@@ -435,9 +435,9 @@ dependencies = [
 
 [[package]]
 name = "axum-server"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25e4a990e1593e286b1b96e6df76da9dbcb84945a810287ca8101f1a4f000f61"
+checksum = "bace45b270e36e3c27a190c65883de6dfc9f1d18c829907c127464815dc67b24"
 dependencies = [
  "bytes",
  "futures-util",
@@ -4124,6 +4124,12 @@ dependencies = [
  "pin-project-lite",
  "windows-sys 0.45.0",
 ]
+
+[[package]]
+name = "port_scanner"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "325a6d2ac5dee293c3b2612d4993b98aec1dff096b0a2dae70ed7d95784a05da"
 
 [[package]]
 name = "portable-atomic"
@@ -7887,6 +7893,7 @@ dependencies = [
  "log",
  "notify 5.1.0",
  "pidlock",
+ "port_scanner",
  "pretty_assertions",
  "prost",
  "rand 0.8.5",
@@ -7914,6 +7921,7 @@ dependencies = [
  "turborepo-api-client",
  "uds_windows",
  "url",
+ "vercel-api-mock",
  "webbrowser",
 ]
 
@@ -8114,6 +8122,18 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vercel-api-mock"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-server",
+ "port_scanner",
+ "tokio",
+ "turborepo-api-client",
+]
 
 [[package]]
 name = "vergen"
