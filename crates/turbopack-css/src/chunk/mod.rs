@@ -14,8 +14,8 @@ use turbopack_core::{
         availability_info::AvailabilityInfo,
         chunk_content, chunk_content_split,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkItem, ChunkItemVc, ChunkReferenceVc,
-        ChunkVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, FromChunkableAsset,
+        Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkItem, ChunkItemVc, ChunkVc,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunksVc, FromChunkableAsset,
         ModuleId, ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
@@ -280,6 +280,21 @@ impl Chunk for CssChunk {
     fn chunking_context(&self) -> ChunkingContextVc {
         self.context
     }
+
+    #[turbo_tasks::function]
+    async fn parallel_chunks(&self) -> Result<ChunksVc> {
+        let content = css_chunk_content(
+            self.context,
+            self.main_entries,
+            Value::new(self.availability_info),
+        )
+        .await?;
+        let mut chunks = Vec::new();
+        for chunk in content.chunks.iter() {
+            chunks.push(*chunk);
+        }
+        Ok(ChunksVc::cell(chunks))
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -347,9 +362,6 @@ impl Asset for CssChunk {
                     }
                 }
             }
-        }
-        for chunk in content.chunks.iter() {
-            references.push(ChunkReferenceVc::new_parallel(*chunk).into());
         }
         for entry in content.async_chunk_group_entries.iter() {
             references.push(ChunkGroupReferenceVc::new(this.context, *entry).into());

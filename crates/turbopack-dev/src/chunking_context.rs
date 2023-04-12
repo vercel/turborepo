@@ -12,14 +12,12 @@ use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        availability_info::AvailabilityInfo, optimize, ChunkVc, ChunkableAsset, ChunkableAssetVc,
-        ChunkingContext, ChunkingContextVc, ChunksVc, EvaluatableAssetsVc, ParallelChunkReference,
-        ParallelChunkReferenceVc,
+        availability_info::AvailabilityInfo, optimize, Chunk, ChunkVc, ChunkableAsset,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunksVc, EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
     ident::{AssetIdent, AssetIdentVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{ModulePart, PrimaryResolveResult},
+    resolve::ModulePart,
 };
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkItemVc, EcmascriptChunkVc, EcmascriptChunkingContext,
@@ -453,7 +451,15 @@ where
 {
     let chunks: Vec<_> = GraphTraversal::<SkipDuplicates<ReverseTopological<_>, _>>::visit(
         entries,
-        get_chunk_children,
+        |chunk: ChunkVc| async move {
+            Ok(chunk
+                .parallel_chunks()
+                .await?
+                .iter()
+                .copied()
+                .collect::<Vec<_>>()
+                .into_iter())
+        },
     )
     .await
     .completed()?
@@ -465,42 +471,4 @@ where
     let chunks = optimize(chunks);
 
     Ok(chunks)
-}
-
-/// Computes the list of all chunk children of a given chunk.
-async fn get_chunk_children(parent: ChunkVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
-    Ok(parent
-        .references()
-        .await?
-        .iter()
-        .copied()
-        .map(reference_to_chunks)
-        .try_join()
-        .await?
-        .into_iter()
-        .flatten())
-}
-
-/// Get all parallel chunks from a parallel chunk reference.
-async fn reference_to_chunks(r: AssetReferenceVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
-    let mut result = Vec::new();
-    if let Some(pc) = ParallelChunkReferenceVc::resolve_from(r).await? {
-        if *pc.is_loaded_in_parallel().await? {
-            result = r
-                .resolve_reference()
-                .await?
-                .primary
-                .iter()
-                .map(|r| async move {
-                    Ok(if let PrimaryResolveResult::Asset(a) = r {
-                        ChunkVc::resolve_from(a).await?
-                    } else {
-                        None
-                    })
-                })
-                .try_join()
-                .await?;
-        }
-    }
-    Ok(result.into_iter().flatten())
 }
