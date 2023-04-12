@@ -39,6 +39,7 @@ const (
 	targetInitialized executionEventName = iota
 	TargetBuilding
 	TargetBuildStopped
+	TargetExecuted
 	TargetBuilt
 	TargetCached
 	TargetBuildFailed
@@ -52,6 +53,8 @@ func (en executionEventName) toString() string {
 		return "building"
 	case TargetBuildStopped:
 		return "buildStopped"
+	case TargetExecuted:
+		return "executed"
 	case TargetBuilt:
 		return "built"
 	case TargetCached:

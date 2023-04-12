@@ -403,6 +403,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		return taskExecutionSummary, err
 	}
 
+	// Add another timestamp into the tracer, so we have an accurate timestamp for how long the task took.
+	tracer(runsummary.TargetExecuted, nil, nil)
+
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
 		ec.logError("", err)
