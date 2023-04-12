@@ -7,7 +7,10 @@ use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack::{
     condition::ContextCondition,
     ecmascript::EcmascriptModuleAssetVc,
-    module_options::{JsxTransformOptions, ModuleOptionsContext, ModuleOptionsContextVc},
+    module_options::{
+        EmotionTransformConfigVc, JsxTransformOptions, ModuleOptionsContext,
+        ModuleOptionsContextVc, StyledComponentsTransformConfigVc,
+    },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
@@ -107,9 +110,9 @@ async fn get_client_module_options_context(
 
     let module_options_context = ModuleOptionsContext {
         enable_jsx: Some(JsxTransformOptions::default().cell()),
-        enable_emotion: true,
+        enable_emotion: Some(EmotionTransformConfigVc::default()),
         enable_react_refresh,
-        enable_styled_components: true,
+        enable_styled_components: Some(StyledComponentsTransformConfigVc::default()),
         enable_styled_jsx: true,
         enable_postcss_transform: Some(Default::default()),
         enable_typescript_transform: Some(Default::default()),
