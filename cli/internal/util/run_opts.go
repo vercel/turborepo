@@ -14,6 +14,7 @@ const (
 	Strict EnvMode = "Strict"
 )
 
+// MarshalText implements TextMarshaler for the struct.
 func (s EnvMode) MarshalText() (text []byte, err error) {
 	return []byte(strings.ToLower(string(s))), nil
 }
