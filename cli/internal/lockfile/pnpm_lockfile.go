@@ -230,7 +230,9 @@ func (p *PnpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, 
 		if entry.Version != "" {
 			version = entry.Version
 		} else {
-			version = resolvedVersion
+			// If there isn't a version field in the entry then the version is
+			// encoded in the key and we can omit the name from the version.
+			version = p.extractVersion(resolvedVersion)
 		}
 		return Package{Key: resolvedVersion, Version: version, Found: true}, nil
 	}
@@ -432,7 +434,19 @@ func (p *PnpmLockfile) resolveSpecifier(workspacePath turbopath.AnchoredUnixPath
 		}
 		return "", false, nil
 	}
-	return resolution.Version, true, nil
+	// If pnpm aliases encode versions as full keys since they point to a
+	// different package.
+	version := resolution.Version
+	/*
+		if _, ok := p.Packages[version]; ok {
+			extractedVersion := p.extractVersion(version)
+			// We only want to use the extracted version if it along with the name can derive the key
+			if resolution.Version == p.formatKey(name, extractedVersion) {
+				version = extractedVersion
+			}
+		}
+	*/
+	return version, true, nil
 }
 
 // Apply pnpm overrides to specifier, see https://pnpm.io/package_json#pnpmoverrides
