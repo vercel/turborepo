@@ -385,6 +385,19 @@
 <a href="#385" id="385">385</a>
 <a href="#386" id="386">386</a>
 <a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -393,7 +406,7 @@
 <span class="kw">pub use </span>module_options_context::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>module_rule::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>rule_condition::<span class="kw-2">*</span>;
-<span class="kw">use </span>turbo_tasks::primitives::OptionStringVc;
+<span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, StringsVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
@@ -451,7 +464,7 @@
             <span class="kw-2">ref </span>enable_emotion,
             enable_react_refresh,
             enable_styled_jsx,
-            enable_styled_components,
+            <span class="kw-2">ref </span>enable_styled_components,
             enable_types,
             enable_tree_shaking,
             <span class="kw-2">ref </span>enable_typescript_transform,
@@ -500,8 +513,21 @@
                 </span>},
             });
         }
-        <span class="kw">if </span>enable_styled_components {
-            transforms.push(EcmascriptInputTransform::StyledComponents);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_styled_components) = enable_styled_components {
+            <span class="kw">let </span>styled_components_transform = <span class="kw-2">&amp;*</span>enable_styled_components.<span class="kw">await</span><span class="question-mark">?</span>;
+            transforms.push(EcmascriptInputTransform::StyledComponents {
+                display_name: styled_components_transform.display_name,
+                ssr: styled_components_transform.ssr,
+                file_name: styled_components_transform.file_name,
+                top_level_import_paths: StringsVc::cell(
+                    styled_components_transform.top_level_import_paths.clone(),
+                ),
+                meaningless_file_names: StringsVc::cell(
+                    styled_components_transform.meaningless_file_names.clone(),
+                ),
+                css_prop: styled_components_transform.css_prop,
+                namespace: OptionStringVc::cell(styled_components_transform.namespace.clone()),
+            });
         }
         <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_jsx) = enable_jsx {
             <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;

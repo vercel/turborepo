@@ -370,6 +370,47 @@
 <a href="#370" id="370">370</a>
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 <span class="kw">mod </span>util;
 
@@ -381,6 +422,7 @@
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program},
+        atoms::JsWord,
         preset_env::{<span class="self">self</span>, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
@@ -390,8 +432,8 @@
     },
     quote,
 };
-<span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, StringVc};
-<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, StringVc, StringsVc};
+<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     environment::EnvironmentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
@@ -424,7 +466,15 @@
         <span class="comment">// swc.jsc.transform.react.runtime,
         </span>runtime: OptionStringVc,
     },
-    StyledComponents,
+    StyledComponents {
+        display_name: bool,
+        ssr: bool,
+        file_name: bool,
+        top_level_import_paths: StringsVc,
+        meaningless_file_names: StringsVc,
+        css_prop: bool,
+        namespace: OptionStringVc,
+    },
     StyledJsx,
     <span class="comment">// These options are subset of swc_core::ecma::transforms::typescript::Config, but
     // it doesn&#39;t derive `Copy` so repeating values in here
@@ -606,11 +656,43 @@
                     inject_helpers(unresolved_mark),
                 ));
             }
-            EcmascriptInputTransform::StyledComponents =&gt; {
+            EcmascriptInputTransform::StyledComponents {
+                display_name,
+                ssr,
+                file_name,
+                top_level_import_paths,
+                meaningless_file_names,
+                css_prop,
+                namespace,
+            } =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>options = styled_components::Config {
+                    display_name: <span class="kw-2">*</span>display_name,
+                    ssr: <span class="kw-2">*</span>ssr,
+                    file_name: <span class="kw-2">*</span>file_name,
+                    css_prop: <span class="kw-2">*</span>css_prop,
+                    ..Default::default()
+                };
+
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(namespace) = <span class="kw-2">&amp;*</span>namespace.<span class="kw">await</span><span class="question-mark">? </span>{
+                    options.namespace = namespace.clone();
+                }
+
+                <span class="kw">let </span>top_level_import_paths = <span class="kw-2">&amp;*</span>top_level_import_paths.<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if </span>top_level_import_paths.len() &gt; <span class="number">0 </span>{
+                    options.top_level_import_paths = top_level_import_paths
+                        .iter()
+                        .map(|s| JsWord::from(s.clone()))
+                        .collect();
+                }
+                <span class="kw">let </span>meaningless_file_names = <span class="kw-2">&amp;*</span>meaningless_file_names.<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if </span>meaningless_file_names.len() &gt; <span class="number">0 </span>{
+                    options.meaningless_file_names = meaningless_file_names.clone();
+                }
+
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>styled_components::styled_components(
                     FileName::Anon,
                     file_name_hash,
-                    parse_json_with_source_context(<span class="string">&quot;{}&quot;</span>)<span class="question-mark">?</span>,
+                    options,
                 ));
             }
             EcmascriptInputTransform::StyledJsx =&gt; {
