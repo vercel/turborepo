@@ -10,11 +10,11 @@ import (
 // TaskCacheSummary is an extended version of cache.ItemStatus
 // that includes TimeSaved and some better data.
 type TaskCacheSummary struct {
-	Local     bool   `json:"local"`  // Deprecated, but keeping around for --dry=json
-	Remote    bool   `json:"remote"` // Deprecated, but keeping around for --dry=json
-	Status    string `json:"status,omitempty"`
-	Source    string `json:"source,omitempty"`
-	TimeSaved int    `json:"timeSaved"`
+	Local     bool   `json:"local"`            // Deprecated, but keeping around for --dry=json
+	Remote    bool   `json:"remote"`           // Deprecated, but keeping around for --dry=json
+	Status    string `json:"status"`           // should always be there
+	Source    string `json:"source,omitempty"` // can be empty on status:miss
+	TimeSaved int    `json:"timeSaved"`        // always include, but can be 0
 }
 
 // NewTaskCacheSummary decorates a cache.ItemStatus into a TaskCacheSummary
