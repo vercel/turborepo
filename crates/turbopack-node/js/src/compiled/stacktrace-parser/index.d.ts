@@ -1,2 +1,2 @@
-export const StackFrame: any;
+export type StackFrame = any;
 export const parse: any;
