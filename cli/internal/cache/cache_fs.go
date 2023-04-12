@@ -88,9 +88,9 @@ func (f *fsCache) Exists(hash string) ItemStatus {
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 	var event string
 	if hit {
-		event = cacheEventHit
+		event = CacheEventHit
 	} else {
-		event = cacheEventMiss
+		event = CacheEventMiss
 	}
 	payload := &CacheEvent{
 		Source:   "LOCAL",

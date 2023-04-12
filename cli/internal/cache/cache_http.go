@@ -168,9 +168,9 @@ func (cache *httpCache) Exists(key string) ItemStatus {
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	var event string
 	if hit {
-		event = cacheEventHit
+		event = CacheEventHit
 	} else {
-		event = cacheEventMiss
+		event = CacheEventMiss
 	}
 	payload := &CacheEvent{
 		Source:   "REMOTE",
