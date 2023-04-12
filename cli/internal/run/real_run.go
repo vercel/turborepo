@@ -96,6 +96,21 @@ func RealRun(
 	}
 
 	logMutex := sync.Mutex{}
+	logWaitGroup := sync.WaitGroup{}
+
+	outputLogsFunc := func(grouped bool, defaultOutWriter io.Writer, defaultErrWriter io.Writer, outBuf bytes.Buffer, errBuf bytes.Buffer) {
+		if grouped {
+			logMutex.Lock()
+			_, outErr := defaultOutWriter.Write(outBuf.Bytes())
+			_, errErr := defaultErrWriter.Write(errBuf.Bytes())
+			logMutex.Unlock()
+			if outErr != nil || errErr != nil {
+				base.UI.Error("Failed to write part of the output to terminal")
+			}
+		}
+		logWaitGroup.Done()
+	}
+
 	taskSummaryMutex := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
@@ -138,15 +153,8 @@ func RealRun(
 			taskSummaryMutex.Unlock()
 		}
 
-		if grouped {
-			logMutex.Lock()
-			_, outErr := defaultOutWriter.Write(outBuf.Bytes())
-			_, errErr := defaultErrWriter.Write(errBuf.Bytes())
-			logMutex.Unlock()
-			if outErr != nil || errErr != nil {
-				base.UI.Error("Failed to write part of the output to terminal")
-			}
-		}
+		logWaitGroup.Add(1)
+		go outputLogsFunc(grouped, defaultOutWriter, defaultErrWriter, *outBuf, *errBuf)
 
 		return err
 	}
@@ -199,6 +207,8 @@ func RealRun(
 			}
 		}
 	}
+
+	logWaitGroup.Wait()
 
 	if err := runSummary.Close(exitCode, g.WorkspaceInfos); err != nil {
 		// We don't need to throw an error, but we can warn on this.
