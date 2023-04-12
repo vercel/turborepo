@@ -212,10 +212,11 @@ func Test_TaskOutputsSort(t *testing.T) {
 	inclusions := []string{"foo/**", "bar"}
 	exclusions := []string{"special-file", ".hidden/**"}
 	taskOutputs := TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
-	sortedOutputs := taskOutputs.Sort()
-	assertIsSorted(t, sortedOutputs.Inclusions, "Inclusions")
-	assertIsSorted(t, sortedOutputs.Exclusions, "Exclusions")
-	assert.False(t, cmp.DeepEqual(taskOutputs, sortedOutputs)().Success())
+	taskOutputs.Sort()
+	assertIsSorted(t, taskOutputs.Inclusions, "Inclusions")
+	assertIsSorted(t, taskOutputs.Exclusions, "Exclusions")
+
+	assert.True(t, cmp.DeepEqual(taskOutputs, TaskOutputs{Inclusions: []string{"bar", "foo/**"}, Exclusions: []string{".hidden/**", "special-file"}})().Success())
 }
 
 // Helpers

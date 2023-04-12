@@ -289,7 +289,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,
-		outputs:              outputs.Sort(),
+		outputs:              outputs,
 		passThruArgs:         args,
 		envMode:              packageTask.EnvMode,
 		passthroughEnv:       packageTask.TaskDefinition.PassthroughEnv,
