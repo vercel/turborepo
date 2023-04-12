@@ -40,23 +40,17 @@ type spacesRunPayload struct {
 	// gitSha          string
 }
 
-type spacesCacheStatus struct {
-	Status    string `json:"status,omitempty"`
-	Source    string `json:"source,omitempty"`
-	TimeSaved int    `json:"timeSaved,omitempty"`
-}
-
 type spacesTask struct {
-	Key          string            `json:"key,omitempty"`
-	Name         string            `json:"name,omitempty"`
-	Workspace    string            `json:"workspace,omitempty"`
-	Hash         string            `json:"hash,omitempty"`
-	StartTime    int64             `json:"startTime,omitempty"`
-	EndTime      int64             `json:"endTime,omitempty"`
-	Cache        spacesCacheStatus `json:"cache,omitempty"`
-	ExitCode     int               `json:"exitCode,omitempty"`
-	Dependencies []string          `json:"dependencies,omitempty"`
-	Dependents   []string          `json:"dependents,omitempty"`
+	Key          string           `json:"key,omitempty"`
+	Name         string           `json:"name,omitempty"`
+	Workspace    string           `json:"workspace,omitempty"`
+	Hash         string           `json:"hash,omitempty"`
+	StartTime    int64            `json:"startTime,omitempty"`
+	EndTime      int64            `json:"endTime,omitempty"`
+	Cache        TaskCacheSummary `json:"cache,omitempty"`
+	ExitCode     int              `json:"exitCode,omitempty"`
+	Dependencies []string         `json:"dependencies,omitempty"`
+	Dependents   []string         `json:"dependents,omitempty"`
 }
 
 func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
@@ -85,33 +79,17 @@ func newSpacesDonePayload(runsummary *RunSummary) *spacesRunPayload {
 }
 
 func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
-	// Set the cache source. Local and Remote shouldn't _both_ be true.
-	var source string
-	if taskSummary.CacheState.Local {
-		source = "LOCAL"
-	} else if taskSummary.CacheState.Remote {
-		source = "REMOTE"
-	}
-	status := "MISS"
-	if source != "" {
-		status = "HIT"
-	}
-
 	startTime := taskSummary.Execution.startAt.UnixMilli()
 	endTime := taskSummary.Execution.endTime().UnixMilli()
 
 	return &spacesTask{
-		Key:       taskSummary.TaskID,
-		Name:      taskSummary.Task,
-		Workspace: taskSummary.Package,
-		Hash:      taskSummary.Hash,
-		StartTime: startTime,
-		EndTime:   endTime,
-		Cache: spacesCacheStatus{
-			Status:    status,
-			Source:    source,
-			TimeSaved: taskSummary.CacheState.TimeSaved,
-		},
+		Key:          taskSummary.TaskID,
+		Name:         taskSummary.Task,
+		Workspace:    taskSummary.Package,
+		Hash:         taskSummary.Hash,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		Cache:        taskSummary.CacheSummary,
 		ExitCode:     *taskSummary.Execution.exitCode,
 		Dependencies: taskSummary.Dependencies,
 		Dependents:   taskSummary.Dependents,

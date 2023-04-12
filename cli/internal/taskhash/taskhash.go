@@ -10,13 +10,13 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
-	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
@@ -47,7 +47,7 @@ type Tracker struct {
 	packageTaskHashes      map[string]string          // taskID -> hash
 	packageTaskFramework   map[string]string          // taskID -> inferred framework for package
 	packageTaskOutputs     map[string][]turbopath.AnchoredSystemPath
-	packageTaskCacheStatus map[string]CacheDetails
+	packageTaskCacheStatus map[string]runsummary.TaskCacheSummary
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -60,7 +60,7 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 		packageTaskFramework:   make(map[string]string),
 		packageTaskEnvVars:     make(map[string]env.DetailedMap),
 		packageTaskOutputs:     make(map[string][]turbopath.AnchoredSystemPath),
-		packageTaskCacheStatus: make(map[string]CacheDetails),
+		packageTaskCacheStatus: make(map[string]runsummary.TaskCacheSummary),
 	}
 }
 
@@ -426,30 +426,21 @@ func (th *Tracker) SetExpandedOutputs(taskID string, outputs []turbopath.Anchore
 }
 
 // SetCacheStatus records the task status for the given taskID
-func (th *Tracker) SetCacheStatus(taskID string, cacheStatus cache.ItemStatus, timeSaved int) {
+func (th *Tracker) SetCacheStatus(taskID string, cacheSummary runsummary.TaskCacheSummary) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
-	th.packageTaskCacheStatus[taskID] = CacheDetails{
-		ItemStatus: cacheStatus,
-		TimeSaved:  timeSaved,
-	}
+	th.packageTaskCacheStatus[taskID] = cacheSummary
 }
 
 // GetCacheStatus records the task status for the given taskID
-func (th *Tracker) GetCacheStatus(taskID string) CacheDetails {
+func (th *Tracker) GetCacheStatus(taskID string) runsummary.TaskCacheSummary {
 	th.mu.Lock()
 	defer th.mu.Unlock()
-	status, ok := th.packageTaskCacheStatus[taskID]
-	if !ok {
-		return CacheDetails{
-			ItemStatus: cache.ItemStatus{Local: false, Remote: false},
-			TimeSaved:  0,
-		}
-	}
-	return status
-}
 
-type CacheDetails struct {
-	ItemStatus cache.ItemStatus
-	TimeSaved  int
+	if status, ok := th.packageTaskCacheStatus[taskID]; ok {
+		return status
+	}
+
+	// Return an empty one, all the fields will be false and 0
+	return runsummary.TaskCacheSummary{}
 }

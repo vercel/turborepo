@@ -173,6 +173,8 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	default:
 		// NoLogs, do not output anything
 	}
+	// TODO: timeSaved could be part of cacheStatus, so we don't have to make a new struct
+	// downstream, but this would be a more invasive change right now.
 	return cacheStatus, timeSaved, nil
 }
 
