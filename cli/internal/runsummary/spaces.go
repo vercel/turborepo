@@ -40,30 +40,29 @@ type spacesRunPayload struct {
 	// gitSha          string
 }
 
-// spacesCacheSummary is the same as TaskCacheSummary so we can convert
-// spacesCacheSummary(cacheSummary), but change the json tags, to omit local and remote fields
-type spacesCacheSummary struct {
-	// omitted fields
-	Local  bool `json:"-"`
-	Remote bool `json:"-"`
-
-	// this is the thing we want.
+// spacesCacheStatus is the same as TaskCacheSummary so we can convert
+// spacesCacheStatus(cacheSummary), but change the json tags, to omit local and remote fields
+type spacesCacheStatus struct {
 	Status    string `json:"status"` // should always be there
 	Source    string `json:"source,omitempty"`
 	TimeSaved int    `json:"timeSaved"`
+
+	// omitted fields, but here so we can convert from TaskCacheSummary easily
+	Local  bool `json:"-"`
+	Remote bool `json:"-"`
 }
 
 type spacesTask struct {
-	Key          string             `json:"key,omitempty"`
-	Name         string             `json:"name,omitempty"`
-	Workspace    string             `json:"workspace,omitempty"`
-	Hash         string             `json:"hash,omitempty"`
-	StartTime    int64              `json:"startTime,omitempty"`
-	EndTime      int64              `json:"endTime,omitempty"`
-	Cache        spacesCacheSummary `json:"cache,omitempty"`
-	ExitCode     int                `json:"exitCode,omitempty"`
-	Dependencies []string           `json:"dependencies,omitempty"`
-	Dependents   []string           `json:"dependents,omitempty"`
+	Key          string            `json:"key,omitempty"`
+	Name         string            `json:"name,omitempty"`
+	Workspace    string            `json:"workspace,omitempty"`
+	Hash         string            `json:"hash,omitempty"`
+	StartTime    int64             `json:"startTime,omitempty"`
+	EndTime      int64             `json:"endTime,omitempty"`
+	Cache        spacesCacheStatus `json:"cache,omitempty"`
+	ExitCode     int               `json:"exitCode,omitempty"`
+	Dependencies []string          `json:"dependencies,omitempty"`
+	Dependents   []string          `json:"dependents,omitempty"`
 }
 
 func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
@@ -102,7 +101,7 @@ func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
 		Hash:         taskSummary.Hash,
 		StartTime:    startTime,
 		EndTime:      endTime,
-		Cache:        spacesCacheSummary(taskSummary.CacheSummary), // wrapped so we can remove fields
+		Cache:        spacesCacheStatus(taskSummary.CacheSummary), // wrapped so we can remove fields
 		ExitCode:     *taskSummary.Execution.exitCode,
 		Dependencies: taskSummary.Dependencies,
 		Dependents:   taskSummary.Dependents,
