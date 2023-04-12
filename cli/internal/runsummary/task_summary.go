@@ -32,15 +32,18 @@ func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheS
 		source = cache.CacheSourceRemote
 	}
 
-	return TaskCacheSummary{
+	cs := TaskCacheSummary{
 		// copy these over
 		Local:  itemStatus.Local,
 		Remote: itemStatus.Remote,
-
-		TimeSaved: *timeSaved, // add in a dereferences timeSaved, should be 0 if nil
-		Status:    status,
-		Source:    source,
+		Status: status,
+		Source: source,
 	}
+	// add in a dereferences timeSaved, should be 0 if nil
+	if timeSaved != nil {
+		cs.TimeSaved = *timeSaved
+	}
+	return cs
 }
 
 // TaskSummary contains information about the task that was about to run
