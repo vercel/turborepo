@@ -105,6 +105,14 @@ jobs:
             !**.md
             !**.mdx
 
+      - name: Turbopack Benchmark related changes
+        id: turbopack_bench
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            crates/turbopack-bench/**
+            !*.md
+
       - name: Turborepo related changes
         id: turborepo
         uses: technote-space/get-diff-action@v6
@@ -166,6 +174,7 @@ jobs:
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
       turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
+      turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
       go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
@@ -716,6 +725,10 @@ jobs:
     runs-on: ubuntu-latest-16-core-oss
     name: Turbopack Rust testing benchmarks on ubuntu
 
+    env:
+      TURBOPACK_BENCH_COUNTS: "100"
+      TURBOPACK_BENCH_PROGRESS: "1"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -738,12 +751,24 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --no-run
+          cargo test --benches --release --exclude turbopack-bench --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
         run: |
-          cargo test --benches --release
+          cargo test --benches --release --exclude turbopack-bench
+
+      - name: Build benchmarks for tests for other bundlers
+        if: needs.determine_jobs.outputs.turbopack_bench == 'true'
+        timeout-minutes: 120
+        run: |
+          cargo test --benches --release -p turbopack-bench --no-run
+
+      - name: Run cargo test on benchmarks for other bundlers
+        if: needs.determine_jobs.outputs.turbopack_bench == 'true'
+        timeout-minutes: 120
+        run: |
+          cargo test --benches --release -p turbopack-bench
 
   turbopack_rust_test_bench2:
     needs: [determine_jobs, rust_prepare]
@@ -759,6 +784,10 @@ jobs:
           #   runner: windows-2019
     runs-on: ${{ matrix.os.runner }}
     name: Turbopack Rust testing benchmarks on ${{ matrix.os.name }}
+
+    env:
+      TURBOPACK_BENCH_COUNTS: "100"
+      TURBOPACK_BENCH_PROGRESS: "1"
 
     steps:
       - name: Set git to use LF
@@ -788,22 +817,63 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --no-run
+          cargo test --benches --release --exclude turbopack-bench --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
         run: |
-          cargo test --benches --release
+          cargo test --benches --release --exclude turbopack-bench
+
+      - name: Build benchmarks for tests for other bundlers
+        if: needs.determine_jobs.outputs.turbopack_bench == 'true'
+        timeout-minutes: 120
+        run: |
+          cargo test --benches --release -p turbopack-bench --no-run
+
+      - name: Run cargo test on benchmarks for other bundlers
+        if: needs.determine_jobs.outputs.turbopack_bench == 'true'
+        timeout-minutes: 120
+        run: |
+          cargo test --benches --release -p turbopack-bench
 
   rust_bench:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
+    if: (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true') || needs.determine_jobs.outputs.turbopack_bench == 'true'
     strategy:
       fail-fast: false
       matrix:
         bench:
+          # One of Turbopack with 1000 modules is benchmarked in every run
+          # to create a baseline result for normalization (should the runners performance vary between jobs)
+
+          # This runs all the non next-dev benchmarks
           - name: generic
             cache_key: all
+            args: --exclude turbopack-bench
+
+          # This measures Turbopack with small app
+          - name: turbopack
+            cache_key: turbopack-cli
+            args: -p turbopack-cli
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+
+          # This measures Turbopack with normal apps
+          - name: turbopack-large
+            cache_key: turbopack-cli
+            args: -p turbopack-cli
+            TURBOPACK_BENCH_COUNTS: 1000,2000,3000
+
+          # This measures Turbopack with larger apps
+          - name: turbopack-xlarge
+            cache_key: turbopack-cli
+            args: -p turbopack-cli
+            TURBOPACK_BENCH_COUNTS: 1000,5000
+
+          # This measures Turbopack with huge apps
+          - name: turbopack-xxlarge
+            cache_key: turbopack-cli
+            args: -p turbopack-cli
+            TURBOPACK_BENCH_COUNTS: 1000,10000
 
     runs-on: ubuntu-latest-8-core-oss
     name: Benchmark on ${{ matrix.bench.name }}
@@ -903,6 +973,110 @@ jobs:
           file_pattern: data/**
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
 
+  turbopack_build_release:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.turbopack == 'true' && needs.determine_jobs.outputs.push == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu-latest-16-core-oss
+            target: x86_64-unknown-linux-musl
+          - name: macos-latest
+            target: x86_64-apple-darwin
+          - name: macos-latest
+            target: aarch64-apple-darwin
+          - name: ubuntu-latest-16-core-oss
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os.name }}
+    name: Rust building release for ${{ matrix.os.target }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          components: ${{ matrix.os.target == 'x86_64-pc-windows-msvc' && 'llvm-tools-preview' || '' }}
+          targets: ${{ matrix.os.target }}
+          cache-key: ${{ matrix.os.target }}
+          save-cache: true
+
+      - name: Install musl tools
+        run: |
+          wget https://github.com/napi-rs/napi-rs/releases/download/linux-musl-cross%4011.2.1/x86_64-linux-musl-native.tgz -O musl.tgz
+          tar -xvzf musl.tgz
+          sudo mv x86_64-linux-musl-native /usr/x86_64-linux-musl
+          sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-cc /usr/bin/musl-gcc
+          sudo ln -sf /usr/x86_64-linux-musl/bin/x86_64-linux-musl-g++ /usr/bin/musl-g++
+        if: matrix.os.target == 'x86_64-unknown-linux-musl'
+
+      - name: Install Cargo xwin toolchain
+        if: matrix.os.target == 'x86_64-pc-windows-msvc'
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-xwin
+
+      - name: Build node-file-trace
+        if: matrix.os.target != 'x86_64-pc-windows-msvc'
+        run: |
+          cargo build --release -p node-file-trace --target ${{ matrix.os.target }}
+      - name: Build node-file-trace
+        if: matrix.os.target == 'x86_64-pc-windows-msvc'
+        run: |
+          cargo xwin build --release -p node-file-trace --target ${{ matrix.os.target }}
+      - name: Build next-dev (native-tls)
+        if: matrix.os.target != 'x86_64-pc-windows-msvc' && matrix.os.target != 'x86_64-unknown-linux-musl'
+        run: |
+          cargo build --release -p next-dev --target ${{ matrix.os.target }}
+      - name: Build next-dev (rustls-tls)
+        if: matrix.os.target == 'x86_64-unknown-linux-musl'
+        run: |
+          cargo build --release -p next-dev --target ${{ matrix.os.target }} --no-default-features --features cli,custom_allocator,rustls-tls
+      - uses: actions/upload-artifact@v3
+        with:
+          name: release-${{ matrix.os.target }}
+          path: |
+            target/${{ matrix.os.target }}/release/turbopack
+            target/${{ matrix.os.target }}/release/turbopack.exe
+
+  turbopack_bench_pr:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.turbopack == 'true' && github.event_name == 'pull_request'
+    name: Benchmark and compare Turbopack performance
+    runs-on: ubuntu-latest-16-core-oss
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Fetch the base branch
+        run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          shared-cache-key: benchmark
+
+      - name: Benchmark and compare with base branch
+        uses: sokra/criterion-compare-action@main
+        timeout-minutes: 180
+        with:
+          branchName: base
+          cwd: crates/turbopack-cli
+
   format_lint:
     name: Formatting
     runs-on: ubuntu-latest
@@ -938,6 +1112,7 @@ jobs:
       - turbopack_rust_test1
       - turborepo_rust_test
       - turbopack_rust_test_bench1
+      - turbopack_build_release
       - format_lint
     if: always()
     permissions:
@@ -973,6 +1148,7 @@ jobs:
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
+          subjob ${{needs.turbopack_build_release.result}} "Turbopack Release Build"
           subjob ${{needs.format_lint.result}} "Formatting"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
@@ -1051,6 +1227,7 @@ jobs:
       - turborepo_rust_test
       - turbopack_rust_test_bench1
       - turbopack_rust_test_bench2
+      - turbopack_build_release
       - rust_bench
       - format_lint
     if: always()
@@ -1092,6 +1269,7 @@ jobs:
           subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
           subjob ${{needs.format_lint.result}} "Formatting"
           subjob ${{needs.rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
+          subjob ${{needs.turbopack_build_release.result}} "Turbopack Release Build"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then

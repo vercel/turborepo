@@ -123,6 +123,17 @@ importers:
       uvu: 0.5.6
       zstd-codec: 0.1.4
 
+  crates/turbopack-cli/js:
+    specifiers:
+      '@next/react-refresh-utils': ^13.0.6
+      '@types/node': ^18.11.11
+      '@vercel/turbopack-dev': '*'
+    dependencies:
+      '@next/react-refresh-utils': 13.0.6_react-refresh@0.12.0
+      '@vercel/turbopack-dev': link:../../turbopack-dev/js
+    devDependencies:
+      '@types/node': 18.13.0
+
   crates/turbopack-dev/js:
     specifiers:
       '@next/react-refresh-utils': ^13.0.6
@@ -2527,7 +2538,7 @@ packages:
   /@types/loader-runner/2.2.4:
     resolution: {integrity: sha512-loD63p9KWQPgTvMBbhu9nD/2AeLqzP7ey/h1cWUK3wzLtilRO1kcCtlJvGrT/LEtOM7bjzaFSX1hxXaOdZdt8g==}
     dependencies:
-      '@types/node': 18.11.11
+      '@types/node': 18.13.0
     dev: true
 
   /@types/mdast/3.0.10:

@@ -7524,6 +7524,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.1.11",
+ "console-subscriber",
+ "dunce",
+ "futures",
+ "mime",
+ "owo-colors",
+ "serde",
+ "tokio",
+ "turbo-malloc",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-env",
+ "turbo-tasks-fetch",
+ "turbo-tasks-fs",
+ "turbo-tasks-memory",
+ "turbopack",
+ "turbopack-cli-utils",
+ "turbopack-core",
+ "turbopack-dev",
+ "turbopack-dev-server",
+ "turbopack-env",
+ "turbopack-node",
+ "webbrowser",
+]
+
+[[package]]
 name = "turbopack-cli-utils"
 version = "0.1.0"
 dependencies = [
@@ -7536,6 +7566,7 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbopack-core",
+ "turbopack-ecmascript",
 ]
 
 [[package]]
@@ -7692,6 +7723,7 @@ name = "turbopack-env"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "indexmap",
  "serde",
  "turbo-tasks",
  "turbo-tasks-build",

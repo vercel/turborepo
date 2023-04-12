@@ -1,0 +1,96 @@
+name: Custom turbopack Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: "Filter"
+        default: "(bench_startup|bench_hydration|bench_startup_cached|bench_hydration_cached|bench_hmr_to_commit|bench_hmr_to_eval)/Turbopack"
+        required: true
+      counts:
+        description: "Modules counts"
+        default: "100,1000"
+        required: true
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=32768"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest-8-core-oss
+    name: ${{ github.event.inputs.filter }} - ${{ github.event.inputs.counts }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: ./.github/actions/setup-node
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          shared-cache-key: benchmark-bundlers
+
+      - name: Clear benchmarks
+        run: rm -rf target/criterion
+
+      - name: Build benchmarks
+        timeout-minutes: 120
+        run: cargo bench --no-run -p turbopack-bench -p turbopack-cli
+
+      - name: Run cargo bench
+        timeout-minutes: 120
+        env:
+          TURBOPACK_BENCH_BUNDLERS: all
+          TURBOPACK_BENCH_COUNTS: ${{ github.event.inputs.counts }}
+        run: cargo bench -p next-dev -- "${{ github.event.inputs.filter }}"
+
+      - name: Install critcmp
+        if: always()
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: critcmp
+
+      - name: Compare results
+        if: always()
+        run: critcmp --group "([^/]+/)[^/]+(?:/)(.+)" base
+
+      - name: Export results
+        if: always()
+        run: critcmp --export base > raw.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: custom
+          path: raw.json
+
+  commit_results:
+    name: Commit benchmark-data
+    needs: bench
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current date
+        id: date
+        run: |
+          echo "year=$(date +'%Y')" >> $GITHUB_OUTPUT
+          echo "month=$(date +'%m')" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%s')" >> $GITHUB_OUTPUT
+          echo "pretty=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
+      - name: Checkout benchmark-data
+        uses: actions/checkout@v3
+        with:
+          ref: benchmark-data
+
+      - name: Download benchmark data
+        uses: actions/download-artifact@v3
+        with:
+          path: data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest/${{ steps.date.outputs.date }}-${{ github.sha }}
+
+      - name: Git pull
+        run: git pull --depth=1 --no-tags origin benchmark-data
+
+      - name: Push data to branch
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
