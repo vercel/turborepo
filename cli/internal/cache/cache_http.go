@@ -173,7 +173,7 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 		event = CacheEventMiss
 	}
 	payload := &CacheEvent{
-		Source:   "REMOTE",
+		Source:   CacheSourceRemote,
 		Event:    event,
 		Hash:     hash,
 		Duration: duration,
