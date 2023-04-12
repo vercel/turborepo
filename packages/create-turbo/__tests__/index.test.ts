@@ -1,7 +1,7 @@
 import path from "path";
 import chalk from "chalk";
 import childProcess from "child_process";
-import { setupTestFixtures, spyConsole } from "turbo-test-utils";
+import { setupTestFixtures, spyConsole } from "@turbo/test-utils";
 import { create } from "../src/commands/create";
 import type { CreateCommandArgument } from "../src/commands/create/types";
 import { turboGradient } from "../src/logger";

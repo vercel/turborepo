@@ -7,7 +7,7 @@ import {
   getPackageManagerMeta,
   ConvertError,
 } from "@turbo/workspaces";
-import { getAvailablePackageManagers } from "turbo-utils";
+import { getAvailablePackageManagers } from "@turbo/utils";
 import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 import * as prompts from "./prompts";
 import { createProject } from "./createProject";

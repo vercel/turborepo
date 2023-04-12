@@ -1,6 +1,6 @@
 import path from "path";
-import * as turboUtils from "turbo-utils";
-import { setupTestFixtures } from "turbo-test-utils";
+import * as turboUtils from "@turbo/utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 import { getWorkspaceDetails, convert } from "../src";
 import { generateConvertMatrix } from "./test-utils";
 import execa from "execa";
