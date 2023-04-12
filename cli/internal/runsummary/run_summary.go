@@ -12,6 +12,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/ci"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -55,17 +56,18 @@ type Meta struct {
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
-	ID                 ksuid.KSUID        `json:"id"`
-	Version            string             `json:"version"`
-	TurboVersion       string             `json:"turboVersion"`
-	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
-	Packages           []string           `json:"packages"`
-	EnvMode            util.EnvMode       `json:"envMode"`
-	FrameworkInference bool               `json:"frameworkInference"`
-	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
-	Tasks              []*TaskSummary     `json:"tasks"`
-	User               string             `json:"user"`
-	SCM                *scmState          `json:"scm"`
+	ID                 ksuid.KSUID         `json:"id"`
+	Version            string              `json:"version"`
+	TurboVersion       string              `json:"turboVersion"`
+	GlobalHashSummary  *GlobalHashSummary  `json:"globalCacheInputs"`
+	Packages           []string            `json:"packages"`
+	Pipeline           fs.PristinePipeline `json:"pipeline"`
+	EnvMode            util.EnvMode        `json:"envMode"`
+	FrameworkInference bool                `json:"frameworkInference"`
+	ExecutionSummary   *executionSummary   `json:"execution,omitempty"`
+	Tasks              []*TaskSummary      `json:"tasks"`
+	User               string              `json:"user"`
+	SCM                *scmState           `json:"scm"`
 }
 
 // NewRunSummary returns a RunSummary instance
@@ -79,6 +81,7 @@ func NewRunSummary(
 	runOpts util.RunOpts,
 	packages []string,
 	globalEnvMode util.EnvMode,
+	pipeline fs.Pipeline,
 	globalHashSummary *GlobalHashSummary,
 	synthesizedCommand string,
 ) Meta {
@@ -106,6 +109,7 @@ func NewRunSummary(
 			TurboVersion:       turboVersion,
 			Packages:           packages,
 			EnvMode:            globalEnvMode,
+			Pipeline:           pipeline.Pristine(),
 			FrameworkInference: runOpts.FrameworkInference,
 			Tasks:              []*TaskSummary{},
 			GlobalHashSummary:  globalHashSummary,

@@ -240,7 +240,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	globalHashInputs, err := getGlobalHashInputs(
 		r.base.RepoRoot,
 		rootPackageJSON,
-		pipeline,
 		turboJSON.GlobalEnv,
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
@@ -366,13 +365,13 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,
+		pipeline,
 		runsummary.NewGlobalHashSummary(
 			globalHashInputs.globalFileHashMap,
 			globalHashInputs.rootExternalDepsHash,
 			globalHashInputs.envVars,
 			envVarPassthroughMap,
 			globalHashInputs.globalCacheKey,
-			globalHashInputs.pipeline,
 		),
 		rs.Opts.SynthesizeCommand(rs.Targets),
 	)

@@ -28,7 +28,6 @@ type GlobalHashableInputs struct {
 	rootExternalDepsHash string
 	envVars              env.DetailedMap
 	globalCacheKey       string
-	pipeline             fs.PristinePipeline
 	envVarPassthroughs   []string
 	envMode              util.EnvMode
 	frameworkInference   bool
@@ -39,7 +38,6 @@ type newGlobalHashable struct {
 	rootExternalDepsHash string
 	envVars              env.EnvironmentVariablePairs
 	globalCacheKey       string
-	pipeline             fs.PristinePipeline
 	envVarPassthroughs   []string
 	envMode              util.EnvMode
 	frameworkInference   bool
@@ -54,7 +52,6 @@ func newGlobalHash(full GlobalHashableInputs) (string, error) {
 		rootExternalDepsHash: full.rootExternalDepsHash,
 		envVars:              full.envVars.All.ToHashable(),
 		globalCacheKey:       full.globalCacheKey,
-		pipeline:             full.pipeline,
 		envVarPassthroughs:   full.envVarPassthroughs,
 		envMode:              full.envMode,
 		frameworkInference:   full.frameworkInference,
@@ -66,7 +63,6 @@ type oldGlobalHashable struct {
 	rootExternalDepsHash string
 	envVars              env.EnvironmentVariablePairs
 	globalCacheKey       string
-	pipeline             fs.PristinePipeline
 }
 
 // oldGlobalHash is a transformation of GlobalHashableInputs.
@@ -79,7 +75,6 @@ func oldGlobalHash(full GlobalHashableInputs) (string, error) {
 		rootExternalDepsHash: full.rootExternalDepsHash,
 		envVars:              full.envVars.All.ToHashable(),
 		globalCacheKey:       full.globalCacheKey,
-		pipeline:             full.pipeline,
 	})
 }
 
@@ -122,7 +117,6 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 func getGlobalHashInputs(
 	rootpath turbopath.AbsoluteSystemPath,
 	rootPackageJSON *fs.PackageJSON,
-	pipeline fs.Pipeline,
 	envVarDependencies []string,
 	globalFileDependencies []string,
 	packageManager *packagemanager.PackageManager,
@@ -190,7 +184,6 @@ func getGlobalHashInputs(
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		envVars:              globalHashableEnvVars,
 		globalCacheKey:       _globalCacheKey,
-		pipeline:             pipeline.Pristine(),
 		envVarPassthroughs:   envVarPassthroughs,
 		envMode:              envMode,
 		frameworkInference:   frameworkInference,
