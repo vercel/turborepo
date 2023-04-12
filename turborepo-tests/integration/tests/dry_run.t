@@ -27,7 +27,7 @@ Setup
   my-app#build
     Task                             = build                                                                                                                           
     Package                          = my-app                                                                                                                          
-    Hash                             = 2f192ed93e20f940                                                                                                                
+    Hash                             = 9431e2a02286769a                                                                                                                
     Cached (Local)                   = false                                                                                                                           
     Cached (Remote)                  = false                                                                                                                           
     Directory                        = apps/my-app                                                                                                                     
@@ -45,7 +45,7 @@ Setup
   util#build
     Task                             = build                                                                                                            
     Package                          = util                                                                                                             
-    Hash                             = af2ba2d52192ee45                                                                                                 
+    Hash                             = e6ceb7aa9a6948f8                                                                                                 
     Cached (Local)                   = false                                                                                                            
     Cached (Remote)                  = false                                                                                                            
     Directory                        = packages/util                                                                                                    

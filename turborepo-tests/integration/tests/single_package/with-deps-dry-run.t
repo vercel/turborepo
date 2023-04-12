@@ -14,7 +14,7 @@ Check
   Tasks to Run
   build
     Task                             = build                                                                                                       
-    Hash                             = 8fc80cfff3b64237                                                                                            
+    Hash                             = d2d26542b87b5554                                                                                            
     Cached (Local)                   = false                                                                                                       
     Cached (Remote)                  = false                                                                                                       
     Command                          = echo 'building' > foo                                                                                       
@@ -30,7 +30,7 @@ Check
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                     
   test
     Task                             = test                                                                                                          
-    Hash                             = c71366ccd6a86465                                                                                              
+    Hash                             = c53806e1057eca23                                                                                              
     Cached (Local)                   = false                                                                                                         
     Cached (Remote)                  = false                                                                                                         
     Command                          = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                  
