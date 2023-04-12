@@ -1,11 +1,16 @@
 package runsummary
 
 import (
-	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
+
+type TaskCacheSummary struct {
+	Local     bool `json:"local"`
+	Remote    bool `json:"remote"`
+	TimeSaved int  `json:"timeSaved"`
+}
 
 // TaskSummary contains information about the task that was about to run
 // TODO(mehulkar): `Outputs` and `ExcludedOutputs` are slightly redundant
@@ -18,7 +23,7 @@ type TaskSummary struct {
 	Hash                   string                                `json:"hash"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"inputs"`
 	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
-	CacheState             cache.ItemStatus                      `json:"cache"`
+	CacheState             TaskCacheSummary                      `json:"cache"`
 	Command                string                                `json:"command"`
 	CommandArguments       []string                              `json:"cliArguments"`
 	Outputs                []string                              `json:"outputs"`

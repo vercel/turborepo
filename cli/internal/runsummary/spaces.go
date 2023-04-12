@@ -41,8 +41,9 @@ type spacesRunPayload struct {
 }
 
 type spacesCacheStatus struct {
-	Status string `json:"status,omitempty"`
-	Source string `json:"source,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Source    string `json:"source,omitempty"`
+	TimeSaved int    `json:"timeSaved,omitempty"`
 }
 
 type spacesTask struct {
@@ -107,8 +108,9 @@ func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
 		StartTime: startTime,
 		EndTime:   endTime,
 		Cache: spacesCacheStatus{
-			Status: status,
-			Source: source,
+			Status:    status,
+			Source:    source,
+			TimeSaved: taskSummary.CacheState.TimeSaved,
 		},
 		ExitCode:     *taskSummary.Execution.exitCode,
 		Dependencies: taskSummary.Dependencies,

@@ -47,7 +47,7 @@ type Tracker struct {
 	packageTaskHashes      map[string]string          // taskID -> hash
 	packageTaskFramework   map[string]string          // taskID -> inferred framework for package
 	packageTaskOutputs     map[string][]turbopath.AnchoredSystemPath
-	packageTaskCacheStatus map[string]cache.ItemStatus
+	packageTaskCacheStatus map[string]CacheDetails
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -60,7 +60,7 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 		packageTaskFramework:   make(map[string]string),
 		packageTaskEnvVars:     make(map[string]env.DetailedMap),
 		packageTaskOutputs:     make(map[string][]turbopath.AnchoredSystemPath),
-		packageTaskCacheStatus: make(map[string]cache.ItemStatus),
+		packageTaskCacheStatus: make(map[string]CacheDetails),
 	}
 }
 
@@ -426,19 +426,30 @@ func (th *Tracker) SetExpandedOutputs(taskID string, outputs []turbopath.Anchore
 }
 
 // SetCacheStatus records the task status for the given taskID
-func (th *Tracker) SetCacheStatus(taskID string, cacheStatus cache.ItemStatus) {
+func (th *Tracker) SetCacheStatus(taskID string, cacheStatus cache.ItemStatus, timeSaved int) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
-	th.packageTaskCacheStatus[taskID] = cacheStatus
+	th.packageTaskCacheStatus[taskID] = CacheDetails{
+		ItemStatus: cacheStatus,
+		TimeSaved:  timeSaved,
+	}
 }
 
 // GetCacheStatus records the task status for the given taskID
-func (th *Tracker) GetCacheStatus(taskID string) cache.ItemStatus {
+func (th *Tracker) GetCacheStatus(taskID string) CacheDetails {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	status, ok := th.packageTaskCacheStatus[taskID]
 	if !ok {
-		return cache.ItemStatus{Local: false, Remote: false}
+		return CacheDetails{
+			ItemStatus: cache.ItemStatus{Local: false, Remote: false},
+			TimeSaved:  0,
+		}
 	}
 	return status
+}
+
+type CacheDetails struct {
+	ItemStatus cache.ItemStatus
+	TimeSaved  int
 }

@@ -105,7 +105,12 @@ func RealRun(
 		if taskExecutionSummary != nil {
 			taskSummary.ExpandedOutputs = taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
 			taskSummary.Execution = taskExecutionSummary
-			taskSummary.CacheState = taskHashTracker.GetCacheStatus(taskSummary.TaskID)
+			cacheDetails := taskHashTracker.GetCacheStatus(taskSummary.TaskID)
+			taskSummary.CacheState = runsummary.TaskCacheSummary{
+				Local:     cacheDetails.ItemStatus.Local,
+				Remote:    cacheDetails.ItemStatus.Remote,
+				TimeSaved: cacheDetails.TimeSaved,
+			}
 
 			// lock since multiple things to be appending to this array at the same time
 			mu.Lock()
@@ -271,8 +276,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		ErrorPrefix:  prettyPrefix,
 		WarnPrefix:   prettyPrefix,
 	}
-	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
-	ec.taskHashTracker.SetCacheStatus(packageTask.TaskID, cacheStatus)
+	cacheStatus, timeSaved, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
+	ec.taskHashTracker.SetCacheStatus(packageTask.TaskID, cacheStatus, timeSaved)
 
 	hit := cacheStatus.Local || cacheStatus.Remote
 	if err != nil {
