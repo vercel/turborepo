@@ -7,6 +7,8 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// TaskCacheSummary is an extended version of cache.ItemStatus
+// that includes TimeSaved and some better data.
 type TaskCacheSummary struct {
 	Local     bool   `json:"local"`  // Deprecated, but keeping around for --dry=json
 	Remote    bool   `json:"remote"` // Deprecated, but keeping around for --dry=json
@@ -15,11 +17,29 @@ type TaskCacheSummary struct {
 	TimeSaved int    `json:"timeSaved"`
 }
 
+// NewTaskCacheSummary decorates a cache.ItemStatus into a TaskCacheSummary
+// Importantly, it adds the
 func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheSummary {
+	status := cache.CacheEventMiss
+	if itemStatus.Local || itemStatus.Remote {
+		status = cache.CacheEventHit
+	}
+
+	var source string
+	if itemStatus.Local {
+		source = cache.CacheSourceFS
+	} else if itemStatus.Remote {
+		source = cache.CacheSourceRemote
+	}
+
 	return TaskCacheSummary{
-		Local:     itemStatus.Local,
-		Remote:    itemStatus.Remote,
-		TimeSaved: *timeSaved,
+		// copy these over
+		Local:  itemStatus.Local,
+		Remote: itemStatus.Remote,
+
+		TimeSaved: *timeSaved, // add in a dereferences timeSaved, should be 0 if nil
+		Status:    status,
+		Source:    source,
 	}
 }
 

@@ -36,8 +36,10 @@ type ItemStatus struct {
 	Remote bool `json:"remote"`
 }
 
-const cacheEventHit = "HIT"
-const cacheEventMiss = "MISS"
+const CacheSourceFS = "LOCAL"
+const CacheSourceRemote = "REMOTE"
+const CacheEventHit = "HIT"
+const CacheEventMiss = "MISS"
 
 type CacheEvent struct {
 	Source   string `mapstructure:"source"`
