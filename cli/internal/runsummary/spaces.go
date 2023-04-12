@@ -43,13 +43,12 @@ type spacesRunPayload struct {
 // spacesCacheStatus is the same as TaskCacheSummary so we can convert
 // spacesCacheStatus(cacheSummary), but change the json tags, to omit local and remote fields
 type spacesCacheStatus struct {
+	// omitted fields, but here so we can convert from TaskCacheSummary easily
+	Local     bool   `json:"-"`
+	Remote    bool   `json:"-"`
 	Status    string `json:"status"` // should always be there
 	Source    string `json:"source,omitempty"`
 	TimeSaved int    `json:"timeSaved"`
-
-	// omitted fields, but here so we can convert from TaskCacheSummary easily
-	Local  bool `json:"-"`
-	Remote bool `json:"-"`
 }
 
 type spacesTask struct {
