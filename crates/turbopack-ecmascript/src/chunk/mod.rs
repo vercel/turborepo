@@ -1,7 +1,6 @@
 pub(crate) mod content;
 pub(crate) mod context;
 pub(crate) mod item;
-pub(crate) mod optimize;
 pub(crate) mod placeable;
 
 use std::fmt::Write;
@@ -16,9 +15,8 @@ use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo,
-        optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkVc, ChunkingContextVc, ChunksVc, ModuleIdsVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkVc,
+        ChunkingContextVc, ChunksVc, ModuleIdsVc,
     },
     ident::{AssetIdent, AssetIdentVc},
     introspect::{
@@ -28,7 +26,7 @@ use turbopack_core::{
     reference::AssetReferencesVc,
 };
 
-use self::{content::ecmascript_chunk_content, optimize::EcmascriptChunkOptimizerVc};
+use self::content::ecmascript_chunk_content;
 pub use self::{
     content::{EcmascriptChunkContent, EcmascriptChunkContentVc},
     context::{EcmascriptChunkingContext, EcmascriptChunkingContextVc},
@@ -45,11 +43,14 @@ use crate::utils::FormatIter;
 
 #[turbo_tasks::value]
 pub struct EcmascriptChunk {
-    context: EcmascriptChunkingContextVc,
-    main_entries: EcmascriptChunkPlaceablesVc,
-    omit_entries: Option<EcmascriptChunkPlaceablesVc>,
-    availability_info: AvailabilityInfo,
+    pub context: EcmascriptChunkingContextVc,
+    pub main_entries: EcmascriptChunkPlaceablesVc,
+    pub omit_entries: Option<EcmascriptChunkPlaceablesVc>,
+    pub availability_info: AvailabilityInfo,
 }
+
+#[turbo_tasks::value(transparent)]
+pub struct EcmascriptChunks(Vec<EcmascriptChunkVc>);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkVc {
@@ -210,9 +211,9 @@ impl EcmascriptChunkVc {
 
 #[turbo_tasks::value]
 pub struct EcmascriptChunkComparison {
-    shared_chunk_items: usize,
-    left_chunk_items: usize,
-    right_chunk_items: usize,
+    pub shared_chunk_items: usize,
+    pub left_chunk_items: usize,
+    pub right_chunk_items: usize,
 }
 
 #[turbo_tasks::value_impl]
@@ -236,14 +237,6 @@ impl Chunk for EcmascriptChunk {
             chunks.push(*chunk);
         }
         Ok(ChunksVc::cell(chunks))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl OptimizableChunk for EcmascriptChunk {
-    #[turbo_tasks::function]
-    fn get_optimizer(&self) -> ChunkOptimizerVc {
-        EcmascriptChunkOptimizerVc::new(self.context).into()
     }
 }
 
@@ -298,7 +291,7 @@ impl EcmascriptChunkVc {
     }
 
     #[turbo_tasks::function]
-    async fn chunk_items_count(self) -> Result<UsizeVc> {
+    pub async fn chunk_items_count(self) -> Result<UsizeVc> {
         Ok(UsizeVc::cell(self.chunk_content().await?.chunk_items.len()))
     }
 }
