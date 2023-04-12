@@ -250,6 +250,10 @@
 <a href="#250" id="250">250</a>
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -468,6 +472,10 @@
     </span><span class="kw">pub </span>decorators: <span class="prelude-ty">Option</span>&lt;DecoratorsOptionsVc&gt;,
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>enable_mdx: bool,
+    <span class="comment">// [Note]: currently mdx, and mdx_rs have different configuration entrypoint from next.config.js,
+    // however we might want to unify them in the future.
+    </span><span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>enable_mdx_rs: bool,
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
     <span class="attr">#[serde(default)]

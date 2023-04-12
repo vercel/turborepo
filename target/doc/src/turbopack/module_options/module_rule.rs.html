@@ -64,6 +64,10 @@
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -73,6 +77,7 @@
 };
 <span class="kw">use </span>turbopack_css::CssInputTransformsVc;
 <span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransformsVc, EcmascriptOptions};
+<span class="kw">use </span>turbopack_mdx::MdxTransformOptionsVc;
 
 <span class="kw">use </span><span class="kw">super</span>::ModuleRuleCondition;
 
@@ -123,7 +128,10 @@
     TypescriptDeclaration(EcmascriptInputTransformsVc),
     Json,
     Raw,
-    Mdx(EcmascriptInputTransformsVc),
+    Mdx {
+        transforms: EcmascriptInputTransformsVc,
+        options: MdxTransformOptionsVc,
+    },
     Css(CssInputTransformsVc),
     CssModule(CssInputTransformsVc),
     Static,

@@ -624,6 +624,7 @@
 <a href="#624" id="624">624</a>
 <a href="#625" id="625">625</a>
 <a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(trivial_bounds)]
@@ -799,9 +800,10 @@
             ModuleCssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
         }
         ModuleType::Static =&gt; StaticModuleAssetVc::new(source, context.into()).into(),
-        ModuleType::Mdx(transforms) =&gt; {
-            MdxModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
-        }
+        ModuleType::Mdx {
+            transforms,
+            options,
+        } =&gt; MdxModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms, <span class="kw-2">*</span>options).into(),
         ModuleType::Custom(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
     })
 }

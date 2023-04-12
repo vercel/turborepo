@@ -211,10 +211,71 @@
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>mdxjs::compile;
+<span class="kw">use </span>mdxjs::{compile, Options};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
@@ -244,12 +305,49 @@
     StringVc::cell(<span class="string">&quot;mdx&quot;</span>.to_string())
 }
 
+<span class="doccomment">/// Subset of mdxjs::Options to allow to inherit turbopack&#39;s jsx-related configs
+/// into mdxjs.
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(PartialOrd, Ord, Hash, Debug, Clone)]
+</span><span class="kw">pub struct </span>MdxTransformOptions {
+    <span class="kw">pub </span>development: bool,
+    <span class="kw">pub </span>preserve_jsx: bool,
+    <span class="kw">pub </span>jsx_runtime: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>jsx_import_source: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>MdxTransformOptions {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            development: <span class="bool-val">true</span>,
+            preserve_jsx: <span class="bool-val">false</span>,
+            jsx_runtime: <span class="prelude-val">None</span>,
+            jsx_import_source: <span class="prelude-val">None</span>,
+        }
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>MdxTransformOptionsVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(Default::default())
+    }
+}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>MdxTransformOptionsVc {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::default()
+    }
+}
+
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone, Copy)]
 </span><span class="kw">pub struct </span>MdxModuleAsset {
     source: AssetVc,
     context: AssetContextVc,
     transforms: EcmascriptInputTransformsVc,
+    options: MdxTransformOptionsVc,
 }
 
 <span class="doccomment">/// MDX components should be treated as normal j|tsx components to analyze
@@ -262,6 +360,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptModuleAssetVc&gt; {
     <span class="kw">let </span>content = current_context.content();
     <span class="kw">let </span>this = current_context.<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>transform_options = this.options.<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
         <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Unexpected mdx asset content&quot;</span>);
@@ -271,9 +370,30 @@
         <span class="macro">anyhow::bail!</span>(<span class="string">&quot;Not able to read mdx file content&quot;</span>);
     };
 
+    <span class="kw">let </span>jsx_runtime = <span class="kw">if let </span><span class="prelude-val">Some</span>(runtime) = <span class="kw-2">&amp;</span>transform_options.jsx_runtime {
+        <span class="kw">match </span>runtime.as_str() {
+            <span class="string">&quot;automatic&quot; </span>=&gt; <span class="prelude-val">Some</span>(mdxjs::JsxRuntime::Automatic),
+            <span class="string">&quot;classic&quot; </span>=&gt; <span class="prelude-val">Some</span>(mdxjs::JsxRuntime::Classic),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        }
+    } <span class="kw">else </span>{
+        <span class="prelude-val">None
+    </span>};
+
+    <span class="kw">let </span>options = Options {
+        development: transform_options.development,
+        jsx: transform_options.preserve_jsx, <span class="comment">// true means &#39;preserve&#39; jsx syntax.
+        </span>jsx_runtime,
+        jsx_import_source: transform_options
+            .jsx_import_source
+            .as_ref()
+            .map(|s| s.into()),
+        filepath: <span class="prelude-val">Some</span>(this.source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>.to_string()),
+        ..Default::default()
+    };
     <span class="comment">// TODO: upstream mdx currently bubbles error as string
     </span><span class="kw">let </span>mdx_jsx_component =
-        compile(<span class="kw-2">&amp;</span>file.content().to_str()<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>Default::default()).map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;{}&quot;</span>, e))<span class="question-mark">?</span>;
+        compile(<span class="kw-2">&amp;</span>file.content().to_str()<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>options).map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;{}&quot;</span>, e))<span class="question-mark">?</span>;
 
     <span class="kw">let </span>source = VirtualAssetVc::new_with_ident(
         this.source.ident(),
@@ -296,11 +416,13 @@
         source: AssetVc,
         context: AssetContextVc,
         transforms: EcmascriptInputTransformsVc,
+        options: MdxTransformOptionsVc,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(MdxModuleAsset {
             source,
             context,
             transforms,
+            options,
         })
     }
 

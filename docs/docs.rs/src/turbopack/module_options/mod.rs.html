@@ -398,6 +398,28 @@
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -417,6 +439,7 @@
 <span class="kw">use </span>turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions,
 };
+<span class="kw">use </span>turbopack_mdx::MdxTransformOptions;
 <span class="kw">use </span>turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
 <span class="kw">use </span><span class="kw">crate</span>::evaluate_context::node_evaluate_asset_context;
@@ -470,6 +493,7 @@
             <span class="kw-2">ref </span>enable_typescript_transform,
             <span class="kw-2">ref </span>decorators,
             enable_mdx,
+            enable_mdx_rs,
             <span class="kw-2">ref </span>enable_postcss_transform,
             <span class="kw-2">ref </span>enable_webpack_loaders,
             preset_env_versions,
@@ -531,6 +555,7 @@
         }
         <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_jsx) = enable_jsx {
             <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;
+
             transforms.push(EcmascriptInputTransform::React {
                 refresh: enable_react_refresh,
                 import_source: OptionStringVc::cell(jsx.import_source.clone()),
@@ -745,12 +770,31 @@
             ),
         ];
 
-        <span class="kw">if </span>enable_mdx {
+        <span class="kw">if </span>enable_mdx || enable_mdx_rs {
+            <span class="kw">let </span>(jsx_runtime, jsx_import_source) = <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_jsx) = enable_jsx {
+                <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;
+                (jsx.runtime.clone(), jsx.import_source.clone())
+            } <span class="kw">else </span>{
+                (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
+            };
+
+            <span class="kw">let </span>mdx_transform_options = (MdxTransformOptions {
+                development: <span class="bool-val">true</span>,
+                preserve_jsx: <span class="bool-val">false</span>,
+                jsx_runtime,
+                jsx_import_source,
+            })
+            .cell();
+
             rules.push(ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mdx&quot;</span>.to_string()),
-                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Mdx(
-                    mdx_transforms,
-                ))],
+                ModuleRuleCondition::any(<span class="macro">vec!</span>[
+                    ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.md&quot;</span>.to_string()),
+                    ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mdx&quot;</span>.to_string()),
+                ]),
+                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Mdx {
+                    transforms: mdx_transforms,
+                    options: mdx_transform_options,
+                })],
             ));
         }
 
