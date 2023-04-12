@@ -3,6 +3,7 @@ package lockfile
 import (
 	"bytes"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -374,4 +375,32 @@ func Test_DepPathParsing(t *testing.T) {
 	for _, tc := range testCases {
 		assert.Equal(t, parseDepPath(tc.input), tc.dp, tc.input)
 	}
+}
+
+func Test_MixedVersioning(t *testing.T) {
+	contents, err := getFixture(t, "pnpm-absolute.yaml")
+	assert.NilError(t, err)
+
+	lockfile, err := DecodePnpmLockfile(contents)
+	assert.NilError(t, err)
+
+	closure, err := transitiveClosure("packages/a", map[string]string{"@scope/parent": "^1.0.0", "another": "^1.0.0", "special": "npm:Special@1.2.3"}, lockfile)
+	assert.NilError(t, err)
+
+	deps := []Package{}
+
+	for _, v := range closure.ToSlice() {
+		dep := v.(Package)
+		deps = append(deps, dep)
+	}
+	sort.Sort(ByKey(deps))
+
+	assert.DeepEqual(t, deps, []Package{
+		{"/@scope/child/1.0.0", "1.0.0", true},
+		{"/@scope/parent/1.0.0", "1.0.0", true},
+		{"/Special/1.2.3", "/Special/1.2.3", true},
+		{"/Special/1.2.3", "1.2.3", true},
+		{"/another/1.0.0", "1.0.0", true},
+		{"/foo/1.0.0", "1.0.0", true},
+	})
 }
