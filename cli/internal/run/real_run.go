@@ -407,7 +407,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	if err := closeOutputs(); err != nil {
 		ec.logError("", err)
 	} else {
-		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(taskExecutionSummary.Duration.Milliseconds())); err != nil {
+		if err = taskCache.SaveOutputs(ctx, progressLogger, prefixedUI, int(taskExecutionSummary.Duration)); err != nil {
 			ec.logError("", fmt.Errorf("error caching output: %w", err))
 		} else {
 			ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
