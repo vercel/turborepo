@@ -5,8 +5,8 @@ import {
   migrateConfig,
   transformer,
 } from "../src/transforms/migrate-env-var-dependencies";
-import { setupTestFixtures } from "turbo-test-utils";
-import type { Schema } from "turbo-types";
+import { setupTestFixtures } from "@turbo/test-utils";
+import type { Schema } from "@turbo/types";
 
 const getTestTurboConfig = (override: Schema = { pipeline: {} }): Schema => {
   const config = {

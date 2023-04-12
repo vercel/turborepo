@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
-import { getTurboConfigs } from "turbo-utils";
-import type { Schema, Pipeline } from "turbo-types";
+import { getTurboConfigs } from "@turbo/utils";
+import type { Schema, Pipeline } from "@turbo/types";
 
 import getTransformerHelpers from "../utils/getTransformerHelpers";
 import { TransformerResults } from "../runner";

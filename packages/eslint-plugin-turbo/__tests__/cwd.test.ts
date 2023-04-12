@@ -1,8 +1,8 @@
 import path from "path";
 import JSON5 from "json5";
 import { execSync } from "child_process";
-import { Schema } from "turbo-types";
-import { setupTestFixtures } from "turbo-test-utils";
+import { Schema } from "@turbo/types";
+import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("eslint settings check", () => {
   const { useFixture } = setupTestFixtures({

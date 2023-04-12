@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import { isFolderEmpty } from "../src/utils/isFolderEmpty";
-import { setupTestFixtures } from "turbo-test-utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("isFolderEmpty", () => {
   const { useFixture } = setupTestFixtures({

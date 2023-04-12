@@ -1,4 +1,4 @@
-import { getAvailablePackageManagers } from "turbo-utils";
+import { getAvailablePackageManagers } from "@turbo/utils";
 import getWorkspaceDetails from "./getWorkspaceDetails";
 import { convertProject } from "./convert";
 import { Logger } from "./logger";

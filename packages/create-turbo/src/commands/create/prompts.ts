@@ -3,7 +3,7 @@ import fs from "fs-extra";
 import chalk from "chalk";
 import type { PackageManager } from "@turbo/workspaces";
 import type { CreateCommandArgument, CreateCommandOptions } from "./types";
-import { getAvailablePackageManagers } from "turbo-utils";
+import { getAvailablePackageManagers } from "@turbo/utils";
 import { isFolderEmpty } from "../../utils/isFolderEmpty";
 import inquirer from "inquirer";
 

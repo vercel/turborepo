@@ -1,6 +1,6 @@
 import path from "path";
 import { isWriteable } from "../src/utils/isWriteable";
-import { setupTestFixtures } from "turbo-test-utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 import fs from "fs-extra";
 
 describe("isWriteable", () => {
