@@ -1,6 +1,7 @@
 pub mod availability_info;
 pub mod available_assets;
 pub(crate) mod chunking_context;
+pub(crate) mod containment_tree;
 pub(crate) mod evaluate;
 pub mod optimize;
 
@@ -16,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{GraphTraversal, GraphTraversalResult, ReverseTopological, Visit, VisitControlFlow},
-    primitives::{BoolVc, StringVc},
+    primitives::StringVc,
     trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
@@ -27,7 +28,6 @@ use self::availability_info::AvailabilityInfo;
 pub use self::{
     chunking_context::{ChunkingContext, ChunkingContextVc},
     evaluate::{EvaluatableAsset, EvaluatableAssetVc, EvaluatableAssets, EvaluatableAssetsVc},
-    optimize::optimize,
 };
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},

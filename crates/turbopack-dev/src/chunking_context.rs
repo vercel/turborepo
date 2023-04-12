@@ -12,23 +12,28 @@ use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        availability_info::AvailabilityInfo, optimize, Chunk, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunksVc, EvaluatableAssetsVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        ChunkingContext, ChunkingContextVc, ChunksVc, EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
     ident::{AssetIdent, AssetIdentVc},
     resolve::ModulePart,
 };
+use turbopack_css::chunk::{CssChunkVc, CssChunksVc};
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkItemVc, EcmascriptChunkVc, EcmascriptChunkingContext,
-    EcmascriptChunkingContextVc,
+    EcmascriptChunkingContextVc, EcmascriptChunksVc,
 };
 
-use crate::ecmascript::{
-    chunk::EcmascriptDevChunkVc,
-    evaluate::chunk::EcmascriptDevEvaluateChunkVc,
-    list::asset::{EcmascriptDevChunkListSource, EcmascriptDevChunkListVc},
-    manifest::{chunk_asset::DevManifestChunkAssetVc, loader_item::DevManifestLoaderItemVc},
+use crate::{
+    css::optimize::optimize_css_chunks,
+    ecmascript::{
+        chunk::EcmascriptDevChunkVc,
+        evaluate::chunk::EcmascriptDevEvaluateChunkVc,
+        list::asset::{EcmascriptDevChunkListSource, EcmascriptDevChunkListVc},
+        manifest::{chunk_asset::DevManifestChunkAssetVc, loader_item::DevManifestLoaderItemVc},
+        optimize::optimize_ecmascript_chunks,
+    },
 };
 
 pub struct DevChunkingContextBuilder {
@@ -467,8 +472,31 @@ where
     .into_iter()
     .collect();
 
-    let chunks = ChunksVc::cell(chunks);
-    let chunks = optimize(chunks);
+    let mut ecmascript_chunks = vec![];
+    let mut css_chunks = vec![];
+    let mut other_chunks = vec![];
 
-    Ok(chunks)
+    for chunk in chunks.iter() {
+        if let Some(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).await? {
+            ecmascript_chunks.push(ecmascript_chunk);
+        } else if let Some(css_chunk) = CssChunkVc::resolve_from(chunk).await? {
+            css_chunks.push(css_chunk);
+        } else {
+            other_chunks.push(*chunk);
+        }
+    }
+
+    let ecmascript_chunks =
+        optimize_ecmascript_chunks(EcmascriptChunksVc::cell(ecmascript_chunks)).await?;
+    let css_chunks = optimize_css_chunks(CssChunksVc::cell(css_chunks)).await?;
+
+    let chunks = ecmascript_chunks
+        .iter()
+        .copied()
+        .map(|chunk| chunk.as_chunk())
+        .chain(css_chunks.iter().copied().map(|chunk| chunk.as_chunk()))
+        .chain(other_chunks.into_iter())
+        .collect();
+
+    Ok(ChunksVc::cell(chunks))
 }
