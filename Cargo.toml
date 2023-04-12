@@ -42,6 +42,7 @@ members = [
   "crates/turborepo-lib",
   "crates/turborepo-lockfiles",
   "crates/turborepo-scm",
+  "crates/turborepo-vercel-api-mock",
   "xtask",
 ]
 
@@ -140,6 +141,7 @@ turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-lib = { path = "crates/turborepo-lib" }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-scm = { path = "crates/turborepo-scm" }
+vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 
 # Be careful when selecting tls backend, including change default tls backend.
 # If you changed, must verify with ALL build targets with next-swc to ensure
@@ -162,6 +164,8 @@ async-compression = { version = "0.3.13", default-features = false, features = [
 ] }
 async-trait = "0.1.64"
 atty = "0.2.14"
+axum = "0.6.2"
+axum-server = "0.4.4"
 bytes = "1.1.0"
 chrono = "0.4.23"
 clap = "4.1.6"
@@ -189,6 +193,7 @@ owo-colors = "3.5.0"
 parking_lot = "0.12.1"
 pathdiff = "0.2.1"
 pin-project-lite = "0.2.9"
+port_scanner = "0.1.5"
 predicates = "2.1.5"
 pretty_assertions = "1.3.0"
 proc-macro2 = "1.0.51"
