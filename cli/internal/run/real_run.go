@@ -33,6 +33,11 @@ import (
 	"github.com/vercel/turbo/cli/internal/ui"
 )
 
+type taskLogContext struct {
+	outBuf *bytes.Buffer
+	errBuf *bytes.Buffer
+}
+
 // RealRun executes a set of tasks
 func RealRun(
 	ctx gocontext.Context,
@@ -95,43 +100,41 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.Concurrency,
 	}
 
-	logMutex := sync.Mutex{}
+	taskCount := len(engine.TaskGraph.Vertices())
+	logChan := make(chan taskLogContext, taskCount)
 	logWaitGroup := sync.WaitGroup{}
+	grouped := rs.Opts.runOpts.LogOrder == "grouped"
 
-	outputLogsFunc := func(grouped bool, defaultOutWriter io.Writer, defaultErrWriter io.Writer, outBuf bytes.Buffer, errBuf bytes.Buffer) {
-		if grouped {
-			logMutex.Lock()
-			_, outErr := defaultOutWriter.Write(outBuf.Bytes())
-			_, errErr := defaultErrWriter.Write(errBuf.Bytes())
-			logMutex.Unlock()
-			if outErr != nil || errErr != nil {
-				base.UI.Error("Failed to write part of the output to terminal")
-			}
+	outputLogs := func() {
+		for i := 1; i < taskCount; i++ {
+			logContext := <-logChan
+
+			os.Stdout.Write(logContext.outBuf.Bytes())
+			os.Stderr.Write(logContext.errBuf.Bytes())
+			logWaitGroup.Done()
 		}
-		logWaitGroup.Done()
+	}
+
+	if grouped {
+		go outputLogs()
 	}
 
 	taskSummaryMutex := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-
-		grouped := rs.Opts.runOpts.LogOrder == "grouped"
-
+		logWaitGroup.Add(1)
 		outBuf := &bytes.Buffer{}
 		errBuf := &bytes.Buffer{}
 
 		var outWriter io.Writer
 		var errWriter io.Writer
 
-		defaultOutWriter := os.Stdout
-		defaultErrWriter := os.Stderr
-
 		if grouped {
 			outWriter = outBuf
 			errWriter = errBuf
 		} else {
-			outWriter = defaultOutWriter
-			errWriter = defaultErrWriter
+			outWriter = os.Stdout
+			errWriter = os.Stderr
 		}
 
 		ui := concurrentUIFactory.Build(os.Stdin, outWriter, errWriter)
@@ -152,9 +155,12 @@ func RealRun(
 			// not using defer, just release the lock
 			taskSummaryMutex.Unlock()
 		}
-
-		logWaitGroup.Add(1)
-		go outputLogsFunc(grouped, defaultOutWriter, defaultErrWriter, *outBuf, *errBuf)
+		if grouped {
+			logChan <- taskLogContext{
+				outBuf: outBuf,
+				errBuf: errBuf,
+			}
+		}
 
 		return err
 	}
@@ -208,7 +214,9 @@ func RealRun(
 		}
 	}
 
-	logWaitGroup.Wait()
+	if grouped {
+		logWaitGroup.Wait()
+	}
 
 	if err := runSummary.Close(exitCode, g.WorkspaceInfos); err != nil {
 		// We don't need to throw an error, but we can warn on this.
