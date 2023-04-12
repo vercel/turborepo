@@ -751,12 +751,12 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --exclude turbopack-bench --no-run
+          cargo test --benches --release --workspace --exclude turbopack-bench --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --exclude turbopack-bench
+          cargo test --benches --release --workspace --exclude turbopack-bench
 
       - name: Build benchmarks for tests for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
@@ -817,12 +817,12 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --exclude turbopack-bench --no-run
+          cargo test --benches --release --workspace --exclude turbopack-bench --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --exclude turbopack-bench
+          cargo test --benches --release --workspace --exclude turbopack-bench
 
       - name: Build benchmarks for tests for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
@@ -849,7 +849,7 @@ jobs:
           # This runs all the non next-dev benchmarks
           - name: generic
             cache_key: all
-            args: --exclude turbopack-bench
+            args: --workspace --exclude turbopack-bench
 
           # This measures Turbopack with small app
           - name: turbopack
@@ -1026,20 +1026,20 @@ jobs:
         if: matrix.os.target == 'x86_64-pc-windows-msvc'
         run: |
           cargo xwin build --release -p node-file-trace --target ${{ matrix.os.target }}
-      - name: Build next-dev (native-tls)
+      - name: Build turbopack-cli (native-tls)
         if: matrix.os.target != 'x86_64-pc-windows-msvc' && matrix.os.target != 'x86_64-unknown-linux-musl'
         run: |
-          cargo build --release -p next-dev --target ${{ matrix.os.target }}
-      - name: Build next-dev (rustls-tls)
+          cargo build --release -p turbopack-cli --target ${{ matrix.os.target }}
+      - name: Build turbopack-cli (rustls-tls)
         if: matrix.os.target == 'x86_64-unknown-linux-musl'
         run: |
-          cargo build --release -p next-dev --target ${{ matrix.os.target }} --no-default-features --features cli,custom_allocator,rustls-tls
+          cargo build --release -p turbopack-cli --target ${{ matrix.os.target }} --no-default-features --features custom_allocator,rustls-tls
       - uses: actions/upload-artifact@v3
         with:
           name: release-${{ matrix.os.target }}
           path: |
-            target/${{ matrix.os.target }}/release/turbopack
-            target/${{ matrix.os.target }}/release/turbopack.exe
+            target/${{ matrix.os.target }}/release/turbopack-cli
+            target/${{ matrix.os.target }}/release/turbopack-cli.exe
 
   turbopack_bench_pr:
     needs: [determine_jobs, rust_prepare]
