@@ -8,13 +8,13 @@ import type {
   Issue,
   ResourceIdentifier,
   ServerMessage,
-} from "../../types/protocol";
+} from "../types/protocol";
 import type {
   ChunkPath,
   ModuleId,
   UpdateCallback,
   TurbopackGlobals,
-} from "../../types";
+} from "../types";
 
 import { addEventListener, sendMessage } from "./websocket";
 
