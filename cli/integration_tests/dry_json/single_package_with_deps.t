@@ -39,7 +39,7 @@ Setup
         }
       }
     },
-    "envMode": "Infer",
+    "envMode": "infer",
     "tasks": [
       {
         "taskId": "build",
@@ -82,7 +82,7 @@ Setup
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
-        "envMode": "Infer",
+        "envMode": "infer",
         "environmentVariables": {
           "configured": [],
           "inferred": [],
@@ -132,7 +132,7 @@ Setup
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
-        "envMode": "Infer",
+        "envMode": "infer",
         "environmentVariables": {
           "configured": [],
           "inferred": [],

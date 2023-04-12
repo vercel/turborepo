@@ -123,7 +123,7 @@ Setup
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
-    "envMode": "Infer",
+    "envMode": "infer",
     "environmentVariables": {
       "configured": [],
       "inferred": [],
@@ -174,7 +174,7 @@ Setup
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
-    "envMode": "Infer",
+    "envMode": "infer",
     "environmentVariables": {
       "configured": [
         "NODE_ENV="
