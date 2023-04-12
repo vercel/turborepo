@@ -93,7 +93,9 @@ Setup
     "hashOfExternalDependencies": "ccab0b28617f1f56",
     "cache": {
       "local": false,
-      "remote": false
+      "remote": false,
+      "status": "MISS",
+      "timeSaved": 0
     },
     "command": "echo 'building'",
     "cliArguments": [],
@@ -143,7 +145,9 @@ Setup
     "hashOfExternalDependencies": "ccab0b28617f1f56",
     "cache": {
       "local": false,
-      "remote": false
+      "remote": false,
+      "status": "MISS",
+      "timeSaved": 0
     },
     "command": "echo 'building'",
     "cliArguments": [],

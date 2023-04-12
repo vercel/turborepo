@@ -29,5 +29,8 @@ Validate that local cache is true in dry run
   $ cat dry.json | jq '.tasks | map(select(.taskId == "my-app#build")) | .[0].cache'
   {
     "local": true,
-    "remote": false
+    "remote": false,
+    "status": "HIT",
+    "source": "LOCAL",
+    "timeSaved": [0-9]+ (re)
   }

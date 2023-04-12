@@ -39,7 +39,9 @@ Setup
         "hashOfExternalDependencies": "",
         "cache": {
           "local": false,
-          "remote": false
+          "remote": false,
+          "status": "MISS",
+          "timeSaved": 0
         },
         "command": "echo 'building'",
         "cliArguments": [],

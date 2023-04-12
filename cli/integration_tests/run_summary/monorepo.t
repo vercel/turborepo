@@ -75,12 +75,17 @@ Setup
   $ echo $FIRST_APP_BUILD | jq '.cache'
   {
     "local": false,
-    "remote": false
+    "remote": false,
+    "status": "MISS",
+    "timeSaved": 0
   }
   $ echo $SECOND_APP_BUILD | jq '.cache'
   {
     "local": true,
-    "remote": false
+    "remote": false,
+    "status": "HIT",
+    "source": "LOCAL",
+    "timeSaved": [0-9]+ (re)
   }
 
 # Some validation of util#build

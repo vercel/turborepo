@@ -82,5 +82,7 @@ Check
   $ echo $TASK_SUMMARY | jq '.cache'
   {
     "local": false,
-    "remote": false
+    "remote": false,
+    "status": "MISS",
+    "timeSaved": 0
   }
