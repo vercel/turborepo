@@ -170,6 +170,42 @@
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -261,6 +297,42 @@
     }
 }
 
+<span class="attr">#[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
+#[serde(rename_all = <span class="string">&quot;kebab-case&quot;</span>)]
+</span><span class="kw">pub enum </span>EmotionLabelKind {
+    DevOnly,
+    Always,
+    Never,
+}
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>OptionEmotionTransformConfig(<span class="prelude-ty">Option</span>&lt;EmotionTransformConfigVc&gt;);
+
+<span class="comment">//[TODO]: need to support importmap, there are type mismatch between
+//[TODO]: next.config.js to swc&#39;s emotion options
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Default, Clone, Debug)]
+#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
+</span><span class="kw">pub struct </span>EmotionTransformConfig {
+    <span class="kw">pub </span>sourcemap: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+    <span class="kw">pub </span>label_format: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>auto_label: <span class="prelude-ty">Option</span>&lt;EmotionLabelKind&gt;,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>EmotionTransformConfigVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(Default::default())
+    }
+}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>EmotionTransformConfigVc {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::default()
+    }
+}
+
 <span class="kw">impl </span>WebpackLoadersOptions {
     <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.extension_to_loaders.is_empty()
@@ -289,7 +361,7 @@
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>enable_jsx: <span class="prelude-ty">Option</span>&lt;JsxTransformOptionsVc&gt;,
     <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_emotion: bool,
+    </span><span class="kw">pub </span>enable_emotion: <span class="prelude-ty">Option</span>&lt;EmotionTransformConfigVc&gt;,
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>enable_react_refresh: bool,
     <span class="attr">#[serde(default)]

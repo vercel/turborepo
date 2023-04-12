@@ -371,6 +371,20 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -434,7 +448,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsVc&gt; {
         <span class="kw">let </span>ModuleOptionsContext {
             enable_jsx,
-            enable_emotion,
+            <span class="kw-2">ref </span>enable_emotion,
             enable_react_refresh,
             enable_styled_jsx,
             enable_styled_components,
@@ -469,8 +483,22 @@
         </span><span class="kw">if </span>enable_styled_jsx {
             transforms.push(EcmascriptInputTransform::StyledJsx);
         }
-        <span class="kw">if </span>enable_emotion {
-            transforms.push(EcmascriptInputTransform::Emotion);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_emotion) = enable_emotion {
+            <span class="kw">let </span>emotion_transform = enable_emotion.<span class="kw">await</span><span class="question-mark">?</span>;
+            transforms.push(EcmascriptInputTransform::Emotion {
+                sourcemap: emotion_transform.sourcemap.unwrap_or(<span class="bool-val">false</span>),
+                label_format: OptionStringVc::cell(emotion_transform.label_format.clone()),
+                auto_label: <span class="kw">if let </span><span class="prelude-val">Some</span>(auto_label) = emotion_transform.auto_label.as_ref() {
+                    <span class="kw">match </span>auto_label {
+                        EmotionLabelKind::Always =&gt; <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
+                        EmotionLabelKind::Never =&gt; <span class="prelude-val">Some</span>(<span class="bool-val">false</span>),
+                        <span class="comment">// [TODO]: this is not correct coerece, need to be fixed
+                        </span>EmotionLabelKind::DevOnly =&gt; <span class="prelude-val">None</span>,
+                    }
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>},
+            });
         }
         <span class="kw">if </span>enable_styled_components {
             transforms.push(EcmascriptInputTransform::StyledComponents);
