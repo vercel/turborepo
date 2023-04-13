@@ -30,3 +30,42 @@ Check
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                    
     ResolvedTaskDefinition           = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                 
+
+  $ ${TURBO} run build --graph
+  
+  digraph {
+  \tcompound = "true" (esc)
+  \tnewrank = "true" (esc)
+  \tsubgraph "root" { (esc)
+  \t\t"[root] build" -> "[root] ___ROOT___" (esc)
+  \t} (esc)
+  }
+  
+Run real once
+  $ ${TURBO} run build
+  \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  build: cache bypass, force executing 5b5ae44052e3d624
+  build: 
+  build: > build
+  build: > echo 'building' > foo
+  build: 
+  
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
+Run a second time, verify no caching because there is no config
+  $ ${TURBO} run build --single-package
+  \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  build: cache bypass, force executing 5b5ae44052e3d624
+  build: 
+  build: > build
+  build: > echo 'building' > foo
+  build: 
+  
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  
