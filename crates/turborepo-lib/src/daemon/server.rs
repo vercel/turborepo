@@ -155,7 +155,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
     }
 
     fn bump_timeout(&self) {
-        self.timeout_time.reset(self.timeout);
+        self.timeout_time.reset();
     }
 }
 

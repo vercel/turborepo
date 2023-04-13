@@ -11,35 +11,44 @@ use tokio::time::Instant;
 /// to the current time plus the new duration. It is non-mutating
 /// and can be called from multiple threads.
 #[derive(Debug)]
-pub struct BumpTimeout(Instant, AtomicU64);
+pub struct BumpTimeout {
+    start: Instant,
+    increment: Duration,
+    deadline: AtomicU64,
+}
 
 impl BumpTimeout {
-    pub fn new(duration: Duration) -> Self {
+    pub fn new(increment: Duration) -> Self {
         let start = Instant::now();
-        let millis = duration.as_millis();
-        Self(start, AtomicU64::new(millis as u64))
+        let millis = increment.as_millis();
+        Self {
+            start,
+            deadline: AtomicU64::new(millis as u64),
+            increment,
+        }
     }
 
     pub fn duration(&self) -> Duration {
-        Duration::from_millis(self.1.load(Ordering::Relaxed))
+        Duration::from_millis(self.deadline.load(Ordering::Relaxed))
     }
 
     pub fn deadline(&self) -> Instant {
-        self.0 + self.duration()
+        self.start + self.duration()
     }
 
     pub fn elapsed(&self) -> Duration {
-        self.0.elapsed()
+        self.start.elapsed()
     }
 
     /// Resets the deadline to the current time plus the given duration.
-    pub fn reset(&self, duration: Duration) {
-        let duration = self.0.elapsed() + duration;
-        self.1.store(duration.as_millis() as u64, Ordering::Relaxed);
+    pub fn reset(&self) {
+        let duration = self.start.elapsed() + self.increment;
+        self.deadline
+            .store(duration.as_millis() as u64, Ordering::Relaxed);
     }
 
     pub fn as_instant(&self) -> Instant {
-        self.0 + self.duration()
+        self.start + self.duration()
     }
 
     /// Waits until the deadline is reached, but if the deadline is
