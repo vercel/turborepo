@@ -107,9 +107,10 @@ impl DevServer {
         // real TCP listener, see if it bound, and get its bound address.
         let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))
             .context("unable to create socket")?;
-        socket
-            .set_only_v6(false)
-            .context("unable to set socket to not only IPv6")?;
+        if matches!(addr, SocketAddr::V6(_)) {
+            // When possible bind to v4 and v6, otherwise ignore the error
+            let _ = socket.set_only_v6(false);
+        }
         socket
             .bind(&addr.into())
             .context("not able to bind address")?;
