@@ -100,9 +100,12 @@ export async function packageManager({
     choices: ["npm", "pnpm", "yarn"].map((p) => ({
       name: p,
       value: p,
-      disabled: availablePackageManagers?.[p as PackageManager]?.available
-        ? false
-        : `not installed`,
+      // npm should always be available
+      disabled:
+        p !== "npm" ||
+        availablePackageManagers?.[p as PackageManager]?.available
+          ? false
+          : `not installed`,
     })),
   });
 
