@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
 
 Check
-  $ ${TURBO} run build --single-package
+  $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing dd4a9a7b508b0e38

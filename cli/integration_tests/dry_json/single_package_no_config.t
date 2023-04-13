@@ -1,6 +1,8 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_no_config
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ rm turbo.json
+  $ git commit -am "Delete turbo config" --quiet
 
   $ ${TURBO} run build --dry=json
   {
@@ -11,7 +13,7 @@ Setup
       "rootKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
       "files": {
         "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
-        "package.json": "581fe2b8dcba5b03cbe51d78a973143eb6d33e3a"
+        "package.json": "185771929d92c3865ce06c863c07d357500d3364"
       },
       "hashOfExternalDependencies": "",
       "rootPipeline": {
@@ -30,11 +32,12 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "c7223f212c321d3b",
+        "hash": "5b5ae44052e3d624",
         "inputs": {
-          ".gitignore": "38548b0538f2fc563d6bacf70dd42798c6fd9a35",
+          ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
-          "package.json": "581fe2b8dcba5b03cbe51d78a973143eb6d33e3a"
+          "package.json": "185771929d92c3865ce06c863c07d357500d3364",
+          "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
         },
         "hashOfExternalDependencies": "",
         "cache": {
@@ -43,7 +46,7 @@ Setup
           "status": "MISS",
           "timeSaved": 0
         },
-        "command": "echo 'building'",
+        "command": "echo 'building' \u003e foo",
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
