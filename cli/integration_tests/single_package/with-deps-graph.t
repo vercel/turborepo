@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_deps
 
 Graph
-  $ ${TURBO} run test --single-package --graph
+  $ ${TURBO} run test --graph
   
   digraph {
   \tcompound = "true" (esc)

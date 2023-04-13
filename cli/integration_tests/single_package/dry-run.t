@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
 
 Check
-  $ ${TURBO} run build --dry --single-package
+  $ ${TURBO} run build --dry
   
   Global Hash Inputs
     Global Files               = 3
