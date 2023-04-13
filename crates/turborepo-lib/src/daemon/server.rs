@@ -28,6 +28,7 @@ use tokio::{
     },
 };
 use tonic::transport::{NamedService, Server};
+use tower::ServiceBuilder;
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 use super::{
@@ -35,15 +36,17 @@ use super::{
     proto::{self},
     DaemonError,
 };
-use crate::{commands::CommandBase, get_version, globwatcher::HashGlobWatcher};
+use crate::{
+    commands::CommandBase, daemon::bump_timeout_layer::BumpTimeoutLayer, get_version,
+    globwatcher::HashGlobWatcher,
+};
 
 pub struct DaemonServer<T: Watcher> {
     daemon_root: AbsoluteSystemPathBuf,
     log_file: AbsoluteSystemPathBuf,
 
     start_time: Instant,
-    timeout: Duration,
-    timeout_time: Arc<BumpTimeout>,
+    timeout: Arc<BumpTimeout>,
 
     watcher: Arc<HashGlobWatcher<T>>,
     shutdown: Mutex<Option<Sender<()>>>,
@@ -81,8 +84,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
             log_file,
 
             start_time: Instant::now(),
-            timeout_time: Arc::new(BumpTimeout::new(timeout)),
-            timeout,
+            timeout: Arc::new(BumpTimeout::new(timeout)),
 
             watcher,
             shutdown: Mutex::new(Some(send_shutdown)),
@@ -98,7 +100,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         let watcher = self.watcher.clone();
         let watcher_fut = watcher.watch(repo_root.as_path().to_owned(), stop.token());
 
-        let timer = self.timeout_time.clone();
+        let timer = self.timeout.clone();
         let timeout_fut = timer.wait();
 
         // if shutdown is available, then listen. otherwise just wait forever
@@ -123,10 +125,14 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 .build()
                 .unwrap();
 
+            let service = ServiceBuilder::new()
+                .layer(BumpTimeoutLayer::new(self.timeout.clone()))
+                .service(crate::daemon::proto::turbod_server::TurbodServer::new(self));
+
             Server::builder()
                 .add_service(reflection)
-                .add_service(crate::daemon::proto::turbod_server::TurbodServer::new(self))
-                .serve_with_shutdown("127.0.0.1:5000".parse().unwrap(), shutdown_fut)
+                .add_service(service)
+                .serve("127.0.0.1:5000".parse().unwrap())
         };
 
         #[cfg(not(feature = "http"))]
@@ -135,10 +141,14 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 .await
                 .unwrap();
 
+            let service = ServiceBuilder::new()
+                .layer(BumpTimeoutLayer::new(self.timeout.clone()))
+                .service(crate::daemon::proto::turbod_server::TurbodServer::new(self));
+
             (
                 lock,
                 Server::builder()
-                    .add_service(crate::daemon::proto::turbod_server::TurbodServer::new(self))
+                    .add_service(service)
                     .serve_with_incoming(stream),
             )
         };
@@ -154,10 +164,6 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         // here the stop token is dropped, and the pid lock is dropped
         // causing them to be cleaned up
     }
-
-    fn bump_timeout(&self) {
-        self.timeout_time.reset();
-    }
 }
 
 #[tonic::async_trait]
@@ -166,8 +172,6 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         request: tonic::Request<proto::HelloRequest>,
     ) -> Result<tonic::Response<proto::HelloResponse>, tonic::Status> {
-        self.bump_timeout();
-
         if request.into_inner().version != get_version() {
             return Err(tonic::Status::unimplemented("version mismatch"));
         } else {
@@ -191,8 +195,6 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         _request: tonic::Request<proto::StatusRequest>,
     ) -> Result<tonic::Response<proto::StatusResponse>, tonic::Status> {
-        self.bump_timeout();
-
         Ok(tonic::Response::new(proto::StatusResponse {
             daemon_status: Some(proto::DaemonStatus {
                 uptime_msec: self.start_time.elapsed().as_millis() as u64,
@@ -205,8 +207,6 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         request: tonic::Request<proto::NotifyOutputsWrittenRequest>,
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
-        self.bump_timeout();
-
         let inner = request.into_inner();
         self.watcher
             .watch_globs(inner.hash, inner.output_globs, inner.output_exclusion_globs)
@@ -219,8 +219,6 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         request: tonic::Request<proto::GetChangedOutputsRequest>,
     ) -> Result<tonic::Response<proto::GetChangedOutputsResponse>, tonic::Status> {
-        self.bump_timeout();
-
         let inner = request.into_inner();
         let changed = self
             .watcher
