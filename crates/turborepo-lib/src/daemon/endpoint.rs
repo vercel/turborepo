@@ -2,6 +2,7 @@ use futures::Stream;
 use log::debug;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::server::Connected;
+use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SocketOpenError {
@@ -15,7 +16,7 @@ pub enum SocketOpenError {
 /// On windows, this will use the `uds_windows` crate, and
 /// poll the result in another thread.
 pub async fn open_socket(
-    path: turborepo_paths::AbsoluteNormalizedPathBuf,
+    path: AbsoluteSystemPathBuf,
 ) -> Result<
     (
         pidlock::Pidlock,
@@ -23,9 +24,9 @@ pub async fn open_socket(
     ),
     SocketOpenError,
 > {
-    let pid_path = path.join(turborepo_paths::ForwardRelativePath::new("turbod.pid").unwrap());
-    let sock_path = path.join(turborepo_paths::ForwardRelativePath::new("turbod.sock").unwrap());
-    let mut lock = pidlock::Pidlock::new(pid_path.to_path_buf());
+    let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
+    let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
+    let mut lock = pidlock::Pidlock::new(pid_path.as_path().to_owned());
 
     debug!("opening socket at {} {}", pid_path, sock_path);
 

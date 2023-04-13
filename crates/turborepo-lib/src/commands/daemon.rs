@@ -1,5 +1,7 @@
 use std::{path::PathBuf, time::Duration};
 
+use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+
 use super::CommandBase;
 use crate::{
     cli::DaemonCommand,
@@ -67,19 +69,17 @@ pub async fn daemon_server(base: &CommandBase, idle_time: &String) -> Result<(),
         let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
             .expect("user has a home dir");
 
-        let folder =
-            turborepo_paths::AbsoluteNormalizedPath::new(directories.data_dir()).expect("absolute");
+        let folder = AbsoluteSystemPathBuf::new(directories.data_dir()).expect("absolute");
 
         let hash = format!("{}-turbo.log", base.repo_hash());
 
-        let logs = turborepo_paths::ForwardRelativePath::new("logs").expect("forward relative");
-        let file = turborepo_paths::ForwardRelativePath::new(&hash).expect("forward relative");
+        let logs = RelativeSystemPathBuf::new("logs").expect("forward relative");
+        let file = RelativeSystemPathBuf::new(&hash).expect("forward relative");
 
-        folder.join(logs).join(file)
+        folder.join_relative(logs).join_relative(file)
     };
 
-    let repo_root =
-        turborepo_paths::AbsoluteNormalizedPathBuf::new(base.repo_root.clone()).expect("absolute");
+    let repo_root = AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("absolute");
 
     let timeout = go_parse_duration::parse_duration(idle_time)
         .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))

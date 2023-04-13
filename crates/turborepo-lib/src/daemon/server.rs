@@ -28,7 +28,7 @@ use tokio::{
     },
 };
 use tonic::transport::{NamedService, Server};
-use turborepo_paths::{AbsoluteNormalizedPathBuf, ForwardRelativePath};
+use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 use super::{
     bump_timeout::BumpTimeout,
@@ -38,8 +38,8 @@ use super::{
 use crate::{commands::CommandBase, get_version, globwatcher::HashGlobWatcher};
 
 pub struct DaemonServer<T: Watcher> {
-    daemon_root: AbsoluteNormalizedPathBuf,
-    log_file: AbsoluteNormalizedPathBuf,
+    daemon_root: AbsoluteSystemPathBuf,
+    log_file: AbsoluteSystemPathBuf,
 
     start_time: Instant,
     timeout: Duration,
@@ -63,14 +63,15 @@ impl DaemonServer<notify::RecommendedWatcher> {
     pub fn new(
         base: &CommandBase,
         timeout: Duration,
-        log_file: AbsoluteNormalizedPathBuf,
+        log_file: AbsoluteSystemPathBuf,
     ) -> Result<Self, DaemonError> {
         let daemon_root = base.daemon_file_root();
 
         let watcher = Arc::new(HashGlobWatcher::new(
             daemon_root
-                .join(ForwardRelativePath::new("flush").expect("valid forward path"))
-                .to_path_buf(),
+                .join_relative(RelativeSystemPathBuf::new("flush").expect("valid forward path"))
+                .as_path()
+                .to_owned(),
         )?);
 
         let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
@@ -92,10 +93,10 @@ impl DaemonServer<notify::RecommendedWatcher> {
 
 impl<T: Watcher + Send + 'static> DaemonServer<T> {
     /// Serve the daemon server, while also watching for filesystem changes.
-    pub async fn serve(mut self, repo_root: AbsoluteNormalizedPathBuf) -> CloseReason {
+    pub async fn serve(mut self, repo_root: AbsoluteSystemPathBuf) -> CloseReason {
         let stop = StopSource::new();
         let watcher = self.watcher.clone();
-        let watcher_fut = watcher.watch(repo_root.to_path_buf(), stop.token());
+        let watcher_fut = watcher.watch(repo_root.as_path().to_owned(), stop.token());
 
         let timer = self.timeout_time.clone();
         let timeout_fut = timer.wait();
