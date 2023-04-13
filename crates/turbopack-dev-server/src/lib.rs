@@ -110,13 +110,19 @@ impl DevServer {
         socket
             .set_only_v6(false)
             .context("unable to set socket to not only IPv6")?;
-        socket.bind(&addr).context("not able to bind address")?;
-        let addr = socket
+        socket
+            .bind(&addr.into())
+            .context("not able to bind address")?;
+
+        let listener: TcpListener = socket.into();
+        let addr = listener
             .local_addr()
             .context("not able to get bound address")?;
-
-        let server = Server::from_tcp(socket.into()).context("Not able to start server")?;
-        Ok(DevServerBuilder { addr, server })
+        let server = Server::from_tcp(listener).context("Not able to start server")?;
+        Ok(DevServerBuilder {
+            addr: addr.into(),
+            server,
+        })
     }
 }
 
