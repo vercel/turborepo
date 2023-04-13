@@ -57,115 +57,109 @@ pub trait Bundler {
 }
 
 pub fn get_bundlers() -> Vec<Box<dyn Bundler>> {
-    let mut bundlers: Vec<Box<dyn Bundler>> = Vec::new();
-
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::Canary,
-        "Next.js canary Turbo SSR",
-        "/page",
-        true,
-        RenderType::ServerSidePrerendered,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::Canary,
-        "Next.js canary Turbo RSC",
-        "/app",
-        true,
-        RenderType::ServerSideRenderedWithEvents,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::Canary,
-        "Next.js canary Turbo RCC",
-        "/client",
-        true,
-        RenderType::ServerSideRenderedWithEvents,
-    )));
-
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::V13,
-        "Next.js 13 Turbo SSR",
-        "/page",
-        true,
-        RenderType::ServerSidePrerendered,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::V13,
-        "Next.js 13 Turbo RSC",
-        "/app",
-        true,
-        RenderType::ServerSideRenderedWithEvents,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::V13,
-        "Next.js 13 Turbo RCC",
-        "/client",
-        true,
-        RenderType::ServerSidePrerendered,
-    )));
-
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::Canary,
-        "Next.js canary webpack SSR",
-        "/page",
-        false,
-        RenderType::ServerSidePrerendered,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::Canary,
-        "Next.js canary webpack RSC",
-        "/app",
-        false,
-        RenderType::ServerSideRenderedWithEvents,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::Canary,
-        "Next.js canary webpack RCC",
-        "/client",
-        false,
-        RenderType::ServerSideRenderedWithEvents,
-    )));
-
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::V13,
-        "Next.js 13 webpack SSR",
-        "/page",
-        false,
-        RenderType::ServerSidePrerendered,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::V13,
-        "Next.js 13 webpack RSC",
-        "/app",
-        false,
-        RenderType::ServerSideRenderedWithEvents,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::V13,
-        "Next.js 13 webpack RCC",
-        "/client",
-        false,
-        RenderType::ServerSidePrerendered,
-    )));
-
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::V12,
-        "Next.js 12 webpack SSR",
-        "/page",
-        false,
-        RenderType::ServerSidePrerendered,
-    )));
-    bundlers.push(Box::new(NextJs::new(
-        NextJsVersion::V11,
-        "Next.js 11 webpack SSR",
-        "/page",
-        false,
-        RenderType::ServerSidePrerendered,
-    )));
-    bundlers.push(Box::new(Parcel {}));
-    bundlers.push(Box::new(Vite::new(false, false)));
-    bundlers.push(Box::new(Vite::new(true, false)));
-    bundlers.push(Box::new(Vite::new(false, true)));
-    bundlers.push(Box::new(Webpack {}));
-
-    bundlers
+    vec![
+        Box::new(NextJs::new(
+            NextJsVersion::Canary,
+            "Next.js canary Turbo SSR",
+            "/page",
+            true,
+            RenderType::ServerSidePrerendered,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::Canary,
+            "Next.js canary Turbo RSC",
+            "/app",
+            true,
+            RenderType::ServerSideRenderedWithEvents,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::Canary,
+            "Next.js canary Turbo RCC",
+            "/client",
+            true,
+            RenderType::ServerSideRenderedWithEvents,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::V13,
+            "Next.js 13 Turbo SSR",
+            "/page",
+            true,
+            RenderType::ServerSidePrerendered,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::V13,
+            "Next.js 13 Turbo RSC",
+            "/app",
+            true,
+            RenderType::ServerSideRenderedWithEvents,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::V13,
+            "Next.js 13 Turbo RCC",
+            "/client",
+            true,
+            RenderType::ServerSidePrerendered,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::Canary,
+            "Next.js canary webpack SSR",
+            "/page",
+            false,
+            RenderType::ServerSidePrerendered,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::Canary,
+            "Next.js canary webpack RSC",
+            "/app",
+            false,
+            RenderType::ServerSideRenderedWithEvents,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::Canary,
+            "Next.js canary webpack RCC",
+            "/client",
+            false,
+            RenderType::ServerSideRenderedWithEvents,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::V13,
+            "Next.js 13 webpack SSR",
+            "/page",
+            false,
+            RenderType::ServerSidePrerendered,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::V13,
+            "Next.js 13 webpack RSC",
+            "/app",
+            false,
+            RenderType::ServerSideRenderedWithEvents,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::V13,
+            "Next.js 13 webpack RCC",
+            "/client",
+            false,
+            RenderType::ServerSidePrerendered,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::V12,
+            "Next.js 12 webpack SSR",
+            "/page",
+            false,
+            RenderType::ServerSidePrerendered,
+        )),
+        Box::new(NextJs::new(
+            NextJsVersion::V11,
+            "Next.js 11 webpack SSR",
+            "/page",
+            false,
+            RenderType::ServerSidePrerendered,
+        )),
+        Box::new(Parcel {}),
+        Box::new(Vite::new(false, false)),
+        Box::new(Vite::new(true, false)),
+        Box::new(Vite::new(false, true)),
+        Box::new(Webpack {}),
+    ]
 }
