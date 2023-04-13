@@ -74,6 +74,7 @@ func NewRunSummary(
 	apiClient *client.APIClient,
 	runOpts util.RunOpts,
 	packages []string,
+	globalEnvMode util.EnvMode,
 	globalHashSummary *GlobalHashSummary,
 	synthesizedCommand string,
 ) Meta {
@@ -99,7 +100,7 @@ func NewRunSummary(
 			ExecutionSummary:  executionSummary,
 			TurboVersion:      turboVersion,
 			Packages:          packages,
-			EnvMode:           runOpts.EnvMode,
+			EnvMode:           globalEnvMode,
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
 		},

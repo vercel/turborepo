@@ -370,6 +370,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		r.base.APIClient,
 		rs.Opts.runOpts,
 		packagesInScope,
+		globalEnvMode,
 		runsummary.NewGlobalHashSummary(
 			globalHashable.globalFileHashMap,
 			globalHashable.rootExternalDepsHash,
