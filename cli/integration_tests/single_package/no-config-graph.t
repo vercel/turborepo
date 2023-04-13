@@ -1,9 +1,11 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_no_config
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ rm turbo.json
+  $ git commit -am "Delete turbo config" --quiet
 
 Graph
-  $ ${TURBO} run build --single-package --graph
+  $ ${TURBO} run build --graph
   
   digraph {
   \tcompound = "true" (esc)

@@ -1,9 +1,11 @@
 Setup
   $ . ${TESTDIR}/../_helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_no_config
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ rm turbo.json
+  $ git commit -am "Delete turbo config" --quiet
 
 Check
-  $ ${TURBO} run build --dry --single-package
+  $ ${TURBO} run build --dry
   
   Global Hash Inputs
     Global Files               = 2
@@ -14,15 +16,15 @@ Check
   Tasks to Run
   build
     Task                             = build                                                                                                   
-    Hash                             = c7223f212c321d3b                                                                                        
+    Hash                             = 5b5ae44052e3d624                                                                                        
     Cached (Local)                   = false                                                                                                   
     Cached (Remote)                  = false                                                                                                   
-    Command                          = echo 'building'                                                                                         
+    Command                          = echo 'building' > foo                                                                                   
     Outputs                          =                                                                                                         
     Log File                         = .turbo/turbo-build.log                                                                                  
     Dependencies                     =                                                                                                         
     Dependendents                    =                                                                                                         
-    Inputs Files Considered          = 3                                                                                                       
+    Inputs Files Considered          = 4                                                                                                       
     Configured Environment Variables =                                                                                                         
     Inferred Environment Variables   =                                                                                                         
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                    
