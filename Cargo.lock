@@ -343,6 +343,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-tungstenite"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1b71b31561643aa8e7df3effe284fa83ab1a840e52294c5f4bd7bfd8b2becbb"
+dependencies = [
+ "futures-io",
+ "futures-util",
+ "log",
+ "pin-project-lite",
+ "tokio",
+ "tungstenite 0.17.3",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -729,6 +743,70 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
+name = "chromiumoxide"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c5506e432f602b1747e8a0d60ac6607c6977af4ee9720237764170305323e62"
+dependencies = [
+ "async-tungstenite",
+ "base64 0.13.1",
+ "cfg-if 1.0.0",
+ "chromiumoxide_cdp",
+ "chromiumoxide_types",
+ "fnv",
+ "futures",
+ "futures-timer",
+ "pin-project-lite",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "which",
+ "winreg",
+]
+
+[[package]]
+name = "chromiumoxide_cdp"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88b6988af5c6bbf097999e7db879729dd7b27a62010c482d4922fddeb4f220d4"
+dependencies = [
+ "chromiumoxide_pdl",
+ "chromiumoxide_types",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "chromiumoxide_pdl"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cdf6513e24d260548345a5ef13a04110f5915b7764c274933e10f9363a43e3b"
+dependencies = [
+ "chromiumoxide_types",
+ "either",
+ "heck",
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "chromiumoxide_types"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1af9c183b5aac7f09639cc7b4ddde8a8551850d2c9bf36530830cb10e28e676f"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "chrono"
@@ -2505,7 +2583,7 @@ dependencies = [
  "pin-project",
  "tokio",
  "tokio-tungstenite",
- "tungstenite",
+ "tungstenite 0.18.0",
 ]
 
 [[package]]
@@ -2775,16 +2853,18 @@ checksum = "453ad9f582a441959e5f0d088b02ce04cfe8d51a8eaf077f12ac6d3e94164ca6"
 
 [[package]]
 name = "jni"
-version = "0.20.0"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "039022cdf4d7b1cf548d31f60ae783138e5fd42013f6271049d7df7afadef96c"
+checksum = "1a87aa2bb7d2af34197c04845522473242e1aa17c12f4935d5856491a7fb8c97"
 dependencies = [
  "cesu8",
+ "cfg-if 1.0.0",
  "combine",
  "jni-sys",
  "log",
  "thiserror",
  "walkdir",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -3210,6 +3290,15 @@ dependencies = [
 
 [[package]]
 name = "memoffset"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
+name = "memoffset"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
@@ -3506,6 +3595,8 @@ dependencies = [
  "bitflags 1.3.2",
  "cfg-if 1.0.0",
  "libc",
+ "memoffset 0.7.1",
+ "pin-utils",
  "static_assertions",
 ]
 
@@ -4136,6 +4227,15 @@ name = "portable-atomic"
 version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
+
+[[package]]
+name = "portpicker"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
+dependencies = [
+ "rand 0.8.5",
+]
 
 [[package]]
 name = "ppv-lite86"
@@ -6995,7 +7095,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite",
+ "tungstenite 0.18.0",
 ]
 
 [[package]]
@@ -7196,6 +7296,25 @@ checksum = "7b3e06c9b9d80ed6b745c7159c40b311ad2916abb34a49e9be2653b90db0d8dd"
 
 [[package]]
 name = "tungstenite"
+version = "0.17.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e27992fd6a8c29ee7eef28fc78349aa244134e10ad447ce3b9f0ac0ed0fa4ce0"
+dependencies = [
+ "base64 0.13.1",
+ "byteorder",
+ "bytes",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.8.5",
+ "sha-1",
+ "thiserror",
+ "url",
+ "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
@@ -7265,6 +7384,7 @@ dependencies = [
  "turbo-tasks-testing",
  "turbo-updater",
  "turbopack",
+ "turbopack-bench",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-create-test-app",
@@ -7524,6 +7644,71 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-bench"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chromiumoxide",
+ "clap 4.1.11",
+ "console-subscriber",
+ "criterion",
+ "dunce",
+ "futures",
+ "mime",
+ "nix",
+ "once_cell",
+ "owo-colors",
+ "parking_lot",
+ "portpicker",
+ "rand 0.8.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tungstenite 0.17.3",
+ "turbo-tasks",
+ "turbo-tasks-testing",
+ "turbopack-cli",
+ "turbopack-create-test-app",
+ "url",
+ "webbrowser",
+]
+
+[[package]]
+name = "turbopack-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.1.11",
+ "console-subscriber",
+ "criterion",
+ "dunce",
+ "futures",
+ "mime",
+ "owo-colors",
+ "regex",
+ "serde",
+ "tokio",
+ "turbo-malloc",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-env",
+ "turbo-tasks-fetch",
+ "turbo-tasks-fs",
+ "turbo-tasks-memory",
+ "turbopack",
+ "turbopack-bench",
+ "turbopack-cli-utils",
+ "turbopack-core",
+ "turbopack-dev",
+ "turbopack-dev-server",
+ "turbopack-env",
+ "turbopack-node",
+ "webbrowser",
+]
+
+[[package]]
 name = "turbopack-cli-utils"
 version = "0.1.0"
 dependencies = [
@@ -7536,6 +7721,7 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbopack-core",
+ "turbopack-ecmascript",
 ]
 
 [[package]]
@@ -7612,6 +7798,7 @@ dependencies = [
  "turbo-tasks-build",
  "turbo-tasks-fs",
  "turbo-tasks-hash",
+ "turbopack",
  "turbopack-core",
  "turbopack-ecmascript",
 ]
@@ -7692,6 +7879,7 @@ name = "turbopack-env"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "indexmap",
  "serde",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -8624,9 +8812,9 @@ dependencies = [
 
 [[package]]
 name = "webbrowser"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97d1fa1e5c829b2bf9eb1e28fb950248b797cd6a04866fbdfa8bc31e5eef4c78"
+checksum = "579cc485bd5ce5bfa0d738e4921dd0b956eca9800be1fd2e5257ebe95bc4617e"
 dependencies = [
  "core-foundation",
  "dirs",
