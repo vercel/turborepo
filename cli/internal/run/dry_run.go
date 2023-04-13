@@ -27,7 +27,7 @@ func DryRun(
 	engine *core.Engine,
 	_ *taskhash.Tracker, // unused, but keep here for parity with RealRun method signature
 	turboCache cache.Cache,
-	turboJSON *fs.TurboJSON,
+	_ *fs.TurboJSON, // unused, but keep here for parity with RealRun method signature
 	globalEnvMode util.EnvMode,
 	base *cmdutil.CmdBase,
 	summary runsummary.Meta,
