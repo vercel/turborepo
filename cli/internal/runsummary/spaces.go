@@ -4,8 +4,10 @@ import (
 	"github.com/vercel/turbo/cli/internal/ci"
 )
 
+// spacesRunResponse deserialized the response from POST Run endpoint
 type spacesRunResponse struct {
-	ID string
+	ID  string
+	URL string
 }
 
 type spacesRunPayload struct {

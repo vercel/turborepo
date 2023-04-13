@@ -151,10 +151,15 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	if rsm.shouldSave {
 		if rsm.spaceID != "" {
 			if rsm.apiClient.IsLinked() {
-				if errs := rsm.record(); len(errs) > 0 {
+				if url, errs := rsm.record(); len(errs) > 0 {
 					rsm.ui.Warn("Errors recording run to Spaces")
 					for _, err := range errs {
 						rsm.ui.Warn(fmt.Sprintf("%v", err))
+					}
+				} else {
+					if url != "" {
+						rsm.ui.Output(fmt.Sprintf("Run: %s", url))
+						rsm.ui.Output("")
 					}
 				}
 			} else {
@@ -209,18 +214,19 @@ func (rsm *Meta) save() error {
 
 // record sends the summary to the API
 // TODO: make this work for single package tasks
-func (rsm *Meta) record() []error {
+func (rsm *Meta) record() (string, []error) {
 	errs := []error{}
 
 	// Right now we'll send the POST to create the Run and the subsequent task payloads
 	// after all execution is done, but in the future, this first POST request
 	// can happen when the Run actually starts, so we can send updates to the associated Space
 	// as tasks complete.
-	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
+	createRunEndpoint := fmt.Sprintf(runsEndpoint, rsm.spaceID)
 	var runID string
+	var runURL string
 	payload := rsm.newSpacesRunCreatePayload()
 	if startPayload, err := json.Marshal(payload); err == nil {
-		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
+		if resp, err := rsm.apiClient.JSONPost(createRunEndpoint, startPayload); err != nil {
 			errs = append(errs, err)
 		} else {
 			spacesRunResponse := &spacesRunResponse{}
@@ -228,12 +234,15 @@ func (rsm *Meta) record() []error {
 				errs = append(errs, err)
 			} else {
 				runID = spacesRunResponse.ID
+				runURL = spacesRunResponse.URL
 			}
 		}
 	}
 
 	if runID != "" {
-		rsm.postTaskSummaries(runID)
+		if taskErrs := rsm.postTaskSummaries(runID); len(taskErrs) > 0 {
+			errs = append(errs, taskErrs...)
+		}
 
 		if donePayload, err := json.Marshal(newSpacesDonePayload(rsm.RunSummary)); err == nil {
 			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, runID)
@@ -244,10 +253,10 @@ func (rsm *Meta) record() []error {
 	}
 
 	if len(errs) > 0 {
-		return errs
+		return runURL, errs
 	}
 
-	return nil
+	return runURL, nil
 }
 
 func (rsm *Meta) postTaskSummaries(runID string) []error {
