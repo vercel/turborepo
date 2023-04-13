@@ -53,7 +53,9 @@ Setup
         "hashOfExternalDependencies": "",
         "cache": {
           "local": false,
-          "remote": false
+          "remote": false,
+          "status": "MISS",
+          "timeSaved": 0
         },
         "command": "echo 'building' \u003e foo",
         "cliArguments": [],
@@ -100,7 +102,9 @@ Setup
         "hashOfExternalDependencies": "",
         "cache": {
           "local": false,
-          "remote": false
+          "remote": false,
+          "status": "MISS",
+          "timeSaved": 0
         },
         "command": "[[ ( -f foo ) \u0026\u0026 $(cat foo) == 'building' ]]",
         "cliArguments": [],

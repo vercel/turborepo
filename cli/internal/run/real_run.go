@@ -105,7 +105,7 @@ func RealRun(
 		if taskExecutionSummary != nil {
 			taskSummary.ExpandedOutputs = taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
 			taskSummary.Execution = taskExecutionSummary
-			taskSummary.CacheState = taskHashTracker.GetCacheStatus(taskSummary.TaskID)
+			taskSummary.CacheSummary = taskHashTracker.GetCacheStatus(taskSummary.TaskID)
 
 			// lock since multiple things to be appending to this array at the same time
 			mu.Lock()
@@ -271,13 +271,20 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		ErrorPrefix:  prettyPrefix,
 		WarnPrefix:   prettyPrefix,
 	}
-	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
-	ec.taskHashTracker.SetCacheStatus(packageTask.TaskID, cacheStatus)
 
-	hit := cacheStatus.Local || cacheStatus.Remote
+	cacheStatus, timeSaved, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
+
+	// It's safe to set the CacheStatus even if there's an error, because if there's
+	// an error, the 0 values are actually what we want. We save cacheStatus and timeSaved
+	// for the task, so that even if there's an error, we have those values for the taskSummary.
+	ec.taskHashTracker.SetCacheStatus(
+		packageTask.TaskID,
+		runsummary.NewTaskCacheSummary(cacheStatus, &timeSaved),
+	)
+
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-	} else if hit {
+	} else if cacheStatus.Local || cacheStatus.Remote { // If there was a cache hit
 		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		// We only cache successful executions, so we can assume this is a successCode exit.
 		tracer(runsummary.TargetCached, nil, &successCode)

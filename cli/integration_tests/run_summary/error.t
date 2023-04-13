@@ -40,7 +40,9 @@ Validate that we got a full task summary for the failed task with an error in .e
     "hashOfExternalDependencies": "ccab0b28617f1f56",
     "cache": {
       "local": false,
-      "remote": false
+      "remote": false,
+      "status": "MISS",
+      "timeSaved": 0
     },
     "command": "exit 4",
     "cliArguments": [],

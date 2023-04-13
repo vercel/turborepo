@@ -7,6 +7,47 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// TaskCacheSummary is an extended version of cache.ItemStatus
+// that includes TimeSaved and some better data.
+type TaskCacheSummary struct {
+	Local     bool   `json:"local"`            // Deprecated, but keeping around for --dry=json
+	Remote    bool   `json:"remote"`           // Deprecated, but keeping around for --dry=json
+	Status    string `json:"status"`           // should always be there
+	Source    string `json:"source,omitempty"` // can be empty on status:miss
+	TimeSaved int    `json:"timeSaved"`        // always include, but can be 0
+}
+
+// NewTaskCacheSummary decorates a cache.ItemStatus into a TaskCacheSummary
+// Importantly, it adds the derived keys of `source` and `status` based on
+// the local/remote booleans. It would be nice if these were just included
+// from upstream, but that is a more invasive change.
+func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheSummary {
+	status := cache.CacheEventMiss
+	if itemStatus.Local || itemStatus.Remote {
+		status = cache.CacheEventHit
+	}
+
+	var source string
+	if itemStatus.Local {
+		source = cache.CacheSourceFS
+	} else if itemStatus.Remote {
+		source = cache.CacheSourceRemote
+	}
+
+	cs := TaskCacheSummary{
+		// copy these over
+		Local:  itemStatus.Local,
+		Remote: itemStatus.Remote,
+		Status: status,
+		Source: source,
+	}
+	// add in a dereferences timeSaved, should be 0 if nil
+	if timeSaved != nil {
+		cs.TimeSaved = *timeSaved
+	}
+	return cs
+}
+
 // TaskSummary contains information about the task that was about to run
 // TODO(mehulkar): `Outputs` and `ExcludedOutputs` are slightly redundant
 // as the information is also available in ResolvedTaskDefinition. We could remove them
@@ -18,7 +59,7 @@ type TaskSummary struct {
 	Hash                   string                                `json:"hash"`
 	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"inputs"`
 	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
-	CacheState             cache.ItemStatus                      `json:"cache"`
+	CacheSummary           TaskCacheSummary                      `json:"cache"`
 	Command                string                                `json:"command"`
 	CommandArguments       []string                              `json:"cliArguments"`
 	Outputs                []string                              `json:"outputs"`

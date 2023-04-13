@@ -40,9 +40,15 @@ type spacesRunPayload struct {
 	// gitSha          string
 }
 
+// spacesCacheStatus is the same as TaskCacheSummary so we can convert
+// spacesCacheStatus(cacheSummary), but change the json tags, to omit local and remote fields
 type spacesCacheStatus struct {
-	Status string `json:"status,omitempty"`
-	Source string `json:"source,omitempty"`
+	// omitted fields, but here so we can convert from TaskCacheSummary easily
+	Local     bool   `json:"-"`
+	Remote    bool   `json:"-"`
+	Status    string `json:"status"` // should always be there
+	Source    string `json:"source,omitempty"`
+	TimeSaved int    `json:"timeSaved"`
 }
 
 type spacesTask struct {
@@ -84,32 +90,17 @@ func newSpacesDonePayload(runsummary *RunSummary) *spacesRunPayload {
 }
 
 func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
-	// Set the cache source. Local and Remote shouldn't _both_ be true.
-	var source string
-	if taskSummary.CacheState.Local {
-		source = "LOCAL"
-	} else if taskSummary.CacheState.Remote {
-		source = "REMOTE"
-	}
-	status := "MISS"
-	if source != "" {
-		status = "HIT"
-	}
-
 	startTime := taskSummary.Execution.startAt.UnixMilli()
 	endTime := taskSummary.Execution.endTime().UnixMilli()
 
 	return &spacesTask{
-		Key:       taskSummary.TaskID,
-		Name:      taskSummary.Task,
-		Workspace: taskSummary.Package,
-		Hash:      taskSummary.Hash,
-		StartTime: startTime,
-		EndTime:   endTime,
-		Cache: spacesCacheStatus{
-			Status: status,
-			Source: source,
-		},
+		Key:          taskSummary.TaskID,
+		Name:         taskSummary.Task,
+		Workspace:    taskSummary.Package,
+		Hash:         taskSummary.Hash,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		Cache:        spacesCacheStatus(taskSummary.CacheSummary), // wrapped so we can remove fields
 		ExitCode:     *taskSummary.Execution.exitCode,
 		Dependencies: taskSummary.Dependencies,
 		Dependents:   taskSummary.Dependents,
