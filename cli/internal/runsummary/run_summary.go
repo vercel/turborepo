@@ -148,24 +148,29 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 
 	rsm.printExecutionSummary()
 
-	if rsm.shouldSave {
-		if rsm.spaceID != "" {
-			if rsm.apiClient.IsLinked() {
-				if url, errs := rsm.record(); len(errs) > 0 {
-					rsm.ui.Warn("Errors recording run to Spaces")
-					for _, err := range errs {
-						rsm.ui.Warn(fmt.Sprintf("%v", err))
-					}
-				} else {
-					if url != "" {
-						rsm.ui.Output(fmt.Sprintf("Run: %s", url))
-						rsm.ui.Output("")
-					}
-				}
-			} else {
-				rsm.ui.Warn("Failed to post to space because repo is not linked to a Space. Run `turbo link` first.")
-			}
+	// If we're not supposed to save or if there's no spaceID
+	if !rsm.shouldSave || rsm.spaceID == "" {
+		return nil
+	}
+
+	if !rsm.apiClient.IsLinked() {
+		rsm.ui.Warn("Failed to post to space because repo is not linked to a Space. Run `turbo link` first.")
+		return nil
+	}
+
+	url, errs := rsm.record()
+
+	if len(errs) > 0 {
+		rsm.ui.Warn("Errors recording run to Spaces")
+		for _, err := range errs {
+			rsm.ui.Warn(fmt.Sprintf("%v", err))
 		}
+		return nil
+	}
+
+	if url != "" {
+		rsm.ui.Output(fmt.Sprintf("Run: %s", url))
+		rsm.ui.Output("")
 	}
 
 	return nil
@@ -213,7 +218,6 @@ func (rsm *Meta) save() error {
 }
 
 // record sends the summary to the API
-// TODO: make this work for single package tasks
 func (rsm *Meta) record() (string, []error) {
 	errs := []error{}
 
@@ -222,41 +226,37 @@ func (rsm *Meta) record() (string, []error) {
 	// can happen when the Run actually starts, so we can send updates to the associated Space
 	// as tasks complete.
 	createRunEndpoint := fmt.Sprintf(runsEndpoint, rsm.spaceID)
-	var runID string
-	var runURL string
+	response := &spacesRunResponse{}
+
 	payload := rsm.newSpacesRunCreatePayload()
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(createRunEndpoint, startPayload); err != nil {
 			errs = append(errs, err)
 		} else {
-			spacesRunResponse := &spacesRunResponse{}
-			if err := json.Unmarshal(resp, spacesRunResponse); err != nil {
-				errs = append(errs, err)
-			} else {
-				runID = spacesRunResponse.ID
-				runURL = spacesRunResponse.URL
+			if err := json.Unmarshal(resp, response); err != nil {
+				errs = append(errs, fmt.Errorf("Error unmarshaling response: %w", err))
 			}
 		}
 	}
 
-	if runID != "" {
-		if taskErrs := rsm.postTaskSummaries(runID); len(taskErrs) > 0 {
+	if response.ID != "" {
+		if taskErrs := rsm.postTaskSummaries(response.ID); len(taskErrs) > 0 {
 			errs = append(errs, taskErrs...)
 		}
 
 		if donePayload, err := json.Marshal(newSpacesDonePayload(rsm.RunSummary)); err == nil {
-			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, runID)
+			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, response.ID)
 			if _, err := rsm.apiClient.JSONPatch(patchURL, donePayload); err != nil {
-				errs = append(errs, err)
+				errs = append(errs, fmt.Errorf("Error marking run as done: %w", err))
 			}
 		}
 	}
 
 	if len(errs) > 0 {
-		return runURL, errs
+		return response.URL, errs
 	}
 
-	return runURL, nil
+	return response.URL, nil
 }
 
 func (rsm *Meta) postTaskSummaries(runID string) []error {
@@ -284,7 +284,7 @@ func (rsm *Meta) postTaskSummaries(runID string) []error {
 				payload := newSpacesTaskPayload(task)
 				if taskPayload, err := json.Marshal(payload); err == nil {
 					if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
-						errs = append(errs, fmt.Errorf("Eror uploading summary of %s", task.TaskID))
+						errs = append(errs, fmt.Errorf("Error sending %s summary to space: %w", task.TaskID, err))
 					}
 				}
 			}
