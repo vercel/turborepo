@@ -13,11 +13,15 @@
 <a href="#13" id="13">13</a>
 <a href="#14" id="14">14</a>
 <a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(lint_reasons)]
 #![feature(iter_intersperse)]
 
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>ecmascript;
+<span class="kw">pub mod </span>embed_js;
+<span class="kw">pub mod </span>react_refresh;
 
 <span class="kw">pub use </span>chunking_context::{DevChunkingContext, DevChunkingContextBuilder, DevChunkingContextVc};
 

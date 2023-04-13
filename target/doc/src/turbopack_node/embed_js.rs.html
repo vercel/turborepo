@@ -17,7 +17,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks_fs::{embed_directory, FileContentVc, FileSystem, FileSystemPathVc, FileSystemVc};
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">fn </span>embed_fs() -&gt; FileSystemVc {
+</span><span class="kw">pub fn </span>embed_fs() -&gt; FileSystemVc {
     <span class="macro">embed_directory!</span>(<span class="string">&quot;turbopack-node&quot;</span>, <span class="string">&quot;$CARGO_MANIFEST_DIR/js/src&quot;</span>)
 }
 

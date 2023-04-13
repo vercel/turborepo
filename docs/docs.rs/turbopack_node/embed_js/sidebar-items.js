@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["embed_fs","embed_fs_inline"]};

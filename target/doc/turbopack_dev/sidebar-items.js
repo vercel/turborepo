@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["register"],"struct":["DevChunkingContext","DevChunkingContextBuilder","DevChunkingContextVc"]};
+window.SIDEBAR_ITEMS = {"fn":["register"],"mod":["embed_js","react_refresh"],"struct":["DevChunkingContext","DevChunkingContextBuilder","DevChunkingContextVc"]};

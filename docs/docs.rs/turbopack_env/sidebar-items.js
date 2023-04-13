@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["register"],"struct":["EmbeddableProcessEnvVc","ProcessEnvAsset","ProcessEnvAssetVc","ProcessEnvIssue","ProcessEnvIssueVc","TryDotenvProcessEnvVc"]};
+window.SIDEBAR_ITEMS = {"fn":["register"],"mod":["dotenv"],"struct":["EmbeddableProcessEnvVc","ProcessEnvAsset","ProcessEnvAssetVc","ProcessEnvIssue","ProcessEnvIssueVc","TryDotenvProcessEnvVc"]};

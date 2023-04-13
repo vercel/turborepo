@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["bench_hmr_to_commit","bench_hmr_to_eval","bench_hydration","bench_hydration_cached","bench_startup","bench_startup_cached"],"mod":["bundlers","util"]};

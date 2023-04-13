@@ -59,15 +59,29 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::AssetContextVc,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    resolve::options::ImportMapVc,
+    resolve::options::{ImportMap, ImportMapVc, ImportMapping},
 };
 
 <span class="kw">use crate</span>::{
@@ -91,6 +105,20 @@
     import_map: <span class="prelude-ty">Option</span>&lt;ImportMapVc&gt;,
     transitions: <span class="prelude-ty">Option</span>&lt;TransitionsByNameVc&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetContextVc&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>import_map = <span class="kw">if let </span><span class="prelude-val">Some</span>(import_map) = import_map {
+        import_map.<span class="kw">await</span><span class="question-mark">?</span>.clone_value()
+    } <span class="kw">else </span>{
+        ImportMap::empty()
+    };
+    import_map.insert_wildcard_alias(
+        <span class="string">&quot;@vercel/turbopack-node/&quot;</span>,
+        ImportMapping::PrimaryAlternative(
+            <span class="string">&quot;./*&quot;</span>.to_string(),
+            <span class="prelude-val">Some</span>(turbopack_node::embed_js::embed_fs().root()),
+        )
+        .cell(),
+    );
+    <span class="kw">let </span>import_map = import_map.cell();
     <span class="prelude-val">Ok</span>(ModuleAssetContextVc::new(
         transitions.unwrap_or_else(|| TransitionsByNameVc::cell(Default::default())),
         CompileTimeInfo::builder(node_build_environment())
@@ -113,7 +141,7 @@
             enable_node_externals: <span class="bool-val">true</span>,
             enable_node_native_modules: <span class="bool-val">true</span>,
             custom_conditions: <span class="macro">vec!</span>[<span class="string">&quot;development&quot;</span>.to_string(), <span class="string">&quot;node&quot;</span>.to_string()],
-            import_map,
+            import_map: <span class="prelude-val">Some</span>(import_map),
             ..Default::default()
         }
         .cell(),
