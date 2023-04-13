@@ -28,17 +28,13 @@ func DryRun(
 	_ *taskhash.Tracker, // unused, but keep here for parity with RealRun method signature
 	turboCache cache.Cache,
 	turboJSON *fs.TurboJSON,
+	globalEnvMode util.EnvMode,
 	base *cmdutil.CmdBase,
 	summary runsummary.Meta,
 ) error {
 	defer turboCache.Shutdown()
 
 	taskSummaries := []*runsummary.TaskSummary{}
-
-	globalEnvMode := rs.Opts.runOpts.EnvMode
-	if globalEnvMode == util.Infer && turboJSON.GlobalPassthroughEnv != nil {
-		globalEnvMode = util.Strict
-	}
 
 	mu := sync.Mutex{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {

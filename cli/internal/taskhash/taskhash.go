@@ -304,20 +304,9 @@ type oldTaskHashable struct {
 }
 
 // calculateTaskHashFromHashable returns a hash string from the taskHashable
-func calculateTaskHashFromHashable(full *taskHashable) (string, error) {
-	switch full.envMode {
-	case util.Infer:
-		if full.passthroughEnv != nil {
-			// In infer mode, if there is any passThru config (even if it is an empty array)
-			// we'll hash the whole object, so we can detect changes to that config
-			// Further, resolve the envMode to the concrete value.
-			full.envMode = util.Strict
-			return fs.HashObject(full)
-		}
-
-		// If we're in infer mode, and there is no global pass through config,
-		// we can use the old anonymous struct. this will be true for everyone not using the strict env
-		// feature, and we don't want to break their cache.
+func calculateTaskHashFromHashable(full *taskHashable, useOldTaskHashable bool) (string, error) {
+	// The user is not using the strict environment variables feature.
+	if useOldTaskHashable {
 		return fs.HashObject(&oldTaskHashable{
 			packageDir:           full.packageDir,
 			hashOfFiles:          full.hashOfFiles,
@@ -329,13 +318,23 @@ func calculateTaskHashFromHashable(full *taskHashable) (string, error) {
 			globalHash:           full.globalHash,
 			taskDependencyHashes: full.taskDependencyHashes,
 		})
+	}
+
+	switch full.envMode {
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
 		full.passthroughEnv = nil
 		return fs.HashObject(full)
-	default:
-		// When we aren't in infer or loose mode we can hash the whole object as is.
+	case util.Strict:
+		// Collapse `nil` and `[]` in strict mode.
+		if full.passthroughEnv == nil {
+			full.passthroughEnv = make([]string, 0)
+		}
 		return fs.HashObject(full)
+	case util.Infer:
+		panic("task inferred status should have already been resolved")
+	default:
+		panic("unimplemented environment mode")
 	}
 }
 
@@ -370,7 +369,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
+func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string, useOldTaskHashable bool) (string, error) {
 	pfs := specFromPackageTask(packageTask)
 	pkgFileHashKey := pfs.ToKey()
 
@@ -416,7 +415,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 		hashableEnvPairs:     hashableEnvPairs,
 		globalHash:           th.globalHash,
 		taskDependencyHashes: taskDependencyHashes,
-	})
+	}, useOldTaskHashable)
 	if err != nil {
 		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)
 	}

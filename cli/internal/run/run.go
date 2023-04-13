@@ -354,6 +354,11 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
+	globalEnvMode := rs.Opts.runOpts.EnvMode
+	if globalEnvMode == util.Infer && turboJSON.GlobalPassthroughEnv != nil {
+		globalEnvMode = util.Strict
+	}
+
 	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
@@ -386,6 +391,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			taskHashTracker,
 			turboCache,
 			turboJSON,
+			globalEnvMode,
 			r.base,
 			summary,
 		)
@@ -400,6 +406,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		taskHashTracker,
 		turboCache,
 		turboJSON,
+		globalEnvMode,
 		packagesInScope,
 		r.base,
 		summary,

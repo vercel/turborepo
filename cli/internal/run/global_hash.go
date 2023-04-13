@@ -72,9 +72,14 @@ func calculateGlobalHashFromHashable(full GlobalHashable) (string, error) {
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
 		full.envVarPassthroughs = nil
 		return fs.HashObject(full)
-	default:
-		// When we aren't in infer or loose mode we can hash the whole object as is.
+	case util.Strict:
+		// Collapse `nil` and `[]` in strict mode.
+		if full.envVarPassthroughs == nil {
+			full.envVarPassthroughs = make([]string, 0)
+		}
 		return fs.HashObject(full)
+	default:
+		panic("unimplemented environment mode")
 	}
 }
 

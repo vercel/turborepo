@@ -82,7 +82,7 @@ Setup
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
-        "envMode": "infer",
+        "envMode": "loose",
         "environmentVariables": {
           "configured": [],
           "inferred": [],
@@ -132,7 +132,7 @@ Setup
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
-        "envMode": "infer",
+        "envMode": "loose",
         "environmentVariables": {
           "configured": [],
           "inferred": [],

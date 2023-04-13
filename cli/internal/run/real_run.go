@@ -42,6 +42,7 @@ func RealRun(
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	turboJSON *fs.TurboJSON,
+	globalEnvMode util.EnvMode,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	runSummary runsummary.Meta,
@@ -71,11 +72,6 @@ func RealRun(
 	colorCache := colorcache.New()
 
 	runCache := runcache.New(turboCache, base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
-
-	globalEnvMode := rs.Opts.runOpts.EnvMode
-	if globalEnvMode == util.Infer && turboJSON.GlobalPassthroughEnv != nil {
-		globalEnvMode = util.Strict
-	}
 
 	ec := &execContext{
 		colorCache:      colorCache,
