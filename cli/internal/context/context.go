@@ -214,10 +214,9 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	}
 	populateGraphWaitGroup := &errgroup.Group{}
 	for _, pkg := range c.WorkspaceInfos.PackageJSONs {
-		pkg := pkg
-		populateGraphWaitGroup.Go(func() error {
-			return c.populateWorkspaceGraphForPackageJSON(pkg, rootpath, pkg.Name, &warnings)
-		})
+		if err := c.populateWorkspaceGraphForPackageJSON(pkg, rootpath, pkg.Name, &warnings); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := populateGraphWaitGroup.Wait(); err != nil {
@@ -282,8 +281,6 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON, warn
 // that are not within the monorepo. The vertexName is used to override the package name in the graph.
 // This can happen when adding the root package, which can have an arbitrary name.
 func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, rootpath string, vertexName string, warnings *Warnings) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	depMap := make(map[string]string)
 	internalDepsSet := make(dag.Set)
 	externalUnresolvedDepsSet := make(dag.Set)
