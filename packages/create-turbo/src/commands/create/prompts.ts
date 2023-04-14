@@ -2,7 +2,7 @@ import path from "path";
 import fs from "fs-extra";
 import chalk from "chalk";
 import type { PackageManager } from "@turbo/workspaces";
-import type { CreateCommandArgument, CreateCommandOptions } from "./types";
+import type { CreateCommandArgument } from "./types";
 import { getAvailablePackageManagers } from "@turbo/utils";
 import { isFolderEmpty } from "../../utils/isFolderEmpty";
 import inquirer from "inquirer";
@@ -95,14 +95,17 @@ export async function packageManager({
     type: "list",
     message: "Which package manager do you want to use?",
     when:
+      // prompt for package manager if it wasn't provided as an argument, or if it was
+      // provided, but isn't available (always allow npm)
       !packageManager ||
+      (packageManager as PackageManager) !== "npm" ||
       !Object.keys(availablePackageManagers).includes(packageManager),
     choices: ["npm", "pnpm", "yarn"].map((p) => ({
       name: p,
       value: p,
-      // npm should always be available
       disabled:
-        p !== "npm" ||
+        // npm should always be available
+        p === "npm" ||
         availablePackageManagers?.[p as PackageManager]?.available
           ? false
           : `not installed`,
