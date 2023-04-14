@@ -3,12 +3,9 @@ use std::mem::replace;
 use anyhow::Result;
 use swc_core::{
     common::DUMMY_SP,
-    ecma::{
-        ast::{
-            ClassDecl, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, FnDecl,
-            Ident, ModuleDecl, ModuleItem, Stmt,
-        },
-        visit::AstParentKind,
+    ecma::ast::{
+        ClassDecl, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, FnDecl,
+        Ident, ModuleDecl, ModuleItem, Stmt,
     },
     quote,
 };
@@ -59,7 +56,7 @@ impl CodeGenerateable for EsmModuleItem {
                             );
                             *module_item = ModuleItem::Stmt(stmt);
                         }
-                        ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, ..}) => {
+                        ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, span }) => {
                             match decl {
                                 DefaultDecl::Class(class) => {
                                     *module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Class(ClassDecl {
@@ -76,7 +73,8 @@ impl CodeGenerateable for EsmModuleItem {
                                     })))
                                 }
                                 DefaultDecl::TsInterfaceDecl(_) => {
-                                    panic!("typescript declarations are unexpected here");
+                                    // not matching, might happen due to eventual consistency
+                                    *module_item = ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, span }));
                                 }
                             }
                         }
@@ -93,12 +91,12 @@ impl CodeGenerateable for EsmModuleItem {
                             // already removed
                         }
                         _ => {
-                            // not matching
+                            // not matching, might happen due to eventual consistency
                             *module_item = ModuleItem::ModuleDecl(module_decl);
                         }
                     }
                 } else {
-                    // not matching
+                    // not matching, might happen due to eventual consistency
                     *module_item = item;
                 }
             }),
