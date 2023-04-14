@@ -307,7 +307,7 @@ func Test_PnpmOverride(t *testing.T) {
 	assert.NilError(t, err, "failure to find package")
 	assert.Assert(t, pkg.Found)
 	assert.DeepEqual(t, pkg.Key, "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
-	assert.DeepEqual(t, pkg.Version, "/hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
+	assert.DeepEqual(t, pkg.Version, "0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy")
 }
 
 func Test_DepPathParsing(t *testing.T) {
@@ -377,7 +377,7 @@ func Test_DepPathParsing(t *testing.T) {
 	}
 }
 
-func Test_MixedVersioning(t *testing.T) {
+func Test_PnpmAliasesOverlap(t *testing.T) {
 	contents, err := getFixture(t, "pnpm-absolute.yaml")
 	assert.NilError(t, err)
 
@@ -398,7 +398,6 @@ func Test_MixedVersioning(t *testing.T) {
 	assert.DeepEqual(t, deps, []Package{
 		{"/@scope/child/1.0.0", "1.0.0", true},
 		{"/@scope/parent/1.0.0", "1.0.0", true},
-		{"/Special/1.2.3", "/Special/1.2.3", true},
 		{"/Special/1.2.3", "1.2.3", true},
 		{"/another/1.0.0", "1.0.0", true},
 		{"/foo/1.0.0", "1.0.0", true},
