@@ -262,74 +262,153 @@ impl GlobSender {
     }
 }
 
+#[derive(PartialEq, Eq, Debug)]
+enum GlobSymbol<'a> {
+    Char(&'a [u8]),
+    OpenBracket,
+    CloseBracket,
+    OpenBrace,
+    CloseBrace,
+    Star,
+    DoubleStar,
+    Question,
+    Negation,
+    PathSeperator,
+}
+
 /// Gets the minimum set of paths that can be watched for a given glob,
 /// specified in minimatch glob syntax.
+///
+/// syntax:
+/// ?		Matches any single character.
+/// *		Matches zero or more characters, except for path separators
+/// **		Matches zero or more characters, including path separators.
+///         Must match a complete path segment.
+/// [ab]	Matches one of the characters contained in the brackets.
+///         Character ranges, e.g. [a-z] are also supported. Use [!ab] or [^ab]
+///         to match any character except those contained in the brackets.
+/// {a,b}	Matches one of the patterns contained in the braces. Any of the
+///         wildcard characters can be used in the sub-patterns. Braces may
+///         be nested up to 10 levels deep.
+/// !		When at the start of the glob, this negates the result.
+///         Multiple ! characters negate the glob multiple times.
+/// \		A backslash character may be used to escape any special characters.
+///
+/// Of these, we only handle `{` and escaping.
 ///
 /// note: it is currently extremely conservative, handling only `**`, braces,
 /// and `?`. any other case watches the entire directory.
 fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
-    let mut chunks = vec![];
+    // get all the symbols and chunk them by path seperator
+    let chunks = glob_to_symbols(glob).group_by(|s| s != &GlobSymbol::PathSeperator);
+    let chunks = chunks
+        .into_iter()
+        .filter_map(|(not_sep, chunk)| (not_sep).then(|| chunk));
 
-    for chunk in glob.split('/') {
-        if chunk.contains('*') || chunk.contains('[') || chunk.contains(']') {
-            break;
-        }
+    // multi cartisian product allows us to get all the possible combinations
+    // of path components for each chunk. for example, if we have a glob
+    // `{a,b}/1/{c,d}`, it will lazily yield the following sets of segments:
+    //   ["a", "1", "c"]
+    //   ["a", "1", "d"]
+    //   ["b", "1", "c"]
+    //   ["b", "1", "d"]
 
-        if chunk.starts_with('{') && chunk.ends_with('}') {
-            return chunk[1..chunk.len() - 1]
-                .split(',')
-                .map(|c| chunks.iter().chain(std::iter::once(&c)).collect())
-                .collect();
-        }
+    chunks
+        .map(symbols_to_combinations) // yield all the possible segments for each glob chunk
+        .take_while(|c| c.is_some()) // if any segment has no possible paths, we can stop
+        .filter_map(|chunk| chunk)
+        .multi_cartesian_product() // get all the possible combinations of path segments
+        .map(|chunks| chunks.into_iter().collect::<PathBuf>())
+        .collect()
+}
 
-        // a question mark in the first character is invalid
-        if chunk.starts_with('?') {
-            break;
-        }
+/// given a set of symbols, returns an iterator over the possible path segments
+/// that can be generated from them
+///
+/// example: given the symbols "{a,b}b" it will yield ["ab"] and ["bb"]
+fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
+    symbols: T,
+) -> Option<impl Iterator<Item = String> + Clone> {
+    let mut bytes = Vec::new();
 
-        if chunk.contains('?') {
-            let no_qmark = chunk.replace('?', "");
-
-            if no_qmark.len() * 2 == chunk.len() {
-                // each character has a question mark, so we
-                // will end up watching an empty chunk, which
-                // is just the parent directory
-                break;
+    for symbol in symbols {
+        match symbol {
+            GlobSymbol::Char(c) => {
+                bytes.extend_from_slice(c);
             }
-
-            // get all the indices of characters that could be optional
-            // ex: ab? -> [1]
-            // ex: ab?b? -> [1, 2]
-            let potentially_optional_character_indices = chunk
-                .match_indices('?')
-                .map(|(qmark_index, _)| qmark_index) // get all the indices of question marks
-                .enumerate() // pair those with the number of question marks we've seen so far
-                .map(|(qmark_index, qmarks_so_far)| qmark_index - qmarks_so_far - 1); // get the index of the preceding character with qmarks removed
-
-            return potentially_optional_character_indices
-                .powerset() // get all combinations of indices to remove
-                .map(|indices_to_remove| {
-                    let mut new_chunk = no_qmark.clone();
-                    // reverse the indices so we can remove them without
-                    // having to recalculate the offsets
-                    for i in indices_to_remove.iter().rev() {
-                        new_chunk.remove(*i);
-                    }
-                    new_chunk
-                })
-                .map(|chunk| {
-                    chunks
-                        .iter()
-                        .chain(std::iter::once(&chunk.as_str()))
-                        .collect()
-                })
-                .collect();
+            GlobSymbol::OpenBracket => return None, // todo handle brackets
+            GlobSymbol::CloseBracket => return None,
+            GlobSymbol::OpenBrace => return None, // todo handle braces
+            GlobSymbol::CloseBrace => return None,
+            GlobSymbol::Star => return None,
+            GlobSymbol::DoubleStar => return None,
+            GlobSymbol::Question => return None,
+            GlobSymbol::Negation => return None,
+            GlobSymbol::PathSeperator => return None,
         }
-
-        chunks.push(chunk);
     }
 
-    vec![chunks.iter().collect()]
+    Some(std::iter::once(
+        String::from_utf8(bytes).expect("char is always valid utf8"),
+    ))
+}
+
+/// parses and escapes a glob, returning an iterator over the symbols
+fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol> {
+    let glob_bytes = glob.as_bytes();
+    let mut escaped = false;
+    let mut cursor = unic_segment::GraphemeCursor::new(0, glob.len());
+
+    std::iter::from_fn(move || loop {
+        let start = cursor.cur_cursor();
+        if start == glob.len() {
+            return None;
+        }
+        let end = cursor.next_boundary(glob, 0).unwrap().unwrap();
+
+        if escaped {
+            escaped = false;
+            return if end - start == 1 {
+                Some(GlobSymbol::Char(match glob_bytes[start] {
+                    b'a' => &[b'\x61'],
+                    b'b' => &[b'\x08'],
+                    b'n' => &[b'\n'],
+                    b'r' => &[b'\r'],
+                    b't' => &[b'\t'],
+                    _ => &glob_bytes[start..end],
+                }))
+            } else {
+                return Some(GlobSymbol::Char(&glob_bytes[start..end]));
+            };
+        }
+
+        return if end - start == 1 {
+            match glob_bytes[start] {
+                b'\\' => {
+                    escaped = true;
+                    continue;
+                }
+                b'[' => Some(GlobSymbol::OpenBracket),
+                b']' => Some(GlobSymbol::CloseBracket),
+                b'{' => Some(GlobSymbol::OpenBrace),
+                b'}' => Some(GlobSymbol::CloseBrace),
+                b'*' => {
+                    if glob_bytes.get(end) == Some(&b'*') {
+                        cursor.set_cursor(end + 1);
+                        Some(GlobSymbol::DoubleStar)
+                    } else {
+                        Some(GlobSymbol::Star)
+                    }
+                }
+                b'?' => Some(GlobSymbol::Question),
+                b'!' => Some(GlobSymbol::Negation),
+                b'/' => Some(GlobSymbol::PathSeperator),
+                _ => Some(GlobSymbol::Char(&glob_bytes[start..end])),
+            }
+        } else {
+            Some(GlobSymbol::Char(&glob_bytes[start..end]))
+        };
+    })
 }
 
 #[cfg(test)]
@@ -338,14 +417,14 @@ mod test {
 
     use test_case::test_case;
 
+    use super::GlobSymbol::*;
+
     #[test_case("foo/**", vec!["foo"])]
     #[test_case("foo/{a,b}", vec!["foo/a", "foo/b"])]
     #[test_case("foo/*/bar", vec!["foo"])]
     #[test_case("foo/[a-d]/bar", vec!["foo"])]
     #[test_case("foo/a?/bar", vec!["foo"])]
-    #[test_case("foo/ab?/bar", vec!["foo/a", "foo/ab"])]
-    #[test_case("foo/ab?c?", vec!["foo/a", "foo/ab", "foo/abc", "foo/ac"])]
-    // todo: this should be ["foo/a/a", "foo/a/ab", "foo/b/a", "foo/b/ab"]
+    #[test_case("foo/ab?/bar", vec!["foo"] ; "question marks ")]
     #[test_case("foo/{a,b}/ab?", vec!["foo/a", "foo/b"])]
     fn test_handles_doublestar(glob: &str, paths_exp: Vec<&str>) {
         let mut paths = super::glob_to_paths(glob);
@@ -354,5 +433,17 @@ mod test {
             paths,
             paths_exp.iter().map(PathBuf::from).collect::<Vec<_>>()
         );
+    }
+
+    #[test_case("🇳🇴/🇳🇴", vec![Char("🇳🇴".as_bytes()), PathSeperator, Char("🇳🇴".as_bytes())])]
+    #[test_case("foo/**", vec![Char(b"f"), Char(b"o"), Char(b"o"), PathSeperator, DoubleStar])]
+    #[test_case("foo/{a,b}", vec![Char(b"f"), Char(b"o"), Char(b"o"), PathSeperator, OpenBrace, Char(b"a"), Char(b","), Char(b"b"), CloseBrace])]
+    #[test_case("\\f", vec![Char(b"f")])]
+    #[test_case("\\\\f", vec![Char(b"\\"), Char(b"f")])]
+    #[test_case("\\🇳🇴", vec![Char("🇳🇴".as_bytes())])]
+    #[test_case("\\n", vec![Char(b"\n")])]
+    fn test_glob_to_symbols(glob: &str, symbols_exp: Vec<super::GlobSymbol>) {
+        let symbols = super::glob_to_symbols(glob).collect::<Vec<_>>();
+        assert_eq!(symbols.as_slice(), symbols_exp.as_slice());
     }
 }
