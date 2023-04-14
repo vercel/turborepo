@@ -58,6 +58,8 @@ impl<'a> Ident<'a> {
     }
 }
 
+// These TryFrom impls should be FromStr, but to avoid unnecessary copying we
+// use TryFrom so we can use a lifetime.
 impl<'a> TryFrom<&'a str> for Ident<'a> {
     type Error = Error;
 

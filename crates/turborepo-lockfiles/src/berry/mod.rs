@@ -10,7 +10,7 @@ use std::{
     path::Path,
 };
 
-use identifiers::{Descriptor, Ident, Locator};
+use identifiers::{Descriptor, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -30,7 +30,7 @@ pub enum Error {
     MissingPackageForLocator(Locator<'static>),
 }
 
-// We depend on BTree iteration being sorted
+// We depend on BTree iteration being sorted for correct serialization
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 pub struct BerryLockfile<'a> {
@@ -106,9 +106,6 @@ impl<'a> BerryLockfile<'a> {
 
             // TODO we're ignoring buildin patches, should we not?
             if locator.patch_file().is_some() {
-                // in go code we just produce the original by replacing the ref with
-                // "npm:{package.version}" I think we can extract this from the
-                // locator itself
                 let original_locator = locator
                     .patched_locator()
                     .ok_or_else(|| Error::PatchMissingOriginalLocator(locator.as_owned()))?;
@@ -131,64 +128,46 @@ impl<'a> BerryLockfile<'a> {
             .transpose()?
             .unwrap_or_default();
 
-        // A temporary representation that is keyed off of the ident to allow for faster
-        // finding of possible descriptor matches
-        /*
-        let mut descriptor_by_indent: Map<Ident, HashSet<&str>> = Map::new();
-        for descriptor in descriptor_locator.keys() {
-            let ranges = descriptor_by_indent
-                .entry(descriptor.ident.clone())
-                .or_default();
-            ranges.insert(&descriptor.range);
-        }
-        */
-
-        let mut xs: HashSet<_> = descriptor_locator.keys().collect();
-        for package in lockfile.packages.values() {
-            for (name, range) in package.dependencies.iter().flatten() {
-                let mut descriptor = Descriptor::new(name, range.as_ref())?;
-                if descriptor.protocol().is_none() {
-                    // probably shouldn't unwrap
-                    descriptor.range = resolver.get(&descriptor).unwrap().into();
-                }
-                xs.remove(&descriptor);
-            }
-        }
-
-        // we go through every dep package
-        // if we can't find a descriptor for a given ident then we should add a map
-        // how does this work for pkg specific overrides?
-        // need to get resolution field as otherwise impossible to tell which version
-        // should be used
-
-        let extensions = xs
-            .into_iter()
-            .map(|desc| desc.clone().into_owned())
-            .collect();
-
-        // make sure to filter out any idents with no ranges
-
-        // instead of generating all possible descriptors we could just check the ident
-        // & that the descriptor minus the protocol
-
-        // list of package extensions is just descriptors - any that appear to come from
-        // a dependency
-
-        // overrides essentially inject a descriptor with an exact version
-        // this descriptor should be used as the default if it appears an entry's dep
-        // doesn't exist e.g. lodash@npm:^4.17.20 doesn't exist
-        // we should then look any lodash@ and use that instead
-
-        // we'll need to keep a list of these mappings around for all deps
-        Ok(Self {
+        let mut this = Self {
             data: lockfile,
             resolutions: descriptor_locator,
             locator_package,
             resolver,
             patches,
-            extensions,
             overrides,
-        })
+            extensions: Default::default(),
+        };
+
+        this.populate_extensions()?;
+
+        Ok(this)
+    }
+
+    fn populate_extensions(&mut self) -> Result<(), Error> {
+        let mut possible_extensions: HashSet<_> = self
+            .resolutions
+            .keys()
+            .filter(|descriptor| matches!(descriptor.protocol(), Some("npm")))
+            .collect();
+        for (locator, package) in &self.locator_package {
+            for (name, range) in package.dependencies.iter().flatten() {
+                // TODO: go through overrides
+                let mut descriptor = self.resolve_dependency(locator, name, range.as_ref())?;
+                if descriptor.protocol().is_none() {
+                    if let Some(range) = self.resolver.get(&descriptor) {
+                        descriptor.range = range.into();
+                    }
+                }
+                possible_extensions.remove(&descriptor);
+            }
+        }
+
+        self.extensions.extend(
+            possible_extensions
+                .into_iter()
+                .map(|desc| desc.clone().into_owned()),
+        );
+        Ok(())
     }
 
     pub fn patches(&self) -> Vec<&Path> {
@@ -411,10 +390,19 @@ impl<'a> Lockfile for BerryLockfile<'a> {
             }
         }
 
-        let locator = self
-            .resolutions
-            .get(&dependency)
-            .ok_or_else(|| crate::Error::MissingPackage(dependency.to_string()))?;
+        if dependency.protocol().is_none() {
+            if let Some(range) = self.resolver.get(&dependency) {
+                dependency.range = range.into();
+            }
+        }
+
+        let locator = self.resolutions.get(&dependency);
+
+        if locator.is_none() {
+            return Ok(None);
+        }
+
+        let locator = locator.unwrap();
 
         let package = self
             .locator_package
@@ -494,6 +482,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
+    use crate::Package;
 
     #[test]
     fn test_deserialize_lockfile() {
@@ -509,6 +498,98 @@ mod test {
         let lockfile: LockfileData = serde_yaml::from_str(contents).unwrap();
         let new_contents = lockfile.to_string();
         assert_eq!(contents, new_contents);
+    }
+
+    #[test]
+    fn test_resolve_package() {
+        let data: LockfileData =
+            serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+
+        assert_eq!(
+            lockfile
+                .resolve_package("apps/docs", "js-tokens", "^3.0.0 || ^4.0.0")
+                .unwrap(),
+            Some(Package {
+                key: "js-tokens@npm:4.0.0".into(),
+                version: "4.0.0".into()
+            }),
+        );
+        assert_eq!(
+            lockfile
+                .resolve_package("apps/docs", "js-tokens", "^4.0.0")
+                .unwrap(),
+            Some(Package {
+                key: "js-tokens@npm:4.0.0".into(),
+                version: "4.0.0".into()
+            }),
+        );
+        assert_eq!(
+            lockfile
+                .resolve_package("apps/docs", "eslint-config-custom", "*")
+                .unwrap(),
+            Some(Package {
+                key: "eslint-config-custom@workspace:packages/eslint-config-custom".into(),
+                version: "0.0.0-use.local".into()
+            }),
+        );
+        assert_eq!(
+            lockfile
+                .resolve_package("apps/docs", "@babel/code-frame", "^7.12.11")
+                .unwrap(),
+            None,
+        );
+    }
+
+    #[test]
+    fn test_all_dependencies() {
+        let data: LockfileData =
+            serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+
+        let pkg = lockfile
+            .resolve_package("apps/docs", "react-dom", "18.2.0")
+            .unwrap()
+            .unwrap();
+        let deps = lockfile.all_dependencies(&pkg.key).unwrap().unwrap();
+        assert_eq!(
+            deps,
+            [
+                ("loose-envify".to_string(), "^1.1.0".to_string()),
+                ("scheduler".to_string(), "^0.23.0".to_string())
+            ]
+            .iter()
+            .cloned()
+            .collect()
+        );
+    }
+
+    #[test]
+    fn test_package_extension_detection() {
+        let data: LockfileData =
+            serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+
+        assert_eq!(
+            &lockfile.extensions,
+            &(["@babel/types@npm:^7.8.3", "lodash@npm:4.17.21"]
+                .iter()
+                .map(|s| Descriptor::try_from(*s).unwrap())
+                .collect::<HashSet<_>>())
+        );
+    }
+
+    #[test]
+    fn test_patch_list() {
+        let data: LockfileData =
+            serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+
+        let locator = Locator::try_from("resolve@npm:2.0.0-next.4").unwrap();
+
+        let patch = lockfile.patches.get(&locator).unwrap();
+        let package = lockfile.locator_package.get(patch).unwrap();
+        assert_eq!(package.version.as_ref(), "2.0.0-next.4");
     }
 
     #[test]
