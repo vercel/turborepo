@@ -520,7 +520,10 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Link { no_gitignore, target} => {
+        Command::Link {
+            no_gitignore,
+            target,
+        } => {
             if clap_args.test_run {
                 println!("Link test run successful");
                 return Ok(Payload::Rust(Ok(0)));
