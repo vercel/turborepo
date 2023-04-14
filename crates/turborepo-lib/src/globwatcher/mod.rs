@@ -152,10 +152,13 @@ impl<T: Watcher> HashGlobWatcher<T> {
         // execution dependencies to prevent that.
         self.config.flush().await.unwrap();
 
-        let globs = self.hash_globs.lock().unwrap();
-        match globs.get(hash) {
+        // hash_globs tracks all unchanged globs for a given hash.
+        // if a hash is not in globs, then either everything has changed
+        // or it was never registered. either way, we return all candidates
+        let hash_globs = self.hash_globs.lock().expect("only fails if poisoned");
+        match hash_globs.get(hash) {
             Some(glob) => {
-                candidates.retain(|c| glob.include.contains(c));
+                candidates.retain(|c| !glob.include.contains(c));
                 candidates
             }
             None => candidates,
