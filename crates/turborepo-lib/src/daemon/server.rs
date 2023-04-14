@@ -19,6 +19,7 @@ use std::{
 };
 
 use globwatch::{StopSource, Watcher};
+use log::error;
 use tokio::{
     select,
     signal::ctrl_c,
@@ -220,15 +221,22 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         request: tonic::Request<proto::NotifyOutputsWrittenRequest>,
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
         let inner = request.into_inner();
-        self.watcher
+
+        match self
+            .watcher
             .watch_globs(
                 Arc::new(inner.hash),
                 inner.output_globs,
                 inner.output_exclusion_globs,
             )
-            .await;
-
-        Ok(tonic::Response::new(proto::NotifyOutputsWrittenResponse {}))
+            .await
+        {
+            Ok(_) => Ok(tonic::Response::new(proto::NotifyOutputsWrittenResponse {})),
+            Err(e) => {
+                error!("failed to watch globs: {:?}", e);
+                Err(tonic::Status::internal("failed to watch globs"))
+            }
+        }
     }
 
     async fn get_changed_outputs(
