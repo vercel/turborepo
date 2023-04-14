@@ -601,59 +601,10 @@
 <a href="#601" id="601">601</a>
 <a href="#602" id="602">602</a>
 <a href="#603" id="603">603</a>
-<a href="#604" id="604">604</a>
-<a href="#605" id="605">605</a>
-<a href="#606" id="606">606</a>
-<a href="#607" id="607">607</a>
-<a href="#608" id="608">608</a>
-<a href="#609" id="609">609</a>
-<a href="#610" id="610">610</a>
-<a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a>
-<a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a>
-<a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a>
-<a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a>
-<a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a>
-<a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>containment_tree;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>evaluate;
 <span class="kw">pub mod </span>optimize;
 
@@ -669,7 +620,7 @@
 <span class="kw">use </span>turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{GraphTraversal, GraphTraversalResult, ReverseTopological, Visit, VisitControlFlow},
-    primitives::{BoolVc, StringVc},
+    primitives::StringVc,
     trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
@@ -680,7 +631,6 @@
 <span class="kw">pub use </span><span class="self">self</span>::{
     chunking_context::{ChunkingContext, ChunkingContextVc},
     evaluate::{EvaluatableAsset, EvaluatableAssetVc, EvaluatableAssets, EvaluatableAssetsVc},
-    optimize::optimize,
 };
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsVc},
@@ -750,13 +700,17 @@
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>Chunks(Vec&lt;ChunkVc&gt;);
 
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunksVc {
+    <span class="doccomment">/// Creates a new empty [ChunksVc].
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>empty() -&gt; ChunksVc {
+        <span class="self">Self</span>::cell(<span class="macro">vec!</span>[])
+    }
+}
+
 <span class="doccomment">/// A chunk is one type of asset.
 /// It usually contains multiple chunk items.
-/// There is an optional trait [ParallelChunkReference] that
-/// [AssetReference]s from a [Chunk] can implement.
-/// If they implement that and [ParallelChunkReference::is_loaded_in_parallel]
-/// returns true, all referenced assets (if they are [Chunk]s) are placed in the
-/// same chunk group.
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>Chunk: Asset {
     <span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc;
@@ -767,12 +721,11 @@
     </span><span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
         <span class="self">self</span>.ident().path()
     }
-}
-
-<span class="doccomment">/// see [Chunk] for explanation
-</span><span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>ParallelChunkReference: AssetReference + ValueToString {
-    <span class="kw">fn </span>is_loaded_in_parallel(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoolVc;
+    <span class="doccomment">/// Returns a list of chunks that should be loaded in parallel to this
+    /// chunk.
+    </span><span class="kw">fn </span>parallel_chunks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunksVc {
+        ChunksVc::empty()
+    }
 }
 
 <span class="doccomment">/// Specifies how a chunk interacts with other chunks when building a chunk
@@ -816,59 +769,6 @@
 </span><span class="kw">pub trait </span>ChunkableAssetReference: AssetReference + ValueToString {
     <span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(<span class="prelude-val">Some</span>(ChunkingType::default()))
-    }
-}
-
-<span class="doccomment">/// A reference to a [Chunk]. Can be loaded in parallel, see [Chunk].
-</span><span class="attr">#[turbo_tasks::value]
-</span><span class="kw">pub struct </span>ChunkReference {
-    chunk: ChunkVc,
-    parallel: bool,
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkReferenceVc {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(chunk: ChunkVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(ChunkReference {
-            chunk,
-            parallel: <span class="bool-val">false</span>,
-        })
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new_parallel(chunk: ChunkVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(ChunkReference {
-            chunk,
-            parallel: <span class="bool-val">true</span>,
-        })
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>AssetReference <span class="kw">for </span>ChunkReference {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::asset(<span class="self">self</span>.chunk.into()).into()
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>ChunkReference {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
-        <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;chunk {}&quot;</span>,
-            <span class="self">self</span>.chunk.ident().to_string().<span class="kw">await</span><span class="question-mark">?
-        </span>)))
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ParallelChunkReference <span class="kw">for </span>ChunkReference {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>is_loaded_in_parallel(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoolVc {
-        BoolVc::cell(<span class="self">self</span>.parallel)
     }
 }
 

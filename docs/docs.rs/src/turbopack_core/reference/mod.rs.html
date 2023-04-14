@@ -170,7 +170,6 @@
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashSet, VecDeque};
 
 <span class="kw">use </span>anyhow::Result;
@@ -187,11 +186,10 @@
 
 <span class="doccomment">/// A reference to one or multiple [Asset]s or other special things.
 /// There are a bunch of optional traits that can influence how these references
-/// are handled. e. g. [ChunkableAssetReference] or [ParallelChunkReference]
+/// are handled. e. g. [ChunkableAssetReference]
 ///
 /// [Asset]: crate::asset::Asset
 /// [ChunkableAssetReference]: crate::chunk::ChunkableAssetReference
-/// [ParallelChunkReference]: crate::chunk::ParallelChunkReference
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>AssetReference: ValueToString {
     <span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc;

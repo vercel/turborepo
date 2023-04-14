@@ -500,10 +500,6 @@
 <a href="#500" id="500">500</a>
 <a href="#501" id="501">501</a>
 <a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a>
-<a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -518,25 +514,28 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        availability_info::AvailabilityInfo, optimize, ChunkVc, ChunkableAsset, ChunkableAssetVc,
-        ChunkingContext, ChunkingContextVc, ChunksVc, EvaluatableAssetsVc, ParallelChunkReference,
-        ParallelChunkReferenceVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        ChunkingContext, ChunkingContextVc, ChunksVc, EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
     ident::{AssetIdent, AssetIdentVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{ModulePart, PrimaryResolveResult},
+    resolve::ModulePart,
 };
+<span class="kw">use </span>turbopack_css::chunk::{CssChunkVc, CssChunksVc};
 <span class="kw">use </span>turbopack_ecmascript::chunk::{
     EcmascriptChunkItemVc, EcmascriptChunkVc, EcmascriptChunkingContext,
-    EcmascriptChunkingContextVc,
+    EcmascriptChunkingContextVc, EcmascriptChunksVc,
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::ecmascript::{
-    chunk::EcmascriptDevChunkVc,
-    evaluate::chunk::EcmascriptDevEvaluateChunkVc,
-    list::asset::{EcmascriptDevChunkListSource, EcmascriptDevChunkListVc},
-    manifest::{chunk_asset::DevManifestChunkAssetVc, loader_item::DevManifestLoaderItemVc},
+<span class="kw">use crate</span>::{
+    css::optimize::optimize_css_chunks,
+    ecmascript::{
+        chunk::EcmascriptDevChunkVc,
+        evaluate::chunk::EcmascriptDevEvaluateChunkVc,
+        list::asset::{EcmascriptDevChunkListSource, EcmascriptDevChunkListVc},
+        manifest::{chunk_asset::DevManifestChunkAssetVc, loader_item::DevManifestLoaderItemVc},
+        optimize::optimize_ecmascript_chunks,
+    },
 };
 
 <span class="kw">pub struct </span>DevChunkingContextBuilder {
@@ -959,7 +958,15 @@
 {
     <span class="kw">let </span>chunks: Vec&lt;<span class="kw">_</span>&gt; = GraphTraversal::&lt;SkipDuplicates&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;::visit(
         entries,
-        get_chunk_children,
+        |chunk: ChunkVc| <span class="kw">async move </span>{
+            <span class="prelude-val">Ok</span>(chunk
+                .parallel_chunks()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.iter()
+                .copied()
+                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                .into_iter())
+        },
     )
     .<span class="kw">await
     </span>.completed()<span class="question-mark">?
@@ -967,48 +974,33 @@
     .into_iter()
     .collect();
 
-    <span class="kw">let </span>chunks = ChunksVc::cell(chunks);
-    <span class="kw">let </span>chunks = optimize(chunks);
+    <span class="kw">let </span><span class="kw-2">mut </span>ecmascript_chunks = <span class="macro">vec!</span>[];
+    <span class="kw">let </span><span class="kw-2">mut </span>css_chunks = <span class="macro">vec!</span>[];
+    <span class="kw">let </span><span class="kw-2">mut </span>other_chunks = <span class="macro">vec!</span>[];
 
-    <span class="prelude-val">Ok</span>(chunks)
-}
-
-<span class="doccomment">/// Computes the list of all chunk children of a given chunk.
-</span><span class="kw">async fn </span>get_chunk_children(parent: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = ChunkVc&gt; + Send&gt; {
-    <span class="prelude-val">Ok</span>(parent
-        .references()
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.iter()
-        .copied()
-        .map(reference_to_chunks)
-        .try_join()
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.into_iter()
-        .flatten())
-}
-
-<span class="doccomment">/// Get all parallel chunks from a parallel chunk reference.
-</span><span class="kw">async fn </span>reference_to_chunks(r: AssetReferenceVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = ChunkVc&gt; + Send&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>result = Vec::new();
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(pc) = ParallelChunkReferenceVc::resolve_from(r).<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="kw">if </span><span class="kw-2">*</span>pc.is_loaded_in_parallel().<span class="kw">await</span><span class="question-mark">? </span>{
-            result = r
-                .resolve_reference()
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.primary
-                .iter()
-                .map(|r| <span class="kw">async move </span>{
-                    <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(a) = r {
-                        ChunkVc::resolve_from(a).<span class="kw">await</span><span class="question-mark">?
-                    </span>} <span class="kw">else </span>{
-                        <span class="prelude-val">None
-                    </span>})
-                })
-                .try_join()
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).<span class="kw">await</span><span class="question-mark">? </span>{
+            ecmascript_chunks.push(ecmascript_chunk);
+        } <span class="kw">else if let </span><span class="prelude-val">Some</span>(css_chunk) = CssChunkVc::resolve_from(chunk).<span class="kw">await</span><span class="question-mark">? </span>{
+            css_chunks.push(css_chunk);
+        } <span class="kw">else </span>{
+            other_chunks.push(<span class="kw-2">*</span>chunk);
         }
     }
-    <span class="prelude-val">Ok</span>(result.into_iter().flatten())
+
+    <span class="kw">let </span>ecmascript_chunks =
+        optimize_ecmascript_chunks(EcmascriptChunksVc::cell(ecmascript_chunks)).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>css_chunks = optimize_css_chunks(CssChunksVc::cell(css_chunks)).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>chunks = ecmascript_chunks
+        .iter()
+        .copied()
+        .map(|chunk| chunk.as_chunk())
+        .chain(css_chunks.iter().copied().map(|chunk| chunk.as_chunk()))
+        .chain(other_chunks.into_iter())
+        .collect();
+
+    <span class="prelude-val">Ok</span>(ChunksVc::cell(chunks))
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="turbopack_dev" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
