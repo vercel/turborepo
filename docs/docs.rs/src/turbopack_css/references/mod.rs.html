@@ -199,6 +199,10 @@
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{
@@ -355,20 +359,24 @@
 
         <span class="kw">let </span>src = url_string(u);
 
-        <span class="kw">let </span>issue_span = u.span;
-        <span class="self">self</span>.references.push(
-            UrlAssetReferenceVc::new(
-                <span class="self">self</span>.origin,
-                RequestVc::parse(Value::new(src.to_string().into())),
-                AstPathVc::cell(as_parent_path(ast_path)),
-                IssueSourceVc::from_byte_offset(
-                    <span class="self">self</span>.source,
-                    issue_span.lo.to_usize(),
-                    issue_span.hi.to_usize(),
-                ),
-            )
-            .into(),
-        );
+        <span class="comment">// ignore internal urls like `url(#noiseFilter)`
+        // ignore server-relative urls like `url(/foo)`
+        </span><span class="kw">if </span>!<span class="macro">matches!</span>(src.bytes().next(), <span class="prelude-val">Some</span>(<span class="string">b&#39;#&#39;</span>) | <span class="prelude-val">Some</span>(<span class="string">b&#39;/&#39;</span>)) {
+            <span class="kw">let </span>issue_span = u.span;
+            <span class="self">self</span>.references.push(
+                UrlAssetReferenceVc::new(
+                    <span class="self">self</span>.origin,
+                    RequestVc::parse(Value::new(src.to_string().into())),
+                    AstPathVc::cell(as_parent_path(ast_path)),
+                    IssueSourceVc::from_byte_offset(
+                        <span class="self">self</span>.source,
+                        issue_span.lo.to_usize(),
+                        issue_span.hi.to_usize(),
+                    ),
+                )
+                .into(),
+            );
+        }
 
         u.visit_children_with_path(<span class="self">self</span>, ast_path);
     }

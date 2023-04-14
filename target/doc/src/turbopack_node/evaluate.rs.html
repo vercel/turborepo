@@ -648,7 +648,6 @@
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -833,10 +832,9 @@
 
     <span class="kw">let </span>bootstrap = NodeJsBootstrapAsset {
         path,
-        chunks: chunking_context.evaluated_chunk_group(
-            entry_module.as_root_chunk(chunking_context),
-            runtime_entries.with_entry(entry_module.into()),
-        ),
+        chunking_context,
+        entry: entry_module.as_root_chunk(chunking_context),
+        evaluatable_assets: runtime_entries.with_entry(entry_module.into()),
     }
     .cell()
     .into();

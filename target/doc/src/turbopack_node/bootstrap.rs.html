@@ -64,6 +64,16 @@
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -71,6 +81,7 @@
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    chunk::{ChunkVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc},
     ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
@@ -79,12 +90,21 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>NodeJsBootstrapAsset {
     <span class="kw">pub</span>(<span class="kw">super</span>) path: FileSystemPathVc,
-    <span class="kw">pub</span>(<span class="kw">super</span>) chunks: AssetsVc,
+    <span class="kw">pub</span>(<span class="kw">super</span>) chunking_context: ChunkingContextVc,
+    <span class="kw">pub</span>(<span class="kw">super</span>) entry: ChunkVc,
+    <span class="kw">pub</span>(<span class="kw">super</span>) evaluatable_assets: EvaluatableAssetsVc,
 }
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>node_js_bootstrap_chunk_reference_description() -&gt; StringVc {
     StringVc::cell(<span class="string">&quot;node.js bootstrap chunk&quot;</span>.to_string())
+}
+
+<span class="kw">impl </span>NodeJsBootstrapAsset {
+    <span class="kw">fn </span>chunks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetsVc {
+        <span class="self">self</span>.chunking_context
+            .evaluated_chunk_group(<span class="self">self</span>.entry, <span class="self">self</span>.evaluatable_assets)
+    }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -102,7 +122,7 @@
         // but until then this is a simple hack to make it work for now
         </span><span class="kw">let </span><span class="kw-2">mut </span>output = <span class="string">&quot;Error.stackTraceLimit = 100;\nglobal.self = global;\n&quot;</span>.to_string();
 
-        <span class="kw">for </span>chunk <span class="kw">in </span><span class="self">self</span>.chunks.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+        <span class="kw">for </span>chunk <span class="kw">in </span><span class="self">self</span>.chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
             <span class="kw">let </span>path = <span class="kw-2">&amp;*</span>chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = context_path.get_relative_path_to(path) {
                 <span class="kw">if </span>p.ends_with(<span class="string">&quot;.js&quot;</span>) {
@@ -116,7 +136,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="kw">let </span>chunks = <span class="self">self</span>.chunks.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunks = <span class="self">self</span>.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
             references.push(
