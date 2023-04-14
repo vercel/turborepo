@@ -1,15 +1,17 @@
 mod de;
 mod identifiers;
+mod protocol_resolver;
 mod resolution;
 mod ser;
 
 use std::{
     collections::{HashMap, HashSet},
     iter,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use identifiers::{Descriptor, Ident, Locator};
+use protocol_resolver::DescriptorResolver;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -34,6 +36,8 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 pub struct BerryLockfile<'a> {
     data: &'a LockfileData,
     resolutions: Map<Descriptor<'a>, Locator<'a>>,
+    // A mapping from descriptors without protocols to a range with a protocol
+    resolver: DescriptorResolver<'a>,
     locator_package: Map<Locator<'a>, &'a BerryPackage>,
     // Map of regular locators to patch locators that apply to them
     patches: Map<Locator<'static>, Locator<'a>>,
@@ -96,11 +100,12 @@ impl<'a> BerryLockfile<'a> {
         let mut patches = Map::new();
         let mut locator_package = Map::new();
         let mut descriptor_locator = Map::new();
+        let mut resolver = DescriptorResolver::new();
         for (key, package) in &lockfile.packages {
             let locator = Locator::try_from(package.resolution.as_str())?;
 
             // TODO we're ignoring buildin patches, should we not?
-            if let Some(path_file) = locator.patch_file() {
+            if locator.patch_file().is_some() {
                 // in go code we just produce the original by replacing the ref with
                 // "npm:{package.version}" I think we can extract this from the
                 // locator itself
@@ -114,6 +119,9 @@ impl<'a> BerryLockfile<'a> {
 
             for descriptor in Descriptor::from_lockfile_key(key) {
                 let descriptor = descriptor?;
+                if let Some(other) = resolver.insert(&descriptor) {
+                    panic!("Descriptor collision {descriptor} and {other}");
+                }
                 descriptor_locator.insert(descriptor, locator.clone());
             }
         }
@@ -125,6 +133,7 @@ impl<'a> BerryLockfile<'a> {
 
         // A temporary representation that is keyed off of the ident to allow for faster
         // finding of possible descriptor matches
+        /*
         let mut descriptor_by_indent: Map<Ident, HashSet<&str>> = Map::new();
         for descriptor in descriptor_locator.keys() {
             let ranges = descriptor_by_indent
@@ -132,18 +141,17 @@ impl<'a> BerryLockfile<'a> {
                 .or_default();
             ranges.insert(&descriptor.range);
         }
+        */
+
+        let mut xs: HashSet<_> = descriptor_locator.keys().collect();
         for package in lockfile.packages.values() {
-            if let Some(deps) = &package.dependencies {
-                for (name, range) in deps {
-                    let ident = Ident::try_from(name.as_str())?;
-                    if let Some(ranges) = descriptor_by_indent.get_mut(&ident) {
-                        // If a full range contains the range of an entry then
-                        // the descriptor can be accounted for.
-                        // We keep any range that doesn't contain the range listed in the entry
-                        ranges.retain(|full_range| !full_range.contains(range.as_ref()))
-                    } // should there ever be a time where we don't have a
-                      // matching ident?
+            for (name, range) in package.dependencies.iter().flatten() {
+                let mut descriptor = Descriptor::new(name, range.as_ref())?;
+                if descriptor.protocol().is_none() {
+                    // probably shouldn't unwrap
+                    descriptor.range = resolver.get(&descriptor).unwrap().into();
                 }
+                xs.remove(&descriptor);
             }
         }
 
@@ -153,15 +161,10 @@ impl<'a> BerryLockfile<'a> {
         // need to get resolution field as otherwise impossible to tell which version
         // should be used
 
-        let mut extensions = HashSet::new();
-        for (ident, ranges) in descriptor_by_indent {
-            for range in ranges {
-                extensions.insert(Descriptor {
-                    ident: ident.into_owned(),
-                    range: range.to_string().into(),
-                });
-            }
-        }
+        let extensions = xs
+            .into_iter()
+            .map(|desc| desc.clone().into_owned())
+            .collect();
 
         // make sure to filter out any idents with no ranges
 
@@ -181,6 +184,7 @@ impl<'a> BerryLockfile<'a> {
             data: lockfile,
             resolutions: descriptor_locator,
             locator_package,
+            resolver,
             patches,
             extensions,
             overrides,
@@ -345,6 +349,7 @@ impl<'a> BerryLockfile<'a> {
             // for proper pruning.
             locator_package: self.locator_package.clone(),
             patches,
+            resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
             overrides: self.overrides.clone(),
         })
@@ -357,6 +362,12 @@ impl<'a> BerryLockfile<'a> {
         range: &'a str,
     ) -> Result<Descriptor<'a>, Error> {
         let mut dependency = Descriptor::new(name, range)?;
+        // If there's no protocol we attempt to find a known one
+        if dependency.protocol().is_none() {
+            if let Some(range) = self.resolver.get(&dependency) {
+                dependency.range = range.to_string().into();
+            }
+        }
 
         for (resolution, reference) in &self.overrides {
             if let Some(override_dependency) =
@@ -516,6 +527,19 @@ mod test {
         let lodash_desc = pruned_lockfile
             .resolutions
             .get(&Descriptor::new("lodash", "npm:^4.17.0").unwrap());
+        assert!(lodash_desc.is_some());
+        assert_eq!(lodash_desc.unwrap().reference, "npm:4.17.21");
+
+        let pruned_lockfile = lockfile
+            .subgraph(
+                &["packages/b".into(), "packages/c".into()],
+                &["lodash@npm:4.17.21".into()],
+            )
+            .unwrap();
+
+        let lodash_desc = pruned_lockfile
+            .resolutions
+            .get(&Descriptor::new("lodash", "npm:^3.0.0 || ^4.0.0").unwrap());
         assert!(lodash_desc.is_some());
         assert_eq!(lodash_desc.unwrap().reference, "npm:4.17.21");
     }

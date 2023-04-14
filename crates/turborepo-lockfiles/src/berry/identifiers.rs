@@ -102,18 +102,19 @@ impl<'a> fmt::Display for Descriptor<'a> {
 impl<'a> Descriptor<'a> {
     pub fn new(ident: &'a str, range: &'a str) -> Result<Self, Error> {
         let ident = Ident::try_from(ident)?;
-        let mut range = Cow::from(range);
-        // If no protocol we use the default "npm:" protocol
-        if !PROTOCOL.is_match(&range) {
-            // We don't want to do this necessarily
-            // range.to_mut().insert_str(0, "npm:");
-        }
-
+        let range = range.into();
         Ok(Self { ident, range })
     }
+
     /// Extracts all descriptors that are present in a lockfile entry key
     pub fn from_lockfile_key(key: &'a str) -> impl Iterator<Item = Result<Descriptor<'a>, Error>> {
         MULTIKEY.split(key).map(Descriptor::try_from)
+    }
+
+    pub fn strip_protocol(range: &str) -> &str {
+        range
+            .find(':')
+            .map_or(range, |colon_index| &range[colon_index + 1..])
     }
 
     pub fn range_without_protocol(&self) -> &str {
@@ -122,8 +123,25 @@ impl<'a> Descriptor<'a> {
             .map_or(&self.range, |colon_index| &self.range[colon_index + 1..])
     }
 
+    pub fn into_owned(self) -> Descriptor<'static> {
+        let Self { ident, range } = self;
+        let range = Cow::Owned(range.to_string());
+        Descriptor {
+            ident: ident.into_owned(),
+            range,
+        }
+    }
+
     pub fn protocol(&self) -> Option<&str> {
         self.range.find(':').map(|i| &self.range[0..i])
+    }
+
+    /// Access the range based on the lifetime of the underlying string slice
+    pub fn range(&self) -> Option<&'a str> {
+        match self.range {
+            Cow::Borrowed(s) => Some(s),
+            _ => None,
+        }
     }
 
     /// If the descriptor is a patch returns the version that the patch targets
