@@ -252,7 +252,6 @@
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
-<a href="#255" id="255">255</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
@@ -366,19 +365,18 @@
             <span class="comment">// When possible bind to v4 and v6, otherwise ignore the error
             </span><span class="kw">let _ </span>= socket.set_only_v6(<span class="bool-val">false</span>);
         }
+        <span class="kw">let </span>sock_addr = addr.into();
         socket
-            .bind(<span class="kw-2">&amp;</span>addr.into())
+            .bind(<span class="kw-2">&amp;</span>sock_addr)
             .context(<span class="string">&quot;not able to bind address&quot;</span>)<span class="question-mark">?</span>;
+        socket.listen(<span class="number">128</span>).context(<span class="string">&quot;not able to listen on socket&quot;</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>listener: TcpListener = socket.into();
         <span class="kw">let </span>addr = listener
             .local_addr()
             .context(<span class="string">&quot;not able to get bound address&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span>server = Server::from_tcp(listener).context(<span class="string">&quot;Not able to start server&quot;</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(DevServerBuilder {
-            addr: addr.into(),
-            server,
-        })
+        <span class="prelude-val">Ok</span>(DevServerBuilder { addr, server })
     }
 }
 
