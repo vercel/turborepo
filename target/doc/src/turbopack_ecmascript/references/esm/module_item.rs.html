@@ -105,23 +105,14 @@
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::replace;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
-    ecma::{
-        ast::{
-            ClassDecl, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, FnDecl,
-            Ident, ModuleDecl, ModuleItem, Stmt,
-        },
-        visit::AstParentKind,
+    ecma::ast::{
+        ClassDecl, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, FnDecl,
+        Ident, ModuleDecl, ModuleItem, Stmt,
     },
     quote,
 };
@@ -160,10 +151,6 @@
         <span class="kw">let </span><span class="kw-2">mut </span>visitors = Vec::new();
 
         <span class="kw">let </span>path = <span class="kw-2">&amp;</span><span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro">assert!</span>(
-            <span class="macro">matches!</span>(path.last(), <span class="prelude-val">Some</span>(AstParentKind::ModuleDecl(<span class="kw">_</span>))),
-            <span class="string">&quot;EsmModuleItem was created with a path that points to a unexpected ast node&quot;
-        </span>);
         visitors.push(
             <span class="macro">create_visitor!</span>(path, visit_mut_module_item(module_item: <span class="kw-2">&amp;mut </span>ModuleItem) {
                 <span class="kw">let </span>item = replace(module_item, ModuleItem::Stmt(<span class="macro">quote!</span>(<span class="string">&quot;;&quot; </span><span class="kw">as </span>Stmt)));
@@ -176,7 +163,7 @@
                             );
                             <span class="kw-2">*</span>module_item = ModuleItem::Stmt(stmt);
                         }
-                        ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, ..}) =&gt; {
+                        ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, span }) =&gt; {
                             <span class="kw">match </span>decl {
                                 DefaultDecl::Class(class) =&gt; {
                                     <span class="kw-2">*</span>module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Class(ClassDecl {
@@ -193,7 +180,8 @@
                                     })))
                                 }
                                 DefaultDecl::TsInterfaceDecl(<span class="kw">_</span>) =&gt; {
-                                    <span class="macro">panic!</span>(<span class="string">&quot;typescript declarations are unexpected here&quot;</span>);
+                                    <span class="comment">// not matching, might happen due to eventual consistency
+                                    </span><span class="kw-2">*</span>module_item = ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, span }));
                                 }
                             }
                         }
@@ -210,12 +198,12 @@
                             <span class="comment">// already removed
                         </span>}
                         <span class="kw">_ </span>=&gt; {
-                            <span class="comment">// not matching
+                            <span class="comment">// not matching, might happen due to eventual consistency
                             </span><span class="kw-2">*</span>module_item = ModuleItem::ModuleDecl(module_decl);
                         }
                     }
                 } <span class="kw">else </span>{
-                    <span class="comment">// not matching
+                    <span class="comment">// not matching, might happen due to eventual consistency
                     </span><span class="kw-2">*</span>module_item = item;
                 }
             }),
