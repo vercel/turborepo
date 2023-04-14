@@ -116,6 +116,16 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
             }
         };
 
+        // when one of these futures complete, let the server gracefully shutdown
+        let mut shutdown_reason = Option::None;
+        let shutdown_fut = async {
+            shutdown_reason = select! {
+                _ = shutdown_fut => Some(CloseReason::Shutdown),
+                _ = timeout_fut => Some(CloseReason::Timeout),
+                _ = ctrl_c() => Some(CloseReason::Interrupt),
+            };
+        };
+
         #[cfg(feature = "http")]
         let server_fut = {
             // set up grpc reflection
@@ -132,7 +142,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
             Server::builder()
                 .add_service(reflection)
                 .add_service(service)
-                .serve("127.0.0.1:5000".parse().unwrap())
+                .serve_with_shutdown("127.0.0.1:5000".parse().unwrap(), shutdown_fut)
         };
 
         #[cfg(not(feature = "http"))]
@@ -149,16 +159,18 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 lock,
                 Server::builder()
                     .add_service(service)
-                    .serve_with_incoming(stream),
+                    .serve_with_incoming_shutdown(stream, shutdown_fut),
             )
         };
 
         select! {
-            _ = server_fut => CloseReason::ServerClosed,
+            _ = server_fut => {
+                match shutdown_reason {
+                    Some(reason) => reason,
+                    None => CloseReason::ServerClosed,
+                }
+            },
             _ = watcher_fut => CloseReason::WatcherClosed,
-            _ = shutdown_fut => CloseReason::Shutdown,
-            _ = timeout_fut => CloseReason::Timeout,
-            _ = ctrl_c() => CloseReason::Interrupt,
         }
 
         // here the stop token is dropped, and the pid lock is dropped
