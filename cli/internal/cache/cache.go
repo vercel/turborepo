@@ -20,7 +20,7 @@ import (
 type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
-	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error)
+	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error)
 	Exists(hash string) ItemStatus
 	// Put caches files for a given hash
 	Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error
@@ -36,8 +36,16 @@ type ItemStatus struct {
 	Remote bool `json:"remote"`
 }
 
-const cacheEventHit = "HIT"
-const cacheEventMiss = "MISS"
+const (
+	// CacheSourceFS is a constant to indicate local cache hit
+	CacheSourceFS = "LOCAL"
+	// CacheSourceRemote is a constant to indicate remote cache hit
+	CacheSourceRemote = "REMOTE"
+	// CacheEventHit is a constant to indicate a cache hit
+	CacheEventHit = "HIT"
+	// CacheEventMiss is a constant to indicate a cache miss
+	CacheEventMiss = "MISS"
+)
 
 type CacheEvent struct {
 	Source   string `mapstructure:"source"`
@@ -232,17 +240,24 @@ func (mplex *cacheMultiplexer) removeCache(removal *cacheRemoval) {
 	}
 }
 
-func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
+func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
 	// Make a shallow copy of the caches, since storeUntil can call removeCache
 	mplex.mu.RLock()
 	caches := make([]Cache, len(mplex.caches))
 	copy(caches, mplex.caches)
 	mplex.mu.RUnlock()
 
+	// We need to return a composite cache status from multiple caches
+	// Initialize the empty struct so we can assign values to it. This is similar
+	// to how the Exists() method works.
+	combinedCacheState := ItemStatus{}
+
 	// Retrieve from caches sequentially; if we did them simultaneously we could
 	// easily write the same file from two goroutines at once.
 	for i, cache := range caches {
-		ok, actualFiles, duration, err := cache.Fetch(anchor, key, files)
+		itemStatus, actualFiles, duration, err := cache.Fetch(anchor, key, files)
+		ok := itemStatus.Local || itemStatus.Remote
+
 		if err != nil {
 			cd := &util.CacheDisabledError{}
 			if errors.As(err, &cd) {
@@ -261,11 +276,15 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 			// we have previously successfully stored in a higher-priority cache, and so the overall
 			// result is a success at fetching. Storing in lower-priority caches is an optimization.
 			_ = mplex.storeUntil(anchor, key, duration, actualFiles, i)
-			return ok, actualFiles, duration, err
+
+			// If another cache had already set this to true, we don't need to set it again from this cache
+			combinedCacheState.Local = combinedCacheState.Local || itemStatus.Local
+			combinedCacheState.Remote = combinedCacheState.Remote || itemStatus.Remote
+			return combinedCacheState, actualFiles, duration, err
 		}
 	}
 
-	return false, nil, 0, nil
+	return ItemStatus{Local: false, Remote: false}, nil, 0, nil
 }
 
 func (mplex *cacheMultiplexer) Exists(target string) ItemStatus {

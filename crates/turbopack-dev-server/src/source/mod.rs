@@ -16,13 +16,13 @@ pub mod wrapping_source;
 use std::collections::BTreeSet;
 
 use anyhow::Result;
-use futures::stream::Stream as StreamTrait;
+use futures::{stream::Stream as StreamTrait, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
-use turbo_tasks::{trace::TraceRawVcs, Value};
+use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, util::SharedError, Value};
 use turbo_tasks_bytes::{Bytes, Stream, StreamRead};
 use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::version::VersionedContentVc;
+use turbo_tasks_hash::{DeterministicHash, DeterministicHasher, Xxh3Hash64Hasher};
+use turbopack_core::version::{Version, VersionVc, VersionedContentVc};
 
 use self::{
     headers::Headers, issue_context::IssueContextContentSourceVc, query::Query,
@@ -40,15 +40,21 @@ pub struct ProxyResult {
     pub body: Body,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Error)]
-#[error("{err}")]
-pub struct BodyError {
-    err: String,
-}
-
-impl BodyError {
-    pub fn new(err: String) -> Self {
-        BodyError { err }
+#[turbo_tasks::value_impl]
+impl Version for ProxyResult {
+    #[turbo_tasks::function]
+    async fn id(&self) -> Result<StringVc> {
+        let mut hash = Xxh3Hash64Hasher::new();
+        hash.write_u16(self.status);
+        for (name, value) in &self.headers {
+            name.deterministic_hash(&mut hash);
+            value.deterministic_hash(&mut hash);
+        }
+        let mut read = self.body.read();
+        while let Some(chunk) = read.try_next().await? {
+            hash.write_bytes(&chunk);
+        }
+        Ok(StringVc::cell(hash.finish().to_string()))
     }
 }
 
@@ -246,29 +252,30 @@ pub struct ContentSourceData {
     pub cache_buster: u64,
 }
 
-type Chunk = Result<Bytes, BodyError>;
+pub type BodyChunk = Result<Bytes, SharedError>;
+
 /// A request body.
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 pub struct Body {
     #[turbo_tasks(trace_ignore)]
-    chunks: Stream<Chunk>,
+    chunks: Stream<BodyChunk>,
 }
 
 impl Body {
     /// Creates a new body from a list of chunks.
-    pub fn new(chunks: Vec<Chunk>) -> Self {
+    pub fn new(chunks: Vec<BodyChunk>) -> Self {
         Self {
             chunks: Stream::new_closed(chunks),
         }
     }
 
     /// Returns an iterator over the body's chunks.
-    pub fn read(&self) -> StreamRead<Chunk> {
+    pub fn read(&self) -> StreamRead<BodyChunk> {
         self.chunks.read()
     }
 
-    pub fn from_stream<T: StreamTrait<Item = Chunk> + Send + Sync + Unpin + 'static>(
+    pub fn from_stream<T: StreamTrait<Item = BodyChunk> + Send + Unpin + 'static>(
         source: T,
     ) -> Self {
         Self {

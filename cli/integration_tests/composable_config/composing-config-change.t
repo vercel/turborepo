@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd) ./monorepo
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) composable_config
 
 # 1. First run, check the hash
   $ ${TURBO} run config-change-task --filter=config-change --dry=json | jq .tasks[0].hash

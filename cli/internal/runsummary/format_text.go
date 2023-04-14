@@ -17,7 +17,7 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
 	ui := rsm.ui
 	summary := rsm.RunSummary
 
-	summary.normalize() // normalize data
+	rsm.normalize() // normalize data
 
 	if !rsm.singlePackage {
 		ui.Output("")
@@ -56,34 +56,19 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
 		taskName := task.TaskID
 
 		if rsm.singlePackage {
-			taskName = util.RootTaskTaskName(taskName)
+			taskName = task.Task
 		}
 
 		ui.Info(util.Sprintf("${BOLD}%s${RESET}", taskName))
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Task\t=\t%s\t${RESET}", task.Task))
 
-		var dependencies []string
-		var dependents []string
-
 		if !rsm.singlePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Package\t=\t%s\t${RESET}", task.Package))
-			dependencies = task.Dependencies
-			dependents = task.Dependents
-		} else {
-			dependencies = make([]string, len(task.Dependencies))
-			for i, dependency := range task.Dependencies {
-				dependencies[i] = util.StripPackageName(dependency)
-			}
-			dependents = make([]string, len(task.Dependents))
-			for i, dependent := range task.Dependents {
-				dependents[i] = util.StripPackageName(dependent)
-			}
 		}
-
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Hash\t=\t%s\t${RESET}", task.Hash))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Local)))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheState.Remote)))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Local)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheSummary.Local)))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Cached (Remote)\t=\t%s\t${RESET}", strconv.FormatBool(task.CacheSummary.Remote)))
 
 		if !rsm.singlePackage {
 			fmt.Fprintln(w, util.Sprintf("  ${GREY}Directory\t=\t%s\t${RESET}", task.Dir))
@@ -92,8 +77,8 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(dependencies, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(dependents, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
 
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Configured Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Configured, ", ")))

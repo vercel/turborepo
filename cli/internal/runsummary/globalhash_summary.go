@@ -8,11 +8,13 @@ import (
 
 // GlobalHashSummary contains the pieces of data that impacted the global hash (then then impacted the task hash)
 type GlobalHashSummary struct {
-	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"globalFileHashMap"`
-	RootExternalDepsHash string                                `json:"rootExternalDepsHash"`
-	GlobalCacheKey       string                                `json:"globalCacheKey"`
-	Pipeline             fs.PristinePipeline                   `json:"pipeline"`
-	EnvVars              env.EnvironmentVariablePairs          `json:"-"`
+	GlobalCacheKey       string                                `json:"rootKey"`
+	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"files"`
+	RootExternalDepsHash string                                `json:"hashOfExternalDependencies"`
+	Pipeline             fs.PristinePipeline                   `json:"rootPipeline"`
+
+	// This is a private field because and not in JSON, because we'll add it to each task
+	envVars env.EnvironmentVariablePairs
 }
 
 // NewGlobalHashSummary creates a GlobalHashSummary struct from a set of fields.
@@ -24,7 +26,7 @@ func NewGlobalHashSummary(
 	pipeline fs.PristinePipeline,
 ) *GlobalHashSummary {
 	return &GlobalHashSummary{
-		EnvVars:              envVars.All.ToSecretHashable(),
+		envVars:              envVars.All.ToSecretHashable(),
 		GlobalFileHashMap:    fileHashMap,
 		RootExternalDepsHash: rootExternalDepsHash,
 		GlobalCacheKey:       globalCacheKey,

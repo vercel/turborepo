@@ -1,3 +1,6 @@
+//go:build go || !rust
+// +build go !rust
+
 // Package scm abstracts operations on various tools like git
 // Currently, only git is supported.
 //

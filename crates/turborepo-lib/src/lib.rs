@@ -1,16 +1,16 @@
 #![feature(assert_matches)]
 
+mod child;
 mod cli;
-mod client;
 mod commands;
 mod config;
 mod daemon;
 mod package_manager;
-mod retry;
 mod shim;
 mod ui;
 
 use anyhow::Result;
+pub use child::spawn_child;
 use log::error;
 
 pub use crate::cli::Args;

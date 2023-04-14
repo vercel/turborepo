@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
   $ . ${TESTDIR}/logged_in.sh
 
 Link Test Run

@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) "hoisted"
 
 Make sure we use local and do not pass --skip-infer to old binary

@@ -5,6 +5,8 @@ package turbostate
 
 import (
 	"fmt"
+
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // RepoState is the state for repository. Consists of the root for the repo
@@ -30,14 +32,15 @@ type PrunePayload struct {
 
 // RunPayload is the extra flags passed for the `run` subcommand
 type RunPayload struct {
-	CacheDir          string   `json:"cache_dir"`
-	CacheWorkers      int      `json:"cache_workers"`
-	Concurrency       string   `json:"concurrency"`
-	ContinueExecution bool     `json:"continue_execution"`
-	DryRun            string   `json:"dry_run"`
-	Filter            []string `json:"filter"`
-	Force             bool     `json:"force"`
-	GlobalDeps        []string `json:"global_deps"`
+	CacheDir          string       `json:"cache_dir"`
+	CacheWorkers      int          `json:"cache_workers"`
+	Concurrency       string       `json:"concurrency"`
+	ContinueExecution bool         `json:"continue_execution"`
+	DryRun            string       `json:"dry_run"`
+	Filter            []string     `json:"filter"`
+	Force             bool         `json:"force"`
+	GlobalDeps        []string     `json:"global_deps"`
+	EnvMode           util.EnvMode `json:"env_mode"`
 	// NOTE: Graph has three effective states that is modeled using a *string:
 	//   nil -> no flag passed
 	//   ""  -> flag passed but no file name attached: print to stdout
@@ -59,6 +62,7 @@ type RunPayload struct {
 	Scope               []string `json:"scope"`
 	Since               string   `json:"since"`
 	SinglePackage       bool     `json:"single_package"`
+	Summarize           bool     `json:"summarize"`
 	Tasks               []string `json:"tasks"`
 	PkgInferenceRoot    string   `json:"pkg_inference_root"`
 	LogPrefix           string   `json:"log_prefix"`

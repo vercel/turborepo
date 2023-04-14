@@ -241,7 +241,7 @@ export const users: Array<TurboUser> = [
   {
     caption: "Plex",
     image: "/images/logos/plex.svg",
-    infoLink: "https://www.plex.com/",
+    infoLink: "https://www.plex.tv/",
     pinned: true,
   },
   {

@@ -1,0 +1,12 @@
+{
+  "name": "monorepo",
+  "packageManager": "pnpm@7.25.1",
+  "devDependencies": {
+    "util": "workspace:*"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "is-number@7.0.0": "patches/is-number@7.0.0.patch"
+    }
+  }
+}

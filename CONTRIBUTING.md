@@ -188,9 +188,10 @@ For instance, if we were adding a `turborepo-foo` crate, we would add the follow
 ```
 
 The crate must also be explicitly excluded from build commands
-when building Turbopack. To do so, add a `--exclude turbopack-foo`
-flag to the build command. Search through `test.yml` and add this
-flag to all cargo commands that already exclude `turborepo-lib`.
+for Turbopack and included in build commands for Turborepo.
+To do so, add a `--exclude turborepo-foo` flag to the Turbopack commands in
+`.cargo/config.toml` such as `tp-test`, and add an `-p turborepo-foo` to the Turborepo
+commands such as `tr-test`.
 
 Finally, the crate must be added to the Turborepo section of CODEOWNERS:
 

@@ -64,6 +64,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -145,6 +146,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -211,6 +213,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -301,6 +304,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -440,6 +444,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -542,6 +547,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -693,6 +699,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -795,6 +802,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -949,6 +957,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -1051,6 +1060,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -1202,6 +1212,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -1304,6 +1315,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -1455,6 +1467,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -1557,6 +1570,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -1711,6 +1725,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -1813,6 +1828,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -1964,6 +1980,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -2066,6 +2083,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -2217,6 +2235,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -2319,6 +2338,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -2473,6 +2493,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -2575,6 +2596,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -2726,6 +2748,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -2828,6 +2851,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -2979,6 +3003,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -3081,6 +3106,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -3232,6 +3258,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -3334,6 +3361,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -3488,6 +3516,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -3590,6 +3619,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -3741,6 +3771,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -3843,6 +3874,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -3994,6 +4026,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -4096,6 +4129,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -4250,12 +4284,317 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('safeAdd' type=inline),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+            ReturnStmt(
+                Arg,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1459,
+            ),
+            hi: BytePos(
+                1466,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('bitRotateLeft' type=dynamic),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+            ReturnStmt(
+                Arg,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1467,
+            ),
+            hi: BytePos(
+                1480,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('safeAdd' type=inline),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+            ReturnStmt(
+                Arg,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1481,
+            ),
+            hi: BytePos(
+                1488,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('safeAdd' type=inline),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+            ReturnStmt(
+                Arg,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1489,
+            ),
+            hi: BytePos(
+                1496,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
     Call {
         func: FreeVar(
-            Other(
-                Atom('safeAdd' type=inline),
-            ),
+            Atom('safeAdd' type=inline),
         ),
         args: [
             Value(
@@ -4353,12 +4692,104 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('safeAdd' type=inline),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Fn,
+            ),
+            FnDecl(
+                Function,
+            ),
+            Function(
+                Body,
+            ),
+            BlockStmt(
+                Stmts(
+                    0,
+                ),
+            ),
+            Stmt(
+                Return,
+            ),
+            ReturnStmt(
+                Arg,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    1,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1504,
+            ),
+            hi: BytePos(
+                1511,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
     Call {
         func: FreeVar(
-            Other(
-                Atom('safeAdd' type=inline),
-            ),
+            Atom('safeAdd' type=inline),
         ),
         args: [
             Value(
@@ -4456,21 +4887,18 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: FreeVar(
-            Other(
-                Atom('safeAdd' type=inline),
-            ),
+            Atom('safeAdd' type=inline),
         ),
         args: [
             Value(
                 Call(
                     4,
                     FreeVar(
-                        Other(
-                            Atom('safeAdd' type=inline),
-                        ),
+                        Atom('safeAdd' type=inline),
                     ),
                     [
                         Variable(
@@ -4492,9 +4920,7 @@
                 Call(
                     4,
                     FreeVar(
-                        Other(
-                            Atom('safeAdd' type=inline),
-                        ),
+                        Atom('safeAdd' type=inline),
                     ),
                     [
                         Variable(
@@ -4580,29 +5006,24 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: FreeVar(
-            Other(
-                Atom('bitRotateLeft' type=dynamic),
-            ),
+            Atom('bitRotateLeft' type=dynamic),
         ),
         args: [
             Value(
                 Call(
                     10,
                     FreeVar(
-                        Other(
-                            Atom('safeAdd' type=inline),
-                        ),
+                        Atom('safeAdd' type=inline),
                     ),
                     [
                         Call(
                             4,
                             FreeVar(
-                                Other(
-                                    Atom('safeAdd' type=inline),
-                                ),
+                                Atom('safeAdd' type=inline),
                             ),
                             [
                                 Variable(
@@ -4622,9 +5043,7 @@
                         Call(
                             4,
                             FreeVar(
-                                Other(
-                                    Atom('safeAdd' type=inline),
-                                ),
+                                Atom('safeAdd' type=inline),
                             ),
                             [
                                 Variable(
@@ -4709,37 +5128,30 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: FreeVar(
-            Other(
-                Atom('safeAdd' type=inline),
-            ),
+            Atom('safeAdd' type=inline),
         ),
         args: [
             Value(
                 Call(
                     13,
                     FreeVar(
-                        Other(
-                            Atom('bitRotateLeft' type=dynamic),
-                        ),
+                        Atom('bitRotateLeft' type=dynamic),
                     ),
                     [
                         Call(
                             10,
                             FreeVar(
-                                Other(
-                                    Atom('safeAdd' type=inline),
-                                ),
+                                Atom('safeAdd' type=inline),
                             ),
                             [
                                 Call(
                                     4,
                                     FreeVar(
-                                        Other(
-                                            Atom('safeAdd' type=inline),
-                                        ),
+                                        Atom('safeAdd' type=inline),
                                     ),
                                     [
                                         Variable(
@@ -4759,9 +5171,7 @@
                                 Call(
                                     4,
                                     FreeVar(
-                                        Other(
-                                            Atom('safeAdd' type=inline),
-                                        ),
+                                        Atom('safeAdd' type=inline),
                                     ),
                                     [
                                         Variable(
@@ -4843,6 +5253,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Call {
         func: Variable(
@@ -4944,12 +5355,11 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: FreeVar(
-            Other(
-                Atom('module' type=static),
-            ),
+            Atom('module' type=static),
         ),
         prop: Constant(
             Str(
@@ -4998,5 +5408,98 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('module' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    3,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Assign,
+            ),
+            AssignExpr(
+                Left,
+            ),
+            PatOrExpr(
+                Pat,
+            ),
+            Pat(
+                Expr,
+            ),
+            Expr(
+                Member,
+            ),
+            MemberExpr(
+                Obj,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1622,
+            ),
+            hi: BytePos(
+                1628,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('md5' type=inline),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    3,
+                ),
+            ),
+            Stmt(
+                Expr,
+            ),
+            ExprStmt(
+                Expr,
+            ),
+            Expr(
+                Assign,
+            ),
+            AssignExpr(
+                Right,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                1639,
+            ),
+            hi: BytePos(
+                1642,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
 ]

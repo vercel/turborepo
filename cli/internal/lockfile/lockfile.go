@@ -56,7 +56,7 @@ func (p ByKey) Swap(i, j int) {
 }
 
 func (p ByKey) Less(i, j int) bool {
-	return p[i].Key < p[j].Key
+	return p[i].Key+p[i].Version < p[j].Key+p[j].Version
 }
 
 var _ (sort.Interface) = (*ByKey)(nil)

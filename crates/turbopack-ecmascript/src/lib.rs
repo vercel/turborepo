@@ -23,10 +23,9 @@ pub mod typescript;
 pub mod utils;
 pub mod webpack;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use chunk::{
-    EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc,
-    EcmascriptChunkRuntimeVc, EcmascriptChunkVc, EcmascriptChunkingContext,
+    EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
     EcmascriptChunkingContextVc,
 };
 use code_gen::CodeGenerateableVc;
@@ -54,7 +53,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{
         availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc,
+        ChunkableAssetVc, ChunkingContextVc, EvaluatableAsset, EvaluatableAssetVc,
     },
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
@@ -186,47 +185,12 @@ impl EcmascriptModuleAssetVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn as_evaluated_chunk(
-        self_vc: EcmascriptModuleAssetVc,
-        context: ChunkingContextVc,
-        other_evaluated_entries: Option<EcmascriptChunkPlaceablesVc>,
-    ) -> Result<ChunkVc> {
-        let Some(context) = EcmascriptChunkingContextVc::resolve_from(&context).await? else {
-            bail!("Ecmascript runtime not found");
-        };
-
-        let mut evaluated_entries = vec![];
-        if let Some(other_evaluated_entries) = other_evaluated_entries {
-            evaluated_entries.extend(other_evaluated_entries.await?.iter().copied());
-        }
-        evaluated_entries.push(self_vc.into());
-
-        let evaluated_entries = EcmascriptChunkPlaceablesVc::cell(evaluated_entries);
-        Ok(self_vc.as_chunk_with_runtime(
-            context,
-            other_evaluated_entries,
-            context.evaluated_ecmascript_runtime(evaluated_entries),
-        ))
-    }
-
-    #[turbo_tasks::function]
-    pub async fn as_chunk_with_runtime(
+    pub fn as_root_chunk_with_entries(
         self_vc: EcmascriptModuleAssetVc,
         context: EcmascriptChunkingContextVc,
-        runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
-        runtime: EcmascriptChunkRuntimeVc,
-    ) -> Result<ChunkVc> {
-        let mut main_entries = vec![];
-        if let Some(runtime_entries) = runtime_entries {
-            main_entries.extend(runtime_entries.await?.iter().copied());
-        }
-        Ok(EcmascriptChunkVc::new_with_entries_and_runtime(
-            context,
-            self_vc.into(),
-            EcmascriptChunkPlaceablesVc::cell(main_entries),
-            runtime,
-        )
-        .into())
+        other_entries: EcmascriptChunkPlaceablesVc,
+    ) -> ChunkVc {
+        EcmascriptChunkVc::new_root_with_entries(context, self_vc.into(), other_entries).into()
     }
 
     #[turbo_tasks::function]
@@ -347,6 +311,9 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleAsset {
         Ok(self_vc.failsafe_analyze().await?.exports)
     }
 }
+
+#[turbo_tasks::value_impl]
+impl EvaluatableAsset for EcmascriptModuleAsset {}
 
 #[turbo_tasks::value_impl]
 impl ResolveOrigin for EcmascriptModuleAsset {

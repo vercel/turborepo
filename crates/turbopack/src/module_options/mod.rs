@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
-use turbo_tasks::primitives::OptionStringVc;
+use turbo_tasks::primitives::{OptionStringVc, StringsVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
@@ -17,6 +17,7 @@ use turbopack_css::{CssInputTransform, CssInputTransformsVc};
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions,
 };
+use turbopack_mdx::MdxTransformOptions;
 use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
 use crate::evaluate_context::node_evaluate_asset_context;
@@ -61,15 +62,16 @@ impl ModuleOptionsVc {
     ) -> Result<ModuleOptionsVc> {
         let ModuleOptionsContext {
             enable_jsx,
-            enable_emotion,
+            ref enable_emotion,
             enable_react_refresh,
             enable_styled_jsx,
-            enable_styled_components,
+            ref enable_styled_components,
             enable_types,
             enable_tree_shaking,
             ref enable_typescript_transform,
             ref decorators,
             enable_mdx,
+            enable_mdx_rs,
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
             preset_env_versions,
@@ -96,14 +98,42 @@ impl ModuleOptionsVc {
         if enable_styled_jsx {
             transforms.push(EcmascriptInputTransform::StyledJsx);
         }
-        if enable_emotion {
-            transforms.push(EcmascriptInputTransform::Emotion);
+        if let Some(enable_emotion) = enable_emotion {
+            let emotion_transform = enable_emotion.await?;
+            transforms.push(EcmascriptInputTransform::Emotion {
+                sourcemap: emotion_transform.sourcemap.unwrap_or(false),
+                label_format: OptionStringVc::cell(emotion_transform.label_format.clone()),
+                auto_label: if let Some(auto_label) = emotion_transform.auto_label.as_ref() {
+                    match auto_label {
+                        EmotionLabelKind::Always => Some(true),
+                        EmotionLabelKind::Never => Some(false),
+                        // [TODO]: this is not correct coerece, need to be fixed
+                        EmotionLabelKind::DevOnly => None,
+                    }
+                } else {
+                    None
+                },
+            });
         }
-        if enable_styled_components {
-            transforms.push(EcmascriptInputTransform::StyledComponents);
+        if let Some(enable_styled_components) = enable_styled_components {
+            let styled_components_transform = &*enable_styled_components.await?;
+            transforms.push(EcmascriptInputTransform::StyledComponents {
+                display_name: styled_components_transform.display_name,
+                ssr: styled_components_transform.ssr,
+                file_name: styled_components_transform.file_name,
+                top_level_import_paths: StringsVc::cell(
+                    styled_components_transform.top_level_import_paths.clone(),
+                ),
+                meaningless_file_names: StringsVc::cell(
+                    styled_components_transform.meaningless_file_names.clone(),
+                ),
+                css_prop: styled_components_transform.css_prop,
+                namespace: OptionStringVc::cell(styled_components_transform.namespace.clone()),
+            });
         }
         if let Some(enable_jsx) = enable_jsx {
             let jsx = enable_jsx.await?;
+
             transforms.push(EcmascriptInputTransform::React {
                 refresh: enable_react_refresh,
                 import_source: OptionStringVc::cell(jsx.import_source.clone()),
@@ -318,12 +348,31 @@ impl ModuleOptionsVc {
             ),
         ];
 
-        if enable_mdx {
+        if enable_mdx || enable_mdx_rs {
+            let (jsx_runtime, jsx_import_source) = if let Some(enable_jsx) = enable_jsx {
+                let jsx = enable_jsx.await?;
+                (jsx.runtime.clone(), jsx.import_source.clone())
+            } else {
+                (None, None)
+            };
+
+            let mdx_transform_options = (MdxTransformOptions {
+                development: true,
+                preserve_jsx: false,
+                jsx_runtime,
+                jsx_import_source,
+            })
+            .cell();
+
             rules.push(ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(".mdx".to_string()),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Mdx(
-                    mdx_transforms,
-                ))],
+                ModuleRuleCondition::any(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".md".to_string()),
+                    ModuleRuleCondition::ResourcePathEndsWith(".mdx".to_string()),
+                ]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Mdx {
+                    transforms: mdx_transforms,
+                    options: mdx_transform_options,
+                })],
             ));
         }
 

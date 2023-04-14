@@ -1,0 +1,18 @@
+[package]
+name = "turborepo-api-client"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+native-tls = ["reqwest/native-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+reqwest = { workspace = true, features = ["json"] }
+rustc_version_runtime = "0.2.1"
+serde = { workspace = true }
+tokio = { workspace = true }

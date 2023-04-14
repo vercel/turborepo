@@ -1,7 +1,58 @@
 [
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    0,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                11,
+            ),
+            hi: BytePos(
+                18,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
+    },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -50,10 +101,62 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('require' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    1,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Callee,
+            ),
+            Callee(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                79,
+            ),
+            hi: BytePos(
+                86,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
     Call {
         func: FreeVar(
-            Require,
+            Atom('require' type=static),
         ),
         args: [
             Value(
@@ -102,6 +205,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -162,6 +266,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     MemberCall {
         obj: Variable(
@@ -233,6 +338,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -293,6 +399,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     MemberCall {
         obj: Variable(
@@ -364,6 +471,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -424,6 +532,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     MemberCall {
         obj: Variable(
@@ -495,6 +604,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -555,6 +665,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     MemberCall {
         obj: Variable(
@@ -626,6 +737,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
@@ -686,6 +798,60 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('global' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    6,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    4,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                328,
+            ),
+            hi: BytePos(
+                334,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
     MemberCall {
         obj: Variable(
@@ -740,9 +906,7 @@
             ),
             Value(
                 FreeVar(
-                    Other(
-                        Atom('global' type=static),
-                    ),
+                    Atom('global' type=static),
                 ),
             ),
             Value(
@@ -800,5 +964,6 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
 ]

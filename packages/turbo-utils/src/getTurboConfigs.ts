@@ -3,7 +3,7 @@ import path from "path";
 import getTurboRoot from "./getTurboRoot";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
-import { Schema } from "turbo-types";
+import { Schema } from "@turbo/types";
 import JSON5 from "json5";
 
 const ROOT_GLOB = "turbo.json";

@@ -14,20 +14,25 @@ use turbo_tasks::{debug::ValueDebug, NothingVc, TryJoinIterExt, TurboTasks, Valu
 use turbo_tasks_env::DotenvProcessEnvVc;
 use turbo_tasks_fs::{
     json::parse_json_with_source_context, util::sys_to_unix, DiskFileSystemVc, FileSystem,
-    FileSystemPathVc,
+    FileSystemPathReadRef, FileSystemPathVc,
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc},
-    module_options::{JsxTransformOptions, JsxTransformOptionsVc, ModuleOptionsContext},
+    ecmascript::EcmascriptModuleAssetVc,
+    module_options::{
+        EmotionTransformConfig, JsxTransformOptions, JsxTransformOptionsVc, ModuleOptionsContext,
+        StyledComponentsTransformConfigVc,
+    },
     resolve_options_context::ResolveOptionsContext,
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
 use turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{availability_info::AvailabilityInfo, ChunkableAsset, ChunkableAssetVc},
+    chunk::{
+        ChunkableAsset, ChunkableAssetVc, ChunkingContext, EvaluatableAssetVc, EvaluatableAssetsVc,
+    },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
@@ -159,8 +164,6 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
     let entry_asset = project_path.join(&options.entry);
     let entry_paths = vec![entry_asset];
 
-    let runtime_entries = maybe_load_env(project_path).await?;
-
     let env = EnvironmentVc::new(
         Value::new(ExecutionEnvironment::Browser(
             // TODO: load more from options.json
@@ -174,17 +177,17 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
         )),
         Value::new(EnvironmentIntention::Client),
     );
-    let compile_time_info = CompileTimeInfo {
-        environment: env,
-        defines: compile_time_defines!(
-            process.env.NODE_ENV = "development",
-            DEFINED_VALUE = "value",
-            DEFINED_TRUE = true,
-            A.VERY.LONG.DEFINED.VALUE = "value",
+    let compile_time_info = CompileTimeInfo::builder(env)
+        .defines(
+            compile_time_defines!(
+                process.env.NODE_ENV = "development",
+                DEFINED_VALUE = "value",
+                DEFINED_TRUE = true,
+                A.VERY.LONG.DEFINED.VALUE = "value",
+            )
+            .cell(),
         )
-        .cell(),
-    }
-    .cell();
+        .cell();
 
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
@@ -193,8 +196,13 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
             enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
                 ..Default::default()
             })),
-            enable_emotion: true,
-            enable_styled_components: true,
+            enable_emotion: Some(EmotionTransformConfig::cell(EmotionTransformConfig {
+                sourcemap: Some(false),
+                ..Default::default()
+            })),
+            enable_styled_components: Some(StyledComponentsTransformConfigVc::cell(
+                Default::default(),
+            )),
             preset_env_versions: Some(env),
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
@@ -226,6 +234,10 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
     )
     .into();
 
+    let runtime_entries = maybe_load_env(context, project_path)
+        .await?
+        .map(|asset| EvaluatableAssetsVc::one(EvaluatableAssetVc::from_asset(asset, context)));
+
     let chunk_root_path = path.join("output");
     let static_root_path = path.join("static");
     let chunking_context =
@@ -245,18 +257,18 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
         )
     });
 
-    let chunks = modules
+    let chunk_groups = modules
         .map(|module| async move {
             if let Some(ecmascript) = EcmascriptModuleAssetVc::resolve_from(module).await? {
                 // TODO: Load runtime entries from snapshots
-                Ok(ecmascript.as_evaluated_chunk(chunking_context, runtime_entries))
-            } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
-                Ok(chunkable.as_chunk(
-                    chunking_context,
-                    Value::new(AvailabilityInfo::Root {
-                        current_availability_root: chunkable.into(),
-                    }),
+                Ok(chunking_context.evaluated_chunk_group(
+                    ecmascript.as_root_chunk(chunking_context),
+                    runtime_entries
+                        .unwrap_or_else(EvaluatableAssetsVc::empty)
+                        .with_entry(ecmascript.into()),
                 ))
+            } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
+                Ok(chunking_context.chunk_group(chunkable.as_root_chunk(chunking_context)))
             } else {
                 // TODO convert into a serve-able asset
                 Err(anyhow!(
@@ -270,12 +282,15 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
 
     let mut seen = HashSet::new();
     let mut queue = VecDeque::with_capacity(32);
-    for chunk in chunks {
-        queue.push_back(chunk.as_asset());
+    for chunks in chunk_groups {
+        for chunk in &*chunks.await? {
+            queue.push_back(*chunk);
+        }
     }
 
+    let output_path = path.await?;
     while let Some(asset) = queue.pop_front() {
-        walk_asset(asset, &mut seen, &mut queue)
+        walk_asset(asset, &output_path, &mut seen, &mut queue)
             .await
             .context(format!(
                 "Failed to walk asset {}",
@@ -296,6 +311,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
 
 async fn walk_asset(
     asset: AssetVc,
+    output_path: &FileSystemPathReadRef,
     seen: &mut HashSet<FileSystemPathVc>,
     queue: &mut VecDeque<AssetVc>,
 ) -> Result<()> {
@@ -305,13 +321,20 @@ async fn walk_asset(
         return Ok(());
     }
 
-    diff(path, asset.content()).await?;
+    if path.await?.is_inside(&*output_path) {
+        // Only consider assets that should be written to disk.
+        diff(path, asset.content()).await?;
+    }
+
     queue.extend(&*all_referenced_assets(asset).await?);
 
     Ok(())
 }
 
-async fn maybe_load_env(path: FileSystemPathVc) -> Result<Option<EcmascriptChunkPlaceablesVc>> {
+async fn maybe_load_env(
+    _context: AssetContextVc,
+    path: FileSystemPathVc,
+) -> Result<Option<AssetVc>> {
     let dotenv_path = path.join("input/.env");
 
     if !dotenv_path.read().await?.is_content() {
@@ -320,7 +343,5 @@ async fn maybe_load_env(path: FileSystemPathVc) -> Result<Option<EcmascriptChunk
 
     let env = DotenvProcessEnvVc::new(None, dotenv_path);
     let asset = ProcessEnvAssetVc::new(dotenv_path, env.into());
-    Ok(Some(EcmascriptChunkPlaceablesVc::cell(vec![
-        asset.as_ecmascript_chunk_placeable()
-    ])))
+    Ok(Some(asset.into()))
 }

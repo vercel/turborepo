@@ -140,14 +140,14 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 	if task, ok := pipeline[taskID]; ok {
 		return &Task{
 			Name:           taskName,
-			TaskDefinition: task.TaskDefinition,
+			TaskDefinition: task.GetTaskDefinition(),
 		}, nil
 	}
 
 	if task, ok := pipeline[taskName]; ok {
 		return &Task{
 			Name:           taskName,
-			TaskDefinition: task.TaskDefinition,
+			TaskDefinition: task.GetTaskDefinition(),
 		}, nil
 	}
 

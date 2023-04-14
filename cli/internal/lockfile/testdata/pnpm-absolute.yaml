@@ -2,9 +2,14 @@ lockfileVersion: 5.4
 importers:
   packages/a:
     specifiers:
+      another: ^1.0.0
       "@scope/parent": ^1.0.0
+      special: npm:Special@1.2.3
     dependencies:
-      somepackage: 1.0.0
+      another: 1.0.0
+      "@scope/parent": 1.0.0
+      special: /Special/1.2.3
+
 packages:
   /@scope/parent/1.0.0:
     resolution: { integrity: junk }
@@ -13,5 +18,21 @@ packages:
     dev: false
 
   /@scope/child/1.0.0:
+    resolution: { integrity: junk }
+    dev: false
+
+  /another/1.0.0:
+    resolution: { integrity: junk }
+    dev: false
+    dependencies:
+      foo: 1.0.0
+
+  /foo/1.0.0:
+    resolution: { integrity: junk }
+    dev: false
+    dependencies:
+      Special: 1.2.3
+
+  /Special/1.2.3:
     resolution: { integrity: junk }
     dev: false

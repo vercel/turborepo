@@ -242,7 +242,7 @@ This blog post has been updated to include React Refresh numbers.
 
 [Evan You’s benchmark application](https://github.com/yyx990803/vite-vs-next-turbo-hmr) is composed of a single, very large file with a thousand imports, and a thousand very small files. The shape of our benchmark is different – it represents a tree of files, with each file importing 0 or 3 other files, trying to mimic an average application. Evan helped us find a regression when editing large, root files in his benchmark. The cause for this was [quickly identified and fixed by Tobias](https://github.com/vercel/turbo/commit/a11422fdf6b1b3cde9072d90aab6d9eebfacb591) and was released in Next 13.0.1.
 
-We have adapted our HMR benchmarks to samples modules uniformly at all depths, and we have updated this blog post and our documentation to include more details about this proces.
+We have adapted our HMR benchmarks to samples modules uniformly at all depths, and we have updated this blog post and our documentation to include more details about this process.
 
 ### SWC vs. Babel
 

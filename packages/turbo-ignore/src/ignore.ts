@@ -1,6 +1,6 @@
 import { exec } from "child_process";
 import path from "path";
-import { getTurboRoot } from "turbo-utils";
+import { getTurboRoot } from "@turbo/utils";
 import { getComparison } from "./getComparison";
 import { getTask } from "./getTask";
 import { getWorkspace } from "./getWorkspace";

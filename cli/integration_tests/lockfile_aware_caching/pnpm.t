@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) pnpm
 
 Populate cache

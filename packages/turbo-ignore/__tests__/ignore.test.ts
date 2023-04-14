@@ -6,7 +6,7 @@ import {
   SpyExit,
   mockEnv,
   validateLogs,
-} from "turbo-test-utils";
+} from "@turbo/test-utils";
 
 function expectBuild(mockExit: SpyExit) {
   expect(mockExit.exit).toHaveBeenCalledWith(1);

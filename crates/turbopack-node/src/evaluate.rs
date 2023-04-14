@@ -24,7 +24,7 @@ use turbo_tasks_fs::{
 };
 use turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{ChunkGroupVc, ChunkingContext, ChunkingContextVc},
+    chunk::{ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc},
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
@@ -32,8 +32,8 @@ use turbopack_core::{
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 use crate::{
@@ -91,7 +91,7 @@ struct JavaScriptStreamSender {
     get: Box<dyn Fn() -> UnboundedSender<Result<Bytes, SharedError>> + Send + Sync>,
 }
 
-#[turbo_tasks::value(transparent, eq = "manual", cell = "new", serialization = "none")]
+#[turbo_tasks::value(transparent)]
 #[derive(Clone, Debug)]
 pub struct JavaScriptEvaluation(#[turbo_tasks(trace_ignore)] JavaScriptStream);
 
@@ -104,7 +104,7 @@ pub async fn get_evaluate_pool(
     env: ProcessEnvVc,
     context: AssetContextVc,
     chunking_context: ChunkingContextVc,
-    runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    runtime_entries: Option<EvaluatableAssetsVc>,
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
@@ -168,23 +168,23 @@ pub async fn get_evaluate_pool(
             Value::new(Default::default()),
             context.compile_time_info(),
         )
-        .as_ecmascript_chunk_placeable();
+        .as_evaluatable_asset();
 
         let mut entries = vec![globals_module];
-        if let Some(other_entries) = runtime_entries {
-            for entry in &*other_entries.await? {
+        if let Some(runtime_entries) = runtime_entries {
+            for entry in &*runtime_entries.await? {
                 entries.push(*entry)
             }
-        };
+        }
 
-        Some(EcmascriptChunkPlaceablesVc::cell(entries))
+        EvaluatableAssetsVc::cell(entries)
     };
 
     let bootstrap = NodeJsBootstrapAsset {
         path,
-        chunk_group: ChunkGroupVc::from_chunk(
-            entry_module.as_evaluated_chunk(chunking_context, runtime_entries),
-        ),
+        chunking_context,
+        entry: entry_module.as_root_chunk(chunking_context),
+        evaluatable_assets: runtime_entries.with_entry(entry_module.into()),
     }
     .cell()
     .into();
@@ -244,22 +244,11 @@ pub fn evaluate(
     context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
     chunking_context: ChunkingContextVc,
-    runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    runtime_entries: Option<EvaluatableAssetsVc>,
     args: Vec<JsonValueVc>,
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -> JavaScriptEvaluationVc {
-    let pool = get_evaluate_pool(
-        module_asset,
-        cwd,
-        env,
-        context,
-        chunking_context,
-        runtime_entries,
-        additional_invalidation,
-        debug,
-    );
-
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
 
@@ -278,11 +267,16 @@ pub fn evaluate(
 
     // run the evaluation as side effect
     compute_evaluate_stream(
-        pool,
+        module_asset,
         cwd,
+        env,
         context_ident_for_issue,
+        context,
         chunking_context,
+        runtime_entries,
         args,
+        additional_invalidation,
+        debug,
         JavaScriptStreamSender {
             get: Box::new(move || {
                 if let Some(sender) = initial.lock().take() {
@@ -308,11 +302,16 @@ pub fn evaluate(
 
 #[turbo_tasks::function]
 async fn compute_evaluate_stream(
-    pool: NodeJsPoolVc,
+    module_asset: AssetVc,
     cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
     context_ident_for_issue: AssetIdentVc,
+    context: AssetContextVc,
     chunking_context: ChunkingContextVc,
+    runtime_entries: Option<EvaluatableAssetsVc>,
     args: Vec<JsonValueVc>,
+    additional_invalidation: CompletionVc,
+    debug: bool,
     sender: JavaScriptStreamSenderVc,
 ) {
     mark_finished();
@@ -322,7 +321,20 @@ async fn compute_evaluate_stream(
     };
 
     let stream = generator! {
-        let pool = pool.await?;
+        let pool = get_evaluate_pool(
+            module_asset,
+            cwd,
+            env,
+            context,
+            chunking_context,
+            runtime_entries,
+            additional_invalidation,
+            debug,
+        );
+
+        // Read this strongly consistent, since we don't want to run inconsistent
+        // node.js code.
+        let pool = pool.strongly_consistent().await?;
 
         let args = args.into_iter().try_join().await?;
         // Assume this is a one-off operation, so we can kill the process
@@ -407,7 +419,7 @@ async fn pull_operation(
         match operation.recv().await? {
             EvalJavaScriptIncomingMessage::Error(error) => {
                 EvaluationIssue {
-                    error: error.clone(),
+                    error,
                     context_ident: context_ident_for_issue,
                     assets_for_source_mapping: pool.assets_for_source_mapping,
                     assets_root: pool.assets_root,
