@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use swc_core::{
     common::DUMMY_SP,
@@ -47,8 +47,7 @@ pub(crate) async fn list_dir(
     let root = &*dir.await?;
     let filter = &*filter.await?;
 
-    let mut queue = VecDeque::with_capacity(1);
-    queue.push_back(dir);
+    let mut queue = VecDeque::from([dir]);
 
     let mut list = Vec::new();
 
@@ -76,6 +75,8 @@ pub(crate) async fn list_dir(
             }
         }
     }
+
+    list.sort_by(|(a, _), (b, _)| a.cmp(b));
 
     Ok(FlatDirListVc::cell(list))
 }
@@ -120,13 +121,15 @@ pub(crate) async fn generate_require_context_map(
                 },
             );
         } else {
-            // TODO: does this need to throw an error?
+            bail!("invariant error: this was already checked in `list_dir`");
         }
     }
 
     Ok(RequireContextMapVc::cell(map))
 }
 
+/// A reference for `require.context()`, will replace it with an inlined map
+/// wrapped in `__turbopack_require_context__`;
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct CjsRequireContextAssetReference {

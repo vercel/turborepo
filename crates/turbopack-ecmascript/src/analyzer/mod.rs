@@ -12,6 +12,7 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use swc_core::{
     common::Mark,
@@ -2881,13 +2882,18 @@ pub struct RequireContextOptions {
     pub filter: Regex,
 }
 
-pub fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex, &'static str> {
+/// Convert an ECMAScript regex to a Rust regex.
+fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex, &'static str> {
     // rust regex doesn't allow escaped slashes, but they are necessary in js
     let pattern = pattern.replace("\\/", "/");
 
     let mut applied_flags = String::new();
     for flag in flags.chars() {
         match flag {
+            // indices for substring matches: not relevant for the regex itself
+            'd' => {}
+            // global: default in rust, ignore
+            'g' => {}
             // case-insensitive: letters match both upper and lower case
             'i' => applied_flags.push('i'),
             // multi-line mode: ^ and $ match begin/end of line
@@ -2896,10 +2902,9 @@ pub fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex, &'static str> 
             's' => applied_flags.push('s'),
             // Unicode support (enabled by default)
             'u' => applied_flags.push('u'),
-            // default in rust, ignore
-            'g' => {}
-            // TODO: maybe error in the future
-            _ => {}
+            // sticky search: not relevant for the regex itself
+            'y' => {}
+            _ => return Err("unsupported flags in regex"),
         }
     }
 
@@ -2909,23 +2914,29 @@ pub fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex, &'static str> 
         pattern
     };
 
-    Regex::new(&regex).map_err(|_| "could not convert javascript regex to rust regex")
+    Regex::new(&regex).map_err(|_| "could not convert ECMAScript regex to Rust regex")
 }
 
+/// Parse the arguments passed to a require.context invocation, validate them
+/// and convert them to the appropriate rust values.
 pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOptions, &'static str> {
     if !(1..=3).contains(&args.len()) {
-        return Err("only 1-3 arguments are supported (mode is not supported)");
+        // https://linear.app/vercel/issue/WEB-910/add-support-for-requirecontexts-mode-argument
+        return Err("require.context() only supports 1-3 arguments (mode is not supported)");
     }
 
     let Some(dir) = args[0].as_str().map(|s| s.to_string()) else {
-        return Err("dir needs to be a constant argument");
+        return Err("require.context(dir, ...) requires dir to be a constant string");
     };
 
     let include_subdirs = if let Some(include_subdirs) = args.get(1) {
         if let Some(include_subdirs) = include_subdirs.as_bool() {
             include_subdirs
         } else {
-            return Err("includeSubdirs needs to be a boolean");
+            return Err(
+                "require.context(..., includeSubdirs, ...) requires includeSubdirs to be a \
+                 constant boolean",
+            );
         }
     } else {
         true
@@ -2935,12 +2946,14 @@ pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOption
         if let JsValue::Constant(ConstantValue::Regex(pattern, flags)) = filter {
             regex_from_js(pattern, flags)?
         } else {
-            return Err("filter needs to be a regex");
+            return Err("require.context(..., ..., filter) requires filter to be a regex");
         }
     } else {
         // https://webpack.js.org/api/module-methods/#requirecontext
         // > optional, default /^\.\/.*$/, any file
-        Regex::new("^\\./.*$").expect("valid static regex should always compile")
+        static DEFAULT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\\./.*$").unwrap());
+
+        DEFAULT_REGEX.clone()
     };
 
     Ok(RequireContextOptions {
@@ -2957,6 +2970,7 @@ pub struct RequireContextValue {
 
 impl Hash for RequireContextValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        self.map.len().hash(state);
         for (k, v) in self.map.iter() {
             k.hash(state);
             v.hash(state);

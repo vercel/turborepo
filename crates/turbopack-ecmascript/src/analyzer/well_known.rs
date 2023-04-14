@@ -345,14 +345,15 @@ pub fn require(args: Vec<JsValue>) -> JsValue {
     }
 }
 
+/// (try to) statically evaluate `require.context(...)()`
 pub fn require_context_require(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
-    if args.len() < 1 {
+    if args.is_empty() {
         return JsValue::Unknown(
             Some(Arc::new(JsValue::call(
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
                 args,
             ))),
-            "only a single argument is supported",
+            "require.context(...).require() requires an argument specifying the module path",
         );
     }
 
@@ -362,7 +363,7 @@ pub fn require_context_require(val: RequireContextValue, args: Vec<JsValue>) -> 
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
                 args,
             ))),
-            "only constant argument is supported",
+            "require.context(...).require() only accepts a single, constant string argument",
         );
     };
 
@@ -372,7 +373,7 @@ pub fn require_context_require(val: RequireContextValue, args: Vec<JsValue>) -> 
                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
                args,
            ))),
-           "argument has to be in the context",
+           "require.context(...).require() can only be called with an argument that's in the context",
        );
     };
 
@@ -382,8 +383,9 @@ pub fn require_context_require(val: RequireContextValue, args: Vec<JsValue>) -> 
     })
 }
 
+/// (try to) statically evaluate `require.context(...).keys()`
 pub fn require_context_require_keys(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
-    if args.len() == 0 {
+    if args.is_empty() {
         JsValue::array(val.map.keys().cloned().map(|k| k.into()).collect())
     } else {
         JsValue::Unknown(
@@ -393,11 +395,12 @@ pub fn require_context_require_keys(val: RequireContextValue, args: Vec<JsValue>
                 )),
                 args,
             ))),
-            "no arguments are supported",
+            "require.context(...).keys() does not accept arguments",
         )
     }
 }
 
+/// (try to) statically evaluate `require.context(...).resolve()`
 pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
     if args.len() != 1 {
         return JsValue::Unknown(
@@ -407,7 +410,7 @@ pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsVal
                 ),
                 args,
             ))),
-            "only a single argument is supported",
+            "require.context(...).resolve() only accepts a single, constant string argument",
         );
     }
 
@@ -419,7 +422,7 @@ pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsVal
                 ),
                 args,
             ))),
-            "only constant argument is supported",
+            "require.context(...).resolve() only accepts a single, constant string argument",
         );
     };
 
@@ -431,7 +434,7 @@ pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsVal
                 ),
                 args,
             ))),
-            "argument has to be in the context",
+            "require.context(...).resolve() can only be called with an argument that's in the context",
         );
     };
 

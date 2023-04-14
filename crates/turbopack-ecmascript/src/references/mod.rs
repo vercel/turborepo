@@ -732,48 +732,34 @@ pub(crate) async fn analyze_ecmascript_module(
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext) => {
                         let args = linked_args(args).await?;
-                        if (1..=3).contains(&args.len()) {
-                            let options = match parse_require_context(&args) {
-                                Ok(options) => options,
-                                Err(reason) => {
-                                    let (args, hints) = explain_args(&args);
-                                    handler.span_err_with_code(
-                                        span,
-                                        &format!(
-                                            "require.context({args}) is not statically \
-                                             analyse-able: {reason}{hints}",
-                                        ),
-                                        DiagnosticId::Error(
-                                            errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT
-                                                .to_string(),
-                                        ),
-                                    );
-                                    return Ok(());
-                                }
-                            };
+                        let options = match parse_require_context(&args) {
+                            Ok(options) => options,
+                            Err(reason) => {
+                                let (args, hints) = explain_args(&args);
+                                handler.span_err_with_code(
+                                    span,
+                                    &format!(
+                                        "require.context({args}) is not statically analyze-able: \
+                                         {reason}{hints}",
+                                    ),
+                                    DiagnosticId::Error(
+                                        errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT
+                                            .to_string(),
+                                    ),
+                                );
+                                return Ok(());
+                            }
+                        };
 
-                            analysis.add_reference(CjsRequireContextAssetReferenceVc::new(
-                                origin,
-                                options.dir,
-                                options.include_subdirs,
-                                RegexVc::cell(options.filter),
-                                AstPathVc::cell(ast_path.to_vec()),
-                                OptionIssueSourceVc::some(issue_source(source, span)),
-                                in_try,
-                            ));
-                            return Ok(());
-                        }
-                        let (args, hints) = explain_args(&args);
-                        handler.span_err_with_code(
-                            span,
-                            &format!(
-                                "require.context({args}) is not statically analyse-able, it \
-                                 should have 1-3 arguments {hints}",
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT.to_string(),
-                            ),
-                        )
+                        analysis.add_reference(CjsRequireContextAssetReferenceVc::new(
+                            origin,
+                            options.dir,
+                            options.include_subdirs,
+                            RegexVc::cell(options.filter),
+                            AstPathVc::cell(ast_path.to_vec()),
+                            OptionIssueSourceVc::some(issue_source(source, span)),
+                            in_try,
+                        ));
                     }
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::FsReadMethod(name)) => {

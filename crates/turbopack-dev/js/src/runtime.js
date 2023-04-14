@@ -195,7 +195,7 @@ function commonJsRequire(sourceModule, id) {
  * @param {RequireContextMap} map
  * @returns {RequireContext}
  */
-function webpackRequireContext(sourceModule, map) {
+function requireContext(sourceModule, map) {
   /**
    * @param {ModuleId} id
    * @returns {Exports}
@@ -404,7 +404,7 @@ function instantiateModule(id, source) {
         e: module.exports,
         r: commonJsRequire.bind(null, module),
         x: externalRequire,
-        f: webpackRequireContext.bind(null, module),
+        f: requireContext.bind(null, module),
         i: esmImport.bind(null, module),
         s: esm.bind(null, module.exports),
         j: cjs.bind(null, module.exports),
