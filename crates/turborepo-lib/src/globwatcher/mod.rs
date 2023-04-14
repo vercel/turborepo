@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -192,15 +192,12 @@ fn clear_hash_globs(
     hash_globs_to_clear: Vec<(Arc<String>, Arc<String>)>,
 ) {
     for (hash, glob) in hash_globs_to_clear {
-        let empty = if let Some(globs) = glob_status.get_mut(&hash) {
-            globs.remove(&glob);
-            globs.is_empty()
-        } else {
-            false
+        if let Entry::Occupied(mut o) = glob_status.entry(hash) {
+            let val = o.get_mut();
+            val.remove(&glob);
+            if val.is_empty() {
+                o.remove();
+            }
         };
-
-        if empty {
-            glob_status.remove(&hash);
-        }
     }
 }
