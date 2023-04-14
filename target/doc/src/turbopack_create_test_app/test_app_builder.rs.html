@@ -568,15 +568,6 @@
 <a href="#568" id="568">568</a>
 <a href="#569" id="569">569</a>
 <a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a>
-<a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a>
-<a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a>
-<a href="#577" id="577">577</a>
-<a href="#578" id="578">578</a>
-<a href="#579" id="579">579</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::VecDeque,
     fs::{create_dir_all, File},
@@ -655,7 +646,6 @@
     <span class="kw">pub </span>flatness: usize,
     <span class="kw">pub </span>package_json: <span class="prelude-ty">Option</span>&lt;PackageJsonConfig&gt;,
     <span class="kw">pub </span>effect_mode: EffectMode,
-    <span class="kw">pub </span>leaf_client_components: bool,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>TestAppBuilder {
@@ -668,7 +658,6 @@
             flatness: <span class="number">5</span>,
             package_json: <span class="prelude-val">Some</span>(Default::default()),
             effect_mode: EffectMode::Hook,
-            leaf_client_components: <span class="bool-val">false</span>,
         }
     }
 }
@@ -753,17 +742,10 @@ React.useEffect(() =&gt; {
                 </span>|| (!queue.is_empty()
                     &amp;&amp; (queue.len() + remaining_modules) % (<span class="self">self</span>.flatness + <span class="number">1</span>) == <span class="number">0</span>);
             <span class="kw">if </span>leaf {
-                <span class="kw">let </span>maybe_use_client = <span class="kw">if </span><span class="self">self</span>.leaf_client_components {
-                    <span class="string">r#&quot;&quot;use client&quot;;&quot;#
-                </span>} <span class="kw">else </span>{
-                    <span class="string">&quot;&quot;
-                </span>};
                 write_file(
                     <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;leaf file {}&quot;</span>, file.display()),
                     <span class="kw-2">&amp;</span>file,
                     <span class="macro">formatdoc! </span>{<span class="string">r#&quot;
-                        {maybe_use_client}
-
                         {setup_imports}
 
                         {SETUP_EFFECT_PROPS}
