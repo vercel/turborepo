@@ -4,8 +4,8 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use futures::StreamExt;
-use globwatch::{GlobSender, GlobWatcher, StopToken, Watcher};
+use futures::{stream::iter, StreamExt};
+use globwatch::{ConfigError, GlobWatcher, StopToken, WatchConfig, Watcher};
 use itertools::Itertools;
 use log::{trace, warn};
 use notify::RecommendedWatcher;
@@ -27,8 +27,8 @@ pub struct HashGlobWatcher<T: Watcher> {
     /// maps a glob to the hashes for which this glob hasn't changed
     glob_statuses: Arc<Mutex<HashMap<Glob, HashSet<Hash>>>>,
 
-    watcher: Arc<Mutex<Option<GlobWatcher<T>>>>,
-    config: GlobSender,
+    watcher: Arc<Mutex<Option<GlobWatcher>>>,
+    config: WatchConfig<T>,
 }
 
 #[derive(Clone)]
@@ -71,7 +71,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
 
         // watch all the globs currently in the map
         for glob in start_globs {
-            self.config.include(glob.to_string()).await.unwrap();
+            self.config.include(glob.to_string()).await.ok();
         }
 
         while let Some(Ok(event)) = stream.next().await {
@@ -109,7 +109,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
         hash: Hash,
         include: Iter,
         exclude: Iter,
-    ) {
+    ) -> Result<(), ConfigError> {
         // wait for a the watcher to flush its events
         // that will ensure that we have seen all filesystem writes
         // *by the calling client*. Other tasks _could_ write to the
@@ -120,9 +120,23 @@ impl<T: Watcher> HashGlobWatcher<T> {
         let include: HashSet<_> = include.into_iter().map(Arc::new).collect();
         let exclude = exclude.into_iter().map(Arc::new).collect();
 
-        for glob in include.iter() {
-            self.config.include(glob.to_string()).await.unwrap();
-        }
+        iter(include.iter())
+            .then(|glob| async { self.config.include(glob.to_string()).await })
+            .fold(Ok(()), |acc, res| async {
+                use ConfigError::*;
+
+                // accumulate any watch errors, but override if the server stopped
+                match (acc, res) {
+                    (Ok(()), Ok(())) => Ok(()),
+                    (Ok(()), Err(e)) => Err(e),
+                    (Err(WatchError(_)), Err(ServerStopped)) => Err(ServerStopped),
+                    (Err(WatchError(files)), Err(WatchError(files2))) => {
+                        Err(WatchError(files.into_iter().chain(files2).collect()))
+                    }
+                    (Err(e), _) => Err(e),
+                }
+            })
+            .await?;
 
         {
             let mut glob_status = self.glob_statuses.lock().expect("only fails if poisoned");
@@ -136,6 +150,8 @@ impl<T: Watcher> HashGlobWatcher<T> {
             let mut hash_globs = self.hash_globs.lock().expect("only fails if poisoned");
             hash_globs.insert(hash, GlobSet { include, exclude });
         }
+
+        Ok(())
     }
 
     /// given a hash and a set of candidates, return the subset of candidates

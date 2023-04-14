@@ -21,8 +21,12 @@
 
 use std::{
     collections::HashMap,
+    fs::File,
     path::{Path, PathBuf},
-    sync::{atomic::AtomicU64, Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
 };
 
 use futures::{channel::oneshot, future::Either, Stream, StreamExt as _};
@@ -36,20 +40,21 @@ use tracing::{event, span, trace, warn, Id, Level, Span};
 
 /// A wrapper around notify that allows for glob-based watching.
 #[derive(Debug)]
-pub struct GlobWatcher<T: Watcher> {
-    watcher: Arc<Mutex<T>>,
+pub struct GlobWatcher {
     stream: UnboundedReceiver<Event>,
     flush_dir: PathBuf,
 
     config: UnboundedReceiver<WatcherCommand>,
 }
 
-impl GlobWatcher<notify::RecommendedWatcher> {
+impl GlobWatcher {
     /// Create a new watcher, using the given flush directory as a temporary
     /// storage when flushing file events. For more information on flushing,
     /// see the module-level documentation.
     #[tracing::instrument]
-    pub fn new(flush_dir: PathBuf) -> Result<(Self, GlobSender), Error> {
+    pub fn new(
+        flush_dir: PathBuf,
+    ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), Error> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let (tconf, rconf) = tokio::sync::mpsc::unbounded_channel();
 
@@ -79,21 +84,29 @@ impl GlobWatcher<notify::RecommendedWatcher> {
 
         watcher.watch(flush_dir.as_path(), notify::RecursiveMode::Recursive)?;
 
+        let watcher = Arc::new(Mutex::new(watcher));
+
         Ok((
             Self {
-                watcher: Arc::new(Mutex::new(watcher)),
                 flush_dir,
                 stream: rx,
                 config: rconf,
             },
-            GlobSender(tconf),
+            WatchConfig {
+                flush: tconf,
+                watcher,
+            },
         ))
     }
 }
 
-impl<T: Watcher> GlobWatcher<T> {
-    /// Convert the watcher into a stream of events,
-    /// handling config changes and flushing transparently.
+impl GlobWatcher {
+    /// Convert the watcher into a stream of events, handling config changes and
+    /// flushing transparently.
+    ///
+    /// This is implemented as a zipped stream which processes filesystem events
+    /// and config changes driven by the same stream. This allows us to ensure
+    /// that anything watching for filesystem is also propagating config changes
     #[tracing::instrument(skip(self))]
     pub fn into_stream(
         self,
@@ -106,16 +119,23 @@ impl<T: Watcher> GlobWatcher<T> {
             UnboundedReceiverStream::new(self.stream)
                 .map(Either::Left)
                 .merge(UnboundedReceiverStream::new(self.config).map(Either::Right))
+                // apply a filter_map, yielding only valid events and consuming config changes and
+                // flushes
                 .filter_map(move |f| {
                     let span = span!(tracing::Level::TRACE, "stream_processor");
                     let _ = span.enter();
-                    let watcher = self.watcher.clone();
+
+                    // clone all the Arcs needed
                     let flush_id = flush_id.clone();
                     let flush_dir = flush_dir.clone();
                     let flush = flush.clone();
+
                     async move {
                         match f {
                             Either::Left(mut e) => {
+                                // if we receive an event for a file in the flush dir, we need to
+                                // remove it from the events list, and send a signal to the flush
+                                // requestor. flushes should not be considered as events.
                                 for flush_id in e
                                     .paths
                                     .drain_filter(|p| p.starts_with(flush_dir.as_path()))
@@ -127,8 +147,10 @@ impl<T: Watcher> GlobWatcher<T> {
                                     })
                                 {
                                     trace!("flushing {:?}", flush);
-                                    if let Some(tx) =
-                                        flush.lock().expect("no panic").remove(&flush_id)
+                                    if let Some(tx) = flush
+                                        .lock()
+                                        .expect("only fails if holder panics")
+                                        .remove(&flush_id)
                                     {
                                         // if this fails, it just means the requestor has gone away
                                         // and we can ignore it
@@ -136,31 +158,26 @@ impl<T: Watcher> GlobWatcher<T> {
                                     }
                                 }
 
-                                if e.paths.is_empty() {
-                                    None
-                                } else {
+                                // if we have any paths left on the event, yield it
+                                if !e.paths.is_empty() {
                                     event!(parent: &span, Level::TRACE, "yielding {:?}", e);
                                     Some(e)
+                                } else {
+                                    None
                                 }
                             }
                             Either::Right(WatcherCommand::Flush(tx)) => {
                                 // create file in flush dir
-                                let flush_id =
-                                    flush_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                                let flush_file = flush_dir.join(format!("{}", flush_id));
-                                if let Err(e) = std::fs::File::create(flush_file) {
+                                let flush_id = flush_id.fetch_add(1, Ordering::SeqCst);
+                                let flush_file = flush_dir.join(flush_id.to_string());
+                                if let Err(e) = File::create(flush_file) {
                                     warn!("failed to create flush file: {}", e);
                                 } else {
-                                    flush.lock().expect("no panic").insert(flush_id, tx);
+                                    flush
+                                        .lock()
+                                        .expect("only fails if holder panics")
+                                        .insert(flush_id, tx);
                                 }
-                                None
-                            }
-                            Either::Right(WatcherCommand::Watcher(change)) => {
-                                event!(parent: &span, Level::TRACE, "change {:?}", change);
-                                Self::handle_config_change(
-                                    &mut watcher.lock().expect("no panic"),
-                                    change,
-                                );
                                 None
                             }
                         }
@@ -169,23 +186,48 @@ impl<T: Watcher> GlobWatcher<T> {
                 .timeout_at(token),
         )
     }
+}
 
-    #[tracing::instrument(skip(watcher))]
-    fn handle_config_change(watcher: &mut T, config: WatcherChange) {
-        match config {
-            WatcherChange::Include(glob, _) => {
-                for p in glob_to_paths(&glob) {
-                    if let Err(e) = watcher.watch(&p, notify::RecursiveMode::Recursive) {
-                        warn!("failed to watch {:?}: {}", p, e);
+#[tracing::instrument(skip(watcher))]
+fn handle_config_change<T: Watcher>(
+    mut watcher: MutexGuard<T>,
+    config: WatcherChange,
+) -> Result<(), Vec<notify::Error>> {
+    match config {
+        WatcherChange::Include(glob, _) => {
+            glob_to_paths(&glob)
+                .iter()
+                .map(|p| watcher.watch(p, notify::RecursiveMode::Recursive))
+                .map(|r| match r {
+                    Ok(()) => Ok(()),
+                    Err(Error {
+                        kind: notify::ErrorKind::PathNotFound,
+                        ..
+                    }) => {
+                        // if the path we are trying to watch doesn't exist
+                        // it is not immediately an error; glob_to_paths
+                        // will generate paths that potentially don't exist,
+                        // since it doesn't walk the fs, no no-op
+                        Ok(())
                     }
-                }
+                    Err(e) => Err(e),
+                })
+                .fold(Ok(()), |acc, next| match (acc, next) {
+                    (Ok(()), Ok(())) => Ok(()),
+                    (Ok(()), Err(e)) => Err(vec![e]),
+                    (Err(acc), Ok(())) => Err(acc),
+                    (Err(mut acc), Err(e)) => {
+                        acc.push(e);
+                        Err(acc)
+                    }
+                })
+        }
+        WatcherChange::Exclude(glob, _) => {
+            for p in glob_to_paths(&glob) {
+                // we don't care if this fails, it's just a best-effort
+                watcher.unwatch(&p).ok();
             }
-            WatcherChange::Exclude(glob, _) => {
-                for p in glob_to_paths(&glob) {
-                    // we don't care if this fails, it's just a best-effort
-                    watcher.unwatch(&p).ok();
-                }
-            }
+            Ok(())
         }
     }
 }
@@ -200,8 +242,6 @@ fn get_flush_id(relative_path: &Path) -> Option<u64> {
 /// A configuration change to the watcher.
 #[derive(Debug)]
 pub enum WatcherCommand {
-    /// A change to the watcher configuration.
-    Watcher(WatcherChange),
     /// A request to flush the watcher.
     Flush(oneshot::Sender<()>),
 }
@@ -221,44 +261,52 @@ pub enum WatcherChange {
 
 /// A sender for watcher configuration changes.
 #[derive(Debug, Clone)]
-pub struct GlobSender(UnboundedSender<WatcherCommand>);
+pub struct WatchConfig<T: Watcher> {
+    flush: UnboundedSender<WatcherCommand>,
+    watcher: Arc<Mutex<T>>,
+}
 
 /// The server is no longer running.
-#[derive(Debug, Copy, Clone)]
-pub struct ConfigError;
+#[derive(Debug)]
+pub enum ConfigError {
+    /// The server is no longer running.
+    ServerStopped,
+    /// Watch error
+    WatchError(Vec<notify::Error>),
+}
 
-impl GlobSender {
+impl<T: Watcher> WatchConfig<T> {
     /// Register a glob to be included by the watcher.
     #[tracing::instrument(skip(self))]
     pub async fn include(&self, glob: String) -> Result<(), ConfigError> {
         trace!("including {:?}", glob);
-        self.0
-            .send(WatcherCommand::Watcher(WatcherChange::Include(
-                glob,
-                Span::current().id(),
-            )))
-            .map_err(|_| ConfigError)
+
+        handle_config_change(
+            self.watcher.lock().expect("no panic"),
+            WatcherChange::Include(glob, Span::current().id()),
+        )
+        .map_err(ConfigError::WatchError)
     }
 
     /// Register a glob to be excluded by the watcher.
     #[tracing::instrument(skip(self))]
     pub async fn exclude(&self, glob: String) -> Result<(), ConfigError> {
         trace!("excluding {:?}", glob);
-        self.0
-            .send(WatcherCommand::Watcher(WatcherChange::Exclude(
-                glob,
-                Span::current().id(),
-            )))
-            .map_err(|_| ConfigError)
+
+        handle_config_change(
+            self.watcher.lock().expect("no panic"),
+            WatcherChange::Exclude(glob, Span::current().id()),
+        )
+        .map_err(ConfigError::WatchError)
     }
 
     /// Await a full filesystem flush from the watcher.
     pub async fn flush(&self) -> Result<(), ConfigError> {
         let (tx, rx) = oneshot::channel();
-        self.0
+        self.flush
             .send(WatcherCommand::Flush(tx))
-            .map_err(|_| ConfigError)?;
-        rx.await.map_err(|_| ConfigError)
+            .map_err(|_| ConfigError::ServerStopped)?;
+        rx.await.map_err(|_| ConfigError::ServerStopped)
     }
 }
 
