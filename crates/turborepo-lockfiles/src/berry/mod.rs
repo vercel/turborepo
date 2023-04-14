@@ -152,7 +152,6 @@ impl<'a> BerryLockfile<'a> {
             .collect();
         for (locator, package) in &self.locator_package {
             for (name, range) in package.dependencies.iter().flatten() {
-                // TODO: go through overrides
                 let mut descriptor = self.resolve_dependency(locator, name, range.as_ref())?;
                 if descriptor.protocol().is_none() {
                     if let Some(range) = self.resolver.get(&descriptor) {
