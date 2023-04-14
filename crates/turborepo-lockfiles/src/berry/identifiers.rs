@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt, ops::Index};
+use std::{borrow::Cow, fmt};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -47,7 +47,8 @@ pub struct Locator<'a> {
 }
 
 impl<'a> Ident<'a> {
-    pub fn into_owned(&self) -> Ident<'static> {
+    /// Clones underlying strings and changes lifetime to represent this
+    pub fn to_owned(&self) -> Ident<'static> {
         let Ident { scope, name } = self;
         let scope = scope
             .as_ref()
@@ -113,33 +114,30 @@ impl<'a> Descriptor<'a> {
         MULTIKEY.split(key).map(Descriptor::try_from)
     }
 
+    /// Removes the protocol from a version range
     pub fn strip_protocol(range: &str) -> &str {
         range
             .find(':')
             .map_or(range, |colon_index| &range[colon_index + 1..])
     }
 
-    pub fn range_without_protocol(&self) -> &str {
-        self.range
-            .find(':')
-            .map_or(&self.range, |colon_index| &self.range[colon_index + 1..])
-    }
-
     pub fn into_owned(self) -> Descriptor<'static> {
         let Self { ident, range } = self;
         let range = Cow::Owned(range.to_string());
         Descriptor {
-            ident: ident.into_owned(),
+            ident: ident.to_owned(),
             range,
         }
     }
 
+    /// Returns the protocol of the version range if one is present
     pub fn protocol(&self) -> Option<&str> {
         self.range.find(':').map(|i| &self.range[0..i])
     }
 
     /// Access the range based on the lifetime of the underlying string slice
-    pub fn range(&self) -> Option<&'a str> {
+    /// this will return None if the underlying range is owned.
+    pub(crate) fn range(&self) -> Option<&'a str> {
         match self.range {
             Cow::Borrowed(s) => Some(s),
             _ => None,
@@ -218,7 +216,7 @@ impl<'a> Locator<'a> {
     /// Converts a possibly borrowed Locator to one that must be owned
     pub fn as_owned(&self) -> Locator<'static> {
         let Locator { ident, reference } = self;
-        let ident = ident.into_owned();
+        let ident = ident.to_owned();
         let reference = Cow::Owned(reference.to_string());
         Locator { ident, reference }
     }

@@ -28,6 +28,8 @@ pub enum Error {
     Resolutions(#[from] resolution::Error),
     #[error("unable to find entry for {0}")]
     MissingPackageForLocator(Locator<'static>),
+    #[error("unable to find any locator for {0}")]
+    MissingLocator(Descriptor<'static>),
 }
 
 // We depend on BTree iteration being sorted for correct serialization
@@ -104,7 +106,6 @@ impl<'a> BerryLockfile<'a> {
         for (key, package) in &lockfile.packages {
             let locator = Locator::try_from(package.resolution.as_str())?;
 
-            // TODO we're ignoring buildin patches, should we not?
             if locator.patch_file().is_some() {
                 let original_locator = locator
                     .patched_locator()
@@ -170,6 +171,7 @@ impl<'a> BerryLockfile<'a> {
         Ok(())
     }
 
+    /// All patch files referenced in the lockfile
     pub fn patches(&self) -> Vec<&Path> {
         self.patches
             .values()
@@ -179,6 +181,7 @@ impl<'a> BerryLockfile<'a> {
             .collect()
     }
 
+    // Helper function for inverting the resolution map
     fn locator_to_descriptors(&self) -> HashMap<&Locator<'a>, HashSet<&Descriptor<'a>>> {
         let mut reverse_lookup: HashMap<&Locator, HashSet<&Descriptor>> =
             HashMap::with_capacity(self.locator_package.len());
@@ -193,6 +196,7 @@ impl<'a> BerryLockfile<'a> {
         reverse_lookup
     }
 
+    /// Constructs a new lockfile data ready to be serialized
     pub fn lockfile(&self) -> Result<LockfileData, Error> {
         let mut packages: std::collections::BTreeMap<String, BerryPackage> = Map::new();
         let mut metadata = self.data.metadata.clone();
@@ -230,6 +234,8 @@ impl<'a> BerryLockfile<'a> {
         Ok(LockfileData { metadata, packages })
     }
 
+    /// Produces a new lockfile containing only the given workspaces and
+    /// packages
     pub fn subgraph(
         &self,
         workspace_packages: &[String],
@@ -248,10 +254,9 @@ impl<'a> BerryLockfile<'a> {
                 .chain(iter::once("."))
                 .any(|path| locator.is_workspace_path(path))
             {
-                //  we need to all descriptors coming out the workspace
+                //  We need to track all of the descriptors coming out the workspace
                 for (name, range) in package.dependencies.iter().flatten() {
                     let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
-                    // we add this dependency to the resolutions
                     let dep_locator = self
                         .resolutions
                         .get(&dependency)
@@ -276,14 +281,14 @@ impl<'a> BerryLockfile<'a> {
                 .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
 
             for (name, range) in package.dependencies.iter().flatten() {
-                let dependency = self.resolve_dependency(&locator, &name, range.as_ref())?;
-                let dep_locator = self.resolutions.get(&dependency).unwrap();
+                let dependency = self.resolve_dependency(&locator, name, range.as_ref())?;
+                let dep_locator = self
+                    .resolutions
+                    .get(&dependency)
+                    .unwrap_or_else(|| panic!("Unable to find locator for {dependency}"));
                 resolutions.insert(dependency, dep_locator.clone());
             }
 
-            // these packages are included, we must figure out which descriptors are
-            // included we just lookup the package and calculate all of the
-            // descriptors it creates
             if let Some(patch_locator) = self.patches.get(&locator) {
                 patches.insert(locator.as_owned(), patch_locator.clone());
                 let patch_descriptors = reverse_lookup
@@ -295,9 +300,10 @@ impl<'a> BerryLockfile<'a> {
             }
         }
 
-        for (primary, patch) in &self.patches {
-            let primary_descriptors = reverse_lookup.get(primary).unwrap();
-            let patch_descriptors = reverse_lookup.get(patch).unwrap();
+        for patch in self.patches.values() {
+            let patch_descriptors = reverse_lookup
+                .get(patch)
+                .unwrap_or_else(|| panic!("Unable to find {patch} in reverse lookup"));
 
             // For each patch descriptor we extract the primary descriptor that each patch
             // descriptor targets and check if that descriptor is present in the
@@ -315,19 +321,21 @@ impl<'a> BerryLockfile<'a> {
             }
         }
 
+        // Add any descriptors used by package extensions
         for descriptor in &self.extensions {
-            // TODO graceful
-            let locator = self.resolutions.get(descriptor).unwrap();
+            let locator = resolutions
+                .get(descriptor)
+                .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
             resolutions.insert(descriptor.clone(), locator.clone());
         }
 
         Ok(Self {
             data: self.data,
             resolutions,
-            // We rely on resolutions only containing the required locators
-            // for proper pruning.
-            locator_package: self.locator_package.clone(),
             patches,
+            // We clone the following structures without any alterations and
+            // rely on resolutions being correctly pruned.
+            locator_package: self.locator_package.clone(),
             resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
             overrides: self.overrides.clone(),
@@ -623,5 +631,78 @@ mod test {
             .get(&Descriptor::new("lodash", "npm:^3.0.0 || ^4.0.0").unwrap());
         assert!(lodash_desc.is_some());
         assert_eq!(lodash_desc.unwrap().reference, "npm:4.17.21");
+    }
+
+    #[test]
+    fn test_basic_resolutions_dependencies() {
+        let data: LockfileData = serde_yaml::from_str(include_str!(
+            "../../fixtures/minimal-berry-resolutions.lock"
+        ))
+        .unwrap();
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("debug@^4.3.4".to_string(), "1.0.0".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+        let lockfile = BerryLockfile::new(&data, Some(&manifest)).unwrap();
+
+        let pkg = lockfile
+            .resolve_package("packages/b", "debug", "^4.3.4")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            pkg,
+            Package {
+                key: "debug@npm:1.0.0".into(),
+                version: "1.0.0".into()
+            }
+        )
+    }
+
+    #[test]
+    fn test_targeted_resolutions_dependencies() {
+        let data: LockfileData = serde_yaml::from_str(include_str!(
+            "../../fixtures/minimal-berry-resolutions.lock"
+        ))
+        .unwrap();
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [
+                    ("debug".to_string(), "1.0.0".to_string()),
+                    // This is a targeted override just for the ms dependency of the debug package
+                    ("debug/ms".to_string(), "0.6.0".to_string()),
+                ]
+                .iter()
+                .cloned()
+                .collect(),
+            ),
+        };
+        let lockfile = BerryLockfile::new(&data, Some(&manifest)).unwrap();
+
+        let deps = lockfile
+            .all_dependencies("debug@npm:1.0.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            deps,
+            [("ms".to_string(), "npm:0.6.0".to_string())]
+                .iter()
+                .cloned()
+                .collect(),
+        );
+        let pkg = lockfile
+            .resolve_package("packages/b", "ms", "npm:0.6.0")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            pkg,
+            Package {
+                key: "ms@npm:0.6.0".into(),
+                version: "0.6.0".into()
+            }
+        );
     }
 }

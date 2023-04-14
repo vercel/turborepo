@@ -23,12 +23,15 @@ pub enum Error {
     UnexpectedToken(Rule),
 }
 
+/// A resolution that can appear in the resolutions field of the top level
+/// package.json
 #[derive(Debug, PartialEq, Clone, Copy, Eq, Default, PartialOrd, Ord, Hash)]
 pub struct Resolution<'a> {
     from: Option<Specifier<'a>>,
     descriptor: Specifier<'a>,
 }
 
+// This is essentially an Ident with an optional semver range
 #[derive(Debug, PartialEq, Clone, Copy, Eq, Default, PartialOrd, Ord, Hash)]
 struct Specifier<'a> {
     full_name: &'a str,
@@ -89,11 +92,10 @@ fn parse_specifier(specifier: Pair<'_, Rule>) -> Result<Option<Specifier>, Error
 }
 
 impl<'a> Resolution<'a> {
-    /// Returns a new descriptor if necessary (TODO finish doc)
-    // reference is the version override
-    // locator is the package where the dependency is coming from
-    // dependency is the package that we are considering overriding
-    // will only return desc if there's an override that should be used instead
+    /// Returns a new descriptor if an override is applicable
+    // reference: version that this resolution resolves to
+    // locator: package that depends on the dependency
+    // dependency: package that we are considering overriding
     pub fn reduce_dependency<'b>(
         &self,
         reference: &str,
