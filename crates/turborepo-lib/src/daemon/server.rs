@@ -267,7 +267,7 @@ mod test {
     use std::time::{Duration, Instant};
 
     use tokio::select;
-    use turborepo_paths::{AbsoluteNormalizedPathBuf, ForwardRelativePath};
+    use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
     use super::DaemonServer;
     use crate::{commands::CommandBase, Args};
@@ -275,7 +275,7 @@ mod test {
     #[tokio::test]
     async fn lifecycle() {
         let tempdir = tempfile::tempdir().unwrap();
-        let path: AbsoluteNormalizedPathBuf = tempdir.into_path().try_into().unwrap();
+        let path = AbsoluteSystemPathBuf::new(tempdir.path()).unwrap();
 
         let daemon = DaemonServer::new(
             &CommandBase::new(
@@ -283,6 +283,7 @@ mod test {
                     ..Default::default()
                 },
                 path.as_path().to_path_buf(),
+                "test",
             )
             .unwrap(),
             Duration::from_secs(60 * 60),
@@ -290,8 +291,8 @@ mod test {
         )
         .unwrap();
 
-        let pid_path = path.join(ForwardRelativePath::new("turbod.pid").unwrap());
-        let sock_path = path.join(ForwardRelativePath::new("turbod.sock").unwrap());
+        let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
+        let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
 
         select! {
             _ = daemon.serve(path) => panic!("must not close"),
@@ -305,7 +306,7 @@ mod test {
     #[tokio::test]
     async fn timeout() {
         let tempdir = tempfile::tempdir().unwrap();
-        let path: AbsoluteNormalizedPathBuf = tempdir.into_path().try_into().unwrap();
+        let path = AbsoluteSystemPathBuf::new(tempdir.path()).unwrap();
 
         let daemon = DaemonServer::new(
             &CommandBase::new(
@@ -313,6 +314,7 @@ mod test {
                     ..Default::default()
                 },
                 path.as_path().to_path_buf(),
+                "test",
             )
             .unwrap(),
             Duration::from_millis(5),
@@ -320,7 +322,7 @@ mod test {
         )
         .unwrap();
 
-        let pid_path = path.join(ForwardRelativePath::new("turbod.pid").unwrap());
+        let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
 
         let now = Instant::now();
         let close_reason = daemon.serve(path).await;
