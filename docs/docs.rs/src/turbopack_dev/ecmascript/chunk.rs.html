@@ -146,12 +146,20 @@
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::ChunkingContext,
+    chunk::{ChunkingContext, ParallelChunkReference, ParallelChunkReferenceVc},
     ident::AssetIdentVc,
     introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
     reference::AssetReferencesVc,
@@ -224,7 +232,15 @@
         <span class="kw">let </span>chunk_references = this.chunk.references().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::with_capacity(chunk_references.len() + <span class="number">1</span>);
 
-        <span class="kw">for </span>reference <span class="kw">in </span><span class="kw-2">&amp;*</span>chunk_references {
+        <span class="comment">// In contrast to the inner chunk, the outer chunk should not have
+        // references of parallel chunk since these are already handled
+        // at the [ChunkGroup] level.
+        </span><span class="kw">for </span>reference <span class="kw">in </span><span class="kw-2">&amp;*</span>chunk_references {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(parallel_ref) = ParallelChunkReferenceVc::resolve_from(<span class="kw-2">*</span>reference).<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="kw">if </span><span class="kw-2">*</span>parallel_ref.is_loaded_in_parallel().<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="kw">continue</span>;
+                }
+            }
             references.push(<span class="kw-2">*</span>reference);
         }
 

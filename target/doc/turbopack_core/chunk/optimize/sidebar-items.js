@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["optimize_by_common_parent"]};
+window.SIDEBAR_ITEMS = {"fn":["optimize","optimize_by_common_parent","optimize_inline"],"struct":["ChunkOptimizerVc","ContainmentTree","OptimizableChunkVc"],"trait":["ChunkOptimizer","OptimizableChunk"],"type":["ChunkOptimizerTraitRef","OptimizableChunkTraitRef"]};
