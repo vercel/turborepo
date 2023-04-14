@@ -74,15 +74,14 @@ impl<'a> Visit for AssetReferencesVisitor<'a> {
                 if &*obj.sym == "__webpack_require__" && &*prop.sym == "e" {
                     if let [ExprOrSpread { spread: None, expr }] = &call.args[..] {
                         if let Expr::Lit(lit) = &**expr {
-                            self.references.push(
+                            self.references.push(Vc::upcast(
                                 WebpackChunkAssetReference {
                                     chunk_id: lit.clone(),
                                     runtime: self.runtime,
                                     transforms: self.transforms,
                                 }
-                                .cell()
-                                .into(),
-                            );
+                                .cell(),
+                            ));
                         }
                     }
                 }

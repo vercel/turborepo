@@ -103,8 +103,8 @@ struct Transparent(u32);
 #[turbo_tasks::value(shared)]
 enum Enum {
     None,
-    Transparent(TransparentVc),
-    Enum(EnumVc),
+    Transparent(Vc<Transparent>),
+    Enum(Vc<Enum>),
 }
 
 #[turbo_tasks::value(shared)]
@@ -112,17 +112,17 @@ struct StructUnit;
 
 #[turbo_tasks::value(shared)]
 struct StructWithTransparent {
-    transparent: TransparentVc,
+    transparent: Vc<Transparent>,
 }
 
 #[turbo_tasks::value(shared)]
 struct StructWithOption {
-    option: Option<TransparentVc>,
+    option: Option<Vc<Transparent>>,
 }
 
 #[turbo_tasks::value(shared)]
 struct StructWithVec {
-    vec: Vec<TransparentVc>,
+    vec: Vec<Vc<Transparent>>,
 }
 
 #[turbo_tasks::value(shared, eq = "manual")]

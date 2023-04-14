@@ -13,11 +13,17 @@ use crate::{asset_context::get_runtime_asset_context, embed_file_path};
 pub async fn get_build_runtime_code(environment: Vc<Environment>) -> Result<Vc<Code>> {
     let asset_context = get_runtime_asset_context(environment);
 
-    let shared_runtime_utils_code =
-        StaticEcmascriptCode::new(asset_context, embed_file_path("shared/runtime-utils.ts")).code();
+    let shared_runtime_utils_code = StaticEcmascriptCode::new(
+        asset_context,
+        embed_file_path("shared/runtime-utils.ts".to_string()),
+    )
+    .code();
 
-    let runtime_code =
-        StaticEcmascriptCode::new(asset_context, embed_file_path("build/runtime.ts")).code();
+    let runtime_code = StaticEcmascriptCode::new(
+        asset_context,
+        embed_file_path("build/runtime.ts".to_string()),
+    )
+    .code();
 
     let mut code = CodeBuilder::default();
     code.push_code(&*shared_runtime_utils_code.await?);

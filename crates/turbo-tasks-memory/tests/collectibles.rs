@@ -1,13 +1,11 @@
 #![feature(arbitrary_self_types)]
 #![feature(async_fn_in_trait)]
 
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use tokio::time::sleep;
-use turbo_tasks::{
-    emit, primitives::StringVc, CollectiblesSource, NothingVc, ValueToString, ValueToStringVc,
-};
+use turbo_tasks::{emit, CollectiblesSource, ValueToString, Vc};
 use turbo_tasks_testing::{register, run};
 register!();
 
@@ -101,7 +99,7 @@ async fn my_collecting_function() -> Result<Vc<Thing>> {
 }
 
 #[turbo_tasks::function]
-async fn my_collecting_function_indirect() -> Result<ThingVc> {
+async fn my_collecting_function_indirect() -> Result<Vc<Thing>> {
     let result = my_collecting_function();
     let list = result.peek_collectibles::<Box<dyn ValueToString>>().await?;
     // my_collecting_function already processed the collectibles so the list should
@@ -111,25 +109,25 @@ async fn my_collecting_function_indirect() -> Result<ThingVc> {
 }
 
 #[turbo_tasks::function]
-fn my_multi_emitting_function() -> Vc<Thing> {
-    my_transitive_emitting_function("".to_string(), "a".to_string());
-    my_transitive_emitting_function("".to_string(), "b".to_string());
-    my_emitting_function("".to_string());
-    Thing::cell(Thing(0))
+async fn my_multi_emitting_function() -> Result<Vc<Thing>> {
+    my_transitive_emitting_function("".to_string(), "a".to_string()).await?;
+    my_transitive_emitting_function("".to_string(), "b".to_string()).await?;
+    my_emitting_function("".to_string()).await?;
+    Ok(Thing::cell(Thing(0)))
 }
 
 #[turbo_tasks::function]
-fn my_transitive_emitting_function(key: String, _key2: String) -> Vc<Thing> {
-    my_emitting_function(key);
-    Thing::cell(Thing(0))
+async fn my_transitive_emitting_function(key: String, _key2: String) -> Result<Vc<Thing>> {
+    my_emitting_function(key).await?;
+    Ok(Thing::cell(Thing(0)))
 }
 
 #[turbo_tasks::function]
 async fn my_transitive_emitting_function_with_child_scope(
-    key: &str,
-    key2: &str,
-    _key3: &str,
-) -> Result<ThingVc> {
+    key: String,
+    key2: String,
+    _key3: String,
+) -> Result<Vc<Thing>> {
     let thing = my_transitive_emitting_function(key, key2);
     let list = thing.peek_collectibles::<Box<dyn ValueToString>>().await?;
     assert_eq!(list.len(), 2);
@@ -137,7 +135,7 @@ async fn my_transitive_emitting_function_with_child_scope(
 }
 
 #[turbo_tasks::function]
-async fn my_emitting_function(_key: &str) -> Result<()> {
+async fn my_emitting_function(_key: String) -> Result<()> {
     sleep(Duration::from_millis(100)).await;
     emit(Vc::upcast::<Box<dyn ValueToString>>(Thing::new(123)));
     emit(Vc::upcast::<Box<dyn ValueToString>>(Thing::new(42)));
@@ -147,8 +145,8 @@ async fn my_emitting_function(_key: &str) -> Result<()> {
 #[turbo_tasks::value(shared)]
 struct Thing(u32);
 
-impl ThingVc {
-    fn new(v: u32) -> Self {
+impl Thing {
+    fn new(v: u32) -> Vc<Self> {
         Self::cell(Thing(v))
     }
 }
@@ -156,7 +154,7 @@ impl ThingVc {
 #[turbo_tasks::value_impl]
 impl ValueToString for Thing {
     #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
-        StringVc::cell(self.0.to_string())
+    fn to_string(&self) -> Vc<String> {
+        Vc::cell(self.0.to_string())
     }
 }

@@ -1,9 +1,8 @@
 use std::marker::PhantomData;
 
 use anyhow::Result;
-use turbo_tasks::Vc;
 
-use crate::{unit, RawVc};
+use crate::{unit, RawVc, Vc};
 
 pub trait TaskOutput {
     type Return;
@@ -31,10 +30,10 @@ where
 }
 
 impl TaskOutput for () {
-    type Return = ();
+    type Return = Vc<()>;
 
-    fn try_from_raw_vc(_raw_vc: RawVc) -> Self::Return {
-        ()
+    fn try_from_raw_vc(raw_vc: RawVc) -> Self::Return {
+        raw_vc.into()
     }
 
     fn try_into_raw_vc(self) -> Result<RawVc> {

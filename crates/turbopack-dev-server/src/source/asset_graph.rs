@@ -18,16 +18,17 @@ use super::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceSideEffect,
     GetContentSourceContent,
 };
-use crate::source::{ContentSourceSideEffect, GetContentSourceContent};
 
 #[turbo_tasks::value(transparent)]
 struct AssetsMap(HashMap<String, Vc<Box<dyn Asset>>>);
+
+type ExpandedState = State<HashSet<Vc<Box<dyn Asset>>>>;
 
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new")]
 pub struct AssetGraphContentSource {
     root_path: Vc<FileSystemPath>,
     root_assets: Vc<AssetsSet>,
-    expanded: Option<State<HashSet<Vc<Box<dyn Asset>>>>>,
+    expanded: Option<ExpandedState>,
 }
 
 #[turbo_tasks::value_impl]
@@ -97,7 +98,7 @@ impl AssetGraphContentSource {
 async fn expand(
     root_assets: &IndexSet<Vc<Box<dyn Asset>>>,
     root_path: &FileSystemPath,
-    expanded: Option<&State<HashSet<Vc<Box<dyn Asset>>>>>,
+    expanded: Option<&ExpandedState>,
 ) -> Result<HashMap<String, Vc<Box<dyn Asset>>>> {
     let mut map = HashMap::new();
     let mut assets = Vec::new();
@@ -189,7 +190,7 @@ impl ContentSource for AssetGraphContentSource {
                 )
             })
             .collect();
-        Ok(Vc::cell(routes).merge())
+        Ok(Vc::<RouteTrees>::cell(routes).merge())
     }
 }
 
@@ -220,7 +221,7 @@ impl GetContentSourceContent for AssetGraphGetContentSourceContent {
         _data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
         let this = self.await?;
-        turbo_tasks::emit(Vc::upcast(self));
+        turbo_tasks::emit(Vc::upcast::<Box<dyn ContentSourceSideEffect>>(self));
         Ok(ContentSourceContent::static_content(
             this.asset.versioned_content(),
         ))
@@ -291,7 +292,7 @@ impl Introspectable for AssetGraphContentSource {
         Ok(Vc::cell(
             root_asset_children
                 .chain(expanded_asset_children)
-                .chain(once((expanded_key, FullyExpaned(self).cell().into())))
+                .chain(once((expanded_key, Vc::upcast(FullyExpaned(self).cell()))))
                 .collect(),
         ))
     }

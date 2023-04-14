@@ -59,7 +59,9 @@ impl Asset for GlobalCssAsset {
 
     #[turbo_tasks::function]
     fn references(self: Vc<Self>) -> Vc<AssetReferences> {
-        Vc::cell(vec![InternalCssAssetReference::new(self.inner()).into()])
+        Vc::cell(vec![Vc::upcast(InternalCssAssetReference::new(
+            self.inner(),
+        ))])
     }
 }
 

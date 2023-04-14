@@ -116,7 +116,7 @@ impl BuildChunkingContext {
         module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Result<Vc<Box<dyn OutputAsset>>> {
-        let entry_chunk = module.as_root_chunk(self.into());
+        let entry_chunk = module.as_root_chunk(Vc::upcast(self));
 
         let other_chunks = self
             .get_chunk_assets(entry_chunk, evaluatable_assets)
@@ -156,7 +156,7 @@ impl BuildChunkingContext {
 
 impl BuildChunkingContext {
     async fn get_chunk_assets(
-        self,
+        self: Vc<Self>,
         entry_chunk: Vc<Box<dyn Chunk>>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Result<Vec<Vc<Box<dyn OutputAsset>>>> {
@@ -166,7 +166,10 @@ impl BuildChunkingContext {
             .iter()
             .map({
                 move |evaluatable_asset| async move {
-                    evaluatable_asset.as_root_chunk(self.into()).resolve().await
+                    evaluatable_asset
+                        .as_root_chunk(Vc::upcast(self))
+                        .resolve()
+                        .await
                 }
             })
             .try_join()
@@ -213,12 +216,12 @@ impl ChunkingContext for BuildChunkingContext {
     ) -> Result<Vc<FileSystemPath>> {
         let root_path = self.chunk_root_path;
         let root_path = if let Some(layer) = self.layer.as_deref() {
-            root_path.join(layer)
+            root_path.join(layer.to_string())
         } else {
             root_path
         };
         let name = ident.output_name(self.context_path, extension).await?;
-        Ok(root_path.join(&name))
+        Ok(root_path.join(name.clone_value()))
     }
 
     #[turbo_tasks::function]
@@ -252,7 +255,7 @@ impl ChunkingContext for BuildChunkingContext {
     ) -> Result<Vc<FileSystemPath>> {
         let source_path = original_asset_ident.path().await?;
         let basename = source_path.file_name();
-        let asset_path = match source_path.extension() {
+        let asset_path = match source_path.extension_ref() {
             Some(ext) => format!(
                 "{basename}.{content_hash}.{ext}",
                 basename = &basename[..basename.len() - ext.len() - 1],
@@ -263,7 +266,7 @@ impl ChunkingContext for BuildChunkingContext {
                 content_hash = &content_hash[..8]
             ),
         };
-        Ok(self.asset_root_path.join(&asset_path))
+        Ok(self.asset_root_path.join(asset_path))
     }
 
     #[turbo_tasks::function]

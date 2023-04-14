@@ -59,15 +59,14 @@ impl Asset for RebasedAsset {
         let input_references = self.source.references().await?;
         let mut references = Vec::new();
         for reference in input_references.iter() {
-            references.push(
+            references.push(Vc::upcast(
                 RebasedAssetReference {
                     reference: *reference,
                     input_dir: self.input_dir,
                     output_dir: self.output_dir,
                 }
-                .cell()
-                .into(),
-            );
+                .cell(),
+            ));
         }
         Ok(Vc::cell(references))
     }
@@ -93,13 +92,14 @@ impl AssetReference for RebasedAssetReference {
                     async move { Ok(asset) }
                 },
                 |reference| {
-                    let reference: Vc<Box<dyn AssetReference>> = RebasedAssetReference {
-                        reference,
-                        input_dir: self.input_dir,
-                        output_dir: self.output_dir,
-                    }
-                    .cell()
-                    .into();
+                    let reference: Vc<Box<dyn AssetReference>> = Vc::upcast(
+                        RebasedAssetReference {
+                            reference,
+                            input_dir: self.input_dir,
+                            output_dir: self.output_dir,
+                        }
+                        .cell(),
+                    );
                     async move { Ok(reference) }
                 },
             )

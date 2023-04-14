@@ -9,6 +9,8 @@
 //! path.
 
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 pub mod fixed;
 
@@ -109,7 +111,7 @@ impl EcmascriptChunkPlaceable for StaticModuleAsset {
         Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
             module: self,
             context,
-            static_asset: self.static_asset(context.into()),
+            static_asset: self.static_asset(Vc::upcast(context)),
         }))
     }
 
@@ -158,7 +160,7 @@ impl Asset for StaticAsset {
         let content_hash_b16 = turbo_tasks_hash::encode_hex(content_hash);
         let asset_path = self
             .context
-            .asset_path(&content_hash_b16, self.source.ident());
+            .asset_path(content_hash_b16, self.source.ident());
         Ok(AssetIdent::from_path(asset_path))
     }
 
@@ -184,14 +186,13 @@ impl ChunkItem for ModuleChunkItem {
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<AssetReferences>> {
-        Ok(Vc::cell(vec![SingleAssetReference::new(
-            self.static_asset.into(),
+        Ok(Vc::cell(vec![Vc::upcast(SingleAssetReference::new(
+            Vc::upcast(self.static_asset),
             Vc::cell(format!(
                 "static(url) {}",
                 self.static_asset.ident().to_string().await?
             )),
-        )
-        .into()]))
+        ))]))
     }
 }
 
@@ -228,14 +229,13 @@ struct StaticCssEmbed {
 impl CssEmbed for StaticCssEmbed {
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<AssetReferences>> {
-        Ok(Vc::cell(vec![SingleAssetReference::new(
-            self.static_asset.into(),
+        Ok(Vc::cell(vec![Vc::upcast(SingleAssetReference::new(
+            Vc::upcast(self.static_asset),
             Vc::cell(format!(
                 "static(url) {}",
                 self.static_asset.ident().path().await?
             )),
-        )
-        .into()]))
+        ))]))
     }
 
     #[turbo_tasks::function]

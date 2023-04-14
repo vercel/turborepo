@@ -15,12 +15,11 @@ use turbopack_core::{
             ConditionValue, ResolutionConditions, ResolveInPackage, ResolveIntoPackage,
             ResolveOptions,
         },
-        origin::ResolveOrigin,
+        origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
         resolve, ResolveResult,
     },
 };
-
 /// Retrieves the [ResolutionConditions] of both the "into" package (allowing a
 /// package to control how it can be imported) and the "in" package (controlling
 /// how this package imports others) resolution options, so that they can be

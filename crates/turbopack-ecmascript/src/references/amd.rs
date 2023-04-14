@@ -25,7 +25,7 @@ use crate::{
     chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
-    references::{pattern_mapping::PatternMapping, AstPath},
+    references::AstPath,
     resolve::{cjs_resolve, try_to_severity},
 };
 
@@ -152,7 +152,7 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
                             PatternMapping::resolve_request(
                                 *request,
                                 self.origin,
-                                context.into(),
+                                Vc::upcast(context),
                                 cjs_resolve(
                                     self.origin,
                                     *request,

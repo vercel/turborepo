@@ -1,8 +1,10 @@
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 use anyhow::{anyhow, Result};
 use mdxjs::{compile, Options};
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{Value, ValueDefault, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -58,14 +60,14 @@ impl Default for MdxTransformOptions {
 #[turbo_tasks::value_impl]
 impl MdxTransformOptions {
     #[turbo_tasks::function]
-    pub fn default() -> Vc<Self> {
+    fn default_private() -> Vc<Self> {
         Self::cell(Default::default())
     }
 }
 
-impl Default for MdxTransformOptions {
-    fn default() -> Vc<Self> {
-        Vc::<Self>::default()
+impl ValueDefault for MdxTransformOptions {
+    fn value_default() -> Vc<Self> {
+        Self::default_private()
     }
 }
 
@@ -126,10 +128,10 @@ async fn into_ecmascript_module_asset(
 
     let source = VirtualSource::new_with_ident(
         this.source.ident(),
-        File::from(Rope::from(mdx_jsx_component)).into(),
+        AssetContent::file(File::from(Rope::from(mdx_jsx_component)).into()),
     );
     Ok(EcmascriptModuleAsset::new(
-        source.into(),
+        Vc::upcast(source),
         this.context,
         Value::new(EcmascriptModuleAssetType::Typescript),
         this.transforms,

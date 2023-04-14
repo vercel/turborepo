@@ -1,6 +1,6 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, Vc};
+use turbo_tasks::{trace::TraceRawVcs, ValueDefault, Vc};
 use turbopack_core::{environment::Environment, resolve::options::ImportMapping};
 use turbopack_ecmascript::TransformPlugin;
 use turbopack_node::{
@@ -71,16 +71,10 @@ pub struct DecoratorsOptions {
 }
 
 #[turbo_tasks::value_impl]
-impl DecoratorsOptions {
+impl ValueDefault for DecoratorsOptions {
     #[turbo_tasks::function]
-    pub fn default() -> Vc<Self> {
-        Self::cell(Default::default())
-    }
-}
-
-impl Default for DecoratorsOptions {
-    fn default() -> Vc<Self> {
-        Vc::<Self>::default()
+    fn value_default() -> Vc<Self> {
+        Self::default().cell()
     }
 }
 
@@ -93,16 +87,10 @@ pub struct TypescriptTransformOptions {
 }
 
 #[turbo_tasks::value_impl]
-impl TypescriptTransformOptions {
+impl ValueDefault for TypescriptTransformOptions {
     #[turbo_tasks::function]
-    pub fn default() -> Vc<Self> {
-        Self::cell(Default::default())
-    }
-}
-
-impl Default for TypescriptTransformOptions {
-    fn default() -> Vc<Self> {
-        Vc::<Self>::default()
+    fn value_default() -> Vc<Self> {
+        Self::default().cell()
     }
 }
 
@@ -179,15 +167,9 @@ pub struct ModuleOptionsContext {
 }
 
 #[turbo_tasks::value_impl]
-impl ModuleOptionsContext {
+impl ValueDefault for ModuleOptionsContext {
     #[turbo_tasks::function]
-    pub fn default() -> Vc<Self> {
+    fn value_default() -> Vc<Self> {
         Self::cell(Default::default())
-    }
-}
-
-impl Default for ModuleOptionsContext {
-    fn default() -> Vc<Self> {
-        Vc::<Self>::default()
     }
 }

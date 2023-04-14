@@ -8,9 +8,11 @@ use turbopack_core::{
     chunk::{availability_info::AvailabilityInfo, ChunkItem, ModuleId},
     code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
 };
-use turbopack_ecmascript::chunk::{EcmascriptChunkContent, EcmascriptChunkItem};
+use turbopack_ecmascript::chunk::{
+    EcmascriptChunkContent, EcmascriptChunkItem, EcmascriptChunkItemExt,
+};
 
 /// A chunk item's content entry.
 ///
@@ -102,14 +104,14 @@ async fn item_code(
                 ));
                 let error_message = format!("{}", PrettyPrintError(&error));
                 let js_error_message = serde_json::to_string(&error_message)?;
-                let issue = CodeGenerationIssue {
+                CodeGenerationIssue {
                     severity: IssueSeverity::Error.cell(),
                     path: item.asset_ident().path(),
                     title: Vc::cell("Code generation for chunk item errored".to_string()),
                     message: Vc::cell(error_message),
                 }
-                .cell();
-                issue.emit();
+                .cell()
+                .emit();
                 let mut code = CodeBuilder::default();
                 code += "(() => {{\n\n";
                 writeln!(code, "throw new Error({error});", error = &js_error_message)?;

@@ -44,18 +44,18 @@ use swc_core::{
         },
     },
 };
-use turbo_tasks::{primitives::Regex, TryJoinIterExt, Value, Vc};
+use turbo_tasks::{TryJoinIterExt, Upcast, Value, Vc};
 use turbo_tasks_fs::{FileJsonContent, FileSystemPath};
 use turbopack_core::{
     asset::Asset,
     compile_time_info::{CompileTimeInfo, FreeVarReference},
     error::PrettyPrintError,
-    issue::{IssueSource, OptionIssueSource},
+    issue::{IssueExt, IssueSource, OptionIssueSource},
     reference::{AssetReference, AssetReferences, SourceMapReference},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,
-        origin::{PlainResolveOrigin, ResolveOrigin},
+        origin::{PlainResolveOrigin, ResolveOrigin, ResolveOriginExt},
         package_json,
         parse::Request,
         pattern::Pattern,
@@ -115,7 +115,7 @@ use crate::{
     magic_identifier,
     references::{
         cjs::{CjsRequireAssetReference, CjsRequireCacheAccess, CjsRequireResolveAssetReference},
-        esm::{module_id::EsmModuleIdAssetReference, EsmBinding, EsmExports},
+        esm::{module_id::EsmModuleIdAssetReference, EsmBinding},
         require_context::{RequireContextAssetReference, RequireContextMap},
         type_issue::SpecifiedModuleTypeIssue,
     },
@@ -150,7 +150,7 @@ impl AnalyzeEcmascriptModuleResult {
             }
         }
         for r in references.await?.iter() {
-            if Vc::try_resolve_sidecast::<Box<dyn CodeGenerateableWithAvailabilityInfo>>(r)
+            if Vc::try_resolve_sidecast::<Box<dyn CodeGenerateableWithAvailabilityInfo>>(*r)
                 .await?
                 .is_some()
             {
@@ -183,32 +183,32 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     }
 
     /// Adds an asset reference to the analysis result.
-    pub fn add_reference<R>(&mut self, reference: R)
+    pub fn add_reference<R>(&mut self, reference: Vc<R>)
     where
-        R: Into<Vc<Box<dyn AssetReference>>>,
+        R: Upcast<Box<dyn AssetReference>>,
     {
-        self.references.insert(reference.into());
+        self.references.insert(Vc::upcast(reference));
     }
 
     /// Adds a codegen to the analysis result.
-    pub fn add_code_gen<C>(&mut self, code_gen: C)
+    pub fn add_code_gen<C>(&mut self, code_gen: Vc<C>)
     where
-        C: Into<Vc<Box<dyn CodeGenerateable>>>,
+        C: Upcast<Box<dyn CodeGenerateable>>,
     {
         self.code_gens
-            .push(CodeGen::CodeGenerateable(code_gen.into()));
+            .push(CodeGen::CodeGenerateable(Vc::upcast(code_gen)));
     }
 
     /// Adds a codegen to the analysis result.
     #[allow(dead_code)]
-    pub fn add_code_gen_with_availability_info<C>(&mut self, code_gen: C)
+    pub fn add_code_gen_with_availability_info<C>(&mut self, code_gen: Vc<C>)
     where
-        C: Into<Vc<Box<dyn CodeGenerateableWithAvailabilityInfo>>>,
+        C: Upcast<Box<dyn CodeGenerateableWithAvailabilityInfo>>,
     {
         self.code_gens
-            .push(CodeGen::CodeGenerateableWithAvailabilityInfo(
-                code_gen.into(),
-            ));
+            .push(CodeGen::CodeGenerateableWithAvailabilityInfo(Vc::upcast(
+                code_gen,
+            )));
     }
 
     /// Sets the analysis result ES export.
@@ -429,7 +429,7 @@ pub(crate) async fn analyze_ecmascript_module(
                     let origin_path = origin.origin_path();
                     analysis.add_reference(SourceMapReference::new(
                         origin_path,
-                        origin_path.parent().join(path),
+                        origin_path.parent().join(path.to_string()),
                     ))
                 }
             }
@@ -586,13 +586,11 @@ pub(crate) async fn analyze_ecmascript_module(
     } else if matches!(specified_type, SpecifiedModuleType::EcmaScript) {
         match detect_dynamic_export(program) {
             DetectedDynamicExportType::CommonJs => {
-                Vc::upcast(
-                    SpecifiedModuleTypeIssue {
-                        path: source.ident().path(),
-                        specified_type,
-                    }
-                    .cell(),
-                )
+                SpecifiedModuleTypeIssue {
+                    path: source.ident().path(),
+                    specified_type,
+                }
+                .cell()
                 .emit();
                 EcmascriptExports::EsmExports(
                     EsmExports {
@@ -938,7 +936,7 @@ pub(crate) async fn analyze_ecmascript_module(
                     compile_time_info.environment().rendering(),
                     Vc::cell(ast_path),
                     IssueSource::from_byte_offset(
-                        source.into(),
+                        Vc::upcast(source),
                         span.lo.to_usize(),
                         span.hi.to_usize(),
                     ),
@@ -1332,8 +1330,6 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             )
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::NodePreGypFind) => {
-            use turbo_tasks::Vc;
-
             use crate::resolve::node_native_binding::NodePreGypConfigReference;
 
             let args = linked_args(args).await?;
@@ -1371,8 +1367,6 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             )
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::NodeGypBuild) => {
-            use turbo_tasks::Vc;
-
             use crate::resolve::node_native_binding::NodeGypBuildReference;
 
             let args = linked_args(args).await?;
@@ -1383,7 +1377,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     let current_context = origin
                         .origin_path()
                         .root()
-                        .join(s.trim_start_matches("/ROOT/"));
+                        .join(s.trim_start_matches("/ROOT/").to_string());
                     analysis.add_reference(NodeGypBuildReference::new(
                         current_context,
                         compile_time_info.environment().compile_target(),
@@ -1403,8 +1397,6 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             )
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::NodeBindings) => {
-            use turbo_tasks::Vc;
-
             use crate::resolve::node_native_binding::NodeBindingsReference;
 
             let args = linked_args(args).await?;
@@ -1742,7 +1734,7 @@ async fn handle_free_var_reference(
 }
 
 fn issue_source(source: Vc<Box<dyn Source>>, span: Span) -> Vc<IssueSource> {
-    IssueSource::from_byte_offset(source.into(), span.lo.to_usize(), span.hi.to_usize())
+    IssueSource::from_byte_offset(Vc::upcast(source), span.lo.to_usize(), span.hi.to_usize())
 }
 
 fn analyze_amd_define(
@@ -2132,7 +2124,7 @@ async fn require_context_visitor(
         }
     };
 
-    let dir = origin.origin_path().parent().join(&options.dir);
+    let dir = origin.origin_path().parent().join(options.dir.clone());
 
     let map = RequireContextMap::generate(
         origin,

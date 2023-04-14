@@ -233,14 +233,14 @@ impl TurbopackDevServerBuilder {
 async fn project_fs(project_dir: String) -> Result<Vc<Box<dyn FileSystem>>> {
     let disk_fs = DiskFileSystem::new("project".to_string(), project_dir.to_string());
     disk_fs.await?.start_watching()?;
-    Ok(disk_fs.into())
+    Ok(Vc::upcast(disk_fs))
 }
 
 #[turbo_tasks::function]
 async fn output_fs(project_dir: String) -> Result<Vc<Box<dyn FileSystem>>> {
     let disk_fs = DiskFileSystem::new("output".to_string(), project_dir.to_string());
     disk_fs.await?.start_watching()?;
-    Ok(disk_fs.into())
+    Ok(Vc::upcast(disk_fs))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -253,30 +253,32 @@ async fn source(
     turbo_tasks: TransientInstance<TurboTasks<MemoryBackend>>,
     browserslist_query: String,
 ) -> Result<Vc<Box<dyn ContentSource>>> {
-    let output_fs = output_fs(&project_dir);
-    let fs = project_fs(&root_dir);
     let project_relative = project_dir.strip_prefix(&root_dir).unwrap();
     let project_relative = project_relative
         .strip_prefix(MAIN_SEPARATOR)
         .unwrap_or(project_relative)
         .replace(MAIN_SEPARATOR, "/");
-    let project_path = fs.root().join(&project_relative);
+
+    let output_fs = output_fs(project_dir);
+    let fs = project_fs(root_dir);
+    let project_path: Vc<turbo_tasks_fs::FileSystemPath> = fs.root().join(project_relative);
 
     let env = load_env(project_path);
-    let build_output_root = output_fs.root().join(".turbopack/build");
+    let build_output_root = output_fs.root().join(".turbopack/build".to_string());
 
     let build_chunking_context = DevChunkingContext::builder(
         project_path,
         build_output_root,
-        build_output_root.join("chunks"),
-        build_output_root.join("assets"),
+        build_output_root.join("chunks".to_string()),
+        build_output_root.join("assets".to_string()),
         node_build_environment(),
     )
     .build();
 
-    let execution_context = ExecutionContext::new(project_path, build_chunking_context.into(), env);
+    let execution_context =
+        ExecutionContext::new(project_path, Vc::upcast(build_chunking_context), env);
 
-    let server_fs = Vc::upcast(ServerFileSystem::new());
+    let server_fs = Vc::upcast::<Box<dyn FileSystem>>(ServerFileSystem::new());
     let server_root = server_fs.root();
     let entry_requests = entry_requests
         .iter()
@@ -295,27 +297,24 @@ async fn source(
         server_root,
         env,
         eager_compile,
-        &browserslist_query,
+        browserslist_query,
     );
-    let viz = turbo_tasks_viz::TurboTasksSource {
-        turbo_tasks: turbo_tasks.into(),
-    }
-    .cell()
-    .into();
+    let viz = Vc::upcast(turbo_tasks_viz::TurboTasksSource::new(turbo_tasks.into()));
     let static_source = Vc::upcast(StaticAssetsContentSource::new(
         String::new(),
-        project_path.join("public"),
+        project_path.join("public".to_string()),
     ));
     let main_source = CombinedContentSource::new(vec![static_source, web_source]);
-    let introspect = IntrospectionSource {
-        roots: HashSet::from([main_source.into()]),
-    }
-    .cell()
-    .into();
-    let main_source = main_source.into();
+    let introspect = Vc::upcast(
+        IntrospectionSource {
+            roots: HashSet::from([Vc::upcast(main_source)]),
+        }
+        .cell(),
+    );
+    let main_source = Vc::upcast(main_source);
     let source_maps = Vc::upcast(SourceMapContentSource::new(main_source));
     let source = Vc::upcast(PrefixedRouterContentSource::new(
-        String::empty(),
+        Vc::<String>::empty(),
         vec![
             ("__turbopack__".to_string(), introspect),
             ("__turbo_tasks__".to_string(), viz),

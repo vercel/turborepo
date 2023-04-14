@@ -1,4 +1,6 @@
 #![cfg(test)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 mod util;
 
@@ -8,7 +10,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use turbo_tasks::{debug::ValueDebug, Completion, Nothing, TryJoinIterExt, TurboTasks, Value, Vc};
+use turbo_tasks::{debug::ValueDebug, unit, Completion, TryJoinIterExt, TurboTasks, Value, Vc};
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_env::CommandLineProcessEnv;
 use turbo_tasks_fs::{
@@ -17,21 +19,18 @@ use turbo_tasks_fs::{
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
-    condition::ContextCondition,
-    module_options::{ModuleOptionsContext, TypescriptTransformOptions},
-    resolve_options_context::ResolveOptionsContext,
-    transition::TransitionsByName,
-    ModuleAssetContext,
+    condition::ContextCondition, module_options::ModuleOptionsContext,
+    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
 };
 use turbopack_core::{
     asset::Asset,
-    chunk::{EvaluatableAsset, EvaluatableAssets},
+    chunk::{EvaluatableAssetExt, EvaluatableAssets},
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
     environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
-    issue::Issue,
+    issue::{Issue, IssueContextExt},
     module::Module,
     reference_type::{EntryReferenceSubType, ReferenceType},
 };
@@ -153,7 +152,7 @@ async fn run(resource: PathBuf, snapshot_mode: IssueSnapshotMode) -> Result<JsRe
     let tt = TurboTasks::new(MemoryBackend::default());
     tt.run_once(async move {
         let resource_str = resource.to_str().unwrap();
-        let run_result = run_test(resource_str);
+        let run_result = run_test(resource_str.to_string());
         if matches!(snapshot_mode, IssueSnapshotMode::Snapshots) {
             snapshot_issues(run_result).await?;
         }
@@ -165,7 +164,7 @@ async fn run(resource: PathBuf, snapshot_mode: IssueSnapshotMode) -> Result<JsRe
 
 #[turbo_tasks::function]
 async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
-    let resource_path = Path::new(resource);
+    let resource_path = Path::new(&resource);
     assert!(resource_path.exists(), "{} does not exist", resource);
     assert!(
         resource_path.is_dir(),
@@ -179,16 +178,16 @@ async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
 
     let relative_path = resource_path.strip_prefix(&*REPO_ROOT)?;
     let relative_path = sys_to_unix(relative_path.to_str().unwrap());
-    let path = root_fs.root().join(&relative_path);
-    let project_path = project_root.join(&relative_path);
-    let tests_path = project_fs.root().join("crates/turbopack-tests");
+    let path = root_fs.root().join(relative_path.to_string());
+    let project_path = project_root.join(relative_path.to_string());
+    let tests_path = project_fs.root().join("crates/turbopack-tests".to_string());
 
-    let jest_runtime_path = tests_path.join("js/jest-runtime.ts");
-    let jest_entry_path = tests_path.join("js/jest-entry.ts");
-    let test_path = project_path.join("input/index.js");
+    let jest_runtime_path = tests_path.join("js/jest-runtime.ts".to_string());
+    let jest_entry_path = tests_path.join("js/jest-entry.ts".to_string());
+    let test_path = project_path.join("input/index.js".to_string());
 
-    let chunk_root_path = path.join("output");
-    let static_root_path = path.join("static");
+    let chunk_root_path = path.join("output".to_string());
+    let static_root_path = path.join("static".to_string());
 
     let env = Environment::new(Value::new(ExecutionEnvironment::NodeJsBuildTime(
         NodeJsEnvironment::default().into(),
@@ -208,7 +207,7 @@ async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
         Vc::cell(HashMap::new()),
         compile_time_info,
         ModuleOptionsContext {
-            enable_typescript_transform: Some(TypescriptTransformOptions::default()),
+            enable_typescript_transform: Some(Default::default()),
             preset_env_versions: Some(env),
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
@@ -252,15 +251,15 @@ async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
     let test_asset = FileSource::new(test_path);
 
     let res = evaluate(
-        jest_entry_asset.into(),
+        Vc::upcast(jest_entry_asset),
         chunk_root_path,
-        CommandLineProcessEnv::new().into(),
+        Vc::upcast(CommandLineProcessEnv::new()),
         test_asset.ident(),
         context,
-        chunking_context.into(),
+        Vc::upcast(chunking_context),
         Some(EvaluatableAssets::many(vec![
-            EvaluatableAsset::from_source(jest_runtime_asset.into(), context),
-            EvaluatableAsset::from_source(test_asset.into(), context),
+            jest_runtime_asset.to_evaluatable(context),
+            test_asset.to_evaluatable(context),
         ])),
         vec![],
         Completion::immutable(),
@@ -284,8 +283,9 @@ async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
 }
 
 #[turbo_tasks::function]
-async fn snapshot_issues(run_result: Vc<RunTestResult>) -> Result<Vc<Nothing>> {
-    let captured_issues = Issue::peek_issues_with_path(run_result)
+async fn snapshot_issues(run_result: Vc<RunTestResult>) -> Result<Vc<()>> {
+    let captured_issues = run_result
+        .peek_issues_with_path()
         .await?
         .strongly_consistent()
         .await?;
@@ -303,11 +303,15 @@ async fn snapshot_issues(run_result: Vc<RunTestResult>) -> Result<Vc<Nothing>> {
         .try_join()
         .await?;
 
-    turbopack_test_utils::snapshot::snapshot_issues(plain_issues, path.join("issues"), &REPO_ROOT)
-        .await
-        .context("Unable to handle issues")?;
+    turbopack_test_utils::snapshot::snapshot_issues(
+        plain_issues,
+        path.join("issues".to_string()),
+        &REPO_ROOT,
+    )
+    .await
+    .context("Unable to handle issues")?;
 
-    Ok(Nothing::new())
+    Ok(unit())
 }
 
 #[turbo_tasks::function]

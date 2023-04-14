@@ -5,6 +5,7 @@ use swc_core::{
     quote,
 };
 use turbo_tasks::Vc;
+use turbopack_core::issue::IssueExt;
 use turbopack_ecmascript::{CustomTransformer, TransformContext, UnsupportedServerActionIssue};
 
 use super::is_server_module;

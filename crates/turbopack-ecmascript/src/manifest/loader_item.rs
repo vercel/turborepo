@@ -13,8 +13,8 @@ use turbopack_core::{
 use super::chunk_asset::ManifestChunkAsset;
 use crate::{
     chunk::{
-        data::EcmascriptChunkData, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkPlaceable, EcmascriptChunkingContext,
+        data::EcmascriptChunkData, item::EcmascriptChunkItemExt, EcmascriptChunkItem,
+        EcmascriptChunkItemContent, EcmascriptChunkPlaceable, EcmascriptChunkingContext,
     },
     utils::StringifyJs,
 };
@@ -83,7 +83,7 @@ impl ChunkItem for ManifestLoaderItem {
             .iter()
             .map(|&chunk| {
                 Vc::upcast(SingleAssetReference::new(
-                    chunk.into(),
+                    Vc::upcast(chunk),
                     manifest_loader_chunk_reference_description(),
                 ))
             })
@@ -110,7 +110,6 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
         let mut code = Vec::new();
 
         let manifest = this.manifest.await?;
-        let asset = Vc::upcast(manifest.asset);
 
         // We need several items in order for a dynamic import to fully load. First, we
         // need the chunk path of the manifest chunk, relative from the output root. The
@@ -128,9 +127,10 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
 
         // Finally, we need the id of the module that we're actually trying to
         // dynamically import.
-        let placeable = Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(asset)
-            .await?
-            .ok_or_else(|| anyhow!("asset is not placeable in ecmascript chunk"))?;
+        let placeable =
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkPlaceable>>(manifest.asset)
+                .await?
+                .ok_or_else(|| anyhow!("asset is not placeable in ecmascript chunk"))?;
         let dynamic_id = &*placeable
             .as_chunk_item(manifest.chunking_context)
             .id()

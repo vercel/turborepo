@@ -15,7 +15,7 @@ pub struct OutputAssets(Vec<Vc<Box<dyn OutputAsset>>>);
 impl OutputAssets {
     #[turbo_tasks::function]
     pub fn empty() -> Vc<Self> {
-        Self::cell(Vec::new())
+        Vc::cell(vec![])
     }
 }
 

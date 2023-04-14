@@ -9,7 +9,10 @@ use turbopack_core::{
     code_builder::{Code, CodeBuilder},
     source_map::{GenerateSourceMap, OptionSourceMap},
 };
-use turbopack_ecmascript::{chunk::EcmascriptChunkContent, utils::StringifyJs};
+use turbopack_ecmascript::{
+    chunk::{EcmascriptChunkContent, EcmascriptChunkItemExt},
+    utils::StringifyJs,
+};
 
 use super::chunk::EcmascriptBuildNodeChunk;
 use crate::BuildChunkingContext;
@@ -88,7 +91,9 @@ impl EcmascriptBuildNodeChunkContent {
     #[turbo_tasks::function]
     pub async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         let code = self.code().await?;
-        Ok(File::from(code.source_code().clone()).into())
+        Ok(AssetContent::file(
+            File::from(code.source_code().clone()).into(),
+        ))
     }
 }
 

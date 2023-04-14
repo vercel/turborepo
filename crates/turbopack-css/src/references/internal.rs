@@ -25,7 +25,7 @@ impl InternalCssAssetReference {
 impl AssetReference for InternalCssAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ResolveResult> {
-        ResolveResult::asset(self.module.into()).cell()
+        ResolveResult::asset(Vc::upcast(self.module)).cell()
     }
 }
 

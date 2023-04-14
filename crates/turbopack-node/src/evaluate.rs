@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
-    duration_span, mark_finished, util::SharedError, Completion, Nothing, RawVc, TryJoinIterExt,
+    duration_span, mark_finished, unit, util::SharedError, Completion, RawVc, TryJoinIterExt,
     Value, ValueToString, Vc,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
@@ -21,12 +21,12 @@ use turbo_tasks_fs::{
     glob::Glob, to_sys_path, DirectoryEntry, File, FileSystemPath, ReadGlobResult,
 };
 use turbopack_core::{
-    asset::Asset,
+    asset::{Asset, AssetContent},
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset, EvaluatableAssets},
     context::AssetContext,
     file_source::FileSource,
     ident::AssetIdent,
-    issue::{Issue, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity},
     reference_type::{InnerAssets, ReferenceType},
     virtual_source::VirtualSource,
 };
@@ -104,7 +104,9 @@ pub async fn get_evaluate_pool(
     debug: bool,
 ) -> Result<Vc<NodeJsPool>> {
     let runtime_asset = context.process(
-        Vc::upcast(FileSource::new(embed_file_path("ipc/evaluate.ts"))),
+        Vc::upcast(FileSource::new(embed_file_path(
+            "ipc/evaluate.ts".to_string(),
+        ))),
         Value::new(ReferenceType::Internal(InnerAssets::empty())),
     );
 
@@ -117,19 +119,21 @@ pub async fn get_evaluate_pool(
     } else {
         Cow::Owned(format!("{file_name}.js"))
     };
-    let path = chunking_context.output_root().join(file_name.as_ref());
+    let path = chunking_context.output_root().join(file_name.to_string());
     let entry_module = context.process(
         Vc::upcast(VirtualSource::new(
-            runtime_asset.ident().path().join("evaluate.js"),
-            File::from(
-                "import { run } from 'RUNTIME'; run((...args) => \
-                 (require('INNER').default(...args)))",
-            )
-            .into(),
+            runtime_asset.ident().path().join("evaluate.js".to_string()),
+            AssetContent::file(
+                File::from(
+                    "import { run } from 'RUNTIME'; run((...args) => \
+                     (require('INNER').default(...args)))",
+                )
+                .into(),
+            ),
         )),
         Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
             "INNER".to_string() => module_asset,
-            "RUNTIME".to_string() => runtime_asset.into()
+            "RUNTIME".to_string() => Vc::upcast(runtime_asset)
         }))),
     );
 
@@ -145,7 +149,7 @@ pub async fn get_evaluate_pool(
 
     let runtime_entries = {
         let globals_module = context.process(
-            Vc::upcast(FileSource::new(embed_file_path("globals.ts"))),
+            Vc::upcast(FileSource::new(embed_file_path("globals.ts".to_string()))),
             Value::new(ReferenceType::Internal(InnerAssets::empty())),
         );
 
@@ -162,17 +166,18 @@ pub async fn get_evaluate_pool(
             }
         }
 
-        Vc::cell(entries)
+        Vc::<EvaluatableAssets>::cell(entries)
     };
 
-    let bootstrap = NodeJsBootstrapAsset {
-        path,
-        chunking_context,
-        entry: entry_module.as_root_chunk(chunking_context),
-        evaluatable_assets: runtime_entries.with_entry(entry_module),
-    }
-    .cell()
-    .into();
+    let bootstrap = Vc::upcast(
+        NodeJsBootstrapAsset {
+            path,
+            chunking_context,
+            entry: entry_module.as_root_chunk(chunking_context),
+            evaluatable_assets: runtime_entries.with_entry(entry_module),
+        }
+        .cell(),
+    );
 
     let output_root = chunking_context.output_root();
     let emit_package = emit_package_json(output_root);
@@ -298,11 +303,11 @@ async fn compute_evaluate_stream(
     additional_invalidation: Vc<Completion>,
     debug: bool,
     sender: Vc<JavaScriptStreamSender>,
-) -> Result<Vc<Nothing>> {
+) -> Result<Vc<()>> {
     mark_finished();
     let Ok(sender) = sender.await else {
         // Impossible to handle the error in a good way.
-        return Ok(Nothing::new());
+        return Ok(unit());
     };
 
     let stream = generator! {
@@ -380,14 +385,14 @@ async fn compute_evaluate_stream(
     pin_mut!(stream);
     while let Some(value) = stream.next().await {
         if sender.send(value).await.is_err() {
-            return Ok(Nothing::new());
+            return Ok(unit());
         }
         if sender.flush().await.is_err() {
-            return Ok(Nothing::new());
+            return Ok(unit());
         }
     }
 
-    Ok(Nothing::new())
+    Ok(unit())
 }
 
 /// Repeatedly pulls from the NodeJsOperation until we receive a
@@ -425,13 +430,13 @@ async fn pull_operation(
             EvalJavaScriptIncomingMessage::End { data } => break ControlFlow::Break(Ok(data)),
             EvalJavaScriptIncomingMessage::FileDependency { path } => {
                 // TODO We might miss some changes that happened during execution
-                file_dependencies.push(cwd.join(&path).read());
+                file_dependencies.push(cwd.join(path).read());
             }
             EvalJavaScriptIncomingMessage::BuildDependency { path } => {
                 // TODO We might miss some changes that happened during execution
                 BuildDependencyIssue {
                     context_ident: context_ident_for_issue,
-                    path: cwd.join(&path),
+                    path: cwd.join(path),
                 }
                 .cell()
                 .emit();
@@ -439,7 +444,7 @@ async fn pull_operation(
             EvalJavaScriptIncomingMessage::DirDependency { path, glob } => {
                 // TODO We might miss some changes that happened during execution
                 dir_dependencies.push(dir_dependency(
-                    cwd.join(&path).read_glob(Glob::new(&glob), false),
+                    cwd.join(path).read_glob(Glob::new(glob), false),
                 ));
             }
             EvalJavaScriptIncomingMessage::EmittedError { error, severity } => {
@@ -575,7 +580,7 @@ async fn dir_dependency_shallow(glob: Vc<ReadGlobResult>) -> Result<Vc<Completio
                 file.track().await?;
             }
             DirectoryEntry::Directory(dir) => {
-                dir_dependency(dir.read_glob(Glob::new("**"), false)).await?;
+                dir_dependency(dir.read_glob(Glob::new("**".to_string()), false)).await?;
             }
             DirectoryEntry::Symlink(symlink) => {
                 symlink.read_link().await?;

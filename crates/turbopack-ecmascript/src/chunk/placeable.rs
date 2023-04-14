@@ -1,4 +1,3 @@
-use anyhow::Result;
 use turbo_tasks::Vc;
 use turbopack_core::{asset::Asset, chunk::ChunkableModule, module::Module};
 
@@ -21,7 +20,7 @@ pub struct EcmascriptChunkPlaceables(Vec<Vc<Box<dyn EcmascriptChunkPlaceable>>>)
 impl EcmascriptChunkPlaceables {
     #[turbo_tasks::function]
     pub fn empty() -> Vc<Self> {
-        Self::cell(Vec::new())
+        Vc::cell(Vec::new())
     }
 }
 

@@ -31,7 +31,7 @@ impl VersionedContentMerger for EcmascriptDevChunkContentMerger {
             .iter()
             .map(|content| async move {
                 if let Some(content) =
-                    Vc::try_resolve_downcast_type::<EcmascriptDevChunkContent>(content).await?
+                    Vc::try_resolve_downcast_type::<EcmascriptDevChunkContent>(*content).await?
                 {
                     Ok(content)
                 } else {
@@ -41,6 +41,8 @@ impl VersionedContentMerger for EcmascriptDevChunkContentMerger {
             .try_join()
             .await?;
 
-        Ok(EcmascriptDevMergedChunkContent { contents }.cell().into())
+        Ok(Vc::upcast(
+            EcmascriptDevMergedChunkContent { contents }.cell(),
+        ))
     }
 }

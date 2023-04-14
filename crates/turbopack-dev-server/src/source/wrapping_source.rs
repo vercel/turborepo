@@ -1,10 +1,9 @@
 use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 
-use super::{GetContentSourceContents, RewriteType};
-use crate::source::{
+use super::{
     ContentSourceContent, ContentSourceData, ContentSourceDataVary, GetContentSourceContent,
-    Rewrite,
+    Rewrite, RewriteType,
 };
 
 /// A ContentSourceProcessor handles the final processing of an eventual

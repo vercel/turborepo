@@ -7,8 +7,6 @@ pub(crate) mod module_id;
 pub(crate) mod module_item;
 pub(crate) mod url;
 
-use turbo_tasks::Vc;
-
 pub use self::{
     base::EsmAssetReference,
     binding::EsmBinding,

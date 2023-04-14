@@ -33,11 +33,11 @@ impl AssetIdent {
         self.assets.push((key, asset));
     }
 
-    pub async fn rename_as(&mut self, pattern: &str) -> Result<()> {
+    pub async fn rename_as_ref(&mut self, pattern: &str) -> Result<()> {
         let root = self.path.root();
         let path = self.path.await?;
         self.path = root
-            .join(&pattern.replace('*', &path.path))
+            .join(pattern.replace('*', &path.path))
             .resolve()
             .await?;
         Ok(())
@@ -109,7 +109,7 @@ impl AssetIdent {
     #[turbo_tasks::function]
     pub async fn rename_as(self: Vc<Self>, pattern: String) -> Result<Vc<Self>> {
         let mut this = self.await?.clone_value();
-        this.rename_as(pattern).await?;
+        this.rename_as_ref(&pattern).await?;
         Ok(Self::new(Value::new(this)))
     }
 
@@ -137,7 +137,7 @@ impl AssetIdent {
         } else {
             clean_separators(&this.path.to_string().await?)
         };
-        let removed_extension = name.ends_with(expected_extension);
+        let removed_extension = name.ends_with(&expected_extension);
         if removed_extension {
             name.truncate(name.len() - expected_extension.len());
         }
@@ -146,7 +146,7 @@ impl AssetIdent {
         // Next.js).
         let mut name = clean_additional_extensions(&name);
 
-        let default_modifier = match expected_extension {
+        let default_modifier = match expected_extension.as_str() {
             ".js" => Some("ecmascript"),
             ".css" => Some("css"),
             _ => None,
@@ -241,7 +241,7 @@ impl AssetIdent {
         if !removed_extension {
             name += "._";
         }
-        name += expected_extension;
+        name += &expected_extension;
         Ok(Vc::cell(name))
     }
 }

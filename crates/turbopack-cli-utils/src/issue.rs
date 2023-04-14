@@ -14,7 +14,7 @@ use owo_colors::{OwoColorize as _, Style};
 use turbo_tasks::{RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt, Vc};
 use turbo_tasks_fs::{source_context::get_source_context, FileLinesContent};
 use turbopack_core::issue::{
-    CapturedIssues, IssueReporter, IssueSeverity, PlainIssue, PlainIssueProcessingPathItem,
+    CapturedIssues, Issue, IssueReporter, IssueSeverity, PlainIssue, PlainIssueProcessingPathItem,
     PlainIssueSource,
 };
 
@@ -78,7 +78,7 @@ fn severity_to_style(severity: IssueSeverity) -> Style {
 }
 
 fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String) {
-    if let FileLinesContent::Lines(lines) = source.asset.content.lines() {
+    if let FileLinesContent::Lines(lines) = source.asset.content.lines_ref() {
         let start_line = source.start.line;
         let end_line = source.end.line;
         let start_column = source.start.column;

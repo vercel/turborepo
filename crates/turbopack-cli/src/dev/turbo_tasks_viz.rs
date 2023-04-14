@@ -8,7 +8,7 @@ use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
     viz, MemoryBackend,
 };
-use turbopack_core::asset::AssetContent;
+use turbopack_core::{asset::AssetContent, version::VersionedContentExt};
 use turbopack_dev_server::source::{
     route_tree::{BaseSegment, RouteTree, RouteTrees, RouteType},
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
@@ -18,7 +18,7 @@ use turbopack_dev_server::source::{
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new", into = "new")]
 pub struct TurboTasksSource {
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    pub turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
+    turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
 }
 
 impl TurboTasksSource {
@@ -33,26 +33,26 @@ const INVALIDATION_INTERVAL: Duration = Duration::from_secs(3);
 impl ContentSource for TurboTasksSource {
     #[turbo_tasks::function]
     fn get_routes(self: Vc<Self>) -> Vc<RouteTree> {
-        Vc::cell(vec![
+        Vc::<RouteTrees>::cell(vec![
             RouteTree::new_route(
                 vec![BaseSegment::Static("graph".to_string())],
                 RouteType::Exact,
-                self.into(),
+                Vc::upcast(self),
             ),
             RouteTree::new_route(
                 vec![BaseSegment::Static("call-graph".to_string())],
                 RouteType::Exact,
-                self.into(),
+                Vc::upcast(self),
             ),
             RouteTree::new_route(
                 vec![BaseSegment::Static("table".to_string())],
                 RouteType::Exact,
-                self.into(),
+                Vc::upcast(self),
             ),
             RouteTree::new_route(
                 vec![BaseSegment::Static("reset".to_string())],
                 RouteType::Exact,
-                self.into(),
+                Vc::upcast(self),
             ),
         ])
         .merge()
@@ -85,7 +85,7 @@ impl GetContentSourceContent for TurboTasksSource {
                 invalidator.invalidate();
             }
         });
-        let html = match path {
+        let html = match path.as_str() {
             "graph" => {
                 let mut stats = Stats::new();
                 let b = tt.backend();
@@ -137,8 +137,9 @@ impl GetContentSourceContent for TurboTasksSource {
             }
             _ => bail!("Unknown path: {}", path),
         };
-        Ok(ContentSourceContent::static_content(Vc::upcast(
-            AssetContent::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)),
-        )))
+        Ok(ContentSourceContent::static_content(
+            AssetContent::file(File::from(html).with_content_type(TEXT_HTML_UTF_8).into())
+                .versioned(),
+        ))
     }
 }

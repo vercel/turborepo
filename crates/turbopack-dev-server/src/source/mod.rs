@@ -18,7 +18,9 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 use futures::{stream::Stream as StreamTrait, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, util::SharedError, Completion, Value, Vc};
+use turbo_tasks::{
+    trace::TraceRawVcs, util::SharedError, Completion, Upcast, Value, ValueDefault, Vc,
+};
 use turbo_tasks_bytes::{Bytes, Stream, StreamRead};
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{DeterministicHash, DeterministicHasher, Xxh3Hash64Hasher};
@@ -67,7 +69,11 @@ pub trait GetContentSourceContent {
     }
 
     /// Get the content
-    fn get(self: Vc<Self>, path: &str, data: Value<ContentSourceData>) -> Vc<ContentSourceContent>;
+    fn get(
+        self: Vc<Self>,
+        path: String,
+        data: Value<ContentSourceData>,
+    ) -> Vc<ContentSourceContent>;
 }
 
 #[turbo_tasks::value(transparent)]
@@ -237,8 +243,8 @@ impl<T: Into<Bytes>> From<T> for Body {
     }
 }
 
-impl Default for Body {
-    fn default() -> Vc<Self> {
+impl ValueDefault for Body {
+    fn value_default() -> Vc<Self> {
         Body::default().cell()
     }
 }
@@ -413,10 +419,19 @@ pub trait ContentSource {
     }
 }
 
-#[turbo_tasks::value_impl]
-impl ContentSource {
-    #[turbo_tasks::function]
-    pub fn issue_context(
+pub trait ContentSourceExt {
+    fn issue_context(
+        self: Vc<Self>,
+        context: Vc<FileSystemPath>,
+        description: String,
+    ) -> Vc<Box<dyn ContentSource>>;
+}
+
+impl<T> ContentSourceExt for T
+where
+    T: Upcast<Box<dyn ContentSource>>,
+{
+    fn issue_context(
         self: Vc<Self>,
         context: Vc<FileSystemPath>,
         description: String,
@@ -424,7 +439,7 @@ impl ContentSource {
         Vc::upcast(IssueContextContentSource::new_context(
             context,
             description,
-            self,
+            Vc::upcast(self),
         ))
     }
 }

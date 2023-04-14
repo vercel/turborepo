@@ -46,7 +46,7 @@ impl VersionedContent for EcmascriptDevMergedChunkContent {
 
     #[turbo_tasks::function]
     fn version(self: Vc<Self>) -> Vc<Box<dyn Version>> {
-        self.version().into()
+        Vc::upcast(self.version())
     }
 
     #[turbo_tasks::function]

@@ -25,7 +25,7 @@ use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     error::PrettyPrintError,
-    issue::{Issue, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity},
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap},
     SOURCE_MAP_ROOT_NAME,
@@ -238,11 +238,6 @@ async fn parse_content(
     let globals_ref = &globals;
     let helpers = GLOBALS.set(globals_ref, || Helpers::new(true));
     let mut result = WrapFuture::new(
-        |f, cx| {
-            GLOBALS.set(globals_ref, || {
-                HANDLER.set(&handler, || HELPERS.set(&helpers, || f.poll(cx)))
-            })
-        },
         async {
             let file_name = FileName::Custom(ident.to_string());
             let fm = source_map.new_source_file(file_name.clone(), string);
@@ -353,6 +348,11 @@ async fn parse_content(
                 // borrowed
                 globals: Arc::new(Globals::new()),
                 source_map,
+            })
+        },
+        |f, cx| {
+            GLOBALS.set(globals_ref, || {
+                HANDLER.set(&handler, || HELPERS.set(&helpers, || f.poll(cx)))
             })
         },
     )

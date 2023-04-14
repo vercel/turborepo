@@ -1,4 +1,3 @@
-use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
@@ -38,5 +37,5 @@ pub trait AssetContext {
         result: Vc<ResolveResult>,
         reference_type: Value<ReferenceType>,
     ) -> Vc<ResolveResult>;
-    fn with_transition(self: Vc<Self>, transition: &str) -> Vc<Box<dyn AssetContext>>;
+    fn with_transition(self: Vc<Self>, transition: String) -> Vc<Box<dyn AssetContext>>;
 }

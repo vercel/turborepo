@@ -1,7 +1,7 @@
 use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{TryJoinIterExt, Value, Vc};
-use turbopack_css::chunk::{CssChunk, CssChunkPlaceables, CssChunks};
+use turbopack_css::chunk::{CssChunk, CssChunks};
 
 #[turbo_tasks::function]
 pub async fn optimize_css_chunks(chunks: Vc<CssChunks>) -> Result<Vc<CssChunks>> {

@@ -9,9 +9,7 @@ use super::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary,
     GetContentSourceContent,
 };
-use crate::source::{
-    route_tree::MapGetContentSourceContent, ContentSources, GetContentSourceContent,
-};
+use crate::source::{route_tree::MapGetContentSourceContent, ContentSources};
 
 /// Binds different ContentSources to different subpaths. The request path must
 /// begin with the prefix, which will be stripped (along with the subpath)
@@ -97,16 +95,15 @@ impl ContentSource for PrefixedRouterContentSource {
             source
                 .get_routes()
                 .with_prepended_base(prepended_base)
-                .map_routes(
+                .map_routes(Vc::upcast(
                     PrefixedRouterContentSourceMapper {
                         prefix: self.prefix,
                         path: path.clone(),
                     }
-                    .cell()
-                    .into(),
-                )
+                    .cell(),
+                ))
         });
-        Ok(Vc::cell(
+        Ok(Vc::<RouteTrees>::cell(
             inner_trees
                 .chain(once(self.fallback.get_routes()))
                 .collect(),
@@ -133,12 +130,13 @@ impl MapGetContentSourceContent for PrefixedRouterContentSourceMapper {
         self: Vc<Self>,
         get_content: Vc<Box<dyn GetContentSourceContent>>,
     ) -> Vc<Box<dyn GetContentSourceContent>> {
-        PrefixedRouterGetContentSourceContent {
-            mapper: self,
-            get_content,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            PrefixedRouterGetContentSourceContent {
+                mapper: self,
+                get_content,
+            }
+            .cell(),
+        )
     }
 }
 
@@ -164,11 +162,11 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
         let prefix = self.mapper.await?.prefix.await?;
         if let Some(path) = path.strip_prefix(&*prefix) {
             if path.is_empty() {
-                return Ok(self.get_content.get("", data));
+                return Ok(self.get_content.get("".to_string(), data));
             } else if prefix.is_empty() {
-                return Ok(self.get_content.get(path, data));
+                return Ok(self.get_content.get(path.to_string(), data));
             } else if let Some(path) = path.strip_prefix('/') {
-                return Ok(self.get_content.get(path, data));
+                return Ok(self.get_content.get(path.to_string(), data));
             }
         }
         Ok(ContentSourceContent::not_found())

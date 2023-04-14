@@ -20,12 +20,15 @@ pub async fn get_dev_runtime_code(
 ) -> Result<Vc<Code>> {
     let asset_context = get_runtime_asset_context(environment);
 
-    let shared_runtime_utils_code =
-        StaticEcmascriptCode::new(asset_context, embed_file_path("shared/runtime-utils.ts")).code();
+    let shared_runtime_utils_code = StaticEcmascriptCode::new(
+        asset_context,
+        embed_file_path("shared/runtime-utils.ts".to_string()),
+    )
+    .code();
 
     let runtime_base_code = StaticEcmascriptCode::new(
         asset_context,
-        embed_file_path("dev/runtime/base/runtime-base.ts"),
+        embed_file_path("dev/runtime/base/runtime-base.ts".to_string()),
     )
     .code();
 
@@ -37,9 +40,15 @@ pub async fn get_dev_runtime_code(
             .chunk_loading()
             .await?
         {
-            ChunkLoading::None => embed_file_path("dev/runtime/none/runtime-backend-none.ts"),
-            ChunkLoading::NodeJs => embed_file_path("dev/runtime/nodejs/runtime-backend-nodejs.ts"),
-            ChunkLoading::Dom => embed_file_path("dev/runtime/dom/runtime-backend-dom.ts"),
+            ChunkLoading::None => {
+                embed_file_path("dev/runtime/none/runtime-backend-none.ts".to_string())
+            }
+            ChunkLoading::NodeJs => {
+                embed_file_path("dev/runtime/nodejs/runtime-backend-nodejs.ts".to_string())
+            }
+            ChunkLoading::Dom => {
+                embed_file_path("dev/runtime/dom/runtime-backend-dom.ts".to_string())
+            }
         },
     )
     .code();

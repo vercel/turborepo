@@ -1,6 +1,6 @@
 use anyhow::Result;
 use criterion::{BenchmarkId, Criterion};
-use turbo_tasks::{Completion, TryJoinIterExt, TurboTasks};
+use turbo_tasks::{unit, Completion, TryJoinIterExt, TurboTasks, Vc};
 use turbo_tasks_memory::MemoryBackend;
 
 use super::register;
@@ -37,7 +37,7 @@ pub fn scope_stress(c: &mut Criterion) {
                 let size = *size;
 
                 b.to_async(rt).iter_with_large_drop(move || {
-                    let tt = TurboTasks::new(MemoryBackend::new());
+                    let tt = TurboTasks::new(MemoryBackend::default());
                     async move {
                         (0..size)
                             .map(|a| (a, size - 1))
@@ -47,7 +47,7 @@ pub fn scope_stress(c: &mut Criterion) {
                                 async move {
                                     let task = tt.spawn_once_task(async move {
                                         rectangle(a, b).strongly_consistent().await?;
-                                        Ok(Vc::cell(()).into())
+                                        Ok(unit().node)
                                     });
                                     tt.wait_task_completion(task, false).await
                                 }

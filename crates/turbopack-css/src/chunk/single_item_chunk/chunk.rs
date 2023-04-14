@@ -48,14 +48,11 @@ impl SingleItemCssChunk {
 
         writeln!(code, "/* {} */", id)?;
         let content = this.item.content().await?;
-        code.push_source(
-            &content.inner_code,
-            content.source_map.map(|sm| Vc::upcast(sm)),
-        );
+        code.push_source(&content.inner_code, content.source_map.map(Vc::upcast));
 
         if *this
             .context
-            .reference_chunk_source_maps(self.into())
+            .reference_chunk_source_maps(Vc::upcast(self))
             .await?
             && code.has_source_map()
         {
@@ -97,7 +94,7 @@ impl Asset for SingleItemCssChunk {
                 self.item
                     .asset_ident()
                     .with_modifier(single_item_modifier()),
-                ".css",
+                ".css".to_string(),
             ),
         ))
     }
@@ -105,7 +102,9 @@ impl Asset for SingleItemCssChunk {
     #[turbo_tasks::function]
     async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         let code = self.code().await?;
-        Ok(File::from(code.source_code().clone()).into())
+        Ok(AssetContent::file(
+            File::from(code.source_code().clone()).into(),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -114,7 +113,7 @@ impl Asset for SingleItemCssChunk {
         let mut references = Vec::new();
         if *this
             .context
-            .reference_chunk_source_maps(self.into())
+            .reference_chunk_source_maps(Vc::upcast(self))
             .await?
         {
             references.push(Vc::upcast(SingleItemCssChunkSourceMapAssetReference::new(

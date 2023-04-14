@@ -82,7 +82,7 @@ impl Request {
         })
     }
 
-    pub fn parse(mut request: Pattern) -> Self {
+    pub fn parse_ref(mut request: Pattern) -> Self {
         request.normalize();
         match request {
             Pattern::Dynamic => Request::Dynamic,
@@ -137,7 +137,7 @@ impl Request {
             Pattern::Concatenation(list) => {
                 let mut iter = list.into_iter();
                 if let Some(first) = iter.next() {
-                    let mut result = Self::parse(first);
+                    let mut result = Self::parse_ref(first);
                     match &mut result {
                         Request::Raw { path, .. } => {
                             path.extend(iter);
@@ -159,7 +159,7 @@ impl Request {
                             path.extend(iter);
                         }
                         Request::Empty => {
-                            result = Request::parse(Pattern::Concatenation(iter.collect()))
+                            result = Request::parse_ref(Pattern::Concatenation(iter.collect()))
                         }
                         Request::PackageInternal { path } => {
                             path.extend(iter);
@@ -192,12 +192,12 @@ impl Request {
 impl Request {
     #[turbo_tasks::function]
     pub fn parse(request: Value<Pattern>) -> Vc<Self> {
-        Self::cell(Request::parse(request.into_value()))
+        Self::cell(Request::parse_ref(request.into_value()))
     }
 
     #[turbo_tasks::function]
     pub fn parse_string(request: String) -> Vc<Self> {
-        Self::cell(Request::parse(request.into()))
+        Self::cell(Request::parse_ref(request.into()))
     }
 
     #[turbo_tasks::function]

@@ -12,7 +12,8 @@ pub fn primitive(input: TokenStream) -> TokenStream {
     let Some(ident) = get_type_ident(&ty) else {
         return quote! {
             // An error occurred while parsing the ident.
-        }.into();
+        }
+        .into();
     };
 
     let value_debug_impl = quote! {

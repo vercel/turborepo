@@ -17,7 +17,7 @@ use swc_core::{
         visit::{FoldWith, VisitMutWith},
     },
 };
-use turbo_tasks::Vc;
+use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     environment::Environment,
@@ -80,8 +80,10 @@ pub struct TransformPlugin(#[turbo_tasks(trace_ignore)] Box<dyn CustomTransforme
 #[turbo_tasks::value(transparent)]
 pub struct OptionTransformPlugin(Option<Vc<TransformPlugin>>);
 
-impl Default for OptionTransformPlugin {
-    fn default() -> Vc<Self> {
+#[turbo_tasks::value_impl]
+impl ValueDefault for OptionTransformPlugin {
+    #[turbo_tasks::function]
+    fn value_default() -> Vc<Self> {
         Vc::cell(None)
     }
 }

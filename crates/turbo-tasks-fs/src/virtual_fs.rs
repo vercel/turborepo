@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{Completion, ValueToString, Vc};
+use turbo_tasks::{Completion, ValueDefault, ValueToString, Vc};
 
 use super::{DirectoryContent, FileContent, FileMeta, FileSystem, FileSystemPath, LinkContent};
 
@@ -20,9 +20,9 @@ impl VirtualFileSystem {
     }
 }
 
-impl Default for VirtualFileSystem {
-    fn default() -> Vc<Self> {
-        Vc::<Self>::new()
+impl ValueDefault for VirtualFileSystem {
+    fn value_default() -> Vc<Self> {
+        Self::new()
     }
 }
 

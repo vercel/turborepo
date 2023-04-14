@@ -55,7 +55,7 @@ pub trait Transition {
     }
     /// Apply modifications to the context
     async fn process_context(
-        self: Vc<Box<dyn Transition>>,
+        self: Vc<Self>,
         context: Vc<ModuleAssetContext>,
     ) -> Result<Vc<ModuleAssetContext>> {
         let context = context.await?;
@@ -74,7 +74,7 @@ pub trait Transition {
     }
     /// Apply modification on the processing of the asset
     fn process(
-        self: Vc<Box<dyn Transition>>,
+        self: Vc<Self>,
         asset: Vc<Box<dyn Source>>,
         context: Vc<ModuleAssetContext>,
         reference_type: Value<ReferenceType>,

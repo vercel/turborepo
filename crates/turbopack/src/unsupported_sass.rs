@@ -4,7 +4,7 @@ use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 use turbopack_core::{
-    issue::{Issue, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity},
     resolve::{
         parse::Request,
         plugin::{ResolvePlugin, ResolvePluginCondition},
@@ -30,7 +30,7 @@ impl UnsupportedSassResolvePlugin {
 impl ResolvePlugin for UnsupportedSassResolvePlugin {
     #[turbo_tasks::function]
     fn after_resolve_condition(&self) -> Vc<ResolvePluginCondition> {
-        ResolvePluginCondition::new(self.root.root(), Glob::new("**/*.{sass,scss}"))
+        ResolvePluginCondition::new(self.root.root(), Glob::new("**/*.{sass,scss}".to_string()))
     }
 
     #[turbo_tasks::function]

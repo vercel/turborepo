@@ -113,12 +113,14 @@ impl VersionedContent for EcmascriptDevChunkContent {
     #[turbo_tasks::function]
     async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         let code = self.code().await?;
-        Ok(File::from(code.source_code().clone()).into())
+        Ok(AssetContent::file(
+            File::from(code.source_code().clone()).into(),
+        ))
     }
 
     #[turbo_tasks::function]
     fn version(self: Vc<Self>) -> Vc<Box<dyn Version>> {
-        self.own_version().into()
+        Vc::upcast(self.own_version())
     }
 
     #[turbo_tasks::function]
@@ -131,7 +133,7 @@ impl VersionedContent for EcmascriptDevChunkContent {
 impl MergeableVersionedContent for EcmascriptDevChunkContent {
     #[turbo_tasks::function]
     fn get_merger(&self) -> Vc<Box<dyn VersionedContentMerger>> {
-        EcmascriptDevChunkContentMerger::new().into()
+        Vc::upcast(EcmascriptDevChunkContentMerger::new())
     }
 }
 
@@ -146,7 +148,7 @@ impl GenerateSourceMap for EcmascriptDevChunkContent {
     async fn by_section(&self, section: String) -> Result<Vc<OptionSourceMap>> {
         // Weirdly, the ContentSource will have already URL decoded the ModuleId, and we
         // can't reparse that via serde.
-        if let Ok(id) = ModuleId::parse(section) {
+        if let Ok(id) = ModuleId::parse(&section) {
             for (entry_id, entry) in self.entries.await?.iter() {
                 if id == **entry_id {
                     let sm = entry.code.generate_source_map();

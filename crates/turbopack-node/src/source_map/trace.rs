@@ -164,6 +164,6 @@ impl SourceMapTrace {
             .to_string(),
         };
         let file = File::from(result).with_content_type(APPLICATION_JSON);
-        Ok(file.into())
+        Ok(AssetContent::file(file.into()))
     }
 }

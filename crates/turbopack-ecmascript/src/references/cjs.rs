@@ -141,7 +141,7 @@ impl CodeGenerateable for CjsRequireAssetReference {
         let pm = PatternMapping::resolve_request(
             self.request,
             self.origin,
-            context.into(),
+            Vc::upcast(context),
             cjs_resolve(
                 self.origin,
                 self.request,
@@ -265,7 +265,7 @@ impl CodeGenerateable for CjsRequireResolveAssetReference {
         let pm = PatternMapping::resolve_request(
             self.request,
             self.origin,
-            context.into(),
+            Vc::upcast(context),
             cjs_resolve(
                 self.origin,
                 self.request,

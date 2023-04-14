@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     environment::Environment,
@@ -72,11 +72,6 @@ pub struct ResolveOptionsContext {
 #[turbo_tasks::value_impl]
 impl ResolveOptionsContext {
     #[turbo_tasks::function]
-    pub fn default() -> Vc<Self> {
-        Self::cell(Default::default())
-    }
-
-    #[turbo_tasks::function]
     pub async fn with_types_enabled(self: Vc<Self>) -> Result<Vc<Self>> {
         let mut clone = self.await?.clone_value();
         clone.enable_types = true;
@@ -121,8 +116,10 @@ impl ResolveOptionsContext {
     }
 }
 
-impl Default for ResolveOptionsContext {
-    fn default() -> Vc<Self> {
-        Vc::<Self>::default()
+#[turbo_tasks::value_impl]
+impl ValueDefault for ResolveOptionsContext {
+    #[turbo_tasks::function]
+    fn value_default() -> Vc<Self> {
+        Self::cell(Default::default())
     }
 }

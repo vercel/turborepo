@@ -1,6 +1,8 @@
 #![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 #![allow(clippy::too_many_arguments)]
 
 use std::{collections::HashMap, iter::once, thread::available_parallelism};
@@ -13,9 +15,9 @@ use turbo_tasks::{
     Completion, Completions, TryJoinIterExt, ValueToString, Vc,
 };
 use turbo_tasks_env::ProcessEnv;
-use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPath};
+use turbo_tasks_fs::{to_sys_path, File, FileSystemPath};
 use turbopack_core::{
-    asset::{Asset, AssetsSet},
+    asset::{Asset, AssetContent, AssetsSet},
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset, EvaluatableAssets},
     reference::primary_referenced_assets,
     source_map::GenerateSourceMap,
@@ -41,7 +43,7 @@ async fn emit(
     intermediate_asset: Vc<Box<dyn Asset>>,
     intermediate_output_path: Vc<FileSystemPath>,
 ) -> Result<Vc<Completion>> {
-    Ok(Vc::cell(
+    Ok(Vc::<Completions>::cell(
         internal_assets(intermediate_asset, intermediate_output_path)
             .strongly_consistent()
             .await?
@@ -92,7 +94,7 @@ async fn internal_assets_for_source_mapping(
     let mut internal_assets_for_source_mapping = HashMap::new();
     for asset in internal_assets.iter() {
         if let Some(generate_source_map) =
-            Vc::try_resolve_sidecast::<Box<dyn GenerateSourceMap>>(asset).await?
+            Vc::try_resolve_sidecast::<Box<dyn GenerateSourceMap>>(*asset).await?
         {
             if let Some(path) = intermediate_output_path.get_path_to(&*asset.ident().path().await?)
             {
@@ -152,7 +154,7 @@ async fn separate_assets(
                     .ident()
                     .path()
                     .await?
-                    .is_inside(intermediate_output_path)
+                    .is_inside_ref(intermediate_output_path)
                 {
                     Ok(Type::Internal(*asset))
                 } else {
@@ -197,8 +199,8 @@ async fn separate_assets(
 fn emit_package_json(dir: Vc<FileSystemPath>) -> Vc<Completion> {
     emit(
         Vc::upcast(VirtualSource::new(
-            dir.join("package.json"),
-            FileContent::Content(File::from("{\"type\": \"commonjs\"}")).into(),
+            dir.join("package.json".to_string()),
+            AssetContent::file(File::from("{\"type\": \"commonjs\"}").into()),
         )),
         dir,
     )
@@ -261,14 +263,15 @@ pub async fn get_intermediate_asset(
     main_entry: Vc<Box<dyn EvaluatableAsset>>,
     other_entries: Vc<EvaluatableAssets>,
 ) -> Result<Vc<Box<dyn Asset>>> {
-    Ok(NodeJsBootstrapAsset {
-        path: chunking_context.chunk_path(main_entry.ident(), ".js"),
-        chunking_context,
-        entry: main_entry.as_root_chunk(chunking_context),
-        evaluatable_assets: other_entries.with_entry(main_entry),
-    }
-    .cell()
-    .into())
+    Ok(Vc::upcast(
+        NodeJsBootstrapAsset {
+            path: chunking_context.chunk_path(main_entry.ident(), ".js".to_string()),
+            chunking_context,
+            entry: main_entry.as_root_chunk(chunking_context),
+            evaluatable_assets: other_entries.with_entry(main_entry),
+        }
+        .cell(),
+    ))
 }
 
 #[derive(Clone, Debug)]

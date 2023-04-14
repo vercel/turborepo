@@ -113,7 +113,7 @@ impl IntoIterator for CompileTimeDefines {
 impl CompileTimeDefines {
     #[turbo_tasks::function]
     pub fn empty() -> Vc<Self> {
-        Self::cell(IndexMap::new())
+        Vc::cell(IndexMap::new())
     }
 }
 
@@ -159,7 +159,7 @@ pub struct FreeVarReferences(pub IndexMap<Vec<String>, FreeVarReference>);
 impl FreeVarReferences {
     #[turbo_tasks::function]
     pub fn empty() -> Vc<Self> {
-        Self::cell(IndexMap::new())
+        Vc::cell(IndexMap::new())
     }
 }
 

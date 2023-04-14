@@ -31,7 +31,7 @@ impl Asset for NftJsonAsset {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let path = self.entry.ident().path().await?;
         Ok(AssetIdent::from_path(
-            path.fs.root().join(&format!("{}.nft.json", path.path)),
+            path.fs.root().join(format!("{}.nft.json", path.path)),
         ))
     }
 
@@ -59,6 +59,6 @@ impl Asset for NftJsonAsset {
           "files": result
         });
 
-        Ok(File::from(json.to_string()).into())
+        Ok(AssetContent::file(File::from(json.to_string()).into()))
     }
 }

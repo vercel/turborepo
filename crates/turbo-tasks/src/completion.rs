@@ -1,9 +1,4 @@
-use turbo_tasks::Vc;
-
-use crate::{
-    RawVc, {self as turbo_tasks},
-};
-
+use crate::{self as turbo_tasks, RawVc, Vc};
 /// Just an empty type, but it's never equal to itself.
 /// [Vc<Completion>] can be used as return value instead of `()`
 /// to have a concrete reference that can be awaited.

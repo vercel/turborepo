@@ -3,6 +3,13 @@ use crate::{TraitTypeId, ValueTypeId};
 
 /// A trait implemented on all values types that can be put into a Value Cell
 /// ([`Vc<T>`]).
+///
+/// # Safety
+///
+/// The implementor of this trait must ensure that the read and cell mode
+/// implementations are correct for the value type. Otherwise, it is possible to
+/// generate invalid reads, for instance by using `VcTransparentRead` for a
+/// value type that is not repr(transparent).
 pub unsafe trait VcValueType: Sized + Send + Sync + 'static {
     /// How to read the value.
     type Read: VcRead<Self>;
@@ -23,7 +30,9 @@ pub trait VcValueTrait {
 /// Marker trait that indicates that a [`Vc<Self>`] can be upcasted to a
 /// [`Vc<T>`].
 ///
-/// Safety: The implementor of this trait must ensure that `Self` implements the
+/// # Safety
+///
+/// The implementor of this trait must ensure that `Self` implements the
 /// trait `T`.
 pub unsafe trait Upcast<T>
 where
@@ -34,7 +43,9 @@ where
 /// Marker trait that indicates that a [`Vc<Self>`] can accept all methods
 /// declared on a [`Vc<T>`].
 ///
-/// Safety: The implementor of this trait must ensure that `Self` implements the
+/// # Safety
+///
+/// The implementor of this trait must ensure that `Self` implements the
 /// trait `T`.
 pub unsafe trait Dynamic<T>
 where

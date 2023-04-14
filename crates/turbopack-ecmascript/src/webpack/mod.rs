@@ -7,7 +7,11 @@ use turbopack_core::{
     ident::AssetIdent,
     reference::{AssetReference, AssetReferences},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
-    resolve::{origin::ResolveOrigin, parse::Request, resolve, ResolveResult},
+    resolve::{
+        origin::{ResolveOrigin, ResolveOriginExt},
+        parse::Request,
+        resolve, ResolveResult,
+    },
     source::{asset_to_source, Source},
 };
 
@@ -89,7 +93,7 @@ impl AssetReference for WebpackChunkAssetReference {
                     _ => todo!(),
                 };
                 let filename = format!("./chunks/{}.js", chunk_id);
-                let source = Vc::upcast(FileSource::new(context_path.join(&filename)));
+                let source = Vc::upcast(FileSource::new(context_path.join(filename)));
 
                 ResolveResult::asset(Vc::upcast(WebpackModuleAsset::new(
                     source,

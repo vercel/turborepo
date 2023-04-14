@@ -1,5 +1,6 @@
-#![feature(min_specialization)]
 #![allow(clippy::items_after_test_module)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 mod helpers;
 #[cfg(feature = "bench_against_node_nft")]
@@ -28,13 +29,12 @@ use rstest_reuse::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::{process::Command, time::timeout};
-use turbo_tasks::{backend::Backend, TurboTasks, Value, ValueToString, Vc};
+use turbo_tasks::{backend::Backend, ReadRef, TurboTasks, Value, ValueToString, Vc};
 use turbo_tasks_fs::{DiskFileSystem, FileSystem, FileSystemPath};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset, register,
-    resolve_options_context::ResolveOptionsContext, transition::TransitionsByName,
-    ModuleAssetContext,
+    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
 };
 #[cfg(not(feature = "bench_against_node_nft"))]
 use turbopack_core::asset::Asset;
@@ -408,7 +408,7 @@ fn node_file_trace<B: Backend + 'static>(
                     package_root.clone(),
                 ));
                 let input_dir = workspace_fs.root();
-                let input = input_dir.join(&format!("tests/{input_string}"));
+                let input = input_dir.join(format!("tests/{input_string}"));
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let original_output = exec_node(package_root, input);
@@ -439,12 +439,13 @@ fn node_file_trace<B: Backend + 'static>(
                     }
                     .cell(),
                 );
-                let module = context.process(source.into(), Value::new(ReferenceType::Undefined));
-                let rebased = RebasedAsset::new(module.into(), input_dir, output_dir);
+                let module =
+                    context.process(Vc::upcast(source), Value::new(ReferenceType::Undefined));
+                let rebased = RebasedAsset::new(Vc::upcast(module), input_dir, output_dir);
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let output_path = rebased.ident().path();
-                emit_with_completion(rebased.into(), output_dir).await?;
+                emit_with_completion(Vc::upcast(rebased), output_dir).await?;
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 {

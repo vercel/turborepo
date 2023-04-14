@@ -16,7 +16,7 @@ use turbopack_core::{
     },
     context::AssetContext,
     ident::AssetIdent,
-    issue::{Issue, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity},
     module::Module,
     reference::{AssetReference, AssetReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
@@ -25,8 +25,8 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     chunk::{
-        EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkPlaceable,
-        EcmascriptChunkingContext, EcmascriptExports,
+        EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemExt,
+        EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports,
     },
     utils::StringifyJs,
     ParseResultSourceMap,
@@ -191,7 +191,7 @@ impl ModuleCssAsset {
             for class_name in class_names {
                 match class_name {
                     ModuleCssClass::Import { from, .. } => {
-                        references.push((*from).into());
+                        references.push(Vc::upcast(*from));
                     }
                     ModuleCssClass::Local { .. } | ModuleCssClass::Global { .. } => {}
                 }
@@ -215,7 +215,7 @@ impl ChunkableModule for ModuleCssAsset {
     ) -> Vc<Box<dyn Chunk>> {
         Vc::upcast(EcmascriptChunk::new(
             context,
-            self.into(),
+            Vc::upcast(self),
             availability_info,
         ))
     }
@@ -228,12 +228,13 @@ impl EcmascriptChunkPlaceable for ModuleCssAsset {
         self: Vc<Self>,
         context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        ModuleChunkItem {
-            context,
-            module: self,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            ModuleChunkItem {
+                context,
+                module: self,
+            }
+            .cell(),
+        )
     }
 
     #[turbo_tasks::function]
@@ -312,10 +313,10 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                         };
 
                         let Some(css_module) =
-                            Vc::try_resolve_downcast_type::<ModuleCssAsset>(resolved_module)
+                            Vc::try_resolve_downcast_type::<ModuleCssAsset>(*resolved_module)
                                 .await?
                         else {
-                            Vc::upcast(CssModuleComposesIssue {
+                            CssModuleComposesIssue {
                                 severity: IssueSeverity::Error.cell(),
                                 source: self.module.ident(),
                                 message: Vc::cell(formatdoc! {
@@ -324,25 +325,26 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                                     "#,
                                     from = &*from.await?.request.to_string().await?
                                 }),
-                            }.cell()).emit();
+                            }.cell().emit();
                             continue;
                         };
 
                         // TODO(alexkirsz) We should also warn if `original_name` can't be found in
                         // the target module.
 
-                        let placeable = Vc::upcast(css_module);
+                        let placeable: Vc<Box<dyn EcmascriptChunkPlaceable>> =
+                            Vc::upcast(css_module);
 
                         let module_id = placeable.as_chunk_item(self.context).id().await?;
                         let module_id = StringifyJs(&*module_id);
-                        let original_name = StringifyJs(original_name);
+                        let original_name = StringifyJs(&original_name);
                         exported_class_names.push(format! {
                             "__turbopack_import__({module_id})[{original_name}]"
                         });
                     }
                     ModuleCssClass::Local { name: class_name }
                     | ModuleCssClass::Global { name: class_name } => {
-                        exported_class_names.push(StringifyJs(class_name).to_string());
+                        exported_class_names.push(StringifyJs(&class_name).to_string());
                     }
                 }
             }

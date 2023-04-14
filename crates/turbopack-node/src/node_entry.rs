@@ -1,4 +1,3 @@
-use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::chunk::{ChunkingContext, EvaluatableAsset, EvaluatableAssets};

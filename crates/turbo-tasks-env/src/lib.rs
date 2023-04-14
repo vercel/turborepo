@@ -1,4 +1,5 @@
-#![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 mod command_line;
 mod custom;
@@ -51,7 +52,7 @@ pub trait ProcessEnv {
     fn read_all(self: Vc<Self>) -> Vc<EnvMap>;
 
     /// Reads a single env variable. Ignores casing.
-    fn read(self: Vc<Self>, name: &str) -> Vc<Option<String>> {
+    fn read(self: Vc<Self>, name: String) -> Vc<Option<String>> {
         case_insensitive_read(self.read_all(), name)
     }
 }

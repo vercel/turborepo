@@ -3,7 +3,7 @@ use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack::resolve_options_context::ResolveOptionsContext;
 use turbopack_core::{
-    issue::{Issue, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity},
     resolve::parse::Request,
 };
 use turbopack_ecmascript::resolve::apply_cjs_specific_options;

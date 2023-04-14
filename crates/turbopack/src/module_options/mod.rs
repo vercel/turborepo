@@ -13,12 +13,9 @@ use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 use turbopack_core::{
     reference_type::{CssReferenceSubType, ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapping},
-    source_transform::SourceTransforms,
 };
-use turbopack_css::{CssInputTransform, CssInputTransforms, CssModuleAssetType};
-use turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransforms, EcmascriptOptions, SpecifiedModuleType,
-};
+use turbopack_css::{CssInputTransform, CssModuleAssetType};
+use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptOptions, SpecifiedModuleType};
 use turbopack_mdx::MdxTransformOptions;
 use turbopack_node::transforms::{postcss::PostCssTransform, webpack::WebpackLoaders};
 
@@ -45,7 +42,7 @@ async fn package_import_map_from_context(
     let mut import_map = ImportMap::default();
     import_map.insert_exact_alias(
         format!("@vercel/turbopack/{}", package_name),
-        ImportMapping::PrimaryAlternative(package_name.to_string(), Some(context_path)).cell(),
+        ImportMapping::PrimaryAlternative(package_name, Some(context_path)).cell(),
     );
     Ok(import_map.cell())
 }
@@ -392,24 +389,26 @@ impl ModuleOptions {
                         if let Some(options) = enable_postcss_transform {
                             let execution_context = execution_context
                                 .context("execution_context is required for the postcss_transform")?
-                                .with_layer("postcss");
+                                .with_layer("postcss".to_string());
 
                             let import_map = if let Some(postcss_package) = options.postcss_package
                             {
-                                package_import_map_from_import_mapping("postcss", postcss_package)
+                                package_import_map_from_import_mapping(
+                                    "postcss".to_string(),
+                                    postcss_package,
+                                )
                             } else {
-                                package_import_map_from_context("postcss", path)
+                                package_import_map_from_context("postcss".to_string(), path)
                             };
                             Some(ModuleRuleEffect::SourceTransforms(Vc::cell(vec![
-                                PostCssTransform::new(
+                                Vc::upcast(PostCssTransform::new(
                                     node_evaluate_asset_context(
                                         execution_context,
                                         Some(import_map),
                                         None,
                                     ),
                                     execution_context,
-                                )
-                                .into(),
+                                )),
                             ])))
                         } else {
                             None
@@ -516,23 +515,28 @@ impl ModuleOptions {
             let webpack_loaders_options = webpack_loaders_options.await?;
             let execution_context = execution_context
                 .context("execution_context is required for webpack_loaders")?
-                .with_layer("webpack_loaders");
+                .with_layer("webpack_loaders".to_string());
             let import_map = if let Some(loader_runner_package) =
                 webpack_loaders_options.loader_runner_package
             {
-                package_import_map_from_import_mapping("loader-runner", loader_runner_package)
+                package_import_map_from_import_mapping(
+                    "loader-runner".to_string(),
+                    loader_runner_package,
+                )
             } else {
-                package_import_map_from_context("loader-runner", path)
+                package_import_map_from_context("loader-runner".to_string(), path)
             };
             for (glob, rule) in webpack_loaders_options.rules.await?.iter() {
                 rules.push(ModuleRule::new(
                     ModuleRuleCondition::All(vec![
                         if !glob.contains('/') {
-                            ModuleRuleCondition::ResourceBasePathGlob(Glob::new(glob).await?)
+                            ModuleRuleCondition::ResourceBasePathGlob(
+                                Glob::new(glob.clone()).await?,
+                            )
                         } else {
                             ModuleRuleCondition::ResourcePathGlob {
                                 base: execution_context.project_path().await?,
-                                glob: Glob::new(glob).await?,
+                                glob: Glob::new(glob.clone()).await?,
                             }
                         },
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualSource),
@@ -544,13 +548,18 @@ impl ModuleOptions {
                             transforms: app_transforms,
                             options: ecmascript_options,
                         }),
-                        ModuleRuleEffect::SourceTransforms(Vc::cell(vec![WebpackLoaders::new(
-                            node_evaluate_asset_context(execution_context, Some(import_map), None),
-                            execution_context,
-                            rule.loaders,
-                            rule.rename_as.clone(),
-                        )
-                        .into()])),
+                        ModuleRuleEffect::SourceTransforms(Vc::cell(vec![Vc::upcast(
+                            WebpackLoaders::new(
+                                node_evaluate_asset_context(
+                                    execution_context,
+                                    Some(import_map),
+                                    None,
+                                ),
+                                execution_context,
+                                rule.loaders,
+                                rule.rename_as.clone(),
+                            ),
+                        )])),
                     ],
                 ));
             }

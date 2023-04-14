@@ -1077,10 +1077,10 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
             let (mut state, _) = self.mem_state_mut(dep.get_task_id(), turbo_tasks);
             let mem_state = state.memory.as_mut().unwrap();
             match dep {
-                Raw::TaskOutput(_) => {
+                RawVc::TaskOutput(_) => {
                     mem_state.output_dependent.remove(&task);
                 }
-                Raw::TaskCell(_, i) => {
+                RawVc::TaskCell(_, i) => {
                     if let Some((_, dependent)) = mem_state.cells.get_mut(&i) {
                         dependent.remove(&task);
                     }
@@ -1178,7 +1178,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
 
         if let TaskType::Persistent(_) = task_info.task_type {
             if has_changes && (is_persisted || !self.only_known_to_memory_tasks.contains(&task)) {
-                for task in self.pg_make_dependent_dirty(Raw::TaskOutput(task), turbo_tasks) {
+                for task in self.pg_make_dependent_dirty(RawVc::TaskOutput(task), turbo_tasks) {
                     let (mut state, _) = self.state_mut(task, turbo_tasks);
                     if !state.scheduled {
                         state.scheduled = true;
@@ -1280,7 +1280,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         if need_dependency {
             let (mut state, _) = self.mem_state_mut(reader, turbo_tasks);
             let mem_state = state.memory.as_mut().unwrap();
-            mem_state.dependencies.insert(Raw::TaskOutput(task));
+            mem_state.dependencies.insert(RawVc::TaskOutput(task));
         }
         result
     }
@@ -1339,7 +1339,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
                     if need_dependency {
                         let (mut state, _) = self.mem_state_mut(reader, turbo_tasks);
                         let mem_state = state.memory.as_mut().unwrap();
-                        mem_state.dependencies.insert(Raw::TaskCell(task, index));
+                        mem_state.dependencies.insert(RawVc::TaskCell(task, index));
                     }
                     Ok(Ok(content))
                 }
@@ -1485,7 +1485,8 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         }
         if let TaskType::Persistent(_) = task_info.task_type {
             if is_persisted || !self.only_known_to_memory_tasks.contains(&task) {
-                for task in self.pg_make_dependent_dirty(Raw::TaskCell(task, index), turbo_tasks) {
+                for task in self.pg_make_dependent_dirty(RawVc::TaskCell(task, index), turbo_tasks)
+                {
                     let (mut state, _) = self.state_mut(task, turbo_tasks);
                     if !state.scheduled {
                         state.scheduled = true;

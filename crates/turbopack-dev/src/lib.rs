@@ -1,6 +1,8 @@
 #![feature(lint_reasons)]
 #![feature(iter_intersperse)]
 #![feature(int_roundings)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 pub(crate) mod chunking_context;
 pub(crate) mod css;
@@ -8,7 +10,6 @@ pub(crate) mod ecmascript;
 pub mod react_refresh;
 
 pub use chunking_context::{DevChunkingContext, DevChunkingContextBuilder};
-use turbo_tasks::Vc;
 
 pub fn register() {
     turbo_tasks::register();

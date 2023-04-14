@@ -223,12 +223,13 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
 
         #[cfg(not(feature = "swc_ecma_transform_plugin"))]
         {
-            let issue: Vc<UnsupportedSwcEcmaTransformPluginsIssue> =
-                UnsupportedSwcEcmaTransformPluginsIssue {
-                    context: ctx.file_path,
-                }
-                .into();
-            issue.emit();
+            use turbopack_core::issue::IssueExt;
+
+            UnsupportedSwcEcmaTransformPluginsIssue {
+                context: ctx.file_path,
+            }
+            .cell()
+            .emit();
         }
 
         Ok(())

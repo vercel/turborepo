@@ -113,8 +113,8 @@ async fn ecmascript_chunk_content_single_entry(
     let asset = Vc::upcast(entry);
 
     Ok(EcmascriptChunkContent::cell(
-        if let Some(res) = chunk_content::<Vc<Box<dyn EcmascriptChunkItem>>>(
-            context.into(),
+        if let Some(res) = chunk_content::<Box<dyn EcmascriptChunkItem>>(
+            Vc::upcast(context),
             asset,
             None,
             availability_info,
@@ -123,8 +123,8 @@ async fn ecmascript_chunk_content_single_entry(
         {
             res
         } else {
-            chunk_content_split::<Vc<Box<dyn EcmascriptChunkItem>>>(
-                context.into(),
+            chunk_content_split::<Box<dyn EcmascriptChunkItem>>(
+                Vc::upcast(context),
                 asset,
                 None,
                 availability_info,

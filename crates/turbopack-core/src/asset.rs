@@ -2,7 +2,7 @@ use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{Completion, Vc};
 use turbo_tasks_fs::{
-    File, FileContent, FileJsonContent, FileLinesContent, FileSystemPath, LinkContent, LinkType,
+    FileContent, FileJsonContent, FileLinesContent, FileSystemPath, LinkContent, LinkType,
 };
 
 use crate::{
@@ -64,26 +64,13 @@ pub enum AssetContent {
     Redirect { target: String, link_type: LinkType },
 }
 
-impl From<Vc<FileContent>> for Vc<AssetContent> {
-    fn from(content: Vc<FileContent>) -> Self {
-        AssetContent::File(content).cell()
-    }
-}
-
-impl From<FileContent> for Vc<AssetContent> {
-    fn from(content: FileContent) -> Self {
-        AssetContent::File(content.cell()).cell()
-    }
-}
-
-impl From<File> for Vc<AssetContent> {
-    fn from(file: File) -> Self {
-        AssetContent::File(file.into()).cell()
-    }
-}
-
 #[turbo_tasks::value_impl]
 impl AssetContent {
+    #[turbo_tasks::function]
+    pub fn file(file: Vc<FileContent>) -> Vc<Self> {
+        AssetContent::File(file).cell()
+    }
+
     #[turbo_tasks::function]
     pub async fn parse_json(self: Vc<Self>) -> Result<Vc<FileJsonContent>> {
         let this = self.await?;

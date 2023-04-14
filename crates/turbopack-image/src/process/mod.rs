@@ -19,7 +19,11 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
 use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Vc};
 use turbo_tasks_fs::{File, FileContent, FileSystemPath};
-use turbopack_core::{error::PrettyPrintError, ident::AssetIdent, issue::Issue};
+use turbopack_core::{
+    error::PrettyPrintError,
+    ident::AssetIdent,
+    issue::{Issue, IssueExt},
+};
 
 use self::svg::calculate;
 
@@ -289,7 +293,7 @@ pub async fn get_meta_data(
     };
     let bytes = content.content().to_bytes()?;
     let path = ident.path().await?;
-    let extension = path.extension();
+    let extension = path.extension_ref();
     if extension == Some("svg") {
         let content = result_to_issue(
             ident,
@@ -361,7 +365,7 @@ pub async fn optimize(
         return Ok(FileContent::NotFound.cell());
     };
     let bytes = content.content().to_bytes()?;
-    let Some((image, mut format)) = load_image(ident, &bytes, ident.path().await?.extension())
+    let Some((image, mut format)) = load_image(ident, &bytes, ident.path().await?.extension_ref())
     else {
         return Ok(FileContent::NotFound.cell());
     };

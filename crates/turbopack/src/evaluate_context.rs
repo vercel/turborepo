@@ -43,11 +43,12 @@ pub async fn node_evaluate_asset_context(
         .cell(),
     );
     let import_map = import_map.cell();
-    let node_env = if let Some(node_env) = &*execution_context.env().read("NODE_ENV").await? {
-        node_env.clone()
-    } else {
-        "development".to_string()
-    };
+    let node_env =
+        if let Some(node_env) = &*execution_context.env().read("NODE_ENV".to_string()).await? {
+            node_env.clone()
+        } else {
+            "development".to_string()
+        };
     Ok(Vc::upcast(ModuleAssetContext::new(
         transitions.unwrap_or_else(|| Vc::cell(Default::default())),
         CompileTimeInfo::builder(node_build_environment())

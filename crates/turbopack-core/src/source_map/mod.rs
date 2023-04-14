@@ -12,7 +12,6 @@ use crate::source_pos::SourcePos;
 pub(crate) mod source_map_asset;
 
 pub use source_map_asset::SourceMapAssetReference;
-use turbo_tasks::Vc;
 
 /// Allows callers to generate source maps.
 #[turbo_tasks::value_trait]
@@ -21,7 +20,7 @@ pub trait GenerateSourceMap {
     fn generate_source_map(self: Vc<Self>) -> Vc<OptionSourceMap>;
 
     /// Returns an individual section of the larger source map, if found.
-    fn by_section(self: Vc<Self>, _section: &str) -> Vc<OptionSourceMap> {
+    fn by_section(self: Vc<Self>, _section: String) -> Vc<OptionSourceMap> {
         Vc::cell(None)
     }
 }

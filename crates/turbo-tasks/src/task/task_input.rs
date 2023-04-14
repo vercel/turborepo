@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, Result};
 
 use super::concrete_task_input::TransientSharedValue;
 use crate::{
-    magic_any::MagicAny, ConcreteTaskInput, SharedValue, TransientInstance, TransientValue,
+    magic_any::MagicAny, ConcreteTaskInput, RawVc, SharedValue, TransientInstance, TransientValue,
     TypedForInput, Value, Vc, VcValueType,
 };
 
@@ -43,7 +43,7 @@ impl TaskInput for bool {
     }
 }
 
-impl<'a, T> TaskInput for Vec<T>
+impl<T> TaskInput for Vec<T>
 where
     T: TaskInput,
 {
@@ -76,6 +76,19 @@ impl TaskInput for u8 {
 
     fn into_concrete(self) -> ConcreteTaskInput {
         ConcreteTaskInput::U8(self)
+    }
+}
+
+impl TaskInput for u16 {
+    fn try_from_concrete(value: &ConcreteTaskInput) -> Result<Self> {
+        match value {
+            ConcreteTaskInput::U16(value) => Ok(*value),
+            _ => bail!("invalid task input type, expected U16"),
+        }
+    }
+
+    fn into_concrete(self) -> ConcreteTaskInput {
+        ConcreteTaskInput::U16(self)
     }
 }
 
@@ -154,11 +167,11 @@ impl<T> TaskInput for Vc<T> {
     fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
         match input {
             ConcreteTaskInput::TaskCell(task, index) => Ok(Vc {
-                node: Raw::TaskCell(*task, *index),
+                node: RawVc::TaskCell(*task, *index),
                 _t: PhantomData,
             }),
             ConcreteTaskInput::TaskOutput(task) => Ok(Vc {
-                node: Raw::TaskOutput(*task),
+                node: RawVc::TaskOutput(*task),
                 _t: PhantomData,
             }),
             _ => bail!("invalid task input type, expected RawVc"),
@@ -167,8 +180,8 @@ impl<T> TaskInput for Vc<T> {
 
     fn into_concrete(self) -> ConcreteTaskInput {
         match self.node {
-            Raw::TaskCell(task, index) => ConcreteTaskInput::TaskCell(task, index),
-            Raw::TaskOutput(task) => ConcreteTaskInput::TaskOutput(task),
+            RawVc::TaskCell(task, index) => ConcreteTaskInput::TaskCell(task, index),
+            RawVc::TaskOutput(task) => ConcreteTaskInput::TaskOutput(task),
         }
     }
 }

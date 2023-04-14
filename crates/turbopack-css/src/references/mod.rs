@@ -15,7 +15,12 @@ use turbopack_core::{
     issue::{IssueSeverity, IssueSource, OptionIssueSource},
     reference::{AssetReference, AssetReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
-    resolve::{handle_resolve_error, origin::ResolveOrigin, parse::Request, ResolveResult},
+    resolve::{
+        handle_resolve_error,
+        origin::{ResolveOrigin, ResolveOriginExt},
+        parse::Request,
+        ResolveResult,
+    },
     source::Source,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -129,7 +134,7 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
             Vc::cell(as_parent_path(ast_path)),
             ImportAttributes::new_from_prelude(i).into(),
             IssueSource::from_byte_offset(
-                self.source.into(),
+                Vc::upcast(self.source),
                 issue_span.lo.to_usize(),
                 issue_span.hi.to_usize(),
             ),
@@ -156,7 +161,7 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
                 Request::parse(Value::new(src.to_string().into())),
                 Vc::cell(as_parent_path(ast_path)),
                 IssueSource::from_byte_offset(
-                    self.source.into(),
+                    Vc::upcast(self.source),
                     issue_span.lo.to_usize(),
                     issue_span.hi.to_usize(),
                 ),

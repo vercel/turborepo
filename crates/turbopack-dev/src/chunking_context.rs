@@ -12,8 +12,8 @@ use turbopack_core::{
     ident::AssetIdent,
     output::{OutputAsset, OutputAssets},
 };
-use turbopack_css::chunk::{CssChunk, CssChunks};
-use turbopack_ecmascript::chunk::{EcmascriptChunk, EcmascriptChunkingContext, EcmascriptChunks};
+use turbopack_css::chunk::CssChunk;
+use turbopack_ecmascript::chunk::{EcmascriptChunk, EcmascriptChunkingContext};
 use turbopack_ecmascript_runtime::RuntimeType;
 
 use crate::{
@@ -224,19 +224,19 @@ impl ChunkingContext for DevChunkingContext {
     ) -> Result<Vc<FileSystemPath>> {
         let root_path = self.chunk_root_path;
         let root_path = if let Some(layer) = self.layer.as_deref() {
-            root_path.join(layer)
+            root_path.join(layer.to_string())
         } else {
             root_path
         };
         let name = ident.output_name(self.context_path, extension).await?;
-        Ok(root_path.join(&name))
+        Ok(root_path.join(name.clone_value()))
     }
 
     #[turbo_tasks::function]
     async fn reference_chunk_source_maps(&self, chunk: Vc<Box<dyn Asset>>) -> Result<Vc<bool>> {
         let mut source_maps = self.reference_chunk_source_maps;
         let path = chunk.ident().path().await?;
-        let extension = path.extension().unwrap_or_default();
+        let extension = path.extension_ref().unwrap_or_default();
         #[allow(clippy::single_match, reason = "future extensions")]
         match extension {
             ".css" => {
@@ -273,7 +273,7 @@ impl ChunkingContext for DevChunkingContext {
     ) -> Result<Vc<FileSystemPath>> {
         let source_path = original_asset_ident.path().await?;
         let basename = source_path.file_name();
-        let asset_path = match source_path.extension() {
+        let asset_path = match source_path.extension_ref() {
             Some(ext) => format!(
                 "{basename}.{content_hash}.{ext}",
                 basename = &basename[..basename.len() - ext.len() - 1],
@@ -284,7 +284,7 @@ impl ChunkingContext for DevChunkingContext {
                 content_hash = &content_hash[..8]
             ),
         };
-        Ok(self.asset_root_path.join(&asset_path))
+        Ok(self.asset_root_path.join(asset_path))
     }
 
     #[turbo_tasks::function]
@@ -340,7 +340,10 @@ impl ChunkingContext for DevChunkingContext {
             .iter()
             .map({
                 move |evaluatable_asset| async move {
-                    evaluatable_asset.as_root_chunk(self.into()).resolve().await
+                    evaluatable_asset
+                        .as_root_chunk(Vc::upcast(self))
+                        .resolve()
+                        .await
                 }
             })
             .try_join()
@@ -429,8 +432,8 @@ where
     let chunks = ecmascript_chunks
         .iter()
         .copied()
-        .map(|chunk| Vc::upcast(chunk))
-        .chain(css_chunks.iter().copied().map(|chunk| Vc::upcast(chunk)))
+        .map(Vc::upcast)
+        .chain(css_chunks.iter().copied().map(Vc::upcast))
         .chain(other_chunks)
         .collect();
 

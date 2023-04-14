@@ -110,12 +110,13 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
         self: Vc<Self>,
         context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
-        Ok(EcmascriptModulePartChunkItem {
-            module: self,
-            context,
-        }
-        .cell()
-        .into())
+        Ok(Vc::upcast(
+            EcmascriptModulePartChunkItem {
+                module: self,
+                context,
+            }
+            .cell(),
+        ))
     }
 
     #[turbo_tasks::function]

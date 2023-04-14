@@ -41,9 +41,9 @@ pub async fn snapshot_issues<
         } else {
             &title
         };
-        let hash = encode_hex(plain_issue.internal_hash(true));
+        let hash = encode_hex(plain_issue.internal_hash_ref(true));
 
-        let path = issues_path.join(&format!("{title}-{}.txt", &hash[0..6]));
+        let path = issues_path.join(format!("{title}-{}.txt", &hash[0..6]));
         if !seen.insert(path) {
             continue;
         }
@@ -56,7 +56,7 @@ pub async fn snapshot_issues<
             .replace(workspace_root, "WORKSPACE_ROOT")
             // Normalize syspaths from Windows. These appear in stack traces.
             .replace("\\\\", "/");
-        let asset = File::from(content).into();
+        let asset = AssetContent::file(File::from(content).into());
 
         diff(path, asset).await?;
     }
@@ -102,7 +102,7 @@ pub async fn matches_expected(
 
 pub async fn diff(path: Vc<FileSystemPath>, actual: Vc<AssetContent>) -> Result<()> {
     let path_str = &path.await?.path;
-    let expected = path.read().into();
+    let expected = AssetContent::file(path.read());
 
     let actual = get_contents(actual, path).await?;
     let expected = get_contents(expected, path).await?;

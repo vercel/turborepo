@@ -114,7 +114,7 @@ pub fn value_impl(args: TokenStream, input: TokenStream) -> TokenStream {
                 let Some(turbo_fn) = TurboFn::new(sig, DefinitionContext::ValueInherentImpl) else {
                     return quote! {
                         // An error occurred while parsing the function signature.
-                    }.into();
+                    };
                 };
 
                 let native_fn = NativeFn::new(
@@ -198,7 +198,7 @@ pub fn value_impl(args: TokenStream, input: TokenStream) -> TokenStream {
                 let Some(turbo_fn) = TurboFn::new(sig, DefinitionContext::ValueTraitImpl) else {
                     return quote! {
                         // An error occurred while parsing the function signature.
-                    }.into();
+                    };
                 };
 
                 let attrs = strip_function_attribute(item, attrs);
@@ -312,16 +312,20 @@ pub fn value_impl(args: TokenStream, input: TokenStream) -> TokenStream {
 
     let item = parse_macro_input!(input as ItemImpl);
 
-    let Some(ty_ident) = ident.map(|ident| Ident::new(&ident.value(), ident.span())).or_else(|| get_type_ident(&*item.self_ty)) else {
+    let Some(ty_ident) = ident
+        .map(|ident| Ident::new(&ident.value(), ident.span()))
+        .or_else(|| get_type_ident(&item.self_ty))
+    else {
         return quote! {
             // An error occurred while parsing the type.
-        }.into();
+        }
+        .into();
     };
 
     match &item.trait_ {
-        None => inherent_value_impl(&*item.self_ty, &ty_ident, &item.items).into(),
+        None => inherent_value_impl(&item.self_ty, &ty_ident, &item.items).into(),
         Some((_, trait_path, _)) => {
-            trait_value_impl(&*item.self_ty, &ty_ident, trait_path, &item.items).into()
+            trait_value_impl(&item.self_ty, &ty_ident, trait_path, &item.items).into()
         }
     }
 }

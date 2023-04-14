@@ -95,10 +95,10 @@ impl Asset for EcmascriptBuildNodeRuntimeChunk {
         let ident = AssetIdent::from_path(
             turbopack_ecmascript_runtime::embed_fs()
                 .root()
-                .join("runtime.js"),
+                .join("runtime.js".to_string()),
         );
 
-        AssetIdent::from_path(self.chunking_context.chunk_path(ident, ".js"))
+        AssetIdent::from_path(self.chunking_context.chunk_path(ident, ".js".to_string()))
     }
 
     #[turbo_tasks::function]
@@ -108,10 +108,10 @@ impl Asset for EcmascriptBuildNodeRuntimeChunk {
 
         if *this
             .chunking_context
-            .reference_chunk_source_maps(self.into())
+            .reference_chunk_source_maps(Vc::upcast(self))
             .await?
         {
-            references.push(Vc::upcast(SourceMapAssetReference::new(self.into())))
+            references.push(Vc::upcast(SourceMapAssetReference::new(Vc::upcast(self))))
         }
 
         Ok(Vc::cell(references))
@@ -120,7 +120,9 @@ impl Asset for EcmascriptBuildNodeRuntimeChunk {
     #[turbo_tasks::function]
     async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         let code = self.code().await?;
-        Ok(File::from(code.source_code().clone()).into())
+        Ok(AssetContent::file(
+            File::from(code.source_code().clone()).into(),
+        ))
     }
 }
 
@@ -157,7 +159,7 @@ impl EcmascriptBuildNodeRuntimeReference {
 impl AssetReference for EcmascriptBuildNodeRuntimeReference {
     #[turbo_tasks::function]
     fn resolve_reference(self: Vc<Self>) -> Vc<ResolveResult> {
-        ResolveResult::asset(self.runtime_chunk().into()).into()
+        ResolveResult::asset(Vc::upcast(self.runtime_chunk())).into()
     }
 }
 

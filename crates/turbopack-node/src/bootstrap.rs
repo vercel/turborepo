@@ -56,7 +56,7 @@ impl Asset for NodeJsBootstrapAsset {
             }
         }
 
-        Ok(File::from(output).into())
+        Ok(AssetContent::file(File::from(output).into()))
     }
 
     #[turbo_tasks::function]
@@ -65,7 +65,7 @@ impl Asset for NodeJsBootstrapAsset {
         let mut references = Vec::new();
         for &chunk in chunks.iter() {
             references.push(Vc::upcast(SingleAssetReference::new(
-                chunk.into(),
+                Vc::upcast(chunk),
                 node_js_bootstrap_chunk_reference_description(),
             )));
         }

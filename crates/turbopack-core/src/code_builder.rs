@@ -14,14 +14,16 @@ use crate::{
     source_pos::SourcePos,
 };
 
+/// A mapping of byte-offset in the code string to an associated source map.
+pub type Mapping = (usize, Option<Vc<Box<dyn GenerateSourceMap>>>);
+
 /// Code stores combined output code and the source map of that output code.
 #[turbo_tasks::value(shared)]
 #[derive(Debug, Clone)]
 pub struct Code {
     code: Rope,
 
-    /// A mapping of byte-offset in the code string to an associated source map.
-    mappings: Vec<(usize, Option<Vc<Box<dyn GenerateSourceMap>>>)>,
+    mappings: Vec<Mapping>,
 }
 
 /// CodeBuilder provides a mutable container to append source code.
@@ -29,8 +31,7 @@ pub struct Code {
 pub struct CodeBuilder {
     code: RopeBuilder,
 
-    /// A mapping of byte-offset in the code string to an associated source map.
-    mappings: Vec<(usize, Option<Vc<Box<dyn GenerateSourceMap>>>)>,
+    mappings: Vec<Mapping>,
 }
 
 impl Code {

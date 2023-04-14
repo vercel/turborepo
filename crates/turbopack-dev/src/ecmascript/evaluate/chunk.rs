@@ -15,7 +15,7 @@ use turbopack_core::{
     source_map::{GenerateSourceMap, OptionSourceMap, SourceMapAssetReference},
 };
 use turbopack_ecmascript::{
-    chunk::{EcmascriptChunkData, EcmascriptChunkPlaceable},
+    chunk::{EcmascriptChunkData, EcmascriptChunkItemExt, EcmascriptChunkPlaceable},
     utils::StringifyJs,
 };
 use turbopack_ecmascript_runtime::RuntimeType;
@@ -94,11 +94,12 @@ impl EcmascriptDevEvaluateChunk {
                 let chunking_context = this.chunking_context;
                 move |entry| async move {
                     if let Some(placeable) =
-                        Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(entry).await?
+                        Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(*entry)
+                            .await?
                     {
                         Ok(Some(
                             placeable
-                                .as_chunk_item(chunking_context.into())
+                                .as_chunk_item(Vc::upcast(chunking_context))
                                 .id()
                                 .await?,
                         ))
@@ -197,7 +198,7 @@ impl Asset for EcmascriptDevEvaluateChunk {
 
         let ident = AssetIdent::new(Value::new(ident));
         Ok(AssetIdent::from_path(
-            self.chunking_context.chunk_path(ident, ".js"),
+            self.chunking_context.chunk_path(ident, ".js".to_string()),
         ))
     }
 
@@ -208,10 +209,10 @@ impl Asset for EcmascriptDevEvaluateChunk {
 
         if *this
             .chunking_context
-            .reference_chunk_source_maps(self.into())
+            .reference_chunk_source_maps(Vc::upcast(self))
             .await?
         {
-            references.push(Vc::upcast(SourceMapAssetReference::new(self.into())));
+            references.push(Vc::upcast(SourceMapAssetReference::new(Vc::upcast(self))));
         }
 
         for chunk_data in &*self.chunks_data().await? {
@@ -224,7 +225,9 @@ impl Asset for EcmascriptDevEvaluateChunk {
     #[turbo_tasks::function]
     async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         let code = self.code().await?;
-        Ok(File::from(code.source_code().clone()).into())
+        Ok(AssetContent::file(
+            File::from(code.source_code().clone()).into(),
+        ))
     }
 }
 

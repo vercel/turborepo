@@ -1,6 +1,3 @@
-use std::fmt::Debug;
-
-use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 
@@ -21,7 +18,7 @@ pub trait ChunkingContext {
     // discretion of chunking context implementors. However, we currently use this
     // in a couple of places in `turbopack-css`, so we need to remove that
     // dependency first.
-    fn chunk_path(self: Vc<Self>, ident: Vc<AssetIdent>, extension: &str) -> Vc<FileSystemPath>;
+    fn chunk_path(self: Vc<Self>, ident: Vc<AssetIdent>, extension: String) -> Vc<FileSystemPath>;
 
     // TODO(alexkirsz) Remove this from the chunking context.
     /// Reference Source Map Assets for chunks
@@ -35,7 +32,7 @@ pub trait ChunkingContext {
 
     fn asset_path(
         self: Vc<Self>,
-        content_hash: &str,
+        content_hash: String,
         original_asset_ident: Vc<AssetIdent>,
     ) -> Vc<FileSystemPath>;
 
@@ -47,7 +44,7 @@ pub trait ChunkingContext {
         Vc::cell("".to_string())
     }
 
-    fn with_layer(self: Vc<Self>, layer: &str) -> Vc<Box<dyn ChunkingContext>>;
+    fn with_layer(self: Vc<Self>, layer: String) -> Vc<Box<dyn ChunkingContext>>;
 
     fn chunk_group(self: Vc<Self>, entry: Vc<Box<dyn Chunk>>) -> Vc<OutputAssets>;
 

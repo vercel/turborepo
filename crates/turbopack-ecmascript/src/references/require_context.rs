@@ -31,11 +31,10 @@ use turbopack_core::{
 
 use crate::{
     chunk::{
-        EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkPlaceable,
-        EcmascriptChunkingContext, EcmascriptExports,
+        item::EcmascriptChunkItemExt, EcmascriptChunk, EcmascriptChunkItem,
+        EcmascriptChunkItemContent, EcmascriptChunkingContext, EcmascriptExports,
     },
-    chunk_group_files_asset::ChunkGroupFilesAsset,
-    code_gen::{CodeGenerateable, CodeGeneration},
+    code_gen::CodeGeneration,
     create_visitor,
     references::{
         pattern_mapping::{PatternMapping, ResolveType::Cjs},
@@ -107,7 +106,7 @@ impl DirList {
 
         list.sort_keys();
 
-        Ok(Self::cell(list))
+        Ok(Vc::cell(list))
     }
 
     #[turbo_tasks::function]
@@ -193,7 +192,7 @@ impl RequireContextMap {
             }
         }
 
-        Ok(Self::cell(map))
+        Ok(Vc::cell(map))
     }
 }
 
@@ -226,7 +225,7 @@ impl RequireContextAssetReference {
     ) -> Vc<Self> {
         let map = RequireContextMap::generate(
             origin,
-            origin.origin_path().parent().join(&dir),
+            origin.origin_path().parent().join(dir.clone()),
             include_subdirs,
             filter,
             issue_source,
@@ -257,7 +256,7 @@ impl RequireContextAssetReference {
 impl AssetReference for RequireContextAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ResolveResult> {
-        ResolveResult::asset(self.inner.into()).cell()
+        ResolveResult::asset(Vc::upcast(self.inner)).cell()
     }
 }
 
@@ -364,7 +363,7 @@ impl Asset for RequireContextAsset {
 
         Ok(Vc::cell(
             map.iter()
-                .map(|(_, entry)| Vc::upcast(Vc::cell(entry.result)))
+                .map(|(_, entry)| Vc::upcast(Vc::<ResolvedAssetReference>::cell(entry.result)))
                 .collect(),
         ))
     }
@@ -397,15 +396,16 @@ impl EcmascriptChunkPlaceable for RequireContextAsset {
         context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
         let this = self.await?;
-        Ok(RequireContextChunkItem {
-            context,
-            inner: self,
+        Ok(Vc::upcast(
+            RequireContextChunkItem {
+                context,
+                inner: self,
 
-            origin: this.origin,
-            map: this.map,
-        }
-        .cell()
-        .into())
+                origin: this.origin,
+                map: this.map,
+            }
+            .cell(),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -443,7 +443,7 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
             let pm = PatternMapping::resolve_request(
                 entry.request,
                 self.origin,
-                self.context.into(),
+                Vc::upcast(self.context),
                 entry.result,
                 Value::new(Cjs),
             )

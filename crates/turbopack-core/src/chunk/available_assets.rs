@@ -95,7 +95,7 @@ async fn chunkable_assets_set(root: Vc<Box<dyn Asset>>) -> Result<Vc<AssetsSet>>
                 .copied()
                 .map(|reference| async move {
                     if let Some(chunkable) =
-                        Vc::try_resolve_sidecast::<Box<dyn ChunkableModuleReference>>(reference)
+                        Vc::try_resolve_downcast::<Box<dyn ChunkableModuleReference>>(reference)
                             .await?
                     {
                         if matches!(

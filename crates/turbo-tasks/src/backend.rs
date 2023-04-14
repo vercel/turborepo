@@ -12,13 +12,12 @@ use std::{
 use anyhow::{anyhow, bail, Result};
 use auto_hash_map::AutoSet;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::Vc;
 
 pub use crate::id::BackendJobId;
 use crate::{
     event::EventListener, manager::TurboTasksBackendApi, raw_vc::CellId, registry,
     ConcreteTaskInput, FunctionId, RawVc, ReadRef, SharedReference, TaskId, TaskIdProvider,
-    TraitRef, TraitTypeId, VcValueTrait, VcValueType,
+    TraitRef, TraitTypeId, Vc, VcValueTrait, VcValueType,
 };
 
 pub enum TaskType {

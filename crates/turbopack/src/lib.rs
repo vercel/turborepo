@@ -5,6 +5,18 @@
 #![feature(option_get_or_insert_default)]
 #![feature(hash_set_entry)]
 #![recursion_limit = "256"]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
+
+pub mod condition;
+pub mod evaluate_context;
+mod graph;
+pub mod module_options;
+pub mod rebase;
+pub mod resolve;
+pub mod resolve_options_context;
+pub mod transition;
+pub(crate) mod unsupported_sass;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -27,7 +39,7 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
     ident::AssetIdent,
-    issue::Issue,
+    issue::{Issue, IssueExt},
     module::Module,
     raw_module::RawModule,
     reference::all_referenced_assets,
@@ -38,20 +50,6 @@ use turbopack_core::{
     },
     source::{asset_to_source, Source},
 };
-
-use crate::transition::Transition;
-
-pub mod condition;
-pub mod evaluate_context;
-mod graph;
-pub mod module_options;
-pub mod rebase;
-pub mod resolve;
-pub mod resolve_options_context;
-pub mod transition;
-pub(crate) mod unsupported_sass;
-
-use turbo_tasks::Vc;
 pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
 use turbopack_json::JsonModuleAsset;
@@ -129,7 +127,7 @@ async fn apply_module_type(
             };
             let mut builder = EcmascriptModuleAsset::builder(
                 source,
-                context_for_module.into(),
+                Vc::upcast(context_for_module),
                 *transforms,
                 *options,
                 context.compile_time_info(),
@@ -164,21 +162,21 @@ async fn apply_module_type(
         }
         ModuleType::Json => Vc::upcast(JsonModuleAsset::new(source)),
         ModuleType::Raw => Vc::upcast(RawModule::new(source)),
-        ModuleType::CssGlobal => Vc::upcast(GlobalCssAsset::new(source, context.into())),
-        ModuleType::CssModule => Vc::upcast(ModuleCssAsset::new(source, context.into())),
+        ModuleType::CssGlobal => Vc::upcast(GlobalCssAsset::new(source, Vc::upcast(context))),
+        ModuleType::CssModule => Vc::upcast(ModuleCssAsset::new(source, Vc::upcast(context))),
         ModuleType::Css { ty, transforms } => Vc::upcast(CssModuleAsset::new(
             source,
-            context.into(),
+            Vc::upcast(context),
             *transforms,
             *ty,
         )),
-        ModuleType::Static => Vc::upcast(StaticModuleAsset::new(source, context.into())),
+        ModuleType::Static => Vc::upcast(StaticModuleAsset::new(source, Vc::upcast(context))),
         ModuleType::Mdx {
             transforms,
             options,
         } => Vc::upcast(MdxModuleAsset::new(
             source,
-            context.into(),
+            Vc::upcast(context),
             *transforms,
             *options,
         )),
@@ -431,11 +429,11 @@ impl AssetContext for ModuleAssetContext {
 
         if *self.is_types_resolving_enabled().await? {
             let types_reference = TypescriptTypesAssetReference::new(
-                Vc::upcast(PlainResolveOrigin::new(self.into(), origin_path)),
+                Vc::upcast(PlainResolveOrigin::new(Vc::upcast(self), origin_path)),
                 request,
             );
 
-            result = result.with_reference(types_reference.into());
+            result = result.with_reference(Vc::upcast(types_reference));
         }
 
         Ok(result)
@@ -453,11 +451,11 @@ impl AssetContext for ModuleAssetContext {
                 |a| {
                     let reference_type = reference_type.clone();
                     async move {
-                        Ok(self
-                            .process(asset_to_source(a), reference_type)
-                            .resolve()
-                            .await?
-                            .into())
+                        Ok(Vc::upcast(
+                            self.process(asset_to_source(a), reference_type)
+                                .resolve()
+                                .await?,
+                        ))
                     }
                 },
                 |i| async move { Ok(i) },
@@ -482,7 +480,7 @@ impl AssetContext for ModuleAssetContext {
     #[turbo_tasks::function]
     async fn with_transition(&self, transition: String) -> Result<Vc<Box<dyn AssetContext>>> {
         Ok(
-            if let Some(transition) = self.transitions.await?.get(transition) {
+            if let Some(transition) = self.transitions.await?.get(&transition) {
                 Vc::upcast(ModuleAssetContext::new_transition(
                     self.transitions,
                     self.compile_time_info,
@@ -547,16 +545,18 @@ pub async fn emit_asset_into_dir(
     output_dir: Vc<FileSystemPath>,
 ) -> Result<Vc<Completion>> {
     let dir = &*output_dir.await?;
-    Ok(if asset.ident().path().await?.is_inside(dir) {
+    Ok(if asset.ident().path().await?.is_inside_ref(dir) {
         emit_asset(asset)
     } else {
         Completion::new()
     })
 }
 
+type AssetSet = HashSet<Vc<Box<dyn Asset>>>;
+
 #[turbo_tasks::value(shared)]
 struct ReferencesList {
-    referenced_by: HashMap<Vc<Box<dyn Asset>>, HashSet<Vc<Box<dyn Asset>>>>,
+    referenced_by: HashMap<Vc<Box<dyn Asset>>, AssetSet>,
 }
 
 #[turbo_tasks::function]
@@ -570,8 +570,7 @@ async fn compute_back_references(aggregated: Vc<AggregatedGraph>) -> Result<Vc<R
             ReferencesList { referenced_by }.into()
         }
         AggregatedGraphNodeContent::Children(children) => {
-            let mut referenced_by =
-                HashMap::<Vc<Box<dyn Asset>>, HashSet<Vc<Box<dyn Asset>>>>::new();
+            let mut referenced_by = HashMap::<Vc<Box<dyn Asset>>, AssetSet>::new();
             let lists = children
                 .iter()
                 .map(|child| compute_back_references(*child))

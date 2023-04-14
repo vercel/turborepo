@@ -1,4 +1,6 @@
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 mod nft_json;
 
@@ -22,7 +24,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::channel;
 use turbo_tasks::{
-    backend::Backend, util::FormatDuration, Nothing, TaskId, TransientInstance, TransientValue,
+    backend::Backend, unit, util::FormatDuration, TaskId, TransientInstance, TransientValue,
     TurboTasks, TurboTasksBackendApi, UpdateInfo, Value, Vc,
 };
 use turbo_tasks_fs::{
@@ -34,8 +36,7 @@ use turbo_tasks_memory::{
 };
 use turbopack::{
     emit_asset, emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset,
-    resolve_options_context::ResolveOptionsContext, transition::TransitionsByName,
-    ModuleAssetContext,
+    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
 };
 use turbopack_cli_utils::issue::{ConsoleUi, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
@@ -44,7 +45,7 @@ use turbopack_core::{
     context::AssetContext,
     environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
-    issue::{Issue, IssueContextExt, IssueReporter, IssueSeverity},
+    issue::{IssueContextExt, IssueReporter, IssueSeverity},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
 };
@@ -200,7 +201,7 @@ async fn create_fs(name: &str, context: &str, watch: bool) -> Result<Vc<Box<dyn 
     } else {
         fs.await?.invalidate();
     }
-    Ok(fs.into())
+    Ok(Vc::upcast(fs))
 }
 
 async fn add_glob_results(
@@ -212,14 +213,10 @@ async fn add_glob_results(
     for entry in result.results.values() {
         if let DirectoryEntry::File(path) = entry {
             let source = Vc::upcast(FileSource::new(*path));
-            list.push(
-                context
-                    .process(
-                        source,
-                        Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
-                    )
-                    .into(),
-            );
+            list.push(Vc::upcast(context.process(
+                source,
+                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+            )));
         }
     }
     for result in result.inner.values() {
@@ -237,7 +234,7 @@ async fn add_glob_results(
 }
 
 #[turbo_tasks::function]
-async fn input_to_modules<'a>(
+async fn input_to_modules(
     fs: Vc<Box<dyn FileSystem>>,
     input: Vec<String>,
     exact: bool,
@@ -251,21 +248,25 @@ async fn input_to_modules<'a>(
         .clone()
         .map(|p| p.trim_start_matches(&context).to_owned());
 
-    let context: Vc<Box<dyn AssetContext>> =
-        create_module_asset(root, process_cwd, module_options, resolve_options).into();
+    let context: Vc<Box<dyn AssetContext>> = Vc::upcast(create_module_asset(
+        root,
+        process_cwd,
+        module_options,
+        resolve_options,
+    ));
 
     let mut list = Vec::new();
-    for input in input.iter() {
+    for input in input {
         if exact {
             let source = Vc::upcast(FileSource::new(root.join(input)));
-            list.push(
+            list.push(Vc::upcast(
                 context
                     .process(
                         source,
                         Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
                     )
                     .into(),
-            );
+            ));
         } else {
             let glob = Glob::new(input);
             add_glob_results(context, root.read_glob(glob, false), &mut list).await?;
@@ -498,14 +499,15 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
                 resolve_options,
             );
 
-            let source = TransientValue::new(output.into());
-            let issues = Issue::peek_issues_with_path(output)
+            let source = TransientValue::new(output.node);
+            let issues = output
+                .peek_issues_with_path()
                 .await?
                 .strongly_consistent()
                 .await?;
 
             let console_ui = ConsoleUi::new(log_options);
-            Vc::upcast(console_ui)
+            Vc::upcast::<Box<dyn IssueReporter>>(console_ui)
                 .report_issues(TransientInstance::new(issues), source)
                 .await?;
 
@@ -515,7 +517,7 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
                 sender.send(output_iter.collect::<Vec<String>>()).await?;
                 drop(sender);
             }
-            Ok(Nothing::new().into())
+            Ok(unit().node)
         })
     });
     finish(tt, task).await?;
@@ -592,7 +594,7 @@ async fn main_operation(
                 let nft_asset = NftJsonAsset::new(*module);
                 let path = nft_asset.ident().path().await?.path.clone();
                 output_nft_assets.push(path);
-                emits.push(emit_asset(nft_asset.into()));
+                emits.push(emit_asset(Vc::upcast(nft_asset)));
             }
             // Wait for all files to be emitted
             for emit in emits {
@@ -653,12 +655,12 @@ async fn create_module_asset(
     let glob_mappings = vec![
         (
             root,
-            Glob::new("**/*/next/dist/server/next.js"),
+            Glob::new("**/*/next/dist/server/next.js".to_string()),
             ImportMapping::Ignore.into(),
         ),
         (
             root,
-            Glob::new("**/*/next/dist/bin/next"),
+            Glob::new("**/*/next/dist/bin/next".to_string()),
             ImportMapping::Ignore.into(),
         ),
     ];

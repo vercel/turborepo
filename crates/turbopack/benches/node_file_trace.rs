@@ -2,13 +2,12 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 use criterion::{Bencher, BenchmarkId, Criterion};
 use regex::Regex;
-use turbo_tasks::{Nothing, TurboTasks, Value, Vc};
+use turbo_tasks::{unit, TurboTasks, Value, Vc};
 use turbo_tasks_fs::{DiskFileSystem, FileSystem, NullFileSystem};
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     emit_with_completion, module_options::ModuleOptionsContext, rebase::RebasedAsset, register,
-    resolve_options_context::ResolveOptionsContext, transition::TransitionsByName,
-    ModuleAssetContext,
+    resolve_options_context::ResolveOptionsContext, ModuleAssetContext,
 };
 use turbopack_core::{
     compile_time_info::CompileTimeInfo,
@@ -73,7 +72,7 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
         async move {
             let task = tt.spawn_once_task(async move {
                 let input_fs = DiskFileSystem::new("tests".to_string(), tests_root.clone());
-                let input = input_fs.root().join(&input);
+                let input = input_fs.root().join(input.clone());
 
                 let input_dir = input.parent().parent();
                 let output_fs: Vc<NullFileSystem> = NullFileSystem.into();
@@ -98,12 +97,13 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
                     }
                     .cell(),
                 );
-                let module = context.process(source.into(), Value::new(ReferenceType::Undefined));
-                let rebased = RebasedAsset::new(module.into(), input_dir, output_dir);
+                let module =
+                    context.process(Vc::upcast(source), Value::new(ReferenceType::Undefined));
+                let rebased = RebasedAsset::new(Vc::upcast(module), input_dir, output_dir);
 
-                emit_with_completion(rebased.into(), output_dir).await?;
+                emit_with_completion(Vc::upcast(rebased), output_dir).await?;
 
-                Ok(Nothing::new().into())
+                Ok(unit().node)
             });
             tt.wait_task_completion(task, true).await.unwrap();
         }

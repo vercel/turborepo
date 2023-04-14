@@ -6,6 +6,7 @@ use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, ReadRef, Vc};
 use turbo_tasks_fs::{FileContent, FileJsonContent, FileSystemPath};
 
 use super::issue::Issue;
+use crate::issue::IssueExt;
 
 /// PackageJson wraps the parsed JSON content of a `package.json` file. The
 /// wrapper is necessary so that we can reference the [FileJsonContent]'s inner

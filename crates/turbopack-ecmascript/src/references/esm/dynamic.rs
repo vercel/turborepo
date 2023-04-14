@@ -98,7 +98,7 @@ impl CodeGenerateableWithAvailabilityInfo for EsmAsyncAssetReference {
         let pm = PatternMapping::resolve_request(
             self.request,
             self.origin,
-            context.into(),
+            Vc::upcast(context),
             esm_resolve(
                 self.origin,
                 self.request,

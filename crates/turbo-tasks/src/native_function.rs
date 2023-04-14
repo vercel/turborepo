@@ -48,7 +48,7 @@ impl NativeFunction {
     }
 
     /// Creates a functor for execution from a fixed set of inputs.
-    pub fn bind(&'static self, inputs: &Vec<ConcreteTaskInput>) -> NativeTaskFn {
+    pub fn bind(&'static self, inputs: &[ConcreteTaskInput]) -> NativeTaskFn {
         match (self.implementation).functor(&self.name, inputs) {
             Ok(functor) => Box::new(move || {
                 let r = (functor)();

@@ -6,6 +6,8 @@
 //! JSON value as an object.
 
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 use std::fmt::Write;
 

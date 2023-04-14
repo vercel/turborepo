@@ -69,8 +69,17 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut items = Vec::with_capacity(raw_items.len());
 
     for item in raw_items.iter() {
-        let TraitItem::Method(TraitItemMethod { sig, default, attrs, semi_token: _ }) = item else {
-            item.span().unwrap().error("only methods are allowed in a #[turbo_tasks::value_trait] trait").emit();
+        let TraitItem::Method(TraitItemMethod {
+            sig,
+            default,
+            attrs,
+            semi_token: _,
+        }) = item
+        else {
+            item.span()
+                .unwrap()
+                .error("only methods are allowed in a #[turbo_tasks::value_trait] trait")
+                .emit();
             continue;
         };
 
@@ -79,7 +88,8 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
         let Some(turbo_fn) = TurboFn::new(sig, DefinitionContext::ValueTrait) else {
             return quote! {
                 // An error occurred while parsing the function signature.
-            }.into();
+            }
+            .into();
         };
 
         let turbo_signature = turbo_fn.signature();

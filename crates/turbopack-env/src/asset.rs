@@ -37,7 +37,7 @@ impl Source for ProcessEnvAsset {}
 impl Asset for ProcessEnvAsset {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
-        AssetIdent::from_path(self.root.join(".env.js"))
+        AssetIdent::from_path(self.root.join(".env.js".to_string()))
     }
 
     #[turbo_tasks::function]
@@ -59,6 +59,6 @@ impl Asset for ProcessEnvAsset {
             writeln!(code, "env[{}] = {};", StringifyJs(name), val)?;
         }
 
-        Ok(File::from(code.build()).into())
+        Ok(AssetContent::file(File::from(code.build()).into()))
     }
 }

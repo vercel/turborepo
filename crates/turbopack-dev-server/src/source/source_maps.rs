@@ -4,6 +4,7 @@ use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::AssetContent, introspect::Introspectable, source_map::GenerateSourceMap,
+    version::VersionedContentExt,
 };
 
 use super::{
@@ -11,7 +12,7 @@ use super::{
     route_tree::{BaseSegment, RouteTree, RouteType},
     wrapping_source::{ContentSourceProcessor, WrappedGetContentSourceContent},
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
-    ContentSourceDataVary, GetContentSourceContent, GetContentSourceContents, RewriteBuilder,
+    ContentSourceDataVary, GetContentSourceContent, RewriteBuilder,
 };
 
 /// SourceMapContentSource allows us to serve full source maps, and individual
@@ -42,7 +43,11 @@ impl SourceMapContentSource {
 impl ContentSource for SourceMapContentSource {
     #[turbo_tasks::function]
     fn get_routes(self: Vc<Self>) -> Vc<RouteTree> {
-        RouteTree::new_route(vec![BaseSegment::Dynamic], RouteType::Exact, self.into())
+        RouteTree::new_route(
+            vec![BaseSegment::Dynamic],
+            RouteType::Exact,
+            Vc::upcast(self),
+        )
     }
 }
 
@@ -78,7 +83,11 @@ impl GetContentSourceContent for SourceMapContentSource {
             _ => None,
         };
 
-        let sources = self.await?.asset_source.get_routes().get(pathname);
+        let sources = self
+            .await?
+            .asset_source
+            .get_routes()
+            .get(pathname.to_string());
         let processor = Vc::upcast(SourceMapContentProcessor::new(id));
         let sources = sources
             .await?
@@ -138,7 +147,7 @@ impl ContentSourceProcessor for SourceMapContentProcessor {
         };
 
         let sm = if let Some(id) = &self.id {
-            gen.by_section(id).await?
+            gen.by_section(id.clone()).await?
         } else {
             gen.generate_source_map().await?
         };
@@ -148,7 +157,11 @@ impl ContentSourceProcessor for SourceMapContentProcessor {
         };
 
         let content = sm.to_rope().await?;
-        let asset = AssetContent::from(File::from(content).with_content_type(APPLICATION_JSON));
-        Ok(ContentSourceContent::static_content(asset.into()))
+        let asset = AssetContent::file(
+            File::from(content)
+                .with_content_type(APPLICATION_JSON)
+                .into(),
+        );
+        Ok(ContentSourceContent::static_content(asset.versioned()))
     }
 }

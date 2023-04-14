@@ -12,7 +12,7 @@ register!();
 #[tokio::test]
 async fn read_ref() {
     run! {
-        let counter = Vc::cell(Counter { value: Mutex::new((0, None))});
+        let counter = Counter::cell(Counter { value: Mutex::new((0, None))});
 
         let counter_value = counter.get_value();
 

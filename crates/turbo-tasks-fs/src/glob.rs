@@ -2,7 +2,7 @@ use std::mem::take;
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use turbo_tasks::trace::TraceRawVcs;
+use turbo_tasks::{trace::TraceRawVcs, Vc};
 
 #[derive(PartialEq, Eq, Debug, Clone, TraceRawVcs, Serialize, Deserialize)]
 enum GlobPart {
@@ -356,7 +356,7 @@ impl TryFrom<&str> for Glob {
 impl Glob {
     #[turbo_tasks::function]
     pub fn new(glob: String) -> Result<Vc<Self>> {
-        Ok(Self::cell(Glob::try_from(glob)?))
+        Ok(Self::cell(Glob::try_from(glob.as_str())?))
     }
 }
 

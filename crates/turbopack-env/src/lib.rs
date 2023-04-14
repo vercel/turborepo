@@ -11,6 +11,8 @@
 
 #![feature(async_closure)]
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 mod asset;
 pub mod dotenv;
@@ -22,7 +24,6 @@ pub use asset::ProcessEnvAsset;
 pub use embeddable::EmbeddableProcessEnv;
 pub use issue::ProcessEnvIssue;
 pub use try_env::TryDotenvProcessEnv;
-use turbo_tasks::Vc;
 
 pub fn register() {
     turbo_tasks::register();

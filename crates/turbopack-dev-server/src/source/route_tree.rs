@@ -107,7 +107,7 @@ pub struct RouteTree {
 
 impl RouteTree {
     /// Creates a route tree for a single route.
-    pub fn new_route(
+    pub fn new_route_ref(
         base_segments: Vec<BaseSegment>,
         route_type: RouteType,
         source: Vc<Box<dyn GetContentSourceContent>>,
@@ -168,7 +168,7 @@ impl RouteTree {
                         if value.len() == 1 {
                             value.into_iter().next().unwrap()
                         } else {
-                            Vc::cell(value).merge().resolve().await?
+                            Vc::<RouteTrees>::cell(value).merge().resolve().await?
                         },
                     ))
                 })
@@ -247,7 +247,7 @@ impl RouteTree {
         route_type: RouteType,
         source: Vc<Box<dyn GetContentSourceContent>>,
     ) -> Vc<Self> {
-        RouteTree::new_route(base_segments, route_type, source).cell()
+        RouteTree::new_route_ref(base_segments, route_type, source).cell()
     }
 
     /// Gets the [`GetContentSourceContent`]s for the given path.
@@ -291,10 +291,10 @@ impl RouteTree {
             if let Some(segment) = segments.next() {
                 let remainder = segments.remainder().unwrap_or("");
                 if let Some(tree) = static_segments.get(segment) {
-                    results.extend(tree.get(remainder).await?.iter().copied());
+                    results.extend(tree.get(remainder.to_string()).await?.iter().copied());
                 }
                 for tree in dynamic_segments.iter() {
-                    results.extend(tree.get(remainder).await?.iter().copied());
+                    results.extend(tree.get(remainder.to_string()).await?.iter().copied());
                 }
             } else {
                 results.extend(sources.iter().copied());

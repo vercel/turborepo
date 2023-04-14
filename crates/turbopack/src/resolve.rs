@@ -104,7 +104,7 @@ async fn base_resolve_options(
     let mut import_map = ImportMap::new(direct_mappings);
     if let Some(additional_import_map) = opt.import_map {
         let additional_import_map = additional_import_map.await?;
-        import_map.extend(&additional_import_map);
+        import_map.extend_ref(&additional_import_map);
     }
     let import_map = import_map.cell();
 

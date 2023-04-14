@@ -2,7 +2,7 @@ use std::io::Write;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, Upcast, Value, ValueToString, Vc};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::{
     asset::Asset,
@@ -12,13 +12,10 @@ use turbopack_core::{
     },
     code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
 };
 
-use super::{
-    context::EcmascriptChunkingContext, placeable::EcmascriptChunkPlaceable,
-    EcmascriptChunkPlaceable, EcmascriptChunkingContext,
-};
+use super::{EcmascriptChunkPlaceable, EcmascriptChunkingContext};
 use crate::{
     manifest::{chunk_asset::ManifestChunkAsset, loader_item::ManifestLoaderItem},
     utils::FormatIter,
@@ -107,7 +104,7 @@ impl EcmascriptChunkItemContent {
             write!(code, "(({{ {} }}) => (() => {{\n\n", args,)?;
         }
 
-        let source_map = this.source_map.map(|sm| Vc::upcast(sm));
+        let source_map = this.source_map.map(Vc::upcast);
         code.push_source(&this.inner_code, source_map);
         if this.options.this {
             code += "\n}.call(this) })";
@@ -148,58 +145,72 @@ pub trait EcmascriptChunkItem: ChunkItem {
     fn chunking_context(self: Vc<Self>) -> Vc<Box<dyn EcmascriptChunkingContext>>;
 }
 
-#[turbo_tasks::value_impl]
-impl EcmascriptChunkItem {
+pub trait EcmascriptChunkItemExt {
     /// Returns the module id of this chunk item.
-    #[turbo_tasks::function]
-    pub fn id(self: Vc<Self>) -> Vc<ModuleId> {
-        self.chunking_context().chunk_item_id(self)
+    fn id(self: Vc<Self>) -> Vc<ModuleId>;
+
+    /// Generates the module factory for this chunk item.
+    fn code(self: Vc<Self>, availability_info: Value<AvailabilityInfo>) -> Vc<Code>;
+}
+
+impl<T> EcmascriptChunkItemExt for T
+where
+    T: Upcast<Box<dyn EcmascriptChunkItem>>,
+{
+    /// Returns the module id of this chunk item.
+    fn id(self: Vc<Self>) -> Vc<ModuleId> {
+        let chunk_item = Vc::upcast(self);
+        chunk_item.chunking_context().chunk_item_id(chunk_item)
     }
 
     /// Generates the module factory for this chunk item.
-    #[turbo_tasks::function]
-    pub async fn code(
-        self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Result<Vc<Code>> {
-        Ok(
-            match self
-                .content_with_availability_info(availability_info)
-                .module_factory()
-                .resolve()
-                .await
-            {
-                Ok(factory) => factory,
-                Err(error) => {
-                    let id = self.id().to_string().await;
-                    let id = id.as_ref().map_or_else(|_| "unknown", |id| &**id);
-                    let error = error.context(format!(
-                        "An error occurred while generating the chunk item {}",
-                        id
-                    ));
-                    let error_message = format!("{}", PrettyPrintError(&error));
-                    let js_error_message = serde_json::to_string(&error_message)?;
-                    let issue = CodeGenerationIssue {
-                        severity: IssueSeverity::Error.cell(),
-                        path: self.asset_ident().path(),
-                        title: Vc::cell("Code generation for chunk item errored".to_string()),
-                        message: Vc::cell(error_message),
-                    }
-                    .cell();
-                    issue.emit();
-                    let mut code = CodeBuilder::default();
-                    code += "(() => {{\n\n";
-                    writeln!(code, "throw new Error({error});", error = &js_error_message)?;
-                    code += "\n}})";
-                    code.build().cell()
-                }
-            },
-        )
+    fn code(self: Vc<Self>, availability_info: Value<AvailabilityInfo>) -> Vc<Code> {
+        module_factory_with_code_generation_issue(Vc::upcast(self), availability_info)
     }
 }
 
+#[turbo_tasks::function]
+async fn module_factory_with_code_generation_issue(
+    chunk_item: Vc<Box<dyn EcmascriptChunkItem>>,
+    availability_info: Value<AvailabilityInfo>,
+) -> Result<Vc<Code>> {
+    Ok(
+        match chunk_item
+            .content_with_availability_info(availability_info)
+            .module_factory()
+            .resolve()
+            .await
+        {
+            Ok(factory) => factory,
+            Err(error) => {
+                let id = chunk_item.id().to_string().await;
+                let id = id.as_ref().map_or_else(|_| "unknown", |id| &**id);
+                let error = error.context(format!(
+                    "An error occurred while generating the chunk item {}",
+                    id
+                ));
+                let error_message = format!("{}", PrettyPrintError(&error));
+                let js_error_message = serde_json::to_string(&error_message)?;
+                CodeGenerationIssue {
+                    severity: IssueSeverity::Error.cell(),
+                    path: chunk_item.asset_ident().path(),
+                    title: Vc::cell("Code generation for chunk item errored".to_string()),
+                    message: Vc::cell(error_message),
+                }
+                .cell()
+                .emit();
+                let mut code = CodeBuilder::default();
+                code += "(() => {{\n\n";
+                writeln!(code, "throw new Error({error});", error = &js_error_message)?;
+                code += "\n}})";
+                code.build().cell()
+            }
+        },
+    )
+}
+
 #[async_trait::async_trait]
-impl FromChunkableModule for EcmascriptChunkItem {
+impl FromChunkableModule for Box<dyn EcmascriptChunkItem> {
     async fn from_asset(
         context: Vc<Box<dyn ChunkingContext>>,
         asset: Vc<Box<dyn Asset>>,

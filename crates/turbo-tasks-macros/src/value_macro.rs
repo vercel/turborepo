@@ -386,10 +386,10 @@ pub fn value_type_and_register(
     cell_mode: proc_macro2::TokenStream,
     new_value_type: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
-    let value_type_init_ident = get_value_type_init_ident(&ident);
-    let value_type_ident = get_value_type_ident(&ident);
-    let value_type_id_ident = get_value_type_id_ident(&ident);
-    let register_value_type_ident = get_register_value_type_ident(&ident);
+    let value_type_init_ident = get_value_type_init_ident(ident);
+    let value_type_ident = get_value_type_ident(ident);
+    let value_type_id_ident = get_value_type_id_ident(ident);
+    let register_value_type_ident = get_register_value_type_ident(ident);
 
     quote! {
         #[doc(hidden)]

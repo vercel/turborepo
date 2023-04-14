@@ -56,7 +56,7 @@ impl FileSystem for EmbeddedFileSystem {
             .iter()
             .map(|e| {
                 let entry_name = e.path().file_name().unwrap_or_default().to_string_lossy();
-                let entry_path = path.join(&entry_name);
+                let entry_path = path.join(entry_name.to_string());
 
                 (
                     entry_name.to_string(),

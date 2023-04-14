@@ -94,7 +94,7 @@ impl ModuleRuleCondition {
                 path.path.starts_with(&format!("{dir}/")) || path.path.contains(&format!("/{dir}/"))
             }
             ModuleRuleCondition::ResourcePathInExactDirectory(parent_path) => {
-                path.is_inside(parent_path)
+                path.is_inside_ref(parent_path)
             }
             ModuleRuleCondition::ReferenceType(condition_ty) => {
                 condition_ty.includes(reference_type)

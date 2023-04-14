@@ -12,7 +12,7 @@ register!();
 #[tokio::test]
 async fn trait_ref() {
     run! {
-        let counter = CounterVc::cell(Counter { value: Mutex::new((0, None))});
+        let counter = Counter::cell(Counter { value: Mutex::new((0, None))});
 
         let counter_value = counter.get_value();
 
@@ -68,10 +68,10 @@ trait CounterTrait {
 #[turbo_tasks::value_impl]
 impl CounterTrait for Counter {
     #[turbo_tasks::function]
-    async fn get_value(&self) -> Result<CounterValueVc> {
+    async fn get_value(&self) -> Result<Vc<CounterValue>> {
         let mut lock = self.value.lock().unwrap();
         lock.1 = Some(get_invalidator());
-        Ok(CounterValueVc::cell(lock.0))
+        Ok(Vc::cell(lock.0))
     }
 }
 

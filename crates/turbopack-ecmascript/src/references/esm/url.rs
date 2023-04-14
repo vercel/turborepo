@@ -7,7 +7,7 @@ use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingType, ChunkingTypeOption},
     environment::Rendering,
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity, IssueSource},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, IssueSource},
     reference::AssetReference,
     reference_type::UrlReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ResolveResult},
@@ -15,7 +15,7 @@ use turbopack_core::{
 
 use super::base::ReferencedAsset;
 use crate::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext},
+    chunk::{item::EcmascriptChunkItemExt, EcmascriptChunkPlaceable, EcmascriptChunkingContext},
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,

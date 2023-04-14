@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{TryJoinIterExt, Vc};
+use turbo_tasks::{ReadRef, TryJoinIterExt, Vc};
 use turbo_tasks_fs::{File, FileSystemPath};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
@@ -12,6 +12,14 @@ use turbopack_core::{
     version::{Version, VersionedContent},
 };
 
+// TODO(WEB-945) This should become a struct once we have a
+// `turbo_tasks::input` attribute macro/`Input` derive macro.
+type DevHtmlEntry = (
+    Vc<Box<dyn ChunkableModule>>,
+    Vc<Box<dyn ChunkingContext>>,
+    Option<Vc<EvaluatableAssets>>,
+);
+
 /// The HTML entry point of the dev server.
 ///
 /// Generates an HTML page that includes the ES and CSS chunks.
@@ -19,13 +27,7 @@ use turbopack_core::{
 #[derive(Clone)]
 pub struct DevHtmlAsset {
     path: Vc<FileSystemPath>,
-    // TODO(WEB-945) This should become a `Vec<DevHtmlEntry>` once we have a
-    // `turbo_tasks::input` attribute macro/`Input` derive macro.
-    entries: Vec<(
-        Vc<Box<dyn ChunkableModule>>,
-        Vc<Box<dyn ChunkingContext>>,
-        Option<Vc<EvaluatableAssets>>,
-    )>,
+    entries: Vec<DevHtmlEntry>,
     body: Option<String>,
 }
 
@@ -54,7 +56,7 @@ impl Asset for DevHtmlAsset {
         let mut references = Vec::new();
         for &chunk in &*self.chunks().await? {
             references.push(Vc::upcast(SingleAssetReference::new(
-                chunk.into(),
+                Vc::upcast(chunk),
                 dev_html_chunk_reference_description(),
             )));
         }
@@ -63,20 +65,13 @@ impl Asset for DevHtmlAsset {
 
     #[turbo_tasks::function]
     fn versioned_content(self: Vc<Self>) -> Vc<Box<dyn VersionedContent>> {
-        self.html_content().into()
+        Vc::upcast(self.html_content())
     }
 }
 
 impl DevHtmlAsset {
     /// Create a new dev HTML asset.
-    pub fn new(
-        path: Vc<FileSystemPath>,
-        entries: Vec<(
-            Vc<Box<dyn ChunkableModule>>,
-            Vc<Box<dyn ChunkingContext>>,
-            Option<Vc<EvaluatableAssets>>,
-        )>,
-    ) -> Vc<Self> {
+    pub fn new(path: Vc<FileSystemPath>, entries: Vec<DevHtmlEntry>) -> Vc<Self> {
         DevHtmlAsset {
             path,
             entries,
@@ -88,11 +83,7 @@ impl DevHtmlAsset {
     /// Create a new dev HTML asset.
     pub fn new_with_body(
         path: Vc<FileSystemPath>,
-        entries: Vec<(
-            Vc<Box<dyn ChunkableModule>>,
-            Vc<Box<dyn ChunkingContext>>,
-            Option<Vc<EvaluatableAssets>>,
-        )>,
+        entries: Vec<DevHtmlEntry>,
         body: String,
     ) -> Vc<Self> {
         DevHtmlAsset {
@@ -214,7 +205,9 @@ impl DevHtmlAssetContent {
             scripts.join("\n"),
         );
 
-        Ok(File::from(html).with_content_type(TEXT_HTML_UTF_8).into())
+        Ok(AssetContent::file(
+            File::from(html).with_content_type(TEXT_HTML_UTF_8).into(),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -233,7 +226,7 @@ impl VersionedContent for DevHtmlAssetContent {
 
     #[turbo_tasks::function]
     fn version(self: Vc<Self>) -> Vc<Box<dyn Version>> {
-        self.version().into()
+        Vc::upcast(self.version())
     }
 }
 

@@ -30,20 +30,21 @@ pub fn create_node_api_source(
     render_data: Vc<JsonValue>,
     debug: bool,
 ) -> Vc<Box<dyn ContentSource>> {
-    NodeApiContentSource {
-        cwd,
-        env,
-        base_segments,
-        route_type,
-        server_root,
-        pathname,
-        route_match,
-        entry,
-        render_data,
-        debug,
-    }
-    .cell()
-    .into()
+    Vc::upcast(
+        NodeApiContentSource {
+            cwd,
+            env,
+            base_segments,
+            route_type,
+            server_root,
+            pathname,
+            route_match,
+            entry,
+            render_data,
+            debug,
+        }
+        .cell(),
+    )
 }
 
 /// A content source that proxies API requests to one-off Node.js
@@ -82,7 +83,7 @@ impl ContentSource for NodeApiContentSource {
         Ok(RouteTree::new_route(
             this.base_segments.clone(),
             this.route_type.clone(),
-            self.into(),
+            Vc::upcast(self),
         ))
     }
 }
@@ -110,7 +111,7 @@ impl GetContentSourceContent for NodeApiContentSource {
         path: String,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
-        let Some(params) = &*self.route_match.params(path).await? else {
+        let Some(params) = &*self.route_match.params(path.clone()).await? else {
             return Err(anyhow!("Non matching path provided"));
         };
         let ContentSourceData {
@@ -129,7 +130,7 @@ impl GetContentSourceContent for NodeApiContentSource {
         Ok(ContentSourceContent::HttpProxy(render_proxy(
             self.cwd,
             self.env,
-            self.server_root.join(path),
+            self.server_root.join(path.clone()),
             entry.module,
             entry.runtime_entries,
             entry.chunking_context,
@@ -186,7 +187,7 @@ impl Introspectable for NodeApiContentSource {
             let entry = entry.await?;
             set.insert((
                 Vc::cell("module".to_string()),
-                IntrospectableAsset::new(entry.module.into()),
+                IntrospectableAsset::new(Vc::upcast(entry.module)),
             ));
             set.insert((
                 Vc::cell("intermediate asset".to_string()),

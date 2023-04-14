@@ -14,7 +14,7 @@ use swc_core::{
         visit::FoldWith,
     },
 };
-use turbo_tasks::trace::TraceRawVcs;
+use turbo_tasks::{trace::TraceRawVcs, ValueDefault, Vc};
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
@@ -42,14 +42,14 @@ pub struct EmotionTransformConfig {
 #[turbo_tasks::value_impl]
 impl EmotionTransformConfig {
     #[turbo_tasks::function]
-    pub fn default() -> Vc<Self> {
+    pub fn default_private() -> Vc<Self> {
         Self::cell(Default::default())
     }
 }
 
-impl Default for EmotionTransformConfig {
-    fn default() -> Vc<Self> {
-        Vc::<Self>::default()
+impl ValueDefault for EmotionTransformConfig {
+    fn value_default() -> Vc<Self> {
+        EmotionTransformConfig::default_private()
     }
 }
 

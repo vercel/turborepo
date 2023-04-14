@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{Upcast, Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
 use super::{options::ResolveOptions, parse::Request, ResolveResult};
@@ -26,49 +26,71 @@ pub trait ResolveOrigin {
     }
 }
 
-#[turbo_tasks::value_impl]
-impl ResolveOrigin {
-    // TODO it would be nice if these methods can be moved to the trait to allow
-    // overriding it, but currently this is not possible due to the way transitions
-    // work. Maybe transitions should be decorators on ResolveOrigin?
-
+// TODO it would be nice if these methods can be moved to the trait to allow
+// overriding it, but currently we explicitly disallow it due to the way
+// transitions work. Maybe transitions should be decorators on ResolveOrigin?
+pub trait ResolveOriginExt {
     /// Resolve to an asset from that origin. Custom resolve options can be
     /// passed. Otherwise provide `origin.resolve_options()` unmodified.
-    #[turbo_tasks::function]
-    pub async fn resolve_asset(
+    fn resolve_asset(
         self: Vc<Self>,
         request: Vc<Request>,
         options: Vc<ResolveOptions>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<Vc<ResolveResult>> {
-        if let Some(asset) = *self.get_inner_asset(request).await? {
-            return Ok(ResolveResult::asset(asset).cell());
-        }
-        Ok(self
-            .context()
-            .resolve_asset(self.origin_path(), request, options, reference_type))
-    }
+    ) -> Vc<ResolveResult>;
 
     /// Get the resolve options that apply for this origin.
-    #[turbo_tasks::function]
-    pub fn resolve_options(
+    fn resolve_options(self: Vc<Self>, reference_type: Value<ReferenceType>) -> Vc<ResolveOptions>;
+
+    /// Adds a transition that is used for resolved assets.
+    fn with_transition(self: Vc<Self>, transition: String) -> Vc<Box<dyn ResolveOrigin>>;
+}
+
+impl<T> ResolveOriginExt for T
+where
+    T: ResolveOrigin + Upcast<Box<dyn ResolveOrigin>>,
+{
+    fn resolve_asset(
         self: Vc<Self>,
+        request: Vc<Request>,
+        options: Vc<ResolveOptions>,
         reference_type: Value<ReferenceType>,
-    ) -> Vc<ResolveOptions> {
+    ) -> Vc<ResolveResult> {
+        resolve_asset(Vc::upcast(self), request, options, reference_type)
+    }
+
+    fn resolve_options(self: Vc<Self>, reference_type: Value<ReferenceType>) -> Vc<ResolveOptions> {
         self.context()
             .resolve_options(self.origin_path(), reference_type)
     }
 
-    /// Adds a transition that is used for resolved assets.
-    #[turbo_tasks::function]
-    pub fn with_transition(self: Vc<Self>, transition: String) -> Vc<Self> {
-        ResolveOriginWithTransition {
-            previous: self,
-            transition: transition.to_string(),
-        }
-        .cell()
-        .into()
+    fn with_transition(self: Vc<Self>, transition: String) -> Vc<Box<dyn ResolveOrigin>> {
+        Vc::upcast(
+            ResolveOriginWithTransition {
+                previous: Vc::upcast(self),
+                transition,
+            }
+            .cell(),
+        )
     }
+}
+
+#[turbo_tasks::function]
+async fn resolve_asset(
+    resolve_origin: Vc<Box<dyn ResolveOrigin>>,
+    request: Vc<Request>,
+    options: Vc<ResolveOptions>,
+    reference_type: Value<ReferenceType>,
+) -> Result<Vc<ResolveResult>> {
+    if let Some(asset) = *resolve_origin.get_inner_asset(request).await? {
+        return Ok(ResolveResult::asset(asset).cell());
+    }
+    Ok(resolve_origin.context().resolve_asset(
+        resolve_origin.origin_path(),
+        request,
+        options,
+        reference_type,
+    ))
 }
 
 /// A resolve origin for some path and context without additional modifications.
@@ -119,7 +141,9 @@ impl ResolveOrigin for ResolveOriginWithTransition {
 
     #[turbo_tasks::function]
     fn context(&self) -> Vc<Box<dyn AssetContext>> {
-        self.previous.context().with_transition(&self.transition)
+        self.previous
+            .context()
+            .with_transition(self.transition.clone())
     }
 
     #[turbo_tasks::function]

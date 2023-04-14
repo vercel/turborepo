@@ -1,12 +1,11 @@
 use std::ops::Deref;
 
 use auto_hash_map::AutoSet;
-use turbo_tasks::{debug::ValueDebugFormat, Vc};
 // This specific macro identifier is detected by turbo-tasks-build.
 use turbo_tasks_macros::primitive as __turbo_tasks_internal_primitive;
 
 use crate::{
-    RawVc, {self as turbo_tasks},
+    RawVc, Vc, {self as turbo_tasks},
 };
 
 __turbo_tasks_internal_primitive!(());

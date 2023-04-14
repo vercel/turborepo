@@ -1,7 +1,6 @@
 use anyhow::{bail, Context, Result};
 use indexmap::indexmap;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 use turbo_tasks::{Completion, Completions, TryJoinIterExt, Value, Vc};
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_fs::{
@@ -91,13 +90,14 @@ impl PostCssTransform {
 impl SourceTransform for PostCssTransform {
     #[turbo_tasks::function]
     fn transform(&self, source: Vc<Box<dyn Source>>) -> Vc<Box<dyn Source>> {
-        PostCssTransformedAsset {
-            evaluate_context: self.evaluate_context,
-            execution_context: self.execution_context,
-            source,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            PostCssTransformedAsset {
+                evaluate_context: self.evaluate_context,
+                execution_context: self.execution_context,
+                source,
+            }
+            .cell(),
+        )
     }
 }
 
@@ -141,20 +141,18 @@ async fn extra_configs(
     context: Vc<Box<dyn AssetContext>>,
     postcss_config_path: Vc<FileSystemPath>,
 ) -> Result<Vc<Completion>> {
-    let config_paths = [postcss_config_path.parent().join("tailwind.config.js")];
+    let config_paths = [postcss_config_path
+        .parent()
+        .join("tailwind.config.js".to_string())];
     let configs = config_paths
         .into_iter()
         .map(|path| async move {
             Ok(
                 matches!(&*path.get_type().await?, FileSystemEntryType::File).then(|| {
-                    any_content_changed(
-                        context
-                            .process(
-                                Vc::upcast(FileSource::new(path)),
-                                Value::new(ReferenceType::Internal(InnerAssets::empty())),
-                            )
-                            .into(),
-                    )
+                    any_content_changed(Vc::upcast(context.process(
+                        Vc::upcast(FileSource::new(path)),
+                        Value::new(ReferenceType::Internal(InnerAssets::empty())),
+                    )))
                 }),
             )
         })
@@ -164,7 +162,7 @@ async fn extra_configs(
         .flatten()
         .collect::<Vec<_>>();
 
-    Ok(Vc::cell(configs).completed())
+    Ok(Vc::<Completions>::cell(configs).completed())
 }
 
 #[turbo_tasks::function]
@@ -172,17 +170,15 @@ fn postcss_executor(
     context: Vc<Box<dyn AssetContext>>,
     postcss_config_path: Vc<FileSystemPath>,
 ) -> Vc<Box<dyn Module>> {
-    let config_asset = context
-        .process(
-            Vc::upcast(FileSource::new(postcss_config_path)),
-            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
-        )
-        .into();
+    let config_asset = Vc::upcast(context.process(
+        Vc::upcast(FileSource::new(postcss_config_path)),
+        Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+    ));
 
     context.process(
         Vc::upcast(VirtualSource::new(
-            postcss_config_path.join("transform.ts"),
-            AssetContent::File(embed_file("transforms/postcss.ts")).cell(),
+            postcss_config_path.join("transform.ts".to_string()),
+            AssetContent::File(embed_file("transforms/postcss.ts".to_string())).cell(),
         )),
         Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
@@ -232,7 +228,7 @@ impl PostCssTransformedAsset {
         let css_path = css_fs_path.path.as_str();
 
         let config_value = evaluate(
-            postcss_executor.into(),
+            Vc::upcast(postcss_executor),
             project_path,
             env,
             this.source.ident(),

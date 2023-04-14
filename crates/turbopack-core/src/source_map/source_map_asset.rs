@@ -37,7 +37,7 @@ impl Asset for SourceMapAsset {
         // NOTE(alexkirsz) We used to include the asset's version id in the path,
         // but this caused `all_assets_map` to be recomputed on every change.
         Ok(AssetIdent::from_path(
-            self.asset.ident().path().append(".map"),
+            self.asset.ident().path().append(".map".to_string()),
         ))
     }
 
@@ -54,7 +54,7 @@ impl Asset for SourceMapAsset {
             SourceMap::empty()
         };
         let sm = sm.to_rope().await?;
-        Ok(File::from(sm).into())
+        Ok(AssetContent::file(File::from(sm).into()))
     }
 }
 

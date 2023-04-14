@@ -7,9 +7,7 @@ use indexmap::{IndexMap, IndexSet};
 use turbo_tasks::{TryJoinIterExt, Value, Vc};
 use turbo_tasks_fs::FileSystemPathOption;
 use turbopack_core::chunk::optimize::optimize_by_common_parent;
-use turbopack_ecmascript::chunk::{
-    EcmascriptChunk, EcmascriptChunkPlaceables, EcmascriptChunkingContext, EcmascriptChunks,
-};
+use turbopack_ecmascript::chunk::{EcmascriptChunk, EcmascriptChunkingContext, EcmascriptChunks};
 
 #[turbo_tasks::function]
 pub async fn optimize_ecmascript_chunks(

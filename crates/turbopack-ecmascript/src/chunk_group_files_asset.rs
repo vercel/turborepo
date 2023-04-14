@@ -61,18 +61,19 @@ impl Asset for ChunkGroupFilesAsset {
 
     #[turbo_tasks::function]
     fn content(&self) -> Vc<AssetContent> {
-        AssetContent::from(File::from("// Chunking only content".to_string()))
+        AssetContent::file(File::from("// Chunking only content".to_string()).into())
     }
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<AssetReferences>> {
-        let mut references: Vec<Vc<Box<dyn AssetReference>>> =
-            vec![SingleAssetReference::new(self.module.into(), module_description()).into()];
+        let mut references: Vec<Vc<Box<dyn AssetReference>>> = vec![Vc::upcast(
+            SingleAssetReference::new(Vc::upcast(self.module), module_description()),
+        )];
 
         if let Some(runtime_entries) = self.runtime_entries {
             references.extend(runtime_entries.await?.iter().map(|&entry| {
                 let reference: Vc<Box<dyn AssetReference>> = Vc::upcast(SingleAssetReference::new(
-                    entry.into(),
+                    Vc::upcast(entry),
                     runtime_entry_description(),
                 ));
                 reference
@@ -110,13 +111,14 @@ impl EcmascriptChunkPlaceable for ChunkGroupFilesAsset {
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
         let this = self.await?;
-        Ok(ChunkGroupFilesChunkItem {
-            chunking_context,
-            client_root: this.client_root,
-            inner: self,
-        }
-        .cell()
-        .into())
+        Ok(Vc::upcast(
+            ChunkGroupFilesChunkItem {
+                chunking_context,
+                client_root: this.client_root,
+                inner: self,
+            }
+            .cell(),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -146,7 +148,7 @@ impl ChunkGroupFilesChunkItem {
                 module
                     .runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
-                    .with_entry(ecma.into()),
+                    .with_entry(Vc::upcast(ecma)),
             )
         } else {
             module
@@ -215,11 +217,11 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
                 .copied()
                 .map(|chunk| {
                     SingleAssetReference::new(
-                        chunk.into(),
+                        Vc::upcast(chunk),
                         chunk_group_chunk_reference_description(),
                     )
                 })
-                .map(Into::into)
+                .map(Vc::upcast)
                 .collect(),
         ))
     }
@@ -247,7 +249,7 @@ impl Introspectable for ChunkGroupFilesAsset {
         let mut children = IndexSet::new();
         children.insert((
             Vc::cell("inner asset".to_string()),
-            IntrospectableAsset::new(self.await?.module.into()),
+            IntrospectableAsset::new(Vc::upcast(self.await?.module)),
         ));
         Ok(Vc::cell(children))
     }

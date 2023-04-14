@@ -5,11 +5,12 @@ use turbo_tasks::{Value, Vc};
 use turbo_tasks_env::ProcessEnv;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    asset::{Asset, AssetsSet},
+    asset::Asset,
     introspect::{asset::IntrospectableAsset, Introspectable, IntrospectableChildren},
     issue::IssueContextExt,
     reference::AssetReference,
     resolve::PrimaryResolveResult,
+    version::VersionedContentExt,
 };
 use turbopack_dev_server::{
     html::DevHtmlAsset,
@@ -67,12 +68,13 @@ pub fn create_node_rendered_source(
     }
     .cell();
     Vc::upcast(ConditionalContentSource::new(
-        source.into(),
-        LazyInstantiatedContentSource {
-            get_source: Vc::upcast(source),
-        }
-        .cell()
-        .into(),
+        Vc::upcast(source),
+        Vc::upcast(
+            LazyInstantiatedContentSource {
+                get_source: Vc::upcast(source),
+            }
+            .cell(),
+        ),
     ))
 }
 
@@ -153,7 +155,7 @@ impl ContentSource for NodeRenderContentSource {
         Ok(RouteTree::new_route(
             this.base_segments.clone(),
             this.route_type.clone(),
-            self.into(),
+            Vc::upcast(self),
         ))
     }
 }
@@ -179,7 +181,7 @@ impl GetContentSourceContent for NodeRenderContentSource {
         path: String,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
-        let Some(params) = &*self.route_match.params(path).await? else {
+        let Some(params) = &*self.route_match.params(path.clone()).await? else {
             return Err(anyhow!(
                 "Non matching path ({}) provided for {}",
                 path,
@@ -201,7 +203,7 @@ impl GetContentSourceContent for NodeRenderContentSource {
         let result = render_static(
             self.cwd,
             self.env,
-            self.server_root.join(path),
+            self.server_root.join(path.clone()),
             entry.module,
             entry.runtime_entries,
             self.fallback_page,
@@ -232,7 +234,9 @@ impl GetContentSourceContent for NodeRenderContentSource {
                 content,
                 status_code,
                 headers,
-            } => ContentSourceContent::static_with_headers(content.into(), status_code, headers),
+            } => {
+                ContentSourceContent::static_with_headers(content.versioned(), status_code, headers)
+            }
             StaticResult::StreamedContent {
                 status,
                 headers,
@@ -283,7 +287,7 @@ impl Introspectable for NodeRenderContentSource {
             let entry = entry.await?;
             set.insert((
                 Vc::cell("module".to_string()),
-                IntrospectableAsset::new(entry.module.into()),
+                IntrospectableAsset::new(Vc::upcast(entry.module)),
             ));
             set.insert((
                 Vc::cell("intermediate asset".to_string()),

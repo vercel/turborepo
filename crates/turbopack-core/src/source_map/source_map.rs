@@ -16,7 +16,7 @@ pub trait GenerateSourceMap {
     fn generate_source_map(self: Vc<Self>) -> Vc<OptionSourceMap>;
 
     /// Returns an individual section of the larger source map, if found.
-    fn by_section(self: Vc<Self>, _section: &str) -> Vc<OptionSourceMap> {
+    fn by_section(&self, _section: String) -> Vc<OptionSourceMap> {
         Vc::cell(None)
     }
 }

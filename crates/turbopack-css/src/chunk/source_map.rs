@@ -34,7 +34,9 @@ impl OutputAsset for CssChunkSourceMapAsset {}
 impl Asset for CssChunkSourceMapAsset {
     #[turbo_tasks::function]
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
-        Ok(AssetIdent::from_path(self.chunk.path().append(".map")))
+        Ok(AssetIdent::from_path(
+            self.chunk.path().append(".map".to_string()),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -45,7 +47,7 @@ impl Asset for CssChunkSourceMapAsset {
             SourceMap::empty()
         };
         let sm = sm.to_rope().await?;
-        Ok(File::from(sm).into())
+        Ok(AssetContent::file(File::from(sm).into()))
     }
 }
 
@@ -68,7 +70,9 @@ impl CssChunkSourceMapAssetReference {
 impl AssetReference for CssChunkSourceMapAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Result<Vc<ResolveResult>> {
-        let source_maps = vec![CssChunkSourceMapAsset { chunk: self.chunk }.cell().into()];
+        let source_maps = vec![Vc::upcast(
+            CssChunkSourceMapAsset { chunk: self.chunk }.cell(),
+        )];
         Ok(ResolveResult::assets_with_references(source_maps, vec![]).cell())
     }
 }

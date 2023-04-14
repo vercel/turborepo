@@ -5,13 +5,11 @@ use futures::{prelude::*, Stream};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::Instrument;
-use turbo_tasks::{
-    CollectiblesSource, IntoTraitRef, Nothing, ReadRef, State, TraitRef, TransientInstance, Vc,
-};
+use turbo_tasks::{unit, IntoTraitRef, ReadRef, State, TraitRef, TransientInstance, Vc};
 use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack_core::{
     error::PrettyPrintError,
-    issue::{Issue, IssueSeverity, OptionIssueProcessingPathItems, PlainIssue},
+    issue::{Issue, IssueContextExt, IssueSeverity, OptionIssueProcessingPathItems, PlainIssue},
     server_fs::ServerFileSystem,
     version::{NotFoundVersion, PartialUpdate, TotalUpdate, Update, Version, VersionedContent},
 };
@@ -20,8 +18,8 @@ use crate::source::{resolve::ResolveSourceRequestResult, ProxyResult};
 
 type GetContentFn = Box<dyn Fn() -> Vc<ResolveSourceRequestResult> + Send + Sync>;
 
-async fn peek_issues<T: CollectiblesSource + Copy>(source: T) -> Result<Vec<ReadRef<PlainIssue>>> {
-    let captured = Issue::peek_issues_with_path(source).await?.await?;
+async fn peek_issues<T>(source: Vc<T>) -> Result<Vec<ReadRef<PlainIssue>>> {
+    let captured = source.peek_issues_with_path().await?.await?;
 
     captured.get_plain_issues().await
 }
@@ -49,19 +47,19 @@ async fn get_update_stream_item(
         Ok(content) => content,
         Err(e) => {
             plain_issues.push(
-                Vc::upcast(
-                    FatalStreamIssue {
-                        resource: resource.to_string(),
-                        description: Vc::cell(format!("{}", PrettyPrintError(&e))),
-                    }
-                    .cell(),
-                )
+                FatalStreamIssue {
+                    resource: resource.to_string(),
+                    description: Vc::cell(format!("{}", PrettyPrintError(&e))),
+                }
+                .cell()
                 .into_plain(OptionIssueProcessingPathItems::none())
                 .await?,
             );
 
             let update = Update::Total(TotalUpdate {
-                to: Vc::upcast(NotFoundVersion::new()).into_trait_ref().await?,
+                to: Vc::upcast::<Box<dyn Version>>(NotFoundVersion::new())
+                    .into_trait_ref()
+                    .await?,
             })
             .cell();
             return Ok(UpdateStreamItem::Found {
@@ -117,7 +115,9 @@ async fn get_update_stream_item(
 
             Ok(UpdateStreamItem::Found {
                 update: Update::Total(TotalUpdate {
-                    to: Vc::upcast(proxy_result).into_trait_ref().await?,
+                    to: Vc::upcast::<Box<dyn Version>>(proxy_result)
+                        .into_trait_ref()
+                        .await?,
                 })
                 .cell()
                 .await?,
@@ -132,7 +132,9 @@ async fn get_update_stream_item(
                 // TODO add special instructions for removed assets to handled it in a better
                 // way
                 Update::Total(TotalUpdate {
-                    to: Vc::upcast(NotFoundVersion::new()).into_trait_ref().await?,
+                    to: Vc::upcast::<Box<dyn Version>>(NotFoundVersion::new())
+                        .into_trait_ref()
+                        .await?,
                 })
                 .cell()
             } else {
@@ -154,7 +156,7 @@ async fn compute_update_stream(
     from: Vc<VersionState>,
     get_content: TransientInstance<GetContentFn>,
     sender: TransientInstance<Sender<Result<ReadRef<UpdateStreamItem>>>>,
-) -> Result<Vc<Nothing>> {
+) -> Result<Vc<()>> {
     let item = get_update_stream_item(resource, from, get_content)
         .strongly_consistent()
         .await;
@@ -162,13 +164,13 @@ async fn compute_update_stream(
     // Send update. Ignore channel closed error.
     let _ = sender.send(item).await;
 
-    Ok(Nothing::new())
+    Ok(unit())
 }
 
 #[turbo_tasks::value]
 struct VersionState {
     #[turbo_tasks(trace_ignore)]
-    version: State<TraitRef<Vc<Box<dyn Version>>>>,
+    version: State<TraitRef<Box<dyn Version>>>,
 }
 
 #[turbo_tasks::value_impl]
@@ -182,13 +184,13 @@ impl VersionState {
 }
 
 impl VersionState {
-    async fn new(version: TraitRef<Vc<Box<dyn Version>>>) -> Result<Vc<Self>> {
+    async fn new(version: TraitRef<Box<dyn Version>>) -> Result<Vc<Self>> {
         Ok(Self::cell(VersionState {
             version: State::new(version),
         }))
     }
 
-    async fn set(&self, new_version: TraitRef<Vc<Box<dyn Version>>>) -> Result<()> {
+    async fn set(self: Vc<Self>, new_version: TraitRef<Box<dyn Version>>) -> Result<()> {
         let this = self.await?;
         this.version.set(new_version);
         Ok(())
@@ -214,13 +216,13 @@ impl UpdateStream {
             ResolveSourceRequestResult::Static(static_content, _) => {
                 static_content.await?.content.version()
             }
-            ResolveSourceRequestResult::HttpProxy(proxy_result) => proxy_result.into(),
-            _ => NotFoundVersion::new().into(),
+            ResolveSourceRequestResult::HttpProxy(proxy_result) => Vc::upcast(proxy_result),
+            _ => Vc::upcast(NotFoundVersion::new()),
         };
         let version_state = VersionState::new(version.into_trait_ref().await?).await?;
 
         let _ = compute_update_stream(
-            &resource,
+            resource,
             version_state,
             get_content,
             TransientInstance::new(sx),
@@ -314,7 +316,7 @@ impl Issue for FatalStreamIssue {
 
     #[turbo_tasks::function]
     fn context(&self) -> Vc<FileSystemPath> {
-        ServerFileSystem::new().root().join(&self.resource)
+        ServerFileSystem::new().root().join(self.resource.clone())
     }
 
     #[turbo_tasks::function]

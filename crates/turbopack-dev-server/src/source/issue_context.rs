@@ -11,7 +11,6 @@ use super::{
     ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary, ContentSources,
     GetContentSourceContent,
 };
-use crate::source::route_tree::MapGetContentSourceContent;
 
 #[turbo_tasks::value]
 pub struct IssueContextContentSource {
@@ -30,7 +29,7 @@ impl IssueContextContentSource {
     ) -> Vc<Self> {
         IssueContextContentSource {
             context: Some(context),
-            description: description.to_string(),
+            description,
             source,
         }
         .cell()
@@ -40,7 +39,7 @@ impl IssueContextContentSource {
     pub fn new_description(description: String, source: Vc<Box<dyn ContentSource>>) -> Vc<Self> {
         IssueContextContentSource {
             context: None,
-            description: description.to_string(),
+            description,
             source,
         }
         .cell()
@@ -57,11 +56,9 @@ impl ContentSource for IssueContextContentSource {
             .get_routes()
             .issue_context(this.context, &this.description)
             .await?;
-        Ok(routes.map_routes(
-            IssueContextContentSourceMapper { source: self }
-                .cell()
-                .into(),
-        ))
+        Ok(routes.map_routes(Vc::upcast(
+            IssueContextContentSourceMapper { source: self }.cell(),
+        )))
     }
 
     #[turbo_tasks::function]
@@ -82,12 +79,13 @@ impl MapGetContentSourceContent for IssueContextContentSourceMapper {
         &self,
         get_content: Vc<Box<dyn GetContentSourceContent>>,
     ) -> Vc<Box<dyn GetContentSourceContent>> {
-        IssueContextGetContentSourceContent {
-            get_content,
-            source: self.source,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            IssueContextGetContentSourceContent {
+                get_content,
+                source: self.source,
+            }
+            .cell(),
+        )
     }
 }
 

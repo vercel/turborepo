@@ -15,13 +15,15 @@ use turbopack_core::{
     reference::AssetReference,
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{
-        origin::ResolveOrigin, parse::Request, ModulePart, PrimaryResolveResult, ResolveResult,
+        origin::{ResolveOrigin, ResolveOriginExt},
+        parse::Request,
+        ModulePart, PrimaryResolveResult, ResolveResult,
     },
 };
 
 use crate::{
     analyzer::imports::ImportAnnotations,
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext},
+    chunk::{item::EcmascriptChunkItemExt, EcmascriptChunkPlaceable, EcmascriptChunkingContext},
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
@@ -80,7 +82,8 @@ impl ReferencedAsset {
                 }
                 PrimaryResolveResult::Asset(asset) => {
                     if let Some(placeable) =
-                        Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(asset).await?
+                        Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(*asset)
+                            .await?
                     {
                         return Ok(ReferencedAsset::cell(ReferencedAsset::Some(placeable)));
                     }
@@ -107,7 +110,7 @@ impl EsmAssetReference {
     fn get_origin(&self) -> Vc<Box<dyn ResolveOrigin>> {
         let mut origin = self.origin;
         if let Some(transition) = self.annotations.transition() {
-            origin = origin.with_transition(transition);
+            origin = origin.with_transition(transition.to_string());
         }
         origin
     }
@@ -205,7 +208,7 @@ impl CodeGenerateable for EsmAssetReference {
 
         // Insert code that throws immediately at time of import if a request is
         // unresolvable
-        if resolved.is_unresolveable() {
+        if resolved.is_unresolveable_ref() {
             let this = &*self.await?;
             let request = request_to_string(this.request).await?.to_string();
             visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {

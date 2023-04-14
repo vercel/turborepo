@@ -6,15 +6,16 @@ use futures::{
 };
 use parking_lot::Mutex;
 use turbo_tasks::{
-    duration_span, mark_finished, util::SharedError, Nothing, RawVc, ValueToString, Vc,
+    duration_span, mark_finished, unit, util::SharedError, RawVc, ValueToString, Vc,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnv;
-use turbo_tasks_fs::{File, FileContent, FileSystemPath};
+use turbo_tasks_fs::{File, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkingContext, EvaluatableAsset, EvaluatableAssets},
     error::PrettyPrintError,
+    issue::IssueExt,
 };
 use turbopack_dev_server::{
     html::DevHtmlAsset,
@@ -272,11 +273,11 @@ async fn render_stream_internal(
     data: Vc<RenderData>,
     sender: Vc<RenderStreamSender>,
     debug: bool,
-) -> Result<Vc<Nothing>> {
+) -> Result<Vc<()>> {
     mark_finished();
     let Ok(sender) = sender.await else {
         // Impossible to handle the error in a good way.
-        return Ok(Nothing::new());
+        return Ok(unit());
     };
 
     let stream = generator! {
@@ -323,7 +324,7 @@ async fn render_stream_internal(
             } => {
                 drop(guard);
                 yield RenderItem::Response(StaticResult::content(
-                    FileContent::Content(File::from(body)).into(),
+                    AssetContent::file(File::from(body).into()),
                     status_code,
                     Vc::cell(headers),
                 ));
@@ -388,12 +389,12 @@ async fn render_stream_internal(
     pin_mut!(stream);
     while let Some(value) = stream.next().await {
         if sender.send(value).await.is_err() {
-            return Ok(Nothing::new());
+            return Ok(unit());
         }
         if sender.flush().await.is_err() {
-            return Ok(Nothing::new());
+            return Ok(unit());
         }
     }
 
-    Ok(Nothing::new())
+    Ok(unit())
 }

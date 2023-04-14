@@ -142,9 +142,5 @@ async fn errors_on_404() {
 }
 
 fn get_issue_context() -> Vc<FileSystemPath> {
-    std::convert::Into::<Vc<Box<dyn FileSystem>>>::into(DiskFileSystem::new(
-        "root".to_owned(),
-        "/".to_owned(),
-    ))
-    .root()
+    DiskFileSystem::new("root".to_owned(), "/".to_owned()).root()
 }

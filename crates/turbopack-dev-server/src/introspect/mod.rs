@@ -2,10 +2,11 @@ use std::{borrow::Cow, collections::HashSet, fmt::Display};
 
 use anyhow::Result;
 use turbo_tasks::{registry, CellId, RawVc, ReadRef, TryJoinIterExt, Vc};
-use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
+use turbo_tasks_fs::{json::parse_json_with_source_context, File};
 use turbopack_core::{
     asset::AssetContent,
     introspect::{Introspectable, IntrospectableChildren},
+    version::VersionedContentExt,
 };
 use turbopack_ecmascript::utils::FormatIter;
 
@@ -75,9 +76,9 @@ impl<T: Display> Display for HtmlStringEscaped<T> {
 impl ContentSource for IntrospectionSource {
     #[turbo_tasks::function]
     fn get_routes(self: Vc<Self>) -> Vc<RouteTree> {
-        Vc::cell(vec![
-            RouteTree::new_route(Vec::new(), RouteType::Exact, self.into()),
-            RouteTree::new_route(Vec::new(), RouteType::CatchAll, self.into()),
+        Vc::<RouteTrees>::cell(vec![
+            RouteTree::new_route(Vec::new(), RouteType::Exact, Vc::upcast(self)),
+            RouteTree::new_route(Vec::new(), RouteType::CatchAll, Vc::upcast(self)),
         ])
         .merge()
     }
@@ -105,8 +106,8 @@ impl GetContentSourceContent for IntrospectionSource {
         }
         .resolve()
         .await?;
-        let raw_vc: RawVc = introspectable.into();
-        let internal_ty = if let Raw::TaskCell(_, CellId { type_id, index }) = raw_vc {
+        let raw_vc: RawVc = introspectable.node;
+        let internal_ty = if let RawVc::TaskCell(_, CellId { type_id, index }) = raw_vc {
             let value_ty = registry::get_value_type(type_id);
             format!("{}#{}", value_ty.name, index)
         } else {
@@ -176,12 +177,12 @@ impl GetContentSourceContent for IntrospectionSource {
             children = FormatIter(|| children.iter())
         );
         Ok(ContentSourceContent::static_content(
-            AssetContent::File(
-                FileContent::Content(File::from(html).with_content_type(mime::TEXT_HTML_UTF_8))
-                    .cell(),
+            AssetContent::file(
+                File::from(html)
+                    .with_content_type(mime::TEXT_HTML_UTF_8)
+                    .into(),
             )
-            .cell()
-            .into(),
+            .versioned(),
         ))
     }
 }

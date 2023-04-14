@@ -2,7 +2,6 @@
 //! However, we keep one test here as an integration test between the derive
 //! macro and the `#[turbo_tasks::function]` macro.
 
-use anyhow::Result;
 use turbo_tasks::{Completion, TaskInput, Vc};
 use turbo_tasks_testing::{register, run};
 

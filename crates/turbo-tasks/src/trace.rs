@@ -195,7 +195,7 @@ impl<T: TraceRawVcs + ?Sized> TraceRawVcs for Arc<T> {
     }
 }
 
-impl TraceRawVcs for Raw {
+impl TraceRawVcs for RawVc {
     fn trace_raw_vcs(&self, context: &mut TraceRawVcsContext) {
         context.list.push(*self);
     }

@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value as JsonValue};
+use serde_json::json;
 use turbo_tasks::{trace::TraceRawVcs, Completion, Value, Vc};
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
@@ -74,12 +74,13 @@ impl WebpackLoaders {
 impl SourceTransform for WebpackLoaders {
     #[turbo_tasks::function]
     fn transform(self: Vc<Self>, source: Vc<Box<dyn Source>>) -> Vc<Box<dyn Source>> {
-        WebpackLoadersProcessedAsset {
-            transform: self,
-            source,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            WebpackLoadersProcessedAsset {
+                transform: self,
+                source,
+            }
+            .cell(),
+        )
     }
 }
 
@@ -98,7 +99,7 @@ impl Asset for WebpackLoadersProcessedAsset {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         Ok(
             if let Some(rename_as) = self.transform.await?.rename_as.as_deref() {
-                self.source.ident().rename_as(rename_as)
+                self.source.ident().rename_as(rename_as.to_string())
             } else {
                 self.source.ident()
             },
@@ -121,7 +122,7 @@ struct ProcessWebpackLoadersResult {
 fn webpack_loaders_executor(context: Vc<Box<dyn AssetContext>>) -> Vc<Box<dyn Module>> {
     context.process(
         Vc::upcast(FileSource::new(embed_file_path(
-            "transforms/webpack-loaders.ts",
+            "transforms/webpack-loaders.ts".to_string(),
         ))),
         Value::new(ReferenceType::Internal(InnerAssets::empty())),
     )
@@ -158,7 +159,7 @@ impl WebpackLoadersProcessedAsset {
         let resource_path = resource_fs_path.path.as_str();
         let loaders = transform.loaders.await?;
         let config_value = evaluate(
-            webpack_loaders_executor.into(),
+            Vc::upcast(webpack_loaders_executor),
             project_path,
             env,
             this.source.ident(),

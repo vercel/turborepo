@@ -9,7 +9,7 @@ use turbopack_core::{
 
 use super::{base::ReferencedAsset, EsmAssetReference};
 use crate::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext},
+    chunk::{item::EcmascriptChunkItemExt, EcmascriptChunkPlaceable, EcmascriptChunkingContext},
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,

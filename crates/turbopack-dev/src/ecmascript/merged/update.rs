@@ -113,7 +113,7 @@ impl MergedModuleMap {
 
     /// Returns the hash of the module with the given id, or `None` if the
     /// module is not present in any of the versions.
-    fn get(&self, id: &ModuleId) -> Option<u64> {
+    fn get(&self, id: &ReadRef<ModuleId>) -> Option<u64> {
         for version in &self.versions {
             if let Some(hash) = version.entries_hashes.get(id) {
                 return Some(*hash);
@@ -135,7 +135,9 @@ pub(super) async fn update_ecmascript_merged_chunk(
     } else {
         // It's likely `from_version` is `NotFoundVersion`.
         return Ok(Update::Total(TotalUpdate {
-            to: Vc::upcast(to_merged_version).into_trait_ref().await?,
+            to: Vc::upcast::<Box<dyn Version>>(to_merged_version)
+                .into_trait_ref()
+                .await?,
         }));
     };
 
@@ -252,7 +254,9 @@ pub(super) async fn update_ecmascript_merged_chunk(
         Update::None
     } else {
         Update::Partial(PartialUpdate {
-            to: Vc::upcast(to_merged_version).into_trait_ref().await?,
+            to: Vc::upcast::<Box<dyn Version>>(to_merged_version)
+                .into_trait_ref()
+                .await?,
             instruction: Arc::new(serde_json::to_value(&merged_update)?),
         })
     };

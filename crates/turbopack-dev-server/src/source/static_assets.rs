@@ -5,13 +5,13 @@ use turbopack_core::{
     asset::Asset,
     file_source::FileSource,
     introspect::{asset::IntrospectableAsset, Introspectable, IntrospectableChildren},
+    version::VersionedContentExt,
 };
 
 use super::{
     route_tree::{BaseSegment, RouteTree, RouteTrees, RouteType},
     ContentSource, ContentSourceContent, ContentSourceData, GetContentSourceContent,
 };
-use crate::source::GetContentSourceContent;
 
 #[turbo_tasks::value(shared)]
 pub struct StaticAssetsContentSource {
@@ -66,7 +66,7 @@ async fn get_routes_from_directory(dir: Vc<FileSystemPath>) -> Result<Vc<RouteTr
             _ => None,
         })
         .collect();
-    Ok(Vc::cell(routes).merge())
+    Ok(Vc::<RouteTrees>::cell(routes).merge())
 }
 
 #[turbo_tasks::value_impl]
@@ -96,8 +96,8 @@ impl StaticAssetsContentSourceItem {
 impl GetContentSourceContent for StaticAssetsContentSourceItem {
     #[turbo_tasks::function]
     fn get(&self, _path: String, _data: Value<ContentSourceData>) -> Vc<ContentSourceContent> {
-        let content = Vc::upcast(FileSource::new(self.path)).content();
-        ContentSourceContent::static_content(content.into())
+        let content = Vc::upcast::<Box<dyn Asset>>(FileSource::new(self.path)).content();
+        ContentSourceContent::static_content(content.versioned())
     }
 }
 
@@ -121,7 +121,7 @@ impl Introspectable for StaticAssetsContentSource {
             .map(|(name, entry)| {
                 let child = match entry {
                     DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) => {
-                        IntrospectableAsset::new(FileSource::new(*path).as_asset())
+                        IntrospectableAsset::new(Vc::upcast(FileSource::new(*path)))
                     }
                     DirectoryEntry::Directory(path) => {
                         Vc::upcast(StaticAssetsContentSource::with_prefix(

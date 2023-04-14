@@ -69,7 +69,7 @@ impl Asset for EcmascriptBuildNodeChunk {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
         let ident = self.chunk.ident().with_modifier(modifier());
-        AssetIdent::from_path(self.chunking_context.chunk_path(ident, ".js"))
+        AssetIdent::from_path(self.chunking_context.chunk_path(ident, ".js".to_string()))
     }
 
     #[turbo_tasks::function]
@@ -84,10 +84,10 @@ impl Asset for EcmascriptBuildNodeChunk {
 
         if *this
             .chunking_context
-            .reference_chunk_source_maps(self.into())
+            .reference_chunk_source_maps(Vc::upcast(self))
             .await?
         {
-            references.push(Vc::upcast(SourceMapAssetReference::new(self.into())));
+            references.push(Vc::upcast(SourceMapAssetReference::new(Vc::upcast(self))));
         }
 
         Ok(Vc::cell(references))
@@ -137,10 +137,10 @@ impl Introspectable for EcmascriptBuildNodeChunk {
     #[turbo_tasks::function]
     async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
         let mut children = IndexSet::new();
-        if let Some(chunk) = Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.chunk).await?
-        {
-            children.insert((Vc::cell("chunk".to_string()), chunk));
-        }
+        let introspectable_chunk = Vc::upcast::<Box<dyn Introspectable>>(self.chunk)
+            .resolve()
+            .await?;
+        children.insert((Vc::cell("chunk".to_string()), introspectable_chunk));
         Ok(Vc::cell(children))
     }
 }

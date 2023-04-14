@@ -27,7 +27,7 @@ impl ContentSource for CombinedContentSource {
     #[turbo_tasks::function]
     fn get_routes(&self) -> Vc<RouteTree> {
         let all_routes = self.sources.iter().map(|s| s.get_routes()).collect();
-        Vc::cell(all_routes).merge()
+        Vc::<RouteTrees>::cell(all_routes).merge()
     }
 
     #[turbo_tasks::function]

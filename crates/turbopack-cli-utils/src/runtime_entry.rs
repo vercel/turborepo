@@ -3,7 +3,7 @@ use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::Asset,
-    chunk::{EvaluatableAsset, EvaluatableAssets},
+    chunk::{EvaluatableAsset, EvaluatableAssetExt, EvaluatableAssets},
     context::AssetContext,
     issue::{IssueSeverity, OptionIssueSource},
     resolve::{origin::PlainResolveOrigin, parse::Request},
@@ -28,9 +28,7 @@ impl RuntimeEntry {
         let (request, path) = match *self.await? {
             RuntimeEntry::Evaluatable(e) => return Ok(EvaluatableAssets::one(e)),
             RuntimeEntry::Source(source) => {
-                return Ok(EvaluatableAssets::one(EvaluatableAsset::from_source(
-                    source, context,
-                )));
+                return Ok(EvaluatableAssets::one(source.to_evaluatable(context)));
             }
             RuntimeEntry::Request(r, path) => (r, path),
         };
@@ -47,7 +45,7 @@ impl RuntimeEntry {
         let mut runtime_entries = Vec::with_capacity(assets.len());
         for asset in &assets {
             if let Some(entry) =
-                Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(asset).await?
+                Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(*asset).await?
             {
                 runtime_entries.push(entry);
             } else {

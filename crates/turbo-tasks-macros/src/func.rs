@@ -37,7 +37,7 @@ impl TurboFn {
             return None;
         }
 
-        if !original_signature.generics.where_clause.is_none() {
+        if original_signature.generics.where_clause.is_some() {
             original_signature
                 .generics
                 .where_clause

@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
-use turbo_tasks::trace::TraceRawVcs;
+use turbo_tasks::{trace::TraceRawVcs, Vc};
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
@@ -13,12 +13,6 @@ pub struct CompileTarget {
     /// <https://nodejs.org/api/os.html#endianness>
     pub endianness: Endianness,
     pub libc: Libc,
-}
-
-impl Default for CompileTarget {
-    fn default() -> Vc<Self> {
-        Vc::<Self>::current()
-    }
 }
 
 #[turbo_tasks::value_impl]

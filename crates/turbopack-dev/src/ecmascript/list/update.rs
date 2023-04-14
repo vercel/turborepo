@@ -6,7 +6,7 @@ use serde::Serialize;
 use turbo_tasks::{IntoTraitRef, TraitRef, Vc};
 use turbopack_core::version::{
     MergeableVersionedContent, PartialUpdate, TotalUpdate, Update, Version, VersionedContent,
-    VersionedContentMerger, VersionedContents,
+    VersionedContentMerger,
 };
 
 use super::{content::EcmascriptDevChunkListContent, version::EcmascriptDevChunkListVersion};
@@ -61,7 +61,9 @@ pub(super) async fn update_chunk_list(
     } else {
         // It's likely `from_version` is `NotFoundVersion`.
         return Ok(Update::Total(TotalUpdate {
-            to: Vc::upcast(to_version).into_trait_ref().await?,
+            to: Vc::upcast::<Box<dyn Version>>(to_version)
+                .into_trait_ref()
+                .await?,
         })
         .cell());
     };
@@ -91,7 +93,7 @@ pub(super) async fn update_chunk_list(
 
     for (chunk_path, chunk_content) in &content.chunks_contents {
         if let Some(mergeable) =
-            Vc::try_resolve_sidecast::<Box<dyn MergeableVersionedContent>>(chunk_content).await?
+            Vc::try_resolve_sidecast::<Box<dyn MergeableVersionedContent>>(*chunk_content).await?
         {
             let merger = mergeable.get_merger().resolve().await?;
             by_merger.entry(merger).or_default().push(*chunk_content);
@@ -145,7 +147,9 @@ pub(super) async fn update_chunk_list(
                 // the update.
                 Update::Total(_) => {
                     return Ok(Update::Total(TotalUpdate {
-                        to: Vc::upcast(to_version).into_trait_ref().await?,
+                        to: Vc::upcast::<Box<dyn Version>>(to_version)
+                            .into_trait_ref()
+                            .await?,
                     })
                     .cell());
                 }
@@ -162,7 +166,9 @@ pub(super) async fn update_chunk_list(
         Update::None
     } else {
         Update::Partial(PartialUpdate {
-            to: Vc::upcast(to_version).into_trait_ref().await?,
+            to: Vc::upcast::<Box<dyn Version>>(to_version)
+                .into_trait_ref()
+                .await?,
             instruction: Arc::new(serde_json::to_value(&update)?),
         })
     };

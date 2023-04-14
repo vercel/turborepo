@@ -7,10 +7,7 @@ use super::{
     ContentSource, ContentSourceData, ContentSourceDataVary, ContentSourceSideEffect,
     GetContentSourceContent,
 };
-use crate::source::{
-    route_tree::MapGetContentSourceContent, ContentSourceContent, ContentSourceSideEffect,
-    ContentSources,
-};
+use crate::source::{ContentSourceContent, ContentSources};
 
 /// Combines two [ContentSource]s like the [CombinedContentSource], but only
 /// allows to serve from the second source when the first source has
@@ -51,13 +48,12 @@ impl ContentSource for ConditionalContentSource {
     async fn get_routes(self: Vc<Self>) -> Result<Vc<RouteTree>> {
         let this = self.await?;
         Ok(if !*this.activated.get() {
-            this.activator.get_routes().map_routes(
-                ConditionalContentSourceMapper { source: self }
-                    .cell()
-                    .into(),
-            )
+            this.activator.get_routes().map_routes(Vc::upcast(
+                ConditionalContentSourceMapper { source: self }.cell(),
+            ))
         } else {
-            Vc::cell(vec![this.activator.get_routes(), this.action.get_routes()]).merge()
+            Vc::<RouteTrees>::cell(vec![this.activator.get_routes(), this.action.get_routes()])
+                .merge()
         })
     }
 
@@ -79,12 +75,13 @@ impl MapGetContentSourceContent for ConditionalContentSourceMapper {
         &self,
         get_content: Vc<Box<dyn GetContentSourceContent>>,
     ) -> Vc<Box<dyn GetContentSourceContent>> {
-        ActivateOnGetContentSource {
-            source: self.source,
-            get_content,
-        }
-        .cell()
-        .into()
+        Vc::upcast(
+            ActivateOnGetContentSource {
+                source: self.source,
+                get_content,
+            }
+            .cell(),
+        )
     }
 }
 
@@ -129,7 +126,7 @@ impl Introspectable for ConditionalContentSource {
         {
             Ok(activator.title())
         } else {
-            Ok(String::empty())
+            Ok(Vc::<String>::empty())
         }
     }
 
@@ -170,7 +167,7 @@ impl GetContentSourceContent for ActivateOnGetContentSource {
         path: String,
         data: Value<ContentSourceData>,
     ) -> Result<Vc<ContentSourceContent>> {
-        turbo_tasks::emit(Vc::upcast(self));
+        turbo_tasks::emit(Vc::upcast::<Box<dyn ContentSourceSideEffect>>(self));
         Ok(self.await?.get_content.get(path, data))
     }
 }

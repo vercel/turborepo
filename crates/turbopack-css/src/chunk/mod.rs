@@ -9,11 +9,11 @@ use indexmap::IndexSet;
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOption};
 use turbopack_core::{
-    asset::{Asset, AssetContent, Assets},
+    asset::{Asset, AssetContent},
     chunk::{
         availability_info::AvailabilityInfo, chunk_content, chunk_content_split, Chunk,
         ChunkContentResult, ChunkItem, ChunkableModule, ChunkingContext, Chunks,
-        FromChunkableModule, ModuleId, ModuleIds, OutputChunk, OutputChunkRuntimeInfo,
+        FromChunkableModule, ModuleId, OutputChunk, OutputChunkRuntimeInfo,
     },
     code_builder::{Code, CodeBuilder},
     ident::AssetIdent,
@@ -141,8 +141,7 @@ impl CssChunkContent {
         let mut body = CodeBuilder::default();
         let mut external_imports = IndexSet::new();
         for entry in this.main_entries.await?.iter() {
-            let entry_placeable = CssChunkPlaceable::cast_from(entry);
-            let entry_item = entry_placeable.as_chunk_item(this.context);
+            let entry_item = entry.as_chunk_item(this.context);
 
             // TODO(WEB-1261)
             for external_import in expand_imports(&mut body, entry_item).await? {
@@ -160,7 +159,7 @@ impl CssChunkContent {
 
         if *this
             .context
-            .reference_chunk_source_maps(this.chunk.into())
+            .reference_chunk_source_maps(Vc::upcast(this.chunk))
             .await?
             && code.has_source_map()
         {
@@ -179,7 +178,9 @@ impl CssChunkContent {
     #[turbo_tasks::function]
     async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         let code = self.code().await?;
-        Ok(File::from(code.source_code().clone()).into())
+        Ok(AssetContent::file(
+            File::from(code.source_code().clone()).into(),
+        ))
     }
 }
 
@@ -256,11 +257,11 @@ async fn css_chunk_content_single_entry(
 ) -> Result<Vc<CssChunkContentResult>> {
     let asset = Vc::upcast(entry);
     let res = if let Some(res) =
-        chunk_content::<Vc<Box<dyn CssChunkItem>>>(context, asset, None, availability_info).await?
+        chunk_content::<Box<dyn CssChunkItem>>(context, asset, None, availability_info).await?
     {
         res
     } else {
-        chunk_content_split::<Vc<Box<dyn CssChunkItem>>>(context, asset, None, availability_info)
+        chunk_content_split::<Box<dyn CssChunkItem>>(context, asset, None, availability_info)
             .await?
     };
 
@@ -378,7 +379,7 @@ impl Asset for CssChunk {
         };
 
         Ok(AssetIdent::from_path(
-            this.context.chunk_path(ident, ".css"),
+            this.context.chunk_path(ident, ".css".to_string()),
         ))
     }
 
@@ -402,7 +403,7 @@ impl Asset for CssChunk {
             for result in r.resolve_reference().await?.primary.iter() {
                 if let PrimaryResolveResult::Asset(asset) = result {
                     if let Some(embeddable) =
-                        Vc::try_resolve_sidecast::<Box<dyn CssEmbeddable>>(asset).await?
+                        Vc::try_resolve_sidecast::<Box<dyn CssEmbeddable>>(*asset).await?
                     {
                         let embed = embeddable.as_css_embed(this.context);
                         references.extend(embed.references().await?.iter());
@@ -418,7 +419,7 @@ impl Asset for CssChunk {
         }
         if *this
             .context
-            .reference_chunk_source_maps(self.into())
+            .reference_chunk_source_maps(Vc::upcast(self))
             .await?
         {
             references.push(Vc::upcast(CssChunkSourceMapAssetReference::new(self)));
@@ -492,12 +493,12 @@ pub trait CssChunkItem: ChunkItem {
     fn content(self: Vc<Self>) -> Vc<CssChunkItemContent>;
     fn chunking_context(self: Vc<Self>) -> Vc<Box<dyn ChunkingContext>>;
     fn id(self: Vc<Self>) -> Vc<ModuleId> {
-        CssChunkContext::of(self.chunking_context()).chunk_item_id(*self)
+        CssChunkContext::of(self.chunking_context()).chunk_item_id(self)
     }
 }
 
 #[async_trait::async_trait]
-impl FromChunkableModule for CssChunkItem {
+impl FromChunkableModule for Box<dyn CssChunkItem> {
     async fn from_asset(
         context: Vc<Box<dyn ChunkingContext>>,
         asset: Vc<Box<dyn Asset>>,
@@ -567,7 +568,10 @@ impl Introspectable for CssChunk {
             .await?
             .clone_value();
         for &entry in &*self.await?.main_entries.await? {
-            children.insert((entry_module_key(), IntrospectableAsset::new(entry.into())));
+            children.insert((
+                entry_module_key(),
+                IntrospectableAsset::new(Vc::upcast(entry)),
+            ));
         }
         Ok(Vc::cell(children))
     }

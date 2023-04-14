@@ -228,7 +228,7 @@ impl<'a> RegisterContext<'a> {
 
     fn process_impl(&mut self, impl_item: ItemImpl) -> Result<()> {
         if has_attribute(&impl_item.attrs, "value_impl") {
-            let struct_ident = get_type_ident(&*impl_item.self_ty).unwrap();
+            let struct_ident = get_type_ident(&impl_item.self_ty).unwrap();
 
             let trait_ident = impl_item
                 .trait_

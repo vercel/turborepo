@@ -11,7 +11,6 @@ use crate::{
 pub mod source_map;
 
 pub use source_map::SourceMapReference;
-use turbo_tasks::Vc;
 
 /// A reference to one or multiple [Asset]s or other special things.
 /// There are a bunch of optional traits that can influence how these references
@@ -48,7 +47,7 @@ pub struct SingleAssetReference {
 
 impl SingleAssetReference {
     /// Returns the asset that this reference resolves to.
-    pub fn asset(&self) -> Vc<Box<dyn Asset>> {
+    pub fn asset_ref(&self) -> Vc<Box<dyn Asset>> {
         self.asset
     }
 }

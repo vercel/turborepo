@@ -2,6 +2,7 @@ use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_env::{DotenvProcessEnv, EnvMap, ProcessEnv};
 use turbo_tasks_fs::FileSystemPath;
+use turbopack_core::issue::IssueExt;
 
 use crate::ProcessEnvIssue;
 

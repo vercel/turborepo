@@ -2269,7 +2269,7 @@ impl Task {
                             read_task_id,
                             &*turbo_tasks,
                         );
-                        Raw::TaskOutput(task).into_read::<AutoSet<RawVc>>()
+                        RawVc::TaskOutput(task).into_read::<AutoSet<RawVc>>()
                     })
                 })
             })
@@ -2296,7 +2296,7 @@ impl Task {
             reader,
             turbo_tasks,
         );
-        Vc::upcast(Raw::TaskOutput(task))
+        RawVc::TaskOutput(task).into()
     }
 
     pub(crate) fn emit_collectible(

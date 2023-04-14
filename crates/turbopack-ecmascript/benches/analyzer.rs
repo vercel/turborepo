@@ -10,7 +10,7 @@ use swc_core::{
         visit::VisitMutWith,
     },
 };
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::Value;
 use turbo_tasks_testing::VcStorage;
 use turbopack_core::{
     compile_time_info::CompileTimeInfo,

@@ -62,7 +62,7 @@ impl UrlAssetReference {
         for result in self.resolve_reference().await?.primary.iter() {
             if let PrimaryResolveResult::Asset(asset) = result {
                 if let Some(embeddable) =
-                    Vc::try_resolve_sidecast::<Box<dyn CssEmbeddable>>(asset).await?
+                    Vc::try_resolve_sidecast::<Box<dyn CssEmbeddable>>(*asset).await?
                 {
                     return Ok(ReferencedAsset::Some(
                         embeddable.as_css_embed(context).embeddable_asset(),
@@ -109,8 +109,10 @@ impl CodeGenerateable for UrlAssetReference {
         let this = self.await?;
         // TODO(WEB-662) This is not the correct way to get the current chunk path. It
         // currently works as all chunks are in the same directory.
-        let chunk_path =
-            context.chunk_path(AssetIdent::from_path(this.origin.origin_path()), ".css");
+        let chunk_path = context.chunk_path(
+            AssetIdent::from_path(this.origin.origin_path()),
+            ".css".to_string(),
+        );
         let context_path = chunk_path.parent().await?;
 
         let mut visitors = Vec::new();

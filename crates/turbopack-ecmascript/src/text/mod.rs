@@ -39,18 +39,18 @@ impl Asset for TextContentFileSource {
         self.source
             .ident()
             .with_modifier(modifier())
-            .rename_as("*.mjs")
+            .rename_as("*.mjs".to_string())
     }
 
     #[turbo_tasks::function]
     async fn content(&self) -> Result<Vc<AssetContent>> {
         let source = self.source.content().file_content();
         let FileContent::Content(content) = &*source.await? else {
-            return Ok(FileContent::NotFound.cell().into());
+            return Ok(AssetContent::file(FileContent::NotFound.cell()));
         };
         let text = content.content().to_str()?;
         let code = format!("export default {};", StringifyJs(&text));
         let content = FileContent::Content(code.into()).cell();
-        Ok(content.into())
+        Ok(AssetContent::file(content))
     }
 }

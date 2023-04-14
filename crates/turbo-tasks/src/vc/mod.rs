@@ -42,6 +42,7 @@ where
 {
     // TODO(alexkirsz) Should be private (or undocumented), but turbo-tasks-memory needs it to be
     // accessible.
+    #[doc(hidden)]
     pub node: RawVc,
     pub(crate) _t: PhantomData<T>,
 }
@@ -64,6 +65,7 @@ macro_rules! do_not_use_or_you_will_be_fired {
             $(
                 #[doc(hidden)]
                 #[allow(unused)]
+                #[allow(clippy::wrong_self_convention)]
                 #[deprecated = "This is not the method you are looking for."]
                 pub fn $name(self) {}
             )*
@@ -255,7 +257,7 @@ where
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(Vc {
-            node: Raw::deserialize(deserializer)?,
+            node: RawVc::deserialize(deserializer)?,
             _t: PhantomData,
         })
     }

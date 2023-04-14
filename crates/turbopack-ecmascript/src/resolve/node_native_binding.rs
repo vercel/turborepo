@@ -126,17 +126,14 @@ pub async fn resolve_node_pre_gyp_files(
                             "unknown"
                         },
                     );
-                    let resolved_file_vc = config_file_dir.join(
-                        format!(
-                            "{}/{}.node",
-                            native_binding_path, node_pre_gyp_config.binary.module_name
-                        )
-                        .as_str(),
-                    );
+                    let resolved_file_vc = config_file_dir.join(format!(
+                        "{}/{}.node",
+                        native_binding_path, node_pre_gyp_config.binary.module_name
+                    ));
                     for (_, entry) in config_file_dir
-                        .join(native_binding_path.as_ref())
+                        .join(native_binding_path.to_string())
                         .read_glob(
-                            Glob::new(format!("*.{}", compile_target.dylib_ext()).as_str()),
+                            Glob::new(format!("*.{}", compile_target.dylib_ext())),
                             false,
                         )
                         .await?
@@ -156,8 +153,8 @@ pub async fn resolve_node_pre_gyp_files(
                     .parent()
                     // TODO
                     // read the dependencies path from `bindings.gyp`
-                    .join("deps/lib")
-                    .read_glob(Glob::new("*".to_string().as_str()), false)
+                    .join("deps/lib".to_string())
+                    .read_glob(Glob::new("*".to_string()), false)
                     .await?
                     .results
                     .values()
@@ -178,7 +175,9 @@ pub async fn resolve_node_pre_gyp_files(
                 }
                 return Ok(ResolveResult::assets_with_references(
                     assets.into_iter().collect(),
-                    vec![AffectingResolvingAssetReference::new(config_file_path).into()],
+                    vec![Vc::upcast(AffectingResolvingAssetReference::new(
+                        config_file_path,
+                    ))],
                 )
                 .into());
             }
@@ -248,7 +247,7 @@ pub async fn resolve_node_gyp_build_files(
                         IndexSet::with_capacity(captured.len());
                     for found in captured.iter().skip(1).flatten() {
                         let name = found.as_str();
-                        let target_path = context.join("build").join("Release");
+                        let target_path = context.join("build/Release".to_string());
                         let resolved_prebuilt_file = resolve_raw(
                             target_path,
                             Pattern::new(Pattern::Constant(format!("{}.node", name))),
@@ -365,18 +364,17 @@ pub async fn resolve_node_bindings_files(
         .iter()
         .map(|try_dir| {
             Vc::upcast(FileSource::new(
-                root_context.join(&format!("{}/{}", try_dir, &file_name)),
+                root_context.join(format!("{}/{}", try_dir, &file_name)),
             ))
         })
         .collect();
 
     Ok(ResolveResult::assets_with_references(
         bindings_try,
-        vec![FileSourceReference::new(
-            FileSource::new(root_context).into(),
+        vec![Vc::upcast(FileSourceReference::new(
+            Vc::upcast(FileSource::new(root_context)),
             Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(file_name)]).into(),
-        )
-        .into()],
+        ))],
     )
     .into())
 }

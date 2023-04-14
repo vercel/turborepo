@@ -19,7 +19,8 @@ pub fn function(_args: TokenStream, input: TokenStream) -> TokenStream {
     let Some(turbo_fn) = TurboFn::new(sig, DefinitionContext::NakedFn) else {
         return quote! {
             // An error occurred while parsing the function signature.
-        }.into();
+        }
+        .into();
     };
 
     let ident = &sig.ident;
@@ -42,7 +43,6 @@ pub fn function(_args: TokenStream, input: TokenStream) -> TokenStream {
     let exposed_block = turbo_fn.static_block(&native_function_id_ident);
 
     quote! {
-        #[must_use]
         #(#attrs)*
         #vis #exposed_signature #exposed_block
 

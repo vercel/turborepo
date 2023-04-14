@@ -17,7 +17,7 @@ pub struct QueryMap(#[turbo_tasks(trace_ignore)] Option<IndexMap<String, String>
 impl QueryMap {
     #[turbo_tasks::function]
     pub fn none() -> Vc<Self> {
-        Self::cell(None)
+        Vc::cell(None)
     }
 }
 
@@ -675,15 +675,15 @@ pub async fn read_matches(
                 if until_end {
                     if handled.insert(str) {
                         if let Some(fs_path) = &*if force_in_context {
-                            context.try_join_inside(str).await?
+                            context.try_join_inside(str.to_string()).await?
                         } else {
-                            context.try_join(str).await?
+                            context.try_join(str.to_string()).await?
                         } {
                             let fs_path = fs_path.resolve().await?;
                             // This explicit deref of `context` is necessary
                             #[allow(clippy::explicit_auto_deref)]
                             let should_match =
-                                !force_in_context || fs_path.await?.is_inside(&*context.await?);
+                                !force_in_context || fs_path.await?.is_inside_ref(&*context.await?);
 
                             if should_match {
                                 let len = prefix.len();
@@ -720,9 +720,9 @@ pub async fn read_matches(
                     let subpath = &str[..=str.rfind('/').unwrap()];
                     if handled.insert(subpath) {
                         if let Some(fs_path) = &*if force_in_context {
-                            context.try_join_inside(subpath).await?
+                            context.try_join_inside(subpath.to_string()).await?
                         } else {
-                            context.try_join(subpath).await?
+                            context.try_join(subpath.to_string()).await?
                         } {
                             let fs_path = fs_path.resolve().await?;
                             let len = prefix.len();

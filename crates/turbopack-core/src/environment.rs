@@ -235,7 +235,7 @@ impl Environment {
                 ])
             }
             ExecutionEnvironment::EdgeWorker(_) | ExecutionEnvironment::Browser(_) => {
-                Strings::empty()
+                Vc::<Vec<String>>::empty()
             }
             ExecutionEnvironment::Custom(_) => todo!(),
         })
@@ -262,7 +262,7 @@ impl Environment {
             ExecutionEnvironment::NodeJsBuildTime(..) | ExecutionEnvironment::NodeJsLambda(_) => {
                 Vc::cell(vec!["node".to_string()])
             }
-            ExecutionEnvironment::Browser(_) => Strings::empty(),
+            ExecutionEnvironment::Browser(_) => Vc::<Vec<String>>::empty(),
             ExecutionEnvironment::EdgeWorker(_) => Vc::cell(vec!["edge-worker".to_string()]),
             ExecutionEnvironment::Custom(_) => todo!(),
         })
@@ -325,7 +325,7 @@ impl Default for NodeJsEnvironment {
     fn default() -> Self {
         NodeJsEnvironment {
             compile_target: CompileTarget::current(),
-            node_version: NodeJsVersion::default(),
+            node_version: NodeJsVersion::default().cell(),
             cwd: Vc::cell(None),
             server_addr: ServerAddr::empty(),
         }
@@ -368,8 +368,8 @@ pub enum NodeJsVersion {
 }
 
 impl Default for NodeJsVersion {
-    fn default() -> Vc<Self> {
-        NodeJsVersion::Static(Vc::cell(DEFAULT_NODEJS_VERSION.to_owned())).cell()
+    fn default() -> Self {
+        NodeJsVersion::Static(Vc::cell(DEFAULT_NODEJS_VERSION.to_owned()))
     }
 }
 
@@ -391,7 +391,7 @@ pub struct RuntimeVersions(#[turbo_tasks(trace_ignore)] pub Versions);
 
 #[turbo_tasks::function]
 pub async fn get_current_nodejs_version(env: Vc<Box<dyn ProcessEnv>>) -> Result<Vc<String>> {
-    let path_read = env.read("PATH").await?;
+    let path_read = env.read("PATH".to_string()).await?;
     let path = path_read.as_ref().context("env must have PATH")?;
     let mut cmd = Command::new("node");
     cmd.arg("--version");

@@ -16,7 +16,7 @@ use swc_core::{
 use turbo_tasks::{trace::TraceRawVcs, ValueToString, Vc};
 use turbopack_core::{
     asset::Asset,
-    issue::{analyze::AnalyzeIssue, IssueSeverity},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity},
 };
 
 use super::{base::ReferencedAsset, EsmAssetReference};
@@ -98,24 +98,22 @@ async fn expand_star_exports(
             .emit(),
             EcmascriptExports::CommonJs => {
                 has_dynamic_exports = true;
-                Vc::upcast(
-                    AnalyzeIssue {
-                        code: None,
-                        category: Vc::cell("analyze".to_string()),
-                        message: Vc::cell(format!(
-                            "export * used with module {} which is a CommonJS module with exports \
-                             only available at runtime\nList all export names manually (`export \
-                             {{ a, b, c }} from \"...\") or rewrite the module to ESM, to avoid \
-                             the additional runtime code.`",
-                            asset.ident().to_string().await?
-                        )),
-                        source_ident: asset.ident(),
-                        severity: IssueSeverity::Warning.into(),
-                        source: None,
-                        title: Vc::cell("unexpected export *".to_string()),
-                    }
-                    .cell(),
-                )
+                AnalyzeIssue {
+                    code: None,
+                    category: Vc::cell("analyze".to_string()),
+                    message: Vc::cell(format!(
+                        "export * used with module {} which is a CommonJS module with exports \
+                         only available at runtime\nList all export names manually (`export {{ a, \
+                         b, c }} from \"...\") or rewrite the module to ESM, to avoid the \
+                         additional runtime code.`",
+                        asset.ident().to_string().await?
+                    )),
+                    source_ident: asset.ident(),
+                    severity: IssueSeverity::Warning.into(),
+                    source: None,
+                    title: Vc::cell("unexpected export *".to_string()),
+                }
+                .cell()
                 .emit()
             }
             EcmascriptExports::DynamicNamespace => {
