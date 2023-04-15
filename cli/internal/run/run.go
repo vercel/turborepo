@@ -30,18 +30,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var _cmdLong = `
-Run tasks across projects in your monorepo.
-
-By default, turbo executes tasks in topological order (i.e.
-dependencies first) and then caches the results. Re-running commands for
-tasks already in the cache will skip re-execution and immediately move
-artifacts from the cache into the correct output folders (as if the task
-occurred again).
-
-Arguments passed after '--' will be passed through to the named tasks.
-`
-
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
 	base, err := helper.GetCmdBase(args)
@@ -73,16 +61,21 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
-	scope.OptsFromArgs(&opts.scopeOpts, args)
+	if err := scope.OptsFromArgs(&opts.scopeOpts, args); err != nil {
+		return nil, err
+	}
 
 	// Cache flags
 	opts.clientOpts.Timeout = args.RemoteCacheTimeout
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
+
+	// Run flags
 	opts.runOpts.LogPrefix = runPayload.LogPrefix
 	opts.runOpts.Summarize = runPayload.Summarize
 	opts.runOpts.ExperimentalSpaceID = runPayload.ExperimentalSpaceID
+	opts.runOpts.EnvMode = runPayload.EnvMode
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force
@@ -170,6 +163,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
 
+	isStructuredOutput := r.opts.runOpts.GraphDot || r.opts.runOpts.DryRunJSON
+
 	var pkgDepGraph *context.Context
 	if r.opts.runOpts.SinglePackage {
 		pkgDepGraph, err = context.SinglePackageGraph(r.base.RepoRoot, rootPackageJSON)
@@ -255,14 +250,18 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
+		turboJSON.GlobalPassthroughEnv,
+		r.opts.runOpts.EnvMode,
 		r.base.Logger,
+		r.base.UI,
+		isStructuredOutput,
 	)
 
 	if err != nil {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	if globalHash, err := fs.HashObject(getGlobalHashable(globalHashable)); err == nil {
+	if globalHash, err := calculateGlobalHashFromHashable(globalHashable); err == nil {
 		r.base.Logger.Debug("global hash", "value", globalHash)
 		g.GlobalHash = globalHash
 	} else {
@@ -355,6 +354,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		startAt,
 		r.base.UI,
 		r.base.RepoRoot,
+		rs.Opts.scopeOpts.PackageInferenceRoot,
 		r.base.TurboVersion,
 		r.base.APIClient,
 		rs.Opts.runOpts,
@@ -366,6 +366,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			globalHashable.globalCacheKey,
 			globalHashable.pipeline,
 		),
+		rs.Opts.SynthesizeCommand(rs.Targets),
 	)
 
 	// Dry Run
@@ -390,6 +391,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		engine,
 		taskHashTracker,
 		turboCache,
+		turboJSON,
 		packagesInScope,
 		r.base,
 		summary,

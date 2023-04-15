@@ -6,6 +6,7 @@
 /** @typedef {import('../types').ChunkPath} ChunkPath */
 /** @typedef {import('../types').ModuleId} ModuleId */
 /** @typedef {import('../types').GetFirstModuleChunk} GetFirstModuleChunk */
+/** @typedef {import('../types').ChunkList} ChunkList */
 
 /** @typedef {import('../types').Module} Module */
 /** @typedef {import('../types').SourceInfo} SourceInfo */
@@ -29,7 +30,6 @@
 /** @typedef {import('../types/protocol').EcmascriptModuleEntry} EcmascriptModuleEntry */
 
 /** @typedef {import('../types/runtime').ModuleEffect} ModuleEffect */
-/** @typedef {import('../types/runtime').DevRuntimeParams} DevRuntimeParams */
 
 /** @type {Object.<ModuleId, ModuleFactory>} */
 const moduleFactories = { __proto__: null };
@@ -167,6 +167,7 @@ function interopEsm(raw, ns, allowExportDefault) {
  */
 function esmImport(sourceModule, id, allowExportDefault) {
   const module = getOrInstantiateModuleFromParent(id, sourceModule);
+  if (module.error) throw module.error;
   const raw = module.exports;
   if (raw.__esModule) return raw;
   if (module.interopNamespace) return module.interopNamespace;
@@ -181,7 +182,9 @@ function esmImport(sourceModule, id, allowExportDefault) {
  * @returns {Exports}
  */
 function commonJsRequire(sourceModule, id) {
-  return getOrInstantiateModuleFromParent(id, sourceModule).exports;
+  const module = getOrInstantiateModuleFromParent(id, sourceModule);
+  if (module.error) throw module.error;
+  return module.exports;
 }
 
 function externalRequire(id, esm) {
@@ -277,6 +280,7 @@ function instantiateModule(id, source) {
   /** @type {Module} */
   const module = {
     exports: {},
+    error: undefined,
     loaded: false,
     id,
     parents: undefined,
@@ -303,21 +307,25 @@ function instantiateModule(id, source) {
   }
 
   runModuleExecutionHooks(module, () => {
-    moduleFactory.call(module.exports, {
-      e: module.exports,
-      r: commonJsRequire.bind(null, module),
-      x: externalRequire,
-      i: esmImport.bind(null, module),
-      s: esm.bind(null, module.exports),
-      j: cjs.bind(null, module.exports),
-      v: exportValue.bind(null, module),
-      m: module,
-      c: moduleCache,
-      l: loadChunk.bind(null, { type: SourceTypeParent, parentId: id }),
-      k: registerChunkList,
-      g: globalThis,
-      __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-    });
+    try {
+      moduleFactory.call(module.exports, {
+        e: module.exports,
+        r: commonJsRequire.bind(null, module),
+        x: externalRequire,
+        i: esmImport.bind(null, module),
+        s: esm.bind(null, module.exports),
+        j: cjs.bind(null, module.exports),
+        v: exportValue.bind(null, module),
+        m: module,
+        c: moduleCache,
+        l: loadChunk.bind(null, { type: SourceTypeParent, parentId: id }),
+        g: globalThis,
+        __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+      });
+    } catch (error) {
+      module.error = error;
+      throw error;
+    }
   });
 
   module.loaded = true;
@@ -469,17 +477,18 @@ function _eval({ code, url, map }) {
 }
 
 /**
- * @param {Map<ModuleId, EcmascriptModuleEntry>} added
+ * @param {Map<ModuleId, EcmascriptModuleEntry | undefined>} added
  * @param {Map<ModuleId, EcmascriptModuleEntry>} modified
- * @param {Record<ModuleId, EcmascriptModuleEntry>} code
  * @returns {{outdatedModules: Set<any>, newModuleFactories: Map<any, any>}}
  */
-function computeOutdatedModules(added, modified, code) {
+function computeOutdatedModules(added, modified) {
   const outdatedModules = new Set();
   const newModuleFactories = new Map();
 
   for (const [moduleId, entry] of added) {
-    newModuleFactories.set(moduleId, _eval(entry));
+    if (entry != null) {
+      newModuleFactories.set(moduleId, _eval(entry));
+    }
   }
 
   for (const [moduleId, entry] of modified) {
@@ -774,8 +783,7 @@ function applyEcmascriptMergedUpdate(chunkPath, update) {
     computeChangedModules(entries, chunks);
   const { outdatedModules, newModuleFactories } = computeOutdatedModules(
     added,
-    modified,
-    entries
+    modified
   );
   const outdatedSelfAcceptedModules =
     computeOutdatedSelfAcceptedModules(outdatedModules);
@@ -1168,6 +1176,10 @@ function disposeChunkList(chunkListPath) {
     }
   }
 
+  // We must also dispose of the chunk list's chunk itself to ensure it may
+  // be reloaded properly in the future.
+  BACKEND.unloadChunk(chunkListPath);
+
   return true;
 }
 
@@ -1232,39 +1244,30 @@ function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
 /**
  * Subscribes to chunk list updates from the update server and applies them.
  *
- * @param {ChunkPath} chunkListPath
- * @param {ChunkPath[]} chunkPaths
+ * @param {ChunkList} chunkList
  */
-function registerChunkList(chunkListPath, chunkPaths) {
+function registerChunkList(chunkList) {
   globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS.push([
-    chunkListPath,
-    handleApply.bind(null, chunkListPath),
+    chunkList.path,
+    handleApply.bind(null, chunkList.path),
   ]);
 
   // Adding chunks to chunk lists and vice versa.
-  const chunks = new Set(chunkPaths);
-  chunkListChunksMap.set(chunkListPath, chunks);
+  const chunks = new Set(chunkList.chunks);
+  chunkListChunksMap.set(chunkList.path, chunks);
   for (const chunkPath of chunks) {
     let chunkChunkLists = chunkChunkListsMap.get(chunkPath);
     if (!chunkChunkLists) {
-      chunkChunkLists = new Set([chunkListPath]);
+      chunkChunkLists = new Set([chunkList.path]);
       chunkChunkListsMap.set(chunkPath, chunkChunkLists);
     } else {
-      chunkChunkLists.add(chunkListPath);
+      chunkChunkLists.add(chunkList.path);
     }
   }
-}
 
-/**
- * Registers a chunk list and marks it as a runtime chunk list. This is called
- * by the runtime of evaluated chunks.
- *
- * @param {ChunkPath} chunkListPath
- * @param {ChunkPath[]} chunkPaths
- */
-function registerChunkListAndMarkAsRuntime(chunkListPath, chunkPaths) {
-  registerChunkList(chunkListPath, chunkPaths);
-  markChunkListAsRuntime(chunkListPath);
+  if (chunkList.source === "entry") {
+    markChunkListAsRuntime(chunkList.path);
+  }
 }
 
 /**
@@ -1282,13 +1285,6 @@ function markChunkListAsRuntime(chunkListPath) {
  * @param {ChunkRegistration} chunkRegistration
  */
 async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
-  if (runtimeParams != null) {
-    registerChunkListAndMarkAsRuntime(runtimeParams.chunkListPath, [
-      chunkPath,
-      ...runtimeParams.otherChunks,
-    ]);
-  }
-
   for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
     if (!moduleFactories[moduleId]) {
       moduleFactories[moduleId] = moduleFactory;
@@ -1302,8 +1298,15 @@ async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
 globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS =
   globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS || [];
 
-const chunksToRegister = globalThis.TURBOPACK;
-globalThis.TURBOPACK = {
-  push: registerChunk,
+const chunkListsToRegister = globalThis.TURBOPACK_CHUNK_LISTS || [];
+for (const chunkList of chunkListsToRegister) {
+  registerChunkList(chunkList);
+}
+globalThis.TURBOPACK_CHUNK_LISTS = {
+  push: (chunkList) => {
+    registerChunkList(chunkList);
+  },
 };
-chunksToRegister.forEach(registerChunk);
+
+globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS =
+  globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS || [];

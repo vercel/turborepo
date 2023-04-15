@@ -1,5 +1,17 @@
 package util
 
+// EnvMode specifies if we will be using strict env vars
+type EnvMode string
+
+const (
+	// Infer - infer environment variable constraints from turbo.json
+	Infer EnvMode = "Infer"
+	// Loose - environment variables are unconstrained
+	Loose EnvMode = "Loose"
+	// Strict - environment variables are limited
+	Strict EnvMode = "Strict"
+)
+
 // RunOpts holds the options that control the execution of a turbo run
 type RunOpts struct {
 	// Force execution to be serially one-at-a-time
@@ -7,6 +19,7 @@ type RunOpts struct {
 	// Whether to execute in parallel (defaults to false)
 	Parallel bool
 
+	EnvMode EnvMode
 	// The filename to write a perf profile.
 	Profile string
 	// If true, continue task executions even if a task fails.

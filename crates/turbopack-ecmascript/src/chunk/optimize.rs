@@ -8,13 +8,10 @@ use turbo_tasks::{TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::chunk::{
     optimize::{optimize_by_common_parent, ChunkOptimizer, ChunkOptimizerVc},
-    ChunkGroupVc, ChunkVc, ChunksVc,
+    ChunkVc, ChunksVc,
 };
 
-use super::{
-    runtime::EcmascriptChunkRuntime, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
-    EcmascriptChunkingContextVc,
-};
+use super::{EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptChunkingContextVc};
 
 #[turbo_tasks::value]
 pub struct EcmascriptChunkOptimizer(EcmascriptChunkingContextVc);
@@ -30,9 +27,9 @@ impl EcmascriptChunkOptimizerVc {
 #[turbo_tasks::value_impl]
 impl ChunkOptimizer for EcmascriptChunkOptimizer {
     #[turbo_tasks::function]
-    async fn optimize(&self, chunks: ChunksVc, chunk_group: ChunkGroupVc) -> Result<ChunksVc> {
+    async fn optimize(&self, chunks: ChunksVc) -> Result<ChunksVc> {
         optimize_by_common_parent(chunks, get_common_parent, |local, children| {
-            optimize_ecmascript(local, children, chunk_group)
+            optimize_ecmascript(local, children)
         })
         .await
     }
@@ -66,14 +63,10 @@ async fn merge_chunks(
         .iter()
         .flat_map(|e| e.iter().copied())
         .collect::<IndexSet<_>>();
-    let runtime = first
-        .runtime
-        .merge(chunks.iter().skip(1).map(|chunk| chunk.runtime).collect());
     Ok(EcmascriptChunkVc::new_normalized(
         first.context,
         EcmascriptChunkPlaceablesVc::cell(main_entries.into_iter().collect()),
         None,
-        runtime,
         Value::new(first.availability_info),
     ))
 }
@@ -380,11 +373,7 @@ async fn merge_by_size(
 
 /// Chunk optimization for ecmascript chunks.
 #[turbo_tasks::function]
-async fn optimize_ecmascript(
-    local: Option<ChunksVc>,
-    children: Vec<ChunksVc>,
-    chunk_group: ChunkGroupVc,
-) -> Result<ChunksVc> {
+async fn optimize_ecmascript(local: Option<ChunksVc>, children: Vec<ChunksVc>) -> Result<ChunksVc> {
     let mut chunks = Vec::<(EcmascriptChunkVc, Option<ChunksVc>)>::new();
     // TODO optimize
     let mut unoptimized_count = 0;
@@ -400,7 +389,6 @@ async fn optimize_ecmascript(
                 content.context,
                 content.main_entries,
                 content.omit_entries,
-                content.runtime.with_chunk_group(chunk_group),
                 Value::new(content.availability_info),
             )
         }

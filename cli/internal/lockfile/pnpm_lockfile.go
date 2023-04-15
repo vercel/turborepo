@@ -230,7 +230,9 @@ func (p *PnpmLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, 
 		if entry.Version != "" {
 			version = entry.Version
 		} else {
-			version = resolvedVersion
+			// If there isn't a version field in the entry then the version is
+			// encoded in the key and we can omit the name from the version.
+			version = p.extractVersion(resolvedVersion)
 		}
 		return Package{Key: resolvedVersion, Version: version, Found: true}, nil
 	}

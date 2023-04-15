@@ -1,9 +1,6 @@
 import { createConnection } from "node:net";
-
-import {
-  StackFrame,
-  parse as parseStackTrace,
-} from "../compiled/stacktrace-parser";
+import type { StackFrame } from "../compiled/stacktrace-parser";
+import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
 
 export type StructuredError = {
   name: string;
@@ -82,6 +79,12 @@ function createIpc<TIncoming, TOutgoing>(
         }
       }
     });
+  });
+  // When the socket is closed, this process is no longer needed.
+  // This might happen e. g. when parent process is killed or
+  // node.js pool is garbage collected.
+  socket.once("close", () => {
+    process.exit(0);
   });
 
   function send(message: any): Promise<void> {

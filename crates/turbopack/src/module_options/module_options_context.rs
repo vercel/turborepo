@@ -89,6 +89,42 @@ impl Default for TypescriptTransformOptionsVc {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EmotionLabelKind {
+    DevOnly,
+    Always,
+    Never,
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct OptionEmotionTransformConfig(Option<EmotionTransformConfigVc>);
+
+//[TODO]: need to support importmap, there are type mismatch between
+//[TODO]: next.config.js to swc's emotion options
+#[turbo_tasks::value(shared)]
+#[derive(Default, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct EmotionTransformConfig {
+    pub sourcemap: Option<bool>,
+    pub label_format: Option<String>,
+    pub auto_label: Option<EmotionLabelKind>,
+}
+
+#[turbo_tasks::value_impl]
+impl EmotionTransformConfigVc {
+    #[turbo_tasks::function]
+    pub fn default() -> Self {
+        Self::cell(Default::default())
+    }
+}
+
+impl Default for EmotionTransformConfigVc {
+    fn default() -> Self {
+        Self::default()
+    }
+}
+
 impl WebpackLoadersOptions {
     pub fn is_empty(&self) -> bool {
         self.extension_to_loaders.is_empty()
@@ -111,17 +147,61 @@ pub struct JsxTransformOptions {
     pub runtime: Option<String>,
 }
 
+#[turbo_tasks::value(transparent)]
+pub struct OptionStyledComponentsTransformConfig(Option<StyledComponentsTransformConfigVc>);
+
+#[turbo_tasks::value(shared)]
+#[derive(Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct StyledComponentsTransformConfig {
+    pub display_name: bool,
+    pub ssr: bool,
+    pub file_name: bool,
+    pub top_level_import_paths: Vec<String>,
+    pub meaningless_file_names: Vec<String>,
+    pub css_prop: bool,
+    pub namespace: Option<String>,
+}
+
+impl Default for StyledComponentsTransformConfig {
+    fn default() -> Self {
+        StyledComponentsTransformConfig {
+            display_name: true,
+            ssr: true,
+            file_name: true,
+            top_level_import_paths: vec![],
+            meaningless_file_names: vec!["index".to_string()],
+            css_prop: true,
+            namespace: None,
+        }
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl StyledComponentsTransformConfigVc {
+    #[turbo_tasks::function]
+    pub fn default() -> Self {
+        Self::cell(Default::default())
+    }
+}
+
+impl Default for StyledComponentsTransformConfigVc {
+    fn default() -> Self {
+        Self::default()
+    }
+}
+
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 pub struct ModuleOptionsContext {
     #[serde(default)]
     pub enable_jsx: Option<JsxTransformOptionsVc>,
     #[serde(default)]
-    pub enable_emotion: bool,
+    pub enable_emotion: Option<EmotionTransformConfigVc>,
     #[serde(default)]
     pub enable_react_refresh: bool,
     #[serde(default)]
-    pub enable_styled_components: bool,
+    pub enable_styled_components: Option<StyledComponentsTransformConfigVc>,
     #[serde(default)]
     pub enable_styled_jsx: bool,
     #[serde(default)]
@@ -136,6 +216,10 @@ pub struct ModuleOptionsContext {
     pub decorators: Option<DecoratorsOptionsVc>,
     #[serde(default)]
     pub enable_mdx: bool,
+    // [Note]: currently mdx, and mdx_rs have different configuration entrypoint from next.config.js,
+    // however we might want to unify them in the future.
+    #[serde(default)]
+    pub enable_mdx_rs: bool,
     #[serde(default)]
     pub preset_env_versions: Option<EnvironmentVc>,
     #[serde(default)]

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Masterminds/semver"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -56,7 +57,7 @@ var nodejsPnpm6 = PackageManager{
 		return true, nil
 	},
 
-	UnmarshalLockfile: func(contents []byte) (lockfile.Lockfile, error) {
+	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
 		return lockfile.DecodePnpmLockfile(contents)
 	},
 }

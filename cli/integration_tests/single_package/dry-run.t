@@ -1,9 +1,9 @@
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/setup.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
 
 Check
-  $ ${TURBO} run build --dry --single-package
+  $ ${TURBO} run build --dry
   
   Global Hash Inputs
     Global Files               = 3
@@ -28,79 +28,3 @@ Check
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                        
     ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                     
-
-  $ ${TURBO} run build --dry=json --single-package
-  {
-    "id": "[a-zA-Z0-9]+", (re)
-    "version": "0",
-    "turboVersion": "[a-z0-9\.-]+", (re)
-    "globalHashSummary": {
-      "globalFileHashMap": {
-        "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-        "package.json": "185771929d92c3865ce06c863c07d357500d3364",
-        "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
-      },
-      "rootExternalDepsHash": "",
-      "globalCacheKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
-      "pipeline": {
-        "//#build": {
-          "outputs": [
-            "foo"
-          ],
-          "cache": true,
-          "dependsOn": [],
-          "inputs": [],
-          "outputMode": "full",
-          "env": [],
-          "persistent": false
-        }
-      }
-    },
-    "tasks": [
-      {
-        "task": "build",
-        "hash": "acd1f716a22c635b",
-        "cacheState": {
-          "local": false,
-          "remote": false
-        },
-        "command": "echo 'building' \u003e foo",
-        "commandArguments": [],
-        "outputs": [
-          "foo"
-        ],
-        "excludedOutputs": null,
-        "logFile": ".turbo/turbo-build.log",
-        "dependencies": [],
-        "dependents": [],
-        "resolvedTaskDefinition": {
-          "outputs": [
-            "foo"
-          ],
-          "cache": true,
-          "dependsOn": [],
-          "inputs": [],
-          "outputMode": "full",
-          "env": [],
-          "persistent": false
-        },
-        "expandedInputs": {
-          ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
-          "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "185771929d92c3865ce06c863c07d357500d3364",
-          "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
-          "turbo.json": "505752e75c10f9e7a0d2538cf8b6f0fcfb8980a0"
-        },
-        "expandedOutputs": [],
-        "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
-        "environmentVariables": {
-          "configured": [],
-          "inferred": [],
-          "global": [
-            "VERCEL_ANALYTICS_ID="
-          ]
-        },
-        "hashOfExternalDependencies": ""
-      }
-    ]
-  }

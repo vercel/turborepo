@@ -35,10 +35,16 @@ func Test_ReadTurboConfig(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
 	}
 
+	assert.EqualValues(t, []string{"AWS_SECRET_KEY"}, turboJSON.GlobalPassthroughEnv)
+
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
+			experimentalFields: util.SetFromStrings([]string{"PassthroughEnv"}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{"GITHUB_TOKEN"},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
 				EnvVarDependencies:      []string{},
@@ -48,8 +54,12 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"lint": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache", "DependsOn"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache", "DependsOn"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
 				EnvVarDependencies:      []string{"MY_VAR"},
@@ -59,8 +69,12 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"dev": {
-			definedFields: util.SetFromStrings([]string{"OutputMode", "ShouldCache"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"OutputMode", "ShouldCache"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{},
 				TopologicalDependencies: []string{},
 				EnvVarDependencies:      []string{},
@@ -70,8 +84,12 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"publish": {
-			definedFields: util.SetFromStrings([]string{"Inputs", "Outputs", "DependsOn", "ShouldCache"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"Inputs", "Outputs", "DependsOn", "ShouldCache"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 				TopologicalDependencies: []string{"build", "publish"},
 				EnvVarDependencies:      []string{},
@@ -120,8 +138,12 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields: util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
-			TaskDefinition: TaskDefinition{
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental: taskDefinitionExperiments{
+				PassthroughEnv: []string{},
+			},
+			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				TopologicalDependencies: []string{"build"},
 				EnvVarDependencies:      []string{},
@@ -157,7 +179,7 @@ func Test_ReadTurboConfig_InvalidEnvDeclarations2(t *testing.T) {
 func Test_ReadTurboConfig_InvalidGlobalEnvDeclarations(t *testing.T) {
 	testDir := getTestDir(t, "invalid-global-env")
 	_, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
-	expectedErrorMsg := "turbo.json: You specified \"$QUX\" in the \"env\" key. You should not prefix your environment variables with \"$\""
+	expectedErrorMsg := "turbo.json: You specified \"$QUX\" in the \"globalEnv\" key. You should not prefix your environment variables with \"$\""
 	assert.EqualErrorf(t, turboJSONReadErr, expectedErrorMsg, "Error should be: %v, got: %v", expectedErrorMsg, turboJSONReadErr)
 }
 
@@ -225,10 +247,11 @@ func validatePipeline(t *testing.T, actual Pipeline, expected Pipeline) {
 		if !ok {
 			t.Errorf("missing expected task: %v", taskName)
 		}
-		actualTaskDefinition := bookkeepingTaskDef.TaskDefinition
+		actualTaskDefinition := bookkeepingTaskDef.GetTaskDefinition()
 		assertIsSorted(t, actualTaskDefinition.Outputs.Inclusions, "Task output inclusions")
 		assertIsSorted(t, actualTaskDefinition.Outputs.Exclusions, "Task output exclusions")
 		assertIsSorted(t, actualTaskDefinition.EnvVarDependencies, "Task env vars")
+		assertIsSorted(t, actualTaskDefinition.PassthroughEnv, "Task env vars")
 		assertIsSorted(t, actualTaskDefinition.TopologicalDependencies, "Topo deps")
 		assertIsSorted(t, actualTaskDefinition.TaskDependencies, "Task deps")
 		assert.EqualValuesf(t, expectedTaskDefinition, bookkeepingTaskDef, "task definition mismatch for %v", taskName)

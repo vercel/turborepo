@@ -24,7 +24,7 @@ use turbo_tasks_fs::{
 };
 use turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{ChunkGroupVc, ChunkingContext, ChunkingContextVc},
+    chunk::{ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc},
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
@@ -32,8 +32,8 @@ use turbopack_core::{
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
+    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 use crate::{
@@ -104,7 +104,7 @@ pub async fn get_evaluate_pool(
     env: ProcessEnvVc,
     context: AssetContextVc,
     chunking_context: ChunkingContextVc,
-    runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    runtime_entries: Option<EvaluatableAssetsVc>,
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
@@ -168,23 +168,23 @@ pub async fn get_evaluate_pool(
             Value::new(Default::default()),
             context.compile_time_info(),
         )
-        .as_ecmascript_chunk_placeable();
+        .as_evaluatable_asset();
 
         let mut entries = vec![globals_module];
-        if let Some(other_entries) = runtime_entries {
-            for entry in &*other_entries.await? {
+        if let Some(runtime_entries) = runtime_entries {
+            for entry in &*runtime_entries.await? {
                 entries.push(*entry)
             }
-        };
+        }
 
-        Some(EcmascriptChunkPlaceablesVc::cell(entries))
+        EvaluatableAssetsVc::cell(entries)
     };
 
     let bootstrap = NodeJsBootstrapAsset {
         path,
-        chunk_group: ChunkGroupVc::from_chunk(
-            entry_module.as_evaluated_chunk(chunking_context, runtime_entries),
-        ),
+        chunking_context,
+        entry: entry_module.as_root_chunk(chunking_context),
+        evaluatable_assets: runtime_entries.with_entry(entry_module.into()),
     }
     .cell()
     .into();
@@ -244,7 +244,7 @@ pub fn evaluate(
     context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
     chunking_context: ChunkingContextVc,
-    runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    runtime_entries: Option<EvaluatableAssetsVc>,
     args: Vec<JsonValueVc>,
     additional_invalidation: CompletionVc,
     debug: bool,
@@ -308,7 +308,7 @@ async fn compute_evaluate_stream(
     context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
     chunking_context: ChunkingContextVc,
-    runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    runtime_entries: Option<EvaluatableAssetsVc>,
     args: Vec<JsonValueVc>,
     additional_invalidation: CompletionVc,
     debug: bool,

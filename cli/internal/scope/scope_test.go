@@ -510,8 +510,12 @@ func TestResolvePackages(t *testing.T) {
 			for _, path := range systemSeparatorChanged {
 				scm.contents[path] = nil
 			}
-			readLockfile := func(contents []byte) (lockfile.Lockfile, error) {
+			readLockfile := func(_rootPackageJSON *fs.PackageJSON, content []byte) (lockfile.Lockfile, error) {
 				return tc.prevLockfile, nil
+			}
+			pkgInferenceRoot, err := resolvePackageInferencePath(tc.inferPkgPath)
+			if err != nil {
+				t.Errorf("bad inference path (%v): %v", tc.inferPkgPath, err)
 			}
 			pkgs, isAllPackages, err := ResolvePackages(&Opts{
 				LegacyFilter: LegacyFilter{
@@ -522,7 +526,7 @@ func TestResolvePackages(t *testing.T) {
 				},
 				IgnorePatterns:       []string{tc.ignore},
 				GlobalDepPatterns:    tc.globalDeps,
-				PackageInferenceRoot: tc.inferPkgPath,
+				PackageInferenceRoot: pkgInferenceRoot,
 			}, root, scm, &context.Context{
 				WorkspaceInfos: workspaceInfos,
 				WorkspaceNames: packageNames,

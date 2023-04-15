@@ -27,22 +27,25 @@ GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: go-turbo$(EXT)
-	cargo build --manifest-path ../crates/turborepo/Cargo.toml
+# We do not set go-turbo as a dependency because the Rust build.rs
+# script will call it for us and copy over the binary
+turbo:
+	cargo build -p turbo
 
-turbo-prod: go-turbo$(EXT)
+turbo-prod:
 	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 	CGO_ENABLED=1 go build -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 
+
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
-	cp ../crates/turborepo-ffi/target/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
+	cp ../crates/turborepo-ffi/target/debug/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
 
 .PHONY: turborepo-ffi
 turborepo-ffi:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target
+	cd ../crates/turborepo-ffi && cargo build --target-dir ./target
 
 .PHONY: turborepo-ffi-copy-bindings
 turborepo-ffi-copy-bindings:
@@ -131,7 +134,7 @@ ifeq ($(UNAME), Windows)
 endif
 
 clean-go:
-	go clean -testcache ./...
+	go clean -testcache -r
 
 test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum turborepo-ffi-install
 	go test $(TURBO_RACE) -tags $(GO_TAG) ./...
@@ -341,12 +344,12 @@ integration-tests: $(CRAM_ENV)/bin/prysk $(CRAM_ENV)/bin/pytest turbo $(INTEGRAT
 integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
 	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
 
-# use target testbed-<some directory under integration_tests> to set up the testbed directory
-.PHONY=testbed-%
-testbed-%:
-	$(eval $@_TEST := $(@:testbed-%=%))
-	@echo "testbed setup $($@_TEST)"
+# use target fixture-<some directory under integration_tests/_fixtures> to set up the testbed directory
+.PHONY=fixture-%
+fixture-%:
+	$(eval $@_FIXTURE := $(@:fixture-%=%))
+	@echo "fixture setup $($@_FIXTURE)"
 	rm -rf testbed
 	mkdir -p testbed
-	./integration_tests/$($@_TEST)/setup.sh testbed
+	./integration_tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
 

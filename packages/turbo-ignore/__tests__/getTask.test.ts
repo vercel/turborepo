@@ -1,5 +1,5 @@
 import { getTask } from "../src/getTask";
-import { spyConsole, validateLogs } from "turbo-test-utils";
+import { spyConsole, validateLogs } from "@turbo/test-utils";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();

@@ -1,0 +1,121 @@
+---
+title: Turborepo 1.9
+date: 2023/04/11
+description: Turborepo 1.9 focuses on improving observability for your task runs to better understand your caching behavior.
+tag: "web development"
+ogImage: /images/blog/turbo-1-9-0/twitter-card.png
+---
+
+# Turborepo 1.9
+
+import { Authors } from '../../components/Authors'
+import Badge from '../../components/Badge'
+import Date from "../../components/blog/Date";
+
+<Date>
+  Monday, April 11th, 2023
+</Date>
+
+<Authors authors={[
+  'gregsoltis',
+  'nathanhammond',
+  'tomknickman',
+  'anthonyshew',
+  'jaredpalmer',
+  'mehulkar',
+  'chrisolszewski',
+  'nicholasyang',
+  'alexanderlyon'
+]} />
+
+Turborepo 1.9 focuses on improving observability for your task runs to better understand your caching behavior:
+
+- [**Run Summaries**](#view-and-compare-task-runs): Use the `--summarize` flag to generate a summary of your task to compare against previous runs.
+- [**Easier Starters**](#bring-your-own-starter): Use the `--example` flag with `npx create-turbo` to start from official Turborepo examples or custom repositories.
+- [**Strict Environments** <Badge>Experimental</Badge>](#strict-environments-experimental): Try enabling strict mode to restrict the environment variables your tasks have access to.
+
+Update today by running `npx @turbo/codemod migrate`.
+
+## View and compare task runs
+
+You can now produce a JSON summary of your task run using the `--summarize` flag:
+
+```bash
+turbo build --summarize
+```
+
+When this flag is enabled, Turborepo will generate a summary in `.turbo/runs/` that contains all the information necessary to understand how `turbo` interpreted your your task's configuration and code.
+
+```bash
+Tasks:    3 successful, 3 total
+Cached:   0 cached, 3 total
+Time:     1.707s
+Summary:  /Users/acme/projects/acme/.turbo/runs/2Nn3X6nWDhP9ag8BnmivWRxHpHC.json
+```
+
+You can then compare summaries using your favorite JSON diffing tool to understand why you got a cache hit or a cache miss.
+
+Learn more in the [docs](/repo/docs/reference/command-line-reference#--summarize) to learn more.
+
+## Bring your own starter
+
+`create-turbo` now supports starting a new project from any of the official [Turborepo examples](https://github.com/vercel/turbo/tree/main/examples). Get started with an example using a single command:
+
+```bash
+npx create-turbo@latest -e kitchen-sink
+```
+
+In your terminal UI, choose your preferred package manager and `create-turbo` will automatically convert the chosen example to your package manager of choice.
+
+Additionally, you can use `create-turbo` with custom repository sources, allowing you to re-use your own custom starter or another starter from around the community:
+
+```bash
+npx create-turbo -e https://github.com/your-org/turbo-starter
+```
+
+## Strict Environments <Badge>Experimental</Badge>
+
+You can now use the `--experimental-env-mode=strict` flag to restrict the environment variables your tasks have access to. Your tasks will only be aware of the variables you explicitly state, creating a safer caching environment.
+
+In `strict` mode, Turborepo will pass environment variables declared in:
+
+- `globalEnv` and `experimentalGlobalPassThroughEnv` to all tasks
+- `env` and `experimentalPassThroughEnv` for each task
+
+```json
+{
+  // Available to all tasks
+  "experimentalGlobalPassThroughEnv": ["GLOBAL_VAR_1"],
+
+  // Available to all tasks and invalidates caches
+  "globalEnv": ["GLOBAL_VAR_2"],
+
+  "pipeline": {
+    "build": {
+      // Only available to `build` tasks
+      "experimentalPassThroughEnv": ["VAR_1"],
+
+      // Available to `build` task and invalidates caches
+      "env": ["VAR_2"]
+    }
+  }
+}
+```
+
+In `strict` mode, this configuration will only expose four environment variables to your `build` tasks, helping you catch missing variables earlier in the development process.
+
+`--experimental-env-mode` also supports `loose` and `infer`.
+
+Learn more in the [docs](/repo/docs/reference/command-line-reference#--experimental-env-mode).
+
+## Community
+
+Since releasing [Turborepo v1.8](/blog/turbo-1-8-0) we've seen incredible adoption and community growth:
+
+- [20.5k+ GitHub Stars](https://github.com/vercel/turbo)
+- [1.1M weekly NPM downloads](https://www.npmjs.com/package/turbo)
+- 64 years of compute time saved through [Remote Caching on Vercel](https://vercel.com/docs/concepts/monorepos/remote-caching)
+
+Turborepo is the result of the combined work of all of its contributors, including our core team.
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice.

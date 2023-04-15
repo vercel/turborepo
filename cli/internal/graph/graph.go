@@ -52,7 +52,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 	taskGraph *dag.AcyclicGraph,
 	getArgs func(taskID string) []string,
 	logger hclog.Logger,
-	visitor func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error,
+	execFunc func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error,
 ) func(taskID string) error {
 	return func(taskID string) error {
 		packageName, taskName := util.GetPackageTaskFromId(taskID)
@@ -140,7 +140,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			summary.Dependents = descendents
 		}
 
-		return visitor(ctx, packageTask, summary)
+		return execFunc(ctx, packageTask, summary)
 	}
 }
 
