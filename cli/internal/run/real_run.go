@@ -33,11 +33,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/ui"
 )
 
-type taskLogContext struct {
-	outBuf *bytes.Buffer
-	errBuf *bytes.Buffer
-}
-
 // RealRun executes a set of tasks
 func RealRun(
 	ctx gocontext.Context,
@@ -109,8 +104,16 @@ func RealRun(
 		for i := 1; i < taskCount; i++ {
 			logContext := <-logChan
 
-			os.Stdout.Write(logContext.outBuf.Bytes())
-			os.Stderr.Write(logContext.errBuf.Bytes())
+			outBytes := logContext.outBuf.Bytes()
+			errBytes := logContext.errBuf.Bytes()
+
+			_, errOut := os.Stdout.Write(outBytes)
+			_, errErr := os.Stderr.Write(errBytes)
+
+			if errOut != nil || errErr != nil {
+				ec.ui.Error("Failed to output some of the logs.")
+			}
+
 			logWaitGroup.Done()
 		}
 	}
@@ -230,6 +233,11 @@ func RealRun(
 		}
 	}
 	return nil
+}
+
+type taskLogContext struct {
+	outBuf *bytes.Buffer
+	errBuf *bytes.Buffer
 }
 
 type execContext struct {
