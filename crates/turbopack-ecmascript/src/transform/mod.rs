@@ -1,7 +1,11 @@
 mod server_to_client_proxy;
 mod util;
 
-use std::{fmt::Debug, path::Path, sync::Arc};
+use std::{
+    fmt::Debug,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::Result;
 use swc_core::{
@@ -276,8 +280,10 @@ impl EcmascriptInputTransform {
                     options.meaningless_file_names = meaningless_file_names.clone();
                 }
 
+                //println!("{:#?}", options);
+
                 program.visit_mut_with(&mut styled_components::styled_components(
-                    FileName::Anon,
+                    FileName::Real(PathBuf::from(file_path.await?.path.clone())),
                     file_name_hash,
                     options,
                 ));

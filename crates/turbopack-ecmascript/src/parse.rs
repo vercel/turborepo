@@ -312,6 +312,12 @@ async fn parse_content(
 
             let eval_context = EvalContext::new(&parsed_program, unresolved_mark);
 
+            if fs_path.path == "pages/index.js" {
+                //println!("parsed_program {:#?}", parsed_program);
+                //print!(&parsed_program, &comments, &source_map, None, true);
+            }
+            //println!("trandformed {:#?}", fs_path.path);
+
             Ok::<ParseResult, anyhow::Error>(ParseResult::Ok {
                 program: parsed_program,
                 comments,
