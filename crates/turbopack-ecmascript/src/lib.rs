@@ -194,9 +194,7 @@ impl EcmascriptModuleAssetVc {
             this.source,
             self.as_resolve_origin(),
             Value::new(this.ty),
-            this.transforms,
             Value::new(this.options),
-            this.compile_time_info,
             None,
         ))
     }
@@ -238,7 +236,11 @@ impl EcmascriptModuleAssetVc {
     #[turbo_tasks::function]
     pub async fn parse(self) -> Result<ParseResultVc> {
         let this = self.await?;
-        Ok(parse(this.source, Value::new(this.ty), this.transforms))
+        Ok(parse(
+            this.source,
+            Value::new(this.ty),
+            this.options.transforms,
+        ))
     }
 }
 
@@ -381,7 +383,11 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         };
 
         let module = this.module.await?;
-        let parsed = parse(module.source, Value::new(module.ty), module.transforms);
+        let parsed = parse(
+            module.source,
+            Value::new(module.ty),
+            module.options.transforms,
+        );
 
         Ok(gen_content(
             this.context.into(),
