@@ -14,7 +14,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc,
+    EcmascriptModuleAssetVc, EcmascriptOptions,
 };
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
@@ -121,11 +121,16 @@ fn webpack_loaders_executor(context: AssetContextVc) -> AssetVc {
         SourceAssetVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: false,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
+        Value::new(EcmascriptOptions {
+            split_into_parts: false,
+            import_parts: false,
+            transforms: EcmascriptInputTransformsVc::cell(vec![
+                EcmascriptInputTransform::TypeScript {
+                    use_define_for_class_fields: false,
+                },
+            ]),
+            compile_time_info: context.compile_time_info(),
+        }),
     )
     .into()
 }

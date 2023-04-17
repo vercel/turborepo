@@ -23,7 +23,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptModuleAssetVc, EcmascriptOptions, InnerAssetsVc,
 };
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
@@ -151,9 +151,12 @@ async fn extra_configs(
                             SourceAssetVc::new(path).into(),
                             context,
                             Value::new(EcmascriptModuleAssetType::Ecmascript),
-                            EcmascriptInputTransformsVc::cell(vec![]),
-                            Value::new(Default::default()),
-                            context.compile_time_info(),
+                            Value::new(EcmascriptOptions {
+                                split_into_parts: false,
+                                import_parts: false,
+                                transforms: EcmascriptInputTransformsVc::cell(vec![]),
+                                compile_time_info: context.compile_time_info(),
+                            }),
                         )
                         .into(),
                     )
@@ -184,11 +187,16 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         .into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: false,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
+        Value::new(EcmascriptOptions {
+            split_into_parts: false,
+            import_parts: false,
+            transforms: EcmascriptInputTransformsVc::cell(vec![
+                EcmascriptInputTransform::TypeScript {
+                    use_define_for_class_fields: false,
+                },
+            ]),
+            compile_time_info: context.compile_time_info(),
+        }),
         InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
         }),
