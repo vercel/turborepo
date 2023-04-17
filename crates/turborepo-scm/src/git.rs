@@ -144,13 +144,9 @@ mod tests {
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
-    use turbopath::AbsoluteSystemPathBuf;
 
     use super::previous_content;
-    use crate::{
-        git::{changed_files, reanchor_path_from_git_root_to_turbo_root},
-        Error,
-    };
+    use crate::{git::changed_files, Error};
 
     fn setup_repository() -> Result<(TempDir, Repository), Error> {
         let repo_root = tempfile::tempdir()?;
@@ -206,6 +202,39 @@ mod tests {
             &tree,
             std::slice::from_ref(&&previous_commit),
         )?)
+    }
+
+    #[test]
+    fn test_shallow_clone() -> Result<(), Error> {
+        let tmp_dir = tempfile::tempdir()?;
+        let output = Command::new("git")
+            .args(&[
+                "clone",
+                "--depth",
+                "2",
+                "https://github.com/vercel/app-playground.git",
+                tmp_dir.path().to_str().unwrap(),
+            ])
+            .output()?;
+        assert!(output.status.success());
+
+        assert!(changed_files(
+            tmp_dir.path().to_owned(),
+            tmp_dir.path().to_owned(),
+            Some("HEAD~1"),
+            "HEAD",
+        )
+        .is_ok());
+
+        assert!(changed_files(
+            tmp_dir.path().to_owned(),
+            tmp_dir.path().to_owned(),
+            None,
+            "HEAD",
+        )
+        .is_ok());
+
+        Ok(())
     }
 
     #[test]
