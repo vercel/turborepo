@@ -952,6 +952,11 @@ impl VisitAstPath for Analyzer<'_> {
                             self.visit_expr(expr, ast_path);
                         },
                     );
+
+                    if let Some(key) = expr.as_ident() {
+                        let value = self.eval_context.eval(&n.right);
+                        self.add_value(key.to_id(), value);
+                    }
                 }
                 PatOrExpr::Pat(pat) => {
                     ast_path.with(
