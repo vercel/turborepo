@@ -45,7 +45,7 @@ impl EcmascriptChunkItem for DevManifestChunkItem {
             if let Some(chunk_data) = ChunkData::from_asset(&output_root, chunk).await? {
                 chunks_data.insert(chunk_data);
             } else {
-                // ignore all chunks that doesn't have chunk data
+                // ignore all chunks that don't have chunk data
                 // they need to be handled by some external mechanism
             };
         }

@@ -32,13 +32,13 @@ impl ChunkData {
         // The difference is a chunk is a file served by the dev server, and an
         // item is one of several that are contained in that chunk file.
         let Some(path) = output_root.get_path_to(&*path) else {
-        return Ok(None);
-    };
+            return Ok(None);
+        };
         let path = path.to_string();
 
         let Some(output_chunk) = OutputChunkVc::resolve_from(chunk).await? else {
-        return Ok(Some(ChunkData::Simple(path)));
-    };
+            return Ok(Some(ChunkData::Simple(path)));
+        };
 
         let runtime_info = output_chunk.runtime_info().await?;
 

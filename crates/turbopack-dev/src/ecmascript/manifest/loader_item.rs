@@ -101,9 +101,8 @@ impl EcmascriptChunkItem for DevManifestLoaderItem {
                 data
             } else {
                 bail!(
-                    "chunk path {} is not in output root {}",
-                    chunk.ident().path().to_string().await?,
-                    manifest.chunking_context.output_root().to_string().await?
+                    "chunk {} doesn't have chunk data",
+                    chunk.ident().to_string().await?,
                 );
             };
 

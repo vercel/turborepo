@@ -16,7 +16,6 @@ let BACKEND;
         return;
       }
 
-      const chunksToWaitFor = [];
       for (const otherChunkData of params.otherChunks) {
         const otherChunkPath =
           typeof otherChunkData === "string"
@@ -28,12 +27,12 @@ let BACKEND;
           const cssResolver = getOrCreateResolver(otherChunkPath);
           cssResolver.resolve();
         } else if (otherChunkPath.endsWith(".js")) {
-          // Chunk might started loading, so we want to avoid triggering another load.
+          // Chunk might have started loading, so we want to avoid triggering another load.
           getOrCreateResolver(otherChunkPath);
         }
       }
 
-      // This wait for chunks to be loaded, but also marks included items as available.
+      // This waits for chunks to be loaded, but also marks included items as available.
       await Promise.all(
         params.otherChunks.map((otherChunkData) =>
           loadChunk({ type: SourceTypeRuntime, chunkPath }, otherChunkData)

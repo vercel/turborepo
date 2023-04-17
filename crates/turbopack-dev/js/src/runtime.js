@@ -233,8 +233,11 @@ async function loadChunk(source, chunkData) {
     }
     const promise = loadChunkPath(source, chunkData.path);
     for (const included of includedList) {
-      if (!availableModules.has(included))
+      if (!availableModules.has(included)) {
+        // It might be better to race old and new promises, but it's rare that the new promise will be faster than a request started earlier.
+        // In production it's even more rare, because the chunk optimization tries to deduplicate modules anyway.
         availableModules.set(included, promise);
+      }
     }
     return promise;
   }

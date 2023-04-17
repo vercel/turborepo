@@ -117,6 +117,8 @@ pub trait Chunk: Asset {
     }
 }
 
+/// Aggregated information about a chunk content that can be used by the runtime
+/// code to optimize chunk loading.
 #[turbo_tasks::value(shared)]
 #[derive(Default)]
 pub struct OutputChunkRuntimeInfo {
