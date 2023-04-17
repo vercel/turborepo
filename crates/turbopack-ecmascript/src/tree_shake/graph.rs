@@ -364,7 +364,6 @@ impl DepGraph {
         /// Returns true if it should be called again
         fn add_to_group(
             graph: &InternedGraph<ItemId>,
-            cycles: &[Vec<u32>],
             data: &FxHashMap<ItemId, ItemData>,
             group: &mut Vec<ItemId>,
             start_ix: u32,
@@ -388,7 +387,7 @@ impl DepGraph {
 
                     group.push(dep_id);
 
-                    add_to_group(graph, cycles, data, group, dep_ix, global_done, group_done);
+                    add_to_group(graph, data, group, dep_ix, global_done, group_done);
                 }
             }
 
@@ -450,15 +449,8 @@ impl DepGraph {
             for (group, group_done) in &mut groups {
                 let start = group[0].clone();
                 let start_ix = self.g.get_node(&start);
-                changed |= add_to_group(
-                    &self.g,
-                    &cycles,
-                    data,
-                    group,
-                    start_ix,
-                    &mut global_done,
-                    group_done,
-                );
+                changed |=
+                    add_to_group(&self.g, data, group, start_ix, &mut global_done, group_done);
             }
 
             if !changed {
