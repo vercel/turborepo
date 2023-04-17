@@ -423,9 +423,8 @@ impl DepGraph {
         for id in self.g.graph_ix.iter() {
             let ix = self.g.get_node(id);
 
-            if cycles.iter().any(|v| v.contains(&ix)) {
+            if cycles.iter().any(|v| v.contains(&ix)) && global_done.insert(ix) {
                 groups.push((vec![id.clone()], FxHashSet::default()));
-                global_done.insert(ix);
             }
         }
 
