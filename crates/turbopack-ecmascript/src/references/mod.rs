@@ -20,7 +20,7 @@ use std::{
 
 use anyhow::Result;
 use constant_condition::{ConstantConditionValue, ConstantConditionVc};
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use regex::Regex;
@@ -101,7 +101,7 @@ use crate::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext, VarGraph},
         imports::{ImportedSymbol, Reexport},
-        parse_require_context, ModuleValue, RequireContextValue,
+        parse_require_context, ModuleValue, RequireContextValueVc,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{
@@ -113,7 +113,7 @@ use crate::{
             CjsRequireAssetReferenceVc, CjsRequireCacheAccess, CjsRequireResolveAssetReferenceVc,
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
-        require_context::{generate_require_context_map, CjsRequireContextAssetReferenceVc},
+        require_context::{RequireContextAssetReferenceVc, RequireContextMapVc},
     },
     resolve::try_to_severity,
     tree_shake::{part_of_module, split},
@@ -2046,24 +2046,17 @@ async fn require_context_visitor(
 
     let dir = origin.origin_path().parent().join(&options.dir);
 
-    let map = &*generate_require_context_map(
+    let map = RequireContextMapVc::generate(
         origin,
         dir,
         options.include_subdirs,
         RegexVc::cell(options.filter),
         OptionIssueSourceVc::none(),
         try_to_severity(in_try),
-    )
-    .await?;
-
-    let mut context_map = IndexMap::new();
-
-    for (key, entry) in map {
-        context_map.insert(key.clone(), entry.origin_relative.clone());
-    }
+    );
 
     Ok(JsValue::WellKnownFunction(
-        WellKnownFunctionKind::RequireContextRequire(RequireContextValue { map: context_map }),
+        WellKnownFunctionKind::RequireContextRequire(RequireContextValueVc::from_context_map(map)),
     ))
 }
 

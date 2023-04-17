@@ -8,7 +8,7 @@ use super::{
     imports::ImportAnnotations, ConstantValue, JsValue, ModuleValue, WellKnownFunctionKind,
     WellKnownObjectKind,
 };
-use crate::analyzer::RequireContextValue;
+use crate::analyzer::RequireContextValueVc;
 
 pub async fn replace_well_known(
     value: JsValue,
@@ -61,12 +61,14 @@ pub async fn well_known_function_call(
             "import() is not supported",
         ),
         WellKnownFunctionKind::Require => require(args),
-        WellKnownFunctionKind::RequireContextRequire(value) => require_context_require(value, args),
+        WellKnownFunctionKind::RequireContextRequire(value) => {
+            require_context_require(value, args).await?
+        }
         WellKnownFunctionKind::RequireContextRequireKeys(value) => {
-            require_context_require_keys(value, args)
+            require_context_require_keys(value, args).await?
         }
         WellKnownFunctionKind::RequireContextRequireResolve(value) => {
-            require_context_require_resolve(value, args)
+            require_context_require_resolve(value, args).await?
         }
         WellKnownFunctionKind::PathToFileUrl => path_to_file_url(args),
         WellKnownFunctionKind::OsArch => compile_time_info
@@ -335,47 +337,55 @@ pub fn require(args: Vec<JsValue>) -> JsValue {
 }
 
 /// (try to) statically evaluate `require.context(...)()`
-pub fn require_context_require(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
+pub async fn require_context_require(
+    val: RequireContextValueVc,
+    args: Vec<JsValue>,
+) -> Result<JsValue> {
     if args.is_empty() {
-        return JsValue::unknown(
+        return Ok(JsValue::unknown(
             JsValue::call(
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
                 args,
             ),
             "require.context(...).require() requires an argument specifying the module path",
-        );
+        ));
     }
 
     let Some(s) = args[0].as_str() else {
-        return JsValue::unknown(
+        return Ok(JsValue::unknown(
             JsValue::call(
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
                 args,
             ),
             "require.context(...).require() only accepts a single, constant string argument",
-        );
+        ));
     };
 
-    let Some(m) = val.map.get(s) else {
-       return JsValue::unknown(
+    let map = val.await?;
+    let Some(m) = map.get(s) else {
+       return Ok(JsValue::unknown(
            JsValue::call(
                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
                args,
            ),
            "require.context(...).require() can only be called with an argument that's in the context",
-       );
+       ));
     };
 
-    JsValue::Module(ModuleValue {
+    Ok(JsValue::Module(ModuleValue {
         module: m.to_string().into(),
         annotations: ImportAnnotations::default(),
-    })
+    }))
 }
 
 /// (try to) statically evaluate `require.context(...).keys()`
-pub fn require_context_require_keys(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
-    if args.is_empty() {
-        JsValue::array(val.map.keys().cloned().map(|k| k.into()).collect())
+pub async fn require_context_require_keys(
+    val: RequireContextValueVc,
+    args: Vec<JsValue>,
+) -> Result<JsValue> {
+    Ok(if args.is_empty() {
+        let map = val.await?;
+        JsValue::array(map.keys().cloned().map(|k| k.into()).collect())
     } else {
         JsValue::unknown(
             JsValue::call(
@@ -386,13 +396,16 @@ pub fn require_context_require_keys(val: RequireContextValue, args: Vec<JsValue>
             ),
             "require.context(...).keys() does not accept arguments",
         )
-    }
+    })
 }
 
 /// (try to) statically evaluate `require.context(...).resolve()`
-pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsValue>) -> JsValue {
+pub async fn require_context_require_resolve(
+    val: RequireContextValueVc,
+    args: Vec<JsValue>,
+) -> Result<JsValue> {
     if args.len() != 1 {
-        return JsValue::unknown(
+        return Ok(JsValue::unknown(
             JsValue::call(
                 box JsValue::WellKnownFunction(
                     WellKnownFunctionKind::RequireContextRequireResolve(val),
@@ -400,11 +413,11 @@ pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsVal
                 args,
             ),
             "require.context(...).resolve() only accepts a single, constant string argument",
-        );
+        ));
     }
 
     let Some(s) = args[0].as_str() else {
-        return JsValue::unknown(
+        return Ok(JsValue::unknown(
             JsValue::call(
                 box JsValue::WellKnownFunction(
                     WellKnownFunctionKind::RequireContextRequireResolve(val),
@@ -412,11 +425,12 @@ pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsVal
                 args,
             ),
             "require.context(...).resolve() only accepts a single, constant string argument",
-        );
+        ));
     };
 
-    let Some(m) = val.map.get(s) else {
-        return JsValue::unknown(
+    let map = val.await?;
+    let Some(m) = map.get(s) else {
+        return Ok(JsValue::unknown(
             JsValue::call(
                 box JsValue::WellKnownFunction(
                     WellKnownFunctionKind::RequireContextRequireResolve(val),
@@ -424,10 +438,10 @@ pub fn require_context_require_resolve(val: RequireContextValue, args: Vec<JsVal
                 args,
             ),
             "require.context(...).resolve() can only be called with an argument that's in the context",
-        );
+        ));
     };
 
-    m.as_str().into()
+    Ok(m.as_str().into())
 }
 
 pub fn path_to_file_url(args: Vec<JsValue>) -> JsValue {

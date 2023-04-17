@@ -1,10 +1,16 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{Expr, KeyValueProp, Lit, ObjectLit, Prop, PropName, PropOrSpread},
+    ecma::{
+        ast::{
+            Expr, ExprStmt, KeyValueProp, Lit, Module, ModuleItem, ObjectLit, Prop, PropName,
+            PropOrSpread, Stmt,
+        },
+        codegen::{text_writer::JsWriter, Emitter},
+    },
     quote, quote_expr,
 };
 use turbo_tasks::{
@@ -13,9 +19,14 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemPathVc};
 use turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    asset::{Asset, AssetContentVc, AssetVc},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContextVc,
+    },
+    ident::AssetIdentVc,
     issue::{IssueSeverityVc, OptionIssueSourceVc},
-    reference::{AssetReference, AssetReferenceVc},
+    reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
@@ -24,7 +35,12 @@ use turbopack_core::{
 };
 
 use crate::{
-    chunk::EcmascriptChunkingContextVc,
+    chunk::{
+        EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
+        EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkVc,
+        EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
+    },
+    chunk_group_files_asset::ChunkGroupFilesAssetVc,
     code_gen::{CodeGenerateable, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::{
@@ -32,100 +48,159 @@ use crate::{
         AstPathVc,
     },
     resolve::{cjs_resolve, try_to_severity},
-    CodeGenerateableVc,
+    utils::module_id_to_lit,
+    CodeGenerateableVc, EcmascriptChunkPlaceableVc,
 };
 
+#[turbo_tasks::value]
+#[derive(Debug)]
+pub(crate) enum DirListEntry {
+    File(FileSystemPathVc),
+    Dir(DirListVc),
+}
+
 #[turbo_tasks::value(transparent)]
-pub(crate) struct FlatDirList(Vec<(String, FileSystemPathVc)>);
+pub(crate) struct DirList(IndexMap<String, DirListEntry>);
 
-#[turbo_tasks::function]
-pub(crate) async fn list_dir(
-    dir: FileSystemPathVc,
-    recursive: bool,
-    filter: RegexVc,
-) -> Result<FlatDirListVc> {
-    let root = &*dir.await?;
-    let filter = &*filter.await?;
+#[turbo_tasks::value_impl]
+impl DirListVc {
+    #[turbo_tasks::function]
+    pub(crate) fn read(dir: FileSystemPathVc, recursive: bool, filter: RegexVc) -> Self {
+        Self::read_internal(dir, dir, recursive, filter)
+    }
 
-    let mut queue = VecDeque::from([dir]);
+    #[turbo_tasks::function]
+    pub(crate) async fn read_internal(
+        root: FileSystemPathVc,
+        dir: FileSystemPathVc,
+        recursive: bool,
+        filter: RegexVc,
+    ) -> Result<Self> {
+        let root_val = &*dir.await?;
+        let regex = &*filter.await?;
 
-    let mut list = Vec::new();
+        let mut list = IndexMap::new();
 
-    while let Some(dir) = queue.pop_front() {
         let dir_content = dir.read_dir().await?;
         let entries = match &*dir_content {
-            DirectoryContent::Entries(entries) => entries,
-            DirectoryContent::NotFound => continue,
+            DirectoryContent::Entries(entries) => Some(entries),
+            DirectoryContent::NotFound => None,
         };
 
-        for (_, entry) in entries {
+        for (_, entry) in entries.iter().flat_map(|m| m.iter()) {
             match entry {
                 DirectoryEntry::File(path) => {
-                    if let Some(relative_path) = root.get_relative_path_to(&*path.await?) {
-                        if filter.is_match(&relative_path) {
-                            list.push((relative_path, *path));
+                    if let Some(relative_path) = root_val.get_relative_path_to(&*path.await?) {
+                        if regex.is_match(&relative_path) {
+                            list.insert(relative_path, DirListEntry::File(*path));
                         }
                     }
                 }
                 DirectoryEntry::Directory(path) if recursive => {
-                    queue.push_back(*path);
+                    if let Some(relative_path) = root_val.get_relative_path_to(&*path.await?) {
+                        list.insert(
+                            relative_path,
+                            DirListEntry::Dir(DirListVc::read_internal(
+                                root, *path, recursive, filter,
+                            )),
+                        );
+                    }
                 }
                 // ignore everything else
                 _ => {}
             }
         }
+
+        list.sort_keys();
+
+        Ok(Self::cell(list))
     }
 
-    list.sort_by(|(a, _), (b, _)| a.cmp(b));
+    #[turbo_tasks::function]
+    async fn flatten(self) -> Result<FlatDirListVc> {
+        let this = self.await?;
 
-    Ok(FlatDirListVc::cell(list))
+        let mut queue = VecDeque::from([this]);
+
+        let mut list = IndexMap::new();
+
+        while let Some(dir) = queue.pop_front() {
+            for (k, entry) in &*dir {
+                match entry {
+                    DirListEntry::File(path) => {
+                        list.insert(k.clone(), *path);
+                    }
+                    DirListEntry::Dir(d) => {
+                        queue.push_back(d.await?);
+                    }
+                }
+            }
+        }
+
+        Ok(FlatDirListVc::cell(list))
+    }
+}
+
+#[turbo_tasks::value(transparent)]
+pub(crate) struct FlatDirList(IndexMap<String, FileSystemPathVc>);
+
+#[turbo_tasks::value_impl]
+impl FlatDirListVc {
+    #[turbo_tasks::function]
+    pub(crate) fn read(dir: FileSystemPathVc, recursive: bool, filter: RegexVc) -> Self {
+        DirListVc::read(dir, recursive, filter).flatten()
+    }
 }
 
 #[turbo_tasks::value]
 #[derive(Debug)]
-pub(crate) struct RequireContextMapEntry {
+pub struct RequireContextMapEntry {
     pub origin_relative: String,
     pub request: RequestVc,
     pub result: ResolveResultVc,
 }
 
+/// The resolved context map for a `require.context(..)` call.
 #[turbo_tasks::value(transparent)]
-pub(crate) struct RequireContextMap(IndexMap<String, RequireContextMapEntry>);
+pub struct RequireContextMap(IndexMap<String, RequireContextMapEntry>);
 
-#[turbo_tasks::function]
-pub(crate) async fn generate_require_context_map(
-    origin: ResolveOriginVc,
-    dir: FileSystemPathVc,
-    recursive: bool,
-    filter: RegexVc,
-    issue_source: OptionIssueSourceVc,
-    issue_severity: IssueSeverityVc,
-) -> Result<RequireContextMapVc> {
-    let origin_path = &*origin.origin_path().parent().await?;
+#[turbo_tasks::value_impl]
+impl RequireContextMapVc {
+    #[turbo_tasks::function]
+    pub(crate) async fn generate(
+        origin: ResolveOriginVc,
+        dir: FileSystemPathVc,
+        recursive: bool,
+        filter: RegexVc,
+        issue_source: OptionIssueSourceVc,
+        issue_severity: IssueSeverityVc,
+    ) -> Result<Self> {
+        let origin_path = &*origin.origin_path().parent().await?;
 
-    let list = &*list_dir(dir, recursive, filter).await?;
+        let list = &*FlatDirListVc::read(dir, recursive, filter).await?;
 
-    let mut map = IndexMap::new();
+        let mut map = IndexMap::new();
 
-    for (context_relative, path) in list {
-        if let Some(origin_relative) = origin_path.get_relative_path_to(&*path.await?) {
-            let request = RequestVc::parse(Value::new(origin_relative.clone().into()));
-            let result = cjs_resolve(origin, request, issue_source, issue_severity);
+        for (context_relative, path) in list {
+            if let Some(origin_relative) = origin_path.get_relative_path_to(&*path.await?) {
+                let request = RequestVc::parse(Value::new(origin_relative.clone().into()));
+                let result = cjs_resolve(origin, request, issue_source, issue_severity);
 
-            map.insert(
-                context_relative.clone(),
-                RequireContextMapEntry {
-                    origin_relative,
-                    request,
-                    result,
-                },
-            );
-        } else {
-            bail!("invariant error: this was already checked in `list_dir`");
+                map.insert(
+                    context_relative.clone(),
+                    RequireContextMapEntry {
+                        origin_relative,
+                        request,
+                        result,
+                    },
+                );
+            } else {
+                bail!("invariant error: this was already checked in `list_dir`");
+            }
         }
-    }
 
-    Ok(RequireContextMapVc::cell(map))
+        Ok(Self::cell(map))
+    }
 }
 
 /// A reference for `require.context()`, will replace it with an inlined map

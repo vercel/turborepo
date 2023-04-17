@@ -27,7 +27,7 @@ use url::Url;
 
 use self::imports::ImportAnnotations;
 pub(crate) use self::imports::ImportMap;
-use crate::utils::StringifyJs;
+use crate::{references::require_context::RequireContextMapVc, utils::StringifyJs};
 
 pub mod builtin;
 pub mod graph;
@@ -2979,15 +2979,35 @@ pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOption
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RequireContextValue {
-    pub(crate) map: IndexMap<String, String>,
+#[turbo_tasks::value(transparent)]
+#[derive(Debug, Clone)]
+pub struct RequireContextValue(IndexMap<String, String>);
+
+#[turbo_tasks::value_impl]
+impl RequireContextValueVc {
+    #[turbo_tasks::function]
+    pub async fn from_context_map(map: RequireContextMapVc) -> Result<Self> {
+        let mut context_map = IndexMap::new();
+
+        for (key, entry) in map.await?.iter() {
+            context_map.insert(key.clone(), entry.origin_relative.clone());
+        }
+
+        Ok(Self::cell(context_map))
+    }
+}
+
+impl From<RequireContextMapVc> for RequireContextValueVc {
+    fn from(map: RequireContextMapVc) -> Self {
+        Self::from_context_map(map)
+    }
 }
 
 impl Hash for RequireContextValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.map.len().hash(state);
-        for (k, v) in self.map.iter() {
+        self.0.len().hash(state);
+        for (i, (k, v)) in self.0.iter().enumerate() {
+            i.hash(state);
             k.hash(state);
             v.hash(state);
         }
@@ -3006,9 +3026,9 @@ pub enum WellKnownFunctionKind {
     Require,
     RequireResolve,
     RequireContext,
-    RequireContextRequire(RequireContextValue),
-    RequireContextRequireKeys(RequireContextValue),
-    RequireContextRequireResolve(RequireContextValue),
+    RequireContextRequire(RequireContextValueVc),
+    RequireContextRequireKeys(RequireContextValueVc),
+    RequireContextRequireResolve(RequireContextValueVc),
     Define,
     FsReadMethod(JsWord),
     PathToFileUrl,
@@ -3056,7 +3076,7 @@ pub mod test_utils {
         builtin::early_replace_builtin, well_known::replace_well_known, JsValue, ModuleValue,
         WellKnownFunctionKind, WellKnownObjectKind,
     };
-    use crate::analyzer::{builtin::replace_builtin, parse_require_context, RequireContextValue};
+    use crate::analyzer::{builtin::replace_builtin, parse_require_context, RequireContextValueVc};
 
     pub async fn early_visitor(mut v: JsValue) -> Result<(JsValue, bool)> {
         let m = early_replace_builtin(&mut v);
@@ -3089,7 +3109,7 @@ pub mod test_utils {
                     map.insert("./c".into(), format!("[context: {}]/c", options.dir));
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(
-                        RequireContextValue { map },
+                        RequireContextValueVc::cell(map),
                     ))
                 }
                 Err(err) => v.into_unknown(PrettyPrintError(&err).to_string()),
