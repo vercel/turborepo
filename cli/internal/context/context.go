@@ -17,7 +17,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/workspace"
 
 	"github.com/Masterminds/semver"
-	mapset "github.com/deckarep/golang-set"
 	"github.com/pyr-sh/dag"
 	"golang.org/x/sync/errgroup"
 )
@@ -179,12 +178,6 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	}
 	c.PackageManager = packageManager
 
-	if lockfile, err := c.PackageManager.ReadLockfile(repoRoot, rootPackageJSON); err != nil {
-		warnings.append(err)
-	} else {
-		c.Lockfile = lockfile
-	}
-
 	if err := c.resolveWorkspaceRootDeps(rootPackageJSON, &warnings); err != nil {
 		// TODO(Gaspar) was this the intended return error?
 		return nil, fmt.Errorf("could not resolve workspaces: %w", err)
@@ -231,6 +224,29 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	}
 	c.WorkspaceInfos.PackageJSONs[util.RootPkgName] = rootPackageJSON
 
+	if lockFile, err := c.PackageManager.ReadLockfile(repoRoot, rootPackageJSON); err != nil {
+		warnings.append(err)
+		rootPackageJSON.TransitiveDeps = []lockfile.Package{}
+		rootPackageJSON.ExternalDepsHash = ""
+	} else {
+		c.Lockfile = lockFile
+		for _, pkg := range c.WorkspaceInfos.PackageJSONs {
+			depSet, err := lockfile.TransitiveClosure(
+				pkg.Dir.ToUnixPath(),
+				pkg.UnresolvedExternalDeps,
+				c.Lockfile,
+			)
+			if err != nil {
+				warnings.append(err)
+				continue
+			}
+			if err := pkg.SetExternalDeps(depSet); err != nil {
+				return nil, err
+			}
+		}
+
+	}
+
 	return c, warnings.errorOrNil()
 }
 
@@ -246,25 +262,6 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON, warn
 	for dep, version := range pkg.Dependencies {
 		pkg.UnresolvedExternalDeps[dep] = version
 	}
-	if c.Lockfile != nil {
-		depSet, err := lockfile.TransitiveClosure(
-			pkg.Dir.ToUnixPath(),
-			pkg.UnresolvedExternalDeps,
-			c.Lockfile,
-		)
-		if err != nil {
-			warnings.append(err)
-			// Return early to skip using results of incomplete dep graph resolution
-			return nil
-		}
-		if err := pkg.SetExternalDeps(depSet); err != nil {
-			return err
-		}
-	} else {
-		pkg.TransitiveDeps = []lockfile.Package{}
-		pkg.ExternalDepsHash = ""
-	}
-
 	return nil
 }
 
@@ -315,17 +312,6 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 		}
 	}
 
-	externalDeps, err := lockfile.TransitiveClosure(
-		pkg.Dir.ToUnixPath(),
-		pkg.UnresolvedExternalDeps,
-		c.Lockfile,
-	)
-	if err != nil {
-		warnings.append(err)
-		// reset external deps to original state
-		externalDeps = mapset.NewSet()
-	}
-
 	// when there are no internal dependencies, we need to still add these leafs to the graph
 	if internalDepsSet.Len() == 0 {
 		c.WorkspaceGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
@@ -334,10 +320,6 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 	pkg.InternalDeps = make([]string, 0, internalDepsSet.Len())
 	for _, v := range internalDepsSet.List() {
 		pkg.InternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
-	}
-
-	if err := pkg.SetExternalDeps(externalDeps); err != nil {
-		return err
 	}
 
 	sort.Strings(pkg.InternalDeps)
