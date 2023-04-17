@@ -33,7 +33,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptModuleAssetVc, EcmascriptOptions, InnerAssetsVc,
 };
 
 use crate::{
@@ -112,11 +112,16 @@ pub async fn get_evaluate_pool(
         SourceAssetVc::new(embed_file_path("ipc/evaluate.ts")).into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: false,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
+        Value::new(EcmascriptOptions {
+            split_into_parts: false,
+            import_parts: false,
+            transforms: EcmascriptInputTransformsVc::cell(vec![
+                EcmascriptInputTransform::TypeScript {
+                    use_define_for_class_fields: false,
+                },
+            ]),
+            compile_time_info: context.compile_time_info(),
+        }),
     )
     .as_asset();
 
@@ -142,11 +147,16 @@ pub async fn get_evaluate_pool(
         .into(),
         context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: false,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
+        Value::new(EcmascriptOptions {
+            split_into_parts: false,
+            import_parts: false,
+            transforms: EcmascriptInputTransformsVc::cell(vec![
+                EcmascriptInputTransform::TypeScript {
+                    use_define_for_class_fields: false,
+                },
+            ]),
+            compile_time_info: context.compile_time_info(),
+        }),
         InnerAssetsVc::cell(indexmap! {
             "INNER".to_string() => module_asset,
             "RUNTIME".to_string() => runtime_asset
@@ -162,11 +172,16 @@ pub async fn get_evaluate_pool(
             SourceAssetVc::new(embed_file_path("globals.ts")).into(),
             context,
             Value::new(EcmascriptModuleAssetType::Typescript),
-            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-                use_define_for_class_fields: false,
-            }]),
-            Value::new(Default::default()),
-            context.compile_time_info(),
+            Value::new(EcmascriptOptions {
+                split_into_parts: false,
+                import_parts: false,
+                transforms: EcmascriptInputTransformsVc::cell(vec![
+                    EcmascriptInputTransform::TypeScript {
+                        use_define_for_class_fields: false,
+                    },
+                ]),
+                compile_time_info: context.compile_time_info(),
+            }),
         )
         .as_evaluatable_asset();
 
