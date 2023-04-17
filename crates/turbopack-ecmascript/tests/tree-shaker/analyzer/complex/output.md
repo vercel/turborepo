@@ -349,78 +349,91 @@ graph TD
 ```mermaid
 graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
-    N1["Items: [ItemId(Export((Atom('dogRef' type=inline), #0)))]"];
+    N1["Items: [ItemId(Export((Atom('dogRef' type=inline), #0))), ItemId(3, Normal), ItemId(6, Normal), ItemId(9, VarDeclarator(0))]"];
     N2["Items: [ItemId(Export((Atom('cat' type=inline), #0)))]"];
     N3["Items: [ItemId(Export((Atom('initialCat' type=dynamic), #0))), ItemId(11, VarDeclarator(0))]"];
     N4["Items: [ItemId(Export((Atom('getChimera' type=dynamic), #0))), ItemId(12, Normal)]"];
-    N5["Items: [ItemId(6, Normal)]"];
-    N6["Items: [ItemId(9, VarDeclarator(0))]"];
-    N7["Items: [ItemId(0, VarDeclarator(0))]"];
-    N8["Items: [ItemId(1, Normal)]"];
-    N9["Items: [ItemId(2, Normal)]"];
-    N10["Items: [ItemId(3, Normal)]"];
-    N11["Items: [ItemId(4, Normal)]"];
-    N12["Items: [ItemId(5, Normal)]"];
-    N13["Items: [ItemId(7, Normal)]"];
-    N14["Items: [ItemId(8, Normal)]"];
-    N15["Items: [ItemId(10, VarDeclarator(0))]"];
+    N5["Items: [ItemId(0, VarDeclarator(0))]"];
+    N6["Items: [ItemId(1, Normal)]"];
+    N7["Items: [ItemId(2, Normal)]"];
+    N8["Items: [ItemId(4, Normal)]"];
+    N9["Items: [ItemId(5, Normal)]"];
+    N10["Items: [ItemId(7, Normal)]"];
+    N11["Items: [ItemId(8, Normal)]"];
+    N12["Items: [ItemId(10, VarDeclarator(0))]"];
+    N0 --> N7;
     N0 --> N9;
-    N0 --> N12;
-    N0 --> N14;
+    N0 --> N11;
+    N1 --> N5;
     N1 --> N6;
-    N2 --> N15;
-    N3 --> N15;
-    N4 --> N15;
-    N4 --> N7;
+    N1 --> N8;
+    N1 --> N10;
+    N1 --> N11;
+    N2 --> N12;
+    N3 --> N12;
+    N4 --> N12;
+    N4 --> N5;
+    N4 --> N6;
     N4 --> N8;
-    N4 --> N11;
-    N4 --> N13;
-    N5 --> N14;
-    N5 --> N6;
-    N6 --> N7;
-    N6 --> N8;
-    N6 --> N11;
-    N6 --> N13;
-    N6 --> N10;
-    N6 --> N5;
-    N9 --> N7;
+    N4 --> N10;
+    N7 --> N5;
+    N7 --> N6;
+    N8 --> N7;
+    N9 --> N5;
+    N9 --> N6;
     N9 --> N8;
-    N10 --> N7;
-    N10 --> N8;
-    N10 --> N11;
-    N10 --> N13;
+    N9 --> N7;
+    N10 --> N9;
+    N11 --> N5;
+    N11 --> N6;
+    N11 --> N8;
+    N11 --> N10;
+    N11 --> N7;
     N11 --> N9;
-    N12 --> N7;
-    N12 --> N8;
-    N12 --> N11;
-    N12 --> N9;
-    N13 --> N12;
-    N14 --> N7;
-    N14 --> N8;
-    N14 --> N11;
-    N14 --> N13;
-    N14 --> N9;
-    N14 --> N12;
 ```
 # Modules (dev)
 ## Part 0
 ```js
 import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+import "entry.js" assert {
     __turbopack_chunk__: 9
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 12
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 14
+    __turbopack_chunk__: 11
 };
 "module evaluation";
 
 ```
 ## Part 1
 ```js
-import { dogRef } from "entry.js" assert {
+import { dog } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
     __turbopack_chunk__: 6
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 10
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 11
+};
+export { dogRef };
+function getDog() {
+    return dog;
+}
+function setDog(newDog) {
+    dog = newDog;
+}
+const dogRef = {
+    initial: dog,
+    get: getDog,
+    set: setDog
 };
 export { dogRef };
 
@@ -428,7 +441,7 @@ export { dogRef };
 ## Part 2
 ```js
 import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 15
+    __turbopack_chunk__: 12
 };
 export { cat };
 
@@ -436,7 +449,7 @@ export { cat };
 ## Part 3
 ```js
 import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 15
+    __turbopack_chunk__: 12
 };
 export { initialCat };
 const initialCat = cat;
@@ -446,19 +459,19 @@ export { initialCat };
 ## Part 4
 ```js
 import { cat } from "entry.js" assert {
-    __turbopack_chunk__: 15
+    __turbopack_chunk__: 12
 };
 import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 6
 };
 import "entry.js" assert {
     __turbopack_chunk__: 8
 };
 import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 13
+    __turbopack_chunk__: 10
 };
 export { getChimera };
 function getChimera() {
@@ -468,53 +481,32 @@ function getChimera() {
 ```
 ## Part 5
 ```js
-import "entry.js" assert {
-    __turbopack_chunk__: 14
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 6
-};
-function setDog(newDog) {
-    dog = newDog;
-}
-
-```
-## Part 6
-```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 13
-};
-import { getDog } from "entry.js" assert {
-    __turbopack_chunk__: 10
-};
-import { setDog } from "entry.js" assert {
-    __turbopack_chunk__: 5
-};
-const dogRef = {
-    initial: dog,
-    get: getDog,
-    set: setDog
-};
-export { dogRef };
-
-```
-## Part 7
-```js
 let dog = "dog";
 export { dog };
 
 ```
+## Part 6
+```js
+dog += "!";
+export { dog };
+
+```
+## Part 7
+```js
+import { dog } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 6
+};
+console.log(dog);
+
+```
 ## Part 8
 ```js
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
 dog += "!";
 export { dog };
 
@@ -522,92 +514,53 @@ export { dog };
 ## Part 9
 ```js
 import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 6
 };
 import "entry.js" assert {
     __turbopack_chunk__: 8
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
 };
 console.log(dog);
 
 ```
 ## Part 10
 ```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 7
-};
 import "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_chunk__: 9
 };
-import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 13
-};
-function getDog() {
-    return dog;
-}
+dog += "!";
+export { dog };
 
 ```
 ## Part 11
 ```js
+import { dog } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 6
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 10
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
 import "entry.js" assert {
     __turbopack_chunk__: 9
 };
-dog += "!";
-export { dog };
+console.log(dog);
 
 ```
 ## Part 12
-```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-console.log(dog);
-
-```
-## Part 13
-```js
-import "entry.js" assert {
-    __turbopack_chunk__: 12
-};
-dog += "!";
-export { dog };
-
-```
-## Part 14
-```js
-import { dog } from "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 11
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 13
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-import "entry.js" assert {
-    __turbopack_chunk__: 12
-};
-console.log(dog);
-
-```
-## Part 15
 ```js
 let cat = "cat";
 export { cat };

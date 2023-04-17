@@ -221,28 +221,19 @@ graph TD
     N0["Items: [ItemId(ModuleEvaluation)]"];
     N1["Items: [ItemId(Export((Atom('c1_1' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('c1_3' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('c2_2' type=inline), #0)))]"];
-    N4["Items: [ItemId(3, Normal)]"];
-    N5["Items: [ItemId(4, Normal)]"];
-    N6["Items: [ItemId(5, Normal)]"];
-    N7["Items: [ItemId(6, Normal)]"];
-    N8["Items: [ItemId(7, Normal)]"];
-    N9["Items: [ItemId(8, Normal)]"];
-    N10["Items: [ItemId(0, Normal)]"];
-    N11["Items: [ItemId(1, Normal)]"];
-    N12["Items: [ItemId(2, Normal)]"];
-    N1 --> N4;
-    N2 --> N6;
-    N3 --> N8;
-    N4 --> N5;
-    N5 --> N6;
-    N5 --> N10;
-    N6 --> N4;
-    N6 --> N11;
+    N3["Items: [ItemId(Export((Atom('c2_2' type=inline), #0))), ItemId(2, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal)]"];
+    N4["Items: [ItemId(0, Normal)]"];
+    N5["Items: [ItemId(1, Normal)]"];
+    N6["Items: [ItemId(3, Normal)]"];
+    N7["Items: [ItemId(4, Normal)]"];
+    N8["Items: [ItemId(5, Normal)]"];
+    N1 --> N6;
+    N2 --> N8;
+    N6 --> N7;
     N7 --> N8;
-    N7 --> N12;
-    N8 --> N9;
-    N9 --> N7;
+    N7 --> N4;
+    N8 --> N6;
+    N8 --> N5;
 ```
 # Modules (dev)
 ## Part 0
@@ -253,7 +244,7 @@ graph TD
 ## Part 1
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_chunk__: 6
 };
 export { c1_1 };
 
@@ -261,101 +252,70 @@ export { c1_1 };
 ## Part 2
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 8
 };
 export { c1_3 };
 
 ```
 ## Part 3
 ```js
-import { c2_2 } from "entry.js" assert {
-    __turbopack_chunk__: 8
-};
 export { c2_2 };
+function d3() {}
+function c2_1() {
+    return c2_2(d3);
+}
+function c2_2() {
+    return c2_3();
+}
+function c2_3() {
+    return c2_1();
+}
 
 ```
 ## Part 4
 ```js
+function d1() {}
+
+```
+## Part 5
+```js
+function d2() {}
+
+```
+## Part 6
+```js
 import { c1_2 } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_chunk__: 7
 };
 function c1_1() {
     return c1_2();
 }
 
 ```
-## Part 5
+## Part 7
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 8
 };
 import { d1 } from "entry.js" assert {
-    __turbopack_chunk__: 10
+    __turbopack_chunk__: 4
 };
 function c1_2() {
     return c1_3(d1);
 }
 
 ```
-## Part 6
+## Part 8
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_chunk__: 6
 };
 import { d2 } from "entry.js" assert {
-    __turbopack_chunk__: 11
+    __turbopack_chunk__: 5
 };
 function c1_3() {
     return c1_1(d2);
 }
-
-```
-## Part 7
-```js
-import { c2_2 } from "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import { d3 } from "entry.js" assert {
-    __turbopack_chunk__: 12
-};
-function c2_1() {
-    return c2_2(d3);
-}
-
-```
-## Part 8
-```js
-import { c2_3 } from "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-function c2_2() {
-    return c2_3();
-}
-
-```
-## Part 9
-```js
-import { c2_1 } from "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-function c2_3() {
-    return c2_1();
-}
-
-```
-## Part 10
-```js
-function d1() {}
-
-```
-## Part 11
-```js
-function d2() {}
-
-```
-## Part 12
-```js
-function d3() {}
 
 ```
 ## Merged (module eval)
@@ -372,7 +332,7 @@ function d3() {}
 ## Part 1
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_chunk__: 6
 };
 export { c1_1 };
 
@@ -380,101 +340,70 @@ export { c1_1 };
 ## Part 2
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 8
 };
 export { c1_3 };
 
 ```
 ## Part 3
 ```js
-import { c2_2 } from "entry.js" assert {
-    __turbopack_chunk__: 8
-};
 export { c2_2 };
+function d3() {}
+function c2_1() {
+    return c2_2(d3);
+}
+function c2_2() {
+    return c2_3();
+}
+function c2_3() {
+    return c2_1();
+}
 
 ```
 ## Part 4
 ```js
+function d1() {}
+
+```
+## Part 5
+```js
+function d2() {}
+
+```
+## Part 6
+```js
 import { c1_2 } from "entry.js" assert {
-    __turbopack_chunk__: 5
+    __turbopack_chunk__: 7
 };
 function c1_1() {
     return c1_2();
 }
 
 ```
-## Part 5
+## Part 7
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 8
 };
 import { d1 } from "entry.js" assert {
-    __turbopack_chunk__: 10
+    __turbopack_chunk__: 4
 };
 function c1_2() {
     return c1_3(d1);
 }
 
 ```
-## Part 6
+## Part 8
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 4
+    __turbopack_chunk__: 6
 };
 import { d2 } from "entry.js" assert {
-    __turbopack_chunk__: 11
+    __turbopack_chunk__: 5
 };
 function c1_3() {
     return c1_1(d2);
 }
-
-```
-## Part 7
-```js
-import { c2_2 } from "entry.js" assert {
-    __turbopack_chunk__: 8
-};
-import { d3 } from "entry.js" assert {
-    __turbopack_chunk__: 12
-};
-function c2_1() {
-    return c2_2(d3);
-}
-
-```
-## Part 8
-```js
-import { c2_3 } from "entry.js" assert {
-    __turbopack_chunk__: 9
-};
-function c2_2() {
-    return c2_3();
-}
-
-```
-## Part 9
-```js
-import { c2_1 } from "entry.js" assert {
-    __turbopack_chunk__: 7
-};
-function c2_3() {
-    return c2_1();
-}
-
-```
-## Part 10
-```js
-function d1() {}
-
-```
-## Part 11
-```js
-function d2() {}
-
-```
-## Part 12
-```js
-function d3() {}
 
 ```
 ## Merged (module eval)
