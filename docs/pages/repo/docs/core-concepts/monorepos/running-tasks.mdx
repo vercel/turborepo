@@ -289,9 +289,9 @@ To accomplish this, we can set up a pipeline like so:
  }
 ```
 
-![](/images/docs/task-graph-with-dummy-task.png)
+![](/images/docs/task-graph-with-placeholder-task.png)
 
-In this pipeline, we create an intermediary dummy `topo` task. Since we don't have a `topo` command in our workspaces, the pipeline will go straight to running `test` scripts in parallel, meeting our first requirement. The second requirement will also be taken care of, falling back on Turborepo's default behavior of creating hashes for a workspace task and it's dependencies as a tree.
+In this pipeline, we create an intermediary placeholder `topo` task. Since we don't have a `topo` command in our workspaces, the pipeline will go straight to running `test` scripts in parallel, meeting our first requirement. The second requirement will also be taken care of, falling back on Turborepo's default behavior of creating hashes for a workspace task and it's dependencies as a tree.
 
 <Callout
   type="idea"
