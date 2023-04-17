@@ -1,6 +1,6 @@
 # Items
 
-Count: 13
+Count: 15
 
 ## Item 1: Stmt 0, `Normal`
 
@@ -110,6 +110,26 @@ function c2_3() {
 - Declares: `c2_3`
 - Reads (eventual): `c2_1`
 
+## Item 10: Stmt 9, `Normal`
+
+```js
+c1_3();
+
+```
+
+- Side effects
+- Reads: `c1_3`
+
+## Item 11: Stmt 10, `Normal`
+
+```js
+c2_2();
+
+```
+
+- Side effects
+- Reads: `c2_2`
+
 # Phase 1
 ```mermaid
 graph TD
@@ -123,13 +143,15 @@ graph TD
     Item8;
     Item9;
     Item10;
-    Item10["ModuleEvaluation"];
     Item11;
-    Item11["export c1_1"];
     Item12;
-    Item12["export c1_3"];
+    Item12["ModuleEvaluation"];
     Item13;
-    Item13["export c2_2"];
+    Item13["export c1_1"];
+    Item14;
+    Item14["export c1_3"];
+    Item15;
+    Item15["export c2_2"];
 ```
 # Phase 2
 ```mermaid
@@ -144,13 +166,34 @@ graph TD
     Item8;
     Item9;
     Item10;
-    Item10["ModuleEvaluation"];
     Item11;
-    Item11["export c1_1"];
     Item12;
-    Item12["export c1_3"];
+    Item12["ModuleEvaluation"];
     Item13;
-    Item13["export c2_2"];
+    Item13["export c1_1"];
+    Item14;
+    Item14["export c1_3"];
+    Item15;
+    Item15["export c2_2"];
+    Item10 --> Item6;
+    Item10 -.-> Item5;
+    Item10 -.-> Item1;
+    Item10 -.-> Item4;
+    Item10 -.-> Item2;
+    Item10 -.-> Item8;
+    Item10 -.-> Item3;
+    Item10 -.-> Item9;
+    Item10 -.-> Item7;
+    Item11 --> Item8;
+    Item11 --> Item10;
+    Item11 -.-> Item5;
+    Item11 -.-> Item6;
+    Item11 -.-> Item1;
+    Item11 -.-> Item4;
+    Item11 -.-> Item2;
+    Item11 -.-> Item3;
+    Item11 -.-> Item9;
+    Item11 -.-> Item7;
 ```
 # Phase 3
 ```mermaid
@@ -165,13 +208,34 @@ graph TD
     Item8;
     Item9;
     Item10;
-    Item10["ModuleEvaluation"];
     Item11;
-    Item11["export c1_1"];
     Item12;
-    Item12["export c1_3"];
+    Item12["ModuleEvaluation"];
     Item13;
-    Item13["export c2_2"];
+    Item13["export c1_1"];
+    Item14;
+    Item14["export c1_3"];
+    Item15;
+    Item15["export c2_2"];
+    Item10 --> Item6;
+    Item10 -.-> Item5;
+    Item10 -.-> Item1;
+    Item10 -.-> Item4;
+    Item10 -.-> Item2;
+    Item10 -.-> Item8;
+    Item10 -.-> Item3;
+    Item10 -.-> Item9;
+    Item10 -.-> Item7;
+    Item11 --> Item8;
+    Item11 --> Item10;
+    Item11 -.-> Item5;
+    Item11 -.-> Item6;
+    Item11 -.-> Item1;
+    Item11 -.-> Item4;
+    Item11 -.-> Item2;
+    Item11 -.-> Item3;
+    Item11 -.-> Item9;
+    Item11 -.-> Item7;
     Item4 --> Item5;
     Item5 --> Item6;
     Item5 --> Item1;
@@ -195,13 +259,34 @@ graph TD
     Item8;
     Item9;
     Item10;
-    Item10["ModuleEvaluation"];
     Item11;
-    Item11["export c1_1"];
     Item12;
-    Item12["export c1_3"];
+    Item12["ModuleEvaluation"];
     Item13;
-    Item13["export c2_2"];
+    Item13["export c1_1"];
+    Item14;
+    Item14["export c1_3"];
+    Item15;
+    Item15["export c2_2"];
+    Item10 --> Item6;
+    Item10 -.-> Item5;
+    Item10 -.-> Item1;
+    Item10 -.-> Item4;
+    Item10 -.-> Item2;
+    Item10 -.-> Item8;
+    Item10 -.-> Item3;
+    Item10 -.-> Item9;
+    Item10 -.-> Item7;
+    Item11 --> Item8;
+    Item11 --> Item10;
+    Item11 -.-> Item5;
+    Item11 -.-> Item6;
+    Item11 -.-> Item1;
+    Item11 -.-> Item4;
+    Item11 -.-> Item2;
+    Item11 -.-> Item3;
+    Item11 -.-> Item9;
+    Item11 -.-> Item7;
     Item4 --> Item5;
     Item5 --> Item6;
     Item5 --> Item1;
@@ -211,40 +296,89 @@ graph TD
     Item7 --> Item3;
     Item8 --> Item9;
     Item9 --> Item7;
-    Item11 --> Item4;
-    Item12 --> Item6;
-    Item13 --> Item8;
+    Item12 --> Item10;
+    Item12 --> Item11;
+    Item13 --> Item4;
+    Item14 --> Item6;
+    Item15 --> Item8;
 ```
 # Final
 ```mermaid
 graph TD
-    N0["Items: [ItemId(ModuleEvaluation)]"];
+    N0["Items: [ItemId(ModuleEvaluation), ItemId(9, Normal), ItemId(10, Normal)]"];
     N1["Items: [ItemId(Export((Atom('c1_1' type=inline), #0)))]"];
     N2["Items: [ItemId(Export((Atom('c1_3' type=inline), #0)))]"];
-    N3["Items: [ItemId(Export((Atom('c2_2' type=inline), #0))), ItemId(2, Normal), ItemId(6, Normal), ItemId(7, Normal), ItemId(8, Normal)]"];
+    N3["Items: [ItemId(Export((Atom('c2_2' type=inline), #0)))]"];
     N4["Items: [ItemId(0, Normal)]"];
     N5["Items: [ItemId(1, Normal)]"];
-    N6["Items: [ItemId(3, Normal)]"];
-    N7["Items: [ItemId(4, Normal)]"];
-    N8["Items: [ItemId(5, Normal)]"];
-    N1 --> N6;
-    N2 --> N8;
-    N6 --> N7;
+    N6["Items: [ItemId(2, Normal)]"];
+    N7["Items: [ItemId(3, Normal)]"];
+    N8["Items: [ItemId(4, Normal)]"];
+    N9["Items: [ItemId(5, Normal)]"];
+    N10["Items: [ItemId(6, Normal)]"];
+    N11["Items: [ItemId(7, Normal)]"];
+    N12["Items: [ItemId(8, Normal)]"];
+    N0 --> N9;
+    N0 --> N8;
+    N0 --> N4;
+    N0 --> N7;
+    N0 --> N5;
+    N0 --> N11;
+    N0 --> N6;
+    N0 --> N12;
+    N0 --> N10;
+    N1 --> N7;
+    N2 --> N9;
+    N3 --> N11;
     N7 --> N8;
-    N7 --> N4;
-    N8 --> N6;
-    N8 --> N5;
+    N8 --> N9;
+    N8 --> N4;
+    N9 --> N7;
+    N9 --> N5;
+    N10 --> N11;
+    N10 --> N6;
+    N11 --> N12;
+    N12 --> N10;
 ```
 # Modules (dev)
 ## Part 0
 ```js
+import { c1_3 } from "entry.js" assert {
+    __turbopack_chunk__: 9
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 4
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import { c2_2 } from "entry.js" assert {
+    __turbopack_chunk__: 11
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 6
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 12
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 10
+};
 "module evaluation";
+c1_3();
+c2_2();
 
 ```
 ## Part 1
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 7
 };
 export { c1_1 };
 
@@ -252,24 +386,17 @@ export { c1_1 };
 ## Part 2
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_chunk__: 9
 };
 export { c1_3 };
 
 ```
 ## Part 3
 ```js
+import { c2_2 } from "entry.js" assert {
+    __turbopack_chunk__: 11
+};
 export { c2_2 };
-function d3() {}
-function c2_1() {
-    return c2_2(d3);
-}
-function c2_2() {
-    return c2_3();
-}
-function c2_3() {
-    return c2_1();
-}
 
 ```
 ## Part 4
@@ -284,18 +411,23 @@ function d2() {}
 ```
 ## Part 6
 ```js
+function d3() {}
+
+```
+## Part 7
+```js
 import { c1_2 } from "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_chunk__: 8
 };
 function c1_1() {
     return c1_2();
 }
 
 ```
-## Part 7
+## Part 8
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_chunk__: 9
 };
 import { d1 } from "entry.js" assert {
     __turbopack_chunk__: 4
@@ -305,10 +437,10 @@ function c1_2() {
 }
 
 ```
-## Part 8
+## Part 9
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 7
 };
 import { d2 } from "entry.js" assert {
     __turbopack_chunk__: 5
@@ -318,21 +450,85 @@ function c1_3() {
 }
 
 ```
+## Part 10
+```js
+import { c2_2 } from "entry.js" assert {
+    __turbopack_chunk__: 11
+};
+import { d3 } from "entry.js" assert {
+    __turbopack_chunk__: 6
+};
+function c2_1() {
+    return c2_2(d3);
+}
+
+```
+## Part 11
+```js
+import { c2_3 } from "entry.js" assert {
+    __turbopack_chunk__: 12
+};
+function c2_2() {
+    return c2_3();
+}
+
+```
+## Part 12
+```js
+import { c2_1 } from "entry.js" assert {
+    __turbopack_chunk__: 10
+};
+function c2_3() {
+    return c2_1();
+}
+
+```
 ## Merged (module eval)
 ```js
+function d1() {}
+function c1_2() {
+    return c1_3(d1);
+}
+function c1_1() {
+    return c1_2();
+}
+function d2() {}
+function c1_3() {
+    return c1_1(d2);
+}
+function d3() {}
+function c2_1() {
+    return c2_2(d3);
+}
+function c2_3() {
+    return c2_1();
+}
+function c2_2() {
+    return c2_3();
+}
 "module evaluation";
+c1_3();
+c2_2();
 
 ```
 # Modules (prod)
 ## Part 0
 ```js
+import { c1_3 } from "entry.js" assert {
+    __turbopack_chunk__: 9
+};
+import { c2_2 } from "entry.js" assert {
+    __turbopack_chunk__: 11
+};
 "module evaluation";
+c1_3();
+c2_2();
 
 ```
 ## Part 1
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 7
 };
 export { c1_1 };
 
@@ -340,24 +536,17 @@ export { c1_1 };
 ## Part 2
 ```js
 import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 8
+    __turbopack_chunk__: 9
 };
 export { c1_3 };
 
 ```
 ## Part 3
 ```js
+import { c2_2 } from "entry.js" assert {
+    __turbopack_chunk__: 11
+};
 export { c2_2 };
-function d3() {}
-function c2_1() {
-    return c2_2(d3);
-}
-function c2_2() {
-    return c2_3();
-}
-function c2_3() {
-    return c2_1();
-}
 
 ```
 ## Part 4
@@ -372,31 +561,36 @@ function d2() {}
 ```
 ## Part 6
 ```js
+function d3() {}
+
+```
+## Part 7
+```js
 import { c1_2 } from "entry.js" assert {
-    __turbopack_chunk__: 7
+    __turbopack_chunk__: 8
 };
 function c1_1() {
     return c1_2();
 }
 
 ```
-## Part 7
+## Part 8
 ```js
-import { c1_3 } from "entry.js" assert {
-    __turbopack_chunk__: 8
-};
 import { d1 } from "entry.js" assert {
     __turbopack_chunk__: 4
+};
+import { c1_3 } from "entry.js" assert {
+    __turbopack_chunk__: 9
 };
 function c1_2() {
     return c1_3(d1);
 }
 
 ```
-## Part 8
+## Part 9
 ```js
 import { c1_1 } from "entry.js" assert {
-    __turbopack_chunk__: 6
+    __turbopack_chunk__: 7
 };
 import { d2 } from "entry.js" assert {
     __turbopack_chunk__: 5
@@ -406,8 +600,64 @@ function c1_3() {
 }
 
 ```
+## Part 10
+```js
+import { d3 } from "entry.js" assert {
+    __turbopack_chunk__: 6
+};
+import { c2_2 } from "entry.js" assert {
+    __turbopack_chunk__: 11
+};
+function c2_1() {
+    return c2_2(d3);
+}
+
+```
+## Part 11
+```js
+import { c2_3 } from "entry.js" assert {
+    __turbopack_chunk__: 12
+};
+function c2_2() {
+    return c2_3();
+}
+
+```
+## Part 12
+```js
+import { c2_1 } from "entry.js" assert {
+    __turbopack_chunk__: 10
+};
+function c2_3() {
+    return c2_1();
+}
+
+```
 ## Merged (module eval)
 ```js
+function d1() {}
+function c1_2() {
+    return c1_3(d1);
+}
+function c1_1() {
+    return c1_2();
+}
+function d2() {}
+function c1_3() {
+    return c1_1(d2);
+}
+function d3() {}
+function c2_1() {
+    return c2_2(d3);
+}
+function c2_3() {
+    return c2_1();
+}
+function c2_2() {
+    return c2_3();
+}
 "module evaluation";
+c1_3();
+c2_2();
 
 ```
