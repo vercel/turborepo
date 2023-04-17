@@ -1,16 +1,20 @@
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
+    process::Command,
 };
 
-use git2::{DiffFormat, DiffOptions, Repository};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::Error;
 
 /// Finds the changed files in a repository between index and working directory
 /// (unstaged changes) and between two commits. Includes untracked files,
-/// i.e. files not yet in git
+/// i.e. files not yet in git.
+///
+/// We shell out to git instead of using a git2 library because git2 doesn't
+/// support shallow clones, and therefore errors on repositories that
+/// are shallow cloned.
 ///
 /// # Arguments
 ///
@@ -27,41 +31,69 @@ pub fn changed_files(
     from_commit: Option<&str>,
     to_commit: &str,
 ) -> Result<HashSet<String>, Error> {
-    // Initialize repository at repo root
-    let repo = Repository::open(&git_root)?;
     let git_root = AbsoluteSystemPathBuf::new(git_root)?;
     let turbo_root = AbsoluteSystemPathBuf::new(turbo_root)?;
-    let anchored_turbo_root = git_root.anchor(&turbo_root)?;
 
     let mut files = HashSet::new();
-    add_changed_files_from_to_commit_to_working_tree(
-        &git_root,
-        &repo,
-        &anchored_turbo_root,
-        &turbo_root,
-        to_commit,
-        &mut files,
-    )?;
-    add_changed_files_from_unstaged_changes(
-        &git_root,
-        &repo,
-        &anchored_turbo_root,
-        &turbo_root,
-        &mut files,
-    )?;
+    let output = Command::new("git")
+        .arg("diff")
+        .arg("--name-only")
+        .arg(to_commit)
+        .arg("--")
+        .arg(turbo_root.to_str().unwrap())
+        .current_dir(&git_root)
+        .output()
+        .expect("failed to execute process");
+
+    add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
+
     if let Some(from_commit) = from_commit {
-        add_changed_files_from_commits(
-            &git_root,
-            &repo,
-            &anchored_turbo_root,
-            &turbo_root,
-            &mut files,
-            from_commit,
-            to_commit,
-        )?;
+        let output = Command::new("git")
+            .arg("diff")
+            .arg("--name-only")
+            .arg(format!("{}...{}", from_commit, to_commit))
+            .arg("--")
+            .arg(turbo_root.to_str().unwrap())
+            .current_dir(&git_root)
+            .output()
+            .expect("failed to execute process");
+
+        add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
     }
 
+    let output = Command::new("git")
+        .arg("ls-files")
+        .arg("--other")
+        .arg("--exclude-standard")
+        .arg("--")
+        .arg(turbo_root.to_str().unwrap())
+        .current_dir(&git_root)
+        .output()
+        .expect("failed to execute process");
+
+    add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
+
     Ok(files)
+}
+
+fn add_files_from_stdout(
+    files: &mut HashSet<String>,
+    git_root: &AbsoluteSystemPathBuf,
+    turbo_root: &AbsoluteSystemPathBuf,
+    stdout: Vec<u8>,
+) {
+    let stdout = String::from_utf8(stdout).unwrap();
+    for line in stdout.lines() {
+        let path = Path::new(line);
+        let anchored_to_turbo_root_file_path =
+            reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, path).unwrap();
+        files.insert(
+            anchored_to_turbo_root_file_path
+                .to_str()
+                .unwrap()
+                .to_string(),
+        );
+    }
 }
 
 fn reanchor_path_from_git_root_to_turbo_root(
@@ -73,106 +105,6 @@ fn reanchor_path_from_git_root_to_turbo_root(
     let absolute_file_path = git_root.resolve(&anchored_to_git_root_file_path);
     let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
     Ok(anchored_to_turbo_root_file_path)
-}
-
-// Equivalent of `git diff --name-only <to_commit> -- <turbo_root>
-fn add_changed_files_from_to_commit_to_working_tree(
-    git_root: &AbsoluteSystemPathBuf,
-    repo: &Repository,
-    anchored_turbo_root: &AnchoredSystemPathBuf,
-    turbo_root: &AbsoluteSystemPathBuf,
-    to_commit: &str,
-    files: &mut HashSet<String>,
-) -> Result<(), Error> {
-    let to_commit_ref = repo.revparse_single(to_commit)?;
-    let to_commit = to_commit_ref.peel_to_commit()?;
-    let to_tree = to_commit.tree()?;
-    let mut options = DiffOptions::new();
-    options.pathspec(anchored_turbo_root.to_str()?);
-
-    let diff = repo.diff_tree_to_workdir_with_index(Some(&to_tree), Some(&mut options))?;
-
-    for delta in diff.deltas() {
-        let file = delta.old_file();
-        if let Some(file_path) = file.path() {
-            let anchored_to_turbo_root_file_path =
-                reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, file_path)?;
-            files.insert(anchored_to_turbo_root_file_path.to_str()?.to_string());
-        }
-    }
-
-    Ok(())
-}
-
-// Equivalent of `git ls-files --other --exclude-standard -- <turbo_root>`
-fn add_changed_files_from_unstaged_changes(
-    git_root: &AbsoluteSystemPathBuf,
-    repo: &Repository,
-    anchored_turbo_root: &AnchoredSystemPathBuf,
-    turbo_root: &AbsoluteSystemPathBuf,
-    files: &mut HashSet<String>,
-) -> Result<(), Error> {
-    let mut options = DiffOptions::new();
-    options.include_untracked(true);
-    options.recurse_untracked_dirs(true);
-
-    options.pathspec(anchored_turbo_root.to_str()?);
-
-    let diff = repo.diff_index_to_workdir(None, Some(&mut options))?;
-
-    for delta in diff.deltas() {
-        let file = delta.old_file();
-        if let Some(file_path) = file.path() {
-            let anchored_to_turbo_root_file_path =
-                reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, file_path)?;
-            files.insert(anchored_to_turbo_root_file_path.to_str()?.to_string());
-        }
-    }
-
-    Ok(())
-}
-
-// Equivalent of `git diff --name-only <from_commit>...<to_commit> --
-// <turbo_root>` NOTE: This is **not** the same as
-// `git diff --name-only <from_commit>..<to_commit> -- <turbo_root>`
-// (note the triple dots vs double dots)
-// The triple dot version is a diff of the most recent common ancestor (merge
-// base) of <from_commit> and <to_commit> to <to_commit>, whereas the double dot
-// version is a diff of <from_commit> to <to_commit>.
-fn add_changed_files_from_commits(
-    git_root: &AbsoluteSystemPathBuf,
-    repo: &Repository,
-    anchored_turbo_root: &AnchoredSystemPathBuf,
-    turbo_root: &AbsoluteSystemPathBuf,
-    files: &mut HashSet<String>,
-    from_commit: &str,
-    to_commit: &str,
-) -> Result<(), Error> {
-    let from_commit_ref = repo.revparse_single(from_commit)?;
-    let to_commit_ref = repo.revparse_single(to_commit)?;
-    let mergebase_of_from_and_to = repo.merge_base(from_commit_ref.id(), to_commit_ref.id())?;
-
-    let mergebase_commit = repo.find_commit(mergebase_of_from_and_to)?;
-    let to_commit = to_commit_ref.peel_to_commit()?;
-    let mergebase_tree = mergebase_commit.tree()?;
-    let to_tree = to_commit.tree()?;
-
-    let mut options = DiffOptions::new();
-    options.pathspec(anchored_turbo_root.to_str()?);
-
-    let diff = repo.diff_tree_to_tree(Some(&mergebase_tree), Some(&to_tree), Some(&mut options))?;
-    diff.print(DiffFormat::NameOnly, |_, _, _| true)?;
-
-    for delta in diff.deltas() {
-        let file = delta.old_file();
-        if let Some(file_path) = file.path() {
-            let anchored_to_turbo_root_file_path =
-                reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, file_path)?;
-            files.insert(anchored_to_turbo_root_file_path.to_str()?.to_string());
-        }
-    }
-
-    Ok(())
 }
 
 /// Finds the content of a file at a previous commit. Assumes file is in a git
@@ -190,20 +122,13 @@ pub fn previous_content(
     from_commit: &str,
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
-    let repo = Repository::open(&git_root)?;
-    let git_root = AbsoluteSystemPathBuf::new(dunce::canonicalize(git_root)?)?;
-    let file_path = AbsoluteSystemPathBuf::new(dunce::canonicalize(file_path)?)?;
-    let from_commit_ref = repo.revparse_single(from_commit)?;
-    let from_commit = from_commit_ref.peel_to_commit()?;
-    let from_tree = from_commit.tree()?;
+    let output = Command::new("git")
+        .arg("show")
+        .arg(format!("{}:{}", from_commit, file_path.to_str().unwrap()))
+        .current_dir(&git_root)
+        .output()?;
 
-    let relative_path = git_root.anchor(&file_path)?;
-
-    let file = from_tree.get_path(relative_path.as_path())?;
-    let blob = repo.find_blob(file.id())?;
-    let content = blob.content();
-
-    Ok(content.to_vec())
+    Ok(output.stdout)
 }
 
 #[cfg(test)]
@@ -221,7 +146,10 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::previous_content;
-    use crate::{git::reanchor_path_from_git_root_to_turbo_root, Error};
+    use crate::{
+        git::{changed_files, reanchor_path_from_git_root_to_turbo_root},
+        Error,
+    };
 
     fn setup_repository() -> Result<(TempDir, Repository), Error> {
         let repo_root = tempfile::tempdir()?;
@@ -277,96 +205,6 @@ mod tests {
             &tree,
             std::slice::from_ref(&&previous_commit),
         )?)
-    }
-
-    fn add_files_from_stdout(
-        files: &mut HashSet<String>,
-        git_root: &AbsoluteSystemPathBuf,
-        turbo_root: &AbsoluteSystemPathBuf,
-        stdout: Vec<u8>,
-    ) {
-        let stdout = String::from_utf8(stdout).unwrap();
-        for line in stdout.lines() {
-            let path = Path::new(line);
-            let anchored_to_turbo_root_file_path =
-                reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, path).unwrap();
-            files.insert(
-                anchored_to_turbo_root_file_path
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-            );
-        }
-    }
-
-    // An implementation that shells out to the git command like the old Go version
-    fn expected_changed_files(
-        git_root: &Path,
-        turbo_root: &Path,
-        from_commit: Option<&str>,
-        to_commit: &str,
-    ) -> Result<HashSet<String>, Error> {
-        let git_root = AbsoluteSystemPathBuf::new(dunce::canonicalize(git_root)?)?;
-        let turbo_root = AbsoluteSystemPathBuf::new(dunce::canonicalize(turbo_root)?)?;
-
-        let mut files = HashSet::new();
-        let output = Command::new("git")
-            .arg("diff")
-            .arg("--name-only")
-            .arg(to_commit)
-            .arg("--")
-            .arg(turbo_root.to_str().unwrap())
-            .current_dir(&git_root)
-            .output()
-            .expect("failed to execute process");
-
-        add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
-
-        if let Some(from_commit) = from_commit {
-            let output = Command::new("git")
-                .arg("diff")
-                .arg("--name-only")
-                .arg(format!("{}...{}", from_commit, to_commit))
-                .arg("--")
-                .arg(turbo_root.to_str().unwrap())
-                .current_dir(&git_root)
-                .output()
-                .expect("failed to execute process");
-
-            add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
-        }
-
-        let output = Command::new("git")
-            .arg("ls-files")
-            .arg("--other")
-            .arg("--exclude-standard")
-            .arg("--")
-            .arg(turbo_root.to_str().unwrap())
-            .current_dir(&git_root)
-            .output()
-            .expect("failed to execute process");
-
-        add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
-
-        Ok(files)
-    }
-
-    // Calls git::changed_files then compares it against the expected version that
-    // shells out to git
-    fn changed_files(
-        git_root: PathBuf,
-        turbo_root: PathBuf,
-        from_commit: Option<&str>,
-        to_commit: &str,
-    ) -> Result<HashSet<String>, Error> {
-        let expected_files =
-            expected_changed_files(&git_root, &turbo_root, from_commit, to_commit)?;
-        let files =
-            super::changed_files(git_root.clone(), turbo_root.clone(), from_commit, to_commit)?;
-
-        assert_eq!(files, expected_files);
-
-        Ok(files)
     }
 
     #[test]

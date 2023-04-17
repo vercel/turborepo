@@ -24,5 +24,9 @@ func (g *git) ChangedFiles(fromCommit string, toCommit string, monorepoRoot stri
 }
 
 func (g *git) PreviousContent(fromCommit string, filePath string) ([]byte, error) {
+	if fromCommit == "" {
+		return nil, fmt.Errorf("Need commit sha to inspect file contents")
+	}
+
 	return ffi.PreviousContent(g.repoRoot, fromCommit, filePath)
 }
