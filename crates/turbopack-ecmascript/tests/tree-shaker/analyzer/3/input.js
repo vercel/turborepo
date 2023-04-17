@@ -32,3 +32,7 @@ export function c2_2() {
 function c2_3() {
   return c2_1()
 }
+
+
+c1_3()
+c2_2()
