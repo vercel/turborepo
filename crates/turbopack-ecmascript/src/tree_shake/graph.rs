@@ -411,6 +411,9 @@ impl DepGraph {
             if let ItemId::Group(_) = id {
                 groups.push((vec![id.clone()], FxHashSet::default()));
                 global_done.insert(ix);
+            } else if cycles.iter().any(|v| v.contains(&ix)) {
+                groups.push((vec![id.clone()], FxHashSet::default()));
+                global_done.insert(ix);
             }
         }
 
