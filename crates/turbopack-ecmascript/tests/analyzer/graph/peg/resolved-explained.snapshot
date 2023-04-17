@@ -443,7 +443,37 @@ endPosDetails = (undefined | {"line": 1, "column": 1} | ???*0* | {"line": ???*2*
 
 error = (...) => undefined
 
-escapedParts = ""
+escapedParts = ("" | `${(undefined | ???*0*)}-${(undefined | ???*5*)}` | undefined | ???*10*)
+- *0* ???*1*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+  ⚠️  unknown callee object
+- *1* ???*2*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
+  ⚠️  unknown callee object
+- *2* ???*3*["replace"](/\r/g, "\\r")
+  ⚠️  unknown callee object
+- *3* ???*4*["replace"](/\n/g, "\\n")
+  ⚠️  unknown callee object
+- *4* ???["replace"](/\t/g, "\\t")
+  ⚠️  unknown callee object
+- *5* ???*6*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+  ⚠️  unknown callee object
+- *6* ???*7*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
+  ⚠️  unknown callee object
+- *7* ???*8*["replace"](/\r/g, "\\r")
+  ⚠️  unknown callee object
+- *8* ???*9*["replace"](/\n/g, "\\n")
+  ⚠️  unknown callee object
+- *9* ???["replace"](/\t/g, "\\t")
+  ⚠️  unknown callee object
+- *10* ???*11*["replace"](/[\x10-\x1F\x7F-\x9F]/g, *anonymous function 2385*)
+  ⚠️  unknown callee object
+- *11* ???*12*["replace"](/[\x00-\x0F]/g, *anonymous function 2287*)
+  ⚠️  unknown callee object
+- *12* ???*13*["replace"](/\r/g, "\\r")
+  ⚠️  unknown callee object
+- *13* ???*14*["replace"](/\n/g, "\\n")
+  ⚠️  unknown callee object
+- *14* ???["replace"](/\t/g, "\\t")
+  ⚠️  unknown callee object
 
 expectation#11 = ???*0*
 - *0* arguments[0]

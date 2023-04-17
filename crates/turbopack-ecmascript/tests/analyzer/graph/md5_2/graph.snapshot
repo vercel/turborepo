@@ -5361,12 +5361,24 @@
     ),
     (
         "i",
-        Constant(
-            Num(
-                ConstantNumber(
-                    0.0,
+        Alternatives(
+            3,
+            [
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            0.0,
+                        ),
+                    ),
                 ),
-            ),
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            16.0,
+                        ),
+                    ),
+                ),
+            ],
         ),
     ),
     (

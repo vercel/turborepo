@@ -636,7 +636,7 @@ Jj = (...) => (undefined | b | null)
 
 Jk = (...) => (undefined | T)
 
-K = (0 | e | c | b | c | h | e)
+K = (0 | 2 | e | 1 | c | b | c | 4 | h | e)
 
 Ka = (...) => (undefined | null | a)
 
@@ -1418,7 +1418,7 @@ a#152 = (arguments[0] | a["child"] | a["sibling"])
 
 a#154 = arguments[0]
 
-a#157 = arguments[0]
+a#157 = (arguments[0] | 0)
 
 a#158 = arguments[0]
 
@@ -1445,7 +1445,8 @@ a#17 = arguments[0]
 
 a#171 = (arguments[0] | a["entanglements"])
 
-a#173 = arguments[0]
+a#173 = (arguments[0] | ???*0*)
+- *0* unsupported expression
 
 a#174 = arguments[0]
 
@@ -2407,7 +2408,8 @@ b#156 = ???*0*
 - *0* b
   ⚠️  pattern without value
 
-b#159 = (arguments[1] | a["entangledLanes"])
+b#159 = (arguments[1] | a["entangledLanes"] | d | ???*0*)
+- *0* unsupported expression
 
 b#161 = arguments[1]
 
@@ -2534,7 +2536,10 @@ b#285 = arguments[1]
 
 b#286 = arguments[1]
 
-b#3 = `https://reactjs.org/docs/error-decoder.html?invariant=${a}`
+b#3 = (
+  | `https://reactjs.org/docs/error-decoder.html?invariant=${a}`
+  | `&args[]=${FreeVar(encodeURIComponent)(FreeVar(arguments)[c])}`
+)
 
 b#30 = (arguments[1] | *anonymous function 6811*)
 
@@ -2776,7 +2781,13 @@ b#559 = arguments[1]
 
 b#56 = ("checked" | "value")
 
-b#562 = (R["identifierPrefix"] | `:${b}R${c}` | `:${b}r${c["toString"](32)}:`)
+b#562 = (
+  | R["identifierPrefix"]
+  | `:${b}R${c}`
+  | `H${c["toString"](32)}`
+  | ":"
+  | `:${b}r${c["toString"](32)}:`
+)
 
 b#565 = di()
 
@@ -2944,7 +2955,8 @@ b#819 = (a | c | b["return"] | b["sibling"])
 
 b#82 = arguments[1]
 
-b#827 = arguments[1]
+b#827 = (arguments[1] | ???*0*)
+- *0* unsupported expression
 
 b#829 = (uc(a, 0) | d)
 
@@ -2956,7 +2968,8 @@ b#834 = K
 
 b#838 = (arguments[1] | 0)
 
-b#843 = (arguments[1] | Z | y | na)
+b#843 = (arguments[1] | Z | y | ???*0* | na)
+- *0* unsupported expression
 
 b#863 = arguments[1]
 
@@ -3026,7 +3039,7 @@ b#951 = (arguments[1] | Bg(4, (a["children"] | []), a["key"], b))
 
 b#952 = arguments[1]
 
-b#953 = (arguments[1] | 1 | 0)
+b#953 = (arguments[1] | 1 | 8 | 0)
 
 b#954 = arguments[1]
 
@@ -3249,7 +3262,7 @@ c#347 = arguments[2]
 
 c#350 = eg
 
-c#357 = arguments[2]
+c#357 = (arguments[2] | 1)
 
 c#361 = Bg(5, null, null, 0)
 
@@ -3271,7 +3284,7 @@ c#392 = (a["alternate"] | a)
 
 c#396 = arguments[2]
 
-c#398 = arguments[2]
+c#398 = (arguments[2] | d)
 
 c#400 = (
   | a["updateQueue"]
@@ -3385,7 +3398,7 @@ c#539 = (arguments[2] | Yg(a, b, e, d))
 
 c#546 = a["pending"]
 
-c#547 = arguments[2]
+c#547 = (arguments[2] | d)
 
 c#550 = (arguments[2] | c["concat"]([a]) | null)
 
@@ -3401,7 +3414,7 @@ c#562 = (sg | (???*0*["toString"](32) + c) | ???*1*)
 - *0* unsupported expression
 - *1* unsupported expression
 
-c#570 = ""
+c#570 = ("" | Pa(d))
 
 c#573 = arguments[2]
 
@@ -3468,7 +3481,8 @@ c#644 = arguments[2]
 
 c#645 = (null | b | a["tail"] | c["sibling"])
 
-c#646 = 0
+c#646 = (0 | ???*0*)
+- *0* unsupported expression
 
 c#647 = (
   | arguments[2]
@@ -3700,7 +3714,8 @@ d#128 = arguments[3]
 
 d#136 = (b | e["return"] | f | e)
 
-d#159 = (0 | tc(h) | tc(f) | tc(g))
+d#159 = (0 | tc(h) | tc(f) | tc(g) | ???*0* | a[c])
+- *0* unsupported expression
 
 d#162 = a["pingedLanes"]
 
@@ -3773,7 +3788,7 @@ d#275 = (a[c] | d["listeners"])
 
 d#280 = `${a}__bubble`
 
-d#281 = 0
+d#281 = (0 | 4)
 
 d#285 = arguments[3]
 
@@ -3798,7 +3813,8 @@ d#347 = a["stateNode"]
 
 d#350 = (c[a] | d(!(0)))
 
-d#357 = rg
+d#357 = (rg | ???*0* | g)
+- *0* unsupported expression
 
 d#364 = xg
 
@@ -3808,7 +3824,7 @@ d#391 = arguments[3]
 
 d#396 = (a["updateQueue"] | d["shared"])
 
-d#398 = b["lanes"]
+d#398 = (b["lanes"] | a["pendingLanes"])
 
 d#400 = (a["alternate"] | d["updateQueue"])
 
@@ -3903,7 +3919,7 @@ d#537 = lh(a)
 
 d#539 = lh(a)
 
-d#547 = b["lanes"]
+d#547 = (b["lanes"] | a["pendingLanes"])
 
 d#554 = ci()
 
@@ -3970,7 +3986,7 @@ d#619 = a["alternate"]
 
 d#620 = arguments[3]
 
-d#621 = (b["pendingProps"] | M["current"] | ???*0*)
+d#621 = (b["pendingProps"] | M["current"] | ???*0* | 1)
 - *0* unsupported expression
 
 d#631 = (b["type"]["_context"] | b["memoizedState"] | (0 !== ???*0*))
@@ -3985,7 +4001,8 @@ d#644 = arguments[3]
 
 d#645 = (null | c)
 
-d#646 = 0
+d#646 = (0 | ???*0* | e["subtreeFlags"] | e["flags"])
+- *0* unsupported expression
 
 d#647 = (
   | b["pendingProps"]
@@ -4234,7 +4251,7 @@ e#354 = ???*0*
 - *0* e
   ⚠️  pattern without value
 
-e#357 = ???*0*
+e#357 = (???*0* | g)
 - *0* unsupported expression
 
 e#391 = b["interleaved"]
@@ -4325,7 +4342,7 @@ e#605 = arguments[4]
 
 e#607 = arguments[4]
 
-e#609 = (M["current"] | a["memoizedState"] | a["child"])
+e#609 = (M["current"] | 1 | a["memoizedState"] | a["child"])
 
 e#614 = (arguments[4] | b["mode"] | 2 | 8 | 32 | 268435456 | 0 | e)
 
@@ -4418,7 +4435,7 @@ e#919 = (
 
 e#92 = arguments[3]
 
-e#947 = arguments[4]
+e#947 = (arguments[4] | 8)
 
 e#952 = arguments[4]
 
@@ -4466,10 +4483,11 @@ f#128 = arguments[5]
 
 f#136 = (e["alternate"] | e["child"] | f["sibling"])
 
-f#159 = (a["pingedLanes"] | ???*0*)
+f#159 = (a["pingedLanes"] | g | ???*0*)
 - *0* unsupported expression
 
-f#162 = a["pendingLanes"]
+f#162 = (a["pendingLanes"] | ???*0*)
+- *0* unsupported expression
 
 f#169 = ???*0*
 - *0* unsupported expression
@@ -4536,7 +4554,7 @@ f#447 = d["_init"]
 
 f#459 = (arguments[2] | f["props"]["children"] | `${f}`)
 
-f#485 = (arguments[5] | 0)
+f#485 = (arguments[5] | 0 | 1)
 
 f#494 = (c["pending"] | e["next"] | e["lane"])
 
@@ -4747,7 +4765,7 @@ g#400 = {
     "next": null
 }
 
-g#404 = (e["lastBaseUpdate"] | k | 0)
+g#404 = (e["lastBaseUpdate"] | k | 0 | r | e["lane"])
 
 g#420 = arguments[6]
 
@@ -4795,13 +4813,13 @@ g#647 = (???*0* | e | e["ownerDocument"] | a | vb(c, d) | f["rendering"] | Mh(a)
 - *0* g
   ⚠️  pattern without value
 
-g#673 = 0
+g#673 = (0 | q["nodeValue"]["length"])
 
 g#706 = f["destroy"]
 
 g#716 = b
 
-g#721 = (c["memoizedProps"] | f | 0 | k["display"] | null)
+g#721 = (c["memoizedProps"] | f | 0 | 2 | k["display"] | null)
 
 g#756 = d["stateNode"]["containerInfo"]
 
@@ -4882,7 +4900,7 @@ gh = (...) => undefined
 
 gi = (...) => (undefined | [f, d])
 
-gj = (0 | fj["current"] | b)
+gj = (c | a | d | 0 | fj["current"] | b)
 
 gk = (B() | 0)
 
@@ -5015,7 +5033,7 @@ hf = ef[gf]
 
 hg = (...) => undefined
 
-hh = 0
+hh = (g | m | f | c | b["lanes"] | 0)
 
 hi = (...) => undefined
 
@@ -5682,7 +5700,7 @@ ra = /[\-:]([a-z])/g
 
 rb = (...) => (undefined | "" | `${b}`["trim"]() | `${b}px`)
 
-rc = 64
+rc = (64 | 1)
 
 rd = (...) => (undefined | b)
 
@@ -5701,7 +5719,7 @@ ri = (...) => (undefined | FreeVar(undefined))
 rj = (...) => (undefined | ???*0*)
 - *0* unsupported expression
 
-rk = (0 | ???*0*)
+rk = (0 | c | ???*0*)
 - *0* unsupported expression
 
 rl = (...) => (undefined | g | k)
@@ -5710,7 +5728,7 @@ sa = (...) => (undefined | a[1]["toUpperCase"]())
 
 sb = (...) => undefined
 
-sc = 4194304
+sc = (4194304 | 1)
 
 sd = {
     "eventPhase": 0,
@@ -5734,7 +5752,7 @@ si = (...) => (undefined | di()["memoizedState"])
 
 sj = (...) => (undefined | tj(a, b, g, d) | null | f | tj(a, b, g, null) | b)
 
-sk = (0 | ???*0*)
+sk = (0 | ???*0* | c)
 - *0* unsupported expression
 
 sl = (...) => (undefined | hl(g))
