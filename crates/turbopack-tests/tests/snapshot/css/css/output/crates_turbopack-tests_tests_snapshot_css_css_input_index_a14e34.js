@@ -242,8 +242,11 @@ async function loadChunk(source, chunkData) {
     }
     const promise = loadChunkPath(source, chunkData.path);
     for (const included of includedList) {
-      if (!availableModules.has(included))
+      if (!availableModules.has(included)) {
+        // It might be better to race old and new promises, but it's rare that the new promise will be faster than a request started earlier.
+        // In production it's even more rare, because the chunk optimization tries to deduplicate modules anyway.
         availableModules.set(included, promise);
+      }
     }
     return promise;
   }
@@ -1373,7 +1376,6 @@ let BACKEND;
         return;
       }
 
-      const chunksToWaitFor = [];
       for (const otherChunkData of params.otherChunks) {
         const otherChunkPath =
           typeof otherChunkData === "string"
@@ -1385,12 +1387,12 @@ let BACKEND;
           const cssResolver = getOrCreateResolver(otherChunkPath);
           cssResolver.resolve();
         } else if (otherChunkPath.endsWith(".js")) {
-          // Chunk might started loading, so we want to avoid triggering another load.
+          // Chunk might have started loading, so we want to avoid triggering another load.
           getOrCreateResolver(otherChunkPath);
         }
       }
 
-      // This wait for chunks to be loaded, but also marks included items as available.
+      // This waits for chunks to be loaded, but also marks included items as available.
       await Promise.all(
         params.otherChunks.map((otherChunkData) =>
           loadChunk({ type: SourceTypeRuntime, chunkPath }, otherChunkData)
