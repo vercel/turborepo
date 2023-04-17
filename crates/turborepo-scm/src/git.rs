@@ -33,6 +33,7 @@ pub fn changed_files(
 ) -> Result<HashSet<String>, Error> {
     let git_root = AbsoluteSystemPathBuf::new(git_root)?;
     let turbo_root = AbsoluteSystemPathBuf::new(turbo_root)?;
+    let turbo_root_relative_to_git_root = git_root.anchor(&turbo_root)?;
 
     let mut files = HashSet::new();
     let output = Command::new("git")
@@ -40,7 +41,7 @@ pub fn changed_files(
         .arg("--name-only")
         .arg(to_commit)
         .arg("--")
-        .arg(turbo_root.to_str().unwrap())
+        .arg(turbo_root_relative_to_git_root.to_str().unwrap())
         .current_dir(&git_root)
         .output()
         .expect("failed to execute process");
@@ -53,7 +54,7 @@ pub fn changed_files(
             .arg("--name-only")
             .arg(format!("{}...{}", from_commit, to_commit))
             .arg("--")
-            .arg(turbo_root.to_str().unwrap())
+            .arg(turbo_root_relative_to_git_root.to_str().unwrap())
             .current_dir(&git_root)
             .output()
             .expect("failed to execute process");
@@ -66,7 +67,7 @@ pub fn changed_files(
         .arg("--other")
         .arg("--exclude-standard")
         .arg("--")
-        .arg(turbo_root.to_str().unwrap())
+        .arg(turbo_root_relative_to_git_root.to_str().unwrap())
         .current_dir(&git_root)
         .output()
         .expect("failed to execute process");

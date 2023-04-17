@@ -10,6 +10,7 @@
 package scm
 
 import (
+	"fmt"
 	"github.com/vercel/turbo/cli/internal/ffi"
 )
 
