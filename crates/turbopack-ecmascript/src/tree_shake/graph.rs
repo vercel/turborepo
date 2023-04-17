@@ -410,7 +410,20 @@ impl DepGraph {
             if let ItemId::Group(_) = id {
                 groups.push((vec![id.clone()], FxHashSet::default()));
                 global_done.insert(ix);
-            } else if cycles.iter().any(|v| v.contains(&ix)) {
+            }
+        }
+
+        cycles.retain_mut(|v| {
+            v.retain(|ix| !global_done.contains(ix));
+
+            v.len() > 1
+        });
+
+        // Cycles should be in their own chunk
+        for id in self.g.graph_ix.iter() {
+            let ix = self.g.get_node(id);
+
+            if cycles.iter().any(|v| v.contains(&ix)) {
                 groups.push((vec![id.clone()], FxHashSet::default()));
                 global_done.insert(ix);
             }
