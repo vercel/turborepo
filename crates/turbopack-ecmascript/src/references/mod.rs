@@ -752,7 +752,8 @@ pub(crate) async fn analyze_ecmascript_module(
                             }
                         };
 
-                        analysis.add_reference(CjsRequireContextAssetReferenceVc::new(
+                        analysis.add_reference(RequireContextAssetReferenceVc::new(
+                            source,
                             origin,
                             options.dir,
                             options.include_subdirs,
