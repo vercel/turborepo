@@ -23,7 +23,7 @@ use turbopack_ecmascript::{
         EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
     AnalyzeEcmascriptModuleResultVc, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc,
+    EcmascriptModuleAssetVc, EcmascriptOptions,
 };
 
 #[turbo_tasks::function]
@@ -129,9 +129,12 @@ async fn into_ecmascript_module_asset(
         source.into(),
         this.context,
         Value::new(EcmascriptModuleAssetType::Typescript),
-        this.transforms,
-        Value::new(Default::default()),
-        this.context.compile_time_info(),
+        Value::new(EcmascriptOptions {
+            split_into_parts: false,
+            import_parts: false,
+            transforms: this.transforms,
+            compile_time_info: this.context.compile_time_info(),
+        }),
     ))
 }
 

@@ -130,9 +130,7 @@ pub struct EcmascriptModuleAsset {
     pub source: AssetVc,
     pub context: AssetContextVc,
     pub ty: EcmascriptModuleAssetType,
-    pub transforms: EcmascriptInputTransformsVc,
     pub options: EcmascriptOptions,
-    pub compile_time_info: CompileTimeInfoVc,
     pub inner_assets: Option<InnerAssetsVc>,
     #[turbo_tasks(debug_ignore)]
     #[serde(skip)]
@@ -150,17 +148,13 @@ impl EcmascriptModuleAssetVc {
         source: AssetVc,
         context: AssetContextVc,
         ty: Value<EcmascriptModuleAssetType>,
-        transforms: EcmascriptInputTransformsVc,
         options: Value<EcmascriptOptions>,
-        compile_time_info: CompileTimeInfoVc,
     ) -> Self {
         Self::cell(EcmascriptModuleAsset {
             source,
             context,
             ty: ty.into_value(),
-            transforms,
             options: options.into_value(),
-            compile_time_info,
             inner_assets: None,
             last_successful_analysis: Default::default(),
         })
@@ -171,18 +165,14 @@ impl EcmascriptModuleAssetVc {
         source: AssetVc,
         context: AssetContextVc,
         ty: Value<EcmascriptModuleAssetType>,
-        transforms: EcmascriptInputTransformsVc,
         options: Value<EcmascriptOptions>,
-        compile_time_info: CompileTimeInfoVc,
         inner_assets: InnerAssetsVc,
     ) -> Self {
         Self::cell(EcmascriptModuleAsset {
             source,
             context,
             ty: ty.into_value(),
-            transforms,
             options: options.into_value(),
-            compile_time_info,
             inner_assets: Some(inner_assets),
             last_successful_analysis: Default::default(),
         })
