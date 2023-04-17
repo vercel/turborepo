@@ -34,47 +34,63 @@ pub fn changed_files(
     let git_root = AbsoluteSystemPathBuf::new(git_root)?;
     let turbo_root = AbsoluteSystemPathBuf::new(turbo_root)?;
     let turbo_root_relative_to_git_root = git_root.anchor(&turbo_root)?;
+    let pathspec = turbo_root_relative_to_git_root.to_str()?;
 
     let mut files = HashSet::new();
-    let output = Command::new("git")
-        .arg("diff")
-        .arg("--name-only")
-        .arg(to_commit)
-        .arg("--")
-        .arg(turbo_root_relative_to_git_root.to_str().unwrap())
-        .current_dir(&git_root)
-        .output()
-        .expect("failed to execute process");
 
-    add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
+    let output = execute_git_command(&git_root, &["diff", "--name-only", to_commit], pathspec)?;
+
+    add_files_from_stdout(&mut files, &git_root, &turbo_root, output);
 
     if let Some(from_commit) = from_commit {
-        let output = Command::new("git")
-            .arg("diff")
-            .arg("--name-only")
-            .arg(format!("{}...{}", from_commit, to_commit))
-            .arg("--")
-            .arg(turbo_root_relative_to_git_root.to_str().unwrap())
-            .current_dir(&git_root)
-            .output()
-            .expect("failed to execute process");
+        let output = execute_git_command(
+            &git_root,
+            &[
+                "diff",
+                "--name-only",
+                &format!("{}...{}", from_commit, to_commit),
+            ],
+            pathspec,
+        )?;
 
-        add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
+        add_files_from_stdout(&mut files, &git_root, &turbo_root, output);
     }
 
-    let output = Command::new("git")
-        .arg("ls-files")
-        .arg("--other")
-        .arg("--exclude-standard")
-        .arg("--")
-        .arg(turbo_root_relative_to_git_root.to_str().unwrap())
-        .current_dir(&git_root)
-        .output()
-        .expect("failed to execute process");
+    let output = execute_git_command(
+        &git_root,
+        &["ls-files", "--others", "--exclude-standard"],
+        pathspec,
+    )?;
 
-    add_files_from_stdout(&mut files, &git_root, &turbo_root, output.stdout);
+    add_files_from_stdout(&mut files, &git_root, &turbo_root, output);
 
     Ok(files)
+}
+
+fn execute_git_command(
+    git_root: &AbsoluteSystemPathBuf,
+    args: &[&str],
+    pathspec: &str,
+) -> Result<Vec<u8>, Error> {
+    let mut command = Command::new("git");
+    command.args(args).current_dir(&git_root);
+
+    add_pathspec(&mut command, pathspec);
+
+    let output = command.output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        Err(Error::Git(stderr))
+    } else {
+        Ok(output.stdout)
+    }
+}
+
+fn add_pathspec(command: &mut Command, pathspec: &str) {
+    if pathspec != "" {
+        command.arg("--").arg(pathspec);
+    }
 }
 
 fn add_files_from_stdout(
@@ -123,20 +139,42 @@ pub fn previous_content(
     from_commit: &str,
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
-    let output = Command::new("git")
-        .arg("show")
-        .arg(format!("{}:{}", from_commit, file_path.to_str().unwrap()))
-        .current_dir(&git_root)
-        .output()?;
+    // If git root is not absolute, we error.
+    let git_root = AbsoluteSystemPathBuf::new(git_root)?;
 
-    Ok(output.stdout)
+    // However for file path we handle both absolute and relative paths
+    // Note that we assume any relative file path is relative to the git root
+    let anchored_file_path = if file_path.is_absolute() {
+        let absolute_file_path = AbsoluteSystemPathBuf::new(file_path)?;
+        git_root.anchor(&absolute_file_path)?
+    } else {
+        file_path.as_path().try_into()?
+    };
+
+    let mut command = Command::new("git");
+    let command = command
+        .arg("show")
+        .arg(format!(
+            "{}:{}",
+            from_commit,
+            anchored_file_path.to_str().unwrap()
+        ))
+        .current_dir(&git_root);
+
+    let output = command.output()?;
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        Err(Error::Git(
+            String::from_utf8_lossy(&output.stderr).to_string(),
+        ))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
         collections::HashSet,
-        env::set_current_dir,
         fs,
         path::{Path, PathBuf},
         process::Command,
@@ -476,16 +514,6 @@ mod tests {
             repo_root.path().to_path_buf(),
             second_commit_oid.to_string().as_str(),
             file,
-        )?;
-        assert_eq!(content, b"let z = 1;");
-
-        set_current_dir(repo_root.path())?;
-
-        // Check that relative paths work as well
-        let content = previous_content(
-            PathBuf::from("."),
-            second_commit_oid.to_string().as_str(),
-            PathBuf::from("./foo.js"),
         )?;
         assert_eq!(content, b"let z = 1;");
 
