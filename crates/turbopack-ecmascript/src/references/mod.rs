@@ -1916,6 +1916,19 @@ async fn value_visitor_inner(
             box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
             args,
         ) => require_context_visitor(origin, args, in_try).await?,
+        JsValue::Call(
+            _,
+            box JsValue::WellKnownFunction(
+                WellKnownFunctionKind::RequireContextRequire(..)
+                | WellKnownFunctionKind::RequireContextRequireKeys(..)
+                | WellKnownFunctionKind::RequireContextRequireResolve(..),
+            ),
+            _,
+        ) => {
+            // TODO: figure out how to do static analysis without invalidating the while
+            // analysis when a new file gets added
+            v.into_unknown("require.context() static analysis is currently limited")
+        }
         JsValue::FreeVar(ref kind) => match &**kind {
             "__dirname" => as_abs_path(origin.origin_path().parent()).await?,
             "__filename" => as_abs_path(origin.origin_path()).await?,
