@@ -1,17 +1,12 @@
 package turbopath
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
 
-type readDir func(string) ([]os.FileInfo, error)
-
-var defaultReadDir readDir = ioutil.ReadDir
-
-func hasFile(name, dir string, readdir readDir) (bool, error) {
-	files, err := readdir(dir)
+func hasFile(name, dir string) (bool, error) {
+	files, err := os.ReadDir(dir)
 
 	if err != nil {
 		return false, err
@@ -26,9 +21,9 @@ func hasFile(name, dir string, readdir readDir) (bool, error) {
 	return false, nil
 }
 
-func findupFrom(name, dir string, readdir readDir) (string, error) {
+func findupFrom(name, dir string) (string, error) {
 	for {
-		found, err := hasFile(name, dir, readdir)
+		found, err := hasFile(name, dir)
 
 		if err != nil {
 			return "", err
@@ -48,8 +43,8 @@ func findupFrom(name, dir string, readdir readDir) (string, error) {
 	}
 }
 
-// Recursively find a file by walking up parents in the file tree
+// FindupFrom Recursively finds a file by walking up parents in the file tree
 // starting from a specific directory.
 func FindupFrom(name, dir string) (string, error) {
-	return findupFrom(name, dir, defaultReadDir)
+	return findupFrom(name, dir)
 }
