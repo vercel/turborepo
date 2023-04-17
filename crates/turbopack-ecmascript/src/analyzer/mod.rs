@@ -379,7 +379,7 @@ pub enum JsValue {
     WellKnownFunction(WellKnownFunctionKind),
     /// Not-analyzable value. Might contain the original value for additional
     /// info. Has a reason string for explanation.
-    Unknown(Option<Arc<JsValue>>, &'static str),
+    Unknown(Option<Arc<JsValue>>, Cow<'static, str>),
 
     // NESTED VALUES
     // ----------------------------
@@ -500,7 +500,7 @@ impl From<&CompileTimeDefineValue> for JsValue {
 
 impl Default for JsValue {
     fn default() -> Self {
-        JsValue::Unknown(None, "")
+        JsValue::unknown_empty("")
     }
 }
 
@@ -818,8 +818,17 @@ impl JsValue {
             args,
         )
     }
+
     pub fn member(o: Box<JsValue>, p: Box<JsValue>) -> Self {
         Self::Member(1 + o.total_nodes() + p.total_nodes(), o, p)
+    }
+
+    pub fn unknown(value: impl Into<Arc<JsValue>>, reason: impl Into<Cow<'static, str>>) -> Self {
+        Self::Unknown(Some(value.into()), reason.into())
+    }
+
+    pub fn unknown_empty(reason: impl Into<Cow<'static, str>>) -> Self {
+        Self::Unknown(None, reason.into())
     }
 }
 
@@ -1472,14 +1481,20 @@ impl JsValue {
 // Unknown management
 impl JsValue {
     /// Convert the value into unknown with a specific reason.
-    pub fn make_unknown(&mut self, reason: &'static str) {
-        *self = JsValue::Unknown(Some(Arc::new(take(self))), reason);
+    pub fn make_unknown(&mut self, reason: impl Into<Cow<'static, str>>) {
+        *self = JsValue::unknown(take(self), reason);
+    }
+
+    /// Convert the owned value into unknown with a specific reason.
+    pub fn into_unknown(mut self, reason: impl Into<Cow<'static, str>>) -> Self {
+        self.make_unknown(reason);
+        self
     }
 
     /// Convert the value into unknown with a specific reason, but don't retain
     /// the original value.
-    pub fn make_unknown_without_content(&mut self, reason: &'static str) {
-        *self = JsValue::Unknown(None, reason);
+    pub fn make_unknown_without_content(&mut self, reason: impl Into<Cow<'static, str>>) {
+        *self = JsValue::unknown_empty(reason);
     }
 
     /// Make all nested operations unknown when the value is an operation.
@@ -1500,7 +1515,7 @@ impl JsValue {
     }
 
     pub fn add_unknown_mutations(&mut self) {
-        self.add_alt(JsValue::Unknown(None, "unknown mutation"));
+        self.add_alt(JsValue::unknown_empty("unknown mutation"));
     }
 }
 
@@ -3032,8 +3047,6 @@ fn is_unresolved(i: &Ident, unresolved_mark: Mark) -> bool {
 
 #[doc(hidden)]
 pub mod test_utils {
-    use std::sync::Arc;
-
     use anyhow::Result;
     use indexmap::IndexMap;
     use turbopack_core::compile_time_info::CompileTimeInfoVc;
@@ -3060,7 +3073,7 @@ pub mod test_utils {
                 ref args,
             ) => match &args[0] {
                 JsValue::Constant(v) => (v.to_string() + "/resolved/lib/index.js").into(),
-                _ => JsValue::Unknown(Some(Arc::new(v)), "require.resolve non constant"),
+                _ => v.into_unknown("require.resolve non constant"),
             },
             JsValue::Call(
                 _,
@@ -3078,15 +3091,15 @@ pub mod test_utils {
                         RequireContextValue { map },
                     ))
                 }
-                Err(reason) => JsValue::Unknown(Some(Arc::new(v)), reason),
+                Err(reason) => v.into_unknown(reason),
             },
-            JsValue::FreeVar(var) => match &*var {
+            JsValue::FreeVar(ref var) => match &**var {
                 "require" => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
                 "define" => JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
                 "__dirname" => "__dirname".into(),
                 "__filename" => "__filename".into(),
                 "process" => JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
-                _ => JsValue::Unknown(Some(Arc::new(JsValue::FreeVar(var))), "unknown global"),
+                _ => v.into_unknown("unknown global"),
             },
             JsValue::Module(ModuleValue {
                 module: ref name, ..
@@ -3291,7 +3304,7 @@ mod tests {
                                         );
                                     }
                                     EffectArg::Spread => {
-                                        new_args.push(JsValue::Unknown(None, "spread"));
+                                        new_args.push(JsValue::unknown_empty("spread"));
                                     }
                                 }
                             }

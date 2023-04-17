@@ -590,7 +590,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                         value
                                     }
                                     EffectArg::Spread => {
-                                        JsValue::Unknown(None, "spread is not supported yet")
+                                        JsValue::unknown_empty("spread is not supported yet")
                                     }
                                 };
                                 state.link_value(value, in_try).await
@@ -1492,7 +1492,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                     &ast_path,
                                     span,
                                     func,
-                                    JsValue::Unknown(None, "no this provided"),
+                                    JsValue::unknown_empty("no this provided"),
                                     args,
                                     &analysis_state,
                                     &add_effects,
@@ -1954,22 +1954,13 @@ async fn value_visitor_inner(
                     "@grpc/proto-loader" => {
                         JsValue::WellKnownObject(WellKnownObjectKind::NodeProtobufLoader)
                     }
-                    _ => JsValue::Unknown(
-                        Some(Arc::new(v)),
-                        "cross module analyzing is not yet supported",
-                    ),
+                    _ => v.into_unknown("cross module analyzing is not yet supported"),
                 }
             } else {
-                JsValue::Unknown(
-                    Some(Arc::new(v)),
-                    "cross module analyzing is not yet supported",
-                )
+                v.into_unknown("cross module analyzing is not yet supported")
             }
         }
-        JsValue::Argument(..) => JsValue::Unknown(
-            Some(Arc::new(v)),
-            "cross function analyzing is not yet supported",
-        ),
+        JsValue::Argument(..) => v.into_unknown("cross function analyzing is not yet supported"),
         _ => {
             let (mut v, mut modified) = replace_well_known(v, compile_time_info).await?;
             modified = replace_builtin(&mut v) || modified;
@@ -2012,22 +2003,22 @@ async fn require_resolve_visitor(
             .collect::<Vec<_>>();
 
         match values.len() {
-            0 => JsValue::Unknown(
-                Some(Arc::new(JsValue::call(
+            0 => JsValue::unknown(
+                JsValue::call(
                     box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
                     args,
-                ))),
+                ),
                 "unresolveable request",
             ),
             1 => values.pop().unwrap(),
             _ => JsValue::alternatives(values),
         }
     } else {
-        JsValue::Unknown(
-            Some(Arc::new(JsValue::call(
+        JsValue::unknown(
+            JsValue::call(
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
                 args,
-            ))),
+            ),
             "only a single argument is supported",
         )
     })
@@ -2041,11 +2032,11 @@ async fn require_context_visitor(
     let options = match parse_require_context(&args) {
         Ok(options) => options,
         Err(reason) => {
-            return Ok(JsValue::Unknown(
-                Some(Arc::new(JsValue::call(
+            return Ok(JsValue::unknown(
+                JsValue::call(
                     box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
                     args,
-                ))),
+                ),
                 reason,
             ))
         }
