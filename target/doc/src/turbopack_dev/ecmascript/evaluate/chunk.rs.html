@@ -266,7 +266,7 @@
     utils::StringifyJs,
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::DevChunkingContextVc;
+<span class="kw">use crate</span>::{ecmascript::chunk_data::ChunkData, DevChunkingContextVc};
 
 <span class="doccomment">/// An Ecmascript chunk that:
 /// * Contains the Turbopack dev runtime code; and
@@ -315,11 +315,11 @@
         };
 
         <span class="kw">let </span>other_chunks = this.other_chunks.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>other_chunks_paths = Vec::with_capacity(other_chunks.len());
-        <span class="kw">for </span>other_chunk <span class="kw">in </span><span class="kw-2">&amp;*</span>other_chunks {
-            <span class="kw">let </span>other_chunk_path = <span class="kw-2">&amp;*</span>other_chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(other_chunk_path) = output_root.get_path_to(other_chunk_path) {
-                other_chunks_paths.push(other_chunk_path.to_string());
+        <span class="kw">let </span><span class="kw-2">mut </span>other_chunks_data = Vec::with_capacity(other_chunks.len());
+        <span class="kw">for </span><span class="kw-2">&amp;</span>other_chunk <span class="kw">in </span><span class="kw-2">&amp;*</span>other_chunks {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(other_chunk_data) = ChunkData::from_asset(<span class="kw-2">&amp;</span>output_root, other_chunk).<span class="kw">await</span><span class="question-mark">?
+            </span>{
+                other_chunks_data.push(other_chunk_data);
             }
         }
 
@@ -350,7 +350,7 @@
             .collect();
 
         <span class="kw">let </span>params = EcmascriptDevChunkRuntimeParams {
-            other_chunks: other_chunks_paths,
+            other_chunks: other_chunks_data,
             runtime_module_ids,
         };
 
@@ -476,15 +476,15 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Default, Serialize)]
+<span class="attr">#[derive(Debug, Serialize)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
-</span><span class="kw">struct </span>EcmascriptDevChunkRuntimeParams {
+</span><span class="kw">struct </span>EcmascriptDevChunkRuntimeParams&lt;T&gt; {
     <span class="doccomment">/// Other chunks in the chunk group this chunk belongs to, if any. Does not
     /// include the chunk itself.
     ///
     /// These chunks must be loaed before the runtime modules can be
     /// instantiated.
-    </span>other_chunks: Vec&lt;String&gt;,
+    </span>other_chunks: Vec&lt;T&gt;,
     <span class="doccomment">/// List of module IDs that this chunk should instantiate when executed.
     </span>runtime_module_ids: Vec&lt;ModuleIdReadRef&gt;,
 }

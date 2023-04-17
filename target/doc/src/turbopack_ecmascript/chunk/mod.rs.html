@@ -434,6 +434,19 @@
 <a href="#434" id="434">434</a>
 <a href="#435" id="435">435</a>
 <a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>content;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>context;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>item;
@@ -455,6 +468,7 @@
         availability_info::AvailabilityInfo,
         optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
         Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkReferenceVc, ChunkVc, ChunkingContextVc,
+        ModuleIdsVc,
     },
     ident::{AssetIdent, AssetIdentVc},
     introspect::{
@@ -586,6 +600,18 @@
             }
         }
         <span class="prelude-val">Ok</span>(FileSystemPathOptionVc::cell(<span class="prelude-val">Some</span>(current)))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>entry_ids(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleIdsVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>entries = this
+            .main_entries
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
+            .map(|<span class="kw-2">&amp;</span>entry| entry.as_chunk_item(this.context).id())
+            .collect();
+        <span class="prelude-val">Ok</span>(ModuleIdsVc::cell(entries))
     }
 
     <span class="attr">#[turbo_tasks::function]

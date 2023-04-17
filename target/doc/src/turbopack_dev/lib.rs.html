@@ -15,6 +15,7 @@
 <a href="#15" id="15">15</a>
 <a href="#16" id="16">16</a>
 <a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(lint_reasons)]
 #![feature(iter_intersperse)]
 
@@ -24,6 +25,7 @@
 <span class="kw">pub mod </span>react_refresh;
 
 <span class="kw">pub use </span>chunking_context::{DevChunkingContext, DevChunkingContextBuilder, DevChunkingContextVc};
+<span class="kw">pub use </span>ecmascript::chunk_data::ChunkData;
 
 <span class="kw">pub fn </span>register() {
     turbo_tasks::register();

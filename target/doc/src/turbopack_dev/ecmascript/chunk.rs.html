@@ -154,12 +154,30 @@
 <a href="#154" id="154">154</a>
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{ChunkingContext, ParallelChunkReference, ParallelChunkReferenceVc},
+    chunk::{
+        ChunkingContext, OutputChunk, OutputChunkRuntimeInfo, OutputChunkRuntimeInfoVc,
+        OutputChunkVc, ParallelChunkReference, ParallelChunkReferenceVc,
+    },
     ident::AssetIdentVc,
     introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
     reference::AssetReferencesVc,
@@ -197,6 +215,18 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="string">&quot;Ecmascript Dev Chunk&quot;</span>.to_string()))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputChunk <span class="kw">for </span>EcmascriptDevChunk {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>runtime_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OutputChunkRuntimeInfoVc {
+        OutputChunkRuntimeInfo {
+            included_ids: <span class="prelude-val">Some</span>(<span class="self">self</span>.chunk.entry_ids()),
+            ..Default::default()
+        }
+        .cell()
     }
 }
 

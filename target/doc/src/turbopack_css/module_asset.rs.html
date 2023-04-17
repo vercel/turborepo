@@ -573,6 +573,8 @@
 <a href="#573" id="573">573</a>
 <a href="#574" id="574">574</a>
 <a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Write, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -647,7 +649,7 @@
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>ModuleCssModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
-        <span class="self">self</span>.inner.ident().with_modifier(modifier())
+        <span class="self">self</span>.inner.source_ident().with_modifier(modifier())
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -993,8 +995,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>CssProxyModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
-        <span class="self">self</span>.module.ident()
+    </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.module.<span class="kw">await</span><span class="question-mark">?</span>.inner.ident().with_modifier(modifier()))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -1033,9 +1035,9 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CssChunkPlaceable <span class="kw">for </span>CssProxyModuleAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>as_chunk_item(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; CssChunkItemVc {
+    </span><span class="kw">fn </span>as_chunk_item(self_vc: CssProxyModuleAssetVc, context: ChunkingContextVc) -&gt; CssChunkItemVc {
         CssProxyModuleChunkItemVc::cell(CssProxyModuleChunkItem {
-            module: <span class="self">self</span>.module,
+            inner: self_vc,
             context,
         })
         .into()
@@ -1057,7 +1059,7 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>CssProxyModuleChunkItem {
-    module: ModuleCssModuleAssetVc,
+    inner: CssProxyModuleAssetVc,
     context: ChunkingContextVc,
 }
 
@@ -1065,12 +1067,12 @@
 </span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>CssProxyModuleChunkItem {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
-        <span class="self">self</span>.module.ident()
+        <span class="self">self</span>.inner.ident()
     }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        <span class="self">self</span>.module.references()
+        <span class="self">self</span>.inner.references()
     }
 }
 
@@ -1079,6 +1081,8 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CssChunkItemContentVc&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.inner
+            .<span class="kw">await</span><span class="question-mark">?
             </span>.module
             .<span class="kw">await</span><span class="question-mark">?
             </span>.inner
