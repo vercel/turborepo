@@ -133,11 +133,6 @@ impl ModuleOptionsVc {
             });
         }
 
-        let ecmascript_options = EcmascriptOptions {
-            split_into_parts: enable_tree_shaking,
-            import_parts: enable_tree_shaking,
-        };
-
         if let Some(env) = preset_env_versions {
             transforms.push(EcmascriptInputTransform::PresetEnv(env));
         }
@@ -222,6 +217,13 @@ impl ModuleOptionsVc {
             .chain(transforms.iter().cloned())
             .collect(),
         );
+
+        let ecmascript_options = EcmascriptOptions {
+            split_into_parts: enable_tree_shaking,
+            import_parts: enable_tree_shaking,
+            transforms: app_transforms,
+            compile_time_info,
+        };
 
         let mut rules = vec![
             ModuleRule::new(
