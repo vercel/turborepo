@@ -413,20 +413,20 @@ impl DepGraph {
             }
         }
 
-        cycles.retain_mut(|v| {
-            v.retain(|ix| !global_done.contains(ix));
+        // cycles.retain_mut(|v| {
+        //     v.retain(|ix| !global_done.contains(ix));
 
-            v.len() > 1
-        });
+        //     v.len() > 1
+        // });
 
-        // Cycles should be in their own chunk
-        for id in self.g.graph_ix.iter() {
-            let ix = self.g.get_node(id);
+        // // Cycles should be in their own chunk
+        // for id in self.g.graph_ix.iter() {
+        //     let ix = self.g.get_node(id);
 
-            if cycles.iter().any(|v| v.contains(&ix)) && global_done.insert(ix) {
-                groups.push((vec![id.clone()], FxHashSet::default()));
-            }
-        }
+        //     if cycles.iter().any(|v| v.contains(&ix)) && global_done.insert(ix) {
+        //         groups.push((vec![id.clone()], FxHashSet::default()));
+        //     }
+        // }
 
         // Expand **starting** nodes
         for (ix, id) in self.g.graph_ix.iter().enumerate() {
