@@ -257,17 +257,9 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON, warn
 			// Return early to skip using results of incomplete dep graph resolution
 			return nil
 		}
-		pkg.TransitiveDeps = make([]lockfile.Package, 0, depSet.Cardinality())
-		for _, v := range depSet.ToSlice() {
-			dep := v.(lockfile.Package)
-			pkg.TransitiveDeps = append(pkg.TransitiveDeps, dep)
-		}
-		sort.Sort(lockfile.ByKey(pkg.TransitiveDeps))
-		hashOfExternalDeps, err := fs.HashObject(pkg.TransitiveDeps)
-		if err != nil {
+		if err := pkg.SetExternalDeps(depSet); err != nil {
 			return err
 		}
-		pkg.ExternalDepsHash = hashOfExternalDeps
 	} else {
 		pkg.TransitiveDeps = []lockfile.Package{}
 		pkg.ExternalDepsHash = ""
@@ -338,22 +330,18 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 	if internalDepsSet.Len() == 0 {
 		c.WorkspaceGraph.Connect(dag.BasicEdge(pkg.Name, core.ROOT_NODE_NAME))
 	}
-	pkg.TransitiveDeps = make([]lockfile.Package, 0, externalDeps.Cardinality())
-	for _, dependency := range externalDeps.ToSlice() {
-		dependency := dependency.(lockfile.Package)
-		pkg.TransitiveDeps = append(pkg.TransitiveDeps, dependency)
-	}
+
 	pkg.InternalDeps = make([]string, 0, internalDepsSet.Len())
 	for _, v := range internalDepsSet.List() {
 		pkg.InternalDeps = append(pkg.InternalDeps, fmt.Sprintf("%v", v))
 	}
-	sort.Strings(pkg.InternalDeps)
-	sort.Sort(lockfile.ByKey(pkg.TransitiveDeps))
-	hashOfExternalDeps, err := fs.HashObject(pkg.TransitiveDeps)
-	if err != nil {
+
+	if err := pkg.SetExternalDeps(externalDeps); err != nil {
 		return err
 	}
-	pkg.ExternalDepsHash = hashOfExternalDeps
+
+	sort.Strings(pkg.InternalDeps)
+
 	return nil
 }
 
