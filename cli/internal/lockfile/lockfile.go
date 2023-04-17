@@ -61,17 +61,40 @@ func (p ByKey) Less(i, j int) bool {
 
 var _ (sort.Interface) = (*ByKey)(nil)
 
-// TransitiveClosure the set of all lockfile keys that pkg depends on
-func TransitiveClosure(
-	workspaceDir turbopath.AnchoredUnixPath,
-	unresolvedDeps map[string]string,
+type closureMsg struct {
+	workspace turbopath.AnchoredUnixPath
+	closure   mapset.Set
+}
+
+// AllTransitiveClosures computes closures for all workspaces
+func AllTransitiveClosures(
+	workspaces map[turbopath.AnchoredUnixPath]map[string]string,
 	lockFile Lockfile,
-) (mapset.Set, error) {
-	if lf, ok := lockFile.(*NpmLockfile); ok {
-		// We special case as Rust implementations have their own dep crawl
-		return npmTransitiveDeps(lf, workspaceDir, unresolvedDeps)
+) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
+	g := new(errgroup.Group)
+	c := make(chan closureMsg, len(workspaces))
+	closures := make(map[turbopath.AnchoredUnixPath]mapset.Set, len(workspaces))
+	for workspace, deps := range workspaces {
+		workspace := workspace
+		deps := deps
+		g.Go(func() error {
+			closure, err := transitiveClosure(workspace, deps, lockFile)
+			if err != nil {
+				return err
+			}
+			c <- closureMsg{workspace: workspace, closure: closure}
+			return nil
+		})
 	}
-	return transitiveClosure(workspaceDir, unresolvedDeps, lockFile)
+	err := g.Wait()
+	close(c)
+	if err != nil {
+		return nil, err
+	}
+	for msg := range c {
+		closures[msg.workspace] = msg.closure
+	}
+	return closures, nil
 }
 
 func transitiveClosure(
@@ -81,6 +104,11 @@ func transitiveClosure(
 ) (mapset.Set, error) {
 	if IsNil(lockFile) {
 		return nil, fmt.Errorf("No lockfile available to do analysis on")
+	}
+
+	if lf, ok := lockFile.(*NpmLockfile); ok {
+		// We special case as Rust implementations have their own dep crawl
+		return npmTransitiveDeps(lf, workspaceDir, unresolvedDeps)
 	}
 
 	resolvedPkgs := mapset.NewSet()

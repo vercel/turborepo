@@ -230,21 +230,17 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 		rootPackageJSON.ExternalDepsHash = ""
 	} else {
 		c.Lockfile = lockFile
-		for _, pkg := range c.WorkspaceInfos.PackageJSONs {
-			depSet, err := lockfile.TransitiveClosure(
-				pkg.Dir.ToUnixPath(),
-				pkg.UnresolvedExternalDeps,
-				c.Lockfile,
-			)
-			if err != nil {
-				warnings.append(err)
-				continue
-			}
-			if err := pkg.SetExternalDeps(depSet); err != nil {
-				return nil, err
+		if closures, err := lockfile.AllTransitiveClosures(c.externalWorkspaceDeps(), c.Lockfile); err != nil {
+			warnings.append(err)
+		} else {
+			for _, pkg := range c.WorkspaceInfos.PackageJSONs {
+				if closure, ok := closures[pkg.Dir.ToUnixPath()]; ok {
+					if err := pkg.SetExternalDeps(closure); err != nil {
+						return nil, err
+					}
+				}
 			}
 		}
-
 	}
 
 	return c, warnings.errorOrNil()
@@ -354,6 +350,14 @@ func (c *Context) parsePackageJSON(repoRoot turbopath.AbsoluteSystemPath, pkgJSO
 	return nil
 }
 
+func (c *Context) externalWorkspaceDeps() map[turbopath.AnchoredUnixPath]map[string]string {
+	workspaces := make(map[turbopath.AnchoredUnixPath]map[string]string, len(c.WorkspaceInfos.PackageJSONs))
+	for _, pkg := range c.WorkspaceInfos.PackageJSONs {
+		workspaces[pkg.Dir.ToUnixPath()] = pkg.UnresolvedExternalDeps
+	}
+	return workspaces
+}
+
 // InternalDependencies finds all dependencies required by the slice of starting
 // packages, as well as the starting packages themselves.
 func (c *Context) InternalDependencies(start []string) ([]string, error) {
@@ -391,13 +395,14 @@ func (c *Context) ChangedPackages(previousLockfile lockfile.Lockfile) ([]string,
 		return nil, fmt.Errorf("Cannot detect changed packages without previous and current lockfile")
 	}
 
+	closures, err := lockfile.AllTransitiveClosures(c.externalWorkspaceDeps(), previousLockfile)
+	if err != nil {
+		return nil, err
+	}
+
 	didPackageChange := func(pkgName string, pkg *fs.PackageJSON) bool {
-		previousDeps, err := lockfile.TransitiveClosure(
-			pkg.Dir.ToUnixPath(),
-			pkg.UnresolvedExternalDeps,
-			previousLockfile,
-		)
-		if err != nil || previousDeps.Cardinality() != len(pkg.TransitiveDeps) {
+		previousDeps, ok := closures[pkg.Dir.ToUnixPath()]
+		if !ok || previousDeps.Cardinality() != len(pkg.TransitiveDeps) {
 			return true
 		}
 
