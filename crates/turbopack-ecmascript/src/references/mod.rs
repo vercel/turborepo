@@ -479,7 +479,7 @@ pub(crate) async fn analyze_ecmascript_module(
             // Check if it was a webpack entry
             if let Some((request, span)) = webpack_runtime {
                 let request = RequestVc::parse(Value::new(request.into()));
-                let runtime = resolve_as_webpack_runtime(origin, request, transforms);
+                let runtime = resolve_as_webpack_runtime(origin, request, options.transforms);
                 match &*runtime.await? {
                     WebpackRuntime::Webpack5 { .. } => {
                         ignore_effect_span = Some(span);
@@ -488,7 +488,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 origin,
                                 request,
                                 runtime,
-                                transforms,
+                                transforms: options.transforms,
                             }
                             .cell(),
                         );
@@ -497,7 +497,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 WebpackEntryAssetReference {
                                     source,
                                     runtime,
-                                    transforms,
+                                    transforms: options.transforms,
                                 }
                                 .cell(),
                             );
@@ -507,7 +507,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 WebpackChunkAssetReference {
                                     chunk_id: chunk,
                                     runtime,
-                                    transforms,
+                                    transforms: options.transforms,
                                 }
                                 .cell(),
                             );
@@ -1361,7 +1361,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 handler: &handler,
                 source,
                 origin,
-                compile_time_info,
+                compile_time_info: options.compile_time_info,
                 var_graph: &var_graph,
                 fun_args_values: Mutex::new(HashMap::<u32, Vec<JsValue>>::new()),
                 first_import_meta: true,
@@ -1664,7 +1664,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 analysis.add_reference(UrlAssetReferenceVc::new(
                                     origin,
                                     RequestVc::parse(Value::new(pat)),
-                                    compile_time_info.environment().rendering(),
+                                    options.compile_time_info.environment().rendering(),
                                     AstPathVc::cell(ast_path),
                                     IssueSourceVc::from_byte_offset(
                                         source,

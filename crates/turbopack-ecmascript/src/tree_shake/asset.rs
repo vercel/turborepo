@@ -164,9 +164,7 @@ async fn analyze(
         module.source,
         full_module.as_resolve_origin(),
         Value::new(module.ty),
-        module.transforms,
         Value::new(module.options),
-        module.compile_time_info,
         Some(part),
     ))
 }
