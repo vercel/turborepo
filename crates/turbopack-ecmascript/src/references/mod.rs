@@ -16,7 +16,6 @@ use std::{
     future::Future,
     mem::take,
     pin::Pin,
-    sync::Arc,
 };
 
 use anyhow::Result;
@@ -46,6 +45,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
     compile_time_info::{CompileTimeInfoVc, FreeVarReference},
+    error::PrettyPrintError,
     issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapReferenceVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
@@ -734,13 +734,14 @@ pub(crate) async fn analyze_ecmascript_module(
                         let args = linked_args(args).await?;
                         let options = match parse_require_context(&args) {
                             Ok(options) => options,
-                            Err(reason) => {
+                            Err(err) => {
                                 let (args, hints) = explain_args(&args);
                                 handler.span_err_with_code(
                                     span,
                                     &format!(
                                         "require.context({args}) is not statically analyze-able: \
-                                         {reason}{hints}",
+                                         {}{hints}",
+                                        PrettyPrintError(&err)
                                     ),
                                     DiagnosticId::Error(
                                         errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT
@@ -1377,6 +1378,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             } => {
                                 let condition =
                                     analysis_state.link_value(condition, in_try).await?;
+
                                 macro_rules! inactive {
                                     ($block:ident) => {
                                         analysis.add_code_gen(UnreachableVc::new(AstPathVc::cell(
@@ -2031,13 +2033,13 @@ async fn require_context_visitor(
 ) -> Result<JsValue> {
     let options = match parse_require_context(&args) {
         Ok(options) => options,
-        Err(reason) => {
+        Err(err) => {
             return Ok(JsValue::unknown(
                 JsValue::call(
                     box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
                     args,
                 ),
-                reason,
+                PrettyPrintError(&err).to_string(),
             ))
         }
     };

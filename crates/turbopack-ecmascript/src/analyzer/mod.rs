@@ -9,6 +9,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::{bail, Context, Result};
 use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
@@ -2898,7 +2899,7 @@ pub struct RequireContextOptions {
 }
 
 /// Convert an ECMAScript regex to a Rust regex.
-fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex, &'static str> {
+fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex> {
     // rust regex doesn't allow escaped slashes, but they are necessary in js
     let pattern = pattern.replace("\\/", "/");
 
@@ -2919,7 +2920,7 @@ fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex, &'static str> {
             'u' => applied_flags.push('u'),
             // sticky search: not relevant for the regex itself
             'y' => {}
-            _ => return Err("unsupported flags in regex"),
+            _ => bail!("unsupported flag `{}` in regex", flag),
         }
     }
 
@@ -2929,26 +2930,26 @@ fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex, &'static str> {
         pattern
     };
 
-    Regex::new(&regex).map_err(|_| "could not convert ECMAScript regex to Rust regex")
+    Regex::new(&regex).context("could not convert ECMAScript regex to Rust regex")
 }
 
 /// Parse the arguments passed to a require.context invocation, validate them
 /// and convert them to the appropriate rust values.
-pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOptions, &'static str> {
+pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOptions> {
     if !(1..=3).contains(&args.len()) {
         // https://linear.app/vercel/issue/WEB-910/add-support-for-requirecontexts-mode-argument
-        return Err("require.context() only supports 1-3 arguments (mode is not supported)");
+        bail!("require.context() only supports 1-3 arguments (mode is not supported)");
     }
 
     let Some(dir) = args[0].as_str().map(|s| s.to_string()) else {
-        return Err("require.context(dir, ...) requires dir to be a constant string");
+        bail!("require.context(dir, ...) requires dir to be a constant string");
     };
 
     let include_subdirs = if let Some(include_subdirs) = args.get(1) {
         if let Some(include_subdirs) = include_subdirs.as_bool() {
             include_subdirs
         } else {
-            return Err(
+            bail!(
                 "require.context(..., includeSubdirs, ...) requires includeSubdirs to be a \
                  constant boolean",
             );
@@ -2961,7 +2962,7 @@ pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOption
         if let JsValue::Constant(ConstantValue::Regex(pattern, flags)) = filter {
             regex_from_js(pattern, flags)?
         } else {
-            return Err("require.context(..., ..., filter) requires filter to be a regex");
+            bail!("require.context(..., ..., filter) requires filter to be a regex");
         }
     } else {
         // https://webpack.js.org/api/module-methods/#requirecontext
@@ -3049,7 +3050,7 @@ fn is_unresolved(i: &Ident, unresolved_mark: Mark) -> bool {
 pub mod test_utils {
     use anyhow::Result;
     use indexmap::IndexMap;
-    use turbopack_core::compile_time_info::CompileTimeInfoVc;
+    use turbopack_core::{compile_time_info::CompileTimeInfoVc, error::PrettyPrintError};
 
     use super::{
         builtin::early_replace_builtin, well_known::replace_well_known, JsValue, ModuleValue,
@@ -3091,7 +3092,7 @@ pub mod test_utils {
                         RequireContextValue { map },
                     ))
                 }
-                Err(reason) => v.into_unknown(reason),
+                Err(err) => v.into_unknown(PrettyPrintError(&err).to_string()),
             },
             JsValue::FreeVar(ref var) => match &**var {
                 "require" => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
