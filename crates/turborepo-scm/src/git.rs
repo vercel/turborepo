@@ -499,8 +499,10 @@ mod tests {
         fs::write(&file, "let z = 0;")?;
 
         let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+        println!("first commit: {}", first_commit_oid);
         fs::write(&file, "let z = 1;")?;
         let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid))?;
+        println!("second commit: {}", second_commit_oid);
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
@@ -542,6 +544,31 @@ mod tests {
         assert_eq!(revparsed_head.id(), second_commit_oid);
         let revparsed_head_minus_1 = repo.revparse_single("HEAD~1")?;
         assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
+
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            Some("HEAD^"),
+            "HEAD",
+        )?;
+        assert_eq!(files, HashSet::from(["foo.js".to_string()]));
+
+        let content = previous_content(repo_root.path().to_path_buf(), "HEAD^", file)?;
+        assert_eq!(content, b"let z = 0;");
+
+        let new_file = repo_root.path().join("bar.js");
+        fs::write(&new_file, "let y = 0;")?;
+        let third_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(second_commit_oid))?;
+        let third_commit = repo.find_commit(third_commit_oid)?;
+        repo.branch("release-1", &third_commit, false)?;
+
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            Some("HEAD~1"),
+            "release-1",
+        )?;
+        assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         Ok(())
     }
