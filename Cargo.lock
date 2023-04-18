@@ -4357,6 +4357,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "prehash"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04bfa62906ce8d9badf8d1764501640ae7f0bcea3437a209315830e0f73564d1"
+
+[[package]]
 name = "preset_env_base"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7766,6 +7772,7 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "parking_lot",
+ "prehash",
  "priority-queue",
  "rustc-hash",
  "serde",
@@ -8331,8 +8338,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.4.6",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
