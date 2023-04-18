@@ -177,6 +177,12 @@ pub enum DaemonCommand {
     Stop,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum LinkTarget {
+    RemoteCache,
+    Spaces,
+}
+
 impl Args {
     pub fn new() -> Result<Self> {
         let mut clap_args = match Args::try_parse() {
@@ -250,6 +256,10 @@ pub enum Command {
         /// Do not create or modify .gitignore (default false)
         #[clap(long)]
         no_gitignore: bool,
+
+        /// Specify what should be linked (default "remote cache")
+        #[clap(long, value_enum)]
+        target: Option<LinkTarget>,
     },
     /// Login to your Vercel account
     Login {
@@ -280,7 +290,11 @@ pub enum Command {
     Run(Box<RunArgs>),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink {},
+    Unlink {
+        /// Specify what should be unlinked (default "remote cache")
+        #[clap(long, value_enum)]
+        target: Option<LinkTarget>,
+    },
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -506,30 +520,32 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Link { no_gitignore } => {
+        Command::Link { no_gitignore, target} => {
             if clap_args.test_run {
                 println!("Link test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
             let modify_gitignore = !*no_gitignore;
+            let to = *target;
             let mut base = CommandBase::new(clap_args, repo_root, version)?;
 
-            if let Err(err) = link::link(&mut base, modify_gitignore).await {
+            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
                 error!("error: {}", err.to_string())
             };
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Unlink { .. } => {
+        Command::Unlink { target } => {
             if clap_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
+            let from = *target;
             let mut base = CommandBase::new(clap_args, repo_root, version)?;
 
-            unlink::unlink(&mut base)?;
+            unlink::unlink(&mut base, from)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -1212,7 +1228,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink {}),
+                command: Some(Command::Unlink { target: None }),
                 ..Args::default()
             }
         );
@@ -1222,7 +1238,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink {}),
+                command: Some(Command::Unlink { target: None }),
                 cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
