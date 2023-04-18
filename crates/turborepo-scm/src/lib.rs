@@ -1,3 +1,8 @@
+#![feature(error_generic_member_access)]
+#![feature(provide_any)]
+
+use std::backtrace;
+
 use thiserror::Error;
 use turbopath::PathValidationError;
 
@@ -6,13 +11,16 @@ pub mod git;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("git error: {0}")]
-    Git2(#[from] git2::Error),
+    Git2(#[from] git2::Error, #[backtrace] backtrace::Backtrace),
     #[error("git error: {0}")]
-    Git(String),
+    Git(String, #[backtrace] backtrace::Backtrace),
     #[error("repository not found")]
-    RepositoryNotFound,
+    RepositoryNotFound(#[backtrace] backtrace::Backtrace),
     #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error("path error: {0}")]
-    Path(#[from] PathValidationError),
+    Path(
+        #[from] PathValidationError,
+        #[backtrace] backtrace::Backtrace,
+    ),
 }

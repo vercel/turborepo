@@ -1,4 +1,5 @@
 use std::{
+    backtrace::Backtrace,
     collections::HashSet,
     path::{Path, PathBuf},
     process::Command,
@@ -81,7 +82,7 @@ fn execute_git_command(
 
     if !output.status.success() {
         let stderr = String::from_utf8(output.stderr).unwrap();
-        Err(Error::Git(stderr))
+        Err(Error::Git(stderr, Backtrace::capture()))
     } else {
         Ok(output.stdout)
     }
@@ -167,6 +168,7 @@ pub fn previous_content(
     } else {
         Err(Error::Git(
             String::from_utf8_lossy(&output.stderr).to_string(),
+            Backtrace::capture(),
         ))
     }
 }
