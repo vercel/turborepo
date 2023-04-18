@@ -1,6 +1,3 @@
-//go:build rust
-// +build rust
-
 package lockfile
 
 import (

@@ -59,6 +59,7 @@ type RunSummary struct {
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages          []string           `json:"packages"`
+	EnvMode           util.EnvMode       `json:"envMode"`
 	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
 }
@@ -73,6 +74,7 @@ func NewRunSummary(
 	apiClient *client.APIClient,
 	runOpts util.RunOpts,
 	packages []string,
+	globalEnvMode util.EnvMode,
 	globalHashSummary *GlobalHashSummary,
 	synthesizedCommand string,
 ) Meta {
@@ -98,6 +100,7 @@ func NewRunSummary(
 			ExecutionSummary:  executionSummary,
 			TurboVersion:      turboVersion,
 			Packages:          packages,
+			EnvMode:           globalEnvMode,
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
 		},

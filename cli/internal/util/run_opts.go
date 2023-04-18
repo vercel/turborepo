@@ -1,5 +1,7 @@
 package util
 
+import "strings"
+
 // EnvMode specifies if we will be using strict env vars
 type EnvMode string
 
@@ -11,6 +13,11 @@ const (
 	// Strict - environment variables are limited
 	Strict EnvMode = "Strict"
 )
+
+// MarshalText implements TextMarshaler for the struct.
+func (s EnvMode) MarshalText() (text []byte, err error) {
+	return []byte(strings.ToLower(string(s))), nil
+}
 
 // RunOpts holds the options that control the execution of a turbo run
 type RunOpts struct {

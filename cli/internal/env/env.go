@@ -56,6 +56,10 @@ type EnvironmentVariablePairs []string
 // mapToPair returns a deterministically sorted set of EnvironmentVariablePairs from an EnvironmentVariableMap
 // It takes a transformer value to operate on each key-value pair and return a string
 func (evm EnvironmentVariableMap) mapToPair(transformer func(k string, v string) string) EnvironmentVariablePairs {
+	if evm == nil {
+		return nil
+	}
+
 	// convert to set to eliminate duplicates
 	pairs := make([]string, 0, len(evm))
 	for k, v := range evm {

@@ -74,11 +74,11 @@ pub extern "C" fn changed_files(buffer: Buffer) -> Buffer {
         }
     };
 
+    let commit_range = req.from_commit.as_deref().zip(req.to_commit.as_deref());
     let response = match turborepo_scm::git::changed_files(
-        req.git_root.into(),
-        req.turbo_root.into(),
-        req.from_commit.as_deref(),
-        &req.to_commit,
+        req.repo_root.into(),
+        req.monorepo_root.into(),
+        commit_range,
     ) {
         Ok(files) => {
             let files: Vec<_> = files.into_iter().collect();
@@ -108,7 +108,7 @@ pub extern "C" fn previous_content(buffer: Buffer) -> Buffer {
     };
 
     let response = match turborepo_scm::git::previous_content(
-        req.git_root.into(),
+        req.repo_root.into(),
         &req.from_commit,
         PathBuf::from(req.file_path),
     ) {

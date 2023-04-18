@@ -63,13 +63,16 @@ Validate that we got a full task summary for the failed task with an error in .e
     },
     "expandedOutputs": [],
     "framework": "",
+    "envMode": "loose",
     "environmentVariables": {
       "configured": [],
       "inferred": [],
       "global": [
         "SOME_ENV_VAR=",
         "VERCEL_ANALYTICS_ID="
-      ]
+      ],
+      "passthrough": null,
+      "globalPassthrough": null
     },
     "execution": {
       "startTime": [0-9]+, (re)
