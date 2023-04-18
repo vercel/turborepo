@@ -168,23 +168,28 @@ func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
 	return []byte(content), nil
 }
 
-// NpmTransitiveDeps returns the transitive external deps of a given package based on the deps and specifiers given
-func NpmTransitiveDeps(content []byte, pkgDir string, unresolvedDeps map[string]string) ([]*ffi_proto.LockfilePackage, error) {
-	return transitiveDeps(npmTransitiveDeps, content, pkgDir, unresolvedDeps)
-}
-
-func npmTransitiveDeps(buf C.Buffer) C.Buffer {
-	return C.npm_transitive_closure(buf)
-}
-
-func transitiveDeps(cFunc func(C.Buffer) C.Buffer, content []byte, pkgDir string, unresolvedDeps map[string]string) ([]*ffi_proto.LockfilePackage, error) {
+// TransitiveDeps returns the transitive external deps for all provided workspaces
+func TransitiveDeps(content []byte, packageManager string, workspaces map[string]map[string]string) (map[string]*ffi_proto.LockfilePackageList, error) {
+	flatWorkspaces := make(map[string]*ffi_proto.PackageDependencyList)
+	for workspace, deps := range workspaces {
+		packageDependencyList := make([]*ffi_proto.PackageDependency, len(deps))
+		i := 0
+		for name, version := range deps {
+			packageDependencyList[i] = &ffi_proto.PackageDependency{
+				Name:  name,
+				Range: version,
+			}
+			i++
+		}
+		flatWorkspaces[workspace] = &ffi_proto.PackageDependencyList{List: packageDependencyList}
+	}
 	req := ffi_proto.TransitiveDepsRequest{
 		Contents:       content,
-		WorkspaceDir:   pkgDir,
-		UnresolvedDeps: unresolvedDeps,
+		PackageManager: packageManager,
+		Workspaces:     flatWorkspaces,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := cFunc(reqBuf)
+	resBuf := C.transitive_closure(reqBuf)
 	reqBuf.Free()
 
 	resp := ffi_proto.TransitiveDepsResponse{}
@@ -196,8 +201,8 @@ func transitiveDeps(cFunc func(C.Buffer) C.Buffer, content []byte, pkgDir string
 		return nil, errors.New(err)
 	}
 
-	list := resp.GetPackages()
-	return list.GetList(), nil
+	dependencies := resp.GetDependencies()
+	return dependencies.GetDependencies(), nil
 }
 
 // NpmSubgraph returns the contents of a npm lockfile subgraph

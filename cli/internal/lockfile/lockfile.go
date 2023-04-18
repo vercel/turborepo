@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	mapset "github.com/deckarep/golang-set"
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"golang.org/x/sync/errgroup"
 )
@@ -71,6 +72,11 @@ func AllTransitiveClosures(
 	workspaces map[turbopath.AnchoredUnixPath]map[string]string,
 	lockFile Lockfile,
 ) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
+	if lf, ok := lockFile.(*NpmLockfile); ok {
+		// We special case as Rust implementations have their own dep crawl
+		return rustTransitiveDeps(lf.contents, "npm", workspaces)
+	}
+
 	g := new(errgroup.Group)
 	c := make(chan closureMsg, len(workspaces))
 	closures := make(map[turbopath.AnchoredUnixPath]mapset.Set, len(workspaces))
@@ -104,11 +110,6 @@ func transitiveClosure(
 ) (mapset.Set, error) {
 	if IsNil(lockFile) {
 		return nil, fmt.Errorf("No lockfile available to do analysis on")
-	}
-
-	if lf, ok := lockFile.(*NpmLockfile); ok {
-		// We special case as Rust implementations have their own dep crawl
-		return npmTransitiveDeps(lf, workspaceDir, unresolvedDeps)
 	}
 
 	resolvedPkgs := mapset.NewSet()
@@ -160,4 +161,29 @@ func transitiveClosureHelper(
 			return nil
 		})
 	}
+}
+
+func rustTransitiveDeps(content []byte, packageManager string, workspaces map[turbopath.AnchoredUnixPath]map[string]string) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
+	processedWorkspaces := make(map[string]map[string]string, len(workspaces))
+	for workspacePath, workspace := range workspaces {
+		processedWorkspaces[workspacePath.ToString()] = workspace
+	}
+	workspaceDeps, err := ffi.TransitiveDeps(content, packageManager, processedWorkspaces)
+	if err != nil {
+		return nil, err
+	}
+	resolvedWorkspaces := make(map[turbopath.AnchoredUnixPath]mapset.Set, len(workspaceDeps))
+	for workspace, dependencies := range workspaceDeps {
+		depsSet := mapset.NewSet()
+		for _, pkg := range dependencies.GetList() {
+			depsSet.Add(Package{
+				Found:   pkg.Found,
+				Key:     pkg.Key,
+				Version: pkg.Version,
+			})
+		}
+		workspacePath := turbopath.AnchoredUnixPath(workspace)
+		resolvedWorkspaces[workspacePath] = depsSet
+	}
+	return resolvedWorkspaces, nil
 }
