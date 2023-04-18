@@ -328,7 +328,10 @@ fn glob_match_internal<'a>(
 fn get_char_slice<'a>(glob: &str, glob_bytes: &'a [u8], index: &mut usize) -> Option<&'a [u8]> {
   use unic_segment::GraphemeCursor;
   let mut cur = GraphemeCursor::new(*index, glob.len());
-  let end = cur.next_boundary(glob, 0).unwrap().unwrap();
+  let end = cur
+    .next_boundary(glob, 0)
+    .unwrap_or_else(|e| panic!("Invalid boundary {:?}", e))
+    .unwrap();
   match &glob_bytes[*index..end] {
     [b'\\'] => {
       if unescape(&mut 92, glob_bytes, index) {
