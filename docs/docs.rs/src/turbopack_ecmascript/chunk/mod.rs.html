@@ -447,10 +447,14 @@
 <a href="#447" id="447">447</a>
 <a href="#448" id="448">448</a>
 <a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>content;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>context;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>item;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>placeable;
 
 <span class="kw">use </span>std::fmt::Write;
@@ -465,10 +469,8 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo,
-        optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkReferenceVc, ChunkVc, ChunkingContextVc,
-        ModuleIdsVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkVc,
+        ChunkingContextVc, ChunksVc, ModuleIdsVc,
     },
     ident::{AssetIdent, AssetIdentVc},
     introspect::{
@@ -478,7 +480,7 @@
     reference::AssetReferencesVc,
 };
 
-<span class="kw">use </span><span class="self">self</span>::{content::ecmascript_chunk_content, optimize::EcmascriptChunkOptimizerVc};
+<span class="kw">use </span><span class="self">self</span>::content::ecmascript_chunk_content;
 <span class="kw">pub use </span><span class="self">self</span>::{
     content::{EcmascriptChunkContent, EcmascriptChunkContentVc},
     context::{EcmascriptChunkingContext, EcmascriptChunkingContextVc},
@@ -495,11 +497,14 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>EcmascriptChunk {
-    context: EcmascriptChunkingContextVc,
-    main_entries: EcmascriptChunkPlaceablesVc,
-    omit_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
-    availability_info: AvailabilityInfo,
+    <span class="kw">pub </span>context: EcmascriptChunkingContextVc,
+    <span class="kw">pub </span>main_entries: EcmascriptChunkPlaceablesVc,
+    <span class="kw">pub </span>omit_entries: <span class="prelude-ty">Option</span>&lt;EcmascriptChunkPlaceablesVc&gt;,
+    <span class="kw">pub </span>availability_info: AvailabilityInfo,
 }
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>EcmascriptChunks(Vec&lt;EcmascriptChunkVc&gt;);
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkVc {
@@ -660,9 +665,9 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>EcmascriptChunkComparison {
-    shared_chunk_items: usize,
-    left_chunk_items: usize,
-    right_chunk_items: usize,
+    <span class="kw">pub </span>shared_chunk_items: usize,
+    <span class="kw">pub </span>left_chunk_items: usize,
+    <span class="kw">pub </span>right_chunk_items: usize,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -671,13 +676,21 @@
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context.into()
     }
-}
 
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>OptimizableChunk <span class="kw">for </span>EcmascriptChunk {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get_optimizer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkOptimizerVc {
-        EcmascriptChunkOptimizerVc::new(<span class="self">self</span>.context).into()
+    </span><span class="kw">async fn </span>parallel_chunks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+        <span class="kw">let </span>content = ecmascript_chunk_content(
+            <span class="self">self</span>.context,
+            <span class="self">self</span>.main_entries,
+            <span class="self">self</span>.omit_entries,
+            Value::new(<span class="self">self</span>.availability_info),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
+        <span class="kw">for </span>chunk <span class="kw">in </span>content.chunks.iter() {
+            chunks.push(<span class="kw-2">*</span>chunk);
+        }
+        <span class="prelude-val">Ok</span>(ChunksVc::cell(chunks))
     }
 }
 
@@ -732,7 +745,7 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_items_count(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;UsizeVc&gt; {
+    </span><span class="kw">pub async fn </span>chunk_items_count(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;UsizeVc&gt; {
         <span class="prelude-val">Ok</span>(UsizeVc::cell(<span class="self">self</span>.chunk_content().<span class="kw">await</span><span class="question-mark">?</span>.chunk_items.len()))
     }
 }
@@ -830,9 +843,6 @@
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>r <span class="kw">in </span>content.external_asset_references.iter() {
             references.push(<span class="kw-2">*</span>r);
-        }
-        <span class="kw">for </span>chunk <span class="kw">in </span>content.chunks.iter() {
-            references.push(ChunkReferenceVc::new_parallel(<span class="kw-2">*</span>chunk).into());
         }
         <span class="kw">for </span>entry <span class="kw">in </span>content.async_chunk_group_entries.iter() {
             references.push(ChunkGroupReferenceVc::new(this.context.into(), <span class="kw-2">*</span>entry).into());

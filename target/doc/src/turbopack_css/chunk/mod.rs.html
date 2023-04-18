@@ -518,8 +518,11 @@
 <a href="#518" id="518">518</a>
 <a href="#519" id="519">519</a>
 <a href="#520" id="520">520</a>
-</pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>optimize;
-<span class="kw">pub mod </span>source_map;
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+</pre><pre class="rust"><code><span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
 
 <span class="kw">use </span>std::fmt::Write;
@@ -531,11 +534,9 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo,
-        chunk_content, chunk_content_split,
-        optimize::{ChunkOptimizerVc, OptimizableChunk, OptimizableChunkVc},
-        Chunk, ChunkContentResult, ChunkGroupReferenceVc, ChunkItem, ChunkItemVc, ChunkReferenceVc,
-        ChunkVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, FromChunkableAsset,
+        availability_info::AvailabilityInfo, chunk_content, chunk_content_split, Chunk,
+        ChunkContentResult, ChunkGroupReferenceVc, ChunkItem, ChunkItemVc, ChunkVc,
+        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, ChunksVc, FromChunkableAsset,
         ModuleId, ModuleIdVc, ModuleIdsVc, OutputChunk, OutputChunkRuntimeInfo,
         OutputChunkRuntimeInfoVc, OutputChunkVc,
     },
@@ -551,7 +552,7 @@
 };
 <span class="kw">use </span>writer::expand_imports;
 
-<span class="kw">use </span><span class="self">self</span>::{optimize::CssChunkOptimizerVc, source_map::CssChunkSourceMapAssetReferenceVc};
+<span class="kw">use </span><span class="self">self</span>::source_map::CssChunkSourceMapAssetReferenceVc;
 <span class="kw">use crate</span>::{
     embed::{CssEmbed, CssEmbeddable, CssEmbeddableVc},
     parse::ParseResultSourceMapVc,
@@ -561,10 +562,13 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>CssChunk {
-    context: ChunkingContextVc,
-    main_entries: CssChunkPlaceablesVc,
-    availability_info: AvailabilityInfo,
+    <span class="kw">pub </span>context: ChunkingContextVc,
+    <span class="kw">pub </span>main_entries: CssChunkPlaceablesVc,
+    <span class="kw">pub </span>availability_info: AvailabilityInfo,
 }
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>CssChunks(Vec&lt;CssChunkVc&gt;);
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CssChunkVc {
@@ -801,13 +805,20 @@
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingContextVc {
         <span class="self">self</span>.context
     }
-}
 
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>OptimizableChunk <span class="kw">for </span>CssChunk {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get_optimizer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkOptimizerVc {
-        CssChunkOptimizerVc::new(<span class="self">self</span>.context).into()
+    </span><span class="kw">async fn </span>parallel_chunks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt; {
+        <span class="kw">let </span>content = css_chunk_content(
+            <span class="self">self</span>.context,
+            <span class="self">self</span>.main_entries,
+            Value::new(<span class="self">self</span>.availability_info),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
+        <span class="kw">for </span>chunk <span class="kw">in </span>content.chunks.iter() {
+            chunks.push(<span class="kw-2">*</span>chunk);
+        }
+        <span class="prelude-val">Ok</span>(ChunksVc::cell(chunks))
     }
 }
 
@@ -886,9 +897,6 @@
                     }
                 }
             }
-        }
-        <span class="kw">for </span>chunk <span class="kw">in </span>content.chunks.iter() {
-            references.push(ChunkReferenceVc::new_parallel(<span class="kw-2">*</span>chunk).into());
         }
         <span class="kw">for </span>entry <span class="kw">in </span>content.async_chunk_group_entries.iter() {
             references.push(ChunkGroupReferenceVc::new(this.context, <span class="kw-2">*</span>entry).into());
