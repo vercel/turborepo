@@ -204,6 +204,8 @@ pub struct ModuleOptionsContext {
     pub placeholder_for_future_extensions: (),
     #[serde(default)]
     pub enable_tree_shaking: bool,
+
+    pub compile_time_info: CompileTimeInfoVc,
 }
 
 #[turbo_tasks::value_impl]
