@@ -81,6 +81,7 @@ impl ModuleOptionsVc {
             ref custom_rules,
             execution_context,
             ref rules,
+            compile_time_info,
             ..
         } = *context.await?;
         if !rules.is_empty() {
