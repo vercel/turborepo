@@ -14,6 +14,8 @@ use crate::{
 /// type (e. g. from SourceAsset to ModuleAsset).
 #[turbo_tasks::value_trait]
 pub trait AssetContext {
+    // TODO: Remove this.
+    // https://github.com/vercel/turbo/pull/4596#discussion_r1168245809
     fn compile_time_info(&self) -> CompileTimeInfoVc;
     fn resolve_options(
         &self,
