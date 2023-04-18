@@ -1,7 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use thiserror::Error;
-use turborepo_lockfiles::{self, npm_subgraph as real_npm_subgraph, NpmLockfile, Package};
+use turborepo_lockfiles::{
+    self, npm_subgraph as real_npm_subgraph, BerryLockfile, LockfileData, NpmLockfile, Package,
+};
 
 use super::{proto, Buffer};
 
@@ -24,6 +26,8 @@ enum Error {
     Protobuf(#[from] prost::DecodeError),
     #[error("unsupported package manager")]
     UnsupportedPackageManager(String),
+    #[error("invalid yarn.lock")]
+    BerryParse(#[from] turborepo_lockfiles::BerryError),
 }
 
 #[no_mangle]
@@ -41,8 +45,10 @@ pub extern "C" fn transitive_closure(buf: Buffer) -> Buffer {
 
 fn transitive_closure_inner(buf: Buffer) -> Result<proto::WorkspaceDependencies, Error> {
     let request: proto::TransitiveDepsRequest = buf.into_proto()?;
+
     match request.package_manager.as_str() {
         "npm" => npm_transitive_closure_inner(request),
+        "berry" => berry_transitive_closure_inner(request),
         pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
     }
 }
@@ -56,29 +62,67 @@ fn npm_transitive_closure_inner(
         ..
     } = request;
     let lockfile = NpmLockfile::load(contents.as_slice())?;
-    let dependencies = workspaces
+    let workspaces = workspaces
         .into_iter()
-        .map(|(workspace_dir, dependencies)| {
-            let dependencies = dependencies
-                .list
-                .into_iter()
-                .map(proto::PackageDependency::into_tuple)
-                .collect();
-            let closure = turborepo_lockfiles::transitive_closure(
-                &lockfile,
-                workspace_dir.clone(),
-                dependencies,
-            )?;
-            let list: Vec<_> = closure
+        .map(|(w, d)| {
+            let proto::PackageDependencyList { list } = d;
+            (
+                w,
+                list.into_iter()
+                    .map(proto::PackageDependency::into_tuple)
+                    .collect(),
+            )
+        })
+        .collect();
+    let dependencies = turborepo_lockfiles::all_transitive_closures(&lockfile, workspaces)?
+        .into_iter()
+        .map(|(workspace, dependencies)| {
+            let list: Vec<_> = dependencies
                 .into_iter()
                 .map(proto::LockfilePackage::from)
                 .collect();
-            Ok((workspace_dir, proto::LockfilePackageList { list }))
+            (workspace, proto::LockfilePackageList { list })
         })
-        .collect::<Result<HashMap<_, _>, Error>>()?;
+        .collect();
+
     Ok(proto::WorkspaceDependencies { dependencies })
 }
 
+fn berry_transitive_closure_inner(
+    request: proto::TransitiveDepsRequest,
+) -> Result<proto::WorkspaceDependencies, Error> {
+    let proto::TransitiveDepsRequest {
+        contents,
+        workspaces,
+        ..
+    } = request;
+    let data = LockfileData::from_bytes(contents.as_slice())?;
+    let lockfile = BerryLockfile::new(&data, None)?;
+    let workspaces = workspaces
+        .into_iter()
+        .map(|(w, d)| {
+            let proto::PackageDependencyList { list } = d;
+            (
+                w,
+                list.into_iter()
+                    .map(proto::PackageDependency::into_tuple)
+                    .collect(),
+            )
+        })
+        .collect();
+    let dependencies = turborepo_lockfiles::all_transitive_closures(&lockfile, workspaces)?
+        .into_iter()
+        .map(|(workspace, dependencies)| {
+            let list: Vec<_> = dependencies
+                .into_iter()
+                .map(proto::LockfilePackage::from)
+                .collect();
+            (workspace, proto::LockfilePackageList { list })
+        })
+        .collect();
+
+    Ok(proto::WorkspaceDependencies { dependencies })
+}
 #[no_mangle]
 pub extern "C" fn npm_subgraph(buf: Buffer) -> Buffer {
     use proto::subgraph_response::Response;

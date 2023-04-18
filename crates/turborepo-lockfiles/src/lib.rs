@@ -4,9 +4,10 @@ mod npm;
 
 use std::collections::{HashMap, HashSet};
 
-pub use berry::*;
+pub use berry::{Error as BerryError, *};
 pub use error::Error;
 pub use npm::*;
+use rayon::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
 pub struct Package {
@@ -29,6 +30,19 @@ pub trait Lockfile {
     // Given a lockfile key return all (prod/dev/optional) dependencies of that
     // package
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
+}
+
+pub fn all_transitive_closures<L: Lockfile + Sync>(
+    lockfile: &L,
+    workspaces: HashMap<String, HashMap<String, String>>,
+) -> Result<HashMap<String, HashSet<Package>>, Error> {
+    workspaces
+        .into_par_iter()
+        .map(|(workspace, unresolved_deps)| {
+            let closure = transitive_closure(lockfile, workspace.clone(), unresolved_deps)?;
+            Ok((workspace, closure))
+        })
+        .collect()
 }
 
 // this should get replaced by petgraph in the future :)

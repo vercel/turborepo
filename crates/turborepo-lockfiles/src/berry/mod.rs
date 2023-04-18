@@ -21,6 +21,8 @@ use super::Lockfile;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("unable to parse")]
+    Parse(#[from] serde_yaml::Error),
+    #[error("unable to parse")]
     Identifiers(#[from] identifiers::Error),
     #[error("unable to find original package in patch locator {0}")]
     PatchMissingOriginalLocator(Locator<'static>),
@@ -451,6 +453,12 @@ impl<'a> Lockfile for BerryLockfile<'a> {
         }
         // For each dependency we need to check if there's an override
         Ok(Some(map))
+    }
+}
+
+impl LockfileData {
+    pub fn from_bytes(s: &[u8]) -> Result<Self, Error> {
+        serde_yaml::from_slice(s).map_err(Error::from)
     }
 }
 
