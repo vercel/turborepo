@@ -8303,8 +8303,15 @@ dependencies = [
 name = "turborepo-lockfiles"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
+ "pest",
+ "pest_derive",
+ "pretty_assertions",
+ "regex",
+ "semver 1.0.17",
  "serde",
  "serde_json",
+ "serde_yaml",
  "thiserror",
 ]
 
