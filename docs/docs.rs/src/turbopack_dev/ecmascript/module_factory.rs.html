@@ -43,6 +43,7 @@
 <a href="#43" id="43">43</a>
 <a href="#44" id="44">44</a>
 <a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -55,6 +56,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>args = <span class="macro">vec!</span>[
         <span class="string">&quot;r: __turbopack_require__&quot;</span>,
         <span class="string">&quot;x: __turbopack_external_require__&quot;</span>,
+        <span class="string">&quot;f: __turbopack_require_context__&quot;</span>,
         <span class="string">&quot;i: __turbopack_import__&quot;</span>,
         <span class="string">&quot;s: __turbopack_esm__&quot;</span>,
         <span class="string">&quot;v: __turbopack_export_value__&quot;</span>,

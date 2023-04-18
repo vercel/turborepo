@@ -488,13 +488,7 @@
 <a href="#488" id="488">488</a>
 <a href="#489" id="489">489</a>
 <a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{mem::take, sync::Arc};
+</pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
 <span class="kw">use </span>swc_core::ecma::atoms::js_word;
 
@@ -582,11 +576,8 @@
                 ..
             } =&gt; {
                 <span class="kw">fn </span>items_to_alternatives(items: <span class="kw-2">&amp;mut </span>Vec&lt;JsValue&gt;, prop: <span class="kw-2">&amp;mut </span>JsValue) -&gt; JsValue {
-                    items.push(JsValue::Unknown(
-                        <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
-                            <span class="kw">box </span>JsValue::array(Vec::new()),
-                            <span class="kw">box </span>take(prop),
-                        ))),
+                    items.push(JsValue::unknown(
+                        JsValue::member(<span class="kw">box </span>JsValue::array(Vec::new()), <span class="kw">box </span>take(prop)),
                         <span class="string">&quot;unknown array prototype methods or values&quot;</span>,
                     ));
                     JsValue::alternatives(take(items))
@@ -603,8 +594,8 @@
                                 }
                                 <span class="bool-val">true
                             </span>} <span class="kw">else </span>{
-                                <span class="kw-2">*</span>value = JsValue::Unknown(
-                                    <span class="prelude-val">Some</span>(Arc::new(JsValue::member(<span class="kw">box </span>take(obj), <span class="kw">box </span>take(prop)))),
+                                <span class="kw-2">*</span>value = JsValue::unknown(
+                                    JsValue::member(<span class="kw">box </span>take(obj), <span class="kw">box </span>take(prop)),
                                     <span class="string">&quot;invalid index&quot;</span>,
                                 );
                                 <span class="bool-val">true
@@ -657,22 +648,19 @@
                                 values.push(take(value));
                             }
                             ObjectPart::Spread(<span class="kw">_</span>) =&gt; {
-                                values.push(JsValue::Unknown(
-                                    <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
+                                values.push(JsValue::unknown(
+                                    JsValue::member(
                                         <span class="kw">box </span>JsValue::object(<span class="macro">vec!</span>[take(part)]),
                                         prop.clone(),
-                                    ))),
+                                    ),
                                     <span class="string">&quot;spreaded object&quot;</span>,
                                 ));
                             }
                         }
                     }
                     <span class="kw">if </span>include_unknown {
-                        values.push(JsValue::Unknown(
-                            <span class="prelude-val">Some</span>(Arc::new(JsValue::member(
-                                <span class="kw">box </span>JsValue::object(Vec::new()),
-                                <span class="kw">box </span>take(prop),
-                            ))),
+                        values.push(JsValue::unknown(
+                            JsValue::member(<span class="kw">box </span>JsValue::object(Vec::new()), <span class="kw">box </span>take(prop)),
                             <span class="string">&quot;unknown object prototype methods or values&quot;</span>,
                         ));
                     }

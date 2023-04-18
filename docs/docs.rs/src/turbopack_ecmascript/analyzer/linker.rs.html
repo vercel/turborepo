@@ -329,17 +329,10 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     future::Future,
     mem::take,
-    sync::Arc,
 };
 
 <span class="kw">use </span>anyhow::Result;
@@ -415,8 +408,8 @@
             </span>Step::Enter(JsValue::Variable(var)) =&gt; {
                 <span class="comment">// Replace with unknown for now
                 </span><span class="kw">if </span>cycle_stack.contains(<span class="kw-2">&amp;</span>var) {
-                    done.push(JsValue::Unknown(
-                        <span class="prelude-val">Some</span>(Arc::new(JsValue::Variable(var.clone()))),
+                    done.push(JsValue::unknown(
+                        JsValue::Variable(var.clone()),
                         <span class="string">&quot;circular variable reference&quot;</span>,
                     ));
                 } <span class="kw">else </span>{
@@ -428,8 +421,8 @@
                         work_queue_stack.push(Step::Enter(val.clone()));
                     } <span class="kw">else </span>{
                         total_nodes += <span class="number">1</span>;
-                        done.push(JsValue::Unknown(
-                            <span class="prelude-val">Some</span>(Arc::new(JsValue::Variable(var.clone()))),
+                        done.push(JsValue::unknown(
+                            JsValue::Variable(var.clone()),
                             <span class="string">&quot;no value of this variable analysed&quot;</span>,
                         ));
                     };
@@ -449,15 +442,14 @@
                         done.push(val.clone());
                     } <span class="kw">else </span>{
                         total_nodes += <span class="number">1</span>;
-                        done.push(JsValue::Unknown(
-                            <span class="prelude-val">None</span>,
+                        done.push(JsValue::unknown_empty(
                             <span class="string">&quot;unknown function argument (out of bounds)&quot;</span>,
                         ));
                     }
                 } <span class="kw">else </span>{
                     total_nodes += <span class="number">1</span>;
-                    done.push(JsValue::Unknown(
-                        <span class="prelude-val">Some</span>(Arc::new(JsValue::Argument(func_ident, index))),
+                    done.push(JsValue::unknown(
+                        JsValue::Argument(func_ident, index),
                         <span class="string">&quot;function calls are not analysed yet&quot;</span>,
                     ));
                 }
@@ -485,11 +477,8 @@
                         total_nodes -= arg.total_nodes();
                     }
                     total_nodes += <span class="number">1</span>;
-                    done.push(JsValue::Unknown(
-                        <span class="prelude-val">Some</span>(Arc::new(JsValue::call(
-                            <span class="kw">box </span>JsValue::function(func_ident, return_value),
-                            args,
-                        ))),
+                    done.push(JsValue::unknown(
+                        JsValue::call(<span class="kw">box </span>JsValue::function(func_ident, return_value), args),
                         <span class="string">&quot;recursive function call&quot;</span>,
                     ));
                 }
@@ -542,7 +531,7 @@
                 total_nodes -= val.total_nodes();
                 <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
                     total_nodes += <span class="number">1</span>;
-                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                    done.push(JsValue::unknown_empty(<span class="string">&quot;node limit reached&quot;</span>));
                     <span class="kw">continue</span>;
                 }
 
@@ -550,7 +539,7 @@
                 val.debug_assert_total_nodes_up_to_date();
                 <span class="kw">if </span>visit_modified &amp;&amp; val.total_nodes() &gt; LIMIT_NODE_SIZE {
                     total_nodes += <span class="number">1</span>;
-                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                    done.push(JsValue::unknown_empty(<span class="string">&quot;node limit reached&quot;</span>));
                     <span class="kw">continue</span>;
                 }
 
@@ -559,7 +548,7 @@
                     <span class="comment">// There is always space for one more node since we just popped at least one
                     // count
                     </span>total_nodes += <span class="number">1</span>;
-                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;in progress nodes limit reached&quot;</span>));
+                    done.push(JsValue::unknown_empty(<span class="string">&quot;in progress nodes limit reached&quot;</span>));
                     <span class="kw">continue</span>;
                 }
                 total_nodes += count;
@@ -591,7 +580,7 @@
 
                 <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
                     total_nodes += <span class="number">1</span>;
-                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                    done.push(JsValue::unknown_empty(<span class="string">&quot;node limit reached&quot;</span>));
                     <span class="kw">continue</span>;
                 }
                 val.normalize_shallow();
@@ -614,7 +603,7 @@
 
                 <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
                     total_nodes += <span class="number">1</span>;
-                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                    done.push(JsValue::unknown_empty(<span class="string">&quot;node limit reached&quot;</span>));
                     <span class="kw">continue</span>;
                 }
                 val.normalize_shallow();
@@ -636,7 +625,7 @@
                     </span>val.debug_assert_total_nodes_up_to_date();
                     <span class="kw">if </span>val.total_nodes() &gt; LIMIT_NODE_SIZE {
                         total_nodes += <span class="number">1</span>;
-                        done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;node limit reached&quot;</span>));
+                        done.push(JsValue::unknown_empty(<span class="string">&quot;node limit reached&quot;</span>));
                         <span class="kw">continue</span>;
                     }
                 }
@@ -646,7 +635,7 @@
                     <span class="comment">// There is always space for one more node since we just popped at least one
                     // count
                     </span>total_nodes += <span class="number">1</span>;
-                    done.push(JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;in progress nodes limit reached&quot;</span>));
+                    done.push(JsValue::unknown_empty(<span class="string">&quot;in progress nodes limit reached&quot;</span>));
                     <span class="kw">continue</span>;
                 }
                 total_nodes += count;
@@ -658,8 +647,7 @@
             }
         }
         <span class="kw">if </span>steps &gt; LIMIT_LINK_STEPS {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::Unknown(
-                <span class="prelude-val">None</span>,
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown_empty(
                 <span class="string">&quot;max number of linking steps reached&quot;</span>,
             ));
         }

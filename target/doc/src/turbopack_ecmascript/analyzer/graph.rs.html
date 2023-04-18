@@ -1714,17 +1714,10 @@
 <a href="#1714" id="1714">1714</a>
 <a href="#1715" id="1715">1715</a>
 <a href="#1716" id="1716">1716</a>
-<a href="#1717" id="1717">1717</a>
-<a href="#1718" id="1718">1718</a>
-<a href="#1719" id="1719">1719</a>
-<a href="#1720" id="1720">1720</a>
-<a href="#1721" id="1721">1721</a>
-<a href="#1722" id="1722">1722</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
     mem::{replace, take},
-    sync::Arc,
 };
 
 <span class="kw">use </span>swc_core::{
@@ -2025,7 +2018,7 @@
                             values.push(JsValue::from(v.clone()));
                         }
                         <span class="comment">// This is actually unreachable
-                        </span><span class="prelude-val">None </span>=&gt; <span class="kw">return </span>JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;&quot;</span>),
+                        </span><span class="prelude-val">None </span>=&gt; <span class="kw">return </span>JsValue::unknown_empty(<span class="string">&quot;&quot;</span>),
                     }
                 }
             } <span class="kw">else </span>{
@@ -2158,7 +2151,7 @@
                 {
                     <span class="self">self</span>.eval_tpl(tpl, <span class="bool-val">true</span>)
                 } <span class="kw">else </span>{
-                    JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;tagged template literal is not supported yet&quot;</span>)
+                    JsValue::unknown_empty(<span class="string">&quot;tagged template literal is not supported yet&quot;</span>)
                 }
             }
 
@@ -2179,7 +2172,7 @@
 
             Expr::Await(AwaitExpr { arg, .. }) =&gt; <span class="self">self</span>.eval(arg),
 
-            Expr::New(..) =&gt; JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;unknown new expression&quot;</span>),
+            Expr::New(..) =&gt; JsValue::unknown_empty(<span class="string">&quot;unknown new expression&quot;</span>),
 
             Expr::Seq(e) =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(e) = e.exprs.last() {
@@ -2215,7 +2208,7 @@
             }) =&gt; {
                 <span class="comment">// We currently do not handle spreads.
                 </span><span class="kw">if </span>args.iter().any(|arg| arg.spread.is_some()) {
-                    <span class="kw">return </span>JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;spread in function calls is not supported&quot;</span>);
+                    <span class="kw">return </span>JsValue::unknown_empty(<span class="string">&quot;spread in function calls is not supported&quot;</span>);
                 }
 
                 <span class="kw">let </span>args = args.iter().map(|arg| <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>arg.expr)).collect();
@@ -2225,8 +2218,7 @@
                         <span class="comment">// TODO avoid clone
                         </span>MemberProp::Ident(i) =&gt; i.sym.clone().into(),
                         MemberProp::PrivateName(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">return </span>JsValue::Unknown(
-                                <span class="prelude-val">None</span>,
+                            <span class="kw">return </span>JsValue::unknown_empty(
                                 <span class="string">&quot;private names in function calls is not supported&quot;</span>,
                             );
                         }
@@ -2247,7 +2239,7 @@
             }) =&gt; {
                 <span class="comment">// We currently do not handle spreads.
                 </span><span class="kw">if </span>args.iter().any(|arg| arg.spread.is_some()) {
-                    <span class="kw">return </span>JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;spread in import() is not supported&quot;</span>);
+                    <span class="kw">return </span>JsValue::unknown_empty(<span class="string">&quot;spread in import() is not supported&quot;</span>);
                 }
                 <span class="kw">let </span>args = args.iter().map(|arg| <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>arg.expr)).collect();
 
@@ -2258,7 +2250,7 @@
 
             Expr::Array(arr) =&gt; {
                 <span class="kw">if </span>arr.elems.iter().flatten().any(|v| v.spread.is_some()) {
-                    <span class="kw">return </span>JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;spread is not supported&quot;</span>);
+                    <span class="kw">return </span>JsValue::unknown_empty(<span class="string">&quot;spread is not supported&quot;</span>);
                 }
 
                 <span class="kw">let </span>arr = arr
@@ -2288,8 +2280,7 @@
                                 ident.sym.clone().into(),
                                 <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>Expr::Ident(ident.clone())),
                             ),
-                            <span class="kw">_ </span>=&gt; ObjectPart::Spread(JsValue::Unknown(
-                                <span class="prelude-val">None</span>,
+                            <span class="kw">_ </span>=&gt; ObjectPart::Spread(JsValue::unknown_empty(
                                 <span class="string">&quot;unsupported object part&quot;</span>,
                             )),
                         })
@@ -2297,7 +2288,7 @@
                 )
             }
 
-            <span class="kw">_ </span>=&gt; JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;unsupported expression&quot;</span>),
+            <span class="kw">_ </span>=&gt; JsValue::unknown_empty(<span class="string">&quot;unsupported expression&quot;</span>),
         }
     }
 }
@@ -3058,10 +3049,7 @@
                 <span class="self">self</span>.add_value(
                     i.to_id(),
                     value.unwrap_or_else(|| {
-                        JsValue::Unknown(
-                            <span class="prelude-val">Some</span>(Arc::new(JsValue::Variable(i.to_id()))),
-                            <span class="string">&quot;pattern without value&quot;</span>,
-                        )
+                        JsValue::unknown(JsValue::Variable(i.to_id()), <span class="string">&quot;pattern without value&quot;</span>)
                     }),
                 );
             }

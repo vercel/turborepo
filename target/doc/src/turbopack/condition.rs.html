@@ -65,7 +65,7 @@
 <span class="kw">use </span>futures::{stream, StreamExt};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
-<span class="kw">use </span>turbo_tasks_fs::{FileSystem, FileSystemPath, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{FileSystemPath, FileSystemPathVc};
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
 </span><span class="kw">pub enum </span>ContextCondition {

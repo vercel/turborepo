@@ -2464,6 +2464,96 @@
 <a href="#2464" id="2464">2464</a>
 <a href="#2465" id="2465">2465</a>
 <a href="#2466" id="2466">2466</a>
+<a href="#2467" id="2467">2467</a>
+<a href="#2468" id="2468">2468</a>
+<a href="#2469" id="2469">2469</a>
+<a href="#2470" id="2470">2470</a>
+<a href="#2471" id="2471">2471</a>
+<a href="#2472" id="2472">2472</a>
+<a href="#2473" id="2473">2473</a>
+<a href="#2474" id="2474">2474</a>
+<a href="#2475" id="2475">2475</a>
+<a href="#2476" id="2476">2476</a>
+<a href="#2477" id="2477">2477</a>
+<a href="#2478" id="2478">2478</a>
+<a href="#2479" id="2479">2479</a>
+<a href="#2480" id="2480">2480</a>
+<a href="#2481" id="2481">2481</a>
+<a href="#2482" id="2482">2482</a>
+<a href="#2483" id="2483">2483</a>
+<a href="#2484" id="2484">2484</a>
+<a href="#2485" id="2485">2485</a>
+<a href="#2486" id="2486">2486</a>
+<a href="#2487" id="2487">2487</a>
+<a href="#2488" id="2488">2488</a>
+<a href="#2489" id="2489">2489</a>
+<a href="#2490" id="2490">2490</a>
+<a href="#2491" id="2491">2491</a>
+<a href="#2492" id="2492">2492</a>
+<a href="#2493" id="2493">2493</a>
+<a href="#2494" id="2494">2494</a>
+<a href="#2495" id="2495">2495</a>
+<a href="#2496" id="2496">2496</a>
+<a href="#2497" id="2497">2497</a>
+<a href="#2498" id="2498">2498</a>
+<a href="#2499" id="2499">2499</a>
+<a href="#2500" id="2500">2500</a>
+<a href="#2501" id="2501">2501</a>
+<a href="#2502" id="2502">2502</a>
+<a href="#2503" id="2503">2503</a>
+<a href="#2504" id="2504">2504</a>
+<a href="#2505" id="2505">2505</a>
+<a href="#2506" id="2506">2506</a>
+<a href="#2507" id="2507">2507</a>
+<a href="#2508" id="2508">2508</a>
+<a href="#2509" id="2509">2509</a>
+<a href="#2510" id="2510">2510</a>
+<a href="#2511" id="2511">2511</a>
+<a href="#2512" id="2512">2512</a>
+<a href="#2513" id="2513">2513</a>
+<a href="#2514" id="2514">2514</a>
+<a href="#2515" id="2515">2515</a>
+<a href="#2516" id="2516">2516</a>
+<a href="#2517" id="2517">2517</a>
+<a href="#2518" id="2518">2518</a>
+<a href="#2519" id="2519">2519</a>
+<a href="#2520" id="2520">2520</a>
+<a href="#2521" id="2521">2521</a>
+<a href="#2522" id="2522">2522</a>
+<a href="#2523" id="2523">2523</a>
+<a href="#2524" id="2524">2524</a>
+<a href="#2525" id="2525">2525</a>
+<a href="#2526" id="2526">2526</a>
+<a href="#2527" id="2527">2527</a>
+<a href="#2528" id="2528">2528</a>
+<a href="#2529" id="2529">2529</a>
+<a href="#2530" id="2530">2530</a>
+<a href="#2531" id="2531">2531</a>
+<a href="#2532" id="2532">2532</a>
+<a href="#2533" id="2533">2533</a>
+<a href="#2534" id="2534">2534</a>
+<a href="#2535" id="2535">2535</a>
+<a href="#2536" id="2536">2536</a>
+<a href="#2537" id="2537">2537</a>
+<a href="#2538" id="2538">2538</a>
+<a href="#2539" id="2539">2539</a>
+<a href="#2540" id="2540">2540</a>
+<a href="#2541" id="2541">2541</a>
+<a href="#2542" id="2542">2542</a>
+<a href="#2543" id="2543">2543</a>
+<a href="#2544" id="2544">2544</a>
+<a href="#2545" id="2545">2545</a>
+<a href="#2546" id="2546">2546</a>
+<a href="#2547" id="2547">2547</a>
+<a href="#2548" id="2548">2548</a>
+<a href="#2549" id="2549">2549</a>
+<a href="#2550" id="2550">2550</a>
+<a href="#2551" id="2551">2551</a>
+<a href="#2552" id="2552">2552</a>
+<a href="#2553" id="2553">2553</a>
+<a href="#2554" id="2554">2554</a>
+<a href="#2555" id="2555">2555</a>
+<a href="#2556" id="2556">2556</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2471,6 +2561,7 @@
 <span class="kw">pub mod </span>node;
 <span class="kw">pub mod </span>pattern_mapping;
 <span class="kw">pub mod </span>raw;
+<span class="kw">pub mod </span>require_context;
 <span class="kw">pub mod </span>typescript;
 <span class="kw">pub mod </span>unreachable;
 <span class="kw">pub mod </span>util;
@@ -2481,7 +2572,6 @@
     future::Future,
     mem::take,
     pin::Pin,
-    sync::Arc,
 };
 
 <span class="kw">use </span>anyhow::Result;
@@ -2503,11 +2593,15 @@
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-<span class="kw">use </span>turbo_tasks::{primitives::BoolVc, TryJoinIterExt, Value};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::{BoolVc, RegexVc},
+    TryJoinIterExt, Value,
+};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
     compile_time_info::{CompileTimeInfoVc, FreeVarReference},
+    error::PrettyPrintError,
     issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapReferenceVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
@@ -2563,7 +2657,7 @@
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext, VarGraph},
         imports::{ImportedSymbol, Reexport},
-        ModuleValue,
+        parse_require_context, ModuleValue, RequireContextValueVc,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{
@@ -2575,6 +2669,7 @@
             CjsRequireAssetReferenceVc, CjsRequireCacheAccess, CjsRequireResolveAssetReferenceVc,
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
+        require_context::{RequireContextAssetReferenceVc, RequireContextMapVc},
     },
     resolve::try_to_severity,
     tree_shake::{part_of_module, split},
@@ -3051,7 +3146,7 @@
                                         value
                                     }
                                     EffectArg::Spread =&gt; {
-                                        JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;spread is not supported yet&quot;</span>)
+                                        JsValue::unknown_empty(<span class="string">&quot;spread is not supported yet&quot;</span>)
                                     }
                                 };
                                 state.link_value(value, in_try).<span class="kw">await
@@ -3189,6 +3284,40 @@
                                 errors::failed_to_analyse::ecmascript::REQUIRE_RESOLVE.to_string(),
                             ),
                         )
+                    }
+
+                    JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext) =&gt; {
+                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">let </span>options = <span class="kw">match </span>parse_require_context(<span class="kw-2">&amp;</span>args) {
+                            <span class="prelude-val">Ok</span>(options) =&gt; options,
+                            <span class="prelude-val">Err</span>(err) =&gt; {
+                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                                handler.span_err_with_code(
+                                    span,
+                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(
+                                        <span class="string">&quot;require.context({args}) is not statically analyze-able: \
+                                         {}{hints}&quot;</span>,
+                                        PrettyPrintError(<span class="kw-2">&amp;</span>err)
+                                    ),
+                                    DiagnosticId::Error(
+                                        errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT
+                                            .to_string(),
+                                    ),
+                                );
+                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                            }
+                        };
+
+                        analysis.add_reference(RequireContextAssetReferenceVc::new(
+                            source,
+                            origin,
+                            options.dir,
+                            options.include_subdirs,
+                            RegexVc::cell(options.filter),
+                            AstPathVc::cell(ast_path.to_vec()),
+                            OptionIssueSourceVc::some(issue_source(source, span)),
+                            in_try,
+                        ));
                     }
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::FsReadMethod(name)) =&gt; {
@@ -3806,6 +3935,7 @@
                             } =&gt; {
                                 <span class="kw">let </span>condition =
                                     analysis_state.link_value(condition, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+
                                 <span class="macro">macro_rules! </span>inactive {
                                     (<span class="macro-nonterminal">$block</span>:ident) =&gt; {
                                         analysis.add_code_gen(UnreachableVc::new(AstPathVc::cell(
@@ -3921,7 +4051,7 @@
                                     <span class="kw-2">&amp;</span>ast_path,
                                     span,
                                     func,
-                                    JsValue::Unknown(<span class="prelude-val">None</span>, <span class="string">&quot;no this provided&quot;</span>),
+                                    JsValue::unknown_empty(<span class="string">&quot;no this provided&quot;</span>),
                                     args,
                                     <span class="kw-2">&amp;</span>analysis_state,
                                     <span class="kw-2">&amp;</span>add_effects,
@@ -4336,52 +4466,24 @@
             <span class="kw">_</span>,
             <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
             args,
+        ) =&gt; require_resolve_visitor(origin, args, in_try).<span class="kw">await</span><span class="question-mark">?</span>,
+        JsValue::Call(
+            <span class="kw">_</span>,
+            <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+            args,
+        ) =&gt; require_context_visitor(origin, args, in_try).<span class="kw">await</span><span class="question-mark">?</span>,
+        JsValue::Call(
+            <span class="kw">_</span>,
+            <span class="kw">box </span>JsValue::WellKnownFunction(
+                WellKnownFunctionKind::RequireContextRequire(..)
+                | WellKnownFunctionKind::RequireContextRequireKeys(..)
+                | WellKnownFunctionKind::RequireContextRequireResolve(..),
+            ),
+            <span class="kw">_</span>,
         ) =&gt; {
-            <span class="kw">if </span>args.len() == <span class="number">1 </span>{
-                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
-                <span class="kw">let </span>request = RequestVc::parse(Value::new(pat.clone()));
-                <span class="kw">let </span>resolved = cjs_resolve(
-                    origin,
-                    request,
-                    OptionIssueSourceVc::none(),
-                    try_to_severity(in_try),
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span><span class="kw-2">mut </span>values = resolved
-                    .primary
-                    .iter()
-                    .map(|result| <span class="kw">async move </span>{
-                        <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
-                            <span class="prelude-val">Some</span>(require_resolve(asset.ident().path()).<span class="kw">await</span><span class="question-mark">?</span>)
-                        } <span class="kw">else </span>{
-                            <span class="prelude-val">None
-                        </span>})
-                    })
-                    .try_join()
-                    .<span class="kw">await</span><span class="question-mark">?
-                    </span>.into_iter()
-                    .flatten()
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-                <span class="kw">match </span>values.len() {
-                    <span class="number">0 </span>=&gt; JsValue::Unknown(
-                        <span class="prelude-val">Some</span>(Arc::new(JsValue::call(
-                            <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
-                            args,
-                        ))),
-                        <span class="string">&quot;unresolveable request&quot;</span>,
-                    ),
-                    <span class="number">1 </span>=&gt; values.pop().unwrap(),
-                    <span class="kw">_ </span>=&gt; JsValue::alternatives(values),
-                }
-            } <span class="kw">else </span>{
-                JsValue::Unknown(
-                    <span class="prelude-val">Some</span>(Arc::new(JsValue::call(
-                        <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
-                        args,
-                    ))),
-                    <span class="string">&quot;only a single argument is supported&quot;</span>,
-                )
-            }
+            <span class="comment">// TODO: figure out how to do static analysis without invalidating the while
+            // analysis when a new file gets added
+            </span>v.into_unknown(<span class="string">&quot;require.context() static analysis is currently limited&quot;</span>)
         }
         JsValue::FreeVar(<span class="kw-2">ref </span>kind) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>kind {
             <span class="string">&quot;__dirname&quot; </span>=&gt; as_abs_path(origin.origin_path().parent()).<span class="kw">await</span><span class="question-mark">?</span>,
@@ -4424,22 +4526,13 @@
                     <span class="string">&quot;@grpc/proto-loader&quot; </span>=&gt; {
                         JsValue::WellKnownObject(WellKnownObjectKind::NodeProtobufLoader)
                     }
-                    <span class="kw">_ </span>=&gt; JsValue::Unknown(
-                        <span class="prelude-val">Some</span>(Arc::new(v)),
-                        <span class="string">&quot;cross module analyzing is not yet supported&quot;</span>,
-                    ),
+                    <span class="kw">_ </span>=&gt; v.into_unknown(<span class="string">&quot;cross module analyzing is not yet supported&quot;</span>),
                 }
             } <span class="kw">else </span>{
-                JsValue::Unknown(
-                    <span class="prelude-val">Some</span>(Arc::new(v)),
-                    <span class="string">&quot;cross module analyzing is not yet supported&quot;</span>,
-                )
+                v.into_unknown(<span class="string">&quot;cross module analyzing is not yet supported&quot;</span>)
             }
         }
-        JsValue::Argument(..) =&gt; JsValue::Unknown(
-            <span class="prelude-val">Some</span>(Arc::new(v)),
-            <span class="string">&quot;cross function analyzing is not yet supported&quot;</span>,
-        ),
+        JsValue::Argument(..) =&gt; v.into_unknown(<span class="string">&quot;cross function analyzing is not yet supported&quot;</span>),
         <span class="kw">_ </span>=&gt; {
             <span class="kw">let </span>(<span class="kw-2">mut </span>v, <span class="kw-2">mut </span>modified) = replace_well_known(v, compile_time_info).<span class="kw">await</span><span class="question-mark">?</span>;
             modified = replace_builtin(<span class="kw-2">&amp;mut </span>v) || modified;
@@ -4448,6 +4541,93 @@
         }
     };
     <span class="prelude-val">Ok</span>((value, <span class="bool-val">true</span>))
+}
+
+<span class="kw">async fn </span>require_resolve_visitor(
+    origin: ResolveOriginVc,
+    args: Vec&lt;JsValue&gt;,
+    in_try: bool,
+) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
+    <span class="prelude-val">Ok</span>(<span class="kw">if </span>args.len() == <span class="number">1 </span>{
+        <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
+        <span class="kw">let </span>request = RequestVc::parse(Value::new(pat.clone()));
+        <span class="kw">let </span>resolved = cjs_resolve(
+            origin,
+            request,
+            OptionIssueSourceVc::none(),
+            try_to_severity(in_try),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>values = resolved
+            .primary
+            .iter()
+            .map(|result| <span class="kw">async move </span>{
+                <span class="prelude-val">Ok</span>(<span class="kw">if let </span>PrimaryResolveResult::Asset(asset) = result {
+                    <span class="prelude-val">Some</span>(require_resolve(asset.ident().path()).<span class="kw">await</span><span class="question-mark">?</span>)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>})
+            })
+            .try_join()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_iter()
+            .flatten()
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">match </span>values.len() {
+            <span class="number">0 </span>=&gt; JsValue::unknown(
+                JsValue::call(
+                    <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                    args,
+                ),
+                <span class="string">&quot;unresolveable request&quot;</span>,
+            ),
+            <span class="number">1 </span>=&gt; values.pop().unwrap(),
+            <span class="kw">_ </span>=&gt; JsValue::alternatives(values),
+        }
+    } <span class="kw">else </span>{
+        JsValue::unknown(
+            JsValue::call(
+                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                args,
+            ),
+            <span class="string">&quot;only a single argument is supported&quot;</span>,
+        )
+    })
+}
+
+<span class="kw">async fn </span>require_context_visitor(
+    origin: ResolveOriginVc,
+    args: Vec&lt;JsValue&gt;,
+    in_try: bool,
+) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
+    <span class="kw">let </span>options = <span class="kw">match </span>parse_require_context(<span class="kw-2">&amp;</span>args) {
+        <span class="prelude-val">Ok</span>(options) =&gt; options,
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown(
+                JsValue::call(
+                    <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+                    args,
+                ),
+                PrettyPrintError(<span class="kw-2">&amp;</span>err).to_string(),
+            ))
+        }
+    };
+
+    <span class="kw">let </span>dir = origin.origin_path().parent().join(<span class="kw-2">&amp;</span>options.dir);
+
+    <span class="kw">let </span>map = RequireContextMapVc::generate(
+        origin,
+        dir,
+        options.include_subdirs,
+        RegexVc::cell(options.filter),
+        OptionIssueSourceVc::none(),
+        try_to_severity(in_try),
+    );
+
+    <span class="prelude-val">Ok</span>(JsValue::WellKnownFunction(
+        WellKnownFunctionKind::RequireContextRequire(RequireContextValueVc::from_context_map(map)),
+    ))
 }
 
 <span class="attr">#[derive(Debug)]
