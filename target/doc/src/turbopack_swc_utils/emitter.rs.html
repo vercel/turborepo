@@ -97,7 +97,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>message = db
             .message
             .iter()
-            .map(|(s, <span class="kw">_</span>)| s.as_ref())
+            .map(|s| s.<span class="number">0</span>.as_ref())
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .join(<span class="string">&quot;&quot;</span>);
         <span class="kw">let </span>code = db.code.as_ref().map(|d| <span class="kw">match </span>d {

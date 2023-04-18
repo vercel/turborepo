@@ -249,6 +249,7 @@
 <a href="#249" id="249">249</a>
 <a href="#250" id="250">250</a>
 <a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -424,6 +425,7 @@
     <span class="kw">let </span>config = ParserConfig {
         css_modules: <span class="macro">matches!</span>(ty, CssModuleAssetType::Module),
         legacy_nesting: <span class="bool-val">true</span>,
+        legacy_ie: <span class="bool-val">true</span>,
         ..Default::default()
     };
 

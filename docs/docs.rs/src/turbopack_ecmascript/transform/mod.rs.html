@@ -411,10 +411,29 @@
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 <span class="kw">mod </span>util;
 
-<span class="kw">use </span>std::{fmt::Debug, path::Path, sync::Arc};
+<span class="kw">use </span>std::{
+    collections::hash_map::DefaultHasher,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    path::Path,
+    sync::Arc,
+};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
@@ -596,6 +615,7 @@
                     <span class="prelude-val">Some</span>(comments.clone()),
                     config,
                     top_level_mark,
+                    unresolved_mark,
                 ));
             }
             EcmascriptInputTransform::CommonJs =&gt; {
@@ -628,9 +648,15 @@
                     ..Default::default()
                 };
                 <span class="kw">let </span>p = std::mem::replace(program, Program::Module(Module::dummy()));
+                <span class="kw">let </span>hash = {
+                    <span class="kw">let </span><span class="kw-2">mut </span>hasher = DefaultHasher::new();
+                    p.hash(<span class="kw-2">&amp;mut </span>hasher);
+                    hasher.finish()
+                };
                 <span class="kw-2">*</span>program = p.fold_with(<span class="kw-2">&amp;mut </span>swc_emotion::emotion(
                     options,
                     Path::new(file_name_str),
+                    hash <span class="kw">as </span>u32,
                     source_map.clone(),
                     comments.clone(),
                 ))

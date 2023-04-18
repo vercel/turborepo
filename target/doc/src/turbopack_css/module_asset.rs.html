@@ -732,17 +732,17 @@
                 <span class="kw">for </span>export_class_name <span class="kw">in </span>export_class_names {
                     export.push(<span class="kw">match </span>export_class_name {
                         CssClassName::Import { from, name } =&gt; ModuleCssClass::Import {
-                            original: name.to_string(),
+                            original: name.value.to_string(),
                             from: CssModuleComposeReferenceVc::new(
                                 <span class="self">self</span>.as_resolve_origin(),
                                 RequestVc::parse(Value::new(from.to_string().into())),
                             ),
                         },
                         CssClassName::Local { name } =&gt; ModuleCssClass::Local {
-                            name: name.to_string(),
+                            name: name.value.to_string(),
                         },
                         CssClassName::Global { name } =&gt; ModuleCssClass::Global {
-                            name: name.to_string(),
+                            name: name.value.to_string(),
                         },
                     })
                 }
