@@ -84,8 +84,9 @@ impl ModuleOptionsVc {
         } = *context.await?;
         if !rules.is_empty() {
             let path_value = path.await?;
+
             for (condition, new_context) in rules.iter() {
-                if condition.matches(&path_value) {
+                if condition.matches(&path_value).await {
                     return Ok(ModuleOptionsVc::new(path, *new_context));
                 }
             }
