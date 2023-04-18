@@ -76,6 +76,10 @@ func AllTransitiveClosures(
 		// We special case as Rust implementations have their own dep crawl
 		return rustTransitiveDeps(lf.contents, "npm", workspaces)
 	}
+	if lf, ok := lockFile.(*BerryLockfile); ok {
+		// We special case as Rust implementations have their own dep crawl
+		return rustTransitiveDeps(lf.contents, "berry", workspaces)
+	}
 
 	g := new(errgroup.Group)
 	c := make(chan closureMsg, len(workspaces))

@@ -113,8 +113,20 @@ var nodejsBerry = PackageManager{
 		return true, nil
 	},
 
-	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
-		return lockfile.DecodeBerryLockfile(contents)
+	UnmarshalLockfile: func(rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
+		var resolutions map[string]string
+		if untypedResolutions, ok := rootPackageJSON.RawJSON["resolutions"]; ok {
+			if untypedResolutions, ok := untypedResolutions.(map[string]interface{}); ok {
+				resolutions = make(map[string]string, len(untypedResolutions))
+				for resolution, reference := range untypedResolutions {
+					if reference, ok := reference.(string); ok {
+						resolutions[resolution] = reference
+					}
+				}
+			}
+		}
+
+		return lockfile.DecodeBerryLockfile(contents, resolutions)
 	},
 
 	prunePatches: func(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error {
