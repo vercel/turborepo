@@ -218,224 +218,340 @@
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{cell::RefCell, mem::take, rc::Rc};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::{IndexMap, IndexSet};
 <span class="kw">use </span>turbo_tasks::TryJoinIterExt;
-<span class="kw">use </span>turbo_tasks_fs::{FileSystemPathOptionVc, FileSystemPathVc};
 
-<span class="attr">#[derive(Default)]
-</span><span class="kw">pub struct </span>ContainmentTree&lt;T&gt; {
-    <span class="kw">pub </span>path: <span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;,
-    <span class="kw">pub </span>chunks: <span class="prelude-ty">Option</span>&lt;Vec&lt;T&gt;&gt;,
-    <span class="kw">pub </span>children: Vec&lt;ContainmentTree&lt;T&gt;&gt;,
+<span class="attr">#[derive(Debug, Default, Clone, Eq, PartialEq)]
+</span><span class="kw">pub struct </span>ContainmentTree&lt;K, V&gt; {
+    <span class="kw">pub </span>key: <span class="prelude-ty">Option</span>&lt;K&gt;,
+    <span class="kw">pub </span>values: <span class="prelude-ty">Option</span>&lt;Vec&lt;V&gt;&gt;,
+    <span class="kw">pub </span>children: Vec&lt;ContainmentTree&lt;K, V&gt;&gt;,
 }
 
-<span class="kw">impl</span>&lt;T&gt; ContainmentTree&lt;T&gt; {
-    <span class="kw">pub async fn </span>build(
-        chunks: <span class="kw">impl </span>Iterator&lt;Item = (FileSystemPathOptionVc, T)&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContainmentTree&lt;T&gt;&gt; {
-        <span class="kw">async fn </span>resolve&lt;T&gt;(
-            chunks: <span class="kw">impl </span>Iterator&lt;Item = (FileSystemPathOptionVc, T)&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;, T)&gt;&gt; {
-            chunks
-                .map(|(common_parent, chunk)| <span class="kw">async move </span>{
-                    <span class="kw">let </span>common_parent = <span class="kw">if let </span><span class="prelude-val">Some</span>(common_parent) = <span class="kw-2">*</span>common_parent.<span class="kw">await</span><span class="question-mark">? </span>{
-                        <span class="prelude-val">Some</span>(common_parent.resolve().<span class="kw">await</span><span class="question-mark">?</span>)
-                    } <span class="kw">else </span>{
-                        <span class="prelude-val">None
-                    </span>};
-                    <span class="prelude-val">Ok</span>((common_parent, chunk))
-                })
-                .try_join()
-                .<span class="kw">await
-        </span>}
+<span class="comment">// Temp structure which uses Rc and RefCell
+</span><span class="kw">struct </span>Node&lt;K, V&gt; {
+    key: K,
+    values: Vec&lt;V&gt;,
+    children: Vec&lt;Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;&gt;,
+}
 
-        <span class="kw">async fn </span>expand_common_parents(
-            common_parents: <span class="kw-2">&amp;mut </span>IndexSet&lt;FileSystemPathVc&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-            <span class="comment">// This is mutated while iterating, so we need to loop with index
-            </span><span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0</span>;
-            <span class="kw">while </span>i &lt; common_parents.len() {
-                <span class="kw">let </span>current = common_parents[i];
-                <span class="kw">let </span>parent = current.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-                common_parents.insert(parent);
-                i += <span class="number">1</span>;
-            }
-            <span class="prelude-val">Ok</span>(())
-        }
+<span class="attr">#[async_trait::async_trait]
+</span><span class="kw">pub trait </span>ContainmentTreeKey: Sized {
+    <span class="kw">async fn </span>parent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
+}
 
-        <span class="kw">async fn </span>compute_relationships(
-            common_parents: <span class="kw-2">&amp;</span>IndexSet&lt;FileSystemPathVc&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;, FileSystemPathVc)&gt;&gt; {
-            common_parents
-                .iter()
-                .map(|<span class="kw-2">&amp;</span>key| {
-                    <span class="kw">let </span>common_parents = <span class="kw-2">&amp;</span>common_parents;
-                    <span class="kw">async move </span>{
-                        <span class="kw">let </span><span class="kw-2">mut </span>current = key;
-                        <span class="kw">loop </span>{
-                            <span class="kw">let </span>parent = current.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-                            <span class="kw">if </span>parent == current {
-                                <span class="kw">return </span><span class="prelude-val">Ok</span>((<span class="prelude-val">None</span>, key));
-                            }
-                            <span class="kw">if </span>common_parents.contains(<span class="kw-2">&amp;</span>parent) {
-                                <span class="comment">// Can&#39;t insert here into the parent tree, since we want the order
-                                // of children to be deterministic
-                                </span><span class="kw">return </span><span class="prelude-val">Ok</span>((<span class="prelude-val">Some</span>(parent), key));
-                            }
-                            current = parent;
-                        }
-                    }
-                })
-                .try_join()
-                .<span class="kw">await
-        </span>}
+<span class="kw">impl</span>&lt;K, V&gt; ContainmentTree&lt;K, V&gt;
+<span class="kw">where
+    </span>K: ContainmentTreeKey + std::hash::Hash + Eq + Clone,
+{
+    <span class="kw">pub async fn </span>build&lt;I&gt;(values: I) -&gt; <span class="prelude-ty">Result</span>&lt;ContainmentTree&lt;K, V&gt;&gt;
+    <span class="kw">where
+        </span>I: IntoIterator&lt;Item = (<span class="prelude-ty">Option</span>&lt;K&gt;, V)&gt;,
+    {
+        <span class="kw">let </span>values: Vec&lt;<span class="kw">_</span>&gt; = values.into_iter().collect();
 
-        <span class="comment">// Temp structure which uses Rc and RefCell
-        </span><span class="kw">struct </span>Node&lt;T&gt; {
-            path: FileSystemPathVc,
-            chunks: Vec&lt;T&gt;,
-            children: Vec&lt;Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt;,
-        }
-
-        <span class="kw">fn </span>create_node_tree&lt;T&gt;(
-            common_parents: IndexSet&lt;FileSystemPathVc&gt;,
-        ) -&gt; IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>trees = IndexMap::&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt;::new();
-            <span class="kw">for </span>common_parent <span class="kw">in </span>common_parents {
-                trees.insert(
-                    common_parent,
-                    Rc::new(RefCell::new(Node {
-                        path: common_parent,
-                        chunks: Vec::new(),
-                        children: Vec::new(),
-                    })),
-                );
-            }
-            trees
-        }
-
-        <span class="kw">fn </span>add_chunks_to_tree&lt;T&gt;(
-            trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt;,
-            chunks: Vec&lt;(<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;, T)&gt;,
-        ) -&gt; Vec&lt;T&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>orphan_chunks = Vec::new();
-            <span class="kw">for </span>(common_parent, chunk) <span class="kw">in </span>chunks {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(common_parent) = common_parent {
-                    trees
-                        .get_mut(<span class="kw-2">&amp;</span>common_parent)
-                        .unwrap()
-                        .borrow_mut()
-                        .chunks
-                        .push(chunk);
-                } <span class="kw">else </span>{
-                    orphan_chunks.push(chunk);
-                }
-            }
-            orphan_chunks
-        }
-
-        <span class="kw">fn </span>treeify&lt;T&gt;(
-            relationships: Vec&lt;(<span class="prelude-ty">Option</span>&lt;FileSystemPathVc&gt;, FileSystemPathVc)&gt;,
-            trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt;,
-        ) -&gt; Vec&lt;Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt; {
-            relationships
-                .into_iter()
-                .flat_map(|(parent, key)| {
-                    <span class="kw">let </span>tree = trees.get(<span class="kw-2">&amp;</span>key).unwrap().clone();
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = parent {
-                        trees.get(<span class="kw-2">&amp;</span>parent).unwrap().borrow_mut().children.push(tree);
-                        <span class="prelude-val">None
-                    </span>} <span class="kw">else </span>{
-                        <span class="prelude-val">Some</span>(tree)
-                    }
-                })
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-        }
-
-        <span class="kw">fn </span>skip_unnessary_nodes&lt;T&gt;(trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;FileSystemPathVc, Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt;) {
-            <span class="kw">for </span>tree <span class="kw">in </span>trees.values_mut() {
-                <span class="kw">let </span><span class="kw-2">mut </span>tree = tree.borrow_mut();
-                <span class="kw">if </span>tree.chunks.is_empty() &amp;&amp; tree.children.len() == <span class="number">1 </span>{
-                    <span class="kw">let </span>child = tree.children.pop().unwrap();
-                    <span class="kw">let </span><span class="kw-2">mut </span>child = child.borrow_mut();
-                    tree.path = child.path;
-                    tree.chunks.append(<span class="kw-2">&amp;mut </span>child.chunks);
-                    tree.children.append(<span class="kw-2">&amp;mut </span>child.children);
-                }
-            }
-        }
-
-        <span class="comment">// Convert function to the real data structure
-        </span><span class="kw">fn </span>node_to_common_parent_tree&lt;T&gt;(node: Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;) -&gt; ContainmentTree&lt;T&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>node = node.borrow_mut();
-            <span class="kw">let </span>children = take(<span class="kw-2">&amp;mut </span>node.children)
-                .into_iter()
-                .map(node_to_common_parent_tree)
-                .collect();
-            <span class="comment">// TODO keyed cell: this would benefit from keying the cell by node.path
-            </span><span class="kw">let </span>chunks = <span class="prelude-val">Some</span>(take(<span class="kw-2">&amp;mut </span>node.chunks));
-            ContainmentTree {
-                path: <span class="prelude-val">Some</span>(node.path),
-                chunks,
-                children,
-            }
-        }
-
-        <span class="kw">fn </span>convert_into_common_parent_tree&lt;T&gt;(
-            roots: Vec&lt;Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt;,
-            orphan_chunks: Vec&lt;T&gt;,
-        ) -&gt; Vec&lt;ContainmentTree&lt;T&gt;&gt; {
-            roots
-                .into_iter()
-                .map(node_to_common_parent_tree)
-                .chain(orphan_chunks.into_iter().map(|chunk| ContainmentTree {
-                    path: <span class="prelude-val">None</span>,
-                    chunks: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[chunk]),
-                    children: Vec::new(),
-                }))
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-        }
-
-        <span class="comment">// resolve all paths
-        </span><span class="kw">let </span>chunks = resolve(chunks).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// compute all unique common_parents
-        </span><span class="kw">let </span><span class="kw-2">mut </span>common_parents = chunks
+        </span><span class="kw">let </span><span class="kw-2">mut </span>common_parents = values
             .iter()
-            .filter_map(|<span class="kw-2">&amp;</span>(path, <span class="kw">_</span>)| path)
+            .filter_map(|(key, <span class="kw">_</span>)| key.clone())
             .collect::&lt;IndexSet&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="comment">// expand all common parents to include all their parents
-        </span>expand_common_parents(<span class="kw-2">&amp;mut </span>common_parents).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// compute parent -&gt; child relationships between common_parents
-        </span><span class="kw">let </span>relationships = compute_relationships(<span class="kw-2">&amp;</span>common_parents).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// create the tree nodes
-        </span><span class="kw">let </span><span class="kw-2">mut </span>trees = create_node_tree(common_parents);
+        <span class="self">Self</span>::expand_common_parents(<span class="kw-2">&amp;mut </span>common_parents).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// add chunks to nodes
-        </span><span class="kw">let </span>orphan_chunks = add_chunks_to_tree(<span class="kw-2">&amp;mut </span>trees, chunks);
+        <span class="kw">let </span>relationships = <span class="self">Self</span>::compute_relationships(<span class="kw-2">&amp;</span>common_parents).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// nest each tree by relationship, compute the roots
-        </span><span class="kw">let </span>roots = treeify(relationships, <span class="kw-2">&amp;mut </span>trees);
+        <span class="kw">let </span><span class="kw-2">mut </span>trees = <span class="self">Self</span>::create_node_tree(common_parents);
+
+        <span class="kw">let </span>orphan_values = <span class="self">Self</span>::add_values_to_tree(<span class="kw-2">&amp;mut </span>trees, values);
+
+        <span class="kw">let </span>roots = <span class="self">Self</span>::treeify(relationships, <span class="kw-2">&amp;mut </span>trees);
 
         <span class="comment">// optimize tree by removing unnecessary nodes
-        </span>skip_unnessary_nodes(<span class="kw-2">&amp;mut </span>trees);
+        </span><span class="self">Self</span>::skip_unnecessary_nodes(<span class="kw-2">&amp;mut </span>trees);
 
         <span class="comment">// do conversion
-        </span><span class="kw">let </span>roots = convert_into_common_parent_tree(roots, orphan_chunks);
+        </span><span class="kw">let </span>roots = <span class="self">Self</span>::convert_into_common_parent_tree(roots, orphan_values);
 
         <span class="comment">// top level nesting
         </span><span class="prelude-val">Ok</span>(<span class="kw">if </span>roots.len() == <span class="number">1 </span>{
             roots.into_iter().next().unwrap()
         } <span class="kw">else </span>{
             ContainmentTree {
-                path: <span class="prelude-val">None</span>,
-                chunks: <span class="prelude-val">None</span>,
+                key: <span class="prelude-val">None</span>,
+                values: <span class="prelude-val">None</span>,
                 children: roots,
             }
         })
+    }
+
+    <span class="doccomment">/// Expand all common parents to include all their parents.
+    </span><span class="kw">async fn </span>expand_common_parents(common_parents: <span class="kw-2">&amp;mut </span>IndexSet&lt;K&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="comment">// This is mutated while iterating, so we need to loop with index
+        </span><span class="kw">let </span><span class="kw-2">mut </span>i = <span class="number">0</span>;
+        <span class="kw">while </span>i &lt; common_parents.len() {
+            <span class="kw">let </span>current = <span class="kw-2">&amp;</span>common_parents[i];
+            <span class="kw">let </span>parent = current.parent().<span class="kw">await</span><span class="question-mark">?</span>;
+            common_parents.insert(parent);
+            i += <span class="number">1</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Compute parent -&gt; child relationships between common_parents.
+    </span><span class="kw">async fn </span>compute_relationships(common_parents: <span class="kw-2">&amp;</span>IndexSet&lt;K&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="prelude-ty">Option</span>&lt;K&gt;, K)&gt;&gt; {
+        common_parents
+            .iter()
+            .map(|key| {
+                <span class="kw">let </span>common_parents = <span class="kw-2">&amp;</span>common_parents;
+                <span class="kw">async move </span>{
+                    <span class="kw">let </span><span class="kw-2">mut </span>current = key.clone();
+                    <span class="kw">loop </span>{
+                        <span class="kw">let </span>parent = current.parent().<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">if </span>parent == current {
+                            <span class="kw">return </span><span class="prelude-val">Ok</span>((<span class="prelude-val">None</span>, key.clone()));
+                        }
+                        <span class="kw">if </span>common_parents.contains(<span class="kw-2">&amp;</span>parent) {
+                            <span class="comment">// Can&#39;t insert here into the parent tree, since we want the order
+                            // of children to be deterministic
+                            </span><span class="kw">return </span><span class="prelude-val">Ok</span>((<span class="prelude-val">Some</span>(parent), key.clone()));
+                        }
+                        current = parent;
+                    }
+                }
+            })
+            .try_join()
+            .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Create the tree nodes.
+    </span><span class="kw">fn </span>create_node_tree(common_parents: IndexSet&lt;K&gt;) -&gt; IndexMap&lt;K, Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>trees = IndexMap::&lt;K, Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;&gt;::new();
+        <span class="kw">for </span>common_parent <span class="kw">in </span>common_parents {
+            trees.insert(
+                common_parent.clone(),
+                Rc::new(RefCell::new(Node {
+                    key: common_parent,
+                    values: Vec::new(),
+                    children: Vec::new(),
+                })),
+            );
+        }
+        trees
+    }
+
+    <span class="doccomment">/// Add chunks to nodes.
+    </span><span class="kw">fn </span>add_values_to_tree(
+        trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;K, Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;&gt;,
+        values: Vec&lt;(<span class="prelude-ty">Option</span>&lt;K&gt;, V)&gt;,
+    ) -&gt; Vec&lt;V&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>orphan_values = Vec::new();
+        <span class="kw">for </span>(common_parent, chunk) <span class="kw">in </span>values {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(common_parent) = common_parent {
+                trees
+                    .get_mut(<span class="kw-2">&amp;</span>common_parent)
+                    .unwrap()
+                    .borrow_mut()
+                    .values
+                    .push(chunk);
+            } <span class="kw">else </span>{
+                orphan_values.push(chunk);
+            }
+        }
+        orphan_values
+    }
+
+    <span class="doccomment">/// Nest each tree by relationship, compute the roots
+    </span><span class="kw">fn </span>treeify(
+        relationships: Vec&lt;(<span class="prelude-ty">Option</span>&lt;K&gt;, K)&gt;,
+        trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;K, Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;&gt;,
+    ) -&gt; Vec&lt;Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;&gt; {
+        relationships
+            .into_iter()
+            .flat_map(|(parent, key)| {
+                <span class="kw">let </span>tree = trees.get(<span class="kw-2">&amp;</span>key).unwrap().clone();
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = parent {
+                    trees.get(<span class="kw-2">&amp;</span>parent).unwrap().borrow_mut().children.push(tree);
+                    <span class="prelude-val">None
+                </span>} <span class="kw">else </span>{
+                    <span class="prelude-val">Some</span>(tree)
+                }
+            })
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+    }
+
+    <span class="doccomment">/// Optimize tree by removing unnecessary nodes.
+    </span><span class="kw">fn </span>skip_unnecessary_nodes(trees: <span class="kw-2">&amp;mut </span>IndexMap&lt;K, Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;&gt;) {
+        <span class="kw">for </span>tree <span class="kw">in </span>trees.values_mut() {
+            <span class="kw">let </span><span class="kw-2">mut </span>tree = tree.borrow_mut();
+            <span class="kw">if </span>tree.values.is_empty() &amp;&amp; tree.children.len() == <span class="number">1 </span>{
+                <span class="kw">let </span>child = tree.children.pop().unwrap();
+                <span class="kw">let </span><span class="kw-2">mut </span>child = child.borrow_mut();
+                tree.key = child.key.clone();
+                tree.values.append(<span class="kw-2">&amp;mut </span>child.values);
+                tree.children.append(<span class="kw-2">&amp;mut </span>child.children);
+            }
+        }
+    }
+
+    <span class="comment">// Convert function to the real data structure
+    </span><span class="kw">fn </span>node_to_common_parent_tree(node: Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;) -&gt; ContainmentTree&lt;K, V&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>node = node.borrow_mut();
+        <span class="kw">let </span>children = take(<span class="kw-2">&amp;mut </span>node.children)
+            .into_iter()
+            .map(<span class="self">Self</span>::node_to_common_parent_tree)
+            .collect();
+        <span class="comment">// TODO keyed cell: this would benefit from keying the cell by node.path
+        </span><span class="kw">let </span>values = <span class="prelude-val">Some</span>(take(<span class="kw-2">&amp;mut </span>node.values));
+        ContainmentTree {
+            key: <span class="prelude-val">Some</span>(node.key.clone()),
+            values,
+            children,
+        }
+    }
+
+    <span class="kw">fn </span>convert_into_common_parent_tree(
+        roots: Vec&lt;Rc&lt;RefCell&lt;Node&lt;K, V&gt;&gt;&gt;&gt;,
+        orphan_values: Vec&lt;V&gt;,
+    ) -&gt; Vec&lt;ContainmentTree&lt;K, V&gt;&gt; {
+        roots
+            .into_iter()
+            .map(<span class="self">Self</span>::node_to_common_parent_tree)
+            .chain(orphan_values.into_iter().map(|value| ContainmentTree {
+                key: <span class="prelude-val">None</span>,
+                values: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[value]),
+                children: Vec::new(),
+            }))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+    }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>anyhow::Result;
+    <span class="kw">use </span>async_trait::async_trait;
+
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+
+    <span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    </span><span class="kw">struct </span>TestKey(u32, u32);
+
+    <span class="attr">#[async_trait]
+    </span><span class="kw">impl </span>ContainmentTreeKey <span class="kw">for </span>TestKey {
+        <span class="kw">async fn </span>parent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+            <span class="kw">if </span><span class="self">self</span>.<span class="number">1 </span>== <span class="number">0 </span>{
+                <span class="prelude-val">Ok</span>(TestKey(<span class="self">self</span>.<span class="number">0</span>, <span class="number">0</span>))
+            } <span class="kw">else </span>{
+                <span class="prelude-val">Ok</span>(TestKey(<span class="self">self</span>.<span class="number">0</span>, <span class="self">self</span>.<span class="number">1 </span>- <span class="number">1</span>))
+            }
+        }
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>test_build_simple_input() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>input = <span class="macro">vec!</span>[
+            (<span class="prelude-val">None</span>, <span class="string">&quot;value0&quot;</span>),
+            (<span class="prelude-val">Some</span>(TestKey(<span class="number">0</span>, <span class="number">0</span>)), <span class="string">&quot;value1&quot;</span>),
+            (<span class="prelude-val">Some</span>(TestKey(<span class="number">0</span>, <span class="number">1</span>)), <span class="string">&quot;value2&quot;</span>),
+            (<span class="prelude-val">Some</span>(TestKey(<span class="number">0</span>, <span class="number">2</span>)), <span class="string">&quot;value3&quot;</span>),
+            (<span class="prelude-val">Some</span>(TestKey(<span class="number">1</span>, <span class="number">2</span>)), <span class="string">&quot;value4&quot;</span>),
+        ];
+
+        <span class="kw">let </span>tree = ContainmentTree::&lt;TestKey, <span class="kw-2">&amp;</span>str&gt;::build(input).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="macro">assert_eq!</span>(
+            tree,
+            ContainmentTree {
+                key: <span class="prelude-val">None</span>,
+                values: <span class="prelude-val">None</span>,
+                children: <span class="macro">vec!</span>[
+                    ContainmentTree {
+                        key: <span class="prelude-val">Some</span>(TestKey(<span class="number">0</span>, <span class="number">0</span>)),
+                        values: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="string">&quot;value1&quot;</span>]),
+                        children: <span class="macro">vec!</span>[ContainmentTree {
+                            key: <span class="prelude-val">Some</span>(TestKey(<span class="number">0</span>, <span class="number">1</span>)),
+                            values: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="string">&quot;value2&quot;</span>]),
+                            children: <span class="macro">vec!</span>[ContainmentTree {
+                                key: <span class="prelude-val">Some</span>(TestKey(<span class="number">0</span>, <span class="number">2</span>)),
+                                values: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="string">&quot;value3&quot;</span>]),
+                                children: <span class="macro">vec!</span>[]
+                            }]
+                        }]
+                    },
+                    ContainmentTree {
+                        key: <span class="prelude-val">Some</span>(TestKey(<span class="number">1</span>, <span class="number">2</span>)),
+                        values: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="string">&quot;value4&quot;</span>]),
+                        children: <span class="macro">vec!</span>[]
+                    },
+                    ContainmentTree {
+                        key: <span class="prelude-val">None</span>,
+                        values: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[<span class="string">&quot;value0&quot;</span>]),
+                        children: <span class="macro">vec!</span>[]
+                    },
+                ]
+            }
+        );
+        <span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div>
