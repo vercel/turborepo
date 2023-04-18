@@ -100,7 +100,6 @@ func (pfs *packageFileSpec) getHashObject(pkg *fs.PackageJSON, repoRoot turbopat
 		InputPatterns: pfs.inputs,
 	})
 	if pkgDepsErr != nil {
-		fmt.Printf("[debug] manually hashing object %#v\n")
 		manualHashObject, err := manuallyHashPackage(pkg, pfs.inputs, repoRoot)
 		if err != nil {
 			return make(map[turbopath.AnchoredUnixPath]string)
@@ -153,9 +152,7 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 			excludePattern = "{" + strings.Join(excludePatterns, ",") + "}"
 		}
 	}
-	fmt.Printf("[debug] includePattern %#v\n", includePattern)
 
-	fmt.Printf("[debug] walking %#v\n", pathPrefix.ToStringDuringMigration())
 	err = fs.Walk(pathPrefix.ToStringDuringMigration(), func(name string, isDir bool) error {
 		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
 		rootMatch := ignore.MatchesPath(convertedName.ToString())
@@ -197,7 +194,6 @@ func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopat
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("[debug] hashObject form manual %#v\n", hashObject)
 	return hashObject, nil
 }
 
