@@ -1,0 +1,28 @@
+css = ("" | partRule | partString)
+
+dynamicHash = (
+  | FreeVar(phash)(???*0*["baseHash"], stylis["hash"])
+  | FreeVar(phash)(dynamicHash, partRule)
+  | FreeVar(phash)(dynamicHash, partString)
+)
+- *0* unsupported expression
+
+executionContext = arguments[0]
+
+i = 0
+
+name = FreeVar(generateName)(???*0*)
+- *0* unsupported expression
+
+names = FreeVar(joinStrings)(FreeVar(names), name)
+
+partRule = ???*0*["rules"][i]
+- *0* unsupported expression
+
+partString = FreeVar(joinStringArray)(
+    FreeVar(flatten)(partRule, executionContext, styleSheet, stylis)
+)
+
+styleSheet = arguments[1]
+
+stylis = arguments[2]

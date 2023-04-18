@@ -1,0 +1,61 @@
+css = ("" | ???*0* | ???*3*)
+- *0* ???*1*[i]
+  ⚠️  unknown object
+- *1* ???*2*["rules"]
+  ⚠️  unknown object
+- *2* unsupported expression
+- *3* ???*4*(
+        FreeVar(flatten)(partRule, executionContext, styleSheet, stylis)
+    )
+  ⚠️  unknown callee
+- *4* FreeVar(joinStringArray)
+  ⚠️  unknown global
+
+dynamicHash = ???*0*
+- *0* ???*1*(???*2*["baseHash"], stylis["hash"])
+  ⚠️  unknown callee
+- *1* FreeVar(phash)
+  ⚠️  unknown global
+- *2* unsupported expression
+
+executionContext = ???*0*
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+i = 0
+
+name = ???*0*
+- *0* ???*1*(???*2*)
+  ⚠️  unknown callee
+- *1* FreeVar(generateName)
+  ⚠️  unknown global
+- *2* unsupported expression
+
+names = ???*0*
+- *0* ???*1*(FreeVar(names), name)
+  ⚠️  unknown callee
+- *1* FreeVar(joinStrings)
+  ⚠️  unknown global
+
+partRule = ???*0*
+- *0* ???*1*[i]
+  ⚠️  unknown object
+- *1* ???*2*["rules"]
+  ⚠️  unknown object
+- *2* unsupported expression
+
+partString = ???*0*
+- *0* ???*1*(
+        FreeVar(flatten)(partRule, executionContext, styleSheet, stylis)
+    )
+  ⚠️  unknown callee
+- *1* FreeVar(joinStringArray)
+  ⚠️  unknown global
+
+styleSheet = ???*0*
+- *0* arguments[1]
+  ⚠️  function calls are not analysed yet
+
+stylis = ???*0*
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
