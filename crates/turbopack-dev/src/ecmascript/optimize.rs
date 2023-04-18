@@ -8,15 +8,51 @@ use turbo_tasks::{TryJoinIterExt, Value};
 use turbo_tasks_fs::FileSystemPathOptionVc;
 use turbopack_core::chunk::optimize::optimize_by_common_parent;
 use turbopack_ecmascript::chunk::{
-    EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptChunksVc,
+    EcmascriptChunkPlaceablesVc, EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptChunksVc,
 };
 
 #[turbo_tasks::function]
 pub async fn optimize_ecmascript_chunks(chunks: EcmascriptChunksVc) -> Result<EcmascriptChunksVc> {
-    optimize_by_common_parent(&*chunks.await?, get_common_parent, |local, children| {
-        optimize_ecmascript(local.map(EcmascriptChunksVc::cell), children)
-    })
-    .await
+    // Ecmascript chunks in the same chunk group can have different chunking
+    // contexts (e.g. through Next.js' with-client-chunks transition). They must not
+    // be merged together, as this affects how module ids are computed within the
+    // chunk.
+    let chunks_by_chunking_context: IndexMap<EcmascriptChunkingContextVc, Vec<EcmascriptChunkVc>> =
+        chunks
+            .await?
+            .iter()
+            .map(|chunk| async move {
+                let chunking_context = chunk.await?.context.resolve().await?;
+                Ok((chunking_context, chunk))
+            })
+            .try_join()
+            .await?
+            .into_iter()
+            .fold(IndexMap::new(), |mut acc, (chunking_context, chunk)| {
+                acc.entry(chunking_context)
+                    .or_insert_with(Vec::new)
+                    .push(*chunk);
+                acc
+            });
+
+    let optimized_chunks = chunks_by_chunking_context
+        .into_values()
+        .map(|chunks| async move {
+            Ok(
+                optimize_by_common_parent(&chunks, get_common_parent, |local, children| {
+                    optimize_ecmascript(local.map(EcmascriptChunksVc::cell), children)
+                })
+                .await?
+                .await?,
+            )
+        })
+        .try_join()
+        .await?
+        .into_iter()
+        .flat_map(|chunks| chunks.iter().copied().collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+
+    Ok(EcmascriptChunksVc::cell(optimized_chunks))
 }
 
 #[turbo_tasks::function]

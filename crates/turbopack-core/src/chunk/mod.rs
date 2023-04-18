@@ -369,12 +369,7 @@ where
                 ));
             }
             ChunkingType::IsolatedParallel => {
-                let chunk = chunkable_asset.as_chunk(
-                    context.chunking_context,
-                    Value::new(AvailabilityInfo::Root {
-                        current_availability_root: chunkable_asset.into(),
-                    }),
-                );
+                let chunk = chunkable_asset.as_root_chunk(context.chunking_context);
                 graph_nodes.push((
                     Some((asset, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),

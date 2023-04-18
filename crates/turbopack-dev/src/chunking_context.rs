@@ -373,9 +373,11 @@ impl ChunkingContext for DevChunkingContext {
 
     #[turbo_tasks::function]
     async fn chunk_group(self_vc: DevChunkingContextVc, entry_chunk: ChunkVc) -> Result<AssetsVc> {
-        let chunks = get_optimized_parallel_chunks([entry_chunk]).await?;
+        let parallel_chunks = get_parallel_chunks([entry_chunk]).await?;
 
-        let mut assets: Vec<AssetVc> = chunks
+        let optimized_chunks = get_optimized_chunks(parallel_chunks).await?;
+
+        let mut assets: Vec<AssetVc> = optimized_chunks
             .await?
             .iter()
             .map(|chunk| self_vc.generate_chunk(*chunk))
@@ -415,9 +417,11 @@ impl ChunkingContext for DevChunkingContext {
 
         entry_assets.insert(entry_chunk.resolve().await?);
 
-        let chunks = get_optimized_parallel_chunks(entry_assets).await?;
+        let parallel_chunks = get_parallel_chunks(entry_assets).await?;
 
-        let mut assets: Vec<AssetVc> = chunks
+        let optimized_chunks = get_optimized_chunks(parallel_chunks).await?;
+
+        let mut assets: Vec<AssetVc> = optimized_chunks
             .await?
             .iter()
             .map(|chunk| self_vc.generate_chunk(*chunk))
@@ -450,39 +454,45 @@ impl EcmascriptChunkingContext for DevChunkingContext {
     }
 }
 
-async fn get_optimized_parallel_chunks<I>(entries: I) -> Result<ChunksVc>
+async fn get_parallel_chunks<I>(entries: I) -> Result<impl Iterator<Item = ChunkVc>>
 where
     I: IntoIterator<Item = ChunkVc>,
 {
-    let chunks: Vec<_> = GraphTraversal::<SkipDuplicates<ReverseTopological<_>, _>>::visit(
-        entries,
-        |chunk: ChunkVc| async move {
-            Ok(chunk
-                .parallel_chunks()
-                .await?
-                .iter()
-                .copied()
-                .collect::<Vec<_>>()
-                .into_iter())
-        },
+    Ok(
+        GraphTraversal::<SkipDuplicates<ReverseTopological<_>, _>>::visit(
+            entries,
+            |chunk: ChunkVc| async move {
+                Ok(chunk
+                    .parallel_chunks()
+                    .await?
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .into_iter())
+            },
+        )
+        .await
+        .completed()?
+        .into_inner()
+        .into_iter(),
     )
-    .await
-    .completed()?
-    .into_inner()
-    .into_iter()
-    .collect();
+}
 
+async fn get_optimized_chunks<I>(chunks: I) -> Result<ChunksVc>
+where
+    I: IntoIterator<Item = ChunkVc>,
+{
     let mut ecmascript_chunks = vec![];
     let mut css_chunks = vec![];
     let mut other_chunks = vec![];
 
-    for chunk in chunks.iter() {
-        if let Some(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).await? {
+    for chunk in chunks.into_iter() {
+        if let Some(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(&chunk).await? {
             ecmascript_chunks.push(ecmascript_chunk);
-        } else if let Some(css_chunk) = CssChunkVc::resolve_from(chunk).await? {
+        } else if let Some(css_chunk) = CssChunkVc::resolve_from(&chunk).await? {
             css_chunks.push(css_chunk);
         } else {
-            other_chunks.push(*chunk);
+            other_chunks.push(chunk);
         }
     }
 
