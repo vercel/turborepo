@@ -420,6 +420,7 @@
 <a href="#420" id="420">420</a>
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -429,7 +430,7 @@
 <span class="kw">pub use </span>module_rule::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>rule_condition::<span class="kw-2">*</span>;
 <span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, StringsVc};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
@@ -506,8 +507,9 @@
         } = <span class="kw-2">*</span>context.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!rules.is_empty() {
             <span class="kw">let </span>path_value = path.<span class="kw">await</span><span class="question-mark">?</span>;
+
             <span class="kw">for </span>(condition, new_context) <span class="kw">in </span>rules.iter() {
-                <span class="kw">if </span>condition.matches(<span class="kw-2">&amp;</span>path_value) {
+                <span class="kw">if </span>condition.matches(<span class="kw-2">&amp;</span>path_value).<span class="kw">await </span>{
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(ModuleOptionsVc::new(path, <span class="kw-2">*</span>new_context));
                 }
             }
