@@ -49,11 +49,13 @@ to the build command. This allows for us to build for more platforms, as `native
 
 ### Running Turborepo Tests
 
-Dependencies
+Install dependencies
 
-1. Install `jq`, `sponge`, and `zstd`
+On macOS:
 
-On macOS: `brew install sponge jq zstd`
+```bash
+brew install moreutils jq zstd # (moreutils is for sponge)
+```
 
 #### Go Tests
 
