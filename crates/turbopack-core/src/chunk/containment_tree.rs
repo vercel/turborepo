@@ -248,11 +248,6 @@ mod tests {
                 values: None,
                 children: vec![
                     ContainmentTree {
-                        key: None,
-                        values: Some(vec!["value0"]),
-                        children: vec![]
-                    },
-                    ContainmentTree {
                         key: Some(TestKey(0, 0)),
                         values: Some(vec!["value1"]),
                         children: vec![ContainmentTree {
@@ -268,6 +263,11 @@ mod tests {
                     ContainmentTree {
                         key: Some(TestKey(1, 2)),
                         values: Some(vec!["value4"]),
+                        children: vec![]
+                    },
+                    ContainmentTree {
+                        key: None,
+                        values: Some(vec!["value0"]),
                         children: vec![]
                     },
                 ]
