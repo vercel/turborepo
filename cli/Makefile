@@ -321,8 +321,6 @@ clean-demo:
 	rm -rf node_modules
 	rm -rf demo
 
-CRAM_ENV := .cram_env
-
 # use target fixture-<some directory under integration_tests/_fixtures> to set up the testbed directory
 .PHONY=fixture-%
 fixture-%:
