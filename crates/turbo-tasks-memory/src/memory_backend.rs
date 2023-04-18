@@ -19,6 +19,7 @@ use auto_hash_map::AutoSet;
 use dashmap::{mapref::entry::Entry, DashMap};
 use lru::LruCache;
 use nohash_hasher::BuildNoHashHasher;
+use prehash::{Passthru, Prehashed, Prehasher};
 use rustc_hash::FxHasher;
 use thread_local::ThreadLocal;
 use tokio::task::futures::TaskLocalFuture;
@@ -46,14 +47,18 @@ use crate::{
 };
 
 type ThreadLocalTaskCache<K> =
-    ThreadLocal<RefCell<LruCache<K, TaskId, BuildHasherDefault<FxHasher>>>>;
+    ThreadLocal<RefCell<LruCache<K, TaskId, BuildHasherDefault<Passthru>>>>;
 
 fn create_thread_local_task_cache<K: Hash + Eq + Send>(
-) -> RefCell<LruCache<K, TaskId, BuildHasherDefault<FxHasher>>> {
+) -> RefCell<LruCache<K, TaskId, BuildHasherDefault<Passthru>>> {
     RefCell::new(LruCache::with_hasher(
         NonZeroUsize::new(4096).unwrap(),
         Default::default(),
     ))
+}
+
+fn prehash_task_type(task_type: PersistentTaskType) -> Prehashed<PersistentTaskType> {
+    BuildHasherDefault::<FxHasher>::prehash(&Default::default(), task_type)
 }
 
 pub struct MemoryBackend {
@@ -63,8 +68,8 @@ pub struct MemoryBackend {
     pub(crate) initial_scope: TaskScopeId,
     backend_jobs: NoMoveVec<Job>,
     backend_job_id_factory: IdFactory<BackendJobId>,
-    thread_local_task_cache: ThreadLocalTaskCache<Arc<PersistentTaskType>>,
-    task_cache: DashMap<Arc<PersistentTaskType>, TaskId, BuildHasherDefault<FxHasher>>,
+    thread_local_task_cache: ThreadLocalTaskCache<Arc<Prehashed<PersistentTaskType>>>,
+    task_cache: DashMap<Arc<Prehashed<PersistentTaskType>>, TaskId, BuildHasherDefault<Passthru>>,
     memory_limit: usize,
     gc_queue: Option<GcQueue>,
     idle_gc_active: AtomicBool,
@@ -680,10 +685,11 @@ impl Backend for MemoryBackend {
 
     fn get_or_create_persistent_task(
         &self,
-        mut task_type: PersistentTaskType,
+        task_type: PersistentTaskType,
         parent_task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> TaskId {
+        let task_type = prehash_task_type(task_type);
         if let Some(task) = self.lookup_and_connect_task(
             parent_task,
             &self.thread_local_task_cache,
@@ -696,8 +702,9 @@ impl Backend for MemoryBackend {
         } else {
             // It's important to avoid overallocating memory as this will go into the task
             // cache and stay there forever. We can to be as small as possible.
+            let (mut task_type, task_type_hash) = Prehashed::into_parts(task_type);
             task_type.shrink_to_fit();
-            let task_type = Arc::new(task_type);
+            let task_type = Arc::new(Prehashed::new(task_type, task_type_hash));
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();
             let task = Task::new_persistent(
