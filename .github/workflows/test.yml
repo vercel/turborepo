@@ -95,7 +95,8 @@ jobs:
             xtask/**
             .cargo/**
             rust-toolchain
-            !crates/turborepo/**                        
+            !glob-watch
+            !crates/turborepo/**
             !crates/turborepo-api-client/**
             !crates/turborepo-lib/**
             !crates/turborepo-ffi/**
@@ -120,6 +121,7 @@ jobs:
           PATTERNS: |
             pnpm-lock.yaml
             package.json
+            glob-watch
             crates/turborepo/**
             crates/turborepo-api-client/**
             crates/turborepo-lib/**
@@ -751,12 +753,12 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --workspace --exclude turbopack-bench --no-run
+          cargo tp-bench-test --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --workspace --exclude turbopack-bench
+          cargo tp-bench-test
 
       - name: Build benchmarks for tests for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
@@ -1046,8 +1048,24 @@ jobs:
   turbopack_bench_pr:
     needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.turbopack == 'true' && github.event_name == 'pull_request'
-    name: Benchmark and compare Turbopack performance
-    runs-on: ubuntu-latest-16-core-oss
+    name: Benchmark and compare Turbopack performance on ${{ matrix.os.title }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: linux
+            title: Linux
+            quiet: false
+            runner: ubuntu-latest-16-core-oss
+          - name: macos
+            title: MacOS
+            quiet: true
+            runner: macos-latest
+          - name: windows
+            title: Windows
+            quiet: true
+            runner: windows-latest
+    runs-on: ${{ matrix.os.runner }}
     permissions:
       contents: read
       pull-requests: write
@@ -1070,13 +1088,15 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          shared-cache-key: benchmark
+          shared-cache-key: benchmark-${{ matrix.os.name }}
 
       - name: Benchmark and compare with base branch
         uses: sokra/criterion-compare-action@main
         timeout-minutes: 180
         with:
           branchName: base
+          title: ${{ matrix.os.title }} Benchmark
+          quiet: ${{ matrix.os.quiet }}
           cwd: crates/turbopack-cli
 
   format_lint:
