@@ -59,14 +59,13 @@ On macOS: `brew install sponge jq zstd`
 
 From the root directory, you can run:
 
-- Go run unit tests with
+- Go unit tests
   ```bash
   pnpm test -- --filter=cli
   ```
-- Go single unit test (see more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages))
+- A single Go unit test (see more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages))
   ```bash
-  cd cli
-  go test ./[path/to/package/]
+  cd cli && go test ./[path/to/package/]
   ```
 - Rust unit tests ([install `nextest` first](https://nexte.st/book/pre-built-binaries.html))
   ```bash
@@ -78,12 +77,10 @@ From the root directory, you can run:
   ```bash
   pnpm test -- --filter=turborepo-integration-tests
   ```
-- e2e test
-
+- E2E test
   ```bash
   pnpm -- turbo e2e --filter=cli
   ```
-
 - Example tests
   ```bash
   pnpm test -- --filter=turborepo-examples-tests -- <example-name> <packagemanager>
