@@ -17,7 +17,7 @@
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "run-example": "./scripts/run-example.sh",
     "prepare": "husky install",
-    "test": "turbo run test"
+    "test": "pnpm -- turbo run test"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
