@@ -1,5 +1,6 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
+#![feature(assert_matches)]
 
 use std::backtrace;
 
@@ -14,8 +15,6 @@ pub enum Error {
     Git2(#[from] git2::Error, #[backtrace] backtrace::Backtrace),
     #[error("git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
-    #[error("repository not found")]
-    RepositoryNotFound(#[backtrace] backtrace::Backtrace),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error("path error: {0}")]

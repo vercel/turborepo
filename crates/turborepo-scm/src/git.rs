@@ -176,6 +176,7 @@ pub fn previous_content(
 #[cfg(test)]
 mod tests {
     use std::{
+        assert_matches::assert_matches,
         collections::HashSet,
         fs,
         path::{Path, PathBuf},
@@ -184,6 +185,7 @@ mod tests {
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
+    use turbopath::PathValidationError;
 
     use super::previous_content;
     use crate::{git::changed_files, Error};
@@ -569,6 +571,52 @@ mod tests {
             "release-1",
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_error_cases() -> Result<(), Error> {
+        let repo_dir = tempfile::tempdir()?;
+        let repo_does_not_exist = changed_files(
+            repo_dir.path().to_path_buf(),
+            repo_dir.path().to_path_buf(),
+            None,
+            "HEAD",
+        );
+
+        assert_matches!(repo_does_not_exist, Err(Error::Git(_, _)));
+
+        let (repo_root, _repo) = setup_repository()?;
+
+        let commit_does_not_exist = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            None,
+            "does-not-exist",
+        );
+
+        assert_matches!(commit_does_not_exist, Err(Error::Git(_, _)));
+
+        let file_does_not_exist = previous_content(
+            repo_root.path().to_path_buf(),
+            "HEAD",
+            repo_root.path().join("does-not-exist"),
+        );
+        assert_matches!(file_does_not_exist, Err(Error::Git(_, _)));
+
+        let turbo_root = tempfile::tempdir()?;
+        let turbo_root_is_not_subdir_of_git_root = changed_files(
+            repo_root.path().to_path_buf(),
+            turbo_root.path().to_path_buf(),
+            None,
+            "HEAD",
+        );
+
+        assert_matches!(
+            turbo_root_is_not_subdir_of_git_root,
+            Err(Error::Path(PathValidationError::NotParent(_, _), _))
+        );
 
         Ok(())
     }
