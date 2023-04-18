@@ -177,12 +177,7 @@ func RealRun(
 			return err
 		}
 
-		// Return the error when there is one
-		if err != nil {
-			return err
-		}
-
-		return err
+		return nil
 	}
 
 	getArgs := func(taskID string) []string {
