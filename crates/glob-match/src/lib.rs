@@ -329,7 +329,6 @@ fn get_char_slice<'a>(glob: &str, glob_bytes: &'a [u8], index: &mut usize) -> Op
   use unic_segment::GraphemeCursor;
   let mut cur = GraphemeCursor::new(*index, glob.len());
   let end = cur.next_boundary(glob, 0).unwrap().unwrap();
-  // if end - low = 1 {}
   match &glob_bytes[*index..end] {
     [b'\\'] => {
       if unescape(&mut 92, glob_bytes, index) {
