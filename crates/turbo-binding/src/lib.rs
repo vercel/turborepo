@@ -72,6 +72,8 @@ pub mod turbopack {
     pub use turbopack_ecmascript as ecmascript;
     #[cfg(feature = "__turbopack_env")]
     pub use turbopack_env as env;
+    #[cfg(feature = "__turbopack_image")]
+    pub use turbopack_image as image;
     #[cfg(feature = "__turbopack_json")]
     pub use turbopack_json as json;
     #[cfg(feature = "__turbopack_mdx")]

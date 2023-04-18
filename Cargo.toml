@@ -29,6 +29,7 @@ members = [
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
   "crates/turbopack-env",
+  "crates/turbopack-image",
   "crates/turbopack-json",
   "crates/turbopack-mdx",
   "crates/turbopack-node",
@@ -132,6 +133,7 @@ turbopack-dev = { path = "crates/turbopack-dev" }
 turbopack-dev-server = { path = "crates/turbopack-dev-server" }
 turbopack-ecmascript = { path = "crates/turbopack-ecmascript" }
 turbopack-env = { path = "crates/turbopack-env" }
+turbopack-image = { path = "crates/turbopack-image" }
 turbopack-json = { path = "crates/turbopack-json" }
 turbopack-mdx = { path = "crates/turbopack-mdx" }
 turbopack-node = { path = "crates/turbopack-node" }
@@ -185,6 +187,7 @@ dunce = "1.0.3"
 futures = "0.3.26"
 futures-retry = "0.6.0"
 httpmock = { version = "0.6.7", default-features = false }
+image = { version = "0.24.6", default-features = false }
 indexmap = "1.9.2"
 indicatif = "0.17.3"
 indoc = "2.0.0"
