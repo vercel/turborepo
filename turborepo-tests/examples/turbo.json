@@ -3,24 +3,7 @@
   "pipeline": {
     "test": {
       "dependsOn": ["^build", "cli#build"],
-      "outputs": [],
-      "inputs": [
-        "./run-example.sh",
-        "tests/*.t",
-
-        // TODO: model ../../examples as a workspace so we can wire up
-        // a workspace "dependency" and use that to trigger changes instead
-        // of relative paths.
-        // .                  => ./turborepo-tests/examples/
-        // ./../              => ./turborepo-tests/
-        // ./../../           => ./
-        // ./../../examples   => ./examples
-        "./../../examples/**/*.ts",
-        "./../../examples/**/*.tsx",
-        "./../../examples/**/*.json",
-        "./../../examples/**/*.js",
-        "./../../examples/**/*.yaml"
-      ]
+      "outputs": []
     }
   }
 }
