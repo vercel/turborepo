@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/_helpers/setup.sh
+  $ . ${TESTDIR}/../../helpers/setup.sh
   $ . ${TESTDIR}/logged_in.sh
 
 Logout while logged in
