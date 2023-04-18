@@ -8,5 +8,8 @@
     "test:interactive": ".cram_env/bin/prysk -i --shell=`which bash` tests/**/*.t",
     "test:parallel": ".cram_env/bin/pytest -n auto tests/**/*.t --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
+  },
+  "devDependencies": {
+    "turborepo-tests-helpers": "workspace:*"
   }
 }

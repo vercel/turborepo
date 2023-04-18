@@ -1,6 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-ROOT_DIR="${TESTDIR}/../../../.."
+SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
+TURBOREPO_TESTS_DIR="$SCRIPT_DIR/../../.."
 
-TURBO=${ROOT_DIR}/target/debug/turbo
-VERSION=${ROOT_DIR}/version.txt
+REAL_SCRIPT="${TURBOREPO_TESTS_DIR}/helpers/setup.sh"
+. "${REAL_SCRIPT}"

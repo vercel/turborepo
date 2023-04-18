@@ -1,11 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-TARGET_DIR=$1
-git init ${TARGET_DIR} --quiet --initial-branch=main
-GIT_ARGS="--git-dir=${TARGET_DIR}/.git --work-tree=${TARGET_DIR}"
-git ${GIT_ARGS} config user.email "turbo-test@example.com"
-git ${GIT_ARGS} config user.name "Turbo Test"
-echo "script-shell=$(which bash)" > ${TARGET_DIR}/.npmrc
-npm --prefix=${TARGET_DIR} install --silent
-git ${GIT_ARGS} add .
-git ${GIT_ARGS} commit -m "Initial" --quiet
+SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
+TURBOREPO_TESTS_DIR="$SCRIPT_DIR/../../.."
+
+REAL_SCRIPT="${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh"
+. "${REAL_SCRIPT}"

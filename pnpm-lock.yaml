@@ -623,6 +623,21 @@ importers:
       '@types/webpack': 5.28.0
       webpack: 5.75.0
 
+  turborepo-tests/examples:
+    specifiers:
+      turborepo-tests-helpers: workspace:*
+    devDependencies:
+      turborepo-tests-helpers: link:../helpers
+
+  turborepo-tests/helpers:
+    specifiers: {}
+
+  turborepo-tests/integration:
+    specifiers:
+      turborepo-tests-helpers: workspace:*
+    devDependencies:
+      turborepo-tests-helpers: link:../helpers
+
 packages:
 
   /@actions/core/1.10.0:

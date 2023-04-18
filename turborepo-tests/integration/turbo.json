@@ -2,7 +2,7 @@
   "extends": ["//"],
   "pipeline": {
     "test": {
-      "dependsOn": ["cli#build"],
+      "dependsOn": ["cli#build", "^build"],
       "env": ["GO_TAG"]
     }
   }

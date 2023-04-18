@@ -1,0 +1,26 @@
+{
+  "extends": ["//"],
+  "pipeline": {
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "inputs": [
+        "./run-example.sh",
+
+        // TODO: model ../../examples as a workspace so we can wire up
+        // a workspace "dependency" and use that to trigger changes instead
+        // of relative paths.
+        "../../examples/**/*.ts",
+        "../../examples/**/*.tsx",
+        "../../examples/**/*.json",
+        "../../examples/**/*.js",
+        "../../examples/**/*.yaml",
+
+        // TODO: can we depend on cli#build instead?
+        "../../cli/**/*.go",
+        "../../cli/go.mod",
+        "../../cli/go.sum"
+      ]
+    }
+  }
+}
