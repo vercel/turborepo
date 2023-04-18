@@ -100,7 +100,9 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 				prefixedInputPatterns = append(prefixedInputPatterns, rerooted)
 			}
 		}
+		// fmt.Printf("[debug] prefixedInputPatterns %#v\n", prefixedInputPatterns)
 		absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns)
+		// fmt.Printf("[debug] absoluteFilesToHash %#v\n", absoluteFilesToHash)
 
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
@@ -117,10 +119,16 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 			filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
 		}
 
-		hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToStringDuringMigration()), filesToHash)
+		fmt.Printf("[debug] filesToHash: %#v\n", len(filesToHash))
+		hashes, err := gitHashObject(
+			turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToStringDuringMigration()),
+			filesToHash,
+		)
 		if err != nil {
+			fmt.Printf("[debug] failed to hash: %#v\n", err)
 			return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
 		}
+		fmt.Printf("[debug] hashes %#v\n", hashes)
 		result = hashes
 		// Note that in this scenario, we don't need to check git status, we're using hash-object directly which
 		// hashes the current state, not state at a commit
