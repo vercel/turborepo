@@ -61,7 +61,7 @@ On macOS: `brew install sponge jq zstd`
 From the root directory, you can
 
 - run unit tests with `pnpm run --filter=cli test`
-- run integration tests with `pnpm test -- --filter=turborepo-integration-tests`
+- run integration tests with `pnpm test -- --filter=turborepo-tests`
 - run e2e tests with `pnpm run --filter=cli e2e`
 
 To run a single Go test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
