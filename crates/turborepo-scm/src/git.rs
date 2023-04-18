@@ -524,7 +524,7 @@ mod tests {
         let content = previous_content(
             repo_root.path().to_path_buf(),
             second_commit_oid.to_string().as_str(),
-            PathBuf::from("./foo.js"),
+            PathBuf::from("foo.js"),
         )?;
         assert_eq!(content, b"let z = 1;");
 
