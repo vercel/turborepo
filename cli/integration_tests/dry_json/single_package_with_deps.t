@@ -39,6 +39,7 @@ Setup
         }
       }
     },
+    "envMode": "infer",
     "tasks": [
       {
         "taskId": "build",
@@ -81,12 +82,15 @@ Setup
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
+        "envMode": "loose",
         "environmentVariables": {
           "configured": [],
           "inferred": [],
           "global": [
             "VERCEL_ANALYTICS_ID="
-          ]
+          ],
+          "passthrough": null,
+          "globalPassthrough": null
         }
       },
       {
@@ -128,12 +132,15 @@ Setup
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
+        "envMode": "loose",
         "environmentVariables": {
           "configured": [],
           "inferred": [],
           "global": [
             "VERCEL_ANALYTICS_ID="
-          ]
+          ],
+          "passthrough": null,
+          "globalPassthrough": null
         }
       }
     ]

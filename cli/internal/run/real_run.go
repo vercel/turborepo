@@ -42,6 +42,7 @@ func RealRun(
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	turboJSON *fs.TurboJSON,
+	globalEnvMode util.EnvMode,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	runSummary runsummary.Meta,
@@ -126,7 +127,7 @@ func RealRun(
 		return rs.ArgsForTask(taskID)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, execFunc)
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, globalEnvMode, getArgs, base.Logger, execFunc)
 	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
@@ -219,20 +220,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
 
-	strictEnv := false
-	switch ec.rs.Opts.runOpts.EnvMode {
-	case util.Infer:
-		globalStrict := ec.passthroughEnv != nil
-		taskStrict := packageTask.TaskDefinition.PassthroughEnv != nil
-		inferredStrict := taskStrict || globalStrict
-
-		strictEnv = inferredStrict
-	case util.Loose:
-		strictEnv = false
-	case util.Strict:
-		strictEnv = true
-	}
-
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash
 	ec.logger.Debug("task hash", "value", hash)
@@ -305,7 +292,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	currentState := env.GetEnvMap()
 	passthroughEnv := env.EnvironmentVariableMap{}
 
-	if strictEnv {
+	if packageTask.EnvMode == util.Strict {
 		defaultPassthrough := []string{
 			"PATH",
 			"SHELL",

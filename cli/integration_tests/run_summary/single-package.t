@@ -51,6 +51,7 @@ Check
     "command",
     "dependencies",
     "dependents",
+    "envMode",
     "environmentVariables",
     "excludedOutputs",
     "execution",

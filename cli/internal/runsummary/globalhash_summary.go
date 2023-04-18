@@ -14,7 +14,8 @@ type GlobalHashSummary struct {
 	Pipeline             fs.PristinePipeline                   `json:"rootPipeline"`
 
 	// This is a private field because and not in JSON, because we'll add it to each task
-	envVars env.EnvironmentVariablePairs
+	envVars            env.EnvironmentVariablePairs
+	passthroughEnvVars env.EnvironmentVariablePairs
 }
 
 // NewGlobalHashSummary creates a GlobalHashSummary struct from a set of fields.
@@ -22,11 +23,13 @@ func NewGlobalHashSummary(
 	fileHashMap map[turbopath.AnchoredUnixPath]string,
 	rootExternalDepsHash string,
 	envVars env.DetailedMap,
+	passthroughEnvVars env.EnvironmentVariableMap,
 	globalCacheKey string,
 	pipeline fs.PristinePipeline,
 ) *GlobalHashSummary {
 	return &GlobalHashSummary{
 		envVars:              envVars.All.ToSecretHashable(),
+		passthroughEnvVars:   passthroughEnvVars.ToSecretHashable(),
 		GlobalFileHashMap:    fileHashMap,
 		RootExternalDepsHash: rootExternalDepsHash,
 		GlobalCacheKey:       globalCacheKey,
