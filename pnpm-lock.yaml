@@ -225,6 +225,9 @@ importers:
       tailwindcss: 3.1.8_postcss@8.4.21
       typescript: 4.8.4
 
+  examples:
+    specifiers: {}
+
   packages/create-turbo:
     specifiers:
       '@turbo/test-utils': workspace:*
@@ -625,8 +628,10 @@ importers:
 
   turborepo-tests/examples:
     specifiers:
+      turborepo-examples: workspace:*
       turborepo-tests-helpers: workspace:*
     devDependencies:
+      turborepo-examples: link:../../examples
       turborepo-tests-helpers: link:../helpers
 
   turborepo-tests/helpers:
