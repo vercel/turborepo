@@ -50,13 +50,17 @@ pub enum ModuleRuleEffect {
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 pub enum ModuleType {
     Ecmascript {
-        transforms: EcmascriptInputTransformsVc,
-        #[turbo_tasks(trace_ignore)]
         options: EcmascriptOptions,
     },
-    Typescript(EcmascriptInputTransformsVc),
-    TypescriptWithTypes(EcmascriptInputTransformsVc),
-    TypescriptDeclaration(EcmascriptInputTransformsVc),
+    Typescript {
+        options: EcmascriptOptions,
+    },
+    TypescriptWithTypes {
+        options: EcmascriptOptions,
+    },
+    TypescriptDeclaration {
+        options: EcmascriptOptions,
+    },
     Json,
     Raw,
     Mdx {
