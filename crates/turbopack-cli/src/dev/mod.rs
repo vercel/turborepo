@@ -388,10 +388,7 @@ pub async fn start_server(args: &DevArguments) -> Result<()> {
                 .map_or_else(|| IssueSeverity::Warning, |l| l.0),
         );
 
-    #[cfg(feature = "serializable")]
-    {
-        server = server.allow_retry(args.allow_retry);
-    }
+    server = server.allow_retry(args.allow_retry);
 
     let server = server.build().await?;
 
