@@ -49,8 +49,3 @@ fi
 [ ! -d .git ] || rm -rf .git
 
 "$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}"
-
-THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
-ROOT_DIR="${THIS_DIR}/../../.."
-
-TURBO=${ROOT_DIR}/target/debug/turbo
