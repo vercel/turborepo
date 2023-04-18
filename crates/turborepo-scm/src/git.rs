@@ -501,10 +501,8 @@ mod tests {
         fs::write(&file, "let z = 0;")?;
 
         let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
-        println!("first commit: {}", first_commit_oid);
         fs::write(&file, "let z = 1;")?;
         let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid))?;
-        println!("second commit: {}", second_commit_oid);
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
