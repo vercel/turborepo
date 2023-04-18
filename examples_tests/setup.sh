@@ -46,4 +46,4 @@ fi
 
 # Delete .git directory if it's there, we'll set up a new git repo
 [ ! -d .git ] || rm -rf .git
-"${SCRIPT_DIR}/../cli/integration_tests/_helpers/setup_git.sh" "${TARGET_DIR}"
+"${SCRIPT_DIR}/../turborepo-tests/integration/tests/_helpers/setup_git.sh" "${TARGET_DIR}"

@@ -269,7 +269,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: pnpm -- turbo run integration-tests --filter=cli
+        run: pnpm test -- --filter=turborepo-integration-tests
         env:
           GO_TAG: rust
 
