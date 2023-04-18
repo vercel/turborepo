@@ -6,7 +6,7 @@ mod lockfile;
 
 use std::{mem::ManuallyDrop, path::PathBuf};
 
-pub use lockfile::{npm_subgraph, npm_transitive_closure};
+pub use lockfile::{npm_subgraph, transitive_closure};
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));

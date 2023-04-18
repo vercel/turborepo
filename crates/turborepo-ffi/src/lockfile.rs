@@ -1,7 +1,7 @@
+use std::collections::HashMap;
+
 use thiserror::Error;
-use turborepo_lockfiles::{
-    npm_subgraph as real_npm_subgraph, transitive_closure, NpmLockfile, Package,
-};
+use turborepo_lockfiles::{self, npm_subgraph as real_npm_subgraph, NpmLockfile, Package};
 
 use super::{proto, Buffer};
 
@@ -19,16 +19,18 @@ impl From<Package> for proto::LockfilePackage {
 #[derive(Debug, Error)]
 enum Error {
     #[error("error performing lockfile operation")]
-    LockfileError(#[from] turborepo_lockfiles::Error),
+    Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("error decoding protobuf")]
-    ProtobufError(#[from] prost::DecodeError),
+    Protobuf(#[from] prost::DecodeError),
+    #[error("unsupported package manager")]
+    UnsupportedPackageManager(String),
 }
 
 #[no_mangle]
-pub extern "C" fn npm_transitive_closure(buf: Buffer) -> Buffer {
+pub extern "C" fn transitive_closure(buf: Buffer) -> Buffer {
     use proto::transitive_deps_response::Response;
-    let response = match npm_transitive_closure_inner(buf) {
-        Ok(list) => Response::Packages(list),
+    let response = match transitive_closure_inner(buf) {
+        Ok(list) => Response::Dependencies(list),
         Err(err) => Response::Error(err.to_string()),
     };
     proto::TransitiveDepsResponse {
@@ -37,17 +39,44 @@ pub extern "C" fn npm_transitive_closure(buf: Buffer) -> Buffer {
     .into()
 }
 
-fn npm_transitive_closure_inner(buf: Buffer) -> Result<proto::LockfilePackageList, Error> {
+fn transitive_closure_inner(buf: Buffer) -> Result<proto::WorkspaceDependencies, Error> {
     let request: proto::TransitiveDepsRequest = buf.into_proto()?;
-    let lockfile = NpmLockfile::load(request.contents.as_slice())?;
-    let transitive_deps =
-        transitive_closure(&lockfile, request.workspace_dir, request.unresolved_deps)?;
-    let list: Vec<_> = transitive_deps
-        .into_iter()
-        .map(proto::LockfilePackage::from)
-        .collect();
+    match request.package_manager.as_str() {
+        "npm" => npm_transitive_closure_inner(request),
+        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
+    }
+}
 
-    Ok(proto::LockfilePackageList { list })
+fn npm_transitive_closure_inner(
+    request: proto::TransitiveDepsRequest,
+) -> Result<proto::WorkspaceDependencies, Error> {
+    let proto::TransitiveDepsRequest {
+        contents,
+        workspaces,
+        ..
+    } = request;
+    let lockfile = NpmLockfile::load(contents.as_slice())?;
+    let dependencies = workspaces
+        .into_iter()
+        .map(|(workspace_dir, dependencies)| {
+            let dependencies = dependencies
+                .list
+                .into_iter()
+                .map(proto::PackageDependency::into_tuple)
+                .collect();
+            let closure = turborepo_lockfiles::transitive_closure(
+                &lockfile,
+                workspace_dir.clone(),
+                dependencies,
+            )?;
+            let list: Vec<_> = closure
+                .into_iter()
+                .map(proto::LockfilePackage::from)
+                .collect();
+            Ok((workspace_dir, proto::LockfilePackageList { list }))
+        })
+        .collect::<Result<HashMap<_, _>, Error>>()?;
+    Ok(proto::WorkspaceDependencies { dependencies })
 }
 
 #[no_mangle]
@@ -66,4 +95,11 @@ fn npm_subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
     let request: proto::SubgraphRequest = buf.into_proto()?;
     let contents = real_npm_subgraph(&request.contents, &request.workspaces, &request.packages)?;
     Ok(contents)
+}
+
+impl proto::PackageDependency {
+    pub fn into_tuple(self) -> (String, String) {
+        let Self { name, range } = self;
+        (name, range)
+    }
 }
