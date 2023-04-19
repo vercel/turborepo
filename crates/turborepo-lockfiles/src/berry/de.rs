@@ -1,6 +1,20 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use super::SemverString;
+// Newtype used for correct deserialization
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Default, Clone)]
+pub struct SemverString(pub String);
+
+impl From<SemverString> for String {
+    fn from(value: SemverString) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for SemverString {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
 
 impl<'de> Deserialize<'de> for SemverString {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

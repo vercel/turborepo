@@ -10,6 +10,7 @@ use std::{
     path::Path,
 };
 
+use de::SemverString;
 use identifiers::{Descriptor, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::{Deserialize, Serialize};
@@ -102,7 +103,7 @@ impl<'a> BerryLockfile<'a> {
         let mut patches = Map::new();
         let mut locator_package = Map::new();
         let mut descriptor_locator = Map::new();
-        let mut resolver = DescriptorResolver::new();
+        let mut resolver = DescriptorResolver::default();
         for (key, package) in &lockfile.packages {
             let locator = Locator::try_from(package.resolution.as_str())?;
 
@@ -430,11 +431,9 @@ impl<'a> Lockfile for BerryLockfile<'a> {
             Locator::try_from(key).unwrap_or_else(|_| panic!("Was passed invalid locator: {key}"));
         let package = self.locator_package.get(&locator);
 
-        if package.is_none() {
+        let Some(package) = package else {
             return Ok(None);
-        }
-
-        let package = package.unwrap();
+        };
 
         let mut map = HashMap::new();
         for (name, version) in package.dependencies.iter().flatten() {
@@ -465,22 +464,6 @@ impl BerryManifest {
                 })
                 .collect()
         })
-    }
-}
-
-// Newtype used exclusively for correct deserialization
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Default, Clone)]
-struct SemverString(String);
-
-impl From<SemverString> for String {
-    fn from(value: SemverString) -> Self {
-        value.0
-    }
-}
-
-impl AsRef<str> for SemverString {
-    fn as_ref(&self) -> &str {
-        self.0.as_str()
     }
 }
 

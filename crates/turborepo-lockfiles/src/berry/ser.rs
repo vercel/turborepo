@@ -48,11 +48,14 @@ impl fmt::Display for Metadata {
     }
 }
 
+const SPACE: char = ' ';
+const NEWLINE: char = '\n';
+
 impl fmt::Display for BerryPackage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // we only want to write a newline there was something before
         let mut first = true;
-        let mut write_line = |field: &str, whitespace: &str, value: &str| -> fmt::Result {
+        let mut write_line = |field: &str, whitespace: char, value: &str| -> fmt::Result {
             if !value.is_empty() {
                 if !first {
                     writeln!(f)?;
@@ -63,53 +66,51 @@ impl fmt::Display for BerryPackage {
             Ok(())
         };
 
-        let space = " ";
-        let newline = "\n";
-        write_line("version", space, &wrap_string(self.version.as_ref()))?;
-        write_line("resolution", space, &wrap_string(&self.resolution))?;
+        write_line("version", SPACE, &wrap_string(self.version.as_ref()))?;
+        write_line("resolution", SPACE, &wrap_string(&self.resolution))?;
         if let Some(deps) = &self.dependencies {
             write_line(
                 "dependencies",
-                newline,
+                NEWLINE,
                 &stringify_dependencies(deps.iter()),
             )?;
         }
         if let Some(peer_deps) = &self.peer_dependencies {
             write_line(
                 "peerDependencies",
-                newline,
+                NEWLINE,
                 &stringify_dependencies(peer_deps.iter()),
             )?;
         }
         if let Some(deps_meta) = &self.dependencies_meta {
             write_line(
                 "dependenciesMeta",
-                newline,
+                NEWLINE,
                 &stringify_dependencies_meta(deps_meta.iter()),
             )?;
         }
         if let Some(peer_deps_meta) = &self.peer_dependencies_meta {
             write_line(
                 "peerDependenciesMeta",
-                newline,
+                NEWLINE,
                 &stringify_dependencies_meta(peer_deps_meta.iter()),
             )?;
         }
         if let Some(bin) = &self.bin {
-            write_line("bin", newline, &stringify_dependencies(bin.iter()))?;
+            write_line("bin", NEWLINE, &stringify_dependencies(bin.iter()))?;
         }
 
         if let Some(checksum) = &self.checksum {
-            write_line("checksum", space, &wrap_string(checksum))?;
+            write_line("checksum", SPACE, &wrap_string(checksum))?;
         }
         if let Some(conditions) = &self.conditions {
-            write_line("conditions", space, &wrap_string(conditions))?;
+            write_line("conditions", SPACE, &wrap_string(conditions))?;
         }
         if let Some(language_name) = &self.language_name {
-            write_line("languageName", space, &wrap_string(language_name))?;
+            write_line("languageName", SPACE, &wrap_string(language_name))?;
         }
         if let Some(link_type) = &self.link_type {
-            write_line("linkType", space, &wrap_string(link_type))?;
+            write_line("linkType", SPACE, &wrap_string(link_type))?;
         }
 
         Ok(())

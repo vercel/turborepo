@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::identifiers::{Descriptor, Ident};
 
 /// A data structure for resolving descriptors when the protocol isn't known
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DescriptorResolver<'a> {
     mapping: HashMap<Key<'a>, &'a str>,
 }
@@ -15,12 +15,6 @@ struct Key<'a> {
 }
 
 impl<'a> DescriptorResolver<'a> {
-    pub fn new() -> Self {
-        Self {
-            mapping: Default::default(),
-        }
-    }
-
     /// Add a descriptor to the resolver
     pub fn insert(&mut self, descriptor: &Descriptor<'a>) -> Option<&'a str> {
         let key = Key::new(descriptor)?;
@@ -49,7 +43,7 @@ mod test {
 
     #[test]
     fn test_descriptor_reconstruction() {
-        let mut resolver = DescriptorResolver::new();
+        let mut resolver = DescriptorResolver::default();
         let babel_npm = Descriptor::new("@babel/core", "npm:^5.0.0").unwrap();
         let babel_file = Descriptor::new("@babel/core", "file:4.5.0").unwrap();
         assert!(resolver.insert(&babel_npm).is_none());
@@ -62,7 +56,7 @@ mod test {
 
     #[test]
     fn test_descriptors_without_protocols() {
-        let mut resolver = DescriptorResolver::new();
+        let mut resolver = DescriptorResolver::default();
         let workspace = Descriptor::new("internal-workspace", "*").unwrap();
         assert!(resolver.insert(&workspace).is_none());
         assert_eq!(resolver.get(&workspace), Some("*"));
