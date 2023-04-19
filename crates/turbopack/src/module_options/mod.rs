@@ -299,15 +299,30 @@ impl ModuleOptionsVc {
                     ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
                 ]),
                 vec![if enable_types {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes(ts_app_transforms))
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
+                        options: EcmascriptOptions {
+                            transforms: ts_app_transforms,
+                            ..ecmascript_options.clone()
+                        },
+                    })
                 } else {
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_app_transforms))
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                        options: EcmascriptOptions {
+                            transforms: ts_app_transforms,
+                            ..ecmascript_options.clone()
+                        },
+                    })
                 }],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".d.ts".to_string()),
                 vec![ModuleRuleEffect::ModuleType(
-                    ModuleType::TypescriptDeclaration(vendor_transforms),
+                    ModuleType::TypescriptDeclaration {
+                        options: EcmascriptOptions {
+                            transforms: vendor_transforms,
+                            ..ecmascript_options.clone()
+                        },
+                    },
                 )],
             ),
             ModuleRule::new(

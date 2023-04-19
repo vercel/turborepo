@@ -208,7 +208,8 @@ pub struct ModuleOptionsContext {
     #[serde(default)]
     pub enable_tree_shaking: bool,
 
-    pub compile_time_info: CompileTimeInfoVc,
+    #[serde(default)]
+    pub compile_time_info: Option<CompileTimeInfoVc>,
 }
 
 #[turbo_tasks::value_impl]
