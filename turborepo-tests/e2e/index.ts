@@ -4,7 +4,7 @@ import { Readable } from "stream";
 import { ZstdCodec } from "zstd-codec";
 import * as uvu from "uvu";
 import * as assert from "uvu/assert";
-import { Monorepo } from "../monorepo";
+import { Monorepo } from "./monorepo";
 import path from "path";
 import * as fs from "fs";
 
