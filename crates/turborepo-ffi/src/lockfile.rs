@@ -124,10 +124,10 @@ fn berry_transitive_closure_inner(
     Ok(proto::WorkspaceDependencies { dependencies })
 }
 #[no_mangle]
-pub extern "C" fn npm_subgraph(buf: Buffer) -> Buffer {
+pub extern "C" fn subgraph(buf: Buffer) -> Buffer {
     use proto::subgraph_response::Response;
     proto::SubgraphResponse {
-        response: Some(match npm_subgraph_inner(buf) {
+        response: Some(match subgraph_inner(buf) {
             Ok(contents) => Response::Contents(contents),
             Err(err) => Response::Error(err.to_string()),
         }),
@@ -135,9 +135,21 @@ pub extern "C" fn npm_subgraph(buf: Buffer) -> Buffer {
     .into()
 }
 
-fn npm_subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
+fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
     let request: proto::SubgraphRequest = buf.into_proto()?;
-    let contents = real_npm_subgraph(&request.contents, &request.workspaces, &request.packages)?;
+    let contents = match request.package_manager.as_str() {
+        "npm" => Ok(real_npm_subgraph(
+            &request.contents,
+            &request.workspaces,
+            &request.packages,
+        )?),
+        "berry" => Ok(turborepo_lockfiles::berry_subgraph(
+            &request.contents,
+            &request.workspaces,
+            &request.packages,
+        )?),
+        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
+    }?;
     Ok(contents)
 }
 

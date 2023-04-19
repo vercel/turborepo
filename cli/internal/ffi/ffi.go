@@ -205,15 +205,16 @@ func TransitiveDeps(content []byte, packageManager string, workspaces map[string
 	return dependencies.GetDependencies(), nil
 }
 
-// NpmSubgraph returns the contents of a npm lockfile subgraph
-func NpmSubgraph(content []byte, workspaces []string, packages []string) ([]byte, error) {
+// Subgraph returns the contents of a lockfile subgraph
+func Subgraph(packageManager string, content []byte, workspaces []string, packages []string) ([]byte, error) {
 	req := ffi_proto.SubgraphRequest{
-		Contents:   content,
-		Workspaces: workspaces,
-		Packages:   packages,
+		Contents:       content,
+		Workspaces:     workspaces,
+		Packages:       packages,
+		PackageManager: packageManager,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.npm_subgraph(reqBuf)
+	resBuf := C.subgraph(reqBuf)
 	reqBuf.Free()
 
 	resp := ffi_proto.SubgraphResponse{}

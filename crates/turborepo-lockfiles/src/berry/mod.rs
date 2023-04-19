@@ -476,6 +476,18 @@ impl BerryManifest {
     }
 }
 
+pub fn berry_subgraph(
+    contents: &[u8],
+    workspace_packages: &[String],
+    packages: &[String],
+) -> Result<Vec<u8>, Error> {
+    let data = LockfileData::from_bytes(contents)?;
+    let lockfile = BerryLockfile::new(&data, None)?;
+    let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
+    let new_contents = pruned_lockfile.lockfile()?.to_string().into_bytes();
+    Ok(new_contents)
+}
+
 // Newtype used exclusively for correct deserialization
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Default, Clone)]
 struct SemverString(String);

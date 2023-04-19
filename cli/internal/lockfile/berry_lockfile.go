@@ -33,7 +33,15 @@ func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 
 // Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
 func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
-	panic("Should use Rust implementation")
+	workspaces := make([]string, len(workspacePackages))
+	for i, workspace := range workspacePackages {
+		workspaces[i] = workspace.ToUnixPath().ToString()
+	}
+	contents, err := ffi.Subgraph("berry", l.contents, workspaces, packages)
+	if err != nil {
+		return nil, err
+	}
+	return &BerryLockfile{contents: contents, resolutions: l.resolutions}, nil
 }
 
 // Encode encode the lockfile representation and write it to the given writer
