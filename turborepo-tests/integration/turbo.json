@@ -1,8 +1,11 @@
 {
   "extends": ["//"],
   "pipeline": {
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
     "test": {
-      "dependsOn": ["cli#build", "^build"],
+      "dependsOn": ["cli#build", "topo"],
       "env": ["GO_TAG"]
     }
   }

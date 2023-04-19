@@ -268,7 +268,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: pnpm test -- --filter=turborepo-integration-tests
+        run: pnpm test -- --filter=turborepo-tests-integration
         env:
           GO_TAG: rust
 
@@ -395,7 +395,7 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
-        run: pnpm -- turbo run test --filter="turborepo-examples-tests" -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: pnpm -- turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
   rust_prepare:
     name: Check rust crates

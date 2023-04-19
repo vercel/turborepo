@@ -77,7 +77,7 @@ From the root directory, you can run:
   directly with `cargo test -p turborepo-lib`.
 - CLI Integration tests
   ```bash
-  pnpm test -- --filter=turborepo-integration-tests
+  pnpm test -- --filter=turborepo-tests-integration
   ```
 - E2E test
   ```bash
@@ -85,7 +85,7 @@ From the root directory, you can run:
   ```
 - Example tests
   ```bash
-  pnpm test -- --filter=turborepo-examples-tests -- <example-name> <packagemanager>
+  pnpm test -- --filter=turborepo-tests-examples -- <example-name> <packagemanager>
   ```
 
 ## Debugging Turborepo
