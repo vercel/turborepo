@@ -37,7 +37,8 @@ pub async fn snapshot_issues<
             // We replace "*", "?", and '"' because they're not allowed in filenames on Windows.
             .replace('*', "__star__")
             .replace('"', "__quo__")
-            .replace('?', "__q__");
+            .replace('?', "__q__")
+            .replace(':', "__c__");
         let title = if title.len() > 50 {
             &title[0..50]
         } else {
