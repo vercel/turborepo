@@ -630,7 +630,7 @@ importers:
     specifiers:
       turborepo-examples: workspace:*
       turborepo-tests-helpers: workspace:*
-    devDependencies:
+    dependencies:
       turborepo-examples: link:../../examples
       turborepo-tests-helpers: link:../helpers
 
@@ -640,7 +640,7 @@ importers:
   turborepo-tests/integration:
     specifiers:
       turborepo-tests-helpers: workspace:*
-    devDependencies:
+    dependencies:
       turborepo-tests-helpers: link:../helpers
 
 packages:
