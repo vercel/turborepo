@@ -190,6 +190,9 @@
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
     env, fs,
@@ -223,19 +226,22 @@
     <span class="kw">let </span>expected_issues = expected(issues_path).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>seen = HashSet::new();
     <span class="kw">for </span>(plain_issue, debug_string) <span class="kw">in </span>captured_issues.into_iter() {
+        <span class="kw">let </span>title = plain_issue
+            .title
+            .replace(<span class="string">&#39;/&#39;</span>, <span class="string">&quot;__&quot;</span>)
+            <span class="comment">// We replace &quot;*&quot;, &quot;?&quot;, and &#39;&quot;&#39; because they&#39;re not allowed in filenames on Windows.
+            </span>.replace(<span class="string">&#39;*&#39;</span>, <span class="string">&quot;__star__&quot;</span>)
+            .replace(<span class="string">&#39;&quot;&#39;</span>, <span class="string">&quot;__quo__&quot;</span>)
+            .replace(<span class="string">&#39;?&#39;</span>, <span class="string">&quot;__q__&quot;</span>)
+            .replace(<span class="string">&#39;:&#39;</span>, <span class="string">&quot;__c__&quot;</span>);
+        <span class="kw">let </span>title = <span class="kw">if </span>title.len() &gt; <span class="number">50 </span>{
+            <span class="kw-2">&amp;</span>title[<span class="number">0</span>..<span class="number">50</span>]
+        } <span class="kw">else </span>{
+            <span class="kw-2">&amp;</span>title
+        };
         <span class="kw">let </span>hash = encode_hex(plain_issue.internal_hash(<span class="bool-val">true</span>));
 
-        <span class="kw">let </span>path = issues_path.join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-            <span class="string">&quot;{}-{}.txt&quot;</span>,
-            plain_issue
-                .title
-                .replace(<span class="string">&#39;/&#39;</span>, <span class="string">&quot;__&quot;</span>)
-                <span class="comment">// We replace &quot;*&quot;, &quot;?&quot;, and &#39;&quot;&#39; because they&#39;re not allowed in filenames on Windows.
-                </span>.replace(<span class="string">&#39;*&#39;</span>, <span class="string">&quot;__star__&quot;</span>)
-                .replace(<span class="string">&#39;&quot;&#39;</span>, <span class="string">&quot;__quo__&quot;</span>)
-                .replace(<span class="string">&#39;?&#39;</span>, <span class="string">&quot;__q__&quot;</span>),
-            <span class="kw-2">&amp;</span>hash[<span class="number">0</span>..<span class="number">6</span>]
-        ));
+        <span class="kw">let </span>path = issues_path.join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{title}-{}.txt&quot;</span>, <span class="kw-2">&amp;</span>hash[<span class="number">0</span>..<span class="number">6</span>]));
         <span class="kw">if </span>!seen.insert(path) {
             <span class="kw">continue</span>;
         }
