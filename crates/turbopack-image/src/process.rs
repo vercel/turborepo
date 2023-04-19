@@ -44,6 +44,7 @@ pub struct ImageMetaData {
     placeholder_for_future_extensions: (),
 }
 
+/// Options for generating a blur placeholder.
 #[turbo_tasks::value(shared)]
 pub struct BlurPlaceholderOptions {
     pub quality: u8,
@@ -153,6 +154,8 @@ fn image_format_to_mime_type(format: ImageFormat) -> Result<Option<Mime>> {
     })
 }
 
+/// Analyze an image and return meta information about it.
+/// Optionally computes a blur placeholder.
 #[turbo_tasks::function]
 pub async fn get_meta_data(
     ident: AssetIdentVc,
