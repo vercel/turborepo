@@ -71,6 +71,7 @@ message TransitiveDepsRequest {
   bytes contents = 1;
   string package_manager = 2;
   map<string, PackageDependencyList> workspaces = 3;
+  optional AdditionalBerryData resolutions = 4;
 }
 
 message TransitiveDepsResponse {
@@ -78,6 +79,10 @@ message TransitiveDepsResponse {
     WorkspaceDependencies dependencies = 1;
     string error = 2;
   }
+}
+
+message AdditionalBerryData {
+  map<string, string> resolutions = 1;
 }
 
 message LockfilePackage {

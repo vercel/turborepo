@@ -463,6 +463,14 @@ impl LockfileData {
 }
 
 impl BerryManifest {
+    pub fn with_resolutions<I>(resolutions: I) -> Self
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        let resolutions = Some(resolutions.into_iter().collect());
+        Self { resolutions }
+    }
+
     pub fn resolutions(&self) -> Option<Result<Map<Resolution, &str>, Error>> {
         self.resolutions.as_ref().map(|resolutions| {
             resolutions

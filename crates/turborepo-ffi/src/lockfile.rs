@@ -94,10 +94,13 @@ fn berry_transitive_closure_inner(
     let proto::TransitiveDepsRequest {
         contents,
         workspaces,
+        resolutions,
         ..
     } = request;
+    let resolutions =
+        resolutions.map(|r| turborepo_lockfiles::BerryManifest::with_resolutions(r.resolutions));
     let data = LockfileData::from_bytes(contents.as_slice())?;
-    let lockfile = BerryLockfile::new(&data, None)?;
+    let lockfile = BerryLockfile::new(&data, resolutions.as_ref())?;
     let workspaces = workspaces
         .into_iter()
         .map(|(w, d)| {

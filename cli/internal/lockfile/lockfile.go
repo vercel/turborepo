@@ -72,13 +72,12 @@ func AllTransitiveClosures(
 	workspaces map[turbopath.AnchoredUnixPath]map[string]string,
 	lockFile Lockfile,
 ) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
+	// We special case as Rust implementations have their own dep crawl
 	if lf, ok := lockFile.(*NpmLockfile); ok {
-		// We special case as Rust implementations have their own dep crawl
-		return rustTransitiveDeps(lf.contents, "npm", workspaces)
+		return rustTransitiveDeps(lf.contents, "npm", workspaces, nil)
 	}
 	if lf, ok := lockFile.(*BerryLockfile); ok {
-		// We special case as Rust implementations have their own dep crawl
-		return rustTransitiveDeps(lf.contents, "berry", workspaces)
+		return rustTransitiveDeps(lf.contents, "berry", workspaces, lf.resolutions)
 	}
 
 	g := new(errgroup.Group)
@@ -167,7 +166,7 @@ func transitiveClosureHelper(
 	}
 }
 
-func rustTransitiveDeps(content []byte, packageManager string, workspaces map[turbopath.AnchoredUnixPath]map[string]string) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
+func rustTransitiveDeps(content []byte, packageManager string, workspaces map[turbopath.AnchoredUnixPath]map[string]string, resolutions map[string]string) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
 	processedWorkspaces := make(map[string]map[string]string, len(workspaces))
 	for workspacePath, workspace := range workspaces {
 		processedWorkspaces[workspacePath.ToString()] = workspace
