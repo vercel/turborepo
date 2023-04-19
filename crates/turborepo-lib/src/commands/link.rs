@@ -111,10 +111,8 @@ pub(crate) async fn verify_caching_enabled<'a>(
 pub async fn link(
     base: &mut CommandBase,
     modify_gitignore: bool,
-    target: Option<LinkTarget>,
+    target: LinkTarget,
 ) -> Result<()> {
-    let target = target.unwrap_or(LinkTarget::RemoteCache);
-
     let homedir_path = home_dir().ok_or_else(|| anyhow!("could not find home directory."))?;
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string_lossy().replacen(&*homedir, "~", 1);
@@ -219,28 +217,28 @@ pub async fn link(
                 SelectedSpace::Space(space) => space,
             };
 
-            let persisted_space_id = add_space_id_to_turbo_json(base, &space.id);
+            add_space_id_to_turbo_json(base, &space.id).map_err(|err| {
+                return anyhow!(
+                    "Could not persist selected space ({}) to `experimentalSpaces.id` in \
+                     turbo.json {}",
+                    space.id,
+                    err
+                );
+            })?;
 
-            match persisted_space_id {
-                Ok(_) => {
-                    println!(
-                        "
+            println!(
+                "
     {} {} linked to {}
 
     {}
         ",
-                        base.ui.rainbow(">>> Success!"),
-                        base.ui.apply(BOLD.apply_to(&repo_root_with_tilde)),
-                        base.ui.apply(BOLD.apply_to(&space.name)),
-                        GREY.apply_to(
-                            "To remove Spaces integration, run `npx turbo unlink --target spaces`"
-                        )
-                    );
-                }
-                Err(e) => {
-                    return Err(anyhow!("Could not persist space id to turbo.json: {}", e));
-                }
-            }
+                base.ui.rainbow(">>> Success!"),
+                base.ui.apply(BOLD.apply_to(&repo_root_with_tilde)),
+                base.ui.apply(BOLD.apply_to(&space.name)),
+                GREY.apply_to(
+                    "To remove Spaces integration, run `npx turbo unlink --target spaces`"
+                )
+            );
 
             return Ok(());
         }
@@ -501,7 +499,7 @@ mod test {
             version: "",
         };
 
-        link::link(&mut base, false, Option::Some(LinkTarget::RemoteCache))
+        link::link(&mut base, false, LinkTarget::RemoteCache)
             .await
             .unwrap();
 
@@ -558,7 +556,7 @@ mod test {
         )
         .unwrap();
 
-        link::link(&mut base, false, Option::Some(LinkTarget::Spaces))
+        link::link(&mut base, false, LinkTarget::Spaces)
             .await
             .unwrap();
 

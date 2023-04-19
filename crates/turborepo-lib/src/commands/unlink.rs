@@ -2,12 +2,7 @@ use std::fs::File;
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::{
-    cli::LinkTarget,
-    commands::CommandBase,
-    config::{SpacesJson, TurboJson},
-    ui::GREY,
-};
+use crate::{cli::LinkTarget, commands::CommandBase, config::TurboJson, ui::GREY};
 
 enum UnlinkSpacesResult {
     Unlinked,
@@ -45,9 +40,7 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
     Ok(())
 }
 
-pub fn unlink(base: &mut CommandBase, target: Option<LinkTarget>) -> Result<()> {
-    let target = target.unwrap_or(LinkTarget::RemoteCache);
-
+pub fn unlink(base: &mut CommandBase, target: LinkTarget) -> Result<()> {
     match target {
         LinkTarget::RemoteCache => {
             unlink_remote_caching(base)?;
@@ -62,18 +55,11 @@ pub fn unlink(base: &mut CommandBase, target: Option<LinkTarget>) -> Result<()> 
 fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResult> {
     let turbo_json_path = base.repo_root.join("turbo.json");
 
-    if !turbo_json_path.exists() {
-        return Err(anyhow!("turbo.json not found."));
-    }
-
-    let turbo_json_file = File::open(&turbo_json_path)?;
+    let turbo_json_file = File::open(&turbo_json_path).context("unable to open turbo.json file")?;
     let mut turbo_json: TurboJson = serde_json::from_reader(turbo_json_file)?;
     let has_spaces_id = turbo_json
         .experimental_spaces
-        .unwrap_or(SpacesJson {
-            id: None,
-            other: None,
-        })
+        .unwrap_or_default()
         .id
         .is_some();
     // remove the spaces config

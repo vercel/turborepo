@@ -258,8 +258,8 @@ pub enum Command {
         no_gitignore: bool,
 
         /// Specify what should be linked (default "remote cache")
-        #[clap(long, value_enum)]
-        target: Option<LinkTarget>,
+        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
+        target: LinkTarget,
     },
     /// Login to your Vercel account
     Login {
@@ -292,8 +292,8 @@ pub enum Command {
     /// Remote Caching
     Unlink {
         /// Specify what should be unlinked (default "remote cache")
-        #[clap(long, value_enum)]
-        target: Option<LinkTarget>,
+        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
+        target: LinkTarget,
     },
 }
 
@@ -1228,7 +1228,9 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink { target: None }),
+                command: Some(Command::Unlink {
+                    target: crate::cli::LinkTarget::RemoteCache
+                }),
                 ..Args::default()
             }
         );
@@ -1238,7 +1240,9 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink { target: None }),
+                command: Some(Command::Unlink {
+                    target: crate::cli::LinkTarget::RemoteCache,
+                }),
                 cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
