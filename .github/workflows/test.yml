@@ -296,8 +296,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
-        # Turbo has already been built in previous step, no need to rebuild
-        run: pnpm -- turbo run e2e-prebuilt --filter=cli
+        run: pnpm -- turbo run test --filter=turborepo-tests-e2e
 
   go_examples:
     name: Go Cli Examples
