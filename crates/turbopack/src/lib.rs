@@ -127,34 +127,28 @@ async fn apply_module_type(
             context.into(),
             Value::new(EcmascriptModuleAssetType::Typescript),
             Value::new(EcmascriptOptions {
-                split_into_parts: false,
-                import_parts: false,
-                transforms: *transforms,
                 compile_time_info: context.compile_time_info(),
+                ..options.clone()
             }),
         )
         .into(),
-        ModuleType::TypescriptWithTypes(transforms) => EcmascriptModuleAssetVc::new(
+        ModuleType::TypescriptWithTypes { options } => EcmascriptModuleAssetVc::new(
             source,
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptWithTypes),
             Value::new(EcmascriptOptions {
-                split_into_parts: false,
-                import_parts: false,
-                transforms: *transforms,
                 compile_time_info: context.compile_time_info(),
+                ..options.clone()
             }),
         )
         .into(),
-        ModuleType::TypescriptDeclaration(transforms) => EcmascriptModuleAssetVc::new(
+        ModuleType::TypescriptDeclaration { options } => EcmascriptModuleAssetVc::new(
             source,
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptDeclaration),
             Value::new(EcmascriptOptions {
-                split_into_parts: false,
-                import_parts: false,
-                transforms: *transforms,
                 compile_time_info: context.compile_time_info(),
+                ..options.clone()
             }),
         )
         .into(),
@@ -290,22 +284,20 @@ impl ModuleAssetContextVc {
                         }
                         ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
                             current_module_type = match current_module_type {
-                                Some(ModuleType::Ecmascript {
-                                    transforms,
-                                    options,
-                                }) => Some(ModuleType::Ecmascript {
-                                    transforms: transforms.extend(*additional_transforms),
-                                    options,
-                                }),
-                                Some(ModuleType::Typescript(transforms)) => {
-                                    Some(ModuleType::Typescript(
-                                        transforms.extend(*additional_transforms),
-                                    ))
+                                Some(ModuleType::Ecmascript { mut options }) => {
+                                    options.transforms =
+                                        options.transforms.extend(*additional_transforms);
+                                    Some(ModuleType::Ecmascript { options })
                                 }
-                                Some(ModuleType::TypescriptWithTypes(transforms)) => {
-                                    Some(ModuleType::TypescriptWithTypes(
-                                        transforms.extend(*additional_transforms),
-                                    ))
+                                Some(ModuleType::Typescript { mut options }) => {
+                                    options.transforms =
+                                        options.transforms.extend(*additional_transforms);
+                                    Some(ModuleType::Typescript { options })
+                                }
+                                Some(ModuleType::TypescriptWithTypes { mut options }) => {
+                                    options.transforms =
+                                        options.transforms.extend(*additional_transforms);
+                                    Some(ModuleType::TypescriptWithTypes { options })
                                 }
                                 Some(module_type) => {
                                     ModuleIssue {
