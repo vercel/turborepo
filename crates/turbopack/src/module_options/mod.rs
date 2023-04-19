@@ -278,21 +278,18 @@ impl ModuleOptionsVc {
                     ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
                 ]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                    transforms: app_transforms,
                     options: ecmascript_options.clone(),
                 })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".mjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                    transforms: app_transforms,
                     options: ecmascript_options.clone(),
                 })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".cjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                    transforms: app_transforms,
                     options: ecmascript_options.clone(),
                 })],
             ),
@@ -331,8 +328,10 @@ impl ModuleOptionsVc {
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathHasNoExtension,
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                    transforms: vendor_transforms,
-                    options: ecmascript_options.clone(),
+                    options: EcmascriptOptions {
+                        transforms: vendor_transforms,
+                        ..ecmascript_options.clone()
+                    },
                 })],
             ),
             ModuleRule::new(
@@ -390,7 +389,6 @@ impl ModuleOptionsVc {
                     ]),
                     vec![
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                            transforms: app_transforms,
                             options: ecmascript_options.clone(),
                         }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
