@@ -72,6 +72,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
         let daemon_root = base.daemon_file_root();
 
         let watcher = Arc::new(HashGlobWatcher::new(
+            AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("valid repo root"),
             daemon_root
                 .join_relative(RelativeSystemPathBuf::new("flush").expect("valid forward path"))
                 .as_path()

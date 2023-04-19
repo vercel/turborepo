@@ -22,8 +22,11 @@ itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
+tempdir = "0.3.7"
 tempfile = { workspace = true }
 test-case = "3.0.0"
+tracing.workspace = true
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 vercel-api-mock = { workspace = true }
 
 [dependencies]
@@ -85,6 +88,7 @@ turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }
 webbrowser = { workspace = true }
+tracing.workspace = true
 
 
 [target.'cfg(target_os = "windows")'.dependencies]

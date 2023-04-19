@@ -55,8 +55,8 @@ impl GlobWatcher {
     pub fn new(
         flush_dir: PathBuf,
     ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), Error> {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let (tconf, rconf) = tokio::sync::mpsc::unbounded_channel();
+        let (send_event, receive_event) = tokio::sync::mpsc::unbounded_channel();
+        let (send_config, receive_config) = tokio::sync::mpsc::unbounded_channel();
 
         // even if this fails, we may still be able to continue
         std::fs::create_dir_all(&flush_dir).ok();
@@ -67,7 +67,7 @@ impl GlobWatcher {
 
             let result = event.map(|e| {
                 trace!(parent: &span, "sending event: {:?}", e);
-                let tx = tx.clone();
+                let tx = send_event.clone();
                 futures::executor::block_on(async move { tx.send(e) })
             });
 
@@ -89,11 +89,11 @@ impl GlobWatcher {
         Ok((
             Self {
                 flush_dir,
-                stream: rx,
-                config: rconf,
+                stream: receive_event,
+                config: receive_config,
             },
             WatchConfig {
-                flush: tconf,
+                flush: send_config,
                 watcher,
             },
         ))
@@ -191,7 +191,7 @@ impl GlobWatcher {
     }
 }
 
-#[tracing::instrument(skip(watcher))]
+#[tracing::instrument(skip_all)]
 fn handle_config_change<T: Watcher>(
     mut watcher: MutexGuard<T>,
     config: WatcherChange,
@@ -200,7 +200,10 @@ fn handle_config_change<T: Watcher>(
         WatcherChange::Include(glob, _) => {
             glob_to_paths(&glob)
                 .iter()
-                .map(|p| watcher.watch(p, notify::RecursiveMode::Recursive))
+                .map(|p| {
+                    trace!("watching {:?}", p);
+                    watcher.watch(p, notify::RecursiveMode::Recursive)
+                })
                 .map(|r| match r {
                     Ok(()) => Ok(()),
                     Err(Error {
@@ -211,6 +214,14 @@ fn handle_config_change<T: Watcher>(
                         // it is not immediately an error; glob_to_paths
                         // will generate paths that potentially don't exist,
                         // since it doesn't walk the fs, no no-op
+                        trace!("OOPS");
+                        Ok(())
+                    }
+                    Err(Error {
+                        kind: notify::ErrorKind::Generic(s),
+                        ..
+                    }) if s.contains("No such file or directory") => {
+                        trace!("OOPS 2");
                         Ok(())
                     }
                     Err(e) => Err(e),
@@ -285,7 +296,7 @@ impl<T: Watcher> WatchConfig<T> {
         trace!("including {:?}", glob);
 
         handle_config_change(
-            self.watcher.lock().expect("no panic"),
+            self.watcher.lock().expect("only fails if poisoned"),
             WatcherChange::Include(glob, Span::current().id()),
         )
         .map_err(ConfigError::WatchError)
@@ -297,7 +308,7 @@ impl<T: Watcher> WatchConfig<T> {
         trace!("excluding {:?}", glob);
 
         handle_config_change(
-            self.watcher.lock().expect("no panic"),
+            self.watcher.lock().expect("only fails if poisoned"),
             WatcherChange::Exclude(glob, Span::current().id()),
         )
         .map_err(ConfigError::WatchError)
@@ -369,7 +380,11 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
         .take_while(|c| c.is_some()) // if any segment has no possible paths, we can stop
         .filter_map(|chunk| chunk)
         .multi_cartesian_product() // get all the possible combinations of path segments
-        .map(|chunks| chunks.into_iter().collect::<PathBuf>())
+        .map(|chunks| {
+            std::iter::once("/")
+                .chain(chunks.iter().map(|s| s.as_str()))
+                .collect::<PathBuf>()
+        })
         .collect()
 }
 
@@ -477,6 +492,7 @@ mod test {
     #[test_case("foo/a?/bar", vec!["foo"])]
     #[test_case("foo/ab?/bar", vec!["foo"] ; "question marks ")]
     #[test_case("foo/{a,b}/ab?", vec!["foo/a", "foo/b"])]
+    #[test_case("/abc", vec!["/abc"])]
     fn test_handles_doublestar(glob: &str, paths_exp: Vec<&str>) {
         let mut paths = super::glob_to_paths(glob);
         paths.sort();
