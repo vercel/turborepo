@@ -564,7 +564,7 @@ jobs:
       - name: Post logs if there are errors
         run: |
           cp packages/next-swc/cargo_output.log ./cargo_output.log
-          if grep 'error: could not compile' ./cargo_output.log; then (printf "This changes may fail to build \`next-swc\`. \n\n\`\`\`\n"; cat ./cargo_output.log; printf "\`\`\`\n") > out.log; else printf ":white_check_mark: This changes can build \`next-swc\`" > out.log; fi
+          if grep 'error: could not compile' ./cargo_output.log; then (printf "This change may fail to build \`next-swc\`. \n\n\`\`\`\n"; cat ./cargo_output.log; printf "\`\`\`\n") > out.log; else printf ":white_check_mark: This change can build \`next-swc\`" > out.log; fi
 
       - name: PR comment with file
         uses: thollander/actions-comment-pull-request@v2
