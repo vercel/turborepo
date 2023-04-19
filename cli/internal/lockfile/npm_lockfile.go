@@ -1,7 +1,6 @@
 package lockfile
 
 import (
-	"encoding/json"
 	"io"
 
 	"github.com/vercel/turbo/cli/internal/ffi"
@@ -60,22 +59,7 @@ func (l *NpmLockfile) GlobalChange(other Lockfile) bool {
 		return true
 	}
 
-	// We just grab the few global fields and check if they've changed
-	type minimalJSON struct {
-		LockfileVersion string `json:"version"`
-		Requires        bool   `json:"requires"`
-	}
-	var self minimalJSON
-	var otherJSON minimalJSON
-	if err := json.Unmarshal(o.contents, &otherJSON); err != nil {
-		return true
-	}
-	if err := json.Unmarshal(l.contents, &self); err != nil {
-		return true
-	}
-
-	return self.LockfileVersion != otherJSON.LockfileVersion ||
-		self.Requires != otherJSON.Requires
+	return ffi.GlobalChange("npm", o.contents, l.contents)
 }
 
 var _ (Lockfile) = (*NpmLockfile)(nil)

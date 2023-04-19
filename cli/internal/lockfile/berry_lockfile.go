@@ -68,5 +68,10 @@ func DecodeBerryLockfile(contents []byte, resolutions map[string]string) (*Berry
 // GlobalChange checks if there are any differences between lockfiles that would completely invalidate
 // the cache.
 func (l *BerryLockfile) GlobalChange(other Lockfile) bool {
-	panic("TODO")
+	o, ok := other.(*BerryLockfile)
+	if !ok {
+		return true
+	}
+
+	return ffi.GlobalChange("berry", o.contents, l.contents)
 }

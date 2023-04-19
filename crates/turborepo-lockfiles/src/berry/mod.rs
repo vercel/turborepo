@@ -488,6 +488,13 @@ pub fn berry_subgraph(
     Ok(new_contents)
 }
 
+pub fn berry_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
+    let prev_data = LockfileData::from_bytes(prev_contents)?;
+    let curr_data = LockfileData::from_bytes(curr_contents)?;
+    Ok(prev_data.metadata.cache_key != curr_data.metadata.cache_key
+        || prev_data.metadata.version != curr_data.metadata.version)
+}
+
 // Newtype used exclusively for correct deserialization
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Default, Clone)]
 struct SemverString(String);

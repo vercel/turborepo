@@ -119,3 +119,13 @@ message PatchesResponse {
 message Patches {
   repeated string patches = 1;
 }
+
+message GlobalChangeRequest {
+  string package_manager = 1;
+  bytes  prev_contents = 2;
+  bytes curr_contents = 3;
+}
+
+message GlobalChangeResponse {
+  bool global_change = 1;
+}

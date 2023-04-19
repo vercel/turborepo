@@ -192,3 +192,26 @@ fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
     }?;
     Ok(proto::Patches { patches })
 }
+
+#[no_mangle]
+pub extern "C" fn global_change(buf: Buffer) -> Buffer {
+    // If there's any issue checking if there's been a global lockfile change
+    // we assume one has changed.
+    let global_change = global_change_inner(buf).unwrap_or(true);
+    proto::GlobalChangeResponse { global_change }.into()
+}
+
+fn global_change_inner(buf: Buffer) -> Result<bool, Error> {
+    let request: proto::GlobalChangeRequest = buf.into_proto()?;
+    match request.package_manager.as_str() {
+        "npm" => Ok(turborepo_lockfiles::npm_global_change(
+            &request.prev_contents,
+            &request.curr_contents,
+        )?),
+        "berry" => Ok(turborepo_lockfiles::berry_global_change(
+            &request.prev_contents,
+            &request.curr_contents,
+        )?),
+        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
+    }
+}
