@@ -73,7 +73,8 @@
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPath;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc, reference_type::ReferenceType, source_transform::SourceTransformsVc,
+    asset::AssetVc, plugin::CustomModuleTypeVc, reference_type::ReferenceType,
+    source_transform::SourceTransformsVc,
 };
 <span class="kw">use </span>turbopack_css::CssInputTransformsVc;
 <span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransformsVc, EcmascriptOptions};
@@ -135,8 +136,7 @@
     Css(CssInputTransformsVc),
     CssModule(CssInputTransformsVc),
     Static,
-    <span class="comment">// TODO allow custom function when we support function pointers
-    </span>Custom(u8),
+    Custom(CustomModuleTypeVc),
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

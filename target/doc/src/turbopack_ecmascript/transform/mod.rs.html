@@ -424,6 +424,11 @@
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
 <a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 <span class="kw">mod </span>util;
 
@@ -543,6 +548,11 @@
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptInputTransformsVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
+        EcmascriptInputTransformsVc::cell(Vec::new())
+    }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>extend(<span class="self">self</span>, other: EcmascriptInputTransformsVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>transforms = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
