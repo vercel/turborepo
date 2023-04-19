@@ -34,7 +34,7 @@ impl Asset for StructuredImageSourceAsset {
             bail!("Input source is not a file and can't be transformed into image information");
         };
         let mut result = RopeBuilder::from("");
-        let info = get_meta_data_and_blur_placeholder(content);
+        let info = get_meta_data_and_blur_placeholder(self.image.ident(), content);
         let info = info.await?;
         writeln!(result, "import src from \"IMAGE\";",)?;
         writeln!(
