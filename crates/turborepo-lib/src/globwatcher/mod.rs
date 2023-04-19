@@ -253,6 +253,8 @@ fn populate_hash_globs<'a>(
                 .unwrap_or(false)
         })
     {
+        let mut stop_watching = true;
+
         for hash in hash_status.iter() {
             let globs = match hash_globs.get_mut(hash).filter(|globs| {
                 !globs
@@ -261,7 +263,12 @@ fn populate_hash_globs<'a>(
                     .any(|f| glob_match::glob_match(f, path.to_str().unwrap()))
             }) {
                 Some(globs) => globs,
-                None => continue,
+                None => {
+                    // if we get here, then the hash is excluded by a glob
+                    // so we don't need to stop watching this glob
+                    stop_watching = false;
+                    continue;
+                }
             };
 
             // if we get here, we know that the glob has changed for every hash that
@@ -276,9 +283,12 @@ fn populate_hash_globs<'a>(
                 hash_globs.remove(hash);
             }
 
+            clear_glob_status.push((hash.clone(), glob.clone()));
+        }
+
+        if stop_watching {
             // store the hash and glob so we can remove it from the glob_status
             exclude_globs.push(glob.to_owned());
-            clear_glob_status.push((hash.clone(), glob.clone()));
         }
     }
 
