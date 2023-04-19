@@ -9,7 +9,7 @@
     "test:parallel": ".cram_env/bin/pytest -n auto tests/**/*.t --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
   },
-  "devDependencies": {
+  "dependencies": {
     "turborepo-tests-helpers": "workspace:*"
   }
 }
