@@ -147,3 +147,36 @@ impl proto::PackageDependency {
         (name, range)
     }
 }
+
+#[no_mangle]
+pub extern "C" fn patches(buf: Buffer) -> Buffer {
+    use proto::patches_response::Response;
+    proto::PatchesResponse {
+        response: Some(match patches_internal(buf) {
+            Ok(patches) => Response::Patches(patches),
+            Err(err) => Response::Error(err.to_string()),
+        }),
+    }
+    .into()
+}
+
+fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
+    let request: proto::PatchesRequest = buf.into_proto()?;
+    let patches = match request.package_manager.as_str() {
+        "berry" => {
+            let data = LockfileData::from_bytes(&request.contents)?;
+            let lockfile = BerryLockfile::new(&data, None)?;
+            Ok(lockfile
+                .patches()
+                .into_iter()
+                .map(|p| {
+                    p.to_str()
+                        .expect("patch coming from yarn.lock isn't valid utf8")
+                        .to_string()
+                })
+                .collect::<Vec<_>>())
+        }
+        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
+    }?;
+    Ok(proto::Patches { patches })
+}

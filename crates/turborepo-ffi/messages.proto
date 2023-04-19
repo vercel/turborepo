@@ -103,3 +103,19 @@ message SubgraphResponse {
     string error = 2;
   }
 }
+
+message PatchesRequest {
+  bytes contents = 1;
+  string package_manager = 2;
+}
+
+message PatchesResponse {
+  oneof response {
+    Patches patches = 1;
+    string error = 2;
+  }
+}
+
+message Patches {
+  repeated string patches = 1;
+}

@@ -227,3 +227,25 @@ func NpmSubgraph(content []byte, workspaces []string, packages []string) ([]byte
 
 	return resp.GetContents(), nil
 }
+
+// Patches returns all patch files referenced in the lockfile
+func Patches(content []byte, packageManager string) []string {
+	req := ffi_proto.PatchesRequest{
+		Contents:       content,
+		PackageManager: packageManager,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.patches(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.PatchesResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		panic(err)
+	}
+
+	return resp.GetPatches().GetPatches()
+}

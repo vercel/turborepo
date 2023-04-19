@@ -1159,6 +1159,188 @@ func (*SubgraphResponse_Contents) isSubgraphResponse_Response() {}
 
 func (*SubgraphResponse_Error) isSubgraphResponse_Response() {}
 
+type PatchesRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Contents       []byte `protobuf:"bytes,1,opt,name=contents,proto3" json:"contents,omitempty"`
+	PackageManager string `protobuf:"bytes,2,opt,name=package_manager,json=packageManager,proto3" json:"package_manager,omitempty"`
+}
+
+func (x *PatchesRequest) Reset() {
+	*x = PatchesRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_turborepo_ffi_messages_proto_msgTypes[18]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PatchesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PatchesRequest) ProtoMessage() {}
+
+func (x *PatchesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_turborepo_ffi_messages_proto_msgTypes[18]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PatchesRequest.ProtoReflect.Descriptor instead.
+func (*PatchesRequest) Descriptor() ([]byte, []int) {
+	return file_turborepo_ffi_messages_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *PatchesRequest) GetContents() []byte {
+	if x != nil {
+		return x.Contents
+	}
+	return nil
+}
+
+func (x *PatchesRequest) GetPackageManager() string {
+	if x != nil {
+		return x.PackageManager
+	}
+	return ""
+}
+
+type PatchesResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Response:
+	//	*PatchesResponse_Patches
+	//	*PatchesResponse_Error
+	Response isPatchesResponse_Response `protobuf_oneof:"response"`
+}
+
+func (x *PatchesResponse) Reset() {
+	*x = PatchesResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_turborepo_ffi_messages_proto_msgTypes[19]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PatchesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PatchesResponse) ProtoMessage() {}
+
+func (x *PatchesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_turborepo_ffi_messages_proto_msgTypes[19]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PatchesResponse.ProtoReflect.Descriptor instead.
+func (*PatchesResponse) Descriptor() ([]byte, []int) {
+	return file_turborepo_ffi_messages_proto_rawDescGZIP(), []int{19}
+}
+
+func (m *PatchesResponse) GetResponse() isPatchesResponse_Response {
+	if m != nil {
+		return m.Response
+	}
+	return nil
+}
+
+func (x *PatchesResponse) GetPatches() *Patches {
+	if x, ok := x.GetResponse().(*PatchesResponse_Patches); ok {
+		return x.Patches
+	}
+	return nil
+}
+
+func (x *PatchesResponse) GetError() string {
+	if x, ok := x.GetResponse().(*PatchesResponse_Error); ok {
+		return x.Error
+	}
+	return ""
+}
+
+type isPatchesResponse_Response interface {
+	isPatchesResponse_Response()
+}
+
+type PatchesResponse_Patches struct {
+	Patches *Patches `protobuf:"bytes,1,opt,name=patches,proto3,oneof"`
+}
+
+type PatchesResponse_Error struct {
+	Error string `protobuf:"bytes,2,opt,name=error,proto3,oneof"`
+}
+
+func (*PatchesResponse_Patches) isPatchesResponse_Response() {}
+
+func (*PatchesResponse_Error) isPatchesResponse_Response() {}
+
+type Patches struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Patches []string `protobuf:"bytes,1,rep,name=patches,proto3" json:"patches,omitempty"`
+}
+
+func (x *Patches) Reset() {
+	*x = Patches{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_turborepo_ffi_messages_proto_msgTypes[20]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Patches) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Patches) ProtoMessage() {}
+
+func (x *Patches) ProtoReflect() protoreflect.Message {
+	mi := &file_turborepo_ffi_messages_proto_msgTypes[20]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Patches.ProtoReflect.Descriptor instead.
+func (*Patches) Descriptor() ([]byte, []int) {
+	return file_turborepo_ffi_messages_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *Patches) GetPatches() []string {
+	if x != nil {
+		return x.Patches
+	}
+	return nil
+}
+
 var File_turborepo_ffi_messages_proto protoreflect.FileDescriptor
 
 var file_turborepo_ffi_messages_proto_rawDesc = []byte{
@@ -1284,8 +1466,22 @@ var file_turborepo_ffi_messages_proto_rawDesc = []byte{
 	0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x48, 0x00, 0x52, 0x08, 0x63, 0x6f, 0x6e, 0x74, 0x65, 0x6e,
 	0x74, 0x73, 0x12, 0x16, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28,
 	0x09, 0x48, 0x00, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x42, 0x0a, 0x0a, 0x08, 0x72, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x0b, 0x5a, 0x09, 0x66, 0x66, 0x69, 0x2f, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x55, 0x0a, 0x0e, 0x50, 0x61, 0x74, 0x63, 0x68, 0x65,
+	0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x63, 0x6f, 0x6e, 0x74,
+	0x65, 0x6e, 0x74, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x08, 0x63, 0x6f, 0x6e, 0x74,
+	0x65, 0x6e, 0x74, 0x73, 0x12, 0x27, 0x0a, 0x0f, 0x70, 0x61, 0x63, 0x6b, 0x61, 0x67, 0x65, 0x5f,
+	0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x70,
+	0x61, 0x63, 0x6b, 0x61, 0x67, 0x65, 0x4d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x22, 0x5b, 0x0a,
+	0x0f, 0x50, 0x61, 0x74, 0x63, 0x68, 0x65, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x24, 0x0a, 0x07, 0x70, 0x61, 0x74, 0x63, 0x68, 0x65, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x08, 0x2e, 0x50, 0x61, 0x74, 0x63, 0x68, 0x65, 0x73, 0x48, 0x00, 0x52, 0x07, 0x70,
+	0x61, 0x74, 0x63, 0x68, 0x65, 0x73, 0x12, 0x16, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x42, 0x0a,
+	0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x23, 0x0a, 0x07, 0x50, 0x61,
+	0x74, 0x63, 0x68, 0x65, 0x73, 0x12, 0x18, 0x0a, 0x07, 0x70, 0x61, 0x74, 0x63, 0x68, 0x65, 0x73,
+	0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x70, 0x61, 0x74, 0x63, 0x68, 0x65, 0x73, 0x42,
+	0x0b, 0x5a, 0x09, 0x66, 0x66, 0x69, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1300,7 +1496,7 @@ func file_turborepo_ffi_messages_proto_rawDescGZIP() []byte {
 	return file_turborepo_ffi_messages_proto_rawDescData
 }
 
-var file_turborepo_ffi_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_turborepo_ffi_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_turborepo_ffi_messages_proto_goTypes = []interface{}{
 	(*TurboDataDirResp)(nil),       // 0: TurboDataDirResp
 	(*GlobReq)(nil),                // 1: GlobReq
@@ -1320,24 +1516,28 @@ var file_turborepo_ffi_messages_proto_goTypes = []interface{}{
 	(*LockfilePackageList)(nil),    // 15: LockfilePackageList
 	(*SubgraphRequest)(nil),        // 16: SubgraphRequest
 	(*SubgraphResponse)(nil),       // 17: SubgraphResponse
-	nil,                            // 18: WorkspaceDependencies.DependenciesEntry
-	nil,                            // 19: TransitiveDepsRequest.WorkspacesEntry
+	(*PatchesRequest)(nil),         // 18: PatchesRequest
+	(*PatchesResponse)(nil),        // 19: PatchesResponse
+	(*Patches)(nil),                // 20: Patches
+	nil,                            // 21: WorkspaceDependencies.DependenciesEntry
+	nil,                            // 22: TransitiveDepsRequest.WorkspacesEntry
 }
 var file_turborepo_ffi_messages_proto_depIdxs = []int32{
 	3,  // 0: GlobResp.files:type_name -> GlobRespList
 	6,  // 1: ChangedFilesResp.files:type_name -> ChangedFilesList
 	9,  // 2: PackageDependencyList.list:type_name -> PackageDependency
-	18, // 3: WorkspaceDependencies.dependencies:type_name -> WorkspaceDependencies.DependenciesEntry
-	19, // 4: TransitiveDepsRequest.workspaces:type_name -> TransitiveDepsRequest.WorkspacesEntry
+	21, // 3: WorkspaceDependencies.dependencies:type_name -> WorkspaceDependencies.DependenciesEntry
+	22, // 4: TransitiveDepsRequest.workspaces:type_name -> TransitiveDepsRequest.WorkspacesEntry
 	11, // 5: TransitiveDepsResponse.dependencies:type_name -> WorkspaceDependencies
 	14, // 6: LockfilePackageList.list:type_name -> LockfilePackage
-	15, // 7: WorkspaceDependencies.DependenciesEntry.value:type_name -> LockfilePackageList
-	10, // 8: TransitiveDepsRequest.WorkspacesEntry.value:type_name -> PackageDependencyList
-	9,  // [9:9] is the sub-list for method output_type
-	9,  // [9:9] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	20, // 7: PatchesResponse.patches:type_name -> Patches
+	15, // 8: WorkspaceDependencies.DependenciesEntry.value:type_name -> LockfilePackageList
+	10, // 9: TransitiveDepsRequest.WorkspacesEntry.value:type_name -> PackageDependencyList
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_turborepo_ffi_messages_proto_init() }
@@ -1562,6 +1762,42 @@ func file_turborepo_ffi_messages_proto_init() {
 				return nil
 			}
 		}
+		file_turborepo_ffi_messages_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PatchesRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_turborepo_ffi_messages_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PatchesResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_turborepo_ffi_messages_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Patches); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	file_turborepo_ffi_messages_proto_msgTypes[2].OneofWrappers = []interface{}{
 		(*GlobResp_Files)(nil),
@@ -1584,13 +1820,17 @@ func file_turborepo_ffi_messages_proto_init() {
 		(*SubgraphResponse_Contents)(nil),
 		(*SubgraphResponse_Error)(nil),
 	}
+	file_turborepo_ffi_messages_proto_msgTypes[19].OneofWrappers = []interface{}{
+		(*PatchesResponse_Patches)(nil),
+		(*PatchesResponse_Error)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_turborepo_ffi_messages_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

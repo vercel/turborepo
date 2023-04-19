@@ -3,6 +3,7 @@ package lockfile
 import (
 	"io"
 
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -43,7 +44,12 @@ func (l *BerryLockfile) Encode(w io.Writer) error {
 
 // Patches return a list of patches used in the lockfile
 func (l *BerryLockfile) Patches() []turbopath.AnchoredUnixPath {
-	panic("TODO")
+	rawPatches := ffi.Patches(l.contents, "berry")
+	patches := make([]turbopath.AnchoredUnixPath, len(rawPatches))
+	for i, patch := range rawPatches {
+		patches[i] = turbopath.AnchoredUnixPath(patch)
+	}
+	return patches
 }
 
 // DecodeBerryLockfile Takes the contents of a berry lockfile and returns a struct representation
