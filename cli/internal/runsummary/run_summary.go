@@ -234,7 +234,7 @@ func (rsm *Meta) record() (string, []error) {
 	payload := rsm.newSpacesRunCreatePayload()
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(createRunEndpoint, startPayload); err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("POST %s: %w", createRunEndpoint, err))
 		} else {
 			if err := json.Unmarshal(resp, response); err != nil {
 				errs = append(errs, fmt.Errorf("Error unmarshaling response: %w", err))
@@ -250,7 +250,7 @@ func (rsm *Meta) record() (string, []error) {
 		if donePayload, err := json.Marshal(newSpacesDonePayload(rsm.RunSummary)); err == nil {
 			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, response.ID)
 			if _, err := rsm.apiClient.JSONPatch(patchURL, donePayload); err != nil {
-				errs = append(errs, fmt.Errorf("Error marking run as done: %w", err))
+				errs = append(errs, fmt.Errorf("PATCH %s: %w", patchURL, err))
 			}
 		}
 	}
