@@ -145,6 +145,8 @@ impl DevServerBuilder {
             let get_issue_reporter = get_issue_reporter.clone();
             async move {
                 let handler = move |request: Request<hyper::Body>| {
+                    #[cfg(feature = "signpost")]
+                    let interval = signposter::interval!("Request", &request.uri().to_string());
                     let start = Instant::now();
                     let tt = tt.clone();
                     let get_issue_reporter = get_issue_reporter.clone();
@@ -214,6 +216,8 @@ impl DevServerBuilder {
                                     duration = FormatDuration(elapsed)
                                 );
                             }
+                            #[cfg(feature = "signpost")]
+                            interval.end();
                             Ok(response)
                         })
                         .await

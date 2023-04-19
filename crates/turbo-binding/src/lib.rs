@@ -100,6 +100,8 @@ pub mod features {
     pub use mdxjs;
     #[cfg(feature = "__feature_node_file_trace")]
     pub use node_file_trace;
+    #[cfg(feature = "__feature_signposter")]
+    pub use signposter;
     #[cfg(feature = "__feature_swc_ast_explorer")]
     pub use swc_ast_explorer;
 }

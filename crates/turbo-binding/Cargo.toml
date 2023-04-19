@@ -138,6 +138,11 @@ __feature_node_file_trace_custom_allocator = [
 ]
 __feature_auto_hash_map = ["__features", "auto-hash-map"]
 __feature_swc_ast_explorer = ["__features", "swc-ast-explorer"]
+__feature_signposter = [
+  "__features",
+  "dep:signposter",
+  "turbopack-dev-server/signpost",
+]
 
 __swc_custom_transform = []
 __swc_transform_styled_components = [
@@ -166,6 +171,7 @@ swc_relay = { optional = true, workspace = true }
 testing = { optional = true, workspace = true }
 
 auto-hash-map = { optional = true, workspace = true }
+signposter = { optional = true, workspace = true }
 swc-ast-explorer = { optional = true, workspace = true }
 
 node-file-trace = { optional = true, workspace = true }

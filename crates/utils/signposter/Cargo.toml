@@ -1,0 +1,20 @@
+[package]
+name = "signposter"
+version = "0.1.0"
+description = "TBD"
+license = "MPL-2.0"
+edition = "2021"
+
+[profile.release]
+debug = true
+
+[lib]
+bench = false
+
+[features]
+default = ["global"]
+global = ["dep:once_cell"]
+
+[dependencies]
+once_cell = { workspace = true, optional = true }
+signposter-sys = { workspace = true }

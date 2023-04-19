@@ -9,6 +9,10 @@ autobenches = false
 [lib]
 bench = false
 
+[features]
+signpost = ["dep:signposter"]
+log_request_stats = []
+
 [dependencies]
 anyhow = { workspace = true }
 async-compression = { workspace = true }
@@ -30,6 +34,7 @@ tokio-stream = "0.1.9"
 tokio-util = { workspace = true }
 urlencoding = "2.1.2"
 
+signposter = { optional = true, workspace = true }
 turbo-tasks = { workspace = true }
 turbo-tasks-bytes = { workspace = true }
 turbo-tasks-fs = { workspace = true }
@@ -41,6 +46,3 @@ turbopack-cli-utils = { workspace = true }
 
 [build-dependencies]
 turbo-tasks-build = { workspace = true }
-
-[features]
-log_request_stats = []
