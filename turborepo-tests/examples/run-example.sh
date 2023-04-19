@@ -8,7 +8,7 @@ python3 -m venv .cram_env
 export folder=$1
 export pkgManager=$2
 
-TEST_FILE="examples_tests/$2-$1.t"
+TEST_FILE="tests/$2-$1.t"
 
 if [ -f "$TEST_FILE" ]; then
   echo "Running $TEST_FILE"

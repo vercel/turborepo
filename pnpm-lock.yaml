@@ -225,6 +225,9 @@ importers:
       tailwindcss: 3.1.8_postcss@8.4.21
       typescript: 4.8.4
 
+  examples:
+    specifiers: {}
+
   packages/create-turbo:
     specifiers:
       '@turbo/test-utils': workspace:*
@@ -622,6 +625,23 @@ importers:
     devDependencies:
       '@types/webpack': 5.28.0
       webpack: 5.75.0
+
+  turborepo-tests/examples:
+    specifiers:
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../helpers
+
+  turborepo-tests/helpers:
+    specifiers: {}
+
+  turborepo-tests/integration:
+    specifiers:
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      turborepo-tests-helpers: link:../helpers
 
 packages:
 

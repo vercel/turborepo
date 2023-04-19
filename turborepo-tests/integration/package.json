@@ -1,5 +1,5 @@
 {
-  "name": "turborepo-integration-tests",
+  "name": "turborepo-tests-integration",
   "scripts": {
     "test:setup_python": "python3 -m venv .cram_env",
     "test:setup_pip": "pnpm test:setup_python && .cram_env/bin/python3 -m pip install --quiet --upgrade pip",
@@ -8,5 +8,8 @@
     "test:interactive": ".cram_env/bin/prysk -i --shell=`which bash` tests/**/*.t",
     "test:parallel": ".cram_env/bin/pytest -n auto tests/**/*.t --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
+  },
+  "dependencies": {
+    "turborepo-tests-helpers": "workspace:*"
   }
 }
