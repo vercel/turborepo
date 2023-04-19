@@ -31,7 +31,7 @@ use std::{
 
 use futures::{channel::oneshot, future::Either, Stream, StreamExt as _};
 use itertools::Itertools;
-use merge_streams::StreamExt as _;
+use merge_streams::MergeStreams;
 pub use notify::{Error, Event, Watcher};
 pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -111,14 +111,17 @@ impl GlobWatcher {
     pub fn into_stream(
         self,
         token: stop_token::StopToken,
-    ) -> impl Stream<Item = Result<Event, TimedOutError>> {
+    ) -> impl Stream<Item = Result<Event, TimedOutError>> + Send + Sync + 'static + Unpin {
         let flush_id = Arc::new(AtomicU64::new(1));
         let flush_dir = Arc::new(self.flush_dir.clone());
         let flush = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<()>>::new()));
+
         Box::pin(
-            UnboundedReceiverStream::new(self.stream)
-                .map(Either::Left)
-                .merge(UnboundedReceiverStream::new(self.config).map(Either::Right))
+            (
+                UnboundedReceiverStream::new(self.stream).map(Either::Left),
+                UnboundedReceiverStream::new(self.config).map(Either::Right),
+            )
+                .merge()
                 // apply a filter_map, yielding only valid events and consuming config changes and
                 // flushes
                 .filter_map(move |f| {
