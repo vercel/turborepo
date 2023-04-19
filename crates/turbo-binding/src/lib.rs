@@ -81,7 +81,7 @@ pub mod turbopack {
     #[cfg(feature = "__turbopack_node")]
     pub use turbopack_node as node;
     #[cfg(feature = "__turbopack_static")]
-    pub use turbopack_static;
+    pub use turbopack_static as r#static;
     #[cfg(feature = "__turbopack_swc_utils")]
     pub use turbopack_swc_utils as swc_utils;
     #[cfg(feature = "__turbopack_test_utils")]

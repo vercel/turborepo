@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::{io::Cursor, str::FromStr};
 
 use anyhow::{bail, Context, Result};
 use base64::{display::Base64Display, engine::general_purpose::STANDARD};
@@ -11,7 +11,10 @@ use image::{
     imageops::FilterType,
     GenericImageView, ImageEncoder, ImageFormat,
 };
-use turbo_tasks::primitives::StringVc;
+use mime::Mime;
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr};
+use turbo_tasks::{debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs};
 use turbo_tasks_fs::{FileContent, FileContentVc, FileSystemPathVc};
 use turbopack_core::{
     error::PrettyPrintError,
@@ -19,38 +22,147 @@ use turbopack_core::{
     issue::{Issue, IssueVc},
 };
 
-#[turbo_tasks::value]
-#[serde(rename_all = "camelCase")]
-pub struct ImageMetaData {
-    width: u32,
-    height: u32,
-    #[serde(rename = "blurDataURL")]
-    blur_data_url: Option<String>,
-    blur_width: u32,
-    blur_height: u32,
+/// Small placeholder version of the image.
+#[derive(PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, ValueDebugFormat)]
+pub struct BlurPlaceholder {
+    pub data_url: String,
+    pub width: u32,
+    pub height: u32,
 }
 
-const BLUR_IMG_SIZE: u32 = 8;
-const BLUR_QUALITY: u8 = 70;
+/// Gathered meta information about an image.
+#[serde_as]
+#[turbo_tasks::value]
+#[derive(Default)]
+pub struct ImageMetaData {
+    pub width: u32,
+    pub height: u32,
+    #[turbo_tasks(trace_ignore, debug_ignore)]
+    #[serde_as(as = "Option<DisplayFromStr>")]
+    pub mime_type: Option<Mime>,
+    pub blur_placeholder: Option<BlurPlaceholder>,
+    placeholder_for_future_extensions: (),
+}
+
+#[turbo_tasks::value(shared)]
+pub struct BlurPlaceholderOptions {
+    pub quality: u8,
+    pub size: u32,
+}
+
+fn load_image(bytes: &[u8]) -> Result<(image::DynamicImage, Option<ImageFormat>)> {
+    let reader = image::io::Reader::new(Cursor::new(&bytes));
+    let reader = reader
+        .with_guessed_format()
+        .context("unable to determine image format from file content")?;
+    let format = reader.format();
+    let image = reader.decode().context("unable to decode image data")?;
+    Ok((image, format))
+}
+
+fn compute_blur_data(
+    image: image::DynamicImage,
+    format: ImageFormat,
+    options: &BlurPlaceholderOptions,
+) -> Result<(String, u32, u32)> {
+    let small_image = image.resize(options.size, options.size, FilterType::Triangle);
+    let mut buf = Vec::new();
+    let blur_width = small_image.width();
+    let blur_height = small_image.height();
+    let url = match format {
+        ImageFormat::Png => {
+            PngEncoder::new_with_quality(
+                &mut buf,
+                CompressionType::Best,
+                image::codecs::png::FilterType::NoFilter,
+            )
+            .write_image(
+                small_image.as_bytes(),
+                blur_width,
+                blur_height,
+                small_image.color(),
+            )?;
+            format!(
+                "data:image/png;base64,{}",
+                Base64Display::new(&buf, &STANDARD)
+            )
+        }
+        ImageFormat::Jpeg => {
+            JpegEncoder::new_with_quality(&mut buf, options.quality).write_image(
+                small_image.as_bytes(),
+                blur_width,
+                blur_height,
+                small_image.color(),
+            )?;
+            format!(
+                "data:image/jpeg;base64,{}",
+                Base64Display::new(&buf, &STANDARD)
+            )
+        }
+        ImageFormat::WebP => {
+            WebPEncoder::new_with_quality(&mut buf, WebPQuality::lossy(options.quality))
+                .write_image(
+                    small_image.as_bytes(),
+                    blur_width,
+                    blur_height,
+                    small_image.color(),
+                )?;
+            format!(
+                "data:image/webp;base64,{}",
+                Base64Display::new(&buf, &STANDARD)
+            )
+        }
+        #[cfg(feature = "avif")]
+        ImageFormat::Avif => {
+            use image::codecs::avif::AvifEncoder;
+            AvifEncoder::new_with_speed_quality(&mut buf, 6, options.quality).write_image(
+                small_image.as_bytes(),
+                blur_width,
+                blur_height,
+                small_image.color(),
+            )?;
+            format!(
+                "data:image/avif;base64,{}",
+                Base64Display::new(&buf, &STANDARD)
+            )
+        }
+        _ => unreachable!(),
+    };
+
+    Ok((url, blur_width, blur_height))
+}
+
+fn image_format_to_mime_type(format: ImageFormat) -> Result<Option<Mime>> {
+    Ok(match format {
+        ImageFormat::Png => Some(mime::IMAGE_PNG),
+        ImageFormat::Jpeg => Some(mime::IMAGE_JPEG),
+        ImageFormat::WebP => Some(Mime::from_str("image/webp")?),
+        ImageFormat::Avif => Some(Mime::from_str("image/avif")?),
+        ImageFormat::Bmp => Some(mime::IMAGE_BMP),
+        ImageFormat::Dds => Some(Mime::from_str("image/vnd-ms.dds")?),
+        ImageFormat::Farbfeld => Some(mime::APPLICATION_OCTET_STREAM),
+        ImageFormat::Gif => Some(mime::IMAGE_GIF),
+        ImageFormat::Hdr => Some(Mime::from_str("image/vnd.radiance")?),
+        ImageFormat::Ico => Some(Mime::from_str("image/x-icon")?),
+        ImageFormat::OpenExr => Some(Mime::from_str("image/x-exr")?),
+        ImageFormat::Pnm => Some(Mime::from_str("image/x-portable-anymap")?),
+        ImageFormat::Qoi => Some(mime::APPLICATION_OCTET_STREAM),
+        ImageFormat::Tga => Some(Mime::from_str("image/x-tga")?),
+        ImageFormat::Tiff => Some(Mime::from_str("image/tiff")?),
+        _ => None,
+    })
+}
 
 #[turbo_tasks::function]
-pub async fn get_meta_data_and_blur_placeholder(
+pub async fn get_meta_data(
     ident: AssetIdentVc,
     content: FileContentVc,
+    blur_placeholder: Option<BlurPlaceholderOptionsVc>,
 ) -> Result<ImageMetaDataVc> {
     let FileContent::Content(content) = &*content.await? else {
       bail!("Input image not found");
     };
     let bytes = content.content().to_bytes()?;
-    fn load_image(bytes: &[u8]) -> Result<(image::DynamicImage, Option<ImageFormat>)> {
-        let reader = image::io::Reader::new(Cursor::new(&bytes));
-        let reader = reader
-            .with_guessed_format()
-            .context("unable to determine image format from file content")?;
-        let format = reader.format();
-        let image = reader.decode().context("unable to decode image data")?;
-        Ok((image, format))
-    }
     let (image, format) = match load_image(&bytes) {
         Ok(r) => r,
         Err(err) => {
@@ -61,121 +173,55 @@ pub async fn get_meta_data_and_blur_placeholder(
             .cell()
             .as_issue()
             .emit();
-            return Ok(ImageMetaData {
-                width: 0,
-                height: 0,
-                blur_data_url: None,
-                blur_width: 0,
-                blur_height: 0,
-            }
-            .cell());
+            return Ok(ImageMetaData::default().cell());
         }
     };
     let (width, height) = image.dimensions();
-    let (blur_data_url, blur_width, blur_height) = if matches!(
-        format,
-        // list should match next/client/image.tsx
-        Some(ImageFormat::Png)
-            | Some(ImageFormat::Jpeg)
-            | Some(ImageFormat::WebP)
-            | Some(ImageFormat::Avif)
-    ) {
-        fn compute_blur_data(
-            image: image::DynamicImage,
-            format: ImageFormat,
-        ) -> Result<(String, u32, u32)> {
-            let small_image = image.resize(BLUR_IMG_SIZE, BLUR_IMG_SIZE, FilterType::Triangle);
-            let mut buf = Vec::new();
-            let blur_width = small_image.width();
-            let blur_height = small_image.height();
-            let url = match format {
-                ImageFormat::Png => {
-                    PngEncoder::new_with_quality(
-                        &mut buf,
-                        CompressionType::Best,
-                        image::codecs::png::FilterType::NoFilter,
-                    )
-                    .write_image(
-                        small_image.as_bytes(),
-                        blur_width,
-                        blur_height,
-                        small_image.color(),
-                    )?;
-                    format!(
-                        "data:image/png;base64,{}",
-                        Base64Display::new(&buf, &STANDARD)
-                    )
+    let blur_placeholder = if let Some(blur_placeholder) = blur_placeholder {
+        if matches!(
+            format,
+            // list should match next/client/image.tsx
+            Some(ImageFormat::Png)
+                | Some(ImageFormat::Jpeg)
+                | Some(ImageFormat::WebP)
+                | Some(ImageFormat::Avif)
+        ) {
+            match compute_blur_data(image, format.unwrap(), &*blur_placeholder.await?)
+                .context("unable to compute blur placeholder")
+            {
+                Ok((url, blur_width, blur_height)) => Some(BlurPlaceholder {
+                    data_url: url,
+                    width: blur_width,
+                    height: blur_height,
+                }),
+                Err(err) => {
+                    ImageProcessingIssue {
+                        path: ident.path(),
+                        message: StringVc::cell(format!("{}", PrettyPrintError(&err))),
+                    }
+                    .cell()
+                    .as_issue()
+                    .emit();
+                    None
                 }
-                ImageFormat::Jpeg => {
-                    JpegEncoder::new_with_quality(&mut buf, BLUR_QUALITY).write_image(
-                        small_image.as_bytes(),
-                        blur_width,
-                        blur_height,
-                        small_image.color(),
-                    )?;
-                    format!(
-                        "data:image/jpeg;base64,{}",
-                        Base64Display::new(&buf, &STANDARD)
-                    )
-                }
-                ImageFormat::WebP => {
-                    WebPEncoder::new_with_quality(&mut buf, WebPQuality::lossy(BLUR_QUALITY))
-                        .write_image(
-                            small_image.as_bytes(),
-                            blur_width,
-                            blur_height,
-                            small_image.color(),
-                        )?;
-                    format!(
-                        "data:image/webp;base64,{}",
-                        Base64Display::new(&buf, &STANDARD)
-                    )
-                }
-                #[cfg(feature = "avif")]
-                ImageFormat::Avif => {
-                    use image::codecs::avif::AvifEncoder;
-                    AvifEncoder::new_with_speed_quality(&mut buf, 6, BLUR_QUALITY).write_image(
-                        small_image.as_bytes(),
-                        blur_width,
-                        blur_height,
-                        small_image.color(),
-                    )?;
-                    format!(
-                        "data:image/avif;base64,{}",
-                        Base64Display::new(&buf, &STANDARD)
-                    )
-                }
-                _ => unreachable!(),
-            };
-
-            Ok((url, blur_width, blur_height))
-        }
-
-        match compute_blur_data(image, format.unwrap())
-            .context("unable to compute blur placeholder")
-        {
-            Ok((url, blur_width, blur_height)) => (Some(url), blur_width, blur_height),
-            Err(err) => {
-                ImageProcessingIssue {
-                    path: ident.path(),
-                    message: StringVc::cell(format!("{}", PrettyPrintError(&err))),
-                }
-                .cell()
-                .as_issue()
-                .emit();
-                (None, 0, 0)
             }
+        } else {
+            None
         }
     } else {
-        (None, 0, 0)
+        None
     };
 
     Ok(ImageMetaData {
         width,
         height,
-        blur_data_url,
-        blur_width,
-        blur_height,
+        mime_type: if let Some(format) = format {
+            image_format_to_mime_type(format)?
+        } else {
+            None
+        },
+        blur_placeholder,
+        placeholder_for_future_extensions: (),
     }
     .cell())
 }

@@ -22,12 +22,12 @@ image = { workspace = true, default-features = false, features = [
   "webp-encoder",
 ] }
 indexmap = { workspace = true }
+mime = { workspace = true }
 serde = { workspace = true }
+serde_with = { workspace = true }
 turbo-tasks = { workspace = true }
 turbo-tasks-fs = { workspace = true }
 turbopack-core = { workspace = true }
-turbopack-ecmascript = { workspace = true }
-turbopack-static = { workspace = true }
 
 [build-dependencies]
 turbo-tasks-build = { workspace = true }
