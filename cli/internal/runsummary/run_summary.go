@@ -2,6 +2,7 @@
 package runsummary
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/client"
+	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
@@ -41,6 +43,7 @@ const (
 // about the Run and references to other things that we need.
 type Meta struct {
 	RunSummary         *RunSummary
+	ctx                context.Context
 	ui                 cli.Ui
 	repoRoot           turbopath.AbsoluteSystemPath // used to write run summary
 	repoPath           turbopath.RelativeSystemPath
@@ -66,6 +69,7 @@ type RunSummary struct {
 
 // NewRunSummary returns a RunSummary instance
 func NewRunSummary(
+	ctx context.Context,
 	startAt time.Time,
 	ui cli.Ui,
 	repoRoot turbopath.AbsoluteSystemPath,
@@ -105,6 +109,7 @@ func NewRunSummary(
 			GlobalHashSummary: globalHashSummary,
 		},
 		ui:                 ui,
+		ctx:                ctx,
 		runType:            runType,
 		repoRoot:           repoRoot,
 		singlePackage:      singlePackage,
@@ -161,8 +166,19 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 		return nil
 	}
 
-	url, errs := rsm.record()
+	// Wrap the record function so we can hoist out url/errors but keep
+	// the function signature/type the spinner.WaitFor expects.
+	var url string
+	var errs []error
+	record := func() {
+		url, errs = rsm.record()
+	}
 
+	func() {
+		_ = spinner.WaitFor(rsm.ctx, record, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
+	}()
+
+	// After the spinner is done
 	if len(errs) > 0 {
 		rsm.ui.Warn("Errors recording run to Spaces")
 		for _, err := range errs {
