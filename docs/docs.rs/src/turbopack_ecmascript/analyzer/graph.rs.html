@@ -1714,6 +1714,52 @@
 <a href="#1714" id="1714">1714</a>
 <a href="#1715" id="1715">1715</a>
 <a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
+<a href="#1727" id="1727">1727</a>
+<a href="#1728" id="1728">1728</a>
+<a href="#1729" id="1729">1729</a>
+<a href="#1730" id="1730">1730</a>
+<a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
+<a href="#1737" id="1737">1737</a>
+<a href="#1738" id="1738">1738</a>
+<a href="#1739" id="1739">1739</a>
+<a href="#1740" id="1740">1740</a>
+<a href="#1741" id="1741">1741</a>
+<a href="#1742" id="1742">1742</a>
+<a href="#1743" id="1743">1743</a>
+<a href="#1744" id="1744">1744</a>
+<a href="#1745" id="1745">1745</a>
+<a href="#1746" id="1746">1746</a>
+<a href="#1747" id="1747">1747</a>
+<a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
+<a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -2036,21 +2082,23 @@
         JsValue::concat(values)
     }
 
+    <span class="kw">fn </span>eval_ident(<span class="kw-2">&amp;</span><span class="self">self</span>, i: <span class="kw-2">&amp;</span>Ident) -&gt; JsValue {
+        <span class="kw">let </span>id = i.to_id();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(imported) = <span class="self">self</span>.imports.get_import(<span class="kw-2">&amp;</span>id) {
+            <span class="kw">return </span>imported;
+        }
+        <span class="kw">if </span>is_unresolved(i, <span class="self">self</span>.unresolved_mark) {
+            JsValue::FreeVar(i.sym.clone())
+        } <span class="kw">else </span>{
+            JsValue::Variable(id)
+        }
+    }
+
     <span class="kw">pub fn </span>eval(<span class="kw-2">&amp;</span><span class="self">self</span>, e: <span class="kw-2">&amp;</span>Expr) -&gt; JsValue {
         <span class="kw">match </span>e {
             Expr::Paren(e) =&gt; <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>e.expr),
             Expr::Lit(e) =&gt; JsValue::Constant(e.clone().into()),
-            Expr::Ident(i) =&gt; {
-                <span class="kw">let </span>id = i.to_id();
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(imported) = <span class="self">self</span>.imports.get_import(<span class="kw-2">&amp;</span>id) {
-                    <span class="kw">return </span>imported;
-                }
-                <span class="kw">if </span>is_unresolved(i, <span class="self">self</span>.unresolved_mark) {
-                    JsValue::FreeVar(i.sym.clone())
-                } <span class="kw">else </span>{
-                    JsValue::Variable(id)
-                }
-            }
+            Expr::Ident(i) =&gt; <span class="self">self</span>.eval_ident(i),
 
             Expr::Unary(UnaryExpr {
                 op: <span class="macro">op!</span>(<span class="string">&quot;!&quot;</span>), arg, ..
@@ -2659,6 +2707,29 @@
             AstParentNodeRef::AssignExpr(n, AssignExprField::Left),
             |ast_path| <span class="kw">match </span><span class="kw-2">&amp;</span>n.left {
                 PatOrExpr::Expr(expr) =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(key) = expr.as_ident() {
+                        <span class="kw">let </span>value = <span class="kw">match </span>n.op {
+                            AssignOp::Assign =&gt; <span class="macro">unreachable!</span>(
+                                <span class="string">&quot;AssignOp::Assign will never have an expression in n.left&quot;
+                            </span>),
+                            AssignOp::AndAssign | AssignOp::OrAssign | AssignOp::NullishAssign =&gt; {
+                                <span class="kw">let </span>right = <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>n.right);
+                                <span class="comment">// We can handle the right value as alternative to the existing
+                                // value
+                                </span><span class="prelude-val">Some</span>(right)
+                            }
+                            AssignOp::AddAssign =&gt; {
+                                <span class="kw">let </span>left = <span class="self">self</span>.eval_context.eval(expr);
+                                <span class="kw">let </span>right = <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>n.right);
+                                <span class="prelude-val">Some</span>(JsValue::add(<span class="macro">vec!</span>[left, right]))
+                            }
+                            <span class="kw">_ </span>=&gt; <span class="prelude-val">Some</span>(JsValue::unknown_empty(<span class="string">&quot;unsupported assign operation&quot;</span>)),
+                        };
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = value {
+                            <span class="self">self</span>.add_value(key.to_id(), value);
+                        }
+                    }
+
                     ast_path.with(
                         AstParentNodeRef::PatOrExpr(<span class="kw-2">&amp;</span>n.left, PatOrExprField::Expr),
                         |ast_path| {
@@ -2667,6 +2738,7 @@
                     );
                 }
                 PatOrExpr::Pat(pat) =&gt; {
+                    <span class="macro">debug_assert!</span>(n.op == AssignOp::Assign);
                     ast_path.with(
                         AstParentNodeRef::PatOrExpr(<span class="kw-2">&amp;</span>n.left, PatOrExprField::Pat),
                         |ast_path| {
@@ -2682,6 +2754,26 @@
             AstParentNodeRef::AssignExpr(n, AssignExprField::Right),
             |ast_path| {
                 <span class="self">self</span>.visit_expr(<span class="kw-2">&amp;</span>n.right, ast_path);
+            },
+        );
+    }
+
+    <span class="kw">fn </span>visit_update_expr&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        n: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>UpdateExpr,
+        ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
+    ) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(key) = n.arg.as_ident() {
+            <span class="self">self</span>.add_value(
+                key.to_id(),
+                JsValue::unknown_empty(<span class="string">&quot;updated with update expression&quot;</span>),
+            );
+        }
+
+        ast_path.with(
+            AstParentNodeRef::UpdateExpr(n, UpdateExprField::Arg),
+            |ast_path| {
+                <span class="self">self</span>.visit_expr(<span class="kw-2">&amp;</span>n.arg, ast_path);
             },
         );
     }
