@@ -177,7 +177,7 @@ fn encode_image(image: DynamicImage, format: ImageFormat, quality: u8) -> Result
         #[cfg(feature = "avif")]
         ImageFormat::Avif => {
             use image::codecs::avif::AvifEncoder;
-            AvifEncoder::new_with_speed_quality(&mut buf, 6, quality - 15).write_image(
+            AvifEncoder::new_with_speed_quality(&mut buf, 6, quality).write_image(
                 image.as_bytes(),
                 width,
                 height,
