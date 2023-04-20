@@ -906,6 +906,44 @@
 <a href="#906" id="906">906</a>
 <a href="#907" id="907">907</a>
 <a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::{type_name, Any},
     borrow::Cow,
@@ -1238,6 +1276,8 @@
     String(String),
     Bool(bool),
     Usize(usize),
+    I8(i8),
+    U8(u8),
     I16(i16),
     U16(u16),
     I32(i32),
@@ -1423,6 +1463,8 @@
             TaskInput::String(s) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;string {:?}&quot;</span>, s),
             TaskInput::Bool(b) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;bool {:?}&quot;</span>, b),
             TaskInput::Usize(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;usize {}&quot;</span>, v),
+            TaskInput::I8(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;i8 {}&quot;</span>, v),
+            TaskInput::U8(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;u8 {}&quot;</span>, v),
             TaskInput::I16(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;i16 {}&quot;</span>, v),
             TaskInput::U16(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;u16 {}&quot;</span>, v),
             TaskInput::I32(v) =&gt; <span class="macro">write!</span>(f, <span class="string">&quot;i32 {}&quot;</span>, v),
@@ -1453,6 +1495,18 @@
 <span class="kw">impl </span>From&lt;bool&gt; <span class="kw">for </span>TaskInput {
     <span class="kw">fn </span>from(b: bool) -&gt; <span class="self">Self </span>{
         TaskInput::Bool(b)
+    }
+}
+
+<span class="kw">impl </span>From&lt;i8&gt; <span class="kw">for </span>TaskInput {
+    <span class="kw">fn </span>from(v: i8) -&gt; <span class="self">Self </span>{
+        TaskInput::I8(v)
+    }
+}
+
+<span class="kw">impl </span>From&lt;u8&gt; <span class="kw">for </span>TaskInput {
+    <span class="kw">fn </span>from(v: u8) -&gt; <span class="self">Self </span>{
+        TaskInput::U8(v)
     }
 }
 
@@ -1598,6 +1652,28 @@
                 .map(|i| FromTaskInput::try_from(i))
                 .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid task input type, expected list&quot;</span>)),
+        }
+    }
+}
+
+<span class="kw">impl </span>FromTaskInput&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>u8 {
+    <span class="kw">type </span>Error = anyhow::Error;
+
+    <span class="kw">fn </span>try_from(value: <span class="kw-2">&amp;</span>TaskInput) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">match </span>value {
+            TaskInput::U8(value) =&gt; <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>value),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid task input type, expected u8&quot;</span>)),
+        }
+    }
+}
+
+<span class="kw">impl </span>FromTaskInput&lt;<span class="lifetime">&#39;_</span>&gt; <span class="kw">for </span>i8 {
+    <span class="kw">type </span>Error = anyhow::Error;
+
+    <span class="kw">fn </span>try_from(value: <span class="kw-2">&amp;</span>TaskInput) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">match </span>value {
+            TaskInput::I8(value) =&gt; <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>value),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;invalid task input type, expected i8&quot;</span>)),
         }
     }
 }
