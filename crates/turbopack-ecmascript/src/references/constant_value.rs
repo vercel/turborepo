@@ -40,7 +40,7 @@ impl CodeGenerateable for ConstantValue {
                 *expr = match value {
                     CompileTimeDefineValue::Bool(true) => quote!("(\"TURBOPACK compile-time value\", true)" as Expr),
                     CompileTimeDefineValue::Bool(false) => quote!("(\"TURBOPACK compile-time value\", false)" as Expr),
-                    CompileTimeDefineValue::String(ref s) => quote!("(\"TURBOPACK compile-time nullish\", $e)" as Expr, e: Expr = s.to_string().into()),
+                    CompileTimeDefineValue::String(ref s) => quote!("(\"TURBOPACK compile-time value\", $e)" as Expr, e: Expr = s.to_string().into()),
                 };
             }),
         ]
