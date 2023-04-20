@@ -381,6 +381,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			tracer(runsummary.TargetBuildFailed, err, nil)
 		}
 
+		// If there was an error, flush the buffered output
+		taskCache.OnError(prefixedUI, progressLogger)
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.ContinueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
@@ -390,9 +392,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			// Set to nil so we don't short-circuit any other execution
 			err = nil
 		}
-
-		// If there was an error, flush the buffered output
-		taskCache.OnError(prefixedUI, progressLogger)
 
 		return taskExecutionSummary, err
 	}
