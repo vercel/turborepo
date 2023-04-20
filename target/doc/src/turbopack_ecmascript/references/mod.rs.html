@@ -2554,9 +2554,18 @@
 <a href="#2554" id="2554">2554</a>
 <a href="#2555" id="2555">2555</a>
 <a href="#2556" id="2556">2556</a>
+<a href="#2557" id="2557">2557</a>
+<a href="#2558" id="2558">2558</a>
+<a href="#2559" id="2559">2559</a>
+<a href="#2560" id="2560">2560</a>
+<a href="#2561" id="2561">2561</a>
+<a href="#2562" id="2562">2562</a>
+<a href="#2563" id="2563">2563</a>
+<a href="#2564" id="2564">2564</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
+<span class="kw">pub mod </span>constant_value;
 <span class="kw">pub mod </span>esm;
 <span class="kw">pub mod </span>node;
 <span class="kw">pub mod </span>pattern_mapping;
@@ -2576,6 +2585,7 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>constant_condition::{ConstantConditionValue, ConstantConditionVc};
+<span class="kw">use </span>constant_value::ConstantValueVc;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>parking_lot::Mutex;
@@ -3831,6 +3841,12 @@
                             .eq(name.iter().map(Cow::Borrowed).rev())
                         {
                             <span class="kw">match </span>value {
+                                FreeVarReference::Value(value) =&gt; {
+                                    analysis.add_code_gen(ConstantValueVc::new(
+                                        Value::new(value.clone()),
+                                        AstPathVc::cell(ast_path.to_vec()),
+                                    ));
+                                }
                                 FreeVarReference::EcmaScriptModule {
                                     request,
                                     context,
