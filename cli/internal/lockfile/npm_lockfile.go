@@ -33,7 +33,7 @@ func (l *NpmLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath,
 	for i, workspace := range workspacePackages {
 		workspaces[i] = workspace.ToUnixPath().ToString()
 	}
-	contents, err := ffi.Subgraph("npm", l.contents, workspaces, packages)
+	contents, err := ffi.Subgraph("npm", l.contents, workspaces, packages, nil)
 	if err != nil {
 		return nil, err
 	}

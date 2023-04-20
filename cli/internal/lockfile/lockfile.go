@@ -171,7 +171,7 @@ func rustTransitiveDeps(content []byte, packageManager string, workspaces map[tu
 	for workspacePath, workspace := range workspaces {
 		processedWorkspaces[workspacePath.ToString()] = workspace
 	}
-	workspaceDeps, err := ffi.TransitiveDeps(content, packageManager, processedWorkspaces)
+	workspaceDeps, err := ffi.TransitiveDeps(content, packageManager, processedWorkspaces, resolutions)
 	if err != nil {
 		return nil, err
 	}

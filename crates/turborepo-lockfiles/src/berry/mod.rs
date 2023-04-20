@@ -273,6 +273,8 @@ impl<'a> BerryLockfile<'a> {
             }
         }
 
+        // TODO we're missing added resolution deps here
+
         for key in packages {
             let locator = Locator::try_from(key.as_str())?;
 
@@ -324,7 +326,8 @@ impl<'a> BerryLockfile<'a> {
 
         // Add any descriptors used by package extensions
         for descriptor in &self.extensions {
-            let locator = resolutions
+            let locator = self
+                .resolutions
                 .get(descriptor)
                 .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
             resolutions.insert(descriptor.clone(), locator.clone());
@@ -488,9 +491,11 @@ pub fn berry_subgraph(
     contents: &[u8],
     workspace_packages: &[String],
     packages: &[String],
+    resolutions: Option<HashMap<String, String>>,
 ) -> Result<Vec<u8>, Error> {
+    let manifest = resolutions.map(BerryManifest::with_resolutions);
     let data = LockfileData::from_bytes(contents)?;
-    let lockfile = BerryLockfile::new(&data, None)?;
+    let lockfile = BerryLockfile::new(&data, manifest.as_ref())?;
     let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
     let new_contents = pruned_lockfile.lockfile()?.to_string().into_bytes();
     Ok(new_contents)
@@ -738,5 +743,44 @@ mod test {
                 version: "0.6.0".into()
             }
         );
+    }
+
+    #[test]
+    fn test_robust_resolutions_dependencies() {
+        let data: LockfileData =
+            serde_yaml::from_str(include_str!("../../fixtures/robust-berry-resolutions.lock"))
+                .unwrap();
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+        let lockfile = BerryLockfile::new(&data, Some(&manifest)).unwrap();
+
+        let unresolved_deps = vec![
+            ("@types/react-dom", "^17.0.11"),
+            ("@types/react", "^17.0.37"),
+            ("eslint", "^7.32.0"),
+            ("typescript", "^4.5.2"),
+            ("react", "^18.2.0"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
+        let closure =
+            transitive_closure(&lockfile, "packages/ui".to_string(), unresolved_deps).unwrap();
+
+        assert!(closure.contains(&Package {
+            key: "ajv@npm:8.11.2".into(),
+            version: "8.11.2".into()
+        }));
+        assert!(closure.contains(&Package {
+            key: "uri-js@npm:4.4.1".into(),
+            version: "4.4.1".into()
+        }));
     }
 }

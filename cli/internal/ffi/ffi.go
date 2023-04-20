@@ -169,7 +169,11 @@ func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
 }
 
 // TransitiveDeps returns the transitive external deps for all provided workspaces
-func TransitiveDeps(content []byte, packageManager string, workspaces map[string]map[string]string) (map[string]*ffi_proto.LockfilePackageList, error) {
+func TransitiveDeps(content []byte, packageManager string, workspaces map[string]map[string]string, resolutions map[string]string) (map[string]*ffi_proto.LockfilePackageList, error) {
+	var additionalData *ffi_proto.AdditionalBerryData
+	if resolutions != nil {
+		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
+	}
 	flatWorkspaces := make(map[string]*ffi_proto.PackageDependencyList)
 	for workspace, deps := range workspaces {
 		packageDependencyList := make([]*ffi_proto.PackageDependency, len(deps))
@@ -187,6 +191,7 @@ func TransitiveDeps(content []byte, packageManager string, workspaces map[string
 		Contents:       content,
 		PackageManager: packageManager,
 		Workspaces:     flatWorkspaces,
+		Resolutions:    additionalData,
 	}
 	reqBuf := Marshal(&req)
 	resBuf := C.transitive_closure(reqBuf)
@@ -206,12 +211,17 @@ func TransitiveDeps(content []byte, packageManager string, workspaces map[string
 }
 
 // Subgraph returns the contents of a lockfile subgraph
-func Subgraph(packageManager string, content []byte, workspaces []string, packages []string) ([]byte, error) {
+func Subgraph(packageManager string, content []byte, workspaces []string, packages []string, resolutions map[string]string) ([]byte, error) {
+	var additionalData *ffi_proto.AdditionalBerryData
+	if resolutions != nil {
+		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
+	}
 	req := ffi_proto.SubgraphRequest{
 		Contents:       content,
 		Workspaces:     workspaces,
 		Packages:       packages,
 		PackageManager: packageManager,
+		Resolutions:    additionalData,
 	}
 	reqBuf := Marshal(&req)
 	resBuf := C.subgraph(reqBuf)

@@ -8,8 +8,9 @@ pub use berry::{Error as BerryError, *};
 pub use error::Error;
 pub use npm::*;
 use rayon::prelude::*;
+use serde::Serialize;
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
     pub key: String,
     pub version: String,
@@ -37,7 +38,8 @@ pub fn all_transitive_closures<L: Lockfile + Sync>(
     workspaces: HashMap<String, HashMap<String, String>>,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
     workspaces
-        .into_par_iter()
+        .into_iter()
+        // .into_par_iter() // uncomment this
         .map(|(workspace, unresolved_deps)| {
             let closure = transitive_closure(lockfile, workspace.clone(), unresolved_deps)?;
             Ok((workspace, closure))
@@ -51,6 +53,11 @@ pub fn transitive_closure<L: Lockfile>(
     workspace_path: String,
     unresolved_deps: HashMap<String, String>,
 ) -> Result<HashSet<Package>, Error> {
+    println!(
+        "workspace: {}, unresolved_deps: {}",
+        workspace_path,
+        serde_json::to_string_pretty(&unresolved_deps).unwrap()
+    );
     let mut transitive_deps = HashSet::new();
     transitive_closure_helper(
         lockfile,

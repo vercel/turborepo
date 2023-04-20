@@ -37,7 +37,7 @@ func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPat
 	for i, workspace := range workspacePackages {
 		workspaces[i] = workspace.ToUnixPath().ToString()
 	}
-	contents, err := ffi.Subgraph("berry", l.contents, workspaces, packages)
+	contents, err := ffi.Subgraph("berry", l.contents, workspaces, packages, l.resolutions)
 	if err != nil {
 		return nil, err
 	}

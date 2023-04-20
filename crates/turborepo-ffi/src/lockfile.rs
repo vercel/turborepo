@@ -139,17 +139,20 @@ pub extern "C" fn subgraph(buf: Buffer) -> Buffer {
 }
 
 fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
-    let request: proto::SubgraphRequest = buf.into_proto()?;
-    let contents = match request.package_manager.as_str() {
-        "npm" => Ok(real_npm_subgraph(
-            &request.contents,
-            &request.workspaces,
-            &request.packages,
-        )?),
+    let proto::SubgraphRequest {
+        contents,
+        package_manager,
+        workspaces,
+        packages,
+        resolutions,
+    } = buf.into_proto()?;
+    let contents = match package_manager.as_str() {
+        "npm" => Ok(real_npm_subgraph(&contents, &workspaces, &packages)?),
         "berry" => Ok(turborepo_lockfiles::berry_subgraph(
-            &request.contents,
-            &request.workspaces,
-            &request.packages,
+            &contents,
+            &workspaces,
+            &packages,
+            resolutions.map(|res| res.resolutions),
         )?),
         pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
     }?;
