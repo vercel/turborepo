@@ -100,8 +100,11 @@ impl From<&str> for CompileTimeDefineValue {
 #[turbo_tasks::value(transparent)]
 pub struct CompileTimeDefines(pub HashMap<Vec<String>, CompileTimeDefineValue>);
 
-impl CompileTimeDefines {
-    pub fn into_iter(self) -> impl Iterator<Item = (Vec<String>, CompileTimeDefineValue)> {
+impl IntoIterator for CompileTimeDefines {
+    type Item = (Vec<String>, CompileTimeDefineValue);
+    type IntoIter = std::collections::hash_map::IntoIter<Vec<String>, CompileTimeDefineValue>;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
