@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "pnpm -- turbo run build --filter=docs",
+    "build": "turbo run build --filter=docs",
     "build:turbo": "pnpm run --filter=cli build",
     "build:ts": "tsc -b tsconfig.project.json",
     "check:prettier": "prettier -c .",
@@ -12,11 +12,9 @@
     "format:prettier": "prettier -w .",
     "format:rs": "cargo fmt --all",
     "format:toml": "taplo format",
-    "turbo": "pnpm run build:turbo && node turbow.js",
-    "turbo-prebuilt": "node turbow.js",
-    "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
+    "docs": "turbo run dev --filter=docs --no-cache",
     "prepare": "husky install",
-    "test": "pnpm -- turbo run test"
+    "test": "turbo run test"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
