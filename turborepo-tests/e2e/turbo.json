@@ -2,9 +2,7 @@
   "extends": ["//"],
   "pipeline": {
     "test": {
-      // TODO: we should have this depend on cli#build, but we first need to change
-      // how these tests are invoked.
-      "dependsOn": [],
+      "dependsOn": ["cli#build"],
       "output": []
     }
   }

@@ -239,7 +239,7 @@ jobs:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - run: pnpm -- turbo run test --filter=cli --color
+      - run: turbo run test --filter=cli --color
 
   go_integration:
     name: Go Integration Tests
@@ -268,7 +268,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: pnpm test -- --filter=turborepo-tests-integration
+        run: turbo run test --filter=turborepo-tests-integration
         env:
           GO_TAG: rust
 
@@ -296,7 +296,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
-        run: pnpm -- turbo run test --filter=turborepo-tests-e2e
+        run: turbo run test --filter=turborepo-tests-e2e
 
   go_examples:
     name: Go Cli Examples
@@ -394,7 +394,7 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
-        run: pnpm -- turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
   rust_prepare:
     name: Check rust crates
@@ -1115,7 +1115,7 @@ jobs:
         # This is the syntax for running the `//#lint` task specifically in turbo.json
         # It runs the taplo check on taplo.toml, and prettier check across the whole repo.
         # TODO: run prettier in individual workspaces instead of globally.
-        run: pnpm -- turbo run lint --filter=//
+        run: turbo run lint --filter=//
 
   final:
     name: Ok
