@@ -941,7 +941,6 @@ impl VisitAstPath for Analyzer<'_> {
         n: &'ast AssignExpr,
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
-        println!("visit_assign_expr: {:#?}", n);
         ast_path.with(
             AstParentNodeRef::AssignExpr(n, AssignExprField::Left),
             |ast_path| match &n.left {
