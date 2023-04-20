@@ -5,6 +5,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/segmentio/ksuid"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // FormatJSON returns a json string representing a RunSummary
@@ -29,6 +30,7 @@ func (rsm *Meta) FormatJSON() ([]byte, error) {
 func (rsm *Meta) normalize() {
 	for _, t := range rsm.RunSummary.Tasks {
 		t.EnvVars.Global = rsm.RunSummary.GlobalHashSummary.envVars
+		t.EnvVars.GlobalPassthrough = rsm.RunSummary.GlobalHashSummary.passthroughEnvVars
 	}
 
 	// Remove execution summary for dry runs
@@ -58,6 +60,7 @@ type nonMonorepoRunSummary struct {
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages          []string           `json:"-"`
+	EnvMode           util.EnvMode       `json:"envMode"`
 	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
 }

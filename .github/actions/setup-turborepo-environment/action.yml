@@ -25,3 +25,4 @@ runs:
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
+        install-cargo-sweep: false

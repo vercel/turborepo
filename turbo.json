@@ -18,28 +18,12 @@
     "check-types": {
       "dependsOn": ["^build"]
     },
-    "dev": {
-      "cache": false
-    },
     "//#build:ts": {
       "outputs": ["packages/**/dist"]
     },
     "build": {
       "outputs": ["dist/**/*", ".next/**/*"],
       "dependsOn": ["^build"]
-    },
-    "//#run-example": {
-      "inputs": [
-        "examples/**/*.ts",
-        "examples/**/*.tsx",
-        "examples/**/*.json",
-        "examples/**/*.js",
-        "examples/**/*.yaml",
-        "cli/**/*.go",
-        "cli/go.mod",
-        "cli/go.sum",
-        "./scripts/run-example.sh"
-      ]
     }
   }
 }

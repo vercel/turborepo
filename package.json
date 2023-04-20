@@ -15,8 +15,8 @@
     "turbo": "pnpm run build:turbo && node turbow.js",
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
-    "run-example": "./scripts/run-example.sh",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "test": "pnpm -- turbo run test"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
@@ -55,5 +55,9 @@
       "next@latest": "13.0.6"
     }
   },
-  "packageManager": "pnpm@7.18.2"
+  "packageManager": "pnpm@7.18.2",
+  "engines": {
+    "node": "16.x",
+    "pnpm": "7"
+  }
 }

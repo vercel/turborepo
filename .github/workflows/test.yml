@@ -95,7 +95,8 @@ jobs:
             xtask/**
             .cargo/**
             rust-toolchain
-            !crates/turborepo/**                        
+            !glob-watch
+            !crates/turborepo/**
             !crates/turborepo-api-client/**
             !crates/turborepo-lib/**
             !crates/turborepo-ffi/**
@@ -120,6 +121,7 @@ jobs:
           PATTERNS: |
             pnpm-lock.yaml
             package.json
+            glob-watch
             crates/turborepo/**
             crates/turborepo-api-client/**
             crates/turborepo-lib/**
@@ -156,8 +158,7 @@ jobs:
         with:
           PATTERNS: |
             examples/**
-            examples_tests/**
-            scripts/run-example.sh
+            turborepo-tests/examples/**
             !**.md
             !**.mdx
 
@@ -267,7 +268,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: pnpm -- turbo run integration-tests --filter=cli
+        run: pnpm test -- --filter=turborepo-tests-integration
         env:
           GO_TAG: rust
 
@@ -295,8 +296,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
-        # Turbo has already been built in previous step, no need to rebuild
-        run: pnpm -- turbo run e2e-prebuilt --filter=cli
+        run: pnpm -- turbo run test --filter=turborepo-tests-e2e
 
   go_examples:
     name: Go Cli Examples
@@ -394,7 +394,7 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
-        run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: pnpm -- turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
   rust_prepare:
     name: Check rust crates
@@ -563,7 +563,7 @@ jobs:
       - name: Post logs if there are errors
         run: |
           cp packages/next-swc/cargo_output.log ./cargo_output.log
-          if grep 'error: could not compile' ./cargo_output.log; then (printf "This changes may fail to build \`next-swc\`. \n\n\`\`\`\n"; cat ./cargo_output.log; printf "\`\`\`\n") > out.log; else printf ":white_check_mark: This changes can build \`next-swc\`" > out.log; fi
+          if grep 'error: could not compile' ./cargo_output.log; then (printf "This change may fail to build \`next-swc\`. \n\n\`\`\`\n"; cat ./cargo_output.log; printf "\`\`\`\n") > out.log; else printf ":white_check_mark: This change can build \`next-swc\`" > out.log; fi
 
       - name: PR comment with file
         uses: thollander/actions-comment-pull-request@v2
@@ -751,12 +751,12 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --workspace --exclude turbopack-bench --no-run
+          cargo tp-bench-test --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --workspace --exclude turbopack-bench
+          cargo tp-bench-test
 
       - name: Build benchmarks for tests for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
@@ -1046,8 +1046,24 @@ jobs:
   turbopack_bench_pr:
     needs: [determine_jobs, rust_prepare]
     if: needs.determine_jobs.outputs.turbopack == 'true' && github.event_name == 'pull_request'
-    name: Benchmark and compare Turbopack performance
-    runs-on: ubuntu-latest-16-core-oss
+    name: Benchmark and compare Turbopack performance on ${{ matrix.os.title }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: linux
+            title: Linux
+            quiet: false
+            runner: ubuntu-latest-16-core-oss
+          - name: macos
+            title: MacOS
+            quiet: true
+            runner: macos-latest
+          - name: windows
+            title: Windows
+            quiet: true
+            runner: windows-latest
+    runs-on: ${{ matrix.os.runner }}
     permissions:
       contents: read
       pull-requests: write
@@ -1070,13 +1086,15 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
-          shared-cache-key: benchmark
+          shared-cache-key: benchmark-${{ matrix.os.name }}
 
       - name: Benchmark and compare with base branch
         uses: sokra/criterion-compare-action@main
         timeout-minutes: 180
         with:
           branchName: base
+          title: ${{ matrix.os.title }} Benchmark
+          quiet: ${{ matrix.os.quiet }}
           cwd: crates/turbopack-cli
 
   format_lint:

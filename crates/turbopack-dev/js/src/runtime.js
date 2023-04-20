@@ -9,6 +9,7 @@
 /** @typedef {import('../types').ChunkList} ChunkList */
 
 /** @typedef {import('../types').Module} Module */
+/** @typedef {import('../types').ChunkData} ChunkData */
 /** @typedef {import('../types').SourceInfo} SourceInfo */
 /** @typedef {import('../types').SourceType} SourceType */
 /** @typedef {import('../types').SourceType.Runtime} SourceTypeRuntime */
@@ -16,6 +17,8 @@
 /** @typedef {import('../types').SourceType.Update} SourceTypeUpdate */
 /** @typedef {import('../types').Exports} Exports */
 /** @typedef {import('../types').EsmInteropNamespace} EsmInteropNamespace */
+/** @typedef {import('../types').RequireContext} RequireContext */
+/** @typedef {import('../types').RequireContextMap} RequireContextMap */
 
 /** @typedef {import('../types').RefreshHelpers} RefreshHelpers */
 /** @typedef {import('../types/hot').Hot} Hot */
@@ -187,6 +190,61 @@ function commonJsRequire(sourceModule, id) {
   return module.exports;
 }
 
+/**
+ * @param {Module} sourceModule
+ * @param {RequireContextMap} map
+ * @returns {RequireContext}
+ */
+function requireContext(sourceModule, map) {
+  /**
+   * @param {ModuleId} id
+   * @returns {Exports}
+   */
+  function requireContext(id) {
+    const entry = map[id];
+
+    if (!entry) {
+      throw new Error(
+        `module ${id} is required from a require.context, but is not in the context`
+      );
+    }
+
+    return entry.internal
+      ? commonJsRequire(sourceModule, entry.id())
+      : externalRequire(entry.id(), false);
+  }
+
+  /**
+   * @returns {ModuleId[]}
+   */
+  requireContext.keys = () => {
+    return Object.keys(map);
+  };
+
+  /**
+   * @param {ModuleId} id
+   * @returns {ModuleId}
+   */
+  requireContext.resolve = (id) => {
+    const entry = map[id];
+
+    if (!entry) {
+      throw new Error(
+        `module ${id} is resolved from a require.context, but is not in the context`
+      );
+    }
+
+    return entry.id();
+  };
+
+  return requireContext;
+}
+
+/**
+ * @param {ModuleId} id
+ * @param {boolean} esm
+ * @returns {Exports | EsmInteropNamespace}
+ */
 function externalRequire(id, esm) {
   let raw;
   try {
@@ -209,12 +267,45 @@ externalRequire.resolve = (name, opt) => {
   return require.resolve(name, opt);
 };
 
+/** @type {Map<ModuleId, Promise<any> | true>} */
+const availableModules = new Map();
+
 /**
  * @param {SourceInfo} source
- * @param {string} chunkPath
- * @returns {Promise<any> | undefined}
+ * @param {ChunkData} chunkData
+ * @returns {Promise<any>}
  */
-async function loadChunk(source, chunkPath) {
+async function loadChunk(source, chunkData) {
+  if (typeof chunkData === "string") {
+    return loadChunkPath(source, chunkData);
+  } else {
+    const includedList = chunkData.included || [];
+    const promises = includedList.map((included) => {
+      if (moduleFactories[included]) return true;
+      return availableModules.get(included);
+    });
+    if (promises.length > 0 && promises.every((p) => p)) {
+      // When all included items are already loaded or loading, we can skip loading ourselves
+      return Promise.all(promises);
+    }
+    const promise = loadChunkPath(source, chunkData.path);
+    for (const included of includedList) {
+      if (!availableModules.has(included)) {
+        // It might be better to race old and new promises, but it's rare that the new promise will be faster than a request started earlier.
+        // In production it's even more rare, because the chunk optimization tries to deduplicate modules anyway.
+        availableModules.set(included, promise);
+      }
+    }
+    return promise;
+  }
+}
+
+/**
+ * @param {SourceInfo} source
+ * @param {ChunkPath} chunkPath
+ * @returns {Promise<any>}
+ */
+async function loadChunkPath(source, chunkPath) {
   try {
     await BACKEND.loadChunk(chunkPath, source);
   } catch (error) {
@@ -252,6 +343,7 @@ const SourceTypeUpdate = 2;
  * @returns {Module}
  */
 function instantiateModule(id, source) {
+  /** @type {ModuleFactory} */
   const moduleFactory = moduleFactories[id];
   if (typeof moduleFactory !== "function") {
     // This can happen if modules incorrectly handle HMR disposes/updates,
@@ -312,6 +404,7 @@ function instantiateModule(id, source) {
         e: module.exports,
         r: commonJsRequire.bind(null, module),
         x: externalRequire,
+        f: requireContext.bind(null, module),
         i: esmImport.bind(null, module),
         s: esm.bind(null, module.exports),
         j: cjs.bind(null, module.exports),
@@ -1208,6 +1301,7 @@ function disposeChunk(chunkPath) {
     if (noRemainingChunks) {
       moduleChunksMap.delete(moduleId);
       disposeModule(moduleId, "clear");
+      availableModules.delete(moduleId);
     }
   }
 
@@ -1242,6 +1336,16 @@ function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
 }
 
 /**
+ * Returns the path of a chunk defined by its data.
+ *
+ * @param {ChunkData} chunkData
+ * @returns {ChunkPath} the chunk path
+ */
+function getChunkPath(chunkData) {
+  return typeof chunkData === "string" ? chunkData : chunkData.path;
+}
+
+/**
  * Subscribes to chunk list updates from the update server and applies them.
  *
  * @param {ChunkList} chunkList
@@ -1253,7 +1357,7 @@ function registerChunkList(chunkList) {
   ]);
 
   // Adding chunks to chunk lists and vice versa.
-  const chunks = new Set(chunkList.chunks);
+  const chunks = new Set(chunkList.chunks.map(getChunkPath));
   chunkListChunksMap.set(chunkList.path, chunks);
   for (const chunkPath of chunks) {
     let chunkChunkLists = chunkChunkListsMap.get(chunkPath);

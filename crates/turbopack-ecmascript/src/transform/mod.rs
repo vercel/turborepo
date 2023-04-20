@@ -1,7 +1,13 @@
 mod server_to_client_proxy;
 mod util;
 
-use std::{fmt::Debug, path::Path, sync::Arc};
+use std::{
+    collections::hash_map::DefaultHasher,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    path::Path,
+    sync::Arc,
+};
 
 use anyhow::Result;
 use swc_core::{
@@ -112,6 +118,11 @@ pub struct EcmascriptInputTransforms(Vec<EcmascriptInputTransform>);
 #[turbo_tasks::value_impl]
 impl EcmascriptInputTransformsVc {
     #[turbo_tasks::function]
+    pub fn empty() -> Self {
+        EcmascriptInputTransformsVc::cell(Vec::new())
+    }
+
+    #[turbo_tasks::function]
     pub async fn extend(self, other: EcmascriptInputTransformsVc) -> Result<Self> {
         let mut transforms = self.await?.clone_value();
         transforms.extend(other.await?.clone_value());
@@ -183,6 +194,7 @@ impl EcmascriptInputTransform {
                     Some(comments.clone()),
                     config,
                     top_level_mark,
+                    unresolved_mark,
                 ));
             }
             EcmascriptInputTransform::CommonJs => {
@@ -215,9 +227,15 @@ impl EcmascriptInputTransform {
                     ..Default::default()
                 };
                 let p = std::mem::replace(program, Program::Module(Module::dummy()));
+                let hash = {
+                    let mut hasher = DefaultHasher::new();
+                    p.hash(&mut hasher);
+                    hasher.finish()
+                };
                 *program = p.fold_with(&mut swc_emotion::emotion(
                     options,
                     Path::new(file_name_str),
+                    hash as u32,
                     source_map.clone(),
                     comments.clone(),
                 ))

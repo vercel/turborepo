@@ -37,7 +37,7 @@ async function getVersion(
 async function getAvailablePackageManagers(): Promise<
   Record<PackageManager, PackageManagerAvailable>
 > {
-  const [yarn, pnpm, npm] = await Promise.all([
+  const [yarn, npm, pnpm] = await Promise.all([
     getVersion("yarnpkg"),
     getVersion("npm"),
     getVersion("pnpm"),
