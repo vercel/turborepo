@@ -43,7 +43,6 @@ const (
 // about the Run and references to other things that we need.
 type Meta struct {
 	RunSummary         *RunSummary
-	ctx                context.Context
 	ui                 cli.Ui
 	repoRoot           turbopath.AbsoluteSystemPath // used to write run summary
 	repoPath           turbopath.RelativeSystemPath
@@ -69,7 +68,6 @@ type RunSummary struct {
 
 // NewRunSummary returns a RunSummary instance
 func NewRunSummary(
-	ctx context.Context,
 	startAt time.Time,
 	ui cli.Ui,
 	repoRoot turbopath.AbsoluteSystemPath,
@@ -109,7 +107,6 @@ func NewRunSummary(
 			GlobalHashSummary: globalHashSummary,
 		},
 		ui:                 ui,
-		ctx:                ctx,
 		runType:            runType,
 		repoRoot:           repoRoot,
 		singlePackage:      singlePackage,
@@ -129,7 +126,7 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
+func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspace.Catalog) error {
 	if rsm.runType == runTypeDryJSON || rsm.runType == runTypeDryText {
 		return rsm.closeDryRun(workspaceInfos)
 	}
@@ -175,7 +172,7 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	}
 
 	func() {
-		_ = spinner.WaitFor(rsm.ctx, record, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
+		_ = spinner.WaitFor(ctx, record, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
 	}()
 
 	// After the spinner is done

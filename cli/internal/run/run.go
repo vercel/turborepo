@@ -362,7 +362,6 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
-		ctx,
 		startAt,
 		r.base.UI,
 		r.base.RepoRoot,
