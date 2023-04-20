@@ -7,7 +7,7 @@
       "dependsOn": ["^topo"]
     },
     "test": {
-      "dependsOn": ["topo"],
+      "dependsOn": ["cli#build", "topo"],
       "env": ["GO_TAG"]
     }
   }
