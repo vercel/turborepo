@@ -3,7 +3,7 @@
   "pipeline": {
     "test": {
       "outputs": ["coverage/**/*"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["cli#build", "^build"]
     },
 
     // lint tasks

@@ -16,7 +16,7 @@
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "prepare": "husky install",
-    "test": "pnpm -- turbo run test"
+    "test": "turbo run test"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
