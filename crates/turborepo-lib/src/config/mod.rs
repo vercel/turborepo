@@ -1,6 +1,7 @@
 mod client;
 mod env;
 mod repo;
+mod turbo;
 mod user;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +19,7 @@ use dirs_next::data_local_dir as config_dir;
 pub use env::MappedEnvironment;
 pub use repo::{get_repo_config_path, RepoConfig, RepoConfigLoader};
 use serde::Serialize;
+pub use turbo::{SpacesJson, TurboJson};
 pub use user::{UserConfig, UserConfigLoader};
 
 pub fn default_user_config_path() -> Result<PathBuf> {
