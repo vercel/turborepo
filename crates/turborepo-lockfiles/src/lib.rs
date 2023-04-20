@@ -1,3 +1,5 @@
+#![feature(once_cell)]
+
 mod berry;
 mod error;
 mod npm;
