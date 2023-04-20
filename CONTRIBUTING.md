@@ -59,7 +59,9 @@ brew install moreutils jq zstd # (moreutils is for sponge)
 
 #### Go Tests
 
-From the root directory, you can run:
+First: `npm install -g turbo`.
+
+Then from the root directory, you can run:
 
 - Go unit tests
   ```bash
