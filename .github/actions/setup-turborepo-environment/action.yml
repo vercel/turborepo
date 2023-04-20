@@ -26,4 +26,6 @@ runs:
         cache-key: ${{ inputs.target }}
         save-cache: true
         install-cargo-sweep: false
-    - run: npm i -g turbo@canary
+    - name: Install Turbo globally
+      shell: bash
+      run: npm i -g turbo@canary
