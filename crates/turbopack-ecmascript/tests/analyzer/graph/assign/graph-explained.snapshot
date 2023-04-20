@@ -1,28 +1,13 @@
-css = ("" | partRule | partString)
+a = ("" | `${a}x`)
 
-dynamicHash = (
-  | FreeVar(phash)(???*0*["baseHash"], stylis["hash"])
-  | FreeVar(phash)(dynamicHash, partRule)
-  | FreeVar(phash)(dynamicHash, partString)
-)
-- *0* unsupported expression
+b = (0 | ???*0*)
+- *0* unsupported assign operation
 
-executionContext = arguments[0]
+c = (0 | ???*0*)
+- *0* updated with update expression
 
-i = 0
+d = (0 | 1)
 
-name = FreeVar(generateName)(???*0*)
-- *0* unsupported expression
+e = (1 | 2)
 
-names = FreeVar(joinStrings)(FreeVar(names), name)
-
-partRule = ???*0*["rules"][i]
-- *0* unsupported expression
-
-partString = FreeVar(joinStringArray)(
-    FreeVar(flatten)(partRule, executionContext, styleSheet, stylis)
-)
-
-styleSheet = arguments[1]
-
-stylis = arguments[2]
+f = (1 | 2)

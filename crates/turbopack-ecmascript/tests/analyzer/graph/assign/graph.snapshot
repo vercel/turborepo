@@ -1,8 +1,8 @@
 [
     (
-        "css",
+        "a",
         Alternatives(
-            4,
+            5,
             [
                 Constant(
                     Str(
@@ -11,240 +11,129 @@
                         ),
                     ),
                 ),
-                Variable(
-                    (
-                        Atom('partRule' type=dynamic),
-                        #5,
-                    ),
-                ),
-                Variable(
-                    (
-                        Atom('partString' type=dynamic),
-                        #7,
-                    ),
+                Concat(
+                    3,
+                    [
+                        Variable(
+                            (
+                                Atom('a' type=static),
+                                #2,
+                            ),
+                        ),
+                        Constant(
+                            Str(
+                                Word(
+                                    Atom('x' type=static),
+                                ),
+                            ),
+                        ),
+                    ],
                 ),
             ],
         ),
     ),
     (
-        "dynamicHash",
+        "b",
         Alternatives(
-            17,
-            [
-                Call(
-                    8,
-                    FreeVar(
-                        Atom('phash' type=inline),
-                    ),
-                    [
-                        Member(
-                            3,
-                            Unknown(
-                                None,
-                                "unsupported expression",
-                            ),
-                            Constant(
-                                Str(
-                                    Word(
-                                        Atom('baseHash' type=dynamic),
-                                    ),
-                                ),
-                            ),
-                        ),
-                        Member(
-                            3,
-                            Variable(
-                                (
-                                    Atom('stylis' type=inline),
-                                    #3,
-                                ),
-                            ),
-                            Constant(
-                                Str(
-                                    Word(
-                                        Atom('hash' type=inline),
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ],
-                ),
-                Call(
-                    4,
-                    FreeVar(
-                        Atom('phash' type=inline),
-                    ),
-                    [
-                        Variable(
-                            (
-                                Atom('dynamicHash' type=dynamic),
-                                #3,
-                            ),
-                        ),
-                        Variable(
-                            (
-                                Atom('partRule' type=dynamic),
-                                #5,
-                            ),
-                        ),
-                    ],
-                ),
-                Call(
-                    4,
-                    FreeVar(
-                        Atom('phash' type=inline),
-                    ),
-                    [
-                        Variable(
-                            (
-                                Atom('dynamicHash' type=dynamic),
-                                #3,
-                            ),
-                        ),
-                        Variable(
-                            (
-                                Atom('partString' type=dynamic),
-                                #7,
-                            ),
-                        ),
-                    ],
-                ),
-            ],
-        ),
-    ),
-    (
-        "executionContext",
-        Argument(
-            0,
-            0,
-        ),
-    ),
-    (
-        "i",
-        Constant(
-            Num(
-                ConstantNumber(
-                    0.0,
-                ),
-            ),
-        ),
-    ),
-    (
-        "name",
-        Call(
             3,
-            FreeVar(
-                Atom('generateName' type=dynamic),
-            ),
             [
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-            ],
-        ),
-    ),
-    (
-        "names",
-        Call(
-            4,
-            FreeVar(
-                Atom('joinStrings' type=dynamic),
-            ),
-            [
-                FreeVar(
-                    Atom('names' type=inline),
-                ),
-                Variable(
-                    (
-                        Atom('name' type=static),
-                        #8,
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            0.0,
+                        ),
                     ),
                 ),
+                Unknown(
+                    None,
+                    "unsupported assign operation",
+                ),
             ],
         ),
     ),
     (
-        "partRule",
-        Member(
-            5,
-            Member(
-                3,
+        "c",
+        Alternatives(
+            3,
+            [
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            0.0,
+                        ),
+                    ),
+                ),
                 Unknown(
                     None,
-                    "unsupported expression",
+                    "updated with update expression",
+                ),
+            ],
+        ),
+    ),
+    (
+        "d",
+        Alternatives(
+            3,
+            [
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            0.0,
+                        ),
+                    ),
                 ),
                 Constant(
-                    Str(
-                        Word(
-                            Atom('rules' type=inline),
+                    Num(
+                        ConstantNumber(
+                            1.0,
                         ),
                     ),
-                ),
-            ),
-            Variable(
-                (
-                    Atom('i' type=static),
-                    #4,
-                ),
-            ),
-        ),
-    ),
-    (
-        "partString",
-        Call(
-            8,
-            FreeVar(
-                Atom('joinStringArray' type=dynamic),
-            ),
-            [
-                Call(
-                    6,
-                    FreeVar(
-                        Atom('flatten' type=inline),
-                    ),
-                    [
-                        Variable(
-                            (
-                                Atom('partRule' type=dynamic),
-                                #5,
-                            ),
-                        ),
-                        Variable(
-                            (
-                                Atom('executionContext' type=dynamic),
-                                #3,
-                            ),
-                        ),
-                        Variable(
-                            (
-                                Atom('styleSheet' type=dynamic),
-                                #3,
-                            ),
-                        ),
-                        Variable(
-                            (
-                                Atom('stylis' type=inline),
-                                #3,
-                            ),
-                        ),
-                    ],
                 ),
             ],
         ),
     ),
     (
-        "styleSheet",
-        Argument(
-            0,
-            1,
+        "e",
+        Alternatives(
+            3,
+            [
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            1.0,
+                        ),
+                    ),
+                ),
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            2.0,
+                        ),
+                    ),
+                ),
+            ],
         ),
     ),
     (
-        "stylis",
-        Argument(
-            0,
-            2,
+        "f",
+        Alternatives(
+            3,
+            [
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            1.0,
+                        ),
+                    ),
+                ),
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            2.0,
+                        ),
+                    ),
+                ),
+            ],
         ),
     ),
 ]

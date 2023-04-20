@@ -1,40 +1,12 @@
-export default class ComponentStyle {
-  generateAndInjectStyles(
-    executionContext,
-    styleSheet,
-    stylis
-  ) {
-    let dynamicHash = phash(this.baseHash, stylis.hash);
-    let css = '';
-
-    for (let i = 0; i < this.rules.length; i++) {
-      const partRule = this.rules[i];
-
-      if (typeof partRule === 'string') {
-        css += partRule;
-
-        if (process.env.NODE_ENV !== 'production') dynamicHash = phash(dynamicHash, partRule);
-      } else if (partRule) {
-        const partString = joinStringArray(
-          flatten(partRule, executionContext, styleSheet, stylis)
-        );
-        dynamicHash = phash(dynamicHash, partString);
-        css += partString;
-      }
-    }
-
-    if (css) {
-      const name = generateName(dynamicHash >>> 0);
-
-      if (!styleSheet.hasNameForId(this.componentId, name)) {
-        styleSheet.insertRules(
-          this.componentId,
-          name,
-          stylis(css, `.${name}`, undefined, this.componentId)
-        );
-      }
-
-      names = joinStrings(names, name);
-    }
-  }
-}
+let a = "";
+a += "x";
+let b = 0;
+b -= 1;
+let c = 0;
+c++;
+let d = 0;
+d ||= 1;
+let e = 1;
+e &&= 2;
+let f = 1;
+f ??= 2;

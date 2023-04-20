@@ -681,8 +681,9 @@
 - *7* l
   ⚠️  pattern without value
 
-275 -> 276 conditional = (1 !== ???*0*)
+275 -> 276 conditional = (1 !== (???*0* | ???*1*))
 - *0* unsupported expression
+- *1* updated with update expression
 
 276 -> 279 conditional = (???*0* | (???*1* !== ???*5*))
 - *0* unsupported expression
@@ -1460,76 +1461,82 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 464 conditional = (???*0* | {} | null | ???*1*)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
-- *1* ???*2*[(0 | ???*3*)]
+- *1* ???*2*[(0 | ???*3* | ???*4*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*["hasOwnProperty"](`$${a[c]["value"]}`)
+- *3* updated with update expression
+- *4* ???*5*["hasOwnProperty"](`$${a[c]["value"]}`)
   ⚠️  unknown callee object
-- *4* b
+- *5* b
   ⚠️  circular variable reference
 
-464 -> 472 member call = (???*0* | {} | null | ???*1*)["hasOwnProperty"](`$${???*5*}`)
+464 -> 472 member call = (???*0* | {} | null | ???*1*)["hasOwnProperty"](`$${???*6*}`)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
-- *1* ???*2*[(0 | ???*3*)]
+- *1* ???*2*[(0 | ???*3* | ???*4*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*["hasOwnProperty"](`$${a[c]["value"]}`)
+- *3* updated with update expression
+- *4* ???*5*["hasOwnProperty"](`$${a[c]["value"]}`)
   ⚠️  unknown callee object
-- *4* b
+- *5* b
   ⚠️  circular variable reference
-- *5* ???*6*["value"]
+- *6* ???*7*["value"]
   ⚠️  unknown object
-- *6* ???*7*[(???*8* | 0 | undefined | ???*9* | "")]
+- *7* ???*8*[(???*9* | 0 | ???*10* | undefined | ???*11* | "")]
   ⚠️  unknown object
-- *7* arguments[0]
+- *8* arguments[0]
   ⚠️  function calls are not analysed yet
-- *8* arguments[2]
+- *9* arguments[2]
   ⚠️  function calls are not analysed yet
-- *9* c
+- *10* updated with update expression
+- *11* c
   ⚠️  circular variable reference
 
-464 -> 479 call = (...) => (undefined | a | "")((???*0* | 0 | undefined | ???*1* | ""))
+464 -> 479 call = (...) => (undefined | a | "")((???*0* | 0 | ???*1* | undefined | ???*2* | ""))
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
-- *1* c
+- *1* updated with update expression
+- *2* c
   ⚠️  circular variable reference
 
-464 -> 483 conditional = (???*0* === (???*15* | 0 | undefined | ???*16* | ""))
+464 -> 483 conditional = (???*0* === (???*16* | 0 | ???*17* | undefined | ???*18* | ""))
 - *0* ???*1*["value"]
   ⚠️  unknown object
-- *1* ???*2*[(0 | ???*3* | ???*7* | null["hasOwnProperty"](???*12*))]
+- *1* ???*2*[(0 | ???*3* | ???*4* | ???*8* | null["hasOwnProperty"](???*13*))]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*["hasOwnProperty"](`$${???*5*}`)
+- *3* updated with update expression
+- *4* ???*5*["hasOwnProperty"](`$${???*6*}`)
   ⚠️  unknown callee object
-- *4* arguments[1]
+- *5* arguments[1]
   ⚠️  function calls are not analysed yet
-- *5* ???*6*["value"]
+- *6* ???*7*["value"]
   ⚠️  unknown object
-- *6* ???[(??? | 0 | undefined | ??? | "")]
+- *7* ???[(??? | 0 | ??? | undefined | ??? | "")]
   ⚠️  unknown object
-- *7* (???*8* | ???*9*)(`$${???*10*}`)
+- *8* (???*9* | ???*10*)(`$${???*11*}`)
   ⚠️  non-function callee
-- *8* FreeVar(undefined)
+- *9* FreeVar(undefined)
   ⚠️  unknown global
-- *9* unknown mutation
-- *10* ???*11*["value"]
+- *10* unknown mutation
+- *11* ???*12*["value"]
   ⚠️  unknown object
-- *11* ???[(??? | 0 | undefined | ??? | "")]
+- *12* ???[(??? | 0 | ??? | undefined | ??? | "")]
   ⚠️  unknown object
-- *12* `$${???*13*}`
+- *13* `$${???*14*}`
   ⚠️  nested operation
-- *13* ???*14*["value"]
+- *14* ???*15*["value"]
   ⚠️  unknown object
-- *14* ???[(??? | 0 | undefined | ??? | "")]
+- *15* ???[(??? | 0 | ??? | undefined | ??? | "")]
   ⚠️  unknown object
-- *15* arguments[2]
+- *16* arguments[2]
   ⚠️  function calls are not analysed yet
-- *16* c
+- *17* updated with update expression
+- *18* c
   ⚠️  circular variable reference
 
 0 -> 493 conditional = (null != ???*0*)
@@ -2202,9 +2209,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 
-649 -> 650 call = (...) => undefined((null | ???*0* | 0))
+649 -> 650 call = (...) => undefined((null | ???*0* | 0 | ???*1*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
+- *1* updated with update expression
 
 649 -> 651 conditional = (null | [???*0*] | ???*1*)
 - *0* arguments[0]
@@ -2212,26 +2220,28 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* unsupported expression
 
 651 -> 654 call = (...) => undefined(
-    (null[(null | ???*0* | 0)] | ???*1* | ???*3* | ???*4* | ???*6* | ???*7*)
+    (null[(null | ???*0* | 0 | ???*1*)] | ???*2* | ???*4* | ???*5* | ???*7* | ???*8*)
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
-- *1* [???*2*][null]
+- *1* updated with update expression
+- *2* [???*3*][null]
   ⚠️  non-num constant property on array
-- *2* arguments[0]
-  ⚠️  function calls are not analysed yet
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *4* [][???*5*]
+- *4* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *5* [][???*6*]
   ⚠️  unknown array prototype methods or values
-- *5* arguments[0]
+- *6* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* unknown mutation
-- *7* ???*8*[(null | ???*9* | 0)]
+- *7* unknown mutation
+- *8* ???*9*[(null | ???*10* | 0 | ???*11*)]
   ⚠️  unknown object
-- *8* unsupported expression
-- *9* arguments[0]
+- *9* unsupported expression
+- *10* arguments[0]
   ⚠️  function calls are not analysed yet
+- *11* updated with update expression
 
 0 -> 655 call = ???*0*(???*1*)
 - *0* arguments[0]
@@ -2827,13 +2837,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 800 free var = FreeVar(Math)
 
-0 -> 801 call = ???*0*((???*2* | 0))
+0 -> 801 call = ???*0*((???*2* | ???*3*))
 - *0* ???*1*["log"]
   ⚠️  unknown object
 - *1* FreeVar(Math)
   ⚠️  unknown global
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+- *3* unsupported assign operation
 
 0 -> 805 conditional = (0 !== ???*0*)
 - *0* unsupported expression
@@ -2842,70 +2853,38 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* unsupported expression
 - *1* unsupported expression
 
-805 -> 807 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)((???*1* | ???*3*))
+805 -> 807 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)((???*1* | ???*3* | ???*4*))
 - *0* unsupported expression
 - *1* ???*2*["pingedLanes"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* unsupported expression
+- *3* unsupported assign operation
+- *4* unsupported expression
 
 805 -> 808 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)(???*1*)
 - *0* unsupported expression
 - *1* unsupported expression
 
-805 -> 809 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)((???*1* | ???*3*))
+805 -> 809 call = (...) => (undefined | 1 | 2 | 4 | 8 | 16 | 32 | ???*0* | 134217728 | 268435456 | 536870912 | 1073741824 | a)((???*1* | ???*3* | ???*4*))
 - *0* unsupported expression
 - *1* ???*2*["pingedLanes"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* unsupported expression
+- *3* unsupported assign operation
+- *4* unsupported expression
 
-0 -> 811 conditional = (0 !== (
-  | ???*0*
-  | ???*1*
-  | 0
-  | undefined
-  | 1
-  | 2
-  | 4
-  | 8
-  | 16
-  | 32
-  | ???*3*
-  | 134217728
-  | 268435456
-  | 536870912
-  | 1073741824
-))
+0 -> 811 conditional = (0 !== (???*0* | ???*1* | ???*3*))
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* ???*2*["entangledLanes"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* unsupported expression
+- *3* unsupported assign operation
 
-811 -> 813 call = (???*0* | (...) => (undefined | 32 | ???*2*))(
-    (
-      | ???*3*
-      | ???*4*
-      | 0
-      | undefined
-      | 1
-      | 2
-      | 4
-      | 8
-      | 16
-      | 32
-      | ???*6*
-      | 134217728
-      | 268435456
-      | 536870912
-      | 1073741824
-    )
-)
+811 -> 813 call = (???*0* | (...) => (undefined | 32 | ???*2*))((???*3* | ???*4* | ???*6*))
 - *0* ???*1*["clz32"]
   ⚠️  unknown object
 - *1* FreeVar(Math)
@@ -2917,7 +2896,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *5* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* unsupported expression
+- *6* unsupported assign operation
 
 0 -> 819 call = (???*0* | (...) => (undefined | 32 | ???*2*))((???*3* | ???*5*))
 - *0* ???*1*["clz32"]
@@ -2929,7 +2908,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* arguments[0]
   ⚠️  function calls are not analysed yet
-- *5* unsupported expression
+- *5* unsupported assign operation
 
 0 -> 821 conditional = (???*0* === ???*1*)
 - *0* unsupported expression
@@ -2964,21 +2943,23 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *4* unsupported expression
 
-0 -> 845 call = (???*0* | (...) => (undefined | 32 | ???*2*))(???*3*)
+0 -> 845 call = (???*0* | (...) => (undefined | 32 | ???*2*))((???*3* | ???*4*))
 - *0* ???*1*["clz32"]
   ⚠️  unknown object
 - *1* FreeVar(Math)
   ⚠️  unknown global
 - *2* unsupported expression
 - *3* unsupported expression
+- *4* unsupported assign operation
 
-0 -> 851 call = (???*0* | (...) => (undefined | 32 | ???*2*))(???*3*)
+0 -> 851 call = (???*0* | (...) => (undefined | 32 | ???*2*))((???*3* | ???*4*))
 - *0* ???*1*["clz32"]
   ⚠️  unknown object
 - *1* FreeVar(Math)
   ⚠️  unknown global
 - *2* unsupported expression
 - *3* unsupported expression
+- *4* unsupported assign operation
 
 0 -> 854 free var = FreeVar(Map)
 
@@ -3687,8 +3668,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 961 member call = ???*0*["forEach"]((...) => (undefined | ad(b, a)))
 - *0* unknown new expression
 
-0 -> 969 call = (...) => (undefined | FreeVar(undefined))((1 | 0 | ???*0*))
-- *0* [][0]
+0 -> 969 call = (...) => (undefined | FreeVar(undefined))((1 | ???*0* | 0 | ???*1*))
+- *0* updated with update expression
+- *1* [][0]
   ⚠️  invalid index
 
 0 -> 972 member call = []["shift"]()
@@ -3853,7 +3835,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 1019 call = module<scheduler, {}>["unstable_getCurrentPriorityLevel"]()
 
-0 -> 1029 member call = (null["value"] | undefined["value"] | ???*0* | null["textContent"] | undefined["textContent"])["slice"]((???*3* | 0), ???*4*)
+0 -> 1029 member call = (null["value"] | undefined["value"] | ???*0* | null["textContent"] | undefined["textContent"])["slice"]((???*3* | 0 | ???*4*), ???*5*)
 - *0* ???*1*["value"]
   ⚠️  unknown object
 - *1* ???*2*["parentNode"]
@@ -3862,7 +3844,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *3* a
   ⚠️  pattern without value
-- *4* unsupported expression
+- *4* updated with update expression
+- *5* unsupported expression
 
 0 -> 1039 member call = ???*0*["hasOwnProperty"](???*1*)
 - *0* arguments[0]
@@ -4505,43 +4488,48 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | ???*1*
       | undefined
       | null
-      | null["value"]["slice"]((???*2* | 0), ???*3*)
-      | undefined["value"]["slice"]((???*4* | 0), ???*5*)
-      | ???*6*
-      | null["textContent"]["slice"]((???*12* | 0), ???*13*)
-      | undefined["textContent"]["slice"]((???*14* | 0), ???*15*)
-      | ???*16*
+      | null["value"]["slice"]((???*2* | 0 | ???*3*), ???*4*)
+      | undefined["value"]["slice"]((???*5* | 0 | ???*6*), ???*7*)
+      | ???*8*
+      | null["textContent"]["slice"]((???*15* | 0 | ???*16*), ???*17*)
+      | undefined["textContent"]["slice"]((???*18* | 0 | ???*19*), ???*20*)
+      | ???*21*
     ),
-    ???*17*
+    ???*22*
 )
 - *0* unsupported expression
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* a
   ⚠️  pattern without value
-- *3* unsupported expression
-- *4* a
+- *3* updated with update expression
+- *4* unsupported expression
+- *5* a
   ⚠️  pattern without value
-- *5* unsupported expression
-- *6* ???*7*["slice"]((???*10* | 0), ???*11*)
+- *6* updated with update expression
+- *7* unsupported expression
+- *8* ???*9*["slice"]((???*12* | 0 | ???*13*), ???*14*)
   ⚠️  unknown callee object
-- *7* ???*8*["value"]
+- *9* ???*10*["value"]
   ⚠️  unknown object
-- *8* ???*9*["parentNode"]
+- *10* ???*11*["parentNode"]
   ⚠️  unknown object
-- *9* arguments[2]
+- *11* arguments[2]
   ⚠️  function calls are not analysed yet
-- *10* a
-  ⚠️  pattern without value
-- *11* unsupported expression
 - *12* a
   ⚠️  pattern without value
-- *13* unsupported expression
-- *14* a
+- *13* updated with update expression
+- *14* unsupported expression
+- *15* a
   ⚠️  pattern without value
-- *15* unsupported expression
-- *16* unsupported expression
-- *17* arguments[1]
+- *16* updated with update expression
+- *17* unsupported expression
+- *18* a
+  ⚠️  pattern without value
+- *19* updated with update expression
+- *20* unsupported expression
+- *21* unsupported expression
+- *22* arguments[1]
   ⚠️  function calls are not analysed yet
 
 1163 -> 1165 call = (...) => (undefined | md | ???*0*)()
@@ -5163,37 +5151,42 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 1454 member call = "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")[0]["toLowerCase"]()
+0 -> 1454 member call = "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")[(0 | ???*0*)]["toLowerCase"]()
+- *0* updated with update expression
 
-0 -> 1457 member call = "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")[0][0]["toUpperCase"]()
+0 -> 1457 member call = "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")[(0 | ???*0*)][0]["toUpperCase"]()
+- *0* updated with update expression
 
-0 -> 1459 member call = "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")[0]["slice"](1)
+0 -> 1459 member call = "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")[(0 | ???*0*)]["slice"](1)
+- *0* updated with update expression
 
-0 -> 1460 call = (...) => undefined(???*0*(), `on${???*3*}`)
+0 -> 1460 call = (...) => undefined(???*0*(), `on${???*4*}`)
 - *0* ???*1*["toLowerCase"]
   ⚠️  unknown object
-- *1* ???*2*[0]
+- *1* ???*2*[(0 | ???*3*)]
   ⚠️  unknown object
 - *2* "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")
   ⚠️  nested operation
-- *3* (???*4* + ???*8*)
+- *3* updated with update expression
+- *4* (???*5* + ???*9*)
   ⚠️  nested operation
-- *4* ???*5*()
+- *5* ???*6*()
   ⚠️  nested operation
-- *5* ???*6*["toUpperCase"]
+- *6* ???*7*["toUpperCase"]
   ⚠️  unknown object
-- *6* ???*7*[0]
+- *7* ???*8*[0]
   ⚠️  unknown object
-- *7* ???[0]
+- *8* ???[(0 | ???)]
   ⚠️  unknown object
-- *8* ???*9*(1)
+- *9* ???*10*(1)
   ⚠️  unknown callee
-- *9* ???*10*["slice"]
+- *10* ???*11*["slice"]
   ⚠️  unknown object
-- *10* ???*11*[0]
+- *11* ???*12*[(0 | ???*13*)]
   ⚠️  unknown object
-- *11* "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")
+- *12* "abort auxClick cancel canPlay canPlayThrough click close contextMenu copy cut drag dragEnd dragEnter dragExit dragLeave dragOver dragStart drop durationChange emptied encrypted ended error gotPointerCapture input invalid keyDown keyPress keyUp load loadedData loadedMetadata loadStart lostPointerCapture mouseDown mouseMove mouseOut mouseOver mouseUp paste pause play playing pointerCancel pointerDown pointerMove pointerOut pointerOver pointerUp progress rateChange reset resize seeked seeking stalled submit suspend timeUpdate touchCancel touchEnd touchStart volumeChange scroll toggle touchMove waiting wheel"["split"](" ")
   ⚠️  nested operation
+- *13* updated with update expression
 
 0 -> 1461 call = (...) => undefined(
     (undefined | ???*0* | ???*1* | "animationend" | ???*2*),
@@ -5311,81 +5304,111 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
 
-1503 -> 1510 member call = (???*0* | null[0]["event"])["isPropagationStopped"]()
+1503 -> 1510 member call = (???*0* | null[(0 | ???*4*)]["event"])["isPropagationStopped"]()
 - *0* ???*1*["event"]
   ⚠️  unknown object
-- *1* ???*2*[0]
+- *1* ???*2*[(0 | ???*3*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+- *3* updated with update expression
+- *4* updated with update expression
 
 1503 -> 1511 call = (...) => undefined(
-    (???*0* | null[0]["event"]),
-    (???*3* | null[0][(???*7* | 0)]),
-    (???*8* | null[0][(???*13* | 0)]["currentTarget"])
+    (???*0* | null[(0 | ???*4*)]["event"]),
+    (???*5* | null[(0 | ???*11*)][(???*12* | ???*13* | 0)]),
+    (
+      | ???*14*
+      | null[(0 | ???*21*)][(???*22* | ???*23* | 0)]["currentTarget"]
+    )
 )
 - *0* ???*1*["event"]
   ⚠️  unknown object
-- *1* ???*2*[0]
+- *1* ???*2*[(0 | ???*3*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*[(???*6* | 0)]
+- *3* updated with update expression
+- *4* updated with update expression
+- *5* ???*6*[(???*9* | ???*10* | 0)]
   ⚠️  unknown object
-- *4* ???*5*[0]
+- *6* ???*7*[(0 | ???*8*)]
   ⚠️  unknown object
-- *5* arguments[0]
+- *7* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* unsupported expression
-- *7* unsupported expression
-- *8* ???*9*["currentTarget"]
-  ⚠️  unknown object
-- *9* ???*10*[(???*12* | 0)]
-  ⚠️  unknown object
-- *10* ???*11*[0]
-  ⚠️  unknown object
-- *11* arguments[0]
-  ⚠️  function calls are not analysed yet
+- *8* updated with update expression
+- *9* unsupported expression
+- *10* updated with update expression
+- *11* updated with update expression
 - *12* unsupported expression
-- *13* unsupported expression
+- *13* updated with update expression
+- *14* ???*15*["currentTarget"]
+  ⚠️  unknown object
+- *15* ???*16*[(???*19* | ???*20* | 0)]
+  ⚠️  unknown object
+- *16* ???*17*[(0 | ???*18*)]
+  ⚠️  unknown object
+- *17* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *18* updated with update expression
+- *19* unsupported expression
+- *20* updated with update expression
+- *21* updated with update expression
+- *22* unsupported expression
+- *23* updated with update expression
 
-1503 -> 1518 member call = (???*0* | null[0]["event"])["isPropagationStopped"]()
+1503 -> 1518 member call = (???*0* | null[(0 | ???*4*)]["event"])["isPropagationStopped"]()
 - *0* ???*1*["event"]
   ⚠️  unknown object
-- *1* ???*2*[0]
+- *1* ???*2*[(0 | ???*3*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+- *3* updated with update expression
+- *4* updated with update expression
 
 1503 -> 1519 call = (...) => undefined(
-    (???*0* | null[0]["event"]),
-    (???*3* | null[0][(???*7* | 0)]),
-    (???*8* | null[0][(???*13* | 0)]["currentTarget"])
+    (???*0* | null[(0 | ???*4*)]["event"]),
+    (???*5* | null[(0 | ???*11*)][(???*12* | ???*13* | 0)]),
+    (
+      | ???*14*
+      | null[(0 | ???*21*)][(???*22* | ???*23* | 0)]["currentTarget"]
+    )
 )
 - *0* ???*1*["event"]
   ⚠️  unknown object
-- *1* ???*2*[0]
+- *1* ???*2*[(0 | ???*3*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*[(???*6* | 0)]
+- *3* updated with update expression
+- *4* updated with update expression
+- *5* ???*6*[(???*9* | ???*10* | 0)]
   ⚠️  unknown object
-- *4* ???*5*[0]
+- *6* ???*7*[(0 | ???*8*)]
   ⚠️  unknown object
-- *5* arguments[0]
+- *7* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* unsupported expression
-- *7* unsupported expression
-- *8* ???*9*["currentTarget"]
-  ⚠️  unknown object
-- *9* ???*10*[(???*12* | 0)]
-  ⚠️  unknown object
-- *10* ???*11*[0]
-  ⚠️  unknown object
-- *11* arguments[0]
-  ⚠️  function calls are not analysed yet
+- *8* updated with update expression
+- *9* unsupported expression
+- *10* updated with update expression
+- *11* updated with update expression
 - *12* unsupported expression
-- *13* unsupported expression
+- *13* updated with update expression
+- *14* ???*15*["currentTarget"]
+  ⚠️  unknown object
+- *15* ???*16*[(???*19* | ???*20* | 0)]
+  ⚠️  unknown object
+- *16* ???*17*[(0 | ???*18*)]
+  ⚠️  unknown object
+- *17* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *18* updated with update expression
+- *19* unsupported expression
+- *20* updated with update expression
+- *21* updated with update expression
+- *22* unsupported expression
+- *23* updated with update expression
 
 0 -> 1522 free var = FreeVar(Set)
 
@@ -5413,12 +5436,13 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 1528 call = (...) => undefined(???*0*, ???*1*, (0 | 4), ???*2*)
+0 -> 1528 call = (...) => undefined(???*0*, ???*1*, (0 | ???*2*), ???*3*)
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
-- *2* arguments[1]
+- *2* unsupported assign operation
+- *3* arguments[1]
   ⚠️  function calls are not analysed yet
 
 0 -> 1532 free var = FreeVar(Math)
@@ -6512,7 +6536,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* c
   ⚠️  circular variable reference
 
-1753 -> 1754 conditional = true
+1753 -> 1754 conditional = (0 === (0 | ???*0*))
+- *0* updated with update expression
 
 1754 -> 1756 member call = ???*0*["removeChild"](???*1*)
 - *0* arguments[0]
@@ -6842,28 +6867,34 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* eg
   ⚠️  circular variable reference
 
-1862 -> 1865 call = (null[0] | ???*0* | ???*1* | ???*2* | ???*5*)(true)
-- *0* arguments[0]
+1862 -> 1865 call = (null[(0 | ???*0*)] | ???*1* | ???*2* | ???*3* | ???*5* | ???*9*)(true)
+- *0* updated with update expression
+- *1* arguments[0]
   ⚠️  function calls are not analysed yet
-- *1* unknown mutation
-- *2* ???*3*[0]
+- *2* unknown mutation
+- *3* [][???*4*]
+  ⚠️  unknown array prototype methods or values
+- *4* updated with update expression
+- *5* ???*6*[(0 | ???*8*)]
   ⚠️  unknown object
-- *3* ???*4*["slice"]((a + 1))
+- *6* ???*7*["slice"]((a + 1))
   ⚠️  unknown callee object
-- *4* eg
+- *7* eg
   ⚠️  circular variable reference
-- *5* ???*6*(!(0))
+- *8* updated with update expression
+- *9* ???*10*(!(0))
   ⚠️  unknown callee
-- *6* d
+- *10* d
   ⚠️  circular variable reference
 
-1862 -> 1867 member call = (null | [???*0*] | ???*1*)["slice"]((0 + 1))
+1862 -> 1867 member call = (null | [???*0*] | ???*1*)["slice"](((0 | ???*3*) + 1))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* ???*2*["slice"]((a + 1))
   ⚠️  unknown callee object
 - *2* eg
   ⚠️  circular variable reference
+- *3* updated with update expression
 
 1862 -> 1868 call = module<scheduler, {}>["unstable_scheduleCallback"](
     module<scheduler, {}>["unstable_ImmediatePriority"],
@@ -7314,10 +7345,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
-- *2* ???*3*["lanes"]
-  ⚠️  unknown object
-- *3* arguments[1]
-  ⚠️  function calls are not analysed yet
+- *2* unsupported assign operation
 
 0 -> 2083 conditional = (
   | (null !== (???*0* | null["alternate"] | ???*2* | ???*3*))
@@ -7558,17 +7586,19 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* arguments[1]
   ⚠️  function calls are not analysed yet
 
-2174 -> 2178 conditional = (null !== (???*0* | 0["effects"][(???*4* | 0)]["callback"]))
+2174 -> 2178 conditional = (null !== (???*0* | 0["effects"][(???*5* | 0 | ???*6*)]["callback"]))
 - *0* ???*1*["callback"]
   ⚠️  unknown object
-- *1* ???*2*[(???*3* | 0)]
+- *1* ???*2*[(???*3* | 0 | ???*4*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 - *3* arguments[1]
   ⚠️  function calls are not analysed yet
-- *4* arguments[1]
+- *4* updated with update expression
+- *5* arguments[1]
   ⚠️  function calls are not analysed yet
+- *6* updated with update expression
 
 2178 -> 2180 conditional = ("function" !== ???*0*)
 - *0* unsupported expression
@@ -7578,17 +7608,22 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 2180 -> 2182 call = (...) => (
   | undefined
   | `Minified React error #${a}; visit ${b} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`
-)(191, (???*0* | 0["effects"][(???*4* | 0)]["callback"]))
+)(
+    191,
+    (???*0* | 0["effects"][(???*5* | 0 | ???*6*)]["callback"])
+)
 - *0* ???*1*["callback"]
   ⚠️  unknown object
-- *1* ???*2*[(???*3* | 0)]
+- *1* ???*2*[(???*3* | 0 | ???*4*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 - *3* arguments[1]
   ⚠️  function calls are not analysed yet
-- *4* arguments[1]
+- *4* updated with update expression
+- *5* arguments[1]
   ⚠️  function calls are not analysed yet
+- *6* updated with update expression
 
 2180 -> 2183 call = ???*0*(
     (
@@ -7601,26 +7636,32 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${191}`
   ⚠️  nested operation
 
-2178 -> 2185 member call = (???*0* | 0["effects"][(???*4* | 0)]["callback"])["call"]((???*5* | 0["effects"][(???*8* | 0)] | ???*9*))
+2178 -> 2185 member call = (???*0* | 0["effects"][(???*5* | 0 | ???*6*)]["callback"])["call"](
+    (???*7* | 0["effects"][(???*11* | 0 | ???*12*)] | ???*13*)
+)
 - *0* ???*1*["callback"]
   ⚠️  unknown object
-- *1* ???*2*[(???*3* | 0)]
+- *1* ???*2*[(???*3* | 0 | ???*4*)]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
 - *3* arguments[1]
   ⚠️  function calls are not analysed yet
-- *4* arguments[1]
+- *4* updated with update expression
+- *5* arguments[1]
   ⚠️  function calls are not analysed yet
-- *5* ???*6*[(???*7* | 0)]
+- *6* updated with update expression
+- *7* ???*8*[(???*9* | 0 | ???*10*)]
   ⚠️  unknown object
-- *6* arguments[0]
+- *8* arguments[0]
   ⚠️  function calls are not analysed yet
-- *7* arguments[1]
+- *9* arguments[1]
   ⚠️  function calls are not analysed yet
-- *8* arguments[1]
+- *10* updated with update expression
+- *11* arguments[1]
   ⚠️  function calls are not analysed yet
-- *9* arguments[2]
+- *12* updated with update expression
+- *13* arguments[2]
   ⚠️  function calls are not analysed yet
 
 0 -> 2189 call = (???*0* | ???*1* | ???*3*)(???*5*, (???*6* | ???*7*))
@@ -7690,17 +7731,18 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | {"eventTime": a, "lane": b, "tag": 0, "payload": null, "callback": null, "next": null}
 )(
     (undefined | module<scheduler, {}>["unstable_now"]() | ???*0*),
-    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*5* | 4 | 16 | 536870912 | null)
+    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | ???*6* | 4 | 16 | 536870912 | null)
 )
 - *0* unsupported expression
 - *1* unsupported expression
-- *2* arguments[0]
+- *2* unsupported assign operation
+- *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*["_reactInternals"]
+- *4* ???*5*["_reactInternals"]
   ⚠️  unknown object
-- *4* a
+- *5* a
   ⚠️  circular variable reference
-- *5* C
+- *6* C
   ⚠️  circular variable reference
 
 0 -> 2203 call = (...) => (undefined | null | Zg(a, c))(
@@ -7709,14 +7751,28 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | undefined
       | {
             "eventTime": (undefined | module<scheduler, {}>["unstable_now"]() | ???*3*),
-            "lane": (undefined | 1 | ???*4* | 0 | 64 | ???*5* | ???*6* | ???*8* | 4 | 16 | 536870912 | null),
+            "lane": (undefined | 1 | ???*4* | 0 | 64 | ???*5* | ???*6* | ???*7* | ???*9* | 4 | 16 | 536870912 | null),
             "tag": 0,
             "payload": null,
             "callback": null,
             "next": null
         }
     ),
-    (undefined | 1 | ???*9* | 0 | 64 | ???*10* | ???*11* | ???*13* | 4 | 16 | 536870912 | null)
+    (
+      | undefined
+      | 1
+      | ???*10*
+      | 0
+      | 64
+      | ???*11*
+      | ???*12*
+      | ???*13*
+      | ???*15*
+      | 4
+      | 16
+      | 536870912
+      | null
+    )
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -7726,29 +7782,31 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *3* unsupported expression
 - *4* unsupported expression
-- *5* arguments[0]
+- *5* unsupported assign operation
+- *6* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* ???*7*["_reactInternals"]
+- *7* ???*8*["_reactInternals"]
   ⚠️  unknown object
-- *7* a
+- *8* a
   ⚠️  circular variable reference
-- *8* C
+- *9* C
   ⚠️  circular variable reference
-- *9* unsupported expression
-- *10* arguments[0]
+- *10* unsupported expression
+- *11* unsupported assign operation
+- *12* arguments[0]
   ⚠️  function calls are not analysed yet
-- *11* ???*12*["_reactInternals"]
+- *13* ???*14*["_reactInternals"]
   ⚠️  unknown object
-- *12* a
+- *14* a
   ⚠️  circular variable reference
-- *13* C
+- *15* C
   ⚠️  circular variable reference
 
 0 -> 2204 call = (...) => undefined(
     (???*0* | undefined | null | ???*1*),
     (???*4* | ???*5*),
-    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*11* | 4 | 16 | 536870912 | null),
-    (undefined | module<scheduler, {}>["unstable_now"]() | ???*12*)
+    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*10* | ???*12* | 4 | 16 | 536870912 | null),
+    (undefined | module<scheduler, {}>["unstable_now"]() | ???*13*)
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -7765,20 +7823,21 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *6* a
   ⚠️  circular variable reference
 - *7* unsupported expression
-- *8* arguments[0]
+- *8* unsupported assign operation
+- *9* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* ???*10*["_reactInternals"]
+- *10* ???*11*["_reactInternals"]
   ⚠️  unknown object
-- *10* a
+- *11* a
   ⚠️  circular variable reference
-- *11* C
+- *12* C
   ⚠️  circular variable reference
-- *12* unsupported expression
+- *13* unsupported expression
 
 0 -> 2205 call = (...) => undefined(
     (???*0* | undefined | null | ???*1*),
     (???*4* | ???*5*),
-    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*11* | 4 | 16 | 536870912 | null)
+    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*10* | ???*12* | 4 | 16 | 536870912 | null)
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -7795,13 +7854,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *6* a
   ⚠️  circular variable reference
 - *7* unsupported expression
-- *8* arguments[0]
+- *8* unsupported assign operation
+- *9* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* ???*10*["_reactInternals"]
+- *10* ???*11*["_reactInternals"]
   ⚠️  unknown object
-- *10* a
+- *11* a
   ⚠️  circular variable reference
-- *11* C
+- *12* C
   ⚠️  circular variable reference
 
 0 -> 2207 call = (...) => (undefined | B() | Bk | ???*0*)()
@@ -7821,17 +7881,18 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | {"eventTime": a, "lane": b, "tag": 0, "payload": null, "callback": null, "next": null}
 )(
     (undefined | module<scheduler, {}>["unstable_now"]() | ???*0*),
-    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*5* | 4 | 16 | 536870912 | null)
+    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | ???*6* | 4 | 16 | 536870912 | null)
 )
 - *0* unsupported expression
 - *1* unsupported expression
-- *2* arguments[0]
+- *2* unsupported assign operation
+- *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*["_reactInternals"]
+- *4* ???*5*["_reactInternals"]
   ⚠️  unknown object
-- *4* a
+- *5* a
   ⚠️  circular variable reference
-- *5* C
+- *6* C
   ⚠️  circular variable reference
 
 0 -> 2213 call = (...) => (undefined | null | Zg(a, c))(
@@ -7840,14 +7901,28 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | undefined
       | {
             "eventTime": (undefined | module<scheduler, {}>["unstable_now"]() | ???*3*),
-            "lane": (undefined | 1 | ???*4* | 0 | 64 | ???*5* | ???*6* | ???*8* | 4 | 16 | 536870912 | null),
+            "lane": (undefined | 1 | ???*4* | 0 | 64 | ???*5* | ???*6* | ???*7* | ???*9* | 4 | 16 | 536870912 | null),
             "tag": 0,
             "payload": null,
             "callback": null,
             "next": null
         }
     ),
-    (undefined | 1 | ???*9* | 0 | 64 | ???*10* | ???*11* | ???*13* | 4 | 16 | 536870912 | null)
+    (
+      | undefined
+      | 1
+      | ???*10*
+      | 0
+      | 64
+      | ???*11*
+      | ???*12*
+      | ???*13*
+      | ???*15*
+      | 4
+      | 16
+      | 536870912
+      | null
+    )
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -7857,29 +7932,31 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *3* unsupported expression
 - *4* unsupported expression
-- *5* arguments[0]
+- *5* unsupported assign operation
+- *6* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* ???*7*["_reactInternals"]
+- *7* ???*8*["_reactInternals"]
   ⚠️  unknown object
-- *7* a
+- *8* a
   ⚠️  circular variable reference
-- *8* C
+- *9* C
   ⚠️  circular variable reference
-- *9* unsupported expression
-- *10* arguments[0]
+- *10* unsupported expression
+- *11* unsupported assign operation
+- *12* arguments[0]
   ⚠️  function calls are not analysed yet
-- *11* ???*12*["_reactInternals"]
+- *13* ???*14*["_reactInternals"]
   ⚠️  unknown object
-- *12* a
+- *14* a
   ⚠️  circular variable reference
-- *13* C
+- *15* C
   ⚠️  circular variable reference
 
 0 -> 2214 call = (...) => undefined(
     (???*0* | undefined | null | ???*1*),
     (???*4* | ???*5*),
-    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*11* | 4 | 16 | 536870912 | null),
-    (undefined | module<scheduler, {}>["unstable_now"]() | ???*12*)
+    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*10* | ???*12* | 4 | 16 | 536870912 | null),
+    (undefined | module<scheduler, {}>["unstable_now"]() | ???*13*)
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -7896,20 +7973,21 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *6* a
   ⚠️  circular variable reference
 - *7* unsupported expression
-- *8* arguments[0]
+- *8* unsupported assign operation
+- *9* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* ???*10*["_reactInternals"]
+- *10* ???*11*["_reactInternals"]
   ⚠️  unknown object
-- *10* a
+- *11* a
   ⚠️  circular variable reference
-- *11* C
+- *12* C
   ⚠️  circular variable reference
-- *12* unsupported expression
+- *13* unsupported expression
 
 0 -> 2215 call = (...) => undefined(
     (???*0* | undefined | null | ???*1*),
     (???*4* | ???*5*),
-    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*11* | 4 | 16 | 536870912 | null)
+    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*10* | ???*12* | 4 | 16 | 536870912 | null)
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -7926,13 +8004,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *6* a
   ⚠️  circular variable reference
 - *7* unsupported expression
-- *8* arguments[0]
+- *8* unsupported assign operation
+- *9* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* ???*10*["_reactInternals"]
+- *10* ???*11*["_reactInternals"]
   ⚠️  unknown object
-- *10* a
+- *11* a
   ⚠️  circular variable reference
-- *11* C
+- *12* C
   ⚠️  circular variable reference
 
 0 -> 2217 call = (...) => (undefined | B() | Bk | ???*0*)()
@@ -7952,17 +8031,18 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | {"eventTime": a, "lane": b, "tag": 0, "payload": null, "callback": null, "next": null}
 )(
     (undefined | module<scheduler, {}>["unstable_now"]() | ???*0*),
-    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*5* | 4 | 16 | 536870912 | null)
+    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | ???*6* | 4 | 16 | 536870912 | null)
 )
 - *0* unsupported expression
 - *1* unsupported expression
-- *2* arguments[0]
+- *2* unsupported assign operation
+- *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*["_reactInternals"]
+- *4* ???*5*["_reactInternals"]
   ⚠️  unknown object
-- *4* a
+- *5* a
   ⚠️  circular variable reference
-- *5* C
+- *6* C
   ⚠️  circular variable reference
 
 0 -> 2222 call = (...) => (undefined | null | Zg(a, c))(
@@ -7971,14 +8051,28 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | undefined
       | {
             "eventTime": (undefined | module<scheduler, {}>["unstable_now"]() | ???*3*),
-            "lane": (undefined | 1 | ???*4* | 0 | 64 | ???*5* | ???*6* | ???*8* | 4 | 16 | 536870912 | null),
+            "lane": (undefined | 1 | ???*4* | 0 | 64 | ???*5* | ???*6* | ???*7* | ???*9* | 4 | 16 | 536870912 | null),
             "tag": 0,
             "payload": null,
             "callback": null,
             "next": null
         }
     ),
-    (undefined | 1 | ???*9* | 0 | 64 | ???*10* | ???*11* | ???*13* | 4 | 16 | 536870912 | null)
+    (
+      | undefined
+      | 1
+      | ???*10*
+      | 0
+      | 64
+      | ???*11*
+      | ???*12*
+      | ???*13*
+      | ???*15*
+      | 4
+      | 16
+      | 536870912
+      | null
+    )
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -7988,29 +8082,31 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *3* unsupported expression
 - *4* unsupported expression
-- *5* arguments[0]
+- *5* unsupported assign operation
+- *6* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* ???*7*["_reactInternals"]
+- *7* ???*8*["_reactInternals"]
   ⚠️  unknown object
-- *7* a
+- *8* a
   ⚠️  circular variable reference
-- *8* C
+- *9* C
   ⚠️  circular variable reference
-- *9* unsupported expression
-- *10* arguments[0]
+- *10* unsupported expression
+- *11* unsupported assign operation
+- *12* arguments[0]
   ⚠️  function calls are not analysed yet
-- *11* ???*12*["_reactInternals"]
+- *13* ???*14*["_reactInternals"]
   ⚠️  unknown object
-- *12* a
+- *14* a
   ⚠️  circular variable reference
-- *13* C
+- *15* C
   ⚠️  circular variable reference
 
 0 -> 2223 call = (...) => undefined(
     (???*0* | undefined | null | ???*1*),
     (???*4* | ???*5*),
-    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*11* | 4 | 16 | 536870912 | null),
-    (undefined | module<scheduler, {}>["unstable_now"]() | ???*12*)
+    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*10* | ???*12* | 4 | 16 | 536870912 | null),
+    (undefined | module<scheduler, {}>["unstable_now"]() | ???*13*)
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -8027,20 +8123,21 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *6* a
   ⚠️  circular variable reference
 - *7* unsupported expression
-- *8* arguments[0]
+- *8* unsupported assign operation
+- *9* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* ???*10*["_reactInternals"]
+- *10* ???*11*["_reactInternals"]
   ⚠️  unknown object
-- *10* a
+- *11* a
   ⚠️  circular variable reference
-- *11* C
+- *12* C
   ⚠️  circular variable reference
-- *12* unsupported expression
+- *13* unsupported expression
 
 0 -> 2224 call = (...) => undefined(
     (???*0* | undefined | null | ???*1*),
     (???*4* | ???*5*),
-    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*11* | 4 | 16 | 536870912 | null)
+    (undefined | 1 | ???*7* | 0 | 64 | ???*8* | ???*9* | ???*10* | ???*12* | 4 | 16 | 536870912 | null)
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -8057,13 +8154,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *6* a
   ⚠️  circular variable reference
 - *7* unsupported expression
-- *8* arguments[0]
+- *8* unsupported assign operation
+- *9* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* ???*10*["_reactInternals"]
+- *10* ???*11*["_reactInternals"]
   ⚠️  unknown object
-- *10* a
+- *11* a
   ⚠️  circular variable reference
-- *11* C
+- *12* C
   ⚠️  circular variable reference
 
 0 -> 2228 member call = (???*0* | ???*1*)["shouldComponentUpdate"](???*3*, ???*4*, ???*5*)
@@ -9327,16 +9425,18 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 2514 call = (...) => (undefined | c | d)(???*0*, ???*1*, ???*2*)
+0 -> 2514 call = (...) => (undefined | c | d)(???*0*, ???*1*, (???*2* | ???*3*))
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 - *2* unsupported expression
+- *3* updated with update expression
 
-0 -> 2517 conditional = (???*0* === ???*1*)
+0 -> 2517 conditional = ((???*0* | ???*1*) === ???*2*)
 - *0* unsupported expression
-- *1* ???*2*["length"]
+- *1* updated with update expression
+- *2* ???*3*["length"]
   ⚠️  unknown object
-- *2* arguments[2]
+- *3* arguments[2]
   ⚠️  function calls are not analysed yet
 
 2517 -> 2518 call = (...) => (undefined | null)(???*0*, ???*1*)
@@ -9344,10 +9444,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2517 -> 2519 call = (...) => undefined(???*0*, ???*1*)
+2517 -> 2519 call = (...) => undefined(???*0*, (???*1* | ???*2*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* updated with update expression
 
 0 -> 2520 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -9362,15 +9463,17 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* arguments[3]
   ⚠️  function calls are not analysed yet
 
-2520 -> 2524 call = (...) => (undefined | c | d)(???*0*, ???*1*, ???*2*)
+2520 -> 2524 call = (...) => (undefined | c | d)(???*0*, ???*1*, (???*2* | ???*3*))
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 - *2* unsupported expression
+- *3* updated with update expression
 
-2520 -> 2526 call = (...) => undefined(???*0*, ???*1*)
+2520 -> 2526 call = (...) => undefined(???*0*, (???*1* | ???*2*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* updated with update expression
 
 0 -> 2527 call = (...) => (undefined | a)(???*0*, ???*1*)
 - *0* arguments[0]
@@ -9385,26 +9488,28 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | y(a, b, c, f(d["_payload"]), e)
   | m(b, a, d, e, null)
   | null
-)(???*0*, ???*1*, ???*2*, ???*3*, ???*5*)
+)(???*0*, ???*1*, (???*2* | ???*3*), ???*4*, ???*6*)
 - *0* max number of linking steps reached
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
-- *3* ???*4*[w]
+- *3* updated with update expression
+- *4* ???*5*[w]
   ⚠️  unknown object
-- *4* arguments[2]
+- *5* arguments[2]
   ⚠️  function calls are not analysed yet
-- *5* arguments[3]
+- *6* arguments[3]
   ⚠️  function calls are not analysed yet
 
 0 -> 2535 member call = ???*0*["delete"](???*1*)
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-0 -> 2536 call = (...) => (undefined | c | d)(???*0*, ???*1*, ???*2*)
+0 -> 2536 call = (...) => (undefined | c | d)(???*0*, ???*1*, (???*2* | ???*3*))
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 - *2* unsupported expression
+- *3* updated with update expression
 
 0 -> 2539 member call = ???*0*["forEach"]((...) => (undefined | b(e, a)))
 - *0* max number of linking steps reached
@@ -9415,10 +9520,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 2541 call = (...) => undefined(???*0*, ???*1*)
+0 -> 2541 call = (...) => undefined(???*0*, (???*1* | ???*2*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* updated with update expression
 
 0 -> 2542 call = (...) => (undefined | null | a)(???*0*)
 - *0* max number of linking steps reached
@@ -9496,10 +9602,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-0 -> 2564 call = (...) => (undefined | c | d)(???*0*, ???*1*, ???*2*)
+0 -> 2564 call = (...) => (undefined | c | d)(???*0*, ???*1*, (???*2* | ???*3*))
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 - *2* unsupported expression
+- *3* updated with update expression
 
 0 -> 2567 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -9509,10 +9616,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *1* max number of linking steps reached
 
-2567 -> 2569 call = (...) => undefined(???*0*, ???*1*)
+2567 -> 2569 call = (...) => undefined(???*0*, (???*1* | ???*2*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* updated with update expression
 
 0 -> 2570 conditional = ???*0*
 - *0* max number of linking steps reached
@@ -9527,15 +9635,17 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* arguments[3]
   ⚠️  function calls are not analysed yet
 
-2570 -> 2576 call = (...) => (undefined | c | d)(???*0*, ???*1*, ???*2*)
+2570 -> 2576 call = (...) => (undefined | c | d)(???*0*, ???*1*, (???*2* | ???*3*))
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 - *2* unsupported expression
+- *3* updated with update expression
 
-2570 -> 2578 call = (...) => undefined(???*0*, ???*1*)
+2570 -> 2578 call = (...) => undefined(???*0*, (???*1* | ???*2*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* updated with update expression
 
 0 -> 2579 call = (...) => (undefined | a)(???*0*, ???*1*)
 - *0* arguments[0]
@@ -9553,23 +9663,25 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | y(a, b, c, f(d["_payload"]), e)
   | m(b, a, d, e, null)
   | null
-)(???*0*, ???*1*, ???*2*, ???*3*, ???*4*)
+)(???*0*, ???*1*, (???*2* | ???*3*), ???*4*, ???*5*)
 - *0* max number of linking steps reached
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
-- *3* max number of linking steps reached
-- *4* arguments[3]
+- *3* updated with update expression
+- *4* max number of linking steps reached
+- *5* arguments[3]
   ⚠️  function calls are not analysed yet
 
 0 -> 2589 member call = ???*0*["delete"](???*1*)
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-0 -> 2590 call = (...) => (undefined | c | d)(???*0*, ???*1*, ???*2*)
+0 -> 2590 call = (...) => (undefined | c | d)(???*0*, ???*1*, (???*2* | ???*3*))
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 - *2* unsupported expression
+- *3* updated with update expression
 
 0 -> 2593 member call = ???*0*["forEach"]((...) => (undefined | b(e, a)))
 - *0* max number of linking steps reached
@@ -9580,10 +9692,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
 
-0 -> 2595 call = (...) => undefined(???*0*, ???*1*)
+0 -> 2595 call = (...) => undefined(???*0*, (???*1* | ???*2*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
+- *2* updated with update expression
 
 0 -> 2600 conditional = (("object" === ???*0*) | (null !== (???*1* | ???*2* | ???*5*)))
 - *0* unsupported expression
@@ -11725,7 +11838,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | undefined
       | (((a === b) && ((0 !== a) || (???*2* === ???*3*))) || ((a !== a) && (b !== b)))
     )
-)((???*4* | undefined | 64 | 1), ???*5*)
+)((???*4* | undefined | 64 | ???*5*), ???*6*)
 - *0* ???*1*["is"]
   ⚠️  unknown object
 - *1* FreeVar(Object)
@@ -11734,7 +11847,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* unsupported expression
 - *4* arguments[2]
   ⚠️  function calls are not analysed yet
-- *5* arguments[1]
+- *5* unsupported assign operation
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
 
 0 -> 2996 call = (...) => (undefined | a)()
@@ -11850,14 +11964,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
     (
       | ???*1*
       | {
-            "lane": (undefined | 1 | ???*2* | 0 | 64 | ???*3* | ???*4* | 4 | 16 | 536870912 | null | ???*5*),
-            "action": ???*7*,
+            "lane": (undefined | 1 | ???*2* | 0 | 64 | ???*3* | ???*4* | ???*5* | 4 | 16 | 536870912 | null | ???*6*),
+            "action": ???*8*,
             "hasEagerState": false,
             "eagerState": null,
             "next": null
         }
       | undefined
-      | ???*8*
+      | ???*9*
       | null
     )
 )
@@ -11866,6 +11980,108 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
+- *3* unsupported assign operation
+- *4* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *5* C
+  ⚠️  circular variable reference
+- *6* ???*7*["value"]
+  ⚠️  unknown object
+- *7* arguments[1]
+  ⚠️  function calls are not analysed yet
+- *8* c
+  ⚠️  circular variable reference
+- *9* ???*10*["stateNode"]
+  ⚠️  unknown object
+- *10* ???*11*["alternate"]
+  ⚠️  unknown object
+- *11* arguments[0]
+  ⚠️  function calls are not analysed yet
+
+3009 -> 3011 call = (...) => (undefined | Zg(a, d))(
+    ???*0*,
+    ???*1*,
+    (
+      | ???*2*
+      | {
+            "lane": (undefined | 1 | ???*3* | 0 | 64 | ???*4* | ???*5* | ???*6* | 4 | 16 | 536870912 | null | ???*7*),
+            "action": ???*9*,
+            "hasEagerState": false,
+            "eagerState": null,
+            "next": null
+        }
+      | undefined
+      | ???*10*
+      | null
+    ),
+    (
+      | undefined
+      | 1
+      | ???*13*
+      | 0
+      | 64
+      | ???*14*
+      | ???*15*
+      | ???*16*
+      | 4
+      | 16
+      | 536870912
+      | null
+      | ???*17*
+    )
+)
+- *0* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *1* arguments[1]
+  ⚠️  function calls are not analysed yet
+- *2* arguments[2]
+  ⚠️  function calls are not analysed yet
+- *3* unsupported expression
+- *4* unsupported assign operation
+- *5* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *6* C
+  ⚠️  circular variable reference
+- *7* ???*8*["value"]
+  ⚠️  unknown object
+- *8* arguments[1]
+  ⚠️  function calls are not analysed yet
+- *9* c
+  ⚠️  circular variable reference
+- *10* ???*11*["stateNode"]
+  ⚠️  unknown object
+- *11* ???*12*["alternate"]
+  ⚠️  unknown object
+- *12* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *13* unsupported expression
+- *14* unsupported assign operation
+- *15* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *16* C
+  ⚠️  circular variable reference
+- *17* ???*18*["value"]
+  ⚠️  unknown object
+- *18* arguments[1]
+  ⚠️  function calls are not analysed yet
+
+3009 -> 3012 conditional = (null !== (
+  | ???*0*
+  | {
+        "lane": (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | 4 | 16 | 536870912 | null | ???*5*),
+        "action": ???*7*,
+        "hasEagerState": false,
+        "eagerState": null,
+        "next": null
+    }
+  | undefined
+  | ???*8*
+  | null
+))
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
+- *1* unsupported expression
+- *2* unsupported assign operation
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 - *4* C
@@ -11883,90 +12099,6 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *10* arguments[0]
   ⚠️  function calls are not analysed yet
 
-3009 -> 3011 call = (...) => (undefined | Zg(a, d))(
-    ???*0*,
-    ???*1*,
-    (
-      | ???*2*
-      | {
-            "lane": (undefined | 1 | ???*3* | 0 | 64 | ???*4* | ???*5* | 4 | 16 | 536870912 | null | ???*6*),
-            "action": ???*8*,
-            "hasEagerState": false,
-            "eagerState": null,
-            "next": null
-        }
-      | undefined
-      | ???*9*
-      | null
-    ),
-    (undefined | 1 | ???*12* | 0 | 64 | ???*13* | ???*14* | 4 | 16 | 536870912 | null | ???*15*)
-)
-- *0* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *1* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *2* arguments[2]
-  ⚠️  function calls are not analysed yet
-- *3* unsupported expression
-- *4* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *5* C
-  ⚠️  circular variable reference
-- *6* ???*7*["value"]
-  ⚠️  unknown object
-- *7* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *8* c
-  ⚠️  circular variable reference
-- *9* ???*10*["stateNode"]
-  ⚠️  unknown object
-- *10* ???*11*["alternate"]
-  ⚠️  unknown object
-- *11* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *12* unsupported expression
-- *13* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *14* C
-  ⚠️  circular variable reference
-- *15* ???*16*["value"]
-  ⚠️  unknown object
-- *16* arguments[1]
-  ⚠️  function calls are not analysed yet
-
-3009 -> 3012 conditional = (null !== (
-  | ???*0*
-  | {
-        "lane": (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | 4 | 16 | 536870912 | null | ???*4*),
-        "action": ???*6*,
-        "hasEagerState": false,
-        "eagerState": null,
-        "next": null
-    }
-  | undefined
-  | ???*7*
-  | null
-))
-- *0* arguments[2]
-  ⚠️  function calls are not analysed yet
-- *1* unsupported expression
-- *2* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *3* C
-  ⚠️  circular variable reference
-- *4* ???*5*["value"]
-  ⚠️  unknown object
-- *5* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *6* c
-  ⚠️  circular variable reference
-- *7* ???*8*["stateNode"]
-  ⚠️  unknown object
-- *8* ???*9*["alternate"]
-  ⚠️  unknown object
-- *9* arguments[0]
-  ⚠️  function calls are not analysed yet
-
 3012 -> 3013 call = (...) => (undefined | B() | Bk | ???*0*)()
 - *0* unsupported expression
 
@@ -11974,98 +12106,130 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
     (
       | ???*0*
       | {
-            "lane": (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | 4 | 16 | 536870912 | null | ???*4*),
-            "action": ???*6*,
+            "lane": (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | 4 | 16 | 536870912 | null | ???*5*),
+            "action": ???*7*,
             "hasEagerState": false,
             "eagerState": null,
             "next": null
         }
       | undefined
-      | ???*7*
+      | ???*8*
       | null
     ),
-    ???*10*,
-    (undefined | 1 | ???*11* | 0 | 64 | ???*12* | ???*13* | 4 | 16 | 536870912 | null | ???*14*),
-    (undefined | module<scheduler, {}>["unstable_now"]() | ???*16*)
+    ???*11*,
+    (
+      | undefined
+      | 1
+      | ???*12*
+      | 0
+      | 64
+      | ???*13*
+      | ???*14*
+      | ???*15*
+      | 4
+      | 16
+      | 536870912
+      | null
+      | ???*16*
+    ),
+    (undefined | module<scheduler, {}>["unstable_now"]() | ???*18*)
 )
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
-- *2* arguments[0]
+- *2* unsupported assign operation
+- *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* C
+- *4* C
   ⚠️  circular variable reference
-- *4* ???*5*["value"]
+- *5* ???*6*["value"]
   ⚠️  unknown object
-- *5* arguments[1]
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
-- *6* c
+- *7* c
   ⚠️  circular variable reference
-- *7* ???*8*["stateNode"]
+- *8* ???*9*["stateNode"]
   ⚠️  unknown object
-- *8* ???*9*["alternate"]
+- *9* ???*10*["alternate"]
   ⚠️  unknown object
-- *9* arguments[0]
-  ⚠️  function calls are not analysed yet
 - *10* arguments[0]
   ⚠️  function calls are not analysed yet
-- *11* unsupported expression
-- *12* arguments[0]
+- *11* arguments[0]
   ⚠️  function calls are not analysed yet
-- *13* C
+- *12* unsupported expression
+- *13* unsupported assign operation
+- *14* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *15* C
   ⚠️  circular variable reference
-- *14* ???*15*["value"]
+- *16* ???*17*["value"]
   ⚠️  unknown object
-- *15* arguments[1]
+- *17* arguments[1]
   ⚠️  function calls are not analysed yet
-- *16* unsupported expression
+- *18* unsupported expression
 
 3012 -> 3015 call = (...) => undefined(
     (
       | ???*0*
       | {
-            "lane": (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | 4 | 16 | 536870912 | null | ???*4*),
-            "action": ???*6*,
+            "lane": (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | 4 | 16 | 536870912 | null | ???*5*),
+            "action": ???*7*,
             "hasEagerState": false,
             "eagerState": null,
             "next": null
         }
       | undefined
-      | ???*7*
+      | ???*8*
       | null
     ),
-    ???*10*,
-    (undefined | 1 | ???*11* | 0 | 64 | ???*12* | ???*13* | 4 | 16 | 536870912 | null | ???*14*)
+    ???*11*,
+    (
+      | undefined
+      | 1
+      | ???*12*
+      | 0
+      | 64
+      | ???*13*
+      | ???*14*
+      | ???*15*
+      | 4
+      | 16
+      | 536870912
+      | null
+      | ???*16*
+    )
 )
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
-- *2* arguments[0]
+- *2* unsupported assign operation
+- *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* C
+- *4* C
   ⚠️  circular variable reference
-- *4* ???*5*["value"]
+- *5* ???*6*["value"]
   ⚠️  unknown object
-- *5* arguments[1]
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
-- *6* c
+- *7* c
   ⚠️  circular variable reference
-- *7* ???*8*["stateNode"]
+- *8* ???*9*["stateNode"]
   ⚠️  unknown object
-- *8* ???*9*["alternate"]
+- *9* ???*10*["alternate"]
   ⚠️  unknown object
-- *9* arguments[0]
+- *10* arguments[0]
   ⚠️  function calls are not analysed yet
-- *10* arguments[1]
+- *11* arguments[1]
   ⚠️  function calls are not analysed yet
-- *11* unsupported expression
-- *12* arguments[0]
+- *12* unsupported expression
+- *13* unsupported assign operation
+- *14* arguments[0]
   ⚠️  function calls are not analysed yet
-- *13* C
+- *15* C
   ⚠️  circular variable reference
-- *14* ???*15*["value"]
+- *16* ???*17*["value"]
   ⚠️  unknown object
-- *15* arguments[1]
+- *17* arguments[1]
   ⚠️  function calls are not analysed yet
 
 0 -> 3016 call = (...) => (undefined | 1 | ???*0* | Ck | a)(???*1*)
@@ -12164,37 +12328,38 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
     ???*0*,
     (
       | {
-            "lane": (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | 4 | 16 | 536870912 | null | ???*4*),
-            "action": (???*6* | undefined | ???*7* | null),
+            "lane": (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | 4 | 16 | 536870912 | null | ???*5*),
+            "action": (???*7* | undefined | ???*8* | null),
             "hasEagerState": false,
             "eagerState": null,
             "next": null
         }
       | undefined
       | module<scheduler, {}>["unstable_now"]()
-      | ???*10*
+      | ???*11*
     )
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
-- *2* arguments[0]
+- *2* unsupported assign operation
+- *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* C
+- *4* C
   ⚠️  circular variable reference
-- *4* ???*5*["value"]
+- *5* ???*6*["value"]
   ⚠️  unknown object
-- *5* arguments[1]
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
-- *6* arguments[2]
+- *7* arguments[2]
   ⚠️  function calls are not analysed yet
-- *7* ???*8*["stateNode"]
+- *8* ???*9*["stateNode"]
   ⚠️  unknown object
-- *8* ???*9*["alternate"]
+- *9* ???*10*["alternate"]
   ⚠️  unknown object
-- *9* arguments[0]
+- *10* arguments[0]
   ⚠️  function calls are not analysed yet
-- *10* unsupported expression
+- *11* unsupported expression
 
 3018 -> 3024 conditional = ((0 === ???*0*) | (null === ???*2*) | (null !== ???*4*))
 - *0* ???*1*["lanes"]
@@ -12277,48 +12442,64 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
     ???*1*,
     (
       | {
-            "lane": (undefined | 1 | ???*2* | 0 | 64 | ???*3* | ???*4* | 4 | 16 | 536870912 | null | ???*5*),
-            "action": (???*7* | undefined | ???*8* | null),
+            "lane": (undefined | 1 | ???*2* | 0 | 64 | ???*3* | ???*4* | ???*5* | 4 | 16 | 536870912 | null | ???*6*),
+            "action": (???*8* | undefined | ???*9* | null),
             "hasEagerState": false,
             "eagerState": null,
             "next": null
         }
       | undefined
       | module<scheduler, {}>["unstable_now"]()
-      | ???*11*
+      | ???*12*
     ),
-    (undefined | 1 | ???*12* | 0 | 64 | ???*13* | ???*14* | 4 | 16 | 536870912 | null | ???*15*)
+    (
+      | undefined
+      | 1
+      | ???*13*
+      | 0
+      | 64
+      | ???*14*
+      | ???*15*
+      | ???*16*
+      | 4
+      | 16
+      | 536870912
+      | null
+      | ???*17*
+    )
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 - *2* unsupported expression
-- *3* arguments[0]
+- *3* unsupported assign operation
+- *4* arguments[0]
   ⚠️  function calls are not analysed yet
-- *4* C
+- *5* C
   ⚠️  circular variable reference
-- *5* ???*6*["value"]
+- *6* ???*7*["value"]
   ⚠️  unknown object
-- *6* arguments[1]
+- *7* arguments[1]
   ⚠️  function calls are not analysed yet
-- *7* arguments[2]
+- *8* arguments[2]
   ⚠️  function calls are not analysed yet
-- *8* ???*9*["stateNode"]
+- *9* ???*10*["stateNode"]
   ⚠️  unknown object
-- *9* ???*10*["alternate"]
+- *10* ???*11*["alternate"]
   ⚠️  unknown object
-- *10* arguments[0]
+- *11* arguments[0]
   ⚠️  function calls are not analysed yet
-- *11* unsupported expression
 - *12* unsupported expression
-- *13* arguments[0]
+- *13* unsupported expression
+- *14* unsupported assign operation
+- *15* arguments[0]
   ⚠️  function calls are not analysed yet
-- *14* C
+- *16* C
   ⚠️  circular variable reference
-- *15* ???*16*["value"]
+- *17* ???*18*["value"]
   ⚠️  unknown object
-- *16* arguments[1]
+- *18* arguments[1]
   ⚠️  function calls are not analysed yet
 
 3018 -> 3039 call = (...) => (undefined | B() | Bk | ???*0*)()
@@ -12327,18 +12508,32 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 3018 -> 3040 call = (...) => undefined(
     (???*0* | undefined | ???*1* | null),
     ???*4*,
-    (undefined | 1 | ???*5* | 0 | 64 | ???*6* | ???*7* | 4 | 16 | 536870912 | null | ???*8*),
+    (undefined | 1 | ???*5* | 0 | 64 | ???*6* | ???*7* | ???*8* | 4 | 16 | 536870912 | null | ???*9*),
     (
       | {
-            "lane": (undefined | 1 | ???*10* | 0 | 64 | ???*11* | ???*12* | 4 | 16 | 536870912 | null | ???*13*),
-            "action": (???*15* | undefined | ???*16* | null),
+            "lane": (
+              | undefined
+              | 1
+              | ???*11*
+              | 0
+              | 64
+              | ???*12*
+              | ???*13*
+              | ???*14*
+              | 4
+              | 16
+              | 536870912
+              | null
+              | ???*15*
+            ),
+            "action": (???*17* | undefined | ???*18* | null),
             "hasEagerState": false,
             "eagerState": null,
             "next": null
         }
       | undefined
       | module<scheduler, {}>["unstable_now"]()
-      | ???*19*
+      | ???*21*
     )
 )
 - *0* arguments[2]
@@ -12352,37 +12547,39 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *4* arguments[0]
   ⚠️  function calls are not analysed yet
 - *5* unsupported expression
-- *6* arguments[0]
+- *6* unsupported assign operation
+- *7* arguments[0]
   ⚠️  function calls are not analysed yet
-- *7* C
+- *8* C
   ⚠️  circular variable reference
-- *8* ???*9*["value"]
+- *9* ???*10*["value"]
   ⚠️  unknown object
-- *9* arguments[1]
+- *10* arguments[1]
   ⚠️  function calls are not analysed yet
-- *10* unsupported expression
-- *11* arguments[0]
+- *11* unsupported expression
+- *12* unsupported assign operation
+- *13* arguments[0]
   ⚠️  function calls are not analysed yet
-- *12* C
+- *14* C
   ⚠️  circular variable reference
-- *13* ???*14*["value"]
+- *15* ???*16*["value"]
   ⚠️  unknown object
-- *14* arguments[1]
+- *16* arguments[1]
   ⚠️  function calls are not analysed yet
-- *15* arguments[2]
+- *17* arguments[2]
   ⚠️  function calls are not analysed yet
-- *16* ???*17*["stateNode"]
+- *18* ???*19*["stateNode"]
   ⚠️  unknown object
-- *17* ???*18*["alternate"]
+- *19* ???*20*["alternate"]
   ⚠️  unknown object
-- *18* arguments[0]
+- *20* arguments[0]
   ⚠️  function calls are not analysed yet
-- *19* unsupported expression
+- *21* unsupported expression
 
 3018 -> 3041 call = (...) => undefined(
     (???*0* | undefined | ???*1* | null),
     ???*4*,
-    (undefined | 1 | ???*5* | 0 | 64 | ???*6* | ???*7* | 4 | 16 | 536870912 | null | ???*8*)
+    (undefined | 1 | ???*5* | 0 | 64 | ???*6* | ???*7* | ???*8* | 4 | 16 | 536870912 | null | ???*9*)
 )
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -12395,13 +12592,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *4* arguments[1]
   ⚠️  function calls are not analysed yet
 - *5* unsupported expression
-- *6* arguments[0]
+- *6* unsupported assign operation
+- *7* arguments[0]
   ⚠️  function calls are not analysed yet
-- *7* C
+- *8* C
   ⚠️  circular variable reference
-- *8* ???*9*["value"]
+- *9* ???*10*["value"]
   ⚠️  unknown object
-- *9* arguments[1]
+- *10* arguments[1]
   ⚠️  function calls are not analysed yet
 
 0 -> 3049 conditional = (0 !== ???*0*)
@@ -12412,10 +12610,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
-- *2* ???*3*["lanes"]
-  ⚠️  unknown object
-- *3* arguments[1]
-  ⚠️  function calls are not analysed yet
+- *2* unsupported assign operation
 
 0 -> 3055 call = (...) => (undefined | P)()
 
@@ -13553,10 +13748,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 3222 call = (...) => (undefined | a)(
     ???*0*,
     ???*1*,
-    (???*2* | ???*3* | undefined | false),
-    (???*5* | undefined | ???*6*),
-    ???*10*,
-    ???*12*
+    (???*2* | ???*3* | undefined | (0 !== (0 | ???*5*))),
+    (???*6* | undefined | ???*7*),
+    ???*12*,
+    ???*14*
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -13568,21 +13763,23 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* c
   ⚠️  circular variable reference
-- *5* arguments[3]
+- *5* updated with update expression
+- *6* arguments[3]
   ⚠️  function calls are not analysed yet
-- *6* (???*7* | ???*8* | undefined | false)(d, e)
+- *7* (???*8* | ???*9* | undefined | (0 !== (0 | ???*11*)))(d, e)
   ⚠️  non-function callee
-- *7* arguments[2]
+- *8* arguments[2]
   ⚠️  function calls are not analysed yet
-- *8* ???*9*["render"]
+- *9* ???*10*["render"]
   ⚠️  unknown object
-- *9* c
+- *10* c
   ⚠️  circular variable reference
-- *10* ???*11*["ref"]
+- *11* updated with update expression
+- *12* ???*13*["ref"]
   ⚠️  unknown object
-- *11* arguments[1]
+- *13* arguments[1]
   ⚠️  function calls are not analysed yet
-- *12* arguments[4]
+- *14* arguments[4]
   ⚠️  function calls are not analysed yet
 
 0 -> 3223 call = (...) => (undefined | a)()
@@ -13603,14 +13800,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
-0 -> 3232 call = (...) => undefined(???*0*, ???*1*, (???*2* | undefined | ???*3*), ???*7*)
+0 -> 3232 call = (...) => undefined(???*0*, ???*1*, (???*2* | undefined | ???*3*), ???*8*)
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
 - *2* arguments[3]
   ⚠️  function calls are not analysed yet
-- *3* (???*4* | ???*5* | undefined | false)(d, e)
+- *3* (???*4* | ???*5* | undefined | (0 !== (0 | ???*7*)))(d, e)
   ⚠️  non-function callee
 - *4* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -13618,7 +13815,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *6* c
   ⚠️  circular variable reference
-- *7* arguments[4]
+- *7* updated with update expression
+- *8* arguments[4]
   ⚠️  function calls are not analysed yet
 
 0 -> 3234 conditional = (null === (
@@ -13900,58 +14098,46 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 3287 -> 3289 call = (...) => undefined(
     (undefined | {"current": 0}),
-    (???*0* | ???*1* | ???*2* | null["baseLanes"] | 0 | undefined["current"] | ???*4*)
+    (???*0* | 0 | undefined["current"] | ???*1* | ???*2* | ???*3*)
 )
-- *0* arguments[2]
+- *0* unsupported assign operation
+- *1* unknown mutation
+- *2* arguments[1]
   ⚠️  function calls are not analysed yet
-- *1* unsupported expression
-- *2* ???*3*["pendingProps"]
-  ⚠️  unknown object
-- *3* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *4* unknown mutation
+- *3* updated with update expression
 
 3287 -> 3290 conditional = (0 === ???*0*)
 - *0* unsupported expression
 
 3290 -> 3296 call = (...) => undefined(
     (undefined | {"current": 0}),
-    (???*0* | ???*1* | ???*2* | null["baseLanes"] | 0 | undefined["current"] | ???*4*)
+    (???*0* | 0 | undefined["current"] | ???*1* | ???*2* | ???*3*)
 )
-- *0* arguments[2]
+- *0* unsupported assign operation
+- *1* unknown mutation
+- *2* arguments[1]
   ⚠️  function calls are not analysed yet
-- *1* unsupported expression
-- *2* ???*3*["pendingProps"]
-  ⚠️  unknown object
-- *3* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *4* unknown mutation
+- *3* updated with update expression
 
 3287 -> 3299 call = (...) => undefined(
     (undefined | {"current": 0}),
-    (???*0* | ???*1* | ???*2* | null["baseLanes"] | 0 | undefined["current"] | ???*4*)
+    (???*0* | 0 | undefined["current"] | ???*1* | ???*2* | ???*3*)
 )
-- *0* arguments[2]
+- *0* unsupported assign operation
+- *1* unknown mutation
+- *2* arguments[1]
   ⚠️  function calls are not analysed yet
-- *1* unsupported expression
-- *2* ???*3*["pendingProps"]
-  ⚠️  unknown object
-- *3* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *4* unknown mutation
+- *3* updated with update expression
 
 3285 -> 3302 call = (...) => undefined(
     (undefined | {"current": 0}),
-    (???*0* | ???*1* | ???*2* | null["baseLanes"] | 0 | undefined["current"] | ???*4*)
+    (???*0* | 0 | undefined["current"] | ???*1* | ???*2* | ???*3*)
 )
-- *0* arguments[2]
+- *0* unsupported assign operation
+- *1* unknown mutation
+- *2* arguments[1]
   ⚠️  function calls are not analysed yet
-- *1* unsupported expression
-- *2* ???*3*["pendingProps"]
-  ⚠️  unknown object
-- *3* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *4* unknown mutation
+- *3* updated with update expression
 
 0 -> 3303 call = (...) => undefined((???*0* | ???*1*), ???*2*, (???*3* | null["baseLanes"]["children"]), ???*6*)
 - *0* arguments[0]
@@ -14019,9 +14205,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
     ???*0*,
     ???*1*,
     (???*2* | undefined | ???*3*),
-    (???*5* | undefined | false),
-    ({} | undefined["current"] | ???*6* | undefined | ???*7*),
-    ???*10*
+    (???*5* | undefined | (0 !== (0 | ???*6*))),
+    ({} | undefined["current"] | ???*7* | undefined | ???*8*),
+    ???*11*
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -14035,14 +14221,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *5* arguments[3]
   ⚠️  function calls are not analysed yet
-- *6* unknown mutation
-- *7* ???*8*["__reactInternalMemoizedMaskedChildContext"]
+- *6* updated with update expression
+- *7* unknown mutation
+- *8* ???*9*["__reactInternalMemoizedMaskedChildContext"]
   ⚠️  unknown object
-- *8* ???*9*["stateNode"]
+- *9* ???*10*["stateNode"]
   ⚠️  unknown object
-- *9* arguments[1]
+- *10* arguments[1]
   ⚠️  function calls are not analysed yet
-- *10* arguments[4]
+- *11* arguments[4]
   ⚠️  function calls are not analysed yet
 
 0 -> 3315 call = (...) => (undefined | a)()
@@ -14906,27 +15093,17 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | ???*1*
       | undefined["current"]["revealOrder"]["alternate"]
       | 0["revealOrder"]["alternate"]
-      | 1["revealOrder"]["alternate"]
       | null["alternate"]
       | undefined["current"]["revealOrder"]["alternate"]
       | null["sibling"]["alternate"]
       | undefined["current"]["revealOrder"]["sibling"]
       | 0["revealOrder"]["sibling"]
-      | 1["revealOrder"]["sibling"]
       | null["sibling"]
       | null["sibling"]["sibling"]
     ),
     ???*3*,
-    (???*4* | undefined["current"]["children"] | 0["children"] | 1["children"]),
-    (
-      | ???*7*
-      | ???*8*
-      | undefined["current"]["revealOrder"]
-      | 0["revealOrder"]
-      | 1["revealOrder"]
-      | null
-      | ???*10*
-    )
+    (???*4* | undefined["current"]["children"] | 0["children"]),
+    (???*7* | ???*8* | undefined["current"]["revealOrder"] | 0["revealOrder"] | null | ???*10*)
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -14960,13 +15137,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | ???*1*
       | undefined["current"]["revealOrder"]["alternate"]
       | 0["revealOrder"]["alternate"]
-      | 1["revealOrder"]["alternate"]
       | null["alternate"]
       | undefined["current"]["revealOrder"]["alternate"]
       | null["sibling"]["alternate"]
       | undefined["current"]["revealOrder"]["sibling"]
       | 0["revealOrder"]["sibling"]
-      | 1["revealOrder"]["sibling"]
       | null["sibling"]
       | null["sibling"]["sibling"]
     ))
@@ -14984,13 +15159,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | ???*0*
   | undefined["current"]["revealOrder"]["alternate"]["tag"]
   | 0["revealOrder"]["alternate"]["tag"]
-  | 1["revealOrder"]["alternate"]["tag"]
   | null["alternate"]["tag"]
   | undefined["current"]["revealOrder"]["alternate"]["tag"]
   | null["sibling"]["alternate"]["tag"]
   | undefined["current"]["revealOrder"]["sibling"]["tag"]
   | 0["revealOrder"]["sibling"]["tag"]
-  | 1["revealOrder"]["sibling"]["tag"]
   | null["sibling"]["tag"]
   | null["sibling"]["sibling"]["tag"]
 ))
@@ -15005,25 +15178,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | ???*1*
       | undefined["current"]["revealOrder"]["alternate"]
       | 0["revealOrder"]["alternate"]
-      | 1["revealOrder"]["alternate"]
       | null["alternate"]
       | undefined["current"]["revealOrder"]["alternate"]
       | null["sibling"]["alternate"]
       | undefined["current"]["revealOrder"]["sibling"]
       | 0["revealOrder"]["sibling"]
-      | 1["revealOrder"]["sibling"]
       | null["sibling"]
       | null["sibling"]["sibling"]
     ),
-    (
-      | ???*3*
-      | ???*4*
-      | undefined["current"]["revealOrder"]
-      | 0["revealOrder"]
-      | 1["revealOrder"]
-      | null
-      | ???*6*
-    ),
+    (???*3* | ???*4* | undefined["current"]["revealOrder"] | 0["revealOrder"] | null | ???*6*),
     ???*7*
 )
 - *0* arguments[0]
@@ -15047,13 +15210,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | ???*0*
   | undefined["current"]["revealOrder"]["alternate"]["tag"]
   | 0["revealOrder"]["alternate"]["tag"]
-  | 1["revealOrder"]["alternate"]["tag"]
   | null["alternate"]["tag"]
   | undefined["current"]["revealOrder"]["alternate"]["tag"]
   | null["sibling"]["alternate"]["tag"]
   | undefined["current"]["revealOrder"]["sibling"]["tag"]
   | 0["revealOrder"]["sibling"]["tag"]
-  | 1["revealOrder"]["sibling"]["tag"]
   | null["sibling"]["tag"]
   | null["sibling"]["sibling"]["tag"]
 ))
@@ -15068,25 +15229,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | ???*1*
       | undefined["current"]["revealOrder"]["alternate"]
       | 0["revealOrder"]["alternate"]
-      | 1["revealOrder"]["alternate"]
       | null["alternate"]
       | undefined["current"]["revealOrder"]["alternate"]
       | null["sibling"]["alternate"]
       | undefined["current"]["revealOrder"]["sibling"]
       | 0["revealOrder"]["sibling"]
-      | 1["revealOrder"]["sibling"]
       | null["sibling"]
       | null["sibling"]["sibling"]
     ),
-    (
-      | ???*3*
-      | ???*4*
-      | undefined["current"]["revealOrder"]
-      | 0["revealOrder"]
-      | 1["revealOrder"]
-      | null
-      | ???*6*
-    ),
+    (???*3* | ???*4* | undefined["current"]["revealOrder"] | 0["revealOrder"] | null | ???*6*),
     ???*7*
 )
 - *0* arguments[0]
@@ -15110,13 +15261,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | ???*0*
   | undefined["current"]["revealOrder"]["alternate"]["child"]
   | 0["revealOrder"]["alternate"]["child"]
-  | 1["revealOrder"]["alternate"]["child"]
   | null["alternate"]["child"]
   | undefined["current"]["revealOrder"]["alternate"]["child"]
   | null["sibling"]["alternate"]["child"]
   | undefined["current"]["revealOrder"]["sibling"]["child"]
   | 0["revealOrder"]["sibling"]["child"]
-  | 1["revealOrder"]["sibling"]["child"]
   | null["sibling"]["child"]
   | null["sibling"]["sibling"]["child"]
 ))
@@ -15127,7 +15276,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 3695 call = (...) => undefined(
     (undefined | {"current": 0}),
-    (???*0* | undefined["current"] | 0 | ???*2* | ???*3* | 1)
+    (???*0* | undefined["current"] | 0 | ???*2* | ???*3* | ???*4*)
 )
 - *0* ???*1*["pendingProps"]
   ⚠️  unknown object
@@ -15135,6 +15284,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *2* unknown mutation
 - *3* unsupported expression
+- *4* unsupported assign operation
 
 0 -> 3697 conditional = (0 === ???*0*)
 - *0* unsupported expression
@@ -15145,13 +15295,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | ???*1*
       | undefined["current"]["revealOrder"]["alternate"]
       | 0["revealOrder"]["alternate"]
-      | 1["revealOrder"]["alternate"]
       | null["alternate"]
       | undefined["current"]["revealOrder"]["alternate"]
       | null["sibling"]["alternate"]
       | undefined["current"]["revealOrder"]["sibling"]
       | 0["revealOrder"]["sibling"]
-      | 1["revealOrder"]["sibling"]
       | null["sibling"]
       | null["sibling"]["sibling"]
     )
@@ -15170,23 +15318,14 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | ???*1*
       | undefined["current"]["revealOrder"]
       | 0["revealOrder"]
-      | 1["revealOrder"]
       | null
       | ???*4*
       | ???*5*
       | null["sibling"]
       | null["alternate"]
     ),
-    (
-      | ???*6*
-      | ???*7*
-      | undefined["current"]["revealOrder"]
-      | 0["revealOrder"]
-      | 1["revealOrder"]
-      | null
-      | ???*9*
-    ),
-    (???*10* | undefined["current"]["tail"] | 0["tail"] | 1["tail"])
+    (???*6* | ???*7* | undefined["current"]["revealOrder"] | 0["revealOrder"] | null | ???*9*),
+    (???*10* | undefined["current"]["tail"] | 0["tail"])
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -15221,13 +15360,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | ???*1*
       | undefined["current"]["revealOrder"]["alternate"]
       | 0["revealOrder"]["alternate"]
-      | 1["revealOrder"]["alternate"]
       | null["alternate"]
       | undefined["current"]["revealOrder"]["alternate"]
       | null["sibling"]["alternate"]
       | undefined["current"]["revealOrder"]["sibling"]
       | 0["revealOrder"]["sibling"]
-      | 1["revealOrder"]["sibling"]
       | null["sibling"]
       | null["sibling"]["sibling"]
     )
@@ -15245,17 +15382,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 3697 -> 3716 call = (...) => undefined(
     ???*0*,
     true,
-    (
-      | ???*1*
-      | ???*2*
-      | undefined["current"]["revealOrder"]
-      | 0["revealOrder"]
-      | 1["revealOrder"]
-      | null
-      | ???*4*
-    ),
+    (???*1* | ???*2* | undefined["current"]["revealOrder"] | 0["revealOrder"] | null | ???*4*),
     null,
-    (???*5* | undefined["current"]["tail"] | 0["tail"] | 1["tail"])
+    (???*5* | undefined["current"]["tail"] | 0["tail"])
 )
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
@@ -18813,6 +18942,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | 0
   | ???*0*
   | ???*1*
+  | ???*3*
   | 1
   | 2
   | 4
@@ -18829,6 +18959,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+- *3* unsupported assign operation
 
 4993 -> 4994 call = module<scheduler, {}>["unstable_cancelCallback"](
     (
@@ -18927,6 +19058,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | 0
       | ???*0*
       | ???*1*
+      | ???*3*
       | 1
       | 2
       | 4
@@ -18944,6 +19076,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+- *3* unsupported assign operation
 
 5000 -> 5012 member call = (...) => (undefined | null | Hk["bind"](null, a))["bind"](null, ???*0*)
 - *0* arguments[0]
@@ -19350,7 +19483,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* unsupported expression
 - *3* arguments[1]
   ⚠️  function calls are not analysed yet
-- *4* unsupported expression
+- *4* unsupported assign operation
 
 0 -> 5133 conditional = (0 !== ???*0*)
 - *0* unsupported expression
@@ -19394,18 +19527,19 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | undefined
       | 0
       | ???*1*
+      | ???*3*
       | 1
       | 2
       | 4
       | 8
       | 16
       | 32
-      | ???*3*
+      | ???*4*
       | 134217728
       | 268435456
       | 536870912
       | 1073741824
-      | ???*4*
+      | ???*5*
     )
 )
 - *0* arguments[0]
@@ -19414,8 +19548,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* unsupported expression
-- *4* arguments[0]
+- *3* unsupported assign operation
+- *4* unsupported expression
+- *5* arguments[0]
   ⚠️  function calls are not analysed yet
 
 0 -> 5144 conditional = ???*0*
@@ -19445,18 +19580,19 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | undefined
       | 0
       | ???*1*
+      | ???*3*
       | 1
       | 2
       | 4
       | 8
       | 16
       | 32
-      | ???*3*
+      | ???*4*
       | 134217728
       | 268435456
       | 536870912
       | 1073741824
-      | ???*4*
+      | ???*5*
     )
 )
 - *0* arguments[0]
@@ -19465,8 +19601,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* unsupported expression
-- *4* arguments[0]
+- *3* unsupported assign operation
+- *4* unsupported expression
+- *5* arguments[0]
   ⚠️  function calls are not analysed yet
 
 5147 -> 5150 call = module<scheduler, {}>["unstable_now"]()
@@ -19816,7 +19953,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 )(
     ???*1*,
     ???*3*,
-    (???*4* | ???*5* | ???*6* | null["baseLanes"] | 0 | undefined["current"] | ???*8*)
+    (???*4* | 0 | undefined["current"] | ???*5* | ???*6* | ???*7*)
 )
 - *0* Wk
   ⚠️  pattern without value
@@ -19826,14 +19963,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *4* arguments[2]
+- *4* unsupported assign operation
+- *5* unknown mutation
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
-- *5* unsupported expression
-- *6* ???*7*["pendingProps"]
-  ⚠️  unknown object
-- *7* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *8* unknown mutation
+- *7* updated with update expression
 
 0 -> 5314 call = (...) => (undefined | FreeVar(undefined))(???*0*)
 - *0* arguments[0]
@@ -19845,7 +19979,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 5319 -> 5320 call = (...) => (undefined | null | b | b["child"])(
     ???*0*,
     (???*1* | ???*2*),
-    (???*4* | ???*5* | ???*6* | null["baseLanes"] | 0 | undefined["current"] | ???*8*)
+    (???*4* | 0 | undefined["current"] | ???*5* | ???*6* | ???*7*)
 )
 - *0* max number of linking steps reached
 - *1* arguments[0]
@@ -19854,14 +19988,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *3* b
   ⚠️  circular variable reference
-- *4* arguments[2]
+- *4* unsupported assign operation
+- *5* unknown mutation
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
-- *5* unsupported expression
-- *6* ???*7*["pendingProps"]
-  ⚠️  unknown object
-- *7* arguments[1]
-  ⚠️  function calls are not analysed yet
-- *8* unknown mutation
+- *7* updated with update expression
 
 5319 -> 5321 call = (...) => (undefined | b | null)(???*0*, (???*1* | ???*2*))
 - *0* max number of linking steps reached
@@ -19927,16 +20058,17 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${327}`
   ⚠️  nested operation
 
-0 -> 5343 conditional = ((???*0* | ???*1* | null["finishedWork"] | 0) === (???*3* | null["current"]))
+0 -> 5343 conditional = ((???*0* | ???*1* | null["finishedWork"] | 0 | ???*3*) === (???*4* | null["current"]))
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* ???*2*["finishedWork"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* ???*4*["current"]
+- *3* updated with update expression
+- *4* ???*5*["current"]
   ⚠️  unknown object
-- *4* arguments[0]
+- *5* arguments[0]
   ⚠️  function calls are not analysed yet
 
 5343 -> 5344 free var = FreeVar(Error)
@@ -19998,7 +20130,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 
-5358 -> 5362 call = (...) => (undefined | n)((???*0* | ???*1* | null), (???*3* | ???*4* | null["finishedWork"] | 0))
+5358 -> 5362 call = (...) => (undefined | n)(
+    (???*0* | ???*1* | null),
+    (???*3* | ???*4* | null["finishedWork"] | 0 | ???*6*)
+)
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* ???*2*["value"]
@@ -20011,28 +20146,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *5* arguments[0]
   ⚠️  function calls are not analysed yet
+- *6* updated with update expression
 
-5358 -> 5363 call = (...) => undefined((???*0* | ???*1* | null["finishedWork"] | 0), (???*3* | ???*4* | null))
-- *0* arguments[2]
-  ⚠️  function calls are not analysed yet
-- *1* ???*2*["finishedWork"]
-  ⚠️  unknown object
-- *2* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *3* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *4* ???*5*["value"]
-  ⚠️  unknown object
-- *5* arguments[1]
-  ⚠️  function calls are not analysed yet
-
-5358 -> 5364 call = (...) => undefined(???*0*)
-- *0* max number of linking steps reached
-
-5358 -> 5366 call = (...) => undefined(
-    (???*0* | ???*1* | null["finishedWork"] | 0),
-    (???*3* | ???*4* | null),
-    (???*6* | null["finishedLanes"])
+5358 -> 5363 call = (...) => undefined(
+    (???*0* | ???*1* | null["finishedWork"] | 0 | ???*3*),
+    (???*4* | ???*5* | null)
 )
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -20040,15 +20158,38 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* arguments[0]
+- *3* updated with update expression
+- *4* arguments[0]
   ⚠️  function calls are not analysed yet
-- *4* ???*5*["value"]
+- *5* ???*6*["value"]
   ⚠️  unknown object
-- *5* arguments[1]
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
-- *6* ???*7*["finishedLanes"]
+
+5358 -> 5364 call = (...) => undefined(???*0*)
+- *0* max number of linking steps reached
+
+5358 -> 5366 call = (...) => undefined(
+    (???*0* | ???*1* | null["finishedWork"] | 0 | ???*3*),
+    (???*4* | ???*5* | null),
+    (???*7* | null["finishedLanes"])
+)
+- *0* arguments[2]
+  ⚠️  function calls are not analysed yet
+- *1* ???*2*["finishedWork"]
   ⚠️  unknown object
-- *7* arguments[0]
+- *2* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *3* updated with update expression
+- *4* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *5* ???*6*["value"]
+  ⚠️  unknown object
+- *6* arguments[1]
+  ⚠️  function calls are not analysed yet
+- *7* ???*8*["finishedLanes"]
+  ⚠️  unknown object
+- *8* arguments[0]
   ⚠️  function calls are not analysed yet
 
 5358 -> 5367 call = module<scheduler, {}>["unstable_requestPaint"]()
@@ -20356,7 +20497,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 5494 call = (...) => (undefined | B() | Bk | ???*0*)()
 - *0* unsupported expression
 
-0 -> 5495 call = (...) => (undefined | c["stateNode"] | null)((???*0* | undefined | ???*1* | null), (???*4* | 1 | 4194304))
+0 -> 5495 call = (...) => (undefined | c["stateNode"] | null)((???*0* | undefined | ???*1* | null), (???*4* | 1 | 4194304 | ???*5*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* ???*2*["stateNode"]
@@ -20367,11 +20508,12 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *4* arguments[1]
   ⚠️  function calls are not analysed yet
+- *5* unsupported assign operation
 
 0 -> 5496 call = (...) => undefined(
     (???*0* | undefined | ???*1* | null),
-    (???*4* | 1 | 4194304),
-    (undefined | module<scheduler, {}>["unstable_now"]() | ???*5*)
+    (???*4* | 1 | 4194304 | ???*5*),
+    (undefined | module<scheduler, {}>["unstable_now"]() | ???*6*)
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -20383,7 +20525,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *4* arguments[1]
   ⚠️  function calls are not analysed yet
-- *5* unsupported expression
+- *5* unsupported assign operation
+- *6* unsupported expression
 
 0 -> 5497 call = (...) => undefined(
     (???*0* | undefined | ???*1* | null),
@@ -21512,18 +21655,19 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 5851 -> 5853 conditional = ("string" === ???*0*)
 - *0* unsupported expression
 
-5853 -> 5855 call = (...) => (undefined | a)(???*0*, (???*2* | 8), ???*3*, (???*4* | undefined | ???*5*))
+5853 -> 5855 call = (...) => (undefined | a)(???*0*, (???*2* | ???*3*), ???*4*, (???*5* | undefined | ???*6*))
 - *0* ???*1*["children"]
   ⚠️  unknown object
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
 - *2* arguments[4]
   ⚠️  function calls are not analysed yet
-- *3* arguments[5]
+- *3* unsupported assign operation
+- *4* arguments[5]
   ⚠️  function calls are not analysed yet
-- *4* arguments[1]
+- *5* arguments[1]
   ⚠️  function calls are not analysed yet
-- *5* unknown new expression
+- *6* unknown new expression
 
 5853 -> 5856 call = (...) => (undefined | ???*0*)(12, ???*1*, (???*2* | undefined | ???*3*), ???*4*)
 - *0* unknown new expression
@@ -21534,7 +21678,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* unknown new expression
 - *4* unsupported expression
 
-5853 -> 5859 call = (...) => (undefined | ???*0*)(13, ???*1*, (???*2* | undefined | ???*3*), (???*4* | 8))
+5853 -> 5859 call = (...) => (undefined | ???*0*)(13, ???*1*, (???*2* | undefined | ???*3*), (???*4* | ???*5*))
 - *0* unknown new expression
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -21543,8 +21687,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* unknown new expression
 - *4* arguments[4]
   ⚠️  function calls are not analysed yet
+- *5* unsupported assign operation
 
-5853 -> 5862 call = (...) => (undefined | ???*0*)(19, ???*1*, (???*2* | undefined | ???*3*), (???*4* | 8))
+5853 -> 5862 call = (...) => (undefined | ???*0*)(19, ???*1*, (???*2* | undefined | ???*3*), (???*4* | ???*5*))
 - *0* unknown new expression
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -21553,17 +21698,19 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* unknown new expression
 - *4* arguments[4]
   ⚠️  function calls are not analysed yet
+- *5* unsupported assign operation
 
-5853 -> 5865 call = (...) => (undefined | a)(???*0*, (???*1* | 8), ???*2*, (???*3* | undefined | ???*4*))
+5853 -> 5865 call = (...) => (undefined | a)(???*0*, (???*1* | ???*2*), ???*3*, (???*4* | undefined | ???*5*))
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
 - *1* arguments[4]
   ⚠️  function calls are not analysed yet
-- *2* arguments[5]
+- *2* unsupported assign operation
+- *3* arguments[5]
   ⚠️  function calls are not analysed yet
-- *3* arguments[1]
+- *4* arguments[1]
   ⚠️  function calls are not analysed yet
-- *4* unknown new expression
+- *5* unknown new expression
 
 5853 -> 5866 conditional = (("object" === ???*0*) | (null !== (???*1* | undefined | ???*2*)))
 - *0* unsupported expression
@@ -21593,7 +21740,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *1* `https://reactjs.org/docs/error-decoder.html?invariant=${130}`
   ⚠️  nested operation
 
-0 -> 5871 call = (...) => (undefined | ???*0*)((2 | 1 | 5 | 8 | 10 | 9 | 11 | 14 | 16), ???*1*, (???*2* | undefined | ???*3*), (???*4* | 8))
+0 -> 5871 call = (...) => (undefined | ???*0*)((2 | 1 | 5 | 8 | 10 | 9 | 11 | 14 | 16), ???*1*, (???*2* | undefined | ???*3*), (???*4* | ???*5*))
 - *0* unknown new expression
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -21602,6 +21749,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* unknown new expression
 - *4* arguments[4]
   ⚠️  function calls are not analysed yet
+- *5* unsupported assign operation
 
 0 -> 5875 call = (...) => (undefined | ???*0*)(7, (???*1* | undefined | ???*2*), ???*3*, ???*4*)
 - *0* unknown new expression
@@ -21652,10 +21800,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 0 -> 5914 call = (...) => (undefined | b)(0)
 
-0 -> 5918 call = (...) => (undefined | ???*0*)(3, null, null, (???*1* | 1 | 8 | 0))
+0 -> 5918 call = (...) => (undefined | ???*0*)(3, null, null, (???*1* | 1 | ???*2* | 0))
 - *0* unknown new expression
 - *1* arguments[1]
   ⚠️  function calls are not analysed yet
+- *2* unsupported assign operation
 
 0 -> 5922 call = (...) => undefined((???*0* | undefined | ???*1*))
 - *0* arguments[5]
@@ -21808,28 +21957,30 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | 0
       | 64
       | ???*11*
+      | ???*12*
       | undefined["current"]
-      | ???*13*
+      | ???*14*
       | 4
       | 16
       | 536870912
       | null
     ),
     (
-      | ???*14*
+      | ???*15*
       | undefined
       | {
-            "eventTime": (???*15* | undefined | module<scheduler, {}>["unstable_now"]() | ???*16*),
+            "eventTime": (???*16* | undefined | module<scheduler, {}>["unstable_now"]() | ???*17*),
             "lane": (
-              | ???*17*
+              | ???*18*
               | undefined
               | 1
-              | ???*18*
+              | ???*19*
               | 0
               | 64
-              | ???*19*
-              | undefined["current"]
+              | ???*20*
               | ???*21*
+              | undefined["current"]
+              | ???*23*
               | 4
               | 16
               | 536870912
@@ -21841,9 +21992,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
             "next": null
         }
     ),
-    ???*22*,
-    ???*23*,
-    ???*24*
+    ???*24*,
+    ???*25*,
+    ???*26*
 )
 - *0* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -21864,31 +22015,33 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *9* arguments[4]
   ⚠️  function calls are not analysed yet
 - *10* unsupported expression
-- *11* ???*12*["current"]
+- *11* unsupported assign operation
+- *12* ???*13*["current"]
   ⚠️  unknown object
-- *12* arguments[0]
+- *13* arguments[0]
   ⚠️  function calls are not analysed yet
-- *13* C
+- *14* C
   ⚠️  circular variable reference
-- *14* arguments[5]
+- *15* arguments[5]
   ⚠️  function calls are not analysed yet
-- *15* arguments[3]
+- *16* arguments[3]
   ⚠️  function calls are not analysed yet
-- *16* unsupported expression
-- *17* arguments[4]
+- *17* unsupported expression
+- *18* arguments[4]
   ⚠️  function calls are not analysed yet
-- *18* unsupported expression
-- *19* ???*20*["current"]
+- *19* unsupported expression
+- *20* unsupported assign operation
+- *21* ???*22*["current"]
   ⚠️  unknown object
-- *20* arguments[0]
+- *22* arguments[0]
   ⚠️  function calls are not analysed yet
-- *21* C
+- *23* C
   ⚠️  circular variable reference
-- *22* arguments[6]
+- *24* arguments[6]
   ⚠️  function calls are not analysed yet
-- *23* arguments[7]
+- *25* arguments[7]
   ⚠️  function calls are not analysed yet
-- *24* arguments[8]
+- *26* arguments[8]
   ⚠️  function calls are not analysed yet
 
 0 -> 5956 call = (...) => (undefined | Vf | bg(a, c, b) | b)(null)
@@ -21918,8 +22071,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | 0
       | 64
       | ???*4*
+      | ???*5*
       | undefined["current"]
-      | ???*6*
+      | ???*7*
       | 4
       | 16
       | 536870912
@@ -21932,11 +22086,12 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *2* arguments[4]
   ⚠️  function calls are not analysed yet
 - *3* unsupported expression
-- *4* ???*5*["current"]
+- *4* unsupported assign operation
+- *5* ???*6*["current"]
   ⚠️  unknown object
-- *5* arguments[0]
+- *6* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* C
+- *7* C
   ⚠️  circular variable reference
 
 0 -> 5962 call = (...) => (undefined | null | Zg(a, c))(
@@ -21954,8 +22109,9 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
               | 0
               | 64
               | ???*8*
+              | ???*9*
               | undefined["current"]
-              | ???*10*
+              | ???*11*
               | 4
               | 16
               | 536870912
@@ -21968,15 +22124,16 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
         }
     ),
     (
-      | ???*11*
+      | ???*12*
       | undefined
       | 1
-      | ???*12*
+      | ???*13*
       | 0
       | 64
-      | ???*13*
-      | undefined["current"]
+      | ???*14*
       | ???*15*
+      | undefined["current"]
+      | ???*17*
       | 4
       | 16
       | 536870912
@@ -21997,20 +22154,22 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *6* arguments[4]
   ⚠️  function calls are not analysed yet
 - *7* unsupported expression
-- *8* ???*9*["current"]
+- *8* unsupported assign operation
+- *9* ???*10*["current"]
   ⚠️  unknown object
-- *9* arguments[0]
+- *10* arguments[0]
   ⚠️  function calls are not analysed yet
-- *10* C
+- *11* C
   ⚠️  circular variable reference
-- *11* arguments[4]
+- *12* arguments[4]
   ⚠️  function calls are not analysed yet
-- *12* unsupported expression
-- *13* ???*14*["current"]
+- *13* unsupported expression
+- *14* unsupported assign operation
+- *15* ???*16*["current"]
   ⚠️  unknown object
-- *14* arguments[0]
+- *16* arguments[0]
   ⚠️  function calls are not analysed yet
-- *15* C
+- *17* C
   ⚠️  circular variable reference
 
 0 -> 5965 call = (...) => undefined(
@@ -22023,14 +22182,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | 0
       | 64
       | ???*6*
+      | ???*7*
       | undefined["current"]
-      | ???*8*
+      | ???*9*
       | 4
       | 16
       | 536870912
       | null
     ),
-    (???*9* | undefined | module<scheduler, {}>["unstable_now"]() | ???*10*)
+    (???*10* | undefined | module<scheduler, {}>["unstable_now"]() | ???*11*)
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
@@ -22042,15 +22202,16 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *4* arguments[4]
   ⚠️  function calls are not analysed yet
 - *5* unsupported expression
-- *6* ???*7*["current"]
+- *6* unsupported assign operation
+- *7* ???*8*["current"]
   ⚠️  unknown object
-- *7* arguments[0]
+- *8* arguments[0]
   ⚠️  function calls are not analysed yet
-- *8* C
+- *9* C
   ⚠️  circular variable reference
-- *9* arguments[3]
+- *10* arguments[3]
   ⚠️  function calls are not analysed yet
-- *10* unsupported expression
+- *11* unsupported expression
 
 0 -> 5966 call = (...) => undefined(
     (???*0* | undefined | ???*1* | ???*3*),
@@ -22110,29 +22271,31 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | 0
       | 64
       | ???*2*
+      | ???*3*
       | undefined["current"]
-      | ???*4*
       | ???*5*
       | ???*6*
+      | ???*7*
       | 4
       | 16
       | 536870912
       | null
-      | ???*7*
+      | ???*8*
     )
 )
 - *0* unsupported expression
 - *1* unsupported expression
-- *2* ???*3*["current"]
+- *2* unsupported assign operation
+- *3* ???*4*["current"]
   ⚠️  unknown object
-- *3* arguments[1]
+- *4* arguments[1]
   ⚠️  function calls are not analysed yet
-- *4* FreeVar(undefined)
+- *5* FreeVar(undefined)
   ⚠️  unknown global
-- *5* unknown mutation
-- *6* C
+- *6* unknown mutation
+- *7* C
   ⚠️  circular variable reference
-- *7* arguments[0]
+- *8* arguments[0]
   ⚠️  function calls are not analysed yet
 
 0 -> 5977 call = (...) => (undefined | null | Zg(a, c))(
@@ -22142,7 +22305,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | undefined
       | {
             "eventTime": (undefined | module<scheduler, {}>["unstable_now"]() | ???*5*),
-            "lane": (undefined | 1 | ???*6* | 0 | 64 | ???*7* | ???*9* | 4 | 16 | 536870912 | null | ???*10*),
+            "lane": (undefined | 1 | ???*6* | 0 | 64 | ???*7* | ???*8* | ???*10* | 4 | 16 | 536870912 | null | ???*11*),
             "tag": 0,
             "payload": null,
             "callback": null,
@@ -22152,19 +22315,20 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
     (
       | undefined
       | 1
-      | ???*11*
+      | ???*12*
       | 0
       | 64
-      | ???*12*
-      | undefined["current"]
+      | ???*13*
       | ???*14*
-      | ???*15*
+      | undefined["current"]
       | ???*16*
+      | ???*17*
+      | ???*18*
       | 4
       | 16
       | 536870912
       | null
-      | ???*17*
+      | ???*19*
     )
 )
 - *0* ???*1*["current"]
@@ -22178,25 +22342,27 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  function calls are not analysed yet
 - *5* unsupported expression
 - *6* unsupported expression
-- *7* ???*8*["current"]
+- *7* unsupported assign operation
+- *8* ???*9*["current"]
   ⚠️  unknown object
-- *8* b
+- *9* b
   ⚠️  circular variable reference
-- *9* C
+- *10* C
   ⚠️  circular variable reference
-- *10* arguments[0]
+- *11* arguments[0]
   ⚠️  function calls are not analysed yet
-- *11* unsupported expression
-- *12* ???*13*["current"]
+- *12* unsupported expression
+- *13* unsupported assign operation
+- *14* ???*15*["current"]
   ⚠️  unknown object
-- *13* arguments[1]
+- *15* arguments[1]
   ⚠️  function calls are not analysed yet
-- *14* FreeVar(undefined)
+- *16* FreeVar(undefined)
   ⚠️  unknown global
-- *15* unknown mutation
-- *16* C
+- *17* unknown mutation
+- *18* C
   ⚠️  circular variable reference
-- *17* arguments[0]
+- *19* arguments[0]
   ⚠️  function calls are not analysed yet
 
 0 -> 5978 call = (...) => undefined(
@@ -22209,17 +22375,18 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | 0
       | 64
       | ???*6*
+      | ???*7*
       | undefined["current"]
-      | ???*8*
       | ???*9*
       | ???*10*
+      | ???*11*
       | 4
       | 16
       | 536870912
       | null
-      | ???*11*
+      | ???*12*
     ),
-    (undefined | module<scheduler, {}>["unstable_now"]() | ???*12*)
+    (undefined | module<scheduler, {}>["unstable_now"]() | ???*13*)
 )
 - *0* max number of linking steps reached
 - *1* ???*2*["current"]
@@ -22230,18 +22397,19 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown global
 - *4* unknown mutation
 - *5* unsupported expression
-- *6* ???*7*["current"]
+- *6* unsupported assign operation
+- *7* ???*8*["current"]
   ⚠️  unknown object
-- *7* arguments[1]
+- *8* arguments[1]
   ⚠️  function calls are not analysed yet
-- *8* FreeVar(undefined)
+- *9* FreeVar(undefined)
   ⚠️  unknown global
-- *9* unknown mutation
-- *10* C
+- *10* unknown mutation
+- *11* C
   ⚠️  circular variable reference
-- *11* arguments[0]
+- *12* arguments[0]
   ⚠️  function calls are not analysed yet
-- *12* unsupported expression
+- *13* unsupported expression
 
 0 -> 5979 call = (...) => undefined(
     ???*0*,
@@ -22253,15 +22421,16 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
       | 0
       | 64
       | ???*6*
+      | ???*7*
       | undefined["current"]
-      | ???*8*
       | ???*9*
       | ???*10*
+      | ???*11*
       | 4
       | 16
       | 536870912
       | null
-      | ???*11*
+      | ???*12*
     )
 )
 - *0* max number of linking steps reached
@@ -22273,16 +22442,17 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown global
 - *4* unknown mutation
 - *5* unsupported expression
-- *6* ???*7*["current"]
+- *6* unsupported assign operation
+- *7* ???*8*["current"]
   ⚠️  unknown object
-- *7* arguments[1]
+- *8* arguments[1]
   ⚠️  function calls are not analysed yet
-- *8* FreeVar(undefined)
+- *9* FreeVar(undefined)
   ⚠️  unknown global
-- *9* unknown mutation
-- *10* C
+- *10* unknown mutation
+- *11* C
   ⚠️  circular variable reference
-- *11* arguments[0]
+- *12* arguments[0]
   ⚠️  function calls are not analysed yet
 
 0 -> 5990 conditional = ((null !== (???*0* | ???*1*)) | (null !== ???*3*))
@@ -22399,30 +22569,31 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  pattern without value
 
 6026 -> 6032 member call = []["splice"](
-    0,
+    (0 | ???*0*),
     0,
     (
-      | ???*0*
+      | ???*1*
       | {
             "blockedOn": null,
-            "target": ???*1*,
-            "priority": (???*2*() | undefined | 0 | 1 | ???*3* | 4 | 16 | 536870912 | null | ???*4* | ???*5*)
+            "target": ???*2*,
+            "priority": (???*3*() | undefined | 0 | 1 | ???*4* | 4 | 16 | 536870912 | null | ???*5* | ???*6*)
         }
     )
 )
-- *0* arguments[0]
+- *0* updated with update expression
+- *1* arguments[0]
   ⚠️  function calls are not analysed yet
-- *1* a
+- *2* a
   ⚠️  circular variable reference
-- *2* Hc
+- *3* Hc
   ⚠️  pattern without value
-- *3* C
+- *4* C
   ⚠️  circular variable reference
-- *4* arguments[0]
+- *5* arguments[0]
   ⚠️  function calls are not analysed yet
-- *5* ???*6*["value"]
+- *6* ???*7*["value"]
   ⚠️  unknown object
-- *6* arguments[1]
+- *7* arguments[1]
   ⚠️  function calls are not analysed yet
 
 6026 -> 6033 call = (...) => (undefined | FreeVar(undefined))(
@@ -22754,18 +22925,19 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 
 6107 -> 6109 call = (...) => (undefined | c["stateNode"] | null)(
     ???*0*,
-    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | 4 | 16 | 536870912 | null | ???*4*)
+    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | 4 | 16 | 536870912 | null | ???*5*)
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
-- *2* arguments[0]
+- *2* unsupported assign operation
+- *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* C
+- *4* C
   ⚠️  circular variable reference
-- *4* ???*5*["value"]
+- *5* ???*6*["value"]
   ⚠️  unknown object
-- *5* arguments[1]
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
 
 6107 -> 6110 conditional = (null !== (undefined | ???*0* | null))
@@ -22782,8 +22954,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 6110 -> 6112 call = (...) => undefined(
     (undefined | ???*0* | null),
     ???*3*,
-    (undefined | 1 | ???*4* | 0 | 64 | ???*5* | ???*6* | 4 | 16 | 536870912 | null | ???*7*),
-    (undefined | module<scheduler, {}>["unstable_now"]() | ???*9*)
+    (undefined | 1 | ???*4* | 0 | 64 | ???*5* | ???*6* | ???*7* | 4 | 16 | 536870912 | null | ???*8*),
+    (undefined | module<scheduler, {}>["unstable_now"]() | ???*10*)
 )
 - *0* ???*1*["stateNode"]
   ⚠️  unknown object
@@ -22794,30 +22966,32 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
 - *4* unsupported expression
-- *5* arguments[0]
+- *5* unsupported assign operation
+- *6* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* C
+- *7* C
   ⚠️  circular variable reference
-- *7* ???*8*["value"]
+- *8* ???*9*["value"]
   ⚠️  unknown object
-- *8* arguments[1]
+- *9* arguments[1]
   ⚠️  function calls are not analysed yet
-- *9* unsupported expression
+- *10* unsupported expression
 
 6107 -> 6113 call = (...) => undefined(
     ???*0*,
-    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | 4 | 16 | 536870912 | null | ???*4*)
+    (undefined | 1 | ???*1* | 0 | 64 | ???*2* | ???*3* | ???*4* | 4 | 16 | 536870912 | null | ???*5*)
 )
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* unsupported expression
-- *2* arguments[0]
+- *2* unsupported assign operation
+- *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *3* C
+- *4* C
   ⚠️  circular variable reference
-- *4* ???*5*["value"]
+- *5* ???*6*["value"]
   ⚠️  unknown object
-- *5* arguments[1]
+- *6* arguments[1]
   ⚠️  function calls are not analysed yet
 
 0 -> 6114 call = ???*0*()
@@ -22840,7 +23014,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *5* c
   ⚠️  circular variable reference
 
-0 -> 6118 conditional = (("radio" === ???*0*) | (null != (???*2* | ???*3* | 0)))
+0 -> 6118 conditional = (("radio" === ???*0*) | (null != (???*2* | ???*3* | 0 | ???*5*)))
 - *0* ???*1*["type"]
   ⚠️  unknown object
 - *1* arguments[2]
@@ -22851,10 +23025,11 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* arguments[2]
   ⚠️  function calls are not analysed yet
+- *5* updated with update expression
 
 6118 -> 6123 free var = FreeVar(JSON)
 
-6118 -> 6124 member call = ???*0*["stringify"]((???*1* | ???*2* | 0))
+6118 -> 6124 member call = ???*0*["stringify"]((???*1* | ???*2* | 0 | ???*4*))
 - *0* FreeVar(JSON)
   ⚠️  unknown global
 - *1* arguments[1]
@@ -22863,6 +23038,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *3* arguments[2]
   ⚠️  function calls are not analysed yet
+- *4* updated with update expression
 
 6118 -> 6125 member call = (???*0* | ???*1* | ???*3*)["querySelectorAll"](`input[name=${???*5*}][type="radio"]`)
 - *0* arguments[2]
@@ -22882,8 +23058,8 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *6* FreeVar(JSON)
   ⚠️  unknown global
 
-6118 -> 6130 conditional = ((???*0* !== ???*5*) | (???*6* === ???*12*))
-- *0* ???*1*[(???*2* | ???*3* | 0)]
+6118 -> 6130 conditional = ((???*0* !== ???*6*) | (???*7* === ???*14*))
+- *0* ???*1*[(???*2* | ???*3* | 0 | ???*5*)]
   ⚠️  unknown object
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -22893,27 +23069,29 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* arguments[2]
   ⚠️  function calls are not analysed yet
-- *5* arguments[0]
+- *5* updated with update expression
+- *6* arguments[0]
   ⚠️  function calls are not analysed yet
-- *6* ???*7*["form"]
+- *7* ???*8*["form"]
   ⚠️  unknown object
-- *7* ???*8*[(???*9* | ???*10* | 0)]
+- *8* ???*9*[(???*10* | ???*11* | 0 | ???*13*)]
   ⚠️  unknown object
-- *8* arguments[2]
+- *9* arguments[2]
   ⚠️  function calls are not analysed yet
-- *9* arguments[1]
+- *10* arguments[1]
   ⚠️  function calls are not analysed yet
-- *10* ???*11*["name"]
+- *11* ???*12*["name"]
   ⚠️  unknown object
-- *11* arguments[2]
+- *12* arguments[2]
   ⚠️  function calls are not analysed yet
-- *12* ???*13*["form"]
+- *13* updated with update expression
+- *14* ???*15*["form"]
   ⚠️  unknown object
-- *13* arguments[0]
+- *15* arguments[0]
   ⚠️  function calls are not analysed yet
 
 6130 -> 6131 call = (...) => (undefined | (a[Pf] || null))(???*0*)
-- *0* ???*1*[(???*2* | ???*3* | 0)]
+- *0* ???*1*[(???*2* | ???*3* | 0 | ???*5*)]
   ⚠️  unknown object
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -22923,11 +23101,12 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* arguments[2]
   ⚠️  function calls are not analysed yet
+- *5* updated with update expression
 
 6130 -> 6132 conditional = !((undefined | ???*0* | null))
 - *0* ???*1*[Pf]
   ⚠️  unknown object
-- *1* ???*2*[(???*3* | ???*4* | 0)]
+- *1* ???*2*[(???*3* | ???*4* | 0 | ???*6*)]
   ⚠️  unknown object
 - *2* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -22937,6 +23116,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *5* arguments[2]
   ⚠️  function calls are not analysed yet
+- *6* updated with update expression
 
 6132 -> 6133 free var = FreeVar(Error)
 
@@ -22957,7 +23137,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  nested operation
 
 6130 -> 6136 call = (...) => (undefined | !(1) | !(0))(???*0*)
-- *0* ???*1*[(???*2* | ???*3* | 0)]
+- *0* ???*1*[(???*2* | ???*3* | 0 | ???*5*)]
   ⚠️  unknown object
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -22967,9 +23147,10 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* arguments[2]
   ⚠️  function calls are not analysed yet
+- *5* updated with update expression
 
-6130 -> 6137 call = (...) => (undefined | FreeVar(undefined))(???*0*, (undefined | ???*5* | null))
-- *0* ???*1*[(???*2* | ???*3* | 0)]
+6130 -> 6137 call = (...) => (undefined | FreeVar(undefined))(???*0*, (undefined | ???*6* | null))
+- *0* ???*1*[(???*2* | ???*3* | 0 | ???*5*)]
   ⚠️  unknown object
 - *1* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -22979,18 +23160,20 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *4* arguments[2]
   ⚠️  function calls are not analysed yet
-- *5* ???*6*[Pf]
+- *5* updated with update expression
+- *6* ???*7*[Pf]
   ⚠️  unknown object
-- *6* ???*7*[(???*8* | ???*9* | 0)]
+- *7* ???*8*[(???*9* | ???*10* | 0 | ???*12*)]
   ⚠️  unknown object
-- *7* arguments[2]
+- *8* arguments[2]
   ⚠️  function calls are not analysed yet
-- *8* arguments[1]
+- *9* arguments[1]
   ⚠️  function calls are not analysed yet
-- *9* ???*10*["name"]
+- *10* ???*11*["name"]
   ⚠️  unknown object
-- *10* arguments[2]
+- *11* arguments[2]
   ⚠️  function calls are not analysed yet
+- *12* updated with update expression
 
 0 -> 6138 call = (...) => undefined(???*0*, (???*1* | ???*2* | ???*4*))
 - *0* arguments[0]
@@ -23008,7 +23191,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 - *5* c
   ⚠️  circular variable reference
 
-0 -> 6141 call = (...) => (undefined | FreeVar(undefined))(???*0*, !(???*1*), (???*4* | ???*5* | 0), false)
+0 -> 6141 call = (...) => (undefined | FreeVar(undefined))(???*0*, !(???*1*), (???*4* | ???*5* | 0 | ???*7*), false)
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
 - *1* !(???*2*)
@@ -23023,6 +23206,7 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  unknown object
 - *6* arguments[2]
   ⚠️  function calls are not analysed yet
+- *7* updated with update expression
 
 0 -> 6147 call = (...) => (undefined | $b(a) | null)(
     (???*0* | undefined | ???*1* | null | ???*2* | ???*4*)
@@ -23411,17 +23595,19 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
      || !(a)
      || ((1 !== a["nodeType"]) && (9 !== a["nodeType"]) && (11 !== a["nodeType"]))
     ))
-)((???*0* | 0))
+)((???*0* | 0 | ???*1*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
+- *1* updated with update expression
 
 0 -> 6226 conditional = !((undefined | ???*0*))
 - *0* !(???*1*)
   ⚠️  nested operation
-- *1* !((???*2* | 0))
+- *1* !((???*2* | 0 | ???*3*))
   ⚠️  nested operation
 - *2* arguments[0]
   ⚠️  function calls are not analysed yet
+- *3* updated with update expression
 
 6226 -> 6227 free var = FreeVar(Error)
 
@@ -23444,78 +23630,72 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
 0 -> 6236 call = (...) => (undefined | a)(
     ???*0*,
     null,
-    (???*1* | 0),
+    (???*1* | 0 | ???*2*),
     1,
-    (???*2* | (null != ???*3*)[(???*4* | 0)] | ???*5* | null[(???*9* | 0)] | null),
+    (???*3* | (null != ???*4*)[(???*5* | 0 | ???*6*)] | ???*7* | null[(???*12* | 0 | ???*13*)] | null),
     (
       | false
       | true
-      | ???*10*
-      | (null != ???*12*)[(???*13* | 0)]["_getVersion"]
-      | null[(???*14* | 0)]["_getVersion"]
-      | ???*15*
+      | ???*14*
+      | (null != ???*16*)[(???*17* | 0 | ???*18*)]["_getVersion"]
+      | null[(???*19* | 0 | ???*20*)]["_getVersion"]
+      | ???*21*
     ),
     false,
     (
       | ""
-      | ???*17*
-      | (null != ???*19*)[(???*20* | 0)]["identifierPrefix"]
-      | null[(???*21* | 0)]["identifierPrefix"]
+      | ???*23*
+      | (null != ???*25*)[(???*26* | 0 | ???*27*)]["identifierPrefix"]
+      | null[(???*28* | 0 | ???*29*)]["identifierPrefix"]
     ),
     (
-      | ???*22*
+      | ???*30*
       | (...) => undefined
-      | ???*23*
-      | (null != ???*25*)[(???*26* | 0)]["onRecoverableError"]
-      | null[(???*27* | 0)]["onRecoverableError"]
+      | ???*31*
+      | (null != ???*33*)[(???*34* | 0 | ???*35*)]["onRecoverableError"]
+      | null[(???*36* | 0 | ???*37*)]["onRecoverableError"]
     )
 )
 - *0* max number of linking steps reached
 - *1* arguments[0]
   ⚠️  function calls are not analysed yet
-- *2* arguments[2]
+- *2* updated with update expression
+- *3* arguments[2]
   ⚠️  function calls are not analysed yet
-- *3* c
+- *4* c
   ⚠️  circular variable reference
-- *4* arguments[0]
+- *5* arguments[0]
   ⚠️  function calls are not analysed yet
-- *5* ???*6*[(???*8* | 0)]
+- *6* updated with update expression
+- *7* ???*8*[(???*10* | 0 | ???*11*)]
   ⚠️  unknown object
-- *6* ???*7*["hydratedSources"]
+- *8* ???*9*["hydratedSources"]
   ⚠️  unknown object
-- *7* c
+- *9* c
   ⚠️  circular variable reference
-- *8* arguments[0]
+- *10* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* arguments[0]
+- *11* updated with update expression
+- *12* arguments[0]
   ⚠️  function calls are not analysed yet
-- *10* ???*11*["_getVersion"]
+- *13* updated with update expression
+- *14* ???*15*["_getVersion"]
   ⚠️  unknown object
-- *11* arguments[2]
+- *15* arguments[2]
   ⚠️  function calls are not analysed yet
-- *12* c
+- *16* c
   ⚠️  circular variable reference
-- *13* arguments[0]
+- *17* arguments[0]
   ⚠️  function calls are not analysed yet
-- *14* arguments[0]
+- *18* updated with update expression
+- *19* arguments[0]
   ⚠️  function calls are not analysed yet
-- *15* ???*16*(c["_source"])
+- *20* updated with update expression
+- *21* ???*22*(c["_source"])
   ⚠️  unknown callee
-- *16* e
+- *22* e
   ⚠️  circular variable reference
-- *17* ???*18*["identifierPrefix"]
-  ⚠️  unknown object
-- *18* arguments[2]
-  ⚠️  function calls are not analysed yet
-- *19* c
-  ⚠️  circular variable reference
-- *20* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *21* arguments[0]
-  ⚠️  function calls are not analysed yet
-- *22* FreeVar(reportError)
-  ⚠️  unknown global
-- *23* ???*24*["onRecoverableError"]
+- *23* ???*24*["identifierPrefix"]
   ⚠️  unknown object
 - *24* arguments[2]
   ⚠️  function calls are not analysed yet
@@ -23523,12 +23703,29 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *26* arguments[0]
   ⚠️  function calls are not analysed yet
-- *27* arguments[0]
+- *27* updated with update expression
+- *28* arguments[0]
   ⚠️  function calls are not analysed yet
+- *29* updated with update expression
+- *30* FreeVar(reportError)
+  ⚠️  unknown global
+- *31* ???*32*["onRecoverableError"]
+  ⚠️  unknown object
+- *32* arguments[2]
+  ⚠️  function calls are not analysed yet
+- *33* c
+  ⚠️  circular variable reference
+- *34* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *35* updated with update expression
+- *36* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *37* updated with update expression
 
-0 -> 6239 call = (...) => undefined((???*0* | 0))
+0 -> 6239 call = (...) => undefined((???*0* | 0 | ???*1*))
 - *0* arguments[0]
   ⚠️  function calls are not analysed yet
+- *1* updated with update expression
 
 0 -> 6240 conditional = ((null != (???*0* | ???*1*)) | ???*3* | null)
 - *0* arguments[2]
@@ -23546,11 +23743,15 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   | false
   | true
   | ???*0*
-  | (null != ???*2*)[(???*3* | 0)]["_getVersion"]
-  | null[(???*4* | 0)]["_getVersion"]
-  | ???*5*
+  | (null != ???*2*)[(???*3* | 0 | ???*4*)]["_getVersion"]
+  | null[(???*5* | 0 | ???*6*)]["_getVersion"]
+  | ???*7*
 )(
-    (???*7* | (null != ???*9*)[(???*10* | 0)]["_source"] | null[(???*11* | 0)]["_source"])
+    (
+      | ???*9*
+      | (null != ???*11*)[(???*12* | 0 | ???*13*)]["_source"]
+      | null[(???*14* | 0 | ???*15*)]["_source"]
+    )
 )
 - *0* ???*1*["_getVersion"]
   ⚠️  unknown object
@@ -23560,32 +23761,36 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *4* arguments[0]
+- *4* updated with update expression
+- *5* arguments[0]
   ⚠️  function calls are not analysed yet
-- *5* ???*6*(c["_source"])
+- *6* updated with update expression
+- *7* ???*8*(c["_source"])
   ⚠️  unknown callee
-- *6* e
+- *8* e
   ⚠️  circular variable reference
-- *7* ???*8*["_source"]
+- *9* ???*10*["_source"]
   ⚠️  unknown object
-- *8* arguments[2]
+- *10* arguments[2]
   ⚠️  function calls are not analysed yet
-- *9* c
+- *11* c
   ⚠️  circular variable reference
-- *10* arguments[0]
+- *12* arguments[0]
   ⚠️  function calls are not analysed yet
-- *11* arguments[0]
+- *13* updated with update expression
+- *14* arguments[0]
   ⚠️  function calls are not analysed yet
+- *15* updated with update expression
 
 6240 -> 6250 member call = ???*0*["push"](
-    (???*1* | (null != ???*2*)[(???*3* | 0)] | ???*4* | null[(???*8* | 0)]),
+    (???*1* | (null != ???*2*)[(???*3* | 0 | ???*4*)] | ???*5* | null[(???*10* | 0 | ???*11*)]),
     (
       | false
       | true
-      | ???*9*
-      | (null != ???*11*)[(???*12* | 0)]["_getVersion"]
-      | null[(???*13* | 0)]["_getVersion"]
-      | ???*14*
+      | ???*12*
+      | (null != ???*14*)[(???*15* | 0 | ???*16*)]["_getVersion"]
+      | null[(???*17* | 0 | ???*18*)]["_getVersion"]
+      | ???*19*
     )
 )
 - *0* max number of linking steps reached
@@ -23595,29 +23800,34 @@ ${(???*7* | ???*8* | ???*13* | "")}${(???*18* | "")}`["type"]
   ⚠️  circular variable reference
 - *3* arguments[0]
   ⚠️  function calls are not analysed yet
-- *4* ???*5*[(???*7* | 0)]
+- *4* updated with update expression
+- *5* ???*6*[(???*8* | 0 | ???*9*)]
   ⚠️  unknown object
-- *5* ???*6*["hydratedSources"]
+- *6* ???*7*["hydratedSources"]
   ⚠️  unknown object
-- *6* c
+- *7* c
   ⚠️  circular variable reference
-- *7* arguments[0]
-  ⚠️  function calls are not analysed yet
 - *8* arguments[0]
   ⚠️  function calls are not analysed yet
-- *9* ???*10*["_getVersion"]
+- *9* updated with update expression
+- *10* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *11* updated with update expression
+- *12* ???*13*["_getVersion"]
   ⚠️  unknown object
-- *10* arguments[2]
+- *13* arguments[2]
   ⚠️  function calls are not analysed yet
-- *11* c
+- *14* c
   ⚠️  circular variable reference
-- *12* arguments[0]
+- *15* arguments[0]
   ⚠️  function calls are not analysed yet
-- *13* arguments[0]
+- *16* updated with update expression
+- *17* arguments[0]
   ⚠️  function calls are not analysed yet
-- *14* ???*15*(c["_source"])
+- *18* updated with update expression
+- *19* ???*20*(c["_source"])
   ⚠️  unknown callee
-- *15* e
+- *20* e
   ⚠️  circular variable reference
 
 0 -> 6252 free var = FreeVar(exports)
