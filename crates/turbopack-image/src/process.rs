@@ -310,11 +310,7 @@ pub async fn optimize(
     if matches!(format, Some(ImageFormat::WebP)) {
         format = Some(ImageFormat::Jpeg);
     }
-    let format = if let Some(format) = format {
-        format
-    } else {
-        ImageFormat::Jpeg
-    };
+    let format = format.unwrap_or(ImageFormat::Jpeg);
     let (data, mime_type) = encode_image(image, format, quality)?;
 
     Ok(FileContent::Content(File::from(data).with_content_type(mime_type)).cell())
