@@ -26,7 +26,7 @@ enum Error {
     Protobuf(#[from] prost::DecodeError),
     #[error("unsupported package manager")]
     UnsupportedPackageManager(String),
-    #[error("invalid yarn.lock")]
+    #[error(transparent)]
     BerryParse(#[from] turborepo_lockfiles::BerryError),
 }
 

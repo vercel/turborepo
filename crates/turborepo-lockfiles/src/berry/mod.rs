@@ -286,7 +286,7 @@ impl<'a> BerryLockfile<'a> {
                 let dep_locator = self
                     .resolutions
                     .get(&dependency)
-                    .unwrap_or_else(|| panic!("Unable to find locator for {dependency}"));
+                    .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
                 resolutions.insert(dependency, dep_locator.clone());
             }
 
@@ -524,7 +524,7 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::Package;
+    use crate::{transitive_closure, Package};
 
     #[test]
     fn test_deserialize_lockfile() {
