@@ -74,6 +74,8 @@ Run with --continue
   other-app:build: npm ERR!   in workspace: other-app 
   other-app:build: npm ERR!   at location: (.*)/apps/other-app  (re)
   other-app:build: command finished with error, but continuing...
+  command \((.*)/apps/some-lib\) npm run build exited \(1\) (re)
+  command \((.*)/apps/other-app\) npm run build exited \(1\) (re)
   
    Tasks:    1 successful, 3 total
   Cached:    0 cached, 3 total

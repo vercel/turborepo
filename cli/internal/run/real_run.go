@@ -322,7 +322,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 		ec.logError(prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.ContinueOnError {
-			return nil, errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID)
+			return nil, core.StopExecution(errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID))
 		}
 	}
 
@@ -387,10 +387,12 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		if !ec.rs.Opts.runOpts.ContinueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			ec.processes.Close()
+			// We're not continuing, stop graph traversal
+			err = core.StopExecution(err)
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
 			// Set to nil so we don't short-circuit any other execution
-			err = nil
+			//err = nil
 		}
 
 		return taskExecutionSummary, err
