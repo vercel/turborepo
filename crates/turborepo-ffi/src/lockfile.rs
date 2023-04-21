@@ -29,6 +29,8 @@ enum Error {
     Protobuf(#[from] prost::DecodeError),
     #[error(transparent)]
     BerryParse(#[from] turborepo_lockfiles::BerryError),
+    #[error("unsupported package manager {0}")]
+    UnsupportedPackageManager(proto::PackageManager),
 }
 
 #[no_mangle]
@@ -49,8 +51,7 @@ fn transitive_closure_inner(buf: Buffer) -> Result<proto::WorkspaceDependencies,
 
     match request.package_manager() {
         proto::PackageManager::Npm => npm_transitive_closure_inner(request),
-        // TODO use actual pm enum
-        _ => berry_transitive_closure_inner(request),
+        proto::PackageManager::Berry => berry_transitive_closure_inner(request),
     }
 }
 
@@ -65,13 +66,12 @@ fn npm_transitive_closure_inner(
     let lockfile = NpmLockfile::load(contents.as_slice())?;
     let workspaces = workspaces
         .into_iter()
-        .map(|(workspace_dir, dependencies)| {
-            let closure = turborepo_lockfiles::transitive_closure(
-                &lockfile,
-                &workspace_dir,
-                dependencies.into(),
-            )?;
-            Ok((workspace_dir, proto::LockfilePackageList::from(closure)))
+        .map(|(w, dependencies)| (w, dependencies.into()))
+        .collect();
+    let dependencies = turborepo_lockfiles::all_transitive_closures(&lockfile, workspaces)?
+        .into_iter()
+        .map(|(workspace, dependencies)| {
+            (workspace, proto::LockfilePackageList::from(dependencies))
         })
         .collect();
 
@@ -93,24 +93,12 @@ fn berry_transitive_closure_inner(
     let lockfile = BerryLockfile::new(&data, resolutions.as_ref())?;
     let workspaces = workspaces
         .into_iter()
-        .map(|(w, d)| {
-            let proto::PackageDependencyList { list } = d;
-            (
-                w,
-                list.into_iter()
-                    .map(proto::PackageDependency::into_tuple)
-                    .collect(),
-            )
-        })
+        .map(|(w, dependencies)| (w, dependencies.into()))
         .collect();
     let dependencies = turborepo_lockfiles::all_transitive_closures(&lockfile, workspaces)?
         .into_iter()
         .map(|(workspace, dependencies)| {
-            let list: Vec<_> = dependencies
-                .into_iter()
-                .map(proto::LockfilePackage::from)
-                .collect();
-            (workspace, proto::LockfilePackageList { list })
+            (workspace, proto::LockfilePackageList::from(dependencies))
         })
         .collect();
 
@@ -129,23 +117,24 @@ pub extern "C" fn subgraph(buf: Buffer) -> Buffer {
 }
 
 fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
+    let request: proto::SubgraphRequest = buf.into_proto()?;
+    let package_manager = request.package_manager();
     let proto::SubgraphRequest {
         contents,
-        package_manager,
         workspaces,
         packages,
         resolutions,
-    } = buf.into_proto()?;
-    let contents = match package_manager.as_str() {
-        "npm" => Ok(real_npm_subgraph(&contents, &workspaces, &packages)?),
-        "berry" => Ok(turborepo_lockfiles::berry_subgraph(
+        ..
+    } = request;
+    let contents = match package_manager {
+        proto::PackageManager::Npm => real_npm_subgraph(&contents, &workspaces, &packages)?,
+        proto::PackageManager::Berry => turborepo_lockfiles::berry_subgraph(
             &contents,
             &workspaces,
             &packages,
             resolutions.map(|res| res.resolutions),
-        )?),
-        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
-    }?;
+        )?,
+    };
     Ok(contents)
 }
 
@@ -174,6 +163,7 @@ impl fmt::Display for proto::PackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             proto::PackageManager::Npm => "npm",
+            proto::PackageManager::Berry => "berry",
         })
     }
 }
@@ -192,8 +182,8 @@ pub extern "C" fn patches(buf: Buffer) -> Buffer {
 
 fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
     let request: proto::PatchesRequest = buf.into_proto()?;
-    let patches = match request.package_manager.as_str() {
-        "berry" => {
+    let patches = match request.package_manager() {
+        proto::PackageManager::Berry => {
             let data = LockfileData::from_bytes(&request.contents)?;
             let lockfile = BerryLockfile::new(&data, None)?;
             Ok(lockfile
@@ -206,7 +196,7 @@ fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
                 })
                 .collect::<Vec<_>>())
         }
-        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
+        pm => Err(Error::UnsupportedPackageManager(pm)),
     }?;
     Ok(proto::Patches { patches })
 }
@@ -221,15 +211,14 @@ pub extern "C" fn global_change(buf: Buffer) -> Buffer {
 
 fn global_change_inner(buf: Buffer) -> Result<bool, Error> {
     let request: proto::GlobalChangeRequest = buf.into_proto()?;
-    match request.package_manager.as_str() {
-        "npm" => Ok(turborepo_lockfiles::npm_global_change(
+    match request.package_manager() {
+        proto::PackageManager::Npm => Ok(turborepo_lockfiles::npm_global_change(
             &request.prev_contents,
             &request.curr_contents,
         )?),
-        "berry" => Ok(turborepo_lockfiles::berry_global_change(
+        proto::PackageManager::Berry => Ok(turborepo_lockfiles::berry_global_change(
             &request.prev_contents,
             &request.curr_contents,
         )?),
-        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
     }
 }

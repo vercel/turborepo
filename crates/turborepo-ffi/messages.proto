@@ -56,6 +56,7 @@ message PreviousContentResp {
 
 enum PackageManager {
   NPM = 0;
+  BERRY = 1;
 }
 
 message PackageDependency {
@@ -101,7 +102,7 @@ message LockfilePackageList {
 
 message SubgraphRequest {
   bytes contents = 1;
-  string package_manager = 2;
+  PackageManager package_manager = 2;
   repeated string workspaces = 3;
   repeated string packages = 4;
   optional AdditionalBerryData resolutions = 5;
@@ -116,7 +117,7 @@ message SubgraphResponse {
 
 message PatchesRequest {
   bytes contents = 1;
-  string package_manager = 2;
+  PackageManager package_manager = 2;
 }
 
 message PatchesResponse {
@@ -131,7 +132,7 @@ message Patches {
 }
 
 message GlobalChangeRequest {
-  string package_manager = 1;
+  PackageManager package_manager = 1;
   bytes  prev_contents = 2;
   bytes curr_contents = 3;
 }

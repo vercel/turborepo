@@ -40,10 +40,9 @@ pub fn all_transitive_closures<L: Lockfile + Sync>(
     workspaces: HashMap<String, HashMap<String, String>>,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
     workspaces
-        .into_iter()
-        // .into_par_iter() // uncomment this
+        .into_par_iter()
         .map(|(workspace, unresolved_deps)| {
-            let closure = transitive_closure(lockfile, workspace.clone(), unresolved_deps)?;
+            let closure = transitive_closure(lockfile, &workspace, unresolved_deps)?;
             Ok((workspace, closure))
         })
         .collect()
