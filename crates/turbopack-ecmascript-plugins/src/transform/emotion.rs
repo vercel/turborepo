@@ -1,6 +1,5 @@
 #![allow(unused)]
 use std::{
-    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     path::Path,
 };
@@ -98,7 +97,8 @@ impl CustomTransformer for EmotionTransformer {
         {
             let p = std::mem::replace(program, Program::Module(Module::dummy()));
             let hash = {
-                let mut hasher = DefaultHasher::new();
+                #[allow(clippy::disallowed_types)]
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 p.hash(&mut hasher);
                 hasher.finish()
             };

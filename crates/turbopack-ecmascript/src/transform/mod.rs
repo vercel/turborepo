@@ -1,13 +1,7 @@
 mod server_to_client_proxy;
 mod util;
 
-use std::{
-    collections::hash_map::DefaultHasher,
-    fmt::Debug,
-    hash::{Hash, Hasher},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{fmt::Debug, hash::Hash, path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use swc_core::{
@@ -44,12 +38,6 @@ pub enum EcmascriptInputTransform {
     ServerDirective(StringVc),
     CommonJs,
     Custom(CustomTransformVc),
-    Emotion {
-        #[serde(default)]
-        sourcemap: bool,
-        label_format: OptionStringVc,
-        auto_label: Option<bool>,
-    },
     PresetEnv(EnvironmentVc),
     React {
         #[serde(default)]
@@ -210,35 +198,6 @@ impl EcmascriptInputTransform {
                     swc_core::ecma::transforms::base::feature::FeatureFlag::all(),
                     Some(comments.clone()),
                 ));
-            }
-            EcmascriptInputTransform::Emotion {
-                sourcemap,
-                label_format,
-                auto_label,
-            } => {
-                let options = swc_emotion::EmotionOptions {
-                    // this should be always enabled if match arrives here:
-                    // since moduleoptions expect to push emotion transform only if
-                    // there are valid, enabled config values.
-                    enabled: Some(true),
-                    sourcemap: Some(*sourcemap),
-                    label_format: label_format.await?.clone_value(),
-                    auto_label: *auto_label,
-                    ..Default::default()
-                };
-                let p = std::mem::replace(program, Program::Module(Module::dummy()));
-                let hash = {
-                    let mut hasher = DefaultHasher::new();
-                    p.hash(&mut hasher);
-                    hasher.finish()
-                };
-                *program = p.fold_with(&mut swc_emotion::emotion(
-                    options,
-                    Path::new(file_name_str),
-                    hash as u32,
-                    source_map.clone(),
-                    comments.clone(),
-                ))
             }
             EcmascriptInputTransform::PresetEnv(env) => {
                 let versions = env.runtime_versions().await?;
