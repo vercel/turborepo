@@ -659,3 +659,239 @@ console.log(foobarCopy);
 export { foobarCopy };
 
 ```
+# Modules (prod)
+## Part 0
+```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+"module evaluation";
+import "module";
+let foobarCopy = foobar;
+console.log(foobarCopy);
+export { foobarCopy };
+
+```
+## Part 1
+```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+export { foobar };
+
+```
+## Part 2
+```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+export { foo };
+const foo = foobar;
+export { foo };
+
+```
+## Part 3
+```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+export { external1 };
+import { upper } from "module";
+function internal() {
+    return upper(foobar);
+}
+function external1() {
+    return internal() + foobar;
+}
+
+```
+## Part 4
+```js
+export { external2 };
+function external2() {
+    foobar += ".";
+}
+
+```
+## Part 5
+```js
+let foobar = "foo";
+export { foobar };
+
+```
+## Part 6
+```js
+const bar = "bar";
+export { bar };
+
+```
+## Part 7
+```js
+import { bar } from "entry.js" assert {
+    __turbopack_chunk__: 6
+};
+foobar += bar;
+export { foobar };
+
+```
+## Part 8
+```js
+foobar += "foo";
+export { foobar };
+
+```
+## Merged (external1)
+```js
+import { upper } from "module";
+let foobar = "foo";
+export { foobar };
+const bar = "bar";
+export { bar };
+foobar += bar;
+export { foobar };
+foobar += "foo";
+export { foobar };
+export { external1 };
+function internal() {
+    return upper(foobar);
+}
+function external1() {
+    return internal() + foobar;
+}
+
+```
+# Modules (prod)
+## Part 0
+```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+"module evaluation";
+import "module";
+let foobarCopy = foobar;
+console.log(foobarCopy);
+export { foobarCopy };
+
+```
+## Part 1
+```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+export { foobar };
+
+```
+## Part 2
+```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+export { foo };
+const foo = foobar;
+export { foo };
+
+```
+## Part 3
+```js
+import { foobar } from "entry.js" assert {
+    __turbopack_chunk__: 5
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 7
+};
+import "entry.js" assert {
+    __turbopack_chunk__: 8
+};
+export { external1 };
+import { upper } from "module";
+function internal() {
+    return upper(foobar);
+}
+function external1() {
+    return internal() + foobar;
+}
+
+```
+## Part 4
+```js
+export { external2 };
+function external2() {
+    foobar += ".";
+}
+
+```
+## Part 5
+```js
+let foobar = "foo";
+export { foobar };
+
+```
+## Part 6
+```js
+const bar = "bar";
+export { bar };
+
+```
+## Part 7
+```js
+import { bar } from "entry.js" assert {
+    __turbopack_chunk__: 6
+};
+foobar += bar;
+export { foobar };
+
+```
+## Part 8
+```js
+foobar += "foo";
+export { foobar };
+
+```
+## Merged (external1,external2)
+```js
+import { upper } from "module";
+let foobar = "foo";
+export { foobar };
+const bar = "bar";
+export { bar };
+foobar += bar;
+export { foobar };
+foobar += "foo";
+export { foobar };
+export { external1 };
+function internal() {
+    return upper(foobar);
+}
+function external1() {
+    return internal() + foobar;
+}
+export { external2 };
+function external2() {
+    foobar += ".";
+}
+
+```
