@@ -1,6 +1,10 @@
 use std::{env, path::PathBuf};
 
 fn main() {
+    if env::var("CARGO_CFG_TARGET_OS").unwrap() != "macos" {
+        return;
+    }
+
     let sdk_path = std::process::Command::new("xcrun")
         .arg("--show-sdk-path")
         .output()
