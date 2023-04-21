@@ -21,8 +21,8 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
-      - name: Run Unit Tests
-        run: turbo run test --filter=cli --color
+      - name: Run Integration Tests
+        run: turbo run test --filter=turborepo-tests-integration
 
   darwin:
     needs: [smoke-test]
