@@ -36,4 +36,3 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         })
     }
 }
-

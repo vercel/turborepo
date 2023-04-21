@@ -107,7 +107,13 @@ pub struct Args {
     #[clap(long, global = true)]
     pub preflight: bool,
     /// Set a timeout for all HTTP requests.
-    #[clap(long, value_name = "TIMEOUT", global = true, value_parser)]
+    #[clap(
+        long,
+        env = "TURBO_REMOTE_CACHE_TIMEOUT",
+        value_name = "TIMEOUT",
+        global = true,
+        value_parser
+    )]
     pub remote_cache_timeout: Option<u64>,
     /// Set the team slug for API calls
     #[clap(long, global = true, value_parser)]
@@ -535,7 +541,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
                 error!("error: {}", err.to_string())
-            };
+            }
 
             Ok(Payload::Rust(Ok(0)))
         }

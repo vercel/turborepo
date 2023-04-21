@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
@@ -171,14 +170,6 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 	timeout, err := executionState.CLIArgs.GetRemoteCacheTimeout()
 	if err == nil {
 		h.clientOpts.Timeout = timeout
-	} else {
-		val, ok := os.LookupEnv("TURBO_REMOTE_CACHE_TIMEOUT")
-		if ok {
-			number, err := strconv.ParseUint(val, 10, 64)
-			if err == nil {
-				h.clientOpts.Timeout = number
-			}
-		}
 	}
 
 	apiClient := client.NewClient(

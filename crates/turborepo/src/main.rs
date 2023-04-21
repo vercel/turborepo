@@ -41,6 +41,12 @@ fn run_go_binary(execution_state: ExecutionState) -> Result<i32> {
         ));
     }
 
+    if execution_state.cli_args.test_run {
+        let serialized_args = serde_json::to_string_pretty(&execution_state)?;
+        println!("{}", serialized_args);
+        return Ok(0);
+    }
+
     let serialized_args = serde_json::to_string(&execution_state)?;
     trace!("Invoking go binary with {}", serialized_args);
     let mut command = process::Command::new(go_binary_path);
