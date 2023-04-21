@@ -436,7 +436,7 @@
     collections::hash_map::DefaultHasher,
     fmt::Debug,
     hash::{Hash, Hasher},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -726,7 +726,7 @@
                 }
 
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>styled_components::styled_components(
-                    FileName::Anon,
+                    FileName::Real(PathBuf::from(file_path.<span class="kw">await</span><span class="question-mark">?</span>.path.clone())),
                     file_name_hash,
                     options,
                 ));
