@@ -8,6 +8,7 @@ use std::{
 use anyhow::Error;
 use indexmap::IndexSet;
 use rustc_hash::FxHasher;
+use serde::Deserialize;
 use swc_core::{
     common::SourceMap,
     ecma::{
@@ -32,7 +33,16 @@ fn test_fixture(input: PathBuf) {
     run(input);
 }
 
+#[derive(Deserialize)]
+struct TestConfig {}
+
 fn run(input: PathBuf) {
+    let config = input.with_file_name("config.json");
+    let config = std::fs::read_to_string(&config).unwrap_or("{}");
+    let config = serde_json::from_str::<TestConfig>(&config).unwrap_or_else(|e| {
+        panic!("failed to parse config.json: {}", config);
+    });
+
     testing::run_test(false, |cm, _handler| {
         let fm = cm.load_file(&input).unwrap();
 
