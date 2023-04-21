@@ -215,6 +215,14 @@
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, ErrorKind};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -359,6 +367,14 @@
                             guess.to_string()
                         },
                     )<span class="question-mark">?</span>);
+                }
+
+                <span class="kw">if </span>!header_map.contains_key(<span class="string">&quot;cache-control&quot;</span>) {
+                    <span class="comment">// The dev server contents might change at any time, we can&#39;t cache them.
+                    </span>header_map.append(
+                        <span class="string">&quot;cache-control&quot;</span>,
+                        hyper::header::HeaderValue::try_from(<span class="string">&quot;must-revalidate&quot;</span>)<span class="question-mark">?</span>,
+                    );
                 }
 
                 <span class="kw">let </span>content = file.content();
