@@ -54,6 +54,10 @@ message PreviousContentResp {
   }
 }
 
+enum PackageManager {
+  NPM = 0;
+}
+
 message PackageDependency {
   string name = 1;
   string range = 2;
@@ -69,7 +73,7 @@ message WorkspaceDependencies {
 
 message TransitiveDepsRequest {
   bytes contents = 1;
-  string package_manager = 2;
+  PackageManager package_manager = 2;
   map<string, PackageDependencyList> workspaces = 3;
   optional AdditionalBerryData resolutions = 4;
 }

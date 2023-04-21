@@ -1,4 +1,7 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use thiserror::Error;
 use turborepo_lockfiles::{
@@ -24,8 +27,6 @@ enum Error {
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("error decoding protobuf")]
     Protobuf(#[from] prost::DecodeError),
-    #[error("unsupported package manager")]
-    UnsupportedPackageManager(String),
     #[error(transparent)]
     BerryParse(#[from] turborepo_lockfiles::BerryError),
 }
@@ -46,10 +47,10 @@ pub extern "C" fn transitive_closure(buf: Buffer) -> Buffer {
 fn transitive_closure_inner(buf: Buffer) -> Result<proto::WorkspaceDependencies, Error> {
     let request: proto::TransitiveDepsRequest = buf.into_proto()?;
 
-    match request.package_manager.as_str() {
-        "npm" => npm_transitive_closure_inner(request),
-        "berry" => berry_transitive_closure_inner(request),
-        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
+    match request.package_manager() {
+        proto::PackageManager::Npm => npm_transitive_closure_inner(request),
+        // TODO use actual pm enum
+        _ => berry_transitive_closure_inner(request),
     }
 }
 
@@ -64,24 +65,13 @@ fn npm_transitive_closure_inner(
     let lockfile = NpmLockfile::load(contents.as_slice())?;
     let workspaces = workspaces
         .into_iter()
-        .map(|(w, d)| {
-            let proto::PackageDependencyList { list } = d;
-            (
-                w,
-                list.into_iter()
-                    .map(proto::PackageDependency::into_tuple)
-                    .collect(),
-            )
-        })
-        .collect();
-    let dependencies = turborepo_lockfiles::all_transitive_closures(&lockfile, workspaces)?
-        .into_iter()
-        .map(|(workspace, dependencies)| {
-            let list: Vec<_> = dependencies
-                .into_iter()
-                .map(proto::LockfilePackage::from)
-                .collect();
-            (workspace, proto::LockfilePackageList { list })
+        .map(|(workspace_dir, dependencies)| {
+            let closure = turborepo_lockfiles::transitive_closure(
+                &lockfile,
+                &workspace_dir,
+                dependencies.into(),
+            )?;
+            Ok((workspace_dir, proto::LockfilePackageList::from(closure)))
         })
         .collect();
 
@@ -159,10 +149,32 @@ fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
     Ok(contents)
 }
 
-impl proto::PackageDependency {
-    pub fn into_tuple(self) -> (String, String) {
-        let Self { name, range } = self;
-        (name, range)
+impl From<proto::PackageDependencyList> for HashMap<String, String> {
+    fn from(other: proto::PackageDependencyList) -> Self {
+        other
+            .list
+            .into_iter()
+            .map(|proto::PackageDependency { name, range }| (name, range))
+            .collect()
+    }
+}
+
+impl From<HashSet<Package>> for proto::LockfilePackageList {
+    fn from(value: HashSet<Package>) -> Self {
+        proto::LockfilePackageList {
+            list: value
+                .into_iter()
+                .map(proto::LockfilePackage::from)
+                .collect(),
+        }
+    }
+}
+
+impl fmt::Display for proto::PackageManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            proto::PackageManager::Npm => "npm",
+        })
     }
 }
 

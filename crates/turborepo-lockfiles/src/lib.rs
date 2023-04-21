@@ -52,7 +52,7 @@ pub fn all_transitive_closures<L: Lockfile + Sync>(
 // this should get replaced by petgraph in the future :)
 pub fn transitive_closure<L: Lockfile>(
     lockfile: &L,
-    workspace_path: String,
+    workspace_path: &str,
     unresolved_deps: HashMap<String, String>,
 ) -> Result<HashSet<Package>, Error> {
     println!(
@@ -63,7 +63,7 @@ pub fn transitive_closure<L: Lockfile>(
     let mut transitive_deps = HashSet::new();
     transitive_closure_helper(
         lockfile,
-        &workspace_path,
+        workspace_path,
         unresolved_deps,
         &mut transitive_deps,
     )?;
