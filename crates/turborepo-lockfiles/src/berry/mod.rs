@@ -22,6 +22,8 @@ use super::Lockfile;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("unable to parse")]
+    Parse(#[from] serde_yaml::Error),
+    #[error("unable to parse")]
     Identifiers(#[from] identifiers::Error),
     #[error("unable to find original package in patch locator {0}")]
     PatchMissingOriginalLocator(Locator<'static>),
@@ -285,7 +287,7 @@ impl<'a> BerryLockfile<'a> {
                 let dep_locator = self
                     .resolutions
                     .get(&dependency)
-                    .unwrap_or_else(|| panic!("Unable to find locator for {dependency}"));
+                    .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
                 resolutions.insert(dependency, dep_locator.clone());
             }
 
@@ -323,7 +325,8 @@ impl<'a> BerryLockfile<'a> {
 
         // Add any descriptors used by package extensions
         for descriptor in &self.extensions {
-            let locator = resolutions
+            let locator = self
+                .resolutions
                 .get(descriptor)
                 .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
             resolutions.insert(descriptor.clone(), locator.clone());
@@ -453,7 +456,21 @@ impl<'a> Lockfile for BerryLockfile<'a> {
     }
 }
 
+impl LockfileData {
+    pub fn from_bytes(s: &[u8]) -> Result<Self, Error> {
+        serde_yaml::from_slice(s).map_err(Error::from)
+    }
+}
+
 impl BerryManifest {
+    pub fn with_resolutions<I>(resolutions: I) -> Self
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        let resolutions = Some(resolutions.into_iter().collect());
+        Self { resolutions }
+    }
+
     pub fn resolutions(&self) -> Option<Result<Map<Resolution, &str>, Error>> {
         self.resolutions.as_ref().map(|resolutions| {
             resolutions
@@ -467,17 +484,38 @@ impl BerryManifest {
     }
 }
 
+pub fn berry_subgraph(
+    contents: &[u8],
+    workspace_packages: &[String],
+    packages: &[String],
+    resolutions: Option<HashMap<String, String>>,
+) -> Result<Vec<u8>, Error> {
+    let manifest = resolutions.map(BerryManifest::with_resolutions);
+    let data = LockfileData::from_bytes(contents)?;
+    let lockfile = BerryLockfile::new(&data, manifest.as_ref())?;
+    let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
+    let new_contents = pruned_lockfile.lockfile()?.to_string().into_bytes();
+    Ok(new_contents)
+}
+
+pub fn berry_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
+    let prev_data = LockfileData::from_bytes(prev_contents)?;
+    let curr_data = LockfileData::from_bytes(curr_contents)?;
+    Ok(prev_data.metadata.cache_key != curr_data.metadata.cache_key
+        || prev_data.metadata.version != curr_data.metadata.version)
+}
+
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::Package;
+    use crate::{transitive_closure, Package};
 
     #[test]
     fn test_deserialize_lockfile() {
         let lockfile: LockfileData =
-            serde_yaml::from_slice(include_bytes!("../../fixtures/berry.lock")).unwrap();
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
         assert_eq!(lockfile.metadata.version, 6);
         assert_eq!(lockfile.metadata.cache_key.as_deref(), Some("8c0"));
     }
@@ -485,7 +523,7 @@ mod test {
     #[test]
     fn test_roundtrip() {
         let contents = include_str!("../../fixtures/berry.lock");
-        let lockfile: LockfileData = serde_yaml::from_str(contents).unwrap();
+        let lockfile = LockfileData::from_bytes(contents.as_bytes()).unwrap();
         let new_contents = lockfile.to_string();
         assert_eq!(contents, new_contents);
     }
@@ -686,5 +724,45 @@ mod test {
                 version: "0.6.0".into()
             }
         );
+    }
+
+    #[test]
+    fn test_robust_resolutions_dependencies() {
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
+        let manifest = BerryManifest {
+            resolutions: Some(
+                [("ajv".to_string(), "^8".to_string())]
+                    .iter()
+                    .cloned()
+                    .collect(),
+            ),
+        };
+        let lockfile = BerryLockfile::new(&data, Some(&manifest)).unwrap();
+
+        let unresolved_deps = vec![
+            ("@types/react-dom", "^17.0.11"),
+            ("@types/react", "^17.0.37"),
+            ("eslint", "^7.32.0"),
+            ("typescript", "^4.5.2"),
+            ("react", "^18.2.0"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
+        let closure =
+            transitive_closure(&lockfile, "packages/ui".to_string(), unresolved_deps).unwrap();
+
+        assert!(closure.contains(&Package {
+            key: "ajv@npm:8.11.2".into(),
+            version: "8.11.2".into()
+        }));
+        assert!(closure.contains(&Package {
+            key: "uri-js@npm:4.4.1".into(),
+            version: "4.4.1".into()
+        }));
     }
 }
