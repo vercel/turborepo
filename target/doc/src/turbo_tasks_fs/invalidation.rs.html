@@ -126,7 +126,7 @@
     ) -&gt; std::fmt::Result {
         <span class="macro">write!</span>(
             f,
-            <span class="string">&quot;{} files changed (e. g. {})&quot;</span>,
+            <span class="string">&quot;{} files changed ({}, ...)&quot;</span>,
             reasons.len(),
             reasons[<span class="number">0</span>]
                 .as_any()
