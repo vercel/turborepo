@@ -227,7 +227,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 
 	if lockFile, err := c.PackageManager.ReadLockfile(repoRoot, rootPackageJSON); err != nil {
 		warnings.append(err)
-		rootPackageJSON.TransitiveDeps = []lockfile.Package{}
+		rootPackageJSON.TransitiveDeps = nil
 		rootPackageJSON.ExternalDepsHash = ""
 	} else {
 		c.Lockfile = lockFile
@@ -239,6 +239,8 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 					if err := pkg.SetExternalDeps(closure); err != nil {
 						return nil, err
 					}
+				} else {
+					return nil, fmt.Errorf("Unable to calculate closure for workspace %s", pkg.Dir.ToString())
 				}
 			}
 		}
