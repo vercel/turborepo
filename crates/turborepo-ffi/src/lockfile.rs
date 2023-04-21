@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use thiserror::Error;
 use turborepo_lockfiles::{self, npm_subgraph as real_npm_subgraph, NpmLockfile, Package};
@@ -56,18 +59,12 @@ fn npm_transitive_closure_inner(
     let dependencies = workspaces
         .into_iter()
         .map(|(workspace_dir, dependencies)| {
-            let dependencies = dependencies
-                .list
-                .into_iter()
-                .map(proto::PackageDependency::into_tuple)
-                .collect();
-            let closure =
-                turborepo_lockfiles::transitive_closure(&lockfile, &workspace_dir, dependencies)?;
-            let list = closure
-                .into_iter()
-                .map(proto::LockfilePackage::from)
-                .collect();
-            Ok((workspace_dir, proto::LockfilePackageList { list }))
+            let closure = turborepo_lockfiles::transitive_closure(
+                &lockfile,
+                &workspace_dir,
+                dependencies.into(),
+            )?;
+            Ok((workspace_dir, proto::LockfilePackageList::from(closure)))
         })
         .collect::<Result<HashMap<_, _>, Error>>()?;
     Ok(proto::WorkspaceDependencies { dependencies })
@@ -91,10 +88,24 @@ fn npm_subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
     Ok(contents)
 }
 
-impl proto::PackageDependency {
-    pub fn into_tuple(self) -> (String, String) {
-        let Self { name, range } = self;
-        (name, range)
+impl From<proto::PackageDependencyList> for HashMap<String, String> {
+    fn from(other: proto::PackageDependencyList) -> Self {
+        other
+            .list
+            .into_iter()
+            .map(|proto::PackageDependency { name, range }| (name, range))
+            .collect()
+    }
+}
+
+impl From<HashSet<Package>> for proto::LockfilePackageList {
+    fn from(value: HashSet<Package>) -> Self {
+        proto::LockfilePackageList {
+            list: value
+                .into_iter()
+                .map(proto::LockfilePackage::from)
+                .collect(),
+        }
     }
 }
 
