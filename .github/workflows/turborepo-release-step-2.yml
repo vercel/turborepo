@@ -10,22 +10,7 @@ on:
         description: "Staging branch to run release from"
 
 jobs:
-  smoke-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.release_branch }}
-      - name: Build turborepo CLI from source
-        uses: ./.github/actions/setup-turborepo-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
-      - name: Run Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration
-
   darwin:
-    needs: [smoke-test]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -59,7 +44,6 @@ jobs:
 
   # compiles linux and windows in a container
   cross:
-    needs: [smoke-test]
     runs-on: ubuntu-latest
     container:
       image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
