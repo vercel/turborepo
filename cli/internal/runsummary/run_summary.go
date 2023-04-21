@@ -175,13 +175,12 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 		_ = spinner.WaitFor(ctx, record, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
 	}()
 
-	// After the spinner is done
+	// After the spinner is done, print any errors and the url
 	if len(errs) > 0 {
 		rsm.ui.Warn("Errors recording run to Spaces")
 		for _, err := range errs {
 			rsm.ui.Warn(fmt.Sprintf("%v", err))
 		}
-		return nil
 	}
 
 	if url != "" {
