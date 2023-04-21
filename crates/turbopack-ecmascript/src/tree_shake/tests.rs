@@ -214,6 +214,17 @@ fn run(input: PathBuf) {
             vec![ItemIdGroupKind::ModuleEvaluation],
         );
 
+        for exports in config.exports {
+            describe(
+                false,
+                &exports.join(","),
+                exports
+                    .into_iter()
+                    .map(|e| ItemIdGroupKind::Export((e.into(), Default::default())))
+                    .collect(),
+            );
+        }
+
         NormalizedOutput::from(s)
             .compare_to_file(input.with_file_name("output.md"))
             .unwrap();
