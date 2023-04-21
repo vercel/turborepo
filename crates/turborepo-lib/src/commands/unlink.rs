@@ -1,6 +1,6 @@
 use std::fs::File;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 
 use crate::{cli::LinkTarget, commands::CommandBase, config::TurboJson, ui::GREY};
 
