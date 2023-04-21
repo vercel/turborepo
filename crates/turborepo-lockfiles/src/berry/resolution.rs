@@ -1,6 +1,5 @@
-use std::fmt;
+use std::{fmt, sync::OnceLock};
 
-use lazy_static::lazy_static;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 use regex::Regex;
@@ -9,13 +8,15 @@ use thiserror::Error;
 
 use super::identifiers::{Descriptor, Ident, Locator};
 
-lazy_static! {
-    static ref TAG_REGEX: Regex = Regex::new(r"^[^v][a-z0-9._-]*$").unwrap();
+fn tag_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^[^v][a-z0-9._-]*$").unwrap())
 }
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("unable to parse")]
+    // Boxed due to this enum variant being much larger than the others
     Pest(#[from] Box<pest::error::Error<Rule>>),
     #[error("unexpected end of input")]
     UnexpectedEOI,
@@ -119,7 +120,7 @@ impl<'a> Resolution<'a> {
 
             // we now insert the default protocol if one isn't present
             if Version::parse(&from_locator.reference).is_ok()
-                || TAG_REGEX.is_match(&from_locator.reference)
+                || tag_regex().is_match(&from_locator.reference)
             {
                 let reference = from_locator.reference.to_mut();
                 reference.insert_str(0, "npm:");
@@ -154,7 +155,7 @@ impl<'a> Resolution<'a> {
         // We have a match an we now override the dependency
         let mut dependency_override = dependency.clone();
         dependency_override.range = reference.to_string().into();
-        if Version::parse(reference).is_ok() || TAG_REGEX.is_match(reference) {
+        if Version::parse(reference).is_ok() || tag_regex().is_match(reference) {
             dependency_override.range.to_mut().insert_str(0, "npm:")
         }
 
