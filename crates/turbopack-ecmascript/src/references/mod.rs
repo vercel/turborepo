@@ -382,11 +382,11 @@ pub(crate) async fn analyze_ecmascript_module(
             let handler = Handler::with_emitter(
                 true,
                 false,
-                box IssueEmitter {
+                Box::new(IssueEmitter {
                     source,
                     source_map: source_map.clone(),
                     title: None,
-                },
+                }),
             );
             let var_graph = HANDLER.set(&handler, || {
                 GLOBALS.set(globals, || create_graph(program, eval_context))
@@ -801,11 +801,11 @@ pub(crate) async fn analyze_ecmascript_module(
                         let linked_func_call = state
                             .link_value(
                                 JsValue::call(
-                                    box JsValue::WellKnownFunction(
+                                    Box::new(JsValue::WellKnownFunction(
                                         WellKnownFunctionKind::PathResolve(
-                                            box parent_path.path.as_str().into(),
+                                            Box::new(parent_path.path.as_str().into()),
                                         ),
-                                    ),
+                                    )),
                                     args.clone(),
                                 ),
                                 in_try,
@@ -832,7 +832,7 @@ pub(crate) async fn analyze_ecmascript_module(
                         let linked_func_call = state
                             .link_value(
                                 JsValue::call(
-                                    box JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
+                                    Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin)),
                                     args.clone(),
                                 ),
                                 in_try,
@@ -861,7 +861,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             let pat = js_value_to_pattern(&args[0]);
                             if pat.is_match("node") && args.len() >= 2 {
                                 let first_arg =
-                                    JsValue::member(box args[1].clone(), box 0_f64.into());
+                                    JsValue::member(Box::new(args[1].clone()), Box::new(0_f64.into()));
                                 let first_arg = state.link_value(first_arg, in_try).await?;
                                 let pat = js_value_to_pattern(&first_arg);
                                 if !pat.has_constant_parts() {
@@ -1062,9 +1062,9 @@ pub(crate) async fn analyze_ecmascript_module(
                                                 let linked_func_call = state
                                                     .link_value(
                                                         JsValue::call(
-                                                            box JsValue::WellKnownFunction(
+                                                            Box::new(JsValue::WellKnownFunction(
                                                                 WellKnownFunctionKind::PathJoin,
-                                                            ),
+                                                            )),
                                                             vec![
                                                                 JsValue::FreeVar(
                                                                     "__dirname".into(),
@@ -1125,9 +1125,9 @@ pub(crate) async fn analyze_ecmascript_module(
                                 let linked_func_call = state
                                     .link_value(
                                         JsValue::call(
-                                            box JsValue::WellKnownFunction(
+                                            Box::new(JsValue::WellKnownFunction(
                                                 WellKnownFunctionKind::PathJoin,
-                                            ),
+                                            )),
                                             vec![
                                                 JsValue::FreeVar("__dirname".into()),
                                                 p.into(),
@@ -1565,7 +1565,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                 }
 
                                 let func = analysis_state
-                                    .link_value(JsValue::member(box obj.clone(), box prop), in_try)
+                                    .link_value(JsValue::member(Box::new(obj.clone()), Box::new(prop)), in_try)
                                     .await?;
 
                                 handle_call(
@@ -2029,7 +2029,7 @@ async fn require_resolve_visitor(
         match values.len() {
             0 => JsValue::unknown(
                 JsValue::call(
-                    box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                    Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve)),
                     args,
                 ),
                 "unresolveable request",
@@ -2040,7 +2040,7 @@ async fn require_resolve_visitor(
     } else {
         JsValue::unknown(
             JsValue::call(
-                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve)),
                 args,
             ),
             "only a single argument is supported",
@@ -2058,7 +2058,7 @@ async fn require_context_visitor(
         Err(err) => {
             return Ok(JsValue::unknown(
                 JsValue::call(
-                    box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+                    Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext)),
                     args,
                 ),
                 PrettyPrintError(&err).to_string(),
