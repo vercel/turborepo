@@ -88,8 +88,8 @@ unsafe impl Send for Signpost {}
 // NOTE(alexkirsz) Not sure that's correct, but it's what the Dart SDK does and
 // it seems to work.
 // See https://github.com/dart-lang/sdk/blob/3e2d3bc77fa8bb5139b869e9b3a5357b5487df18/runtime/vm/timeline_macos.cc#L34-L35
-static FORMAT_BUFFER: [u8; 64] = [0; 64];
-static FORMAT_BUFFER_LEN: u32 = (FORMAT_BUFFER.len() * std::mem::size_of::<u8>()) as u32;
+const FORMAT_BUFFER_LEN: usize = 64;
+static FORMAT_BUFFER: [u8; 64] = [0; FORMAT_BUFFER_LEN];
 
 #[repr(u8)]
 enum SignpostType {
@@ -155,7 +155,7 @@ impl Signpost {
                 name.as_ptr(),
                 message.map(|message| message.as_ptr()).unwrap_or(null()),
                 &FORMAT_BUFFER as *const _ as *mut _,
-                FORMAT_BUFFER_LEN,
+                FORMAT_BUFFER_LEN as _,
             )
         }
     }
