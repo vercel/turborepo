@@ -234,7 +234,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -255,7 +256,8 @@ jobs:
             runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -290,7 +292,8 @@ jobs:
             runner: windows-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -361,7 +364,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -1105,8 +1109,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ubuntu
           github-token: "${{ secrets.GITHUB_TOKEN }}"
