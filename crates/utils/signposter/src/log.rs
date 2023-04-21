@@ -191,6 +191,7 @@ impl Drop for SignpostInterval {
     }
 }
 
+// TODO(alexkirsz) This should likely return a Cow<str> instead.
 /// Escapes a message for use with signposts, which will try to parse it as a
 /// format string.
 fn escape_message(message: &str) -> String {
