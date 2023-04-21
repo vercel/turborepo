@@ -166,12 +166,16 @@ fn run(input: PathBuf) {
 
         let uri_of_module: JsWord = "entry.js".into();
 
-        {
+        let mut describe = |is_debug: bool, title: &str| {
             let mut g = analyzer.g.clone();
-            g.handle_weak(Mode::Development);
+            g.handle_weak(if is_debug {
+                Mode::Development
+            } else {
+                Mode::Production
+            });
             let SplitModuleResult { modules, .. } = g.split_module(&uri_of_module, analyzer.items);
 
-            writeln!(s, "# Modules (dev)").unwrap();
+            writeln!(s, "# Modules ({})", if is_debug { "dev" } else { "prod" }).unwrap();
             for (i, module) in modules.iter().enumerate() {
                 writeln!(s, "## Part {}", i).unwrap();
                 writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
@@ -183,30 +187,11 @@ fn run(input: PathBuf) {
             });
             let module = merger.merge_recursively(modules[0].clone()).unwrap();
 
-            writeln!(s, "## Merged (module eval)").unwrap();
+            writeln!(s, "## Merged ({})", title).unwrap();
             writeln!(s, "```js\n{}\n```", print(&cm, &[&module])).unwrap();
-        }
-
-        {
-            let mut g = analyzer.g.clone();
-            g.handle_weak(Mode::Production);
-            let SplitModuleResult { modules, .. } = g.split_module(&uri_of_module, analyzer.items);
-
-            writeln!(s, "# Modules (prod)").unwrap();
-            for (i, module) in modules.iter().enumerate() {
-                writeln!(s, "## Part {}", i).unwrap();
-                writeln!(s, "```js\n{}\n```", print(&cm, &[module])).unwrap();
-            }
-
-            let mut merger = Merger::new(SingleModuleLoader {
-                modules: &modules,
-                entry_module_uri: &uri_of_module,
-            });
-            let module = merger.merge_recursively(modules[0].clone()).unwrap();
-
-            writeln!(s, "## Merged (module eval)").unwrap();
-            writeln!(s, "```js\n{}\n```", print(&cm, &[&module])).unwrap();
-        }
+        };
+        describe(true, "module eval");
+        describe(false, "module eval");
 
         NormalizedOutput::from(s)
             .compare_to_file(input.with_file_name("output.md"))
