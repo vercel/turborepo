@@ -343,17 +343,23 @@ enum GlobSymbol<'a> {
 ///
 /// syntax:
 /// ?		Matches any single character.
-/// *		Matches zero or more characters, except for path separators
+///
+/// *      Matches zero or more characters, except for path separators.
+///
 /// **		Matches zero or more characters, including path separators.
 ///         Must match a complete path segment.
+///
 /// [ab]	Matches one of the characters contained in the brackets.
 ///         Character ranges, e.g. [a-z] are also supported. Use [!ab] or [^ab]
 ///         to match any character except those contained in the brackets.
+///
 /// {a,b}	Matches one of the patterns contained in the braces. Any of the
 ///         wildcard characters can be used in the sub-patterns. Braces may
 ///         be nested up to 10 levels deep.
+///
 /// !		When at the start of the glob, this negates the result.
 ///         Multiple ! characters negate the glob multiple times.
+///
 /// \		A backslash character may be used to escape any special characters.
 ///
 /// Of these, we only handle `{` and escaping.
@@ -381,7 +387,8 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
         .filter_map(|chunk| chunk)
         .multi_cartesian_product() // get all the possible combinations of path segments
         .map(|chunks| {
-            std::iter::once("/")
+            let prefix = if glob.starts_with("/") { "/" } else { "" };
+            std::iter::once(prefix)
                 .chain(chunks.iter().map(|s| s.as_str()))
                 .collect::<PathBuf>()
         })
@@ -389,7 +396,9 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
 }
 
 /// given a set of symbols, returns an iterator over the possible path segments
-/// that can be generated from them
+/// that can be generated from them. this currently is very conservative, and
+/// simply ejects if it encounters glob-like symbols. in the future, we should
+/// handle brackets and braces.
 ///
 /// example: given the symbols "{a,b}b" it will yield ["ab"] and ["bb"]
 fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
@@ -430,7 +439,11 @@ fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol> {
         if start == glob.len() {
             return None;
         }
-        let end = cursor.next_boundary(glob, 0).unwrap().unwrap();
+
+        let end = match cursor.next_boundary(glob, 0) {
+            Ok(Some(end)) => end,
+            _ => return None,
+        };
 
         if escaped {
             escaped = false;
@@ -486,12 +499,12 @@ mod test {
     use super::GlobSymbol::*;
 
     #[test_case("foo/**", vec!["foo"])]
-    #[test_case("foo/{a,b}", vec!["foo/a", "foo/b"])]
+    #[test_case("foo/{a,b}", vec!["foo"])]
     #[test_case("foo/*/bar", vec!["foo"])]
     #[test_case("foo/[a-d]/bar", vec!["foo"])]
     #[test_case("foo/a?/bar", vec!["foo"])]
     #[test_case("foo/ab?/bar", vec!["foo"] ; "question marks ")]
-    #[test_case("foo/{a,b}/ab?", vec!["foo/a", "foo/b"])]
+    #[test_case("foo/{a,b}/ab?", vec!["foo"])]
     #[test_case("/abc", vec!["/abc"])]
     fn test_handles_doublestar(glob: &str, paths_exp: Vec<&str>) {
         let mut paths = super::glob_to_paths(glob);

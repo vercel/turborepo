@@ -9,7 +9,7 @@ use std::{
 use log::warn;
 
 /// Errors that may occur during the `Pidlock` lifetime.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq)]
 pub enum PidlockError {
     /// A lock already exists
     #[error("lock exists at {0}")]
@@ -242,7 +242,7 @@ mod tests {
         match pidfile.acquire() {
             Err(err) => {
                 orig_pidfile.release().unwrap();
-                assert_eq!(err, PidlockError::LockExists);
+                assert_eq!(err, PidlockError::AlreadyOwned);
             }
             _ => {
                 orig_pidfile.release().unwrap();
@@ -311,8 +311,8 @@ mod tests {
 
         drop(file);
 
-        let mut pidfile = Pidlock::new(path);
-        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists));
+        let mut pidfile = Pidlock::new(path.clone());
+        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists(path)));
     }
 
     #[test]
@@ -333,9 +333,9 @@ mod tests {
 
         drop(file);
 
-        let mut pidfile = Pidlock::new(path);
+        let mut pidfile = Pidlock::new(path.clone());
 
-        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists));
+        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists(path)));
     }
 
     #[test]
@@ -352,7 +352,7 @@ mod tests {
 
         drop(file);
 
-        let mut pidfile = Pidlock::new(path);
-        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists));
+        let mut pidfile = Pidlock::new(path.clone());
+        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists(path)));
     }
 }
