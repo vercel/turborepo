@@ -145,6 +145,7 @@ pub async fn process_request_with_content_source(
                 }
 
                 if !header_map.contains_key("cache-control") {
+                    // The dev server contents might change at any time, we can't cache them.
                     header_map.append(
                         "cache-control",
                         hyper::header::HeaderValue::try_from("must-revalidate")?,
