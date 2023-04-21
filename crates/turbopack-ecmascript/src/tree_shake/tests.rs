@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 use rustc_hash::FxHasher;
 use serde::Deserialize;
 use swc_core::{
-    common::SourceMap,
+    common::{util::take::Take, SourceMap},
     ecma::{
         ast::{EsVersion, Id, Module},
         atoms::JsWord,
@@ -25,7 +25,7 @@ use super::{
         DepGraph, Dependency, InternedGraph, ItemId, ItemIdGroupKind, Mode, SplitModuleResult,
     },
     merge::Merger,
-    Analyzer,
+    Analyzer, Key,
 };
 
 #[fixture("tests/tree-shaker/analyzer/**/input.js")]
@@ -166,14 +166,18 @@ fn run(input: PathBuf) {
 
         let uri_of_module: JsWord = "entry.js".into();
 
-        let mut describe = |is_debug: bool, title: &str| {
+        let mut describe = |is_debug: bool, title: &str, entries: Vec<ItemIdGroupKind>| {
             let mut g = analyzer.g.clone();
             g.handle_weak(if is_debug {
                 Mode::Development
             } else {
                 Mode::Production
             });
-            let SplitModuleResult { modules, .. } = g.split_module(&uri_of_module, analyzer.items);
+            let SplitModuleResult {
+                modules,
+                entrypoints,
+                ..
+            } = g.split_module(&uri_of_module, analyzer.items);
 
             writeln!(s, "# Modules ({})", if is_debug { "dev" } else { "prod" }).unwrap();
             for (i, module) in modules.iter().enumerate() {
@@ -185,13 +189,30 @@ fn run(input: PathBuf) {
                 modules: &modules,
                 entry_module_uri: &uri_of_module,
             });
-            let module = merger.merge_recursively(modules[0].clone()).unwrap();
+            let mut entry = Module::dummy();
+
+            for e in &entries {
+                let key = match e {
+                    ItemIdGroupKind::ModuleEvaluation => Key::ModuleEvaluation,
+                    ItemIdGroupKind::Export(e) => Key::Export(e.0.to_string()),
+                    _ => continue,
+                };
+
+                let index = entrypoints[&key];
+                entry.body.extend(modules[index as usize].body.clone());
+            }
+
+            let module = merger.merge_recursively(entry).unwrap();
 
             writeln!(s, "## Merged ({})", title).unwrap();
             writeln!(s, "```js\n{}\n```", print(&cm, &[&module])).unwrap();
         };
-        describe(true, "module eval");
-        describe(false, "module eval");
+        describe(true, "module eval", vec![ItemIdGroupKind::ModuleEvaluation]);
+        describe(
+            false,
+            "module eval",
+            vec![ItemIdGroupKind::ModuleEvaluation],
+        );
 
         NormalizedOutput::from(s)
             .compare_to_file(input.with_file_name("output.md"))
