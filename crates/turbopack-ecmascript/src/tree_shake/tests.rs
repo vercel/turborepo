@@ -43,7 +43,7 @@ struct TestConfig {
 
 fn run(input: PathBuf) {
     let config = input.with_file_name("config.json");
-    let config = std::fs::read_to_string(&config).as_deref().unwrap_or("{}");
+    let config = std::fs::read_to_string(&config).unwrap_or_else(|| "{}".into());
     let config = serde_json::from_str::<TestConfig>(&config).unwrap_or_else(|e| {
         panic!("failed to parse config.json: {}", config);
     });
