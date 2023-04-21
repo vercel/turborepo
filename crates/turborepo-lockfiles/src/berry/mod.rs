@@ -274,8 +274,6 @@ impl<'a> BerryLockfile<'a> {
             }
         }
 
-        // TODO we're missing added resolution deps here
-
         for key in packages {
             let locator = Locator::try_from(key.as_str())?;
 
