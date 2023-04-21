@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use thiserror::Error;
 use turborepo_lockfiles::{self, npm_subgraph as real_npm_subgraph, NpmLockfile, Package};
@@ -22,8 +22,6 @@ enum Error {
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("error decoding protobuf")]
     Protobuf(#[from] prost::DecodeError),
-    #[error("unsupported package manager")]
-    UnsupportedPackageManager(String),
 }
 
 #[no_mangle]
@@ -41,9 +39,8 @@ pub extern "C" fn transitive_closure(buf: Buffer) -> Buffer {
 
 fn transitive_closure_inner(buf: Buffer) -> Result<proto::WorkspaceDependencies, Error> {
     let request: proto::TransitiveDepsRequest = buf.into_proto()?;
-    match request.package_manager.as_str() {
-        "npm" => npm_transitive_closure_inner(request),
-        pm => Err(Error::UnsupportedPackageManager(pm.to_string())),
+    match request.package_manager() {
+        proto::PackageManager::Npm => npm_transitive_closure_inner(request),
     }
 }
 
@@ -101,5 +98,13 @@ impl proto::PackageDependency {
     pub fn into_tuple(self) -> (String, String) {
         let Self { name, range } = self;
         (name, range)
+    }
+}
+
+impl fmt::Display for proto::PackageManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            proto::PackageManager::Npm => "npm",
+        })
     }
 }

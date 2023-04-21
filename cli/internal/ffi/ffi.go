@@ -18,6 +18,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"unsafe"
 
@@ -185,7 +186,7 @@ func TransitiveDeps(content []byte, packageManager string, workspaces map[string
 	}
 	req := ffi_proto.TransitiveDepsRequest{
 		Contents:       content,
-		PackageManager: packageManager,
+		PackageManager: toPackageManager(packageManager),
 		Workspaces:     flatWorkspaces,
 	}
 	reqBuf := Marshal(&req)
@@ -203,6 +204,15 @@ func TransitiveDeps(content []byte, packageManager string, workspaces map[string
 
 	dependencies := resp.GetDependencies()
 	return dependencies.GetDependencies(), nil
+}
+
+func toPackageManager(packageManager string) ffi_proto.PackageManager {
+	switch packageManager {
+	case "npm":
+		return ffi_proto.PackageManager_NPM
+	default:
+		panic(fmt.Sprintf("Invalid package manager string: %s", packageManager))
+	}
 }
 
 // NpmSubgraph returns the contents of a npm lockfile subgraph
