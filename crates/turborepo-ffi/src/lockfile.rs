@@ -63,7 +63,7 @@ fn npm_transitive_closure_inner(
                 .collect();
             let closure =
                 turborepo_lockfiles::transitive_closure(&lockfile, &workspace_dir, dependencies)?;
-            let list: Vec<_> = closure
+            let list = closure
                 .into_iter()
                 .map(proto::LockfilePackage::from)
                 .collect();
