@@ -104,7 +104,7 @@ impl CustomTransformer for EmotionTransformer {
             };
             *program = p.fold_with(&mut swc_emotion::emotion(
                 self.config.clone(),
-                Path::new(ctx.file_name_str.clone()),
+                Path::new(ctx.file_name_str),
                 hash as u32,
                 ctx.source_map.clone(),
                 ctx.comments.clone(),

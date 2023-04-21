@@ -37,7 +37,7 @@ pub enum EcmascriptInputTransform {
     ClientDirective(StringVc),
     ServerDirective(StringVc),
     CommonJs,
-    Custom(CustomTransformVc),
+    Plugin(TransformPluginVc),
     PresetEnv(EnvironmentVc),
     React {
         #[serde(default)]
@@ -81,7 +81,7 @@ pub trait CustomTransformer: Debug {
     fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Option<Program>;
 }
 
-/// A wrapper around a CustomTransformer instance, allowing it to operate with
+/// A wrapper around a TransformPlugin instance, allowing it to operate with
 /// the turbo_task caching requirements.
 #[turbo_tasks::value(
     transparent,
@@ -91,9 +91,9 @@ pub trait CustomTransformer: Debug {
     cell = "new"
 )]
 #[derive(Debug)]
-pub struct CustomTransform(#[turbo_tasks(trace_ignore)] Box<dyn CustomTransformer + Send + Sync>);
+pub struct TransformPlugin(#[turbo_tasks(trace_ignore)] Box<dyn CustomTransformer + Send + Sync>);
 
-impl CustomTransformer for CustomTransform {
+impl CustomTransformer for TransformPlugin {
     fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Option<Program> {
         self.0.transform(program, ctx)
     }
@@ -242,14 +242,14 @@ impl EcmascriptInputTransform {
                 }
 
                 let top_level_import_paths = &*top_level_import_paths.await?;
-                if top_level_import_paths.len() > 0 {
+                if !top_level_import_paths.is_empty() {
                     options.top_level_import_paths = top_level_import_paths
                         .iter()
                         .map(|s| JsWord::from(s.clone()))
                         .collect();
                 }
                 let meaningless_file_names = &*meaningless_file_names.await?;
-                if meaningless_file_names.len() > 0 {
+                if !meaningless_file_names.is_empty() {
                     options.meaningless_file_names = meaningless_file_names.clone();
                 }
 
@@ -320,7 +320,7 @@ impl EcmascriptInputTransform {
                         .emit();
                 }
             }
-            EcmascriptInputTransform::Custom(transform) => {
+            EcmascriptInputTransform::Plugin(transform) => {
                 if let Some(output) = transform.await?.transform(program, ctx) {
                     *program = output;
                 }

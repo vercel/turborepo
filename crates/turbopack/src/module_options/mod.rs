@@ -15,7 +15,7 @@ use turbopack_core::{
 };
 use turbopack_css::{CssInputTransform, CssInputTransformsVc};
 use turbopack_ecmascript::{
-    CustomTransformVc, EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions,
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, TransformPluginVc,
 };
 use turbopack_ecmascript_plugins::transform::emotion::build_emotion_transformer;
 use turbopack_mdx::MdxTransformOptions;
@@ -101,8 +101,8 @@ impl ModuleOptionsVc {
             transforms.push(EcmascriptInputTransform::StyledJsx);
         }
 
-        if let Some(transformer) = build_emotion_transformer(&*enable_emotion).await? {
-            transforms.push(EcmascriptInputTransform::Custom(CustomTransformVc::cell(
+        if let Some(transformer) = build_emotion_transformer(enable_emotion).await? {
+            transforms.push(EcmascriptInputTransform::Plugin(TransformPluginVc::cell(
                 transformer,
             )));
         }
