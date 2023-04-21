@@ -131,9 +131,7 @@ impl<'a> Descriptor<'a> {
 
     /// Removes the protocol from a version range
     pub fn strip_protocol(range: &str) -> &str {
-        range
-            .find(':')
-            .map_or(range, |colon_index| &range[colon_index + 1..])
+        range.split_once(':').map_or(range, |(_, rest)| rest)
     }
 
     pub fn into_owned(self) -> Descriptor<'static> {
@@ -147,7 +145,7 @@ impl<'a> Descriptor<'a> {
 
     /// Returns the protocol of the version range if one is present
     pub fn protocol(&self) -> Option<&str> {
-        self.range.find(':').map(|i| &self.range[0..i])
+        self.range.split_once(':').map(|(protocol, _)| protocol)
     }
 
     /// Access the range based on the lifetime of the underlying string slice
