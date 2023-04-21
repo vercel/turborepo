@@ -215,6 +215,8 @@ func toPackageManager(packageManager string) ffi_proto.PackageManager {
 	switch packageManager {
 	case "npm":
 		return ffi_proto.PackageManager_NPM
+	case "berry":
+		return ffi_proto.PackageManager_BERRY
 	default:
 		panic(fmt.Sprintf("Invalid package manager string: %s", packageManager))
 	}
@@ -230,7 +232,7 @@ func Subgraph(packageManager string, content []byte, workspaces []string, packag
 		Contents:       content,
 		Workspaces:     workspaces,
 		Packages:       packages,
-		PackageManager: packageManager,
+		PackageManager: toPackageManager(packageManager),
 		Resolutions:    additionalData,
 	}
 	reqBuf := Marshal(&req)
@@ -253,7 +255,7 @@ func Subgraph(packageManager string, content []byte, workspaces []string, packag
 func Patches(content []byte, packageManager string) []string {
 	req := ffi_proto.PatchesRequest{
 		Contents:       content,
-		PackageManager: packageManager,
+		PackageManager: toPackageManager(packageManager),
 	}
 	reqBuf := Marshal(&req)
 	resBuf := C.patches(reqBuf)
@@ -275,7 +277,7 @@ func Patches(content []byte, packageManager string) []string {
 // the cache.
 func GlobalChange(packageManager string, prevContents []byte, currContents []byte) bool {
 	req := ffi_proto.GlobalChangeRequest{
-		PackageManager: packageManager,
+		PackageManager: toPackageManager(packageManager),
 		PrevContents:   prevContents,
 		CurrContents:   currContents,
 	}

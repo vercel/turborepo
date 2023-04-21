@@ -64,18 +64,11 @@ fn npm_transitive_closure_inner(
         ..
     } = request;
     let lockfile = NpmLockfile::load(contents.as_slice())?;
-    let workspaces = workspaces
-        .into_iter()
-        .map(|(w, dependencies)| (w, dependencies.into()))
-        .collect();
-    let dependencies = turborepo_lockfiles::all_transitive_closures(&lockfile, workspaces)?
-        .into_iter()
-        .map(|(workspace, dependencies)| {
-            (workspace, proto::LockfilePackageList::from(dependencies))
-        })
-        .collect();
-
-    Ok(proto::WorkspaceDependencies { dependencies })
+    let dependencies = turborepo_lockfiles::all_transitive_closures(
+        &lockfile,
+        workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),
+    )?;
+    Ok(dependencies.into())
 }
 
 fn berry_transitive_closure_inner(
@@ -91,19 +84,13 @@ fn berry_transitive_closure_inner(
         resolutions.map(|r| turborepo_lockfiles::BerryManifest::with_resolutions(r.resolutions));
     let data = LockfileData::from_bytes(contents.as_slice())?;
     let lockfile = BerryLockfile::new(&data, resolutions.as_ref())?;
-    let workspaces = workspaces
-        .into_iter()
-        .map(|(w, dependencies)| (w, dependencies.into()))
-        .collect();
-    let dependencies = turborepo_lockfiles::all_transitive_closures(&lockfile, workspaces)?
-        .into_iter()
-        .map(|(workspace, dependencies)| {
-            (workspace, proto::LockfilePackageList::from(dependencies))
-        })
-        .collect();
-
-    Ok(proto::WorkspaceDependencies { dependencies })
+    let dependencies = turborepo_lockfiles::all_transitive_closures(
+        &lockfile,
+        workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),
+    )?;
+    Ok(dependencies.into())
 }
+
 #[no_mangle]
 pub extern "C" fn subgraph(buf: Buffer) -> Buffer {
     use proto::subgraph_response::Response;
@@ -136,36 +123,6 @@ fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
         )?,
     };
     Ok(contents)
-}
-
-impl From<proto::PackageDependencyList> for HashMap<String, String> {
-    fn from(other: proto::PackageDependencyList) -> Self {
-        other
-            .list
-            .into_iter()
-            .map(|proto::PackageDependency { name, range }| (name, range))
-            .collect()
-    }
-}
-
-impl From<HashSet<Package>> for proto::LockfilePackageList {
-    fn from(value: HashSet<Package>) -> Self {
-        proto::LockfilePackageList {
-            list: value
-                .into_iter()
-                .map(proto::LockfilePackage::from)
-                .collect(),
-        }
-    }
-}
-
-impl fmt::Display for proto::PackageManager {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            proto::PackageManager::Npm => "npm",
-            proto::PackageManager::Berry => "berry",
-        })
-    }
 }
 
 #[no_mangle]
@@ -220,5 +177,48 @@ fn global_change_inner(buf: Buffer) -> Result<bool, Error> {
             &request.prev_contents,
             &request.curr_contents,
         )?),
+    }
+}
+
+impl From<proto::PackageDependencyList> for HashMap<String, String> {
+    fn from(other: proto::PackageDependencyList) -> Self {
+        other
+            .list
+            .into_iter()
+            .map(|proto::PackageDependency { name, range }| (name, range))
+            .collect()
+    }
+}
+
+impl From<HashSet<Package>> for proto::LockfilePackageList {
+    fn from(value: HashSet<Package>) -> Self {
+        proto::LockfilePackageList {
+            list: value
+                .into_iter()
+                .map(proto::LockfilePackage::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<HashMap<String, HashSet<turborepo_lockfiles::Package>>> for proto::WorkspaceDependencies {
+    fn from(value: HashMap<String, HashSet<turborepo_lockfiles::Package>>) -> Self {
+        proto::WorkspaceDependencies {
+            dependencies: value
+                .into_iter()
+                .map(|(workspace, dependencies)| {
+                    (workspace, proto::LockfilePackageList::from(dependencies))
+                })
+                .collect(),
+        }
+    }
+}
+
+impl fmt::Display for proto::PackageManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            proto::PackageManager::Npm => "npm",
+            proto::PackageManager::Berry => "berry",
+        })
     }
 }
