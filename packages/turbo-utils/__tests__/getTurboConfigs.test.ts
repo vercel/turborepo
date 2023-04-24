@@ -8,7 +8,7 @@ describe("getTurboConfigs", () => {
     test: "common",
   });
 
-  it("single-package", async () => {
+  it("supports single-package repos", async () => {
     const { root } = useFixture({ fixture: `single-package` });
     const configs = getTurboConfigs(root);
     expect(configs).toHaveLength(1);
@@ -54,7 +54,7 @@ describe("getTurboConfigs", () => {
     `);
   });
 
-  it("workspace-configs", async () => {
+  it("supports repos using workspace configs", async () => {
     const { root } = useFixture({ fixture: `workspace-configs` });
     const configs = getTurboConfigs(root);
 
@@ -105,6 +105,35 @@ describe("getTurboConfigs", () => {
               "IS_SERVER",
             ],
           },
+        },
+      }
+    `);
+  });
+
+  it("supports repos with old workspace configuration format", async () => {
+    const { root } = useFixture({ fixture: `old-workspace-config` });
+    const configs = getTurboConfigs(root);
+
+    expect(configs).toHaveLength(1);
+    expect(configs[0].isRootConfig).toBe(true);
+    expect(configs[0].config).toMatchInlineSnapshot(`
+      Object {
+        "$schema": "https://turbo.build/schema.json",
+        "globalDependencies": Array [
+          "**/.env.*local",
+        ],
+        "pipeline": Object {
+          "build": Object {
+            "outputs": Array [
+              ".next/**",
+              "!.next/cache/**",
+            ],
+          },
+          "dev": Object {
+            "cache": false,
+            "persistent": true,
+          },
+          "lint": Object {},
         },
       }
     `);
