@@ -74,7 +74,7 @@ pub async fn daemon_server(base: &CommandBase, idle_time: &String) -> Result<(),
         let hash = format!("{}-turbo.log", base.repo_hash());
 
         let logs = RelativeSystemPathBuf::new("logs").expect("forward relative");
-        let file = RelativeSystemPathBuf::new(&hash).expect("forward relative");
+        let file = RelativeSystemPathBuf::new(hash).expect("forward relative");
 
         folder.join_relative(logs).join_relative(file)
     };

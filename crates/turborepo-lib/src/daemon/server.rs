@@ -14,7 +14,10 @@
 
 use std::{
     collections::HashSet,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -34,6 +37,7 @@ use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 use super::{
     bump_timeout::BumpTimeout,
+    endpoint::SocketOpenError,
     proto::{self},
     DaemonError,
 };
@@ -52,15 +56,18 @@ pub struct DaemonServer<T: Watcher> {
     watcher: Arc<HashGlobWatcher<T>>,
     shutdown: Mutex<Option<Sender<()>>>,
     shutdown_rx: Option<Receiver<()>>,
+
+    running: Arc<AtomicBool>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug)]
 pub enum CloseReason {
     Timeout,
     Shutdown,
     WatcherClosed,
     ServerClosed,
     Interrupt,
+    SocketOpenError(SocketOpenError),
 }
 
 impl DaemonServer<notify::RecommendedWatcher> {
@@ -91,7 +98,15 @@ impl DaemonServer<notify::RecommendedWatcher> {
             watcher,
             shutdown: Mutex::new(Some(send_shutdown)),
             shutdown_rx: Some(recv_shutdown),
+
+            running: Arc::new(AtomicBool::new(true))
         })
+    }
+}
+
+impl<T: Watcher> Drop for DaemonServer<T> {
+    fn drop(&mut self) {
+        self.running.store(false, Ordering::SeqCst);
     }
 }
 
@@ -128,6 +143,8 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
             };
         };
 
+        tracing::info!("here");
+
         #[cfg(feature = "http")]
         let server_fut = {
             // set up grpc reflection
@@ -149,9 +166,17 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
 
         #[cfg(not(feature = "http"))]
         let (_lock, server_fut) = {
-            let (lock, stream) = crate::daemon::endpoint::open_socket(self.daemon_root.clone())
-                .await
-                .unwrap();
+            let (lock, stream) = match crate::daemon::endpoint::open_socket(
+                self.daemon_root.clone(),
+                self.running.clone(),
+            )
+            .await
+            {
+                Ok(val) => val,
+                Err(e) => return CloseReason::SocketOpenError(e),
+            };
+
+            tracing::info!("starting server");
 
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(self.timeout.clone()))
@@ -164,6 +189,8 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                     .serve_with_incoming_shutdown(stream, shutdown_fut),
             )
         };
+
+        tracing::info!("select!");
 
         select! {
             _ = server_fut => {
@@ -265,7 +292,10 @@ impl<T: Watcher> NamedService for DaemonServer<T> {
 
 #[cfg(test)]
 mod test {
-    use std::time::{Duration, Instant};
+    use std::{
+        assert_matches,
+        time::{Duration, Instant},
+    };
 
     use tokio::select;
     use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
@@ -273,10 +303,15 @@ mod test {
     use super::DaemonServer;
     use crate::{commands::CommandBase, Args};
 
-    #[tokio::test]
+    // the windows runner starts a new thread to accept uds requests,
+    // so we need a multi-threaded runtime
+    #[tokio::test(flavor = "multi_thread")]
+    #[tracing_test::traced_test]
     async fn lifecycle() {
         let tempdir = tempfile::tempdir().unwrap();
         let path = AbsoluteSystemPathBuf::new(tempdir.path()).unwrap();
+
+        tracing::info!("start");
 
         let daemon = DaemonServer::new(
             &CommandBase::new(
@@ -292,6 +327,8 @@ mod test {
         )
         .unwrap();
 
+        tracing::info!("server started");
+
         let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
         let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
 
@@ -300,11 +337,18 @@ mod test {
             _ = tokio::time::sleep(Duration::from_millis(10)) => (),
         }
 
+        tracing::info!("yay we are done");
+
         assert!(!pid_path.exists(), "pid file must be deleted");
         assert!(!sock_path.exists(), "socket file must be deleted");
+
+        tracing::info!("and files cleaned up")
     }
 
-    #[tokio::test]
+    // the windows runner starts a new thread to accept uds requests,
+    // so we need a multi-threaded runtime
+    #[tokio::test(flavor = "multi_thread")]
+    #[tracing_test::traced_test]
     async fn timeout() {
         let tempdir = tempfile::tempdir().unwrap();
         let path = AbsoluteSystemPathBuf::new(tempdir.path()).unwrap();
@@ -332,7 +376,7 @@ mod test {
             now.elapsed() >= Duration::from_millis(5),
             "must wait at least 5ms"
         );
-        assert_eq!(
+        assert_matches::assert_matches!(
             super::CloseReason::Timeout,
             close_reason,
             "must close due to timeout"

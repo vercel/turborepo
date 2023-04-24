@@ -1,6 +1,14 @@
+use std::{
+    io::ErrorKind,
+    sync::{atomic::{AtomicBool, Ordering}, Arc},
+    time::Duration,
+};
+
 use futures::Stream;
 use log::debug;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+};
 use tonic::transport::server::Connected;
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
@@ -12,11 +20,17 @@ pub enum SocketOpenError {
     LockError(#[from] pidlock::PidlockError),
 }
 
+const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
+
 /// Gets a stream of incoming connections from a Unix socket.
 /// On windows, this will use the `uds_windows` crate, and
 /// poll the result in another thread.
+///
+/// note: the running param is used by the windows
+///       code path to shut down the non-blocking polling
 pub async fn open_socket(
     path: AbsoluteSystemPathBuf,
+    running: Arc<AtomicBool>,
 ) -> Result<
     (
         pidlock::Pidlock,
@@ -46,24 +60,40 @@ pub async fn open_socket(
 
     #[cfg(windows)]
     {
-        use std::sync::Arc;
-
         use tokio_util::compat::FuturesAsyncReadCompatExt;
 
         let listener = Arc::new(uds_windows::UnixListener::bind(sock_path)?);
-        let stream = futures::stream::unfold(listener, |listener| async move {
-            let task_listener = listener.clone();
-            let task = tokio::task::spawn_blocking(move || task_listener.accept());
+        listener.set_nonblocking(true)?;
 
-            let result = task
-                .await
-                .expect("no panic")
-                .map(|(stream, _)| stream)
-                .and_then(async_io::Async::new)
-                .map(FuturesAsyncReadCompatExt::compat)
-                .map(UdsWindowsStream);
+        let stream = futures::stream::unfold(listener, move |listener| {
+            let task_running = running.clone();
+            async move {
+                // ensure the underlying thread is aborted on drop
+                let task_listener = listener.clone();
+                let task = tokio::task::spawn_blocking(move || loop {
+                    break match task_listener.accept() {
+                        Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                            std::thread::sleep(WINDOWS_POLL_DURATION);
+                            if !task_running.load(Ordering::SeqCst) {
+                                None
+                            } else {
+                                continue;
+                            }
+                        }
+                        res => Some(res),
+                    };
+                });
 
-            Some((result, listener))
+                let result = task
+                    .await
+                    .expect("no panic")?
+                    .map(|(stream, _)| stream)
+                    .and_then(async_io::Async::new)
+                    .map(FuturesAsyncReadCompatExt::compat)
+                    .map(UdsWindowsStream);
+
+                Some((result, listener))
+            }
         });
 
         Ok((lock, stream))
@@ -137,7 +167,5 @@ impl<T: AsyncWrite> AsyncWrite for UdsWindowsStream<T> {
 #[cfg(windows)]
 impl<T> Connected for UdsWindowsStream<T> {
     type ConnectInfo = ();
-    fn connect_info(&self) -> Self::ConnectInfo {
-        ()
-    }
+    fn connect_info(&self) -> Self::ConnectInfo {}
 }

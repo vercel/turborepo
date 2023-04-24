@@ -78,7 +78,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
 
         // watch all the globs currently in the map
         for glob in start_globs {
-            self.config.include(glob.to_string()).await.ok();
+            self.config.include(&root_folder, &glob).await.ok();
         }
 
         while let Some(Ok(event)) = stream.next().await {
@@ -105,7 +105,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
             };
 
             for glob in globs_to_exclude {
-                self.config.exclude(glob.to_string()).await.unwrap();
+                self.config.exclude(self.relative_to.as_path(), &glob).await.unwrap();
             }
         }
     }
@@ -131,16 +131,10 @@ impl<T: Watcher> HashGlobWatcher<T> {
         let exclude = exclude.into_iter().map(Arc::new).collect();
 
         let result: Vec<(Glob, ConfigError)> = iter(include.iter())
-            .then(|glob| async {
+            .then(|glob| async move {
                 (
                     glob.clone(),
-                    self.config
-                        .include(format!(
-                            "{}/{}",
-                            self.relative_to.as_path().to_string_lossy(),
-                            glob.clone()
-                        ))
-                        .await,
+                    self.config.include(self.relative_to.as_path(), glob).await,
                 )
             })
             .filter_map(|(glob, res)| async {
