@@ -25,7 +25,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Arc, Mutex, MutexGuard,
+        Arc, Mutex,
     },
 };
 
@@ -191,61 +191,6 @@ impl GlobWatcher {
     }
 }
 
-#[tracing::instrument(skip_all)]
-fn handle_config_change<T: Watcher>(
-    mut watcher: MutexGuard<T>,
-    config: WatcherChange,
-) -> Result<(), Vec<notify::Error>> {
-    match config {
-        WatcherChange::Include(glob, _) => {
-            glob_to_paths(&glob)
-                .iter()
-                .map(|p| {
-                    trace!("watching {:?}", p);
-                    watcher.watch(p, notify::RecursiveMode::Recursive)
-                })
-                .map(|r| match r {
-                    Ok(()) => Ok(()),
-                    Err(Error {
-                        kind: notify::ErrorKind::PathNotFound,
-                        ..
-                    }) => {
-                        // if the path we are trying to watch doesn't exist
-                        // it is not immediately an error; glob_to_paths
-                        // will generate paths that potentially don't exist,
-                        // since it doesn't walk the fs, no no-op
-                        trace!("OOPS");
-                        Ok(())
-                    }
-                    Err(Error {
-                        kind: notify::ErrorKind::Generic(s),
-                        ..
-                    }) if s.contains("No such file or directory") => {
-                        trace!("OOPS 2");
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
-                })
-                .fold(Ok(()), |acc, next| match (acc, next) {
-                    (Ok(()), Ok(())) => Ok(()),
-                    (Ok(()), Err(e)) => Err(vec![e]),
-                    (Err(acc), Ok(())) => Err(acc),
-                    (Err(mut acc), Err(e)) => {
-                        acc.push(e);
-                        Err(acc)
-                    }
-                })
-        }
-        WatcherChange::Exclude(glob, _) => {
-            for p in glob_to_paths(&glob) {
-                // we don't care if this fails, it's just a best-effort
-                watcher.unwatch(&p).ok();
-            }
-            Ok(())
-        }
-    }
-}
-
 fn get_flush_id(relative_path: &Path) -> Option<u64> {
     relative_path
         .file_name()
@@ -292,26 +237,67 @@ pub enum ConfigError {
 impl<T: Watcher> WatchConfig<T> {
     /// Register a glob to be included by the watcher.
     #[tracing::instrument(skip(self))]
-    pub async fn include(&self, glob: String) -> Result<(), ConfigError> {
+    pub async fn include(&self, relative_to: &Path, glob: &str) -> Result<(), ConfigError> {
         trace!("including {:?}", glob);
 
-        handle_config_change(
-            self.watcher.lock().expect("only fails if poisoned"),
-            WatcherChange::Include(glob, Span::current().id()),
-        )
-        .map_err(ConfigError::WatchError)
+        glob_to_paths(&glob)
+            .iter()
+            .map(|p| relative_to.join(p))
+            .map(|p| {
+                trace!("watching {:?}", p);
+                self.watcher
+                    .lock()
+                    .expect("only fails if poisoned")
+                    .watch(&p, notify::RecursiveMode::Recursive)
+            })
+            .map(|r| match r {
+                Ok(()) => Ok(()),
+                Err(Error {
+                    kind: notify::ErrorKind::PathNotFound,
+                    ..
+                }) => {
+                    // if the path we are trying to watch doesn't exist
+                    // it is not immediately an error; glob_to_paths
+                    // will generate paths that potentially don't exist,
+                    // since it doesn't walk the fs, no no-op
+                    Ok(())
+                }
+                Err(Error {
+                    kind: notify::ErrorKind::Generic(s),
+                    ..
+                }) if s.contains("No such file or directory")
+                    || s.eq("Input watch path is neither a file nor a directory.") =>
+                {
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            })
+            .fold(Ok(()), |acc, next| match (acc, next) {
+                (Ok(()), Ok(())) => Ok(()),
+                (Ok(()), Err(e)) => Err(vec![e]),
+                (Err(acc), Ok(())) => Err(acc),
+                (Err(mut acc), Err(e)) => {
+                    acc.push(e);
+                    Err(acc)
+                }
+            })
+            .map_err(ConfigError::WatchError)
     }
 
     /// Register a glob to be excluded by the watcher.
     #[tracing::instrument(skip(self))]
-    pub async fn exclude(&self, glob: String) -> Result<(), ConfigError> {
+    pub async fn exclude(&self, relative_to: &Path, glob: &str) -> Result<(), ConfigError> {
         trace!("excluding {:?}", glob);
 
-        handle_config_change(
-            self.watcher.lock().expect("only fails if poisoned"),
-            WatcherChange::Exclude(glob, Span::current().id()),
-        )
-        .map_err(ConfigError::WatchError)
+        for p in glob_to_paths(&glob).iter().map(|p| relative_to.join(p)) {
+            // we don't care if this fails, it's just a best-effort
+            self.watcher
+                .lock()
+                .expect("only fails if poisoned")
+                .unwatch(&p)
+                .ok();
+        }
+        Ok(())
     }
 
     /// Await a full filesystem flush from the watcher.
@@ -506,7 +492,8 @@ mod test {
     #[test_case("foo/ab?/bar", vec!["foo"] ; "question marks ")]
     #[test_case("foo/{a,b}/ab?", vec!["foo"])]
     #[test_case("/abc", vec!["/abc"])]
-    fn test_handles_doublestar(glob: &str, paths_exp: Vec<&str>) {
+    #[test_case("/abc/abc/*", vec!["/abc/abc"])]
+    fn test_glob_to_paths(glob: &str, paths_exp: Vec<&str>) {
         let mut paths = super::glob_to_paths(glob);
         paths.sort();
         assert_eq!(

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{time::Duration, path::PathBuf};
 
 use futures::{join, StreamExt};
 use globwatch::GlobWatcher;
@@ -26,12 +26,12 @@ async fn main() {
         for x in 0..5 {
             info!(parent: &span, "iteration {}", x);
             config
-                .include("./globwatch/src/**".to_string())
+                .include(&PathBuf::try_from(".").unwrap(), "globwatch/src/**")
                 .await
                 .unwrap();
             tokio::time::sleep(Duration::from_secs(1)).await;
             config
-                .exclude("./globwatch/src/**".to_string())
+                .exclude(&PathBuf::try_from(".").unwrap(), "globwatch/src/**")
                 .await
                 .unwrap();
             tokio::time::sleep(Duration::from_secs(1)).await;
