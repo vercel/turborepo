@@ -22,6 +22,10 @@ const (
 	topologicalPipelineDelimiter = "^"
 )
 
+type SpaceConfig struct {
+	ID string `json:"id"`
+}
+
 type rawTurboJSON struct {
 	// Global root filesystem dependencies
 	GlobalDependencies []string `json:"globalDependencies,omitempty"`
@@ -39,9 +43,12 @@ type rawTurboJSON struct {
 
 	// Extends can be the name of another workspace
 	Extends []string `json:"extends,omitempty"`
+
+	// Configuration for the space
+	Space SpaceConfig `json:"experimentalSpaces,omitempty"`
 }
 
-// pristineTurboJSON is used when marshaling a TurboJSON object into a turbo.json string
+// pristineTurboJSON is used when marshaling a TurboJSON object into a json string
 // Notably, it includes a PristinePipeline instead of the regular Pipeline. (i.e. TaskDefinition
 // instead of BookkeepingTaskDefinition.)
 type pristineTurboJSON struct {
@@ -51,6 +58,7 @@ type pristineTurboJSON struct {
 	Pipeline             PristinePipeline   `json:"pipeline"`
 	RemoteCacheOptions   RemoteCacheOptions `json:"remoteCache,omitempty"`
 	Extends              []string           `json:"extends,omitempty"`
+	Space                SpaceConfig        `json:"experimentalSpaces,omitempty"`
 }
 
 // TurboJSON represents a turbo.json configuration file
@@ -60,9 +68,8 @@ type TurboJSON struct {
 	GlobalPassthroughEnv []string
 	Pipeline             Pipeline
 	RemoteCacheOptions   RemoteCacheOptions
-
-	// A list of Workspace names
-	Extends []string
+	Extends              []string // A list of Workspace names
+	SpaceID              string
 }
 
 // RemoteCacheOptions is a struct for deserializing .remoteCache of configFile
@@ -611,7 +618,7 @@ func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON deserializes the contents of turbo.json into a TurboJSON struct
-func (c *TurboJSON) UnmarshalJSON(data []byte) error {
+func (tj *TurboJSON) UnmarshalJSON(data []byte) error {
 	raw := &rawTurboJSON{}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -642,21 +649,22 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 	}
 
 	// turn the set into an array and assign to the TurboJSON struct fields.
-	c.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
-	sort.Strings(c.GlobalEnv)
+	tj.GlobalEnv = envVarDependencies.UnsafeListOfStrings()
+	sort.Strings(tj.GlobalEnv)
 
 	if raw.GlobalPassthroughEnv != nil {
-		c.GlobalPassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
-		sort.Strings(c.GlobalPassthroughEnv)
+		tj.GlobalPassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
+		sort.Strings(tj.GlobalPassthroughEnv)
 	}
 
-	c.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
-	sort.Strings(c.GlobalDeps)
+	tj.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
+	sort.Strings(tj.GlobalDeps)
 
 	// copy these over, we don't need any changes here.
-	c.Pipeline = raw.Pipeline
-	c.RemoteCacheOptions = raw.RemoteCacheOptions
-	c.Extends = raw.Extends
+	tj.Pipeline = raw.Pipeline
+	tj.RemoteCacheOptions = raw.RemoteCacheOptions
+	tj.Extends = raw.Extends
+	tj.SpaceID = raw.Space.ID
 
 	return nil
 }
@@ -666,13 +674,14 @@ func (c *TurboJSON) UnmarshalJSON(data []byte) error {
 // This is used by `turbo prune` to generate a pruned turbo.json
 // and also by --summarize & --dry=json to serialize the known config
 // into something we can print to screen
-func (c *TurboJSON) MarshalJSON() ([]byte, error) {
+func (tj *TurboJSON) MarshalJSON() ([]byte, error) {
 	raw := pristineTurboJSON{}
-	raw.GlobalDependencies = c.GlobalDeps
-	raw.GlobalEnv = c.GlobalEnv
-	raw.GlobalPassthroughEnv = c.GlobalPassthroughEnv
-	raw.Pipeline = c.Pipeline.Pristine()
-	raw.RemoteCacheOptions = c.RemoteCacheOptions
+	raw.GlobalDependencies = tj.GlobalDeps
+	raw.GlobalEnv = tj.GlobalEnv
+	raw.GlobalPassthroughEnv = tj.GlobalPassthroughEnv
+	raw.Pipeline = tj.Pipeline.Pristine()
+	raw.RemoteCacheOptions = tj.RemoteCacheOptions
+	raw.Space = SpaceConfig{ID: tj.SpaceID}
 
 	return json.Marshal(&raw)
 }
