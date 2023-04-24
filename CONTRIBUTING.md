@@ -81,6 +81,11 @@ Then from the root directory, you can run:
   ```bash
   pnpm test -- --filter=turborepo-tests-integration
   ```
+- A single Integration test
+  e.g to run everything in `tests/run_summary`:
+  ```
+  pnpm -F turborepo-tests-integration -- "run_summary"
+  ```
 - E2E test
   ```bash
   pnpm -- turbo e2e --filter=cli
