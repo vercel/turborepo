@@ -23,3 +23,5 @@ struct Buffer subgraph(struct Buffer buf);
 struct Buffer patches(struct Buffer buf);
 
 struct Buffer global_change(struct Buffer buf);
+
+struct Buffer verify_signature(struct Buffer buffer);

@@ -368,7 +368,7 @@ func newHTTPCache(opts Opts, client client, recorder analytics.Recorder) *httpCa
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
-			teamId:  client.GetTeamID(),
+			teamID:  client.GetTeamID(),
 			enabled: opts.RemoteCacheOpts.Signature,
 		},
 	}
