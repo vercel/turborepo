@@ -99,7 +99,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
             shutdown: Mutex::new(Some(send_shutdown)),
             shutdown_rx: Some(recv_shutdown),
 
-            running: Arc::new(AtomicBool::new(true))
+            running: Arc::new(AtomicBool::new(true)),
         })
     }
 }

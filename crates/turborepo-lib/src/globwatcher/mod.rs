@@ -105,7 +105,10 @@ impl<T: Watcher> HashGlobWatcher<T> {
             };
 
             for glob in globs_to_exclude {
-                self.config.exclude(self.relative_to.as_path(), &glob).await.unwrap();
+                self.config
+                    .exclude(self.relative_to.as_path(), &glob)
+                    .await
+                    .unwrap();
             }
         }
     }

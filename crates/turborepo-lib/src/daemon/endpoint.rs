@@ -1,14 +1,15 @@
 use std::{
     io::ErrorKind,
-    sync::{atomic::{AtomicBool, Ordering}, Arc},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
 use futures::Stream;
 use log::debug;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::server::Connected;
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
