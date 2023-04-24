@@ -78,7 +78,7 @@ impl Lockfile for NpmLockfile {
             .transpose()
     }
 
-    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error> {
+    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
         self.packages
             .get(key)
             .map(|pkg| {
@@ -91,7 +91,7 @@ impl Lockfile for NpmLockfile {
                                     let version = entry.version.as_deref().ok_or_else(|| {
                                         Error::MissingVersion(possible_key.clone())
                                     })?;
-                                    Ok((possible_key, version))
+                                    Ok((possible_key, version.to_string()))
                                 })
                             })
                     })
