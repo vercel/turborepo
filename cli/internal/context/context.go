@@ -225,25 +225,8 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 	}
 	c.WorkspaceInfos.PackageJSONs[util.RootPkgName] = rootPackageJSON
 
-	if lockFile, err := c.PackageManager.ReadLockfile(repoRoot, rootPackageJSON); err != nil {
-		warnings.append(err)
-		rootPackageJSON.TransitiveDeps = nil
-		rootPackageJSON.ExternalDepsHash = ""
-	} else {
-		c.Lockfile = lockFile
-		if closures, err := lockfile.AllTransitiveClosures(c.externalWorkspaceDeps(), c.Lockfile); err != nil {
-			warnings.append(err)
-		} else {
-			for _, pkg := range c.WorkspaceInfos.PackageJSONs {
-				if closure, ok := closures[pkg.Dir.ToUnixPath()]; ok {
-					if err := pkg.SetExternalDeps(closure); err != nil {
-						return nil, err
-					}
-				} else {
-					return nil, fmt.Errorf("Unable to calculate closure for workspace %s", pkg.Dir.ToString())
-				}
-			}
-		}
+	if err := c.populateExternalDeps(repoRoot, rootPackageJSON, &warnings); err != nil {
+		return nil, err
 	}
 
 	return c, warnings.errorOrNil()
@@ -361,6 +344,31 @@ func (c *Context) externalWorkspaceDeps() map[turbopath.AnchoredUnixPath]map[str
 		workspaces[pkg.Dir.ToUnixPath()] = pkg.UnresolvedExternalDeps
 	}
 	return workspaces
+}
+
+func (c *Context) populateExternalDeps(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, warnings *Warnings) error {
+	if lockFile, err := c.PackageManager.ReadLockfile(repoRoot, rootPackageJSON); err != nil {
+		warnings.append(err)
+		rootPackageJSON.TransitiveDeps = nil
+		rootPackageJSON.ExternalDepsHash = ""
+	} else {
+		c.Lockfile = lockFile
+		if closures, err := lockfile.AllTransitiveClosures(c.externalWorkspaceDeps(), c.Lockfile); err != nil {
+			warnings.append(err)
+		} else {
+			for _, pkg := range c.WorkspaceInfos.PackageJSONs {
+				if closure, ok := closures[pkg.Dir.ToUnixPath()]; ok {
+					if err := pkg.SetExternalDeps(closure); err != nil {
+						return err
+					}
+				} else {
+					return fmt.Errorf("Unable to calculate closure for workspace %s", pkg.Dir.ToString())
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // InternalDependencies finds all dependencies required by the slice of starting
