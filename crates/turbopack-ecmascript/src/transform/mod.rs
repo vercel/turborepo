@@ -5,7 +5,7 @@ use std::{
     collections::hash_map::DefaultHasher,
     fmt::Debug,
     hash::{Hash, Hasher},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -117,6 +117,11 @@ pub struct EcmascriptInputTransforms(Vec<EcmascriptInputTransform>);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptInputTransformsVc {
+    #[turbo_tasks::function]
+    pub fn empty() -> Self {
+        EcmascriptInputTransformsVc::cell(Vec::new())
+    }
+
     #[turbo_tasks::function]
     pub async fn extend(self, other: EcmascriptInputTransformsVc) -> Result<Self> {
         let mut transforms = self.await?.clone_value();
@@ -290,7 +295,7 @@ impl EcmascriptInputTransform {
                 }
 
                 program.visit_mut_with(&mut styled_components::styled_components(
-                    FileName::Anon,
+                    FileName::Real(PathBuf::from(file_path.await?.path.clone())),
                     file_name_hash,
                     options,
                 ));

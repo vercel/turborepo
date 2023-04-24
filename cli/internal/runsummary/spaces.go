@@ -11,30 +11,14 @@ type spacesRunResponse struct {
 }
 
 type spacesRunPayload struct {
-	// StartTime is when this run was started
-	StartTime int64 `json:"startTime,omitempty"`
-
-	// EndTime is when this run ended. We will never be submitting start and endtime at the same time.
-	EndTime int64 `json:"endTime,omitempty"`
-
-	// Status is
-	Status string `json:"status,omitempty"`
-
-	// Type should be hardcoded to TURBO
-	Type string `json:"type,omitempty"`
-
-	// ExitCode is the exit code for the full run
-	ExitCode int `json:"exitCode,omitempty"`
-
-	// The command that kicked off the turbo run
-	Command string `json:"command,omitempty"`
-
-	// RepositoryPath is the relative directory from the turborepo root to where
-	// the command was invoked.
-	RepositoryPath string `json:"repositoryPath,omitempty"`
-
-	// Context is the host on which this Run was executed (e.g. Github Action, Vercel, etc)
-	Context string `json:"context,omitempty"`
+	StartTime      int64  `json:"startTime,omitempty"`      // when the run was started
+	EndTime        int64  `json:"endTime,omitempty"`        // when the run ended. we should never submit start and end at the same time.
+	Status         string `json:"status,omitempty"`         // Status is "running" or "completed"
+	Type           string `json:"type,omitempty"`           // hardcoded to "TURBO"
+	ExitCode       int    `json:"exitCode,omitempty"`       // exit code for the full run
+	Command        string `json:"command,omitempty"`        // the thing that kicked off the turbo run
+	RepositoryPath string `json:"repositoryPath,omitempty"` // where the command was invoked from
+	Context        string `json:"context,omitempty"`        // the host on which this Run was executed (e.g. Github Action, Vercel, etc)
 
 	// TODO: we need to add these in
 	// originationUser string
@@ -64,6 +48,7 @@ type spacesTask struct {
 	ExitCode     int               `json:"exitCode,omitempty"`
 	Dependencies []string          `json:"dependencies,omitempty"`
 	Dependents   []string          `json:"dependents,omitempty"`
+	Logs         string            `json:"log"`
 }
 
 func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
@@ -106,5 +91,6 @@ func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
 		ExitCode:     *taskSummary.Execution.exitCode,
 		Dependencies: taskSummary.Dependencies,
 		Dependents:   taskSummary.Dependents,
+		Logs:         string(taskSummary.GetLogs()),
 	}
 }

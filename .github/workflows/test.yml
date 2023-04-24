@@ -158,8 +158,7 @@ jobs:
         with:
           PATTERNS: |
             examples/**
-            examples_tests/**
-            scripts/run-example.sh
+            turborepo-tests/examples/**
             !**.md
             !**.mdx
 
@@ -235,12 +234,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - run: pnpm -- turbo run test --filter=cli --color
+      - run: turbo run test --filter=cli --color
 
   go_integration:
     name: Go Integration Tests
@@ -256,7 +256,8 @@ jobs:
             runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -269,7 +270,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: pnpm -- turbo run integration-tests --filter=cli
+        run: turbo run test --filter=turborepo-tests-integration
         env:
           GO_TAG: rust
 
@@ -291,14 +292,14 @@ jobs:
             runner: windows-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
-        # Turbo has already been built in previous step, no need to rebuild
-        run: pnpm -- turbo run e2e-prebuilt --filter=cli
+        run: turbo run test --filter=turborepo-tests-e2e
 
   go_examples:
     name: Go Cli Examples
@@ -363,7 +364,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -396,7 +398,7 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
-        run: pnpm -- turbo run run-example -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
   rust_prepare:
     name: Check rust crates
@@ -565,7 +567,7 @@ jobs:
       - name: Post logs if there are errors
         run: |
           cp packages/next-swc/cargo_output.log ./cargo_output.log
-          if grep 'error: could not compile' ./cargo_output.log; then (printf "This changes may fail to build \`next-swc\`. \n\n\`\`\`\n"; cat ./cargo_output.log; printf "\`\`\`\n") > out.log; else printf ":white_check_mark: This changes can build \`next-swc\`" > out.log; fi
+          if grep 'error: could not compile' ./cargo_output.log; then (printf "This change may fail to build \`next-swc\`. \n\n\`\`\`\n"; cat ./cargo_output.log; printf "\`\`\`\n") > out.log; else printf ":white_check_mark: This change can build \`next-swc\`" > out.log; fi
 
       - name: PR comment with file
         uses: thollander/actions-comment-pull-request@v2
@@ -1107,8 +1109,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - uses: ./.github/actions/setup-turborepo-environment
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ubuntu
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -1117,7 +1119,7 @@ jobs:
         # This is the syntax for running the `//#lint` task specifically in turbo.json
         # It runs the taplo check on taplo.toml, and prettier check across the whole repo.
         # TODO: run prettier in individual workspaces instead of globally.
-        run: pnpm -- turbo run lint --filter=//
+        run: turbo run lint --filter=//
 
   final:
     name: Ok

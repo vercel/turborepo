@@ -10,7 +10,6 @@ Thanks for your interest in contributing to Turbo!
     - [TLS Implementation](#tls-implementation)
     - [Running Turborepo Tests](#running-turborepo-tests)
       - [Go Tests](#go-tests)
-      - [Rust Tests](#rust-tests)
   - [Debugging Turborepo](#debugging-turborepo)
   - [Benchmarking Turborepo](#benchmarking-turborepo)
   - [Updating `turbo`](#updating-turbo)
@@ -50,28 +49,46 @@ to the build command. This allows for us to build for more platforms, as `native
 
 ### Running Turborepo Tests
 
-Dependencies
+Install dependencies
 
-1. Install `jq`, `sponge`, and `zstd`
+On macOS:
 
-On macOS: `brew install sponge jq zstd`
+```bash
+brew install moreutils jq zstd # (moreutils is for sponge)
+```
 
 #### Go Tests
 
-From the root directory, you can
+First: `npm install -g turbo`.
 
-- run unit tests with `pnpm run --filter=cli test`
-- run integration tests with `pnpm run --filter=cli integration-tests`
-- run e2e tests with `pnpm run --filter=cli e2e`
+Then from the root directory, you can run:
 
-To run a single Go test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
-
-#### Rust Tests
-
-The recommended way to run tests is: `cargo nextest run -p turborepo-lib --features rustls-tls`.
-You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
-
-You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.
+- Go unit tests
+  ```bash
+  pnpm test -- --filter=cli
+  ```
+- A single Go unit test (see more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages))
+  ```bash
+  cd cli && go test ./[path/to/package/]
+  ```
+- Rust unit tests ([install `nextest` first](https://nexte.st/book/pre-built-binaries.html))
+  ```bash
+  cargo nextest run -p turborepo-lib --features rustls-tls
+  ```
+  You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html)
+  directly with `cargo test -p turborepo-lib`.
+- CLI Integration tests
+  ```bash
+  pnpm test -- --filter=turborepo-tests-integration
+  ```
+- E2E test
+  ```bash
+  pnpm -- turbo e2e --filter=cli
+  ```
+- Example tests
+  ```bash
+  pnpm test -- --filter=turborepo-tests-examples -- <example-name> <packagemanager>
+  ```
 
 ## Debugging Turborepo
 
