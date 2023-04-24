@@ -391,8 +391,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			err = core.StopExecution(err)
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
-			// Set to nil so we don't short-circuit any other execution
-			//err = nil
 		}
 
 		return taskExecutionSummary, err
