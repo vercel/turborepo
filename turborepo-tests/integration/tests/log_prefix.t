@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/_helpers/setup.sh
+  $ . ${TESTDIR}/../../helpers/setup.sh
   $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd) run_logging
 
 # Run for the first time with --log-prefix=none

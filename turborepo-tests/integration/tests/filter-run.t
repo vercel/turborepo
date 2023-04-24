@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/_helpers/setup.sh
+  $ . ${TESTDIR}/../../helpers/setup.sh
   $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
 
 # Running with --filter works and exits with success

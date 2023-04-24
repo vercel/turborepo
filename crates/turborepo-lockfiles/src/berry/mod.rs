@@ -515,7 +515,7 @@ mod test {
     #[test]
     fn test_deserialize_lockfile() {
         let lockfile: LockfileData =
-            serde_yaml::from_slice(include_bytes!("../../fixtures/berry.lock")).unwrap();
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
         assert_eq!(lockfile.metadata.version, 6);
         assert_eq!(lockfile.metadata.cache_key.as_deref(), Some("8c0"));
     }
@@ -523,7 +523,7 @@ mod test {
     #[test]
     fn test_roundtrip() {
         let contents = include_str!("../../fixtures/berry.lock");
-        let lockfile: LockfileData = serde_yaml::from_str(contents).unwrap();
+        let lockfile = LockfileData::from_bytes(contents.as_bytes()).unwrap();
         let new_contents = lockfile.to_string();
         assert_eq!(contents, new_contents);
     }
@@ -728,9 +728,10 @@ mod test {
 
     #[test]
     fn test_robust_resolutions_dependencies() {
-        let data: LockfileData =
-            serde_yaml::from_str(include_str!("../../fixtures/robust-berry-resolutions.lock"))
-                .unwrap();
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/robust-berry-resolutions.lock"
+        ))
+        .unwrap();
         let manifest = BerryManifest {
             resolutions: Some(
                 [("ajv".to_string(), "^8".to_string())]

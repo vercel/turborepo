@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/10-too-many
 
   $ ${TURBO} run build --concurrency=1

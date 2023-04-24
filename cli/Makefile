@@ -328,5 +328,5 @@ fixture-%:
 	@echo "fixture setup $($@_FIXTURE)"
 	rm -rf testbed
 	mkdir -p testbed
-	./integration_tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
+	../turborepo-tests/integration/tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
 
