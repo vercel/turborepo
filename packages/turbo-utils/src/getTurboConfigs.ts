@@ -15,6 +15,11 @@ export type TurboConfigs = Array<{
   isRootConfig: boolean;
 }>;
 
+interface PackageJson {
+  turbo?: Schema;
+  workspaces?: { packages: Array<string> } | Array<string>;
+}
+
 interface Options {
   cache?: boolean;
 }
@@ -34,8 +39,15 @@ function getWorkspaceGlobs(root: string): Array<string> {
     } else {
       const packageJson = JSON.parse(
         fs.readFileSync(path.join(root, "package.json"), "utf8")
-      );
-      return packageJson?.workspaces || [];
+      ) as PackageJson;
+      if (packageJson?.workspaces) {
+        // support nested packages workspace format
+        if ("packages" in packageJson?.workspaces) {
+          return packageJson.workspaces.packages || [];
+        }
+        return packageJson?.workspaces || [];
+      }
+      return [];
     }
   } catch (e) {
     return [];
