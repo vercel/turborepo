@@ -22,6 +22,8 @@ const (
 	topologicalPipelineDelimiter = "^"
 )
 
+// SpaceConfig is used to marshal and unmarshal the
+// `experimentalSpaceId` field in a turbo.json
 type SpaceConfig struct {
 	ID string `json:"id"`
 }
@@ -45,7 +47,7 @@ type rawTurboJSON struct {
 	Extends []string `json:"extends,omitempty"`
 
 	// Configuration for the space
-	Space SpaceConfig `json:"experimentalSpaces,omitempty"`
+	Space *SpaceConfig `json:"experimentalSpaces,omitempty"`
 }
 
 // pristineTurboJSON is used when marshaling a TurboJSON object into a json string
@@ -58,7 +60,7 @@ type pristineTurboJSON struct {
 	Pipeline             PristinePipeline   `json:"pipeline"`
 	RemoteCacheOptions   RemoteCacheOptions `json:"remoteCache,omitempty"`
 	Extends              []string           `json:"extends,omitempty"`
-	Space                SpaceConfig        `json:"experimentalSpaces,omitempty"`
+	Space                *SpaceConfig       `json:"experimentalSpaces,omitempty"`
 }
 
 // TurboJSON represents a turbo.json configuration file
@@ -664,7 +666,10 @@ func (tj *TurboJSON) UnmarshalJSON(data []byte) error {
 	tj.Pipeline = raw.Pipeline
 	tj.RemoteCacheOptions = raw.RemoteCacheOptions
 	tj.Extends = raw.Extends
-	tj.SpaceID = raw.Space.ID
+	// Directly to SpaceID, we don't need to keep the struct
+	if raw.Space != nil {
+		tj.SpaceID = raw.Space.ID
+	}
 
 	return nil
 }
@@ -681,7 +686,10 @@ func (tj *TurboJSON) MarshalJSON() ([]byte, error) {
 	raw.GlobalPassthroughEnv = tj.GlobalPassthroughEnv
 	raw.Pipeline = tj.Pipeline.Pristine()
 	raw.RemoteCacheOptions = tj.RemoteCacheOptions
-	raw.Space = SpaceConfig{ID: tj.SpaceID}
+
+	if tj.SpaceID != "" {
+		raw.Space = &SpaceConfig{ID: tj.SpaceID}
+	}
 
 	return json.Marshal(&raw)
 }
