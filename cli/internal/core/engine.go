@@ -98,7 +98,8 @@ func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	var sema = util.NewSemaphore(opts.Concurrency)
 	var errored int32
 
-	// Returning an error from the Walk callback cancels downstream tasks, but not unrelated tasks.
+	// The dag library's behavior is that returning an error from the Walk callback cancels downstream
+	// tasks, but not unrelated tasks.
 	// The behavior we want is to either cancel everything or nothing (--continue). So, we do our own
 	// error handling. Collect any errors that occur in "errors", and report them as the result of
 	// Execute. panic on any other error returned by Walk.
