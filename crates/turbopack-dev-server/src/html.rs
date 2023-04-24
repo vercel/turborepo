@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
 use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
@@ -140,21 +140,27 @@ impl DevHtmlAssetVc {
     async fn chunks(self) -> Result<AssetsVc> {
         let this = self.await?;
 
-        let mut all_assets = vec![];
+        let all_assets = this
+            .entries
+            .iter()
+            .map(|entry| async move {
+                let (chunkable_asset, chunking_context, runtime_entries) = entry;
 
-        // TODO(alexkirsz) try_join
-        for entry in &this.entries {
-            let (chunkable_asset, chunking_context, runtime_entries) = entry;
+                let chunk = chunkable_asset.as_root_chunk(*chunking_context);
+                let assets = if let Some(runtime_entries) = runtime_entries {
+                    chunking_context.evaluated_chunk_group(chunk, *runtime_entries)
+                } else {
+                    chunking_context.chunk_group(chunk)
+                };
 
-            let chunk = chunkable_asset.as_root_chunk(*chunking_context);
-            let assets = if let Some(runtime_entries) = runtime_entries {
-                chunking_context.evaluated_chunk_group(chunk, *runtime_entries)
-            } else {
-                chunking_context.chunk_group(chunk)
-            };
-
-            all_assets.extend(assets.await?.iter());
-        }
+                Ok(assets.await?)
+            })
+            .try_join()
+            .await?
+            .iter()
+            .flat_map(|assets| assets.iter())
+            .copied()
+            .collect();
 
         Ok(AssetsVc::cell(all_assets))
     }
