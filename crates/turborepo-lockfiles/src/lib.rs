@@ -54,11 +54,6 @@ pub fn transitive_closure<L: Lockfile>(
     workspace_path: &str,
     unresolved_deps: HashMap<String, String>,
 ) -> Result<HashSet<Package>, Error> {
-    println!(
-        "workspace: {}, unresolved_deps: {}",
-        workspace_path,
-        serde_json::to_string_pretty(&unresolved_deps).unwrap()
-    );
     let mut transitive_deps = HashSet::new();
     transitive_closure_helper(
         lockfile,

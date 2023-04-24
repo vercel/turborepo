@@ -267,7 +267,21 @@ mod test {
                     description: None
                 }
             }
-        )
+        );
+
+        assert_eq!(
+            parse_resolution("is-even/is-odd").unwrap(),
+            Resolution {
+                from: Some(Specifier {
+                    full_name: "is-even",
+                    description: None
+                }),
+                descriptor: Specifier {
+                    full_name: "is-odd",
+                    description: None
+                }
+            }
+        );
     }
 
     #[test]
