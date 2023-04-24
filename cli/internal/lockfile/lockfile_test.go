@@ -29,19 +29,19 @@ func Test_ByKeySortIsStable(t *testing.T) {
 
 type mockLockfile struct{}
 
-func (m *mockLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
+func (m *mockLockfile) ResolvePackage(_ turbopath.AnchoredUnixPath, _ string, _ string) (Package, error) {
 	panic("unimplemented")
 }
 
-func (m *mockLockfile) AllDependencies(key string) (map[string]string, bool) {
+func (m *mockLockfile) AllDependencies(_ string) (map[string]string, bool) {
 	panic("unimplemented")
 }
 
-func (m *mockLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
+func (m *mockLockfile) Subgraph(_ []turbopath.AnchoredSystemPath, _ []string) (Lockfile, error) {
 	panic("unimplemented")
 }
 
-func (m *mockLockfile) Encode(w io.Writer) error {
+func (m *mockLockfile) Encode(_ io.Writer) error {
 	panic("unimplemented")
 }
 
@@ -49,7 +49,7 @@ func (m *mockLockfile) Patches() []turbopath.AnchoredUnixPath {
 	panic("unimplemented")
 }
 
-func (m *mockLockfile) GlobalChange(other Lockfile) bool {
+func (m *mockLockfile) GlobalChange(_ Lockfile) bool {
 	panic("unimplemented")
 }
 
