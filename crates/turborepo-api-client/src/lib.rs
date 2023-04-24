@@ -308,16 +308,13 @@ impl APIClient {
         false
     }
 
-    pub fn new(
-        base_url: impl AsRef<str>,
-        timeout: Option<u64>,
-        version: &'static str,
-    ) -> Result<Self> {
-        let client = match timeout {
-            Some(timeout) => reqwest::Client::builder()
+    pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &'static str) -> Result<Self> {
+        let client = if timeout != 0 {
+            reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout))
-                .build()?,
-            None => reqwest::Client::builder().build()?,
+                .build()?
+        } else {
+            reqwest::Client::builder().build()?
         };
 
         let user_agent = format!(

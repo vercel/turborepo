@@ -13,7 +13,7 @@ pub struct ClientConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 struct ClientConfigValue {
-    remote_cache_timeout: Option<u64>,
+    remote_cache_timeout: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -23,24 +23,13 @@ pub struct ClientConfigLoader {
 }
 
 impl ClientConfig {
-    #[allow(dead_code)]
-    pub fn remote_cache_timeout(&self) -> Option<u64> {
-        match self.config.remote_cache_timeout {
-            // Pass 0 to get no timeout.
-            Some(0) => None,
-
-            // Pass any non-zero uint64 to get a timeout of that duration measured in seconds.
-            Some(other) => Some(other),
-
-            // If the _config_ doesn't have a remote_cache_timeout, give them the default.
-            None => Some(DEFAULT_TIMEOUT),
-        }
+    pub fn remote_cache_timeout(&self) -> u64 {
+        self.config.remote_cache_timeout
     }
 }
 
 impl ClientConfigLoader {
     /// Creates a loader that will load the client config
-    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             remote_cache_timeout: None,
@@ -49,7 +38,6 @@ impl ClientConfigLoader {
     }
 
     /// Set an override for token that the user provided via the command line
-    #[allow(dead_code)]
     pub fn with_remote_cache_timeout(mut self, remote_cache_timeout: Option<u64>) -> Self {
         self.remote_cache_timeout = remote_cache_timeout;
         self
@@ -61,7 +49,6 @@ impl ClientConfigLoader {
         self
     }
 
-    #[allow(dead_code)]
     pub fn load(self) -> Result<ClientConfig> {
         let Self {
             remote_cache_timeout,
@@ -79,7 +66,7 @@ impl ClientConfigLoader {
         match config_attempt {
             Err(_) => Ok(ClientConfig {
                 config: ClientConfigValue {
-                    remote_cache_timeout: None,
+                    remote_cache_timeout: 0,
                 },
             }),
             Ok(config) => Ok(ClientConfig { config }),

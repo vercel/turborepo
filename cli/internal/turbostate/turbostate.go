@@ -4,17 +4,8 @@
 package turbostate
 
 import (
-	"fmt"
-
 	"github.com/vercel/turbo/cli/internal/util"
 )
-
-// RepoState is the state for repository. Consists of the root for the repo
-// along with the mode (single package or multi package)
-type RepoState struct {
-	Root string `json:"root"`
-	Mode string `json:"mode"`
-}
 
 // DaemonPayload is the extra flags and command that are
 // passed for the `daemon` subcommand
@@ -98,22 +89,16 @@ type ParsedArgsFromRust struct {
 
 // ExecutionState is the entire state of a turbo execution that is passed from the Rust shim.
 type ExecutionState struct {
-	RemoteConfig RemoteConfig       `json:"remote_config"`
-	CLIArgs      ParsedArgsFromRust `json:"cli_args"`
+	APIClientConfig APIClientConfig    `json:"remote_config"`
+	CLIArgs         ParsedArgsFromRust `json:"cli_args"`
 }
 
-// RemoteConfig holds the authentication and endpoint details for the API client
-type RemoteConfig struct {
-	Token    string `json:"token"`
-	TeamID   string `json:"team_id"`
-	TeamSlug string `json:"team_slug"`
-	APIURL   string `json:"api_url"`
-}
-
-// GetRemoteCacheTimeout returns the value of the `remote-cache-timeout` flag.
-func (a ParsedArgsFromRust) GetRemoteCacheTimeout() (uint64, error) {
-	if a.RemoteCacheTimeout != 0 {
-		return a.RemoteCacheTimeout, nil
-	}
-	return 0, fmt.Errorf("no remote cache timeout provided")
+// APIClientConfig holds the authentication and endpoint details for the API client
+type APIClientConfig struct {
+	Token        string `json:"token"`
+	TeamID       string `json:"team_id"`
+	TeamSlug     string `json:"team_slug"`
+	APIURL       string `json:"api_url"`
+	UsePreflight bool   `json:"use_preflight"`
+	Timeout      uint64 `json:"timeout"`
 }

@@ -66,8 +66,6 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 		return nil, err
 	}
 
-	// Cache flags
-	opts.clientOpts.Timeout = args.RemoteCacheTimeout
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers

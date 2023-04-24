@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    env,
     path::{Path, PathBuf},
 };
 
@@ -162,6 +163,11 @@ impl RepoConfigLoader {
         // might not match.
         if has_team_slug_override {
             config.team_id = None;
+        }
+
+        // We don't set this above because it's specific to team_id
+        if let Ok(vercel_artifacts_owner) = env::var("VERCEL_ARTIFACTS_OWNER") {
+            config.team_id = Some(vercel_artifacts_owner);
         }
 
         Ok(RepoConfig {

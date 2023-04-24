@@ -38,8 +38,6 @@ type Helper struct {
 
 	rawRepoRoot string
 
-	clientOpts client.Opts
-
 	// UserConfigPath is the path to where we expect to find
 	// a user-specific config file, if one is present. Public
 	// to allow overrides in tests
@@ -154,29 +152,12 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 	if err != nil {
 		return nil, err
 	}
-	remoteConfig := executionState.RemoteConfig
-	if remoteConfig.Token == "" && ui.IsCI {
-		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
-		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
-		if vercelArtifactsToken != "" {
-			remoteConfig.Token = vercelArtifactsToken
-		}
-		if vercelArtifactsOwner != "" {
-			remoteConfig.TeamID = vercelArtifactsOwner
-		}
-	}
-
-	// Primacy: Arg > Env
-	timeout, err := executionState.CLIArgs.GetRemoteCacheTimeout()
-	if err == nil {
-		h.clientOpts.Timeout = timeout
-	}
+	apiClientConfig := executionState.APIClientConfig
 
 	apiClient := client.NewClient(
-		remoteConfig,
+		apiClientConfig,
 		logger,
 		h.TurboVersion,
-		h.clientOpts,
 	)
 
 	return &CmdBase{
@@ -184,7 +165,6 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 		Logger:       logger,
 		RepoRoot:     repoRoot,
 		APIClient:    apiClient,
-		RemoteConfig: remoteConfig,
 		TurboVersion: h.TurboVersion,
 	}, nil
 }
@@ -195,7 +175,6 @@ type CmdBase struct {
 	Logger       hclog.Logger
 	RepoRoot     turbopath.AbsoluteSystemPath
 	APIClient    *client.APIClient
-	RemoteConfig turbostate.RemoteConfig
 	TurboVersion string
 }
 

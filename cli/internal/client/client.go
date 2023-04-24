@@ -48,23 +48,14 @@ func (c *APIClient) SetToken(token string) {
 	c.token = token
 }
 
-// Opts holds values for configuring the behavior of the API client
-type Opts struct {
-	UsePreflight bool
-	Timeout      uint64
-}
-
-// ClientTimeout Exported ClientTimeout used in run.go
-const ClientTimeout uint64 = 20
-
 // NewClient creates a new APIClient
-func NewClient(remoteConfig turbostate.RemoteConfig, logger hclog.Logger, turboVersion string, opts Opts) *APIClient {
+func NewClient(config turbostate.APIClientConfig, logger hclog.Logger, turboVersion string) *APIClient {
 	client := &APIClient{
-		baseURL:      remoteConfig.APIURL,
+		baseURL:      config.APIURL,
 		turboVersion: turboVersion,
 		HTTPClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
-				Timeout: time.Duration(opts.Timeout) * time.Second,
+				Timeout: time.Duration(config.Timeout) * time.Second,
 			},
 			RetryWaitMin: 2 * time.Second,
 			RetryWaitMax: 10 * time.Second,
@@ -72,10 +63,10 @@ func NewClient(remoteConfig turbostate.RemoteConfig, logger hclog.Logger, turboV
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
-		token:        remoteConfig.Token,
-		teamID:       remoteConfig.TeamID,
-		teamSlug:     remoteConfig.TeamSlug,
-		usePreflight: opts.UsePreflight,
+		token:        config.Token,
+		teamID:       config.TeamID,
+		teamSlug:     config.TeamSlug,
+		usePreflight: config.UsePreflight,
 	}
 	client.HTTPClient.CheckRetry = client.checkRetry
 	return client

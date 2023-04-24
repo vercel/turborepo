@@ -5,17 +5,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"gotest.tools/v3/assert"
 )
 
 func TestRemoteCacheTimeoutFlag(t *testing.T) {
 	args := turbostate.ParsedArgsFromRust{
-		CWD:                "",
-		RemoteCacheTimeout: 599,
+		CWD: "",
 	}
+
 	executionState := turbostate.ExecutionState{
+		APIClientConfig: turbostate.APIClientConfig{
+			Timeout: 599,
+		},
 		CLIArgs: args,
 	}
 
@@ -38,10 +40,12 @@ func TestRemoteCacheTimeoutPrimacy(t *testing.T) {
 			_ = os.Unsetenv(key)
 		})
 		args := turbostate.ParsedArgsFromRust{
-			CWD:                "",
-			RemoteCacheTimeout: 1,
+			CWD: "",
 		}
 		executionState := turbostate.ExecutionState{
+			APIClientConfig: turbostate.APIClientConfig{
+				Timeout: 1,
+			},
 			CLIArgs: args,
 		}
 		h := NewHelper("test-version", &args)

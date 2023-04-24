@@ -31,12 +31,12 @@ func Test_sendToServer(t *testing.T) {
 		}))
 	defer ts.Close()
 
-	remoteConfig := turbostate.RemoteConfig{
+	apiClientConfig := turbostate.APIClientConfig{
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
 	}
-	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
+	apiClient := NewClient(apiClientConfig, hclog.Default(), "v1")
 
 	myUUID, err := uuid.NewUUID()
 	if err != nil {
@@ -86,12 +86,12 @@ func Test_PutArtifact(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	remoteConfig := turbostate.RemoteConfig{
+	apiClientConfig := turbostate.APIClientConfig{
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
 	}
-	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
+	apiClient := NewClient(apiClientConfig, hclog.Default(), "v1")
 	expectedArtifactBody := []byte("My string artifact")
 
 	// Test Put Artifact
@@ -112,12 +112,12 @@ func Test_PutWhenCachingDisabled(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	remoteConfig := turbostate.RemoteConfig{
+	apiClientConfig := turbostate.APIClientConfig{
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
 	}
-	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
+	apiClient := NewClient(apiClientConfig, hclog.Default(), "v1")
 	expectedArtifactBody := []byte("My string artifact")
 	// Test Put Artifact
 	err := apiClient.PutArtifact("hash", expectedArtifactBody, 500, "")
@@ -139,12 +139,12 @@ func Test_FetchWhenCachingDisabled(t *testing.T) {
 	defer ts.Close()
 
 	// Set up test expected values
-	remoteConfig := turbostate.RemoteConfig{
+	apiClientConfig := turbostate.APIClientConfig{
 		TeamSlug: "my-team-slug",
 		APIURL:   ts.URL,
 		Token:    "my-token",
 	}
-	apiClient := NewClient(remoteConfig, hclog.Default(), "v1", Opts{})
+	apiClient := NewClient(apiClientConfig, hclog.Default(), "v1")
 	// Test Put Artifact
 	resp, err := apiClient.FetchArtifact("hash")
 	cd := &util.CacheDisabledError{}
