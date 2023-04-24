@@ -1,4 +1,4 @@
-// Adapted from ghttps://github.com/thought-machine/please
+// Adapted from https://github.com/thought-machine/please
 // Copyright Thought Machine, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package cache
@@ -7,7 +7,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -170,14 +170,8 @@ func Test_GenerateTagAndValidate(t *testing.T) {
 
 // Return the Base64 encoded HMAC given the artifact metadata and artifact body
 func testUtilGetHMACTag(hash string, teamId string, artifactBody []byte, secret string) string {
-	artifactMetadata := &struct {
-		Hash   string `json:"hash"`
-		TeamId string `json:"teamId"`
-	}{
-		Hash:   hash,
-		TeamId: teamId,
-	}
-	metadata, _ := json.Marshal(artifactMetadata)
+	metadata := []byte(hash)
+	metadata = append(metadata, []byte(teamId)...)
 	h := hmac.New(sha256.New, []byte(secret))
 	h.Write(metadata)
 	h.Write(artifactBody)
@@ -190,6 +184,7 @@ func Test_Utils(t *testing.T) {
 	hash := "the-artifact-hash"
 	artifactBody := []byte("the artifact body as bytes")
 	testTag := testUtilGetHMACTag(hash, teamId, artifactBody, secret)
-	expectedTag := "9Fu8YniPZ2dEBolTPQoNlFWG0LNMW8EXrBsRmf/fEHk="
+	fmt.Println(testTag)
+	expectedTag := "mh3PI05JSXRfAy3hL0Dz3Gjq0UhZYKalu1HwmLNvYjs="
 	assert.True(t, hmac.Equal([]byte(testTag), []byte(expectedTag)))
 }

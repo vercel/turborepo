@@ -17,7 +17,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-const _globalCacheKey = "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo"
+const _globalCacheKey = "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am."
 
 // Variables that we always include
 var _defaultEnvVars = []string{

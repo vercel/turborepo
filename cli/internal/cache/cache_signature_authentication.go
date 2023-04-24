@@ -7,7 +7,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -48,17 +47,8 @@ func (asa *ArtifactSignatureAuthentication) getTagGenerator(hash string) (hash.H
 	if err != nil {
 		return nil, err
 	}
-	artifactMetadata := &struct {
-		Hash   string `json:"hash"`
-		TeamId string `json:"teamId"`
-	}{
-		Hash:   hash,
-		TeamId: teamId,
-	}
-	metadata, err := json.Marshal(artifactMetadata)
-	if err != nil {
-		return nil, err
-	}
+	metadata := []byte(hash)
+	metadata = append(metadata, []byte(teamId)...)
 
 	// TODO(Gaspar) Support additional signing algorithms here
 	h := hmac.New(sha256.New, secret)
