@@ -158,7 +158,7 @@ impl DevHtmlAssetVc {
             .try_join()
             .await?
             .iter()
-            .flat_map(|assets| assets.iter())
+            .flatten()
             .copied()
             .collect();
 
