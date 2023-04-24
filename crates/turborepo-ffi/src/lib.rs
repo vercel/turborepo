@@ -163,3 +163,42 @@ pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
     };
     response.into()
 }
+
+pub extern "C" fn verify_signature(buffer: Buffer) -> Buffer {
+    let req: proto::VerifySignatureRequest = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::VerifySignatureResponse {
+                response: Some(proto::verify_signature_response::Response::Error(
+                    err.to_string(),
+                )),
+            };
+            return resp.into();
+        }
+    };
+
+    let authenticator =
+        turborepo_cache::signature_authentication::ArtifactSignatureAuthenticator::new(
+            req.team_id,
+            req.secret_key_override,
+        );
+
+    match authenticator.validate(req.hash.as_bytes(), &req.artifact_body, &req.expected_tag) {
+        Ok(verified) => {
+            let resp = proto::VerifySignatureResponse {
+                response: Some(proto::verify_signature_response::Response::Verified(
+                    verified,
+                )),
+            };
+            resp.into()
+        }
+        Err(err) => {
+            let resp = proto::VerifySignatureResponse {
+                response: Some(proto::verify_signature_response::Response::Error(
+                    err.to_string(),
+                )),
+            };
+            resp.into()
+        }
+    }
+}
