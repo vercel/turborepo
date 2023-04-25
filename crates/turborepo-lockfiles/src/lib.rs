@@ -9,7 +9,6 @@ use std::collections::{HashMap, HashSet};
 pub use berry::{Error as BerryError, *};
 pub use error::Error;
 pub use npm::*;
-use rayon::prelude::*;
 use serde::Serialize;
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
@@ -40,7 +39,7 @@ pub fn all_transitive_closures<L: Lockfile + Sync>(
     workspaces: HashMap<String, HashMap<String, String>>,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
     workspaces
-        .into_par_iter()
+        .into_iter()
         .map(|(workspace, unresolved_deps)| {
             let closure = transitive_closure(lockfile, &workspace, unresolved_deps)?;
             Ok((workspace, closure))
