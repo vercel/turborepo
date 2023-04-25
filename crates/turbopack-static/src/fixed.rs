@@ -5,8 +5,8 @@ use turbopack_core::{
     ident::AssetIdentVc,
 };
 
-/// A static asset that is served that a fixed output path. It won't use
-/// contenthashing to generate a long term cacheable URL.
+/// A static asset that is served at a fixed output path. It won't use
+/// content hashing to generate a long term cacheable URL.
 #[turbo_tasks::value]
 pub struct FixedStaticAsset {
     output_path: FileSystemPathVc,

@@ -13,8 +13,8 @@ fn modifier() -> StringVc {
     StringVc::cell("text content".to_string())
 }
 
-/// A source asset that exports the string content of an asset as default export
-/// of a JS module.
+/// A source asset that exports the string content of an asset as the default
+/// export of a JS module.
 #[turbo_tasks::value]
 pub struct TextContentSourceAsset {
     pub source: AssetVc,
@@ -42,7 +42,6 @@ impl Asset for TextContentSourceAsset {
             return Ok(FileContent::NotFound.cell().into());
         };
         let text = content.content().to_str()?;
-        let text = text.trim_end().replace("\r\n", "\n");
         let code = format!("export default {};", StringifyJs(&text));
         let content = FileContent::Content(code.into()).cell();
         Ok(content.into())
