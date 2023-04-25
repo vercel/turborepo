@@ -223,6 +223,10 @@
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, ErrorKind};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -240,10 +244,13 @@
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileContentReadRef};
 <span class="kw">use </span>turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
 
-<span class="kw">use </span><span class="kw">crate</span>::source::{
-    request::SourceRequest,
-    resolve::{resolve_source_request, ResolveSourceRequestResult},
-    Body, ContentSourceVc, HeaderListReadRef, ProxyResultReadRef,
+<span class="kw">use crate</span>::{
+    handle_issues,
+    source::{
+        request::SourceRequest,
+        resolve::{resolve_source_request, ResolveSourceRequestResult},
+        Body, ContentSourceVc, HeaderListReadRef, ProxyResultReadRef,
+    },
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
@@ -300,6 +307,7 @@
     <span class="kw">let </span>original_path = request.uri().path().to_string();
     <span class="kw">let </span>request = http_request_to_source_request(request).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>result = get_from_source(source, TransientInstance::new(request), issue_reporter);
+    handle_issues(result, <span class="kw-2">&amp;</span>original_path, <span class="string">&quot;get_from_source&quot;</span>, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">match </span><span class="kw-2">&amp;*</span>result.strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>{
         GetFromSourceResult::Static {
             content,
