@@ -413,20 +413,21 @@ impl DepGraph {
             }
         }
 
-        // cycles.retain_mut(|v| {
-        //     v.retain(|ix| !global_done.contains(ix));
+        // Cycles should form a separate group
+        for id in self.g.graph_ix.iter() {
+            let ix = self.g.get_node(id);
 
-        //     v.len() > 1
-        // });
+            if let Some(cycle) = cycles.iter().find(|v| v.contains(&ix)) {
+                if cycle.iter().all(|v| !global_done.contains(v)) {
+                    let ids = cycle
+                        .iter()
+                        .map(|&ix| self.g.graph_ix[ix as usize].clone())
+                        .collect::<Vec<_>>();
 
-        // // Cycles should be in their own chunk
-        // for id in self.g.graph_ix.iter() {
-        //     let ix = self.g.get_node(id);
-
-        //     if cycles.iter().any(|v| v.contains(&ix)) && global_done.insert(ix) {
-        //         groups.push((vec![id.clone()], FxHashSet::default()));
-        //     }
-        // }
+                    groups.push((ids, FxHashSet::default()));
+                }
+            }
+        }
 
         // Expand **starting** nodes
         for (ix, id) in self.g.graph_ix.iter().enumerate() {
