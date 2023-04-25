@@ -351,6 +351,10 @@ pub trait Backend: Sync + Send {
         task_type: TransientTaskType,
         turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> TaskId;
+
+    fn is_task_active(&self, task: TaskId, turbo_tasks: &dyn TurboTasksBackendApi<Self>) -> bool {
+        true
+    }
 }
 
 impl PersistentTaskType {

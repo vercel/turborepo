@@ -2819,6 +2819,20 @@ impl Task {
             .collectibles
             .get_read_collectibles_task(trait_id, create_new)
     }
+
+    pub fn is_active(&self, backend: &MemoryBackend) -> bool {
+        if let TaskMetaStateReadGuard::Full(state) = self.state() {
+            let mut active = false;
+            for scope in state.scopes.iter() {
+                backend.with_scope(scope, |scope| {
+                    active = active || scope.state.lock().is_active();
+                })
+            }
+            active
+        } else {
+            false
+        }
+    }
 }
 
 fn remove_collectible_from_scopes(

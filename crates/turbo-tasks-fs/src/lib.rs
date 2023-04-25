@@ -36,7 +36,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context, Result};
-use auto_hash_map::AutoMap;
+use auto_hash_map::{map::Entry, AutoMap};
 use bitflags::bitflags;
 use dunce::simplified;
 use glob::GlobVc;
@@ -53,7 +53,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
 };
 use turbo_tasks::{
-    mark_stateful,
+    get_invalidator, mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
@@ -143,6 +143,12 @@ impl DiskWatcher {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+enum WriterState {
+    Authorative,
+    InConflict,
+}
+
 #[turbo_tasks::value(cell = "new", eq = "manual")]
 pub struct DiskFileSystem {
     pub name: String,
@@ -154,6 +160,8 @@ pub struct DiskFileSystem {
     invalidator_map: Arc<InvalidatorMap>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     dir_invalidator_map: Arc<InvalidatorMap>,
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    authorative_write_map: Arc<Mutex<HashMap<PathBuf, AutoMap<Invalidator, WriterState>>>>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
     watcher: Arc<DiskWatcher>,
@@ -490,6 +498,7 @@ impl DiskFileSystemVc {
             mutex_map: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
+            authorative_write_map: Default::default(),
             watcher: Default::default(),
         };
 
@@ -677,6 +686,51 @@ impl FileSystem for DiskFileSystem {
         fs_path.track().await?;
 
         let _lock = self.mutex_map.lock(full_path.clone()).await;
+
+        // Make sure that there is only one authorative writer at a time.
+        let conflict = {
+            let own_invalidator = get_invalidator();
+            let mut authorative_write_map = self.authorative_write_map.lock().unwrap();
+            let inner_map = authorative_write_map.entry(full_path.clone()).or_default();
+            let mut new_map = AutoMap::new();
+            let mut has_own = false;
+            // Remove all inactive invalidators.
+            for (invalidator, state) in take(inner_map).into_iter() {
+                if invalidator == own_invalidator {
+                    has_own = true;
+                    new_map.insert(invalidator, state);
+                } else if invalidator.is_active() {
+                    new_map.insert(invalidator, state);
+                } else {
+                    invalidator.invalidate();
+                }
+            }
+            let conflict = if has_own {
+                new_map.len() > 1
+            } else {
+                !new_map.is_empty()
+            };
+            if conflict {
+                let inner_map = take(&mut new_map);
+                for (invalidator, state) in inner_map.into_iter() {
+                    match state {
+                        WriterState::Authorative => {
+                            invalidator.invalidate();
+                        }
+                        WriterState::InConflict => {
+                            new_map.insert(invalidator, state);
+                        }
+                    }
+                }
+            }
+            conflict
+        };
+        if conflict {
+            bail!(
+                "File {} is written from multiple sources",
+                fs_path.to_string().await?
+            )
+        }
 
         // We perform an untracked comparison here, so that this write is not dependent
         // on a read's FileContentVc (and the memory it holds). Our untracked read can

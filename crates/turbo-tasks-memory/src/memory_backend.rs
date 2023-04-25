@@ -724,6 +724,10 @@ impl Backend for MemoryBackend {
         println!("new {scope} for {task}");
         id
     }
+
+    fn is_task_active(&self, task: TaskId, _turbo_tasks: &dyn TurboTasksBackendApi<Self>) -> bool {
+        self.with_task(task, |task| task.is_active(self))
+    }
 }
 
 pub(crate) enum Job {

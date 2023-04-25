@@ -118,6 +118,11 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
     fn mark_own_task_as_finished(&self, task: TaskId);
 
     fn connect_task(&self, task: TaskId);
+
+    /// Peeks at the current active status of a task.
+    fn is_task_active(&self, _task: TaskId) -> bool {
+        true
+    }
 }
 
 /// The type of stats reporting.
@@ -979,6 +984,10 @@ impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
     fn mark_own_task_as_finished(&self, task: TaskId) {
         self.backend.mark_own_task_as_finished(task, self);
     }
+
+    fn is_task_active(&self, task: TaskId) -> bool {
+        self.backend.is_task_active(task, self)
+    }
 }
 
 impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
@@ -1169,6 +1178,15 @@ impl Invalidator {
         if let Some(turbo_tasks) = turbo_tasks.upgrade() {
             turbo_tasks
                 .invalidate_with_reason(task, (reason as &'static dyn InvalidationReason).into());
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        let _ = self.handle.enter();
+        if let Some(turbo_tasks) = self.turbo_tasks.upgrade() {
+            turbo_tasks.is_task_active(self.task)
+        } else {
+            false
         }
     }
 }
