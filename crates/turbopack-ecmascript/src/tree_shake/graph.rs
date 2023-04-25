@@ -426,7 +426,7 @@ impl DepGraph {
 
                     global_done.extend(cycle.iter().copied());
 
-                    groups.push((ids, FxHashSet::default()));
+                    groups.push((ids, Default::default()));
                 }
             }
         }
