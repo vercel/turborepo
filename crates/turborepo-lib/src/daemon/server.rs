@@ -22,7 +22,6 @@ use std::{
 };
 
 use globwatch::{StopSource, Watcher};
-use log::error;
 use tokio::{
     select,
     signal::ctrl_c,
@@ -33,6 +32,7 @@ use tokio::{
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
+use tracing::error;
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 use super::{

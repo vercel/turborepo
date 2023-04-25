@@ -5,12 +5,12 @@ use std::{
 };
 
 use command_group::AsyncCommandGroup;
-use log::{debug, error};
 use notify::{Config, Event, EventKind, Watcher};
 use sysinfo::{Pid, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
 use thiserror::Error;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
+use tracing::debug;
 
 use super::{client::proto::turbod_client::TurbodClient, DaemonClient};
 use crate::daemon::DaemonError;

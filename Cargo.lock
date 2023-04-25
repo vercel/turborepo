@@ -2113,19 +2113,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
-dependencies = [
- "humantime",
- "is-terminal",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "erased-serde"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8185,9 +8172,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.16"
+version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6176eae26dd70d0c919749377897b54a9276bd7061339665dd68777926b5a70"
+checksum = "30a651bc37f915e81f087d86e62a18eec5f79550c7faff886f7090b4ea757c77"
 dependencies = [
  "matchers",
  "nu-ansi-term",
@@ -8296,13 +8283,13 @@ dependencies = [
  "command-group",
  "dunce",
  "itertools",
- "log",
  "pretty_assertions",
  "serde",
  "serde_json",
  "serde_yaml 0.9.19",
  "tiny-gradient",
  "tokio-util",
+ "tracing",
  "turborepo-lib",
  "winapi 0.3.9",
 ]
@@ -9059,7 +9046,6 @@ dependencies = [
  "directories",
  "dirs-next",
  "dunce",
- "env_logger 0.10.0",
  "futures",
  "glob-match 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "globwatch",
@@ -9071,8 +9057,8 @@ dependencies = [
  "itertools",
  "lazy_static",
  "libc",
- "log",
  "notify 5.1.0",
+ "owo-colors",
  "pidlock",
  "port_scanner",
  "pretty_assertions",
@@ -9100,6 +9086,7 @@ dependencies = [
  "tonic-reflection",
  "tower",
  "tracing",
+ "tracing-subscriber",
  "tracing-test",
  "turbo-updater",
  "turbopath",
