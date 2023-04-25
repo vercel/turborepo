@@ -95,7 +95,9 @@ jobs:
             xtask/**
             .cargo/**
             rust-toolchain
-            !glob-watch
+            !crates/glob-match/**
+            !crates/globwatch/**
+            !crates/pidlock/**
             !crates/turborepo/**
             !crates/turborepo-api-client/**
             !crates/turborepo-lib/**
@@ -121,7 +123,9 @@ jobs:
           PATTERNS: |
             pnpm-lock.yaml
             package.json
-            glob-watch
+            crates/glob-match/**
+            crates/globwatch/**
+            crates/pidlock/**
             crates/turborepo/**
             crates/turborepo-api-client/**
             crates/turborepo-lib/**
@@ -234,8 +238,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: Build turborepo CLI from source
-        uses: ./.github/actions/setup-turborepo-environment
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -256,8 +259,7 @@ jobs:
             runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Build turborepo CLI from source
-        uses: ./.github/actions/setup-turborepo-environment
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -292,8 +294,7 @@ jobs:
             runner: windows-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Build turborepo CLI from source
-        uses: ./.github/actions/setup-turborepo-environment
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -364,8 +365,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Build turborepo CLI from source
-        uses: ./.github/actions/setup-turborepo-environment
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -1109,8 +1109,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Build turborepo CLI from source
-        uses: ./.github/actions/setup-turborepo-environment
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ubuntu
           github-token: "${{ secrets.GITHUB_TOKEN }}"

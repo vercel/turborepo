@@ -10,7 +10,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
-	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/prune"
 	"github.com/vercel/turbo/cli/internal/run"
@@ -64,9 +63,7 @@ func RunWithArgs(args *turbostate.ParsedArgsFromRust, turboVersion string) int {
 	var execErr error
 	go func() {
 		command := args.Command
-		if command.Daemon != nil {
-			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, args)
-		} else if command.Prune != nil {
+		if command.Prune != nil {
 			execErr = prune.ExecutePrune(helper, args)
 		} else if command.Run != nil {
 			execErr = run.ExecuteRun(ctx, helper, signalWatcher, args)

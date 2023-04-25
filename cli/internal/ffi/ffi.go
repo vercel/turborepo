@@ -118,12 +118,11 @@ func stringToRef(s string) *string {
 // ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
 func ChangedFiles(gitRoot string, turboRoot string, fromCommit string, toCommit string) ([]string, error) {
 	fromCommitRef := stringToRef(fromCommit)
-	toCommitRef := stringToRef(toCommit)
 
 	req := ffi_proto.ChangedFilesReq{
 		GitRoot:    gitRoot,
 		FromCommit: fromCommitRef,
-		ToCommit:   toCommitRef,
+		ToCommit:   toCommit,
 		TurboRoot:  turboRoot,
 	}
 
