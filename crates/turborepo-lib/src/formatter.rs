@@ -11,6 +11,17 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
+/// The formatter for TURBOREPO
+///
+/// This is a port of the go formatter, which follows a few main rules:
+/// - Errors are red
+/// - Warnings are yellow
+/// - Info is default
+/// - Debug and trace are default, but with timestamp and level attached
+///
+/// This formatter does not print any information about spans, and does
+/// not print any event metadata other than the message (which is set
+/// when you call `debug!(...)` or `info!(...)` etc.
 pub struct TurboFormatter;
 
 impl<S, N> FormatEvent<S, N> for TurboFormatter
@@ -58,6 +69,10 @@ where
     }
 }
 
+/// A visitor that writes the message field of an event to the given writer.
+///
+/// The FG and BG type parameters are the foreground and background colors
+/// to use when writing the message.
 struct MessageVisitor<'a, FG: Color, BG: Color> {
     writer: Writer<'a>,
     _fg: PhantomData<FG>,
