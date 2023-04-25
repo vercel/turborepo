@@ -215,6 +215,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// TODO: these values come from a config file, hopefully viper can help us merge these
 	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
 
+	// If a spaceID wasn't passed as a flag, read it from the turbo.json config.
+	// If that is not set either, we'll still end up with a blank string.
+	if r.opts.runOpts.ExperimentalSpaceID == "" {
+		r.opts.runOpts.ExperimentalSpaceID = turboJSON.SpaceID
+	}
+
 	pipeline := turboJSON.Pipeline
 	g.Pipeline = pipeline
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
