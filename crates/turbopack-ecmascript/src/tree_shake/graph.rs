@@ -424,6 +424,8 @@ impl DepGraph {
                         .map(|&ix| self.g.graph_ix[ix as usize].clone())
                         .collect::<Vec<_>>();
 
+                    global_done.extend(cycle.iter().copied());
+
                     groups.push((ids, FxHashSet::default()));
                 }
             }
