@@ -10,7 +10,9 @@ pub struct ExecutionState<'a> {
 
 #[derive(Debug, Serialize, Default)]
 pub struct APIClientConfig<'a> {
+    // Comes from user config, i.e. $XDG_CONFIG_HOME/turborepo/config.json
     pub token: Option<&'a str>,
+    // Comes from repo config, i.e. ./.turbo/config.json
     pub team_id: Option<&'a str>,
     pub team_slug: Option<&'a str>,
     pub api_url: &'a str,

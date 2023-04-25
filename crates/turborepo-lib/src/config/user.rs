@@ -145,14 +145,6 @@ mod test {
         Ok(())
     }
 
-    struct TestCase {
-        config_key: &'static str,
-        config_value: &'static str,
-        env_var_key: &'static str,
-        env_var_value: &'static str,
-        expected: Option<&'static str>,
-    }
-
     static TOKEN_ENV_VARS: [&'static str; 2] = ["TURBO_TOKEN", "VERCEL_ARTIFACTS_TOKEN"];
 
     #[test]
@@ -172,7 +164,7 @@ mod test {
                 .with_environment(Some(env))
                 .load()?;
 
-            assert_eq!(config.token(), Some(&env_var_value));
+            assert_eq!(config.token(), Some(env_var_value.as_str()));
         }
 
         Ok(())
