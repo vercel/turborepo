@@ -244,6 +244,8 @@
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -256,7 +258,9 @@
 
 </span><span class="attr">#![feature(min_specialization)]
 
-</span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+</span><span class="kw">pub mod </span>fixed;
+
+<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::FileContent;
 <span class="kw">use </span>turbopack_core::{

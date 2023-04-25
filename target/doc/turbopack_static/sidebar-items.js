@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["register"],"struct":["StaticModuleAsset","StaticModuleAssetVc"],"type":["StaticModuleAssetReadRef"]};
+window.SIDEBAR_ITEMS = {"fn":["register"],"mod":["fixed"],"struct":["StaticModuleAsset","StaticModuleAssetVc"],"type":["StaticModuleAssetReadRef"]};
