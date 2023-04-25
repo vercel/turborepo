@@ -19,6 +19,8 @@ pub enum ChunkData {
         included: Vec<ModuleIdReadRef>,
         #[serde(skip_serializing_if = "Vec::is_empty", default)]
         excluded: Vec<ModuleIdReadRef>,
+        #[serde(skip_serializing_if = "Vec::is_empty", default)]
+        module_chunks: Vec<String>,
     },
 }
 
@@ -45,6 +47,7 @@ impl ChunkData {
         let OutputChunkRuntimeInfo {
             included_ids,
             excluded_ids,
+            module_chunks,
             placeholder_for_future_extensions: _,
         } = &*runtime_info;
 
@@ -58,6 +61,22 @@ impl ChunkData {
         } else {
             Vec::new()
         };
+        let modules: Vec<_> = if let Some(module_chunks) = module_chunks {
+            module_chunks
+                .iter()
+                .copied()
+                .map(|chunk_path| async move {
+                    let chunk_path = chunk_path.await?;
+                    Ok(output_root.get_path_to(&*chunk_path).map(ToOwned::to_owned))
+                })
+                .try_join()
+                .await?
+                .into_iter()
+                .flatten()
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         if included.is_empty() && excluded.is_empty() {
             return Ok(Some(ChunkData::Simple(path)));
@@ -67,6 +86,7 @@ impl ChunkData {
             path,
             included,
             excluded,
+            module_chunks: modules,
         }))
     }
 }

@@ -133,6 +133,7 @@ pub trait Chunk: Asset {
 pub struct OutputChunkRuntimeInfo {
     pub included_ids: Option<ModuleIdsVc>,
     pub excluded_ids: Option<ModuleIdsVc>,
+    pub module_chunks: Option<Vec<FileSystemPathVc>>,
     pub placeholder_for_future_extensions: (),
 }
 

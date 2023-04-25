@@ -1,3 +1,4 @@
+pub(crate) mod single_item_chunk;
 pub mod source_map;
 pub(crate) mod writer;
 
@@ -28,7 +29,10 @@ use turbopack_core::{
 };
 use writer::expand_imports;
 
-use self::source_map::CssChunkSourceMapAssetReferenceVc;
+use self::{
+    single_item_chunk::{chunk::SingleItemCssChunkVc, reference::SingleItemCssChunkReferenceVc},
+    source_map::CssChunkSourceMapAssetReferenceVc,
+};
 use crate::{
     embed::{CssEmbed, CssEmbeddable, CssEmbeddableVc},
     parse::ParseResultSourceMapVc,
@@ -302,14 +306,26 @@ impl Chunk for CssChunk {
 impl OutputChunk for CssChunk {
     #[turbo_tasks::function]
     async fn runtime_info(&self) -> Result<OutputChunkRuntimeInfoVc> {
+        let content = css_chunk_content(
+            self.context,
+            self.main_entries,
+            Value::new(self.availability_info),
+        )
+        .await?;
         let entries = self
             .main_entries
             .await?
             .iter()
             .map(|&entry| entry.as_chunk_item(self.context).id())
             .collect();
+        let module_chunks: Vec<_> = content
+            .chunk_items
+            .iter()
+            .map(|item| SingleItemCssChunkVc::new(self.context, *item).path())
+            .collect();
         Ok(OutputChunkRuntimeInfo {
             included_ids: Some(ModuleIdsVc::cell(entries)),
+            module_chunks: Some(module_chunks),
             ..Default::default()
         }
         .cell())
@@ -376,6 +392,9 @@ impl Asset for CssChunk {
         }
         for entry in content.async_chunk_group_entries.iter() {
             references.push(ChunkGroupReferenceVc::new(this.context, *entry).into());
+        }
+        for item in content.chunk_items.iter() {
+            references.push(SingleItemCssChunkReferenceVc::new(this.context, *item).into());
         }
         if *this
             .context
