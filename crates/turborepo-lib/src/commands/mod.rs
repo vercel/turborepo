@@ -1,8 +1,7 @@
-use std::path::PathBuf;
-
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIClient;
 
 use crate::{
@@ -22,7 +21,7 @@ pub(crate) mod logout;
 pub(crate) mod unlink;
 
 pub struct CommandBase {
-    pub repo_root: PathBuf,
+    pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
     user_config: OnceCell<UserConfig>,
     repo_config: OnceCell<RepoConfig>,
@@ -32,7 +31,11 @@ pub struct CommandBase {
 }
 
 impl CommandBase {
-    pub fn new(args: Args, repo_root: PathBuf, version: &'static str) -> Result<Self> {
+    pub fn new(
+        args: Args,
+        repo_root: AbsoluteSystemPathBuf,
+        version: &'static str,
+    ) -> Result<Self> {
         Ok(Self {
             repo_root,
             ui: args.ui(),
@@ -162,19 +165,17 @@ impl CommandBase {
 #[cfg(test)]
 mod test {
     use test_case::test_case;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use crate::get_version;
 
     #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
-    #[test_case("", "e3b0c44298fc1c14"; "empty string ok")]
     fn test_repo_hash(path: &str, expected_hash: &str) {
-        use std::path::PathBuf;
-
         use super::CommandBase;
         use crate::Args;
 
         let args = Args::default();
-        let repo_root = PathBuf::from(path);
+        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
         let command_base = CommandBase::new(args, repo_root, get_version()).unwrap();
 
         let hash = command_base.repo_hash();
