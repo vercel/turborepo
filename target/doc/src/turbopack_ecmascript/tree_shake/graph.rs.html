@@ -842,6 +842,21 @@
 <a href="#842" id="842">842</a>
 <a href="#843" id="843">843</a>
 <a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt,
     hash::{BuildHasherDefault, Hash},
@@ -1214,10 +1229,7 @@
             global_done: <span class="kw-2">&amp;mut </span>FxHashSet&lt;u32&gt;,
             group_done: <span class="kw-2">&amp;mut </span>FxHashSet&lt;u32&gt;,
         ) -&gt; bool {
-            <span class="comment">// TODO(WEB-706): Consider cycles
-            //
-
-            </span><span class="kw">let </span><span class="kw-2">mut </span>changed = <span class="bool-val">false</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>changed = <span class="bool-val">false</span>;
 
             <span class="comment">// Check deps of `start`.
             </span><span class="kw">for </span>dep_ix <span class="kw">in </span>graph
@@ -1257,6 +1269,24 @@
             <span class="kw">if let </span>ItemId::Group(<span class="kw">_</span>) = id {
                 groups.push((<span class="macro">vec!</span>[id.clone()], FxHashSet::default()));
                 global_done.insert(ix);
+            }
+        }
+
+        <span class="comment">// Cycles should form a separate group
+        </span><span class="kw">for </span>id <span class="kw">in </span><span class="self">self</span>.g.graph_ix.iter() {
+            <span class="kw">let </span>ix = <span class="self">self</span>.g.get_node(id);
+
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(cycle) = cycles.iter().find(|v| v.contains(<span class="kw-2">&amp;</span>ix)) {
+                <span class="kw">if </span>cycle.iter().all(|v| !global_done.contains(v)) {
+                    <span class="kw">let </span>ids = cycle
+                        .iter()
+                        .map(|<span class="kw-2">&amp;</span>ix| <span class="self">self</span>.g.graph_ix[ix <span class="kw">as </span>usize].clone())
+                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+
+                    global_done.extend(cycle.iter().copied());
+
+                    groups.push((ids, Default::default()));
+                }
             }
         }
 
