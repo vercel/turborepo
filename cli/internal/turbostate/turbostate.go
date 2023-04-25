@@ -72,9 +72,8 @@ type RunPayload struct {
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
-	Daemon *DaemonPayload `json:"daemon"`
-	Prune  *PrunePayload  `json:"prune"`
-	Run    *RunPayload    `json:"run"`
+	Prune *PrunePayload `json:"prune"`
+	Run   *RunPayload   `json:"run"`
 }
 
 // ParsedArgsFromRust are the parsed command line arguments passed
