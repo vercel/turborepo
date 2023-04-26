@@ -36,7 +36,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context, Result};
-use auto_hash_map::{map::Entry, AutoMap};
+use auto_hash_map::AutoMap;
 use bitflags::bitflags;
 use dunce::simplified;
 use glob::GlobVc;
