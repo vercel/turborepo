@@ -2822,16 +2822,13 @@ impl Task {
 
     pub fn is_active(&self, backend: &MemoryBackend) -> bool {
         if let TaskMetaStateReadGuard::Full(state) = self.state() {
-            let mut active = false;
             for scope in state.scopes.iter() {
-                backend.with_scope(scope, |scope| {
-                    active = active || scope.state.lock().is_active();
-                })
+                if backend.with_scope(scope, |scope| scope.state.lock().is_active()) {
+                    return true;
+                }
             }
-            active
-        } else {
-            false
         }
+        false
     }
 }
 
