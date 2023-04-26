@@ -1,45 +1,98 @@
 use std::hash::Hash;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use turbo_tasks::TryJoinIterExt;
-use turbo_tasks_fs::FileSystemPath;
+use serde::Serialize;
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
+use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
-    asset::{Asset, AssetVc},
+    asset::{Asset, AssetVc, AssetsVc},
     chunk::{ModuleIdReadRef, OutputChunk, OutputChunkRuntimeInfo, OutputChunkVc},
+    reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 
-#[derive(Serialize, Deserialize, Hash, PartialEq, Eq)]
-#[serde(untagged)]
+#[turbo_tasks::value]
 pub enum ChunkData {
     Simple(String),
     WithRuntimeInfo {
         path: String,
-        #[serde(skip_serializing_if = "Vec::is_empty", default)]
         included: Vec<ModuleIdReadRef>,
-        #[serde(skip_serializing_if = "Vec::is_empty", default)]
         excluded: Vec<ModuleIdReadRef>,
-        #[serde(skip_serializing_if = "Vec::is_empty", default)]
         module_chunks: Vec<String>,
+        references: AssetReferencesVc,
     },
 }
 
 impl ChunkData {
+    /// Returns a serializable version of this chunk data.
+    pub fn runtime_chunk_data(&self) -> RuntimeChunkData {
+        match self {
+            ChunkData::Simple(path) => RuntimeChunkData::Simple(path),
+            ChunkData::WithRuntimeInfo {
+                path,
+                included,
+                excluded,
+                module_chunks,
+                ..
+            } => RuntimeChunkData::WithRuntimeInfo {
+                path,
+                included: &included,
+                excluded: &excluded,
+                module_chunks: &module_chunks,
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Hash, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum RuntimeChunkData<'a> {
+    Simple(&'a str),
+    #[serde(rename_all = "camelCase")]
+    WithRuntimeInfo {
+        path: &'a str,
+        #[serde(skip_serializing_if = "<[_]>::is_empty", default)]
+        included: &'a [ModuleIdReadRef],
+        #[serde(skip_serializing_if = "<[_]>::is_empty", default)]
+        excluded: &'a [ModuleIdReadRef],
+        #[serde(skip_serializing_if = "<[_]>::is_empty", default)]
+        module_chunks: &'a [String],
+    },
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct ChunkDataOption(Option<ChunkDataVc>);
+
+// NOTE(alexkirsz) Our convention for naming vector types is to add an "s" to
+// the end of the type name, but in this case it would be both gramatically
+// incorrect and clash with the variable names everywhere.
+// TODO(WEB-101) Should fix this.
+#[turbo_tasks::value(transparent)]
+pub struct ChunksData(Vec<ChunkDataVc>);
+
+#[turbo_tasks::function]
+fn module_chunk_reference_description() -> StringVc {
+    StringVc::cell("module chunk".to_string())
+}
+
+#[turbo_tasks::value_impl]
+impl ChunkDataVc {
+    #[turbo_tasks::function]
     pub async fn from_asset(
-        output_root: &FileSystemPath,
+        output_root: FileSystemPathVc,
         chunk: AssetVc,
-    ) -> Result<Option<impl Serialize + Hash + PartialEq + Eq>> {
+    ) -> Result<ChunkDataOptionVc> {
+        let output_root = output_root.await?;
         let path = chunk.ident().path().await?;
         // The "path" in this case is the chunk's path, not the chunk item's path.
         // The difference is a chunk is a file served by the dev server, and an
         // item is one of several that are contained in that chunk file.
         let Some(path) = output_root.get_path_to(&*path) else {
-            return Ok(None);
+            return Ok(ChunkDataOptionVc::cell(None));
         };
         let path = path.to_string();
 
         let Some(output_chunk) = OutputChunkVc::resolve_from(chunk).await? else {
-            return Ok(Some(ChunkData::Simple(path)));
+            return Ok(ChunkDataOptionVc::cell(Some(ChunkData::Simple(path).cell())));
         };
 
         let runtime_info = output_chunk.runtime_info().await?;
@@ -61,32 +114,80 @@ impl ChunkData {
         } else {
             Vec::new()
         };
-        let modules: Vec<_> = if let Some(module_chunks) = module_chunks {
+        let (module_chunks, module_chunks_references) = if let Some(module_chunks) = module_chunks {
             module_chunks
+                .await?
                 .iter()
                 .copied()
-                .map(|chunk_path| async move {
-                    let chunk_path = chunk_path.await?;
-                    Ok(output_root.get_path_to(&*chunk_path).map(ToOwned::to_owned))
+                .map(|chunk| {
+                    let output_root = output_root.clone();
+
+                    async move {
+                        let chunk_path = chunk.ident().path().await?;
+                        Ok(output_root.get_path_to(&*chunk_path).map(|path| {
+                            (
+                                path.to_owned(),
+                                SingleAssetReferenceVc::new(
+                                    chunk,
+                                    module_chunk_reference_description(),
+                                )
+                                .as_asset_reference(),
+                            )
+                        }))
+                    }
                 })
                 .try_join()
                 .await?
                 .into_iter()
                 .flatten()
-                .collect()
+                .unzip()
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
 
         if included.is_empty() && excluded.is_empty() {
-            return Ok(Some(ChunkData::Simple(path)));
+            return Ok(ChunkDataOptionVc::cell(Some(
+                ChunkData::Simple(path).cell(),
+            )));
         }
 
-        Ok(Some(ChunkData::WithRuntimeInfo {
-            path,
-            included,
-            excluded,
-            module_chunks: modules,
-        }))
+        Ok(ChunkDataOptionVc::cell(Some(
+            ChunkData::WithRuntimeInfo {
+                path,
+                included,
+                excluded,
+                module_chunks: module_chunks,
+                references: AssetReferencesVc::cell(module_chunks_references),
+            }
+            .cell(),
+        )))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn from_assets(
+        output_root: FileSystemPathVc,
+        chunks: AssetsVc,
+    ) -> Result<ChunksDataVc> {
+        Ok(ChunksDataVc::cell(
+            chunks
+                .await?
+                .iter()
+                .map(|&chunk| ChunkDataVc::from_asset(output_root, chunk))
+                .try_join()
+                .await?
+                .into_iter()
+                .flat_map(|chunk| *chunk)
+                .collect(),
+        ))
+    }
+
+    /// Returns [`AssetReferences`] to the assets that this chunk data
+    /// references.
+    #[turbo_tasks::function]
+    pub async fn references(self) -> Result<AssetReferencesVc> {
+        Ok(match &*self.await? {
+            ChunkData::WithRuntimeInfo { references, .. } => *references,
+            ChunkData::Simple(_) => AssetReferencesVc::empty(),
+        })
     }
 }

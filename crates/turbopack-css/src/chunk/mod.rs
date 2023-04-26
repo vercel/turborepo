@@ -9,7 +9,7 @@ use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, Value, ValueToString};
 use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
         availability_info::AvailabilityInfo, chunk_content, chunk_content_split, Chunk,
         ChunkContentResult, ChunkGroupReferenceVc, ChunkItem, ChunkItemVc, ChunkVc,
@@ -321,11 +321,11 @@ impl OutputChunk for CssChunk {
         let module_chunks: Vec<_> = content
             .chunk_items
             .iter()
-            .map(|item| SingleItemCssChunkVc::new(self.context, *item).path())
+            .map(|item| SingleItemCssChunkVc::new(self.context, *item).into())
             .collect();
         Ok(OutputChunkRuntimeInfo {
             included_ids: Some(ModuleIdsVc::cell(entries)),
-            module_chunks: Some(module_chunks),
+            module_chunks: Some(AssetsVc::cell(module_chunks)),
             ..Default::default()
         }
         .cell())
