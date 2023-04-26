@@ -16,14 +16,18 @@ use turbopack_core::{
 use super::source_map::SingleItemCssChunkSourceMapAssetReferenceVc;
 use crate::chunk::{CssChunkItem, CssChunkItemVc};
 
+/// A CSS chunk that only contains a single item. This is used for selectively
+/// loading CSS modules that are part of a larger chunk in development mode, and
+/// avoiding rule duplication.
 #[turbo_tasks::value]
 pub struct SingleItemCssChunk {
-    pub context: ChunkingContextVc,
-    pub item: CssChunkItemVc,
+    context: ChunkingContextVc,
+    item: CssChunkItemVc,
 }
 
 #[turbo_tasks::value_impl]
 impl SingleItemCssChunkVc {
+    /// Creates a new [`SingleItemCssChunkVc`].
     #[turbo_tasks::function]
     pub fn new(context: ChunkingContextVc, item: CssChunkItemVc) -> Self {
         SingleItemCssChunk { context, item }.cell()

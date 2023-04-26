@@ -12,15 +12,17 @@ use turbopack_core::{
 use super::chunk::SingleItemCssChunkVc;
 use crate::chunk::CssChunkItemVc;
 
+/// A reference to a [`SingleItemCssChunkVc`].
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct SingleItemCssChunkReference {
-    pub context: ChunkingContextVc,
-    pub item: CssChunkItemVc,
+    context: ChunkingContextVc,
+    item: CssChunkItemVc,
 }
 
 #[turbo_tasks::value_impl]
 impl SingleItemCssChunkReferenceVc {
+    /// Creates a new [`SingleItemCssChunkReferenceVc`].
     #[turbo_tasks::function]
     pub fn new(context: ChunkingContextVc, item: CssChunkItemVc) -> Self {
         Self::cell(SingleItemCssChunkReference { context, item })
