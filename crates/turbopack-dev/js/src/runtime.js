@@ -283,10 +283,6 @@ async function loadChunk(source, chunkData) {
     return loadChunkPath(source, chunkData);
   }
 
-  if (chunkData.moduleChunks) {
-    console.log("loadChunk", source, chunkData);
-  }
-
   const includedList = chunkData.included || [];
   const modulesPromises = includedList.map((included) => {
     if (moduleFactories[included]) return true;
@@ -294,7 +290,6 @@ async function loadChunk(source, chunkData) {
   });
   if (modulesPromises.length > 0 && modulesPromises.every((p) => p)) {
     // When all included items are already loaded or loading, we can skip loading ourselves
-    console.log("Returning here");
     return Promise.all(modulesPromises);
   }
 
