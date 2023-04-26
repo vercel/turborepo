@@ -876,7 +876,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    force: true,
+                    force: Some(Some(true)),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -1087,7 +1087,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: true,
+                    remote_only: Some(Some(true)),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
