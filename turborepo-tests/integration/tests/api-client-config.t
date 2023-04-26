@@ -15,7 +15,7 @@ Run test run
 
 Run test run with api overloaded
   $ ${TURBO} run build --__test-run --api http://localhost:8000 | jq .api_client_config.api_url
-  null
+  "http://localhost:8000"
 
 Run test run with token overloaded
   $ ${TURBO} run build --__test-run --token 1234567890 | jq .api_client_config.token
