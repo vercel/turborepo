@@ -116,8 +116,8 @@ jobs:
             crates/turbopack-bench/**
             !*.md
 
-      - name: Turborepo related changes
-        id: turborepo
+      - name: Turborepo Rust related changes
+        id: turborepo_rust
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
@@ -138,23 +138,28 @@ jobs:
             !**.md
             !**.mdx
 
-      - name: Go related changes
-        id: go
+      - name: Turborepo Go related changes
+        id: turborepo_go
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
             cli/**
 
-      - name: Go E2E related changes
-        id: go_e2e
+      - name: Turborepo integration tests changes
+        id: turborepo_integration
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            cli/**
-            crates/turborepo*
-            crates/turborepo*/**
-            crates/turbo-updater
-            Cargo.lock
+            turborepo-tests/integration/**
+            turborepo-tests/helpers/**
+
+      - name: Turborepo e2e tests changes
+        id: turborepo_e2e
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            turborepo-tests/e2e/**
+            turborepo-tests/helpers/**
 
       - name: Examples related changes
         id: examples
@@ -180,8 +185,9 @@ jobs:
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
       turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
-      go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
-      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
+      go: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' }}
+      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
+      go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
@@ -248,7 +254,7 @@ jobs:
   go_integration:
     name: Go Integration Tests
     needs: determine_jobs
-    if: needs.determine_jobs.outputs.go_e2e == 'true'
+    if: needs.determine_jobs.outputs.go_integration == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
