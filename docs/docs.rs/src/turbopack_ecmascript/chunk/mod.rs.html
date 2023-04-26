@@ -793,7 +793,7 @@
             <span class="kw">let </span>need_root = <span class="kw">if let </span>[(<span class="kw">_</span>, main_entry)] = <span class="kw-2">&amp;</span>assets[..] {
                 main_entry.resolve().<span class="kw">await</span><span class="question-mark">? </span>!= ident.resolve().<span class="kw">await</span><span class="question-mark">?
             </span>} <span class="kw">else </span>{
-                <span class="bool-val">false
+                <span class="bool-val">true
             </span>};
             <span class="kw">if </span>need_root {
                 <span class="kw">let </span>availability_root_key = StringVc::cell(<span class="string">&quot;current_availability_root&quot;</span>.to_string());
