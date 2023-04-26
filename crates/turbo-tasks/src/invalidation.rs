@@ -79,7 +79,7 @@ macro_rules! impl_eq_hash {
 impl_eq_hash!(dyn InvalidationReason);
 impl_eq_hash!(dyn InvalidationReasonKind);
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 enum MapKey {
     Untyped {
         unique_tag: usize,
@@ -89,6 +89,7 @@ enum MapKey {
     },
 }
 
+#[derive(Clone)]
 enum MapEntry {
     Single {
         reason: StaticOrArc<dyn InvalidationReason>,
@@ -101,7 +102,7 @@ enum MapEntry {
 /// A set of [InvalidationReason]s. They are automatically deduplicated and
 /// merged by kind during insertion. It implements [Display] to get a readable
 /// representation.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InvalidationReasonSet {
     next_unique_tag: usize,
     // We track typed and untyped entries in the same map to keep the occurence order of entries.
