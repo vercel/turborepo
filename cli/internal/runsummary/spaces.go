@@ -2,6 +2,8 @@ package runsummary
 
 import (
 	"github.com/vercel/turbo/cli/internal/ci"
+	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/scm"
 )
 
 // spacesRunResponse deserialized the response from POST Run endpoint
@@ -19,11 +21,11 @@ type spacesRunPayload struct {
 	Command        string `json:"command,omitempty"`        // the thing that kicked off the turbo run
 	RepositoryPath string `json:"repositoryPath,omitempty"` // where the command was invoked from
 	Context        string `json:"context,omitempty"`        // the host on which this Run was executed (e.g. Github Action, Vercel, etc)
+	GitBranch      string `json:"gitBranch"`
+	GitSha         string `json:"gitSha"`
 
 	// TODO: we need to add these in
 	// originationUser string
-	// gitBranch       string
-	// gitSha          string
 }
 
 // spacesCacheStatus is the same as TaskCacheSummary so we can convert
@@ -57,6 +59,10 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 	if name := ci.Constant(); name != "" {
 		context = name
 	}
+
+	// Get a list of env vars
+	sha, branch := getGitMetadata()
+
 	return &spacesRunPayload{
 		StartTime:      startTime,
 		Status:         "running",
@@ -64,6 +70,8 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 		RepositoryPath: rsm.repoPath.ToString(),
 		Type:           "TURBO",
 		Context:        context,
+		GitBranch:      branch,
+		GitSha:         sha,
 	}
 }
 
@@ -93,4 +101,31 @@ func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
 		Dependents:   taskSummary.Dependents,
 		Logs:         string(taskSummary.GetLogs()),
 	}
+}
+
+func getGitMetadata() (string, string) {
+	allEnvVars := env.GetEnvMap()
+
+	var sha string
+	var branch string
+
+	// If we're in CI, try to get the values we need from environment variables
+	if ci.IsCi() {
+		vendor := ci.Info()
+		branchVarName := vendor.BranchEnvVar
+		shaVarName := vendor.ShaEnvVar
+		vars := env.FromKeys(allEnvVars, []string{shaVarName, branchVarName})
+		sha = vars[shaVarName]
+		branch = vars[branchVarName]
+	}
+
+	// Otherwise fallback to using `git`
+	if branch == "" {
+		branch = scm.GetCurrentBranch()
+	}
+	if sha == "" {
+		sha = scm.GetCurrentSha()
+	}
+
+	return sha, branch
 }

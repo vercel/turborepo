@@ -15,6 +15,12 @@ type Vendor struct {
 	Env vendorEnvs
 	// EvalEnv is key/value map of environment variables that can be used to quickly determine the vendor
 	EvalEnv map[string]string
+
+	// The name of the environment variable that contains the current git sha
+	ShaEnvVar string
+
+	// The name of the environment variable that contains the current checked out branch
+	BranchEnvVar string
 }
 
 // Vendors is a list of common CI/CD vendors (from https://github.com/watson/ci-info/blob/master/vendors.json)
@@ -107,9 +113,11 @@ var Vendors = []Vendor{
 		Env:      vendorEnvs{Any: []string{"EAS_BUILD"}},
 	},
 	{
-		Name:     "GitHub Actions",
-		Constant: "GITHUB_ACTIONS",
-		Env:      vendorEnvs{Any: []string{"GITHUB_ACTIONS"}},
+		Name:         "GitHub Actions",
+		Constant:     "GITHUB_ACTIONS",
+		Env:          vendorEnvs{Any: []string{"GITHUB_ACTIONS"}},
+		ShaEnvVar:    "GITHUB_SHA",
+		BranchEnvVar: "GITHUB_REF_NAME",
 	},
 	{
 		Name:     "GitLab CI",
@@ -224,9 +232,11 @@ var Vendors = []Vendor{
 		Env:      vendorEnvs{Any: []string{"TRAVIS"}},
 	},
 	{
-		Name:     "Vercel",
-		Constant: "VERCEL",
-		Env:      vendorEnvs{Any: []string{"NOW_BUILDER", "VERCEL"}},
+		Name:         "Vercel",
+		Constant:     "VERCEL",
+		Env:          vendorEnvs{Any: []string{"NOW_BUILDER", "VERCEL"}},
+		ShaEnvVar:    "VERCEL_GIT_COMMIT_SHA",
+		BranchEnvVar: "VERCEL_GIT_COMMIT_REF",
 	},
 	{
 		Name:     "Visual Studio App Center",

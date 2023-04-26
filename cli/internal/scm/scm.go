@@ -7,6 +7,8 @@
 package scm
 
 import (
+	"os/exec"
+
 	"github.com/pkg/errors"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -50,4 +52,24 @@ func FromInRepo(repoRoot turbopath.AbsoluteSystemPath) (SCM, error) {
 		return nil, err
 	}
 	return newFallback(dotGitDir.Dir())
+}
+
+// GetCurrentBranch returns the current branch
+func GetCurrentBranch() string {
+	command := []string{"rev-parse", "--abbrev-ref", "HEAD"}
+	out, err := exec.Command("git", command...).CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+// GetCurrentSha returns the current SHA
+func GetCurrentSha() string {
+	command := []string{"rev-parse", "HEAD"}
+	out, err := exec.Command("git", command...).CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
