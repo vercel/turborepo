@@ -4,9 +4,7 @@ use std::{
 };
 
 use thiserror::Error;
-use turborepo_lockfiles::{
-    self, npm_subgraph as real_npm_subgraph, BerryLockfile, LockfileData, NpmLockfile, Package,
-};
+use turborepo_lockfiles::{self, BerryLockfile, LockfileData, NpmLockfile, Package};
 
 use super::{proto, Buffer};
 
@@ -114,7 +112,9 @@ fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
         ..
     } = request;
     let contents = match package_manager {
-        proto::PackageManager::Npm => real_npm_subgraph(&contents, &workspaces, &packages)?,
+        proto::PackageManager::Npm => {
+            turborepo_lockfiles::npm_subgraph(&contents, &workspaces, &packages)?
+        }
         proto::PackageManager::Berry => turborepo_lockfiles::berry_subgraph(
             &contents,
             &workspaces,
