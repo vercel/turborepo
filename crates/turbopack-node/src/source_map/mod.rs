@@ -231,7 +231,7 @@ async fn resolve_source_mapping(
         .await?;
     match &*trace {
         TraceResult::Found(frame) => {
-            let lib_code = !frame.file.contains("/node_modules/");
+            let lib_code = frame.file.contains("/node_modules/");
             if let Some(project_path) = frame.file.strip_prefix(concatcp!(
                 "/",
                 SOURCE_MAP_ROOT_NAME,
