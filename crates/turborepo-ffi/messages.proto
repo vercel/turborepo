@@ -140,3 +140,12 @@ message GlobalChangeRequest {
 message GlobalChangeResponse {
   bool global_change = 1;
 }
+
+message RecursiveCopyRequest {
+  string src = 1;
+  string dst = 2;
+}
+
+message RecursiveCopyResponse {
+  optional string error = 1;
+}
