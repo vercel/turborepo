@@ -510,11 +510,11 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>((i, i_sym)) = <span class="self">self</span>.imports.get(id) {
             <span class="kw">let </span>r = <span class="kw-2">&amp;</span><span class="self">self</span>.references[<span class="kw-2">*</span>i];
             <span class="kw">return </span><span class="prelude-val">Some</span>(JsValue::member(
-                <span class="kw">box </span>JsValue::Module(ModuleValue {
+                Box::new(JsValue::Module(ModuleValue {
                     module: r.module_path.clone(),
                     annotations: r.annotations.clone(),
-                }),
-                <span class="kw">box </span>i_sym.clone().into(),
+                })),
+                Box::new(i_sym.clone().into()),
             ));
         }
         <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = <span class="self">self</span>.namespace_imports.get(id) {

@@ -4178,36 +4178,36 @@
     <span class="kw">pub fn </span>equal(a: JsValue, b: JsValue) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::Binary(
             <span class="number">1 </span>+ a.total_nodes() + b.total_nodes(),
-            <span class="kw">box </span>a,
+            Box::new(a),
             BinaryOperator::Equal,
-            <span class="kw">box </span>b,
+            Box::new(b),
         )
     }
 
     <span class="kw">pub fn </span>not_equal(a: JsValue, b: JsValue) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::Binary(
             <span class="number">1 </span>+ a.total_nodes() + b.total_nodes(),
-            <span class="kw">box </span>a,
+            Box::new(a),
             BinaryOperator::NotEqual,
-            <span class="kw">box </span>b,
+            Box::new(b),
         )
     }
 
     <span class="kw">pub fn </span>strict_equal(a: JsValue, b: JsValue) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::Binary(
             <span class="number">1 </span>+ a.total_nodes() + b.total_nodes(),
-            <span class="kw">box </span>a,
+            Box::new(a),
             BinaryOperator::StrictEqual,
-            <span class="kw">box </span>b,
+            Box::new(b),
         )
     }
 
     <span class="kw">pub fn </span>strict_not_equal(a: JsValue, b: JsValue) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::Binary(
             <span class="number">1 </span>+ a.total_nodes() + b.total_nodes(),
-            <span class="kw">box </span>a,
+            Box::new(a),
             BinaryOperator::StrictNotEqual,
-            <span class="kw">box </span>b,
+            Box::new(b),
         )
     }
 
@@ -6819,7 +6819,7 @@
                                 <span class="kw">let </span>new_args = handle_args(args, <span class="kw-2">&amp;mut </span>queue, <span class="kw-2">&amp;</span>var_graph, i).<span class="kw">await</span>;
                                 resolved.push((
                                     <span class="macro">format!</span>(<span class="string">&quot;{parent} -&gt; {i} call&quot;</span>),
-                                    JsValue::call(<span class="kw">box </span>func, new_args),
+                                    JsValue::call(Box::new(func), new_args),
                                 ));
                             }
                             Effect::FreeVar { var, .. } =&gt; {
@@ -6833,7 +6833,7 @@
                                 <span class="kw">let </span>new_args = handle_args(args, <span class="kw-2">&amp;mut </span>queue, <span class="kw-2">&amp;</span>var_graph, i).<span class="kw">await</span>;
                                 resolved.push((
                                     <span class="macro">format!</span>(<span class="string">&quot;{parent} -&gt; {i} member call&quot;</span>),
-                                    JsValue::member_call(<span class="kw">box </span>obj, <span class="kw">box </span>prop, new_args),
+                                    JsValue::member_call(Box::new(obj), Box::new(prop), new_args),
                                 ));
                             }
                             <span class="kw">_ </span>=&gt; {}

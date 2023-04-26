@@ -278,6 +278,8 @@
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::replace;
 
 <span class="kw">use </span>auto_hash_map::AutoSet;
@@ -467,7 +469,8 @@
                 )
                 .into_partial()
                 .unwrap();
-                <span class="kw-2">*</span>guard = TaskMetaState::Full(<span class="kw">box </span>partial.into_full(task.get_event_description()));
+                <span class="kw-2">*</span>guard =
+                    TaskMetaState::Full(Box::new(partial.into_full(task.get_event_description())));
             }
             TaskMetaState::Unloaded(<span class="kw">_</span>) =&gt; {
                 <span class="kw">let </span>unloaded = replace(
@@ -479,7 +482,8 @@
                 )
                 .into_unloaded()
                 .unwrap();
-                <span class="kw-2">*</span>guard = TaskMetaState::Full(<span class="kw">box </span>unloaded.into_full(task.get_event_description()));
+                <span class="kw-2">*</span>guard =
+                    TaskMetaState::Full(Box::new(unloaded.into_full(task.get_event_description())));
             }
         }
         WriteGuard::new(guard, TaskMetaState::as_full, TaskMetaState::as_full_mut)
@@ -508,7 +512,7 @@
                 )
                 .into_unloaded()
                 .unwrap();
-                <span class="kw-2">*</span>guard = TaskMetaState::Partial(<span class="kw">box </span>unloaded.into_partial());
+                <span class="kw-2">*</span>guard = TaskMetaState::Partial(Box::new(unloaded.into_partial()));
                 TaskMetaStateWriteGuard::Partial(WriteGuard::new(
                     guard,
                     TaskMetaState::as_partial,

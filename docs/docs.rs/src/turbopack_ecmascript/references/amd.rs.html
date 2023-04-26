@@ -546,7 +546,7 @@
             </span><span class="kw">let </span>f = <span class="macro">private_ident!</span>(<span class="string">&quot;f&quot;</span>);
             <span class="kw">let </span>call_f = Expr::Call(CallExpr {
                 args: deps,
-                callee: Callee::Expr(<span class="kw">box </span>Expr::Ident(f.clone())),
+                callee: Callee::Expr(Box::new(Expr::Ident(f.clone()))),
                 span: DUMMY_SP,
                 type_args: <span class="prelude-val">None</span>,
             });
@@ -569,12 +569,12 @@
                 <span class="string">&quot;r =&gt; r !== undefined &amp;&amp; __turbopack_export_value__(r)&quot;
             </span>));
             args.push(ExprOrSpread {
-                expr: <span class="kw">box </span>Expr::Call(CallExpr {
+                expr: Box::new(Expr::Call(CallExpr {
                     args: deps,
                     callee: Callee::Expr(factory),
                     span: DUMMY_SP,
                     type_args: <span class="prelude-val">None</span>,
-                }),
+                })),
                 spread: <span class="prelude-val">None</span>,
             });
         }

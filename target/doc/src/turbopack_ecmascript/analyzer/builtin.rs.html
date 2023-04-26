@@ -488,6 +488,13 @@
 <a href="#488" id="488">488</a>
 <a href="#489" id="489">489</a>
 <a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
 <span class="kw">use </span>swc_core::ecma::atoms::js_word;
@@ -564,7 +571,7 @@
                 <span class="kw-2">*</span>value = JsValue::alternatives(
                     take(alts)
                         .into_iter()
-                        .map(|alt| JsValue::member(<span class="kw">box </span>alt, prop.clone()))
+                        .map(|alt| JsValue::member(Box::new(alt), prop.clone()))
                         .collect(),
                 );
                 <span class="bool-val">true
@@ -577,7 +584,7 @@
             } =&gt; {
                 <span class="kw">fn </span>items_to_alternatives(items: <span class="kw-2">&amp;mut </span>Vec&lt;JsValue&gt;, prop: <span class="kw-2">&amp;mut </span>JsValue) -&gt; JsValue {
                     items.push(JsValue::unknown(
-                        JsValue::member(<span class="kw">box </span>JsValue::array(Vec::new()), <span class="kw">box </span>take(prop)),
+                        JsValue::member(Box::new(JsValue::array(Vec::new())), Box::new(take(prop))),
                         <span class="string">&quot;unknown array prototype methods or values&quot;</span>,
                     ));
                     JsValue::alternatives(take(items))
@@ -595,7 +602,7 @@
                                 <span class="bool-val">true
                             </span>} <span class="kw">else </span>{
                                 <span class="kw-2">*</span>value = JsValue::unknown(
-                                    JsValue::member(<span class="kw">box </span>take(obj), <span class="kw">box </span>take(prop)),
+                                    JsValue::member(Box::new(take(obj)), Box::new(take(prop))),
                                     <span class="string">&quot;invalid index&quot;</span>,
                                 );
                                 <span class="bool-val">true
@@ -617,7 +624,7 @@
                         <span class="kw-2">*</span>value = JsValue::alternatives(
                             take(alts)
                                 .into_iter()
-                                .map(|alt| JsValue::member(<span class="kw">box </span>obj.clone(), <span class="kw">box </span>alt))
+                                .map(|alt| JsValue::member(Box::new(obj.clone()), Box::new(alt)))
                                 .collect(),
                         );
                         <span class="bool-val">true
@@ -650,7 +657,7 @@
                             ObjectPart::Spread(<span class="kw">_</span>) =&gt; {
                                 values.push(JsValue::unknown(
                                     JsValue::member(
-                                        <span class="kw">box </span>JsValue::object(<span class="macro">vec!</span>[take(part)]),
+                                        Box::new(JsValue::object(<span class="macro">vec!</span>[take(part)])),
                                         prop.clone(),
                                     ),
                                     <span class="string">&quot;spreaded object&quot;</span>,
@@ -660,7 +667,10 @@
                     }
                     <span class="kw">if </span>include_unknown {
                         values.push(JsValue::unknown(
-                            JsValue::member(<span class="kw">box </span>JsValue::object(Vec::new()), <span class="kw">box </span>take(prop)),
+                            JsValue::member(
+                                Box::new(JsValue::object(Vec::new())),
+                                Box::new(take(prop)),
+                            ),
                             <span class="string">&quot;unknown object prototype methods or values&quot;</span>,
                         ));
                     }
@@ -752,7 +762,7 @@
                         <span class="kw-2">*</span>value = JsValue::alternatives(
                             take(alts)
                                 .into_iter()
-                                .map(|alt| JsValue::member(<span class="kw">box </span>obj.clone(), <span class="kw">box </span>alt))
+                                .map(|alt| JsValue::member(Box::new(obj.clone()), Box::new(alt)))
                                 .collect(),
                         );
                         <span class="bool-val">true
@@ -826,7 +836,7 @@
                                             .enumerate()
                                             .map(|(i, item)| {
                                                 JsValue::call(
-                                                    <span class="kw">box </span>func.clone(),
+                                                    Box::new(func.clone()),
                                                     <span class="macro">vec!</span>[
                                                         item,
                                                         JsValue::Constant(ConstantValue::Num(
@@ -851,7 +861,11 @@
                         take(alts)
                             .into_iter()
                             .map(|alt| {
-                                JsValue::member_call(<span class="kw">box </span>alt, <span class="kw">box </span>prop.clone(), args.clone())
+                                JsValue::member_call(
+                                    Box::new(alt),
+                                    Box::new(prop.clone()),
+                                    args.clone(),
+                                )
                             })
                             .collect(),
                     );
@@ -862,7 +876,7 @@
             <span class="comment">// without special handling, we convert it into a normal call like
             // `(obj.prop)(arg1, arg2, ...)`
             </span><span class="kw-2">*</span>value = JsValue::call(
-                <span class="kw">box </span>JsValue::member(<span class="kw">box </span>take(obj), <span class="kw">box </span>take(prop)),
+                Box::new(JsValue::member(Box::new(take(obj)), Box::new(take(prop)))),
                 take(args),
             );
             <span class="bool-val">true
@@ -873,7 +887,7 @@
             <span class="kw-2">*</span>value = JsValue::alternatives(
                 take(alts)
                     .into_iter()
-                    .map(|alt| JsValue::call(<span class="kw">box </span>alt, args.clone()))
+                    .map(|alt| JsValue::call(Box::new(alt), args.clone()))
                     .collect(),
             );
             <span class="bool-val">true

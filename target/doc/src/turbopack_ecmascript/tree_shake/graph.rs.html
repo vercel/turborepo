@@ -857,6 +857,7 @@
 <a href="#857" id="857">857</a>
 <a href="#858" id="858">858</a>
 <a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt,
     hash::{BuildHasherDefault, Hash},
@@ -1155,9 +1156,9 @@
                     .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                         span: DUMMY_SP,
                         specifiers,
-                        src: <span class="kw">box </span>uri_of_module.clone().into(),
+                        src: Box::new(uri_of_module.clone().into()),
                         type_only: <span class="bool-val">false</span>,
-                        asserts: <span class="prelude-val">Some</span>(<span class="kw">box </span>create_turbopack_chunk_id_assert(dep)),
+                        asserts: <span class="prelude-val">Some</span>(Box::new(create_turbopack_chunk_id_assert(dep))),
                     })));
             }
 
@@ -1171,10 +1172,11 @@
                 <span class="comment">// Emit `export { foo }`
                 </span><span class="kw">for </span>var <span class="kw">in </span>data.write_vars.iter() {
                     <span class="kw">if </span>required_vars.remove(var) {
-                        <span class="kw">let </span>assertion_prop = PropOrSpread::Prop(<span class="kw">box </span>Prop::KeyValue(KeyValueProp {
-                            key: <span class="macro">quote_ident!</span>(<span class="string">&quot;__turbopack_var__&quot;</span>).into(),
-                            value: <span class="kw">box </span><span class="bool-val">true</span>.into(),
-                        }));
+                        <span class="kw">let </span>assertion_prop =
+                            PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
+                                key: <span class="macro">quote_ident!</span>(<span class="string">&quot;__turbopack_var__&quot;</span>).into(),
+                                value: Box::new(<span class="bool-val">true</span>.into()),
+                            })));
 
                         chunk
                             .body
@@ -1191,10 +1193,10 @@
                                     )],
                                     src: <span class="prelude-val">None</span>,
                                     type_only: <span class="bool-val">false</span>,
-                                    asserts: <span class="prelude-val">Some</span>(<span class="kw">box </span>ObjectLit {
+                                    asserts: <span class="prelude-val">Some</span>(Box::new(ObjectLit {
                                         span: DUMMY_SP,
                                         props: <span class="macro">vec!</span>[assertion_prop],
-                                    }),
+                                    })),
                                 },
                             )));
                     }
@@ -1700,10 +1702,10 @@
 <span class="kw">fn </span>create_turbopack_chunk_id_assert(dep: u32) -&gt; ObjectLit {
     ObjectLit {
         span: DUMMY_SP,
-        props: <span class="macro">vec!</span>[PropOrSpread::Prop(<span class="kw">box </span>Prop::KeyValue(KeyValueProp {
+        props: <span class="macro">vec!</span>[PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
             key: PropName::Ident(Ident::new(ASSERT_CHUNK_KEY.into(), DUMMY_SP)),
             value: (dep <span class="kw">as </span>f64).into(),
-        }))],
+        })))],
     }
 }
 

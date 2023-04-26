@@ -489,8 +489,8 @@
 
     <span class="kw">impl </span>VisitorFactory <span class="kw">for </span>Box&lt;StrReplacer&lt;<span class="lifetime">&#39;_</span>&gt;&gt; {
         <span class="kw">fn </span>create&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>VisitMut + Send + Sync + <span class="lifetime">&#39;a</span>&gt; {
-            <span class="kw">box </span><span class="kw-2">&amp;**</span><span class="self">self
-        </span>}
+            Box::new(<span class="kw-2">&amp;**</span><span class="self">self</span>)
+        }
     }
 
     <span class="kw">impl </span>VisitMut <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span>StrReplacer&lt;<span class="lifetime">&#39;_</span>&gt; {
@@ -501,7 +501,7 @@
     }
 
     <span class="kw">fn </span>replacer(from: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, to: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="kw">impl </span>VisitorFactory {
-        <span class="kw">box </span>StrReplacer { from, to }
+        Box::new(StrReplacer { from, to })
     }
 
     <span class="kw">fn </span>to_js(m: <span class="kw-2">&amp;</span>Module, cm: <span class="kw-2">&amp;</span>Arc&lt;SourceMap&gt;) -&gt; String {

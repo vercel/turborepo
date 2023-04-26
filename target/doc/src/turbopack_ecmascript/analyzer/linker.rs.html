@@ -478,7 +478,7 @@
                     }
                     total_nodes += <span class="number">1</span>;
                     done.push(JsValue::unknown(
-                        JsValue::call(<span class="kw">box </span>JsValue::function(func_ident, return_value), args),
+                        JsValue::call(Box::new(JsValue::function(func_ident, return_value)), args),
                         <span class="string">&quot;recursive function call&quot;</span>,
                     ));
                 }

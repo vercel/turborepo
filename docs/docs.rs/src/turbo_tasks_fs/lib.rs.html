@@ -1955,14 +1955,11 @@
 <a href="#1955" id="1955">1955</a>
 <a href="#1956" id="1956">1956</a>
 <a href="#1957" id="1957">1957</a>
-<a href="#1958" id="1958">1958</a>
-<a href="#1959" id="1959">1959</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
 #![feature(iter_advance_by)]
 #![feature(io_error_more)]
-#![feature(box_syntax)]
 #![feature(round_char_boundary)]
 
 </span><span class="kw">pub mod </span>attach;
@@ -3642,9 +3639,9 @@
                 <span class="kw">let </span>de = <span class="kw-2">&amp;mut </span>serde_json::Deserializer::from_reader(file.read());
                 <span class="kw">match </span>serde_path_to_error::deserialize(de) {
                     <span class="prelude-val">Ok</span>(data) =&gt; FileJsonContent::Content(data),
-                    <span class="prelude-val">Err</span>(e) =&gt; FileJsonContent::Unparseable(
-                        <span class="kw">box </span>UnparseableJson::from_serde_path_to_error(e),
-                    ),
+                    <span class="prelude-val">Err</span>(e) =&gt; FileJsonContent::Unparseable(Box::new(
+                        UnparseableJson::from_serde_path_to_error(e),
+                    )),
                 }
             }
             FileContent::NotFound =&gt; FileJsonContent::NotFound,
@@ -3668,9 +3665,8 @@
                             <span class="string">&quot;text content doesn&#39;t contain any json data&quot;</span>,
                         ),
                     },
-                    <span class="prelude-val">Err</span>(e) =&gt; FileJsonContent::Unparseable(<span class="kw">box </span>UnparseableJson::from_jsonc_error(
-                        e,
-                        string.as_ref(),
+                    <span class="prelude-val">Err</span>(e) =&gt; FileJsonContent::Unparseable(Box::new(
+                        UnparseableJson::from_jsonc_error(e, string.as_ref()),
                     )),
                 },
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; FileJsonContent::unparseable(<span class="string">&quot;binary is not valid utf-8 text&quot;</span>),

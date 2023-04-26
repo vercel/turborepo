@@ -380,7 +380,7 @@
         }
 
         <span class="comment">// something random that&#39;s never gonna be in real css
-        </span><span class="kw">let </span><span class="kw-2">mut </span>rule = Rule::ListOfComponentValues(<span class="kw">box </span>ListOfComponentValues {
+        </span><span class="kw">let </span><span class="kw-2">mut </span>rule = Rule::ListOfComponentValues(Box::new(ListOfComponentValues {
             span: DUMMY_SP,
             children: <span class="macro">vec!</span>[ComponentValue::PreservedToken(Box::new(token(
                 Token::String {
@@ -388,23 +388,23 @@
                     raw: <span class="string">r#&quot;&quot;&quot;&quot;__turbopack_placeholder__&quot;&quot;&quot;&quot;#</span>.into(),
                 },
             )))],
-        });
+        }));
 
         <span class="kw">fn </span>at_rule(name: <span class="kw-2">&amp;</span>str, prelude: AtRulePrelude, inner_rule: Rule) -&gt; Rule {
-            Rule::AtRule(<span class="kw">box </span>AtRule {
+            Rule::AtRule(Box::new(AtRule {
                 span: DUMMY_SP,
                 name: AtRuleName::Ident(Ident {
                     span: DUMMY_SP,
                     value: name.into(),
                     raw: <span class="prelude-val">None</span>,
                 }),
-                prelude: <span class="prelude-val">Some</span>(<span class="kw">box </span>prelude),
+                prelude: <span class="prelude-val">Some</span>(Box::new(prelude)),
                 block: <span class="prelude-val">Some</span>(SimpleBlock {
                     span: DUMMY_SP,
                     name: token(Token::LBrace),
                     value: <span class="macro">vec!</span>[ComponentValue::from(inner_rule)],
                 }),
-            })
+            }))
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(media) = <span class="kw-2">&amp;</span><span class="self">self</span>.media {

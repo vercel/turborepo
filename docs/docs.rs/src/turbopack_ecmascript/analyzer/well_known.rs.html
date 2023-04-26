@@ -742,6 +742,26 @@
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
+<a href="#748" id="748">748</a>
+<a href="#749" id="749">749</a>
+<a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
 <span class="kw">use </span>anyhow::Result;
@@ -801,7 +821,7 @@
         WellKnownFunctionKind::PathDirname =&gt; path_dirname(args),
         WellKnownFunctionKind::PathResolve(cwd) =&gt; path_resolve(<span class="kw-2">*</span>cwd, args),
         WellKnownFunctionKind::Import =&gt; JsValue::unknown(
-            JsValue::call(<span class="kw">box </span>JsValue::WellKnownFunction(kind), args),
+            JsValue::call(Box::new(JsValue::WellKnownFunction(kind)), args),
             <span class="string">&quot;import() is not supported&quot;</span>,
         ),
         WellKnownFunctionKind::Require =&gt; require(args),
@@ -834,7 +854,7 @@
                 cwd.clone().into()
             } <span class="kw">else </span>{
                 JsValue::unknown(
-                    JsValue::call(<span class="kw">box </span>JsValue::WellKnownFunction(kind), args),
+                    JsValue::call(Box::new(JsValue::WellKnownFunction(kind)), args),
                     <span class="string">&quot;process.cwd is not specified in the environment&quot;</span>,
                 )
             }
@@ -855,7 +875,7 @@
         }
 
         <span class="kw">_ </span>=&gt; JsValue::unknown(
-            JsValue::call(<span class="kw">box </span>JsValue::WellKnownFunction(kind), args),
+            JsValue::call(Box::new(JsValue::WellKnownFunction(kind)), args),
             <span class="string">&quot;unsupported function&quot;</span>,
         ),
     })
@@ -882,7 +902,9 @@
         } <span class="kw">else </span>{
             JsValue::unknown(
                 JsValue::call(
-                    <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::ObjectAssign),
+                    Box::new(JsValue::WellKnownFunction(
+                        WellKnownFunctionKind::ObjectAssign,
+                    )),
                     <span class="macro">vec!</span>[],
                 ),
                 <span class="string">&quot;empty arguments for Object.assign&quot;</span>,
@@ -891,7 +913,9 @@
     } <span class="kw">else </span>{
         JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::ObjectAssign),
+                Box::new(JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::ObjectAssign,
+                )),
                 args,
             ),
             <span class="string">&quot;only const object assign is supported&quot;</span>,
@@ -1046,7 +1070,9 @@
     }
     JsValue::unknown(
         JsValue::call(
-            <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::PathDirname),
+            Box::new(JsValue::WellKnownFunction(
+                WellKnownFunctionKind::PathDirname,
+            )),
             args,
         ),
         <span class="string">&quot;path.dirname with unsupported arguments&quot;</span>,
@@ -1063,7 +1089,7 @@
         } <span class="kw">else </span>{
             JsValue::unknown(
                 JsValue::call(
-                    <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+                    Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::Require)),
                     args,
                 ),
                 <span class="string">&quot;only constant argument is supported&quot;</span>,
@@ -1072,7 +1098,7 @@
     } <span class="kw">else </span>{
         JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+                Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::Require)),
                 args,
             ),
             <span class="string">&quot;only a single argument is supported&quot;</span>,
@@ -1088,7 +1114,9 @@
     <span class="kw">if </span>args.is_empty() {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
+                Box::new(JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::RequireContextRequire(val),
+                )),
                 args,
             ),
             <span class="string">&quot;require.context(...).require() requires an argument specifying the module path&quot;</span>,
@@ -1098,7 +1126,7 @@
     <span class="kw">let </span><span class="prelude-val">Some</span>(s) = args[<span class="number">0</span>].as_str() <span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
+                Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val))),
                 args,
             ),
             <span class="string">&quot;require.context(...).require() only accepts a single, constant string argument&quot;</span>,
@@ -1109,7 +1137,7 @@
     <span class="kw">let </span><span class="prelude-val">Some</span>(m) = map.get(s) <span class="kw">else </span>{
        <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown(
            JsValue::call(
-               <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val)),
+               Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(val))),
                args,
            ),
            <span class="string">&quot;require.context(...).require() can only be called with an argument that&#39;s in the context&quot;</span>,
@@ -1133,8 +1161,8 @@
     } <span class="kw">else </span>{
         JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequireKeys(
-                    val,
+                Box::new(JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::RequireContextRequireKeys(val),
                 )),
                 args,
             ),
@@ -1151,9 +1179,9 @@
     <span class="kw">if </span>args.len() != <span class="number">1 </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(
+                Box::new(JsValue::WellKnownFunction(
                     WellKnownFunctionKind::RequireContextRequireResolve(val),
-                ),
+                )),
                 args,
             ),
             <span class="string">&quot;require.context(...).resolve() only accepts a single, constant string argument&quot;</span>,
@@ -1163,9 +1191,9 @@
     <span class="kw">let </span><span class="prelude-val">Some</span>(s) = args[<span class="number">0</span>].as_str() <span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(
+                Box::new(JsValue::WellKnownFunction(
                     WellKnownFunctionKind::RequireContextRequireResolve(val),
-                ),
+                )),
                 args,
             ),
             <span class="string">&quot;require.context(...).resolve() only accepts a single, constant string argument&quot;</span>,
@@ -1176,9 +1204,9 @@
     <span class="kw">let </span><span class="prelude-val">Some</span>(m) = map.get(s) <span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(
+                Box::new(JsValue::WellKnownFunction(
                     WellKnownFunctionKind::RequireContextRequireResolve(val),
-                ),
+                )),
                 args,
             ),
             <span class="string">&quot;require.context(...).resolve() can only be called with an argument that&#39;s in the context&quot;</span>,
@@ -1196,7 +1224,9 @@
                 .unwrap_or_else(|<span class="kw">_</span>| {
                     JsValue::unknown(
                         JsValue::call(
-                            <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::PathToFileUrl),
+                            Box::new(JsValue::WellKnownFunction(
+                                WellKnownFunctionKind::PathToFileUrl,
+                            )),
                             args,
                         ),
                         <span class="string">&quot;url not parseable: path is relative or has an invalid prefix&quot;</span>,
@@ -1205,7 +1235,9 @@
         } <span class="kw">else </span>{
             JsValue::unknown(
                 JsValue::call(
-                    <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::PathToFileUrl),
+                    Box::new(JsValue::WellKnownFunction(
+                        WellKnownFunctionKind::PathToFileUrl,
+                    )),
                     args,
                 ),
                 <span class="string">&quot;only constant argument is supported&quot;</span>,
@@ -1214,7 +1246,9 @@
     } <span class="kw">else </span>{
         JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::PathToFileUrl),
+                Box::new(JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::PathToFileUrl,
+                )),
                 args,
             ),
             <span class="string">&quot;only a single argument is supported&quot;</span>,
@@ -1248,7 +1282,7 @@
         <span class="attr">#[allow(unreachable_patterns)]
         </span>(kind, <span class="kw">_</span>) =&gt; {
             <span class="kw">return </span>(
-                JsValue::member(<span class="kw">box </span>JsValue::WellKnownFunction(kind), <span class="kw">box </span>prop),
+                JsValue::member(Box::new(JsValue::WellKnownFunction(kind)), Box::new(prop)),
                 <span class="bool-val">false</span>,
             )
         }
@@ -1285,7 +1319,7 @@
         <span class="attr">#[allow(unreachable_patterns)]
         </span><span class="kw">_ </span>=&gt; {
             <span class="kw">return </span><span class="prelude-val">Ok</span>((
-                JsValue::member(<span class="kw">box </span>JsValue::WellKnownObject(kind), <span class="kw">box </span>prop),
+                JsValue::member(Box::new(JsValue::WellKnownObject(kind)), Box::new(prop)),
                 <span class="bool-val">false</span>,
             ))
         }
@@ -1298,8 +1332,8 @@
         <span class="prelude-val">Some</span>(<span class="string">&quot;assign&quot;</span>) =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::ObjectAssign),
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(WellKnownObjectKind::GlobalObject)),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on global Object&quot;</span>,
         ),
@@ -1312,15 +1346,17 @@
         (.., <span class="prelude-val">Some</span>(<span class="string">&quot;dirname&quot;</span>)) =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::PathDirname),
         (.., <span class="prelude-val">Some</span>(<span class="string">&quot;resolve&quot;</span>)) =&gt; {
             <span class="comment">// cwd is added while resolving in refernces.rs
-            </span>JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(<span class="kw">box </span>JsValue::from(<span class="string">&quot;&quot;</span>)))
+            </span>JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(Box::new(JsValue::from(
+                <span class="string">&quot;&quot;</span>,
+            ))))
         }
         (WellKnownObjectKind::PathModule, <span class="prelude-val">Some</span>(<span class="string">&quot;default&quot;</span>)) =&gt; {
             JsValue::WellKnownObject(WellKnownObjectKind::PathModuleDefault)
         }
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::PathModule),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(WellKnownObjectKind::PathModule)),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on Node.js path module&quot;</span>,
         ),
@@ -1350,8 +1386,8 @@
     }
     JsValue::unknown(
         JsValue::member(
-            <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::FsModule),
-            <span class="kw">box </span>prop,
+            Box::new(JsValue::WellKnownObject(WellKnownObjectKind::FsModule)),
+            Box::new(prop),
         ),
         <span class="string">&quot;unsupported property on Node.js fs module&quot;</span>,
     )
@@ -1367,8 +1403,8 @@
         }
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::UrlModule),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(WellKnownObjectKind::UrlModule)),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on Node.js url module&quot;</span>,
         ),
@@ -1389,8 +1425,8 @@
         }
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::ChildProcess),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(WellKnownObjectKind::ChildProcess)),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on Node.js child_process module&quot;</span>,
         ),
@@ -1407,8 +1443,8 @@
         }
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::OsModule),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(WellKnownObjectKind::OsModule)),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on Node.js os module&quot;</span>,
         ),
@@ -1438,8 +1474,8 @@
         <span class="prelude-val">Some</span>(<span class="string">&quot;env&quot;</span>) =&gt; JsValue::WellKnownObject(WellKnownObjectKind::NodeProcessEnv),
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on Node.js process object&quot;</span>,
         ),
@@ -1451,8 +1487,8 @@
         <span class="prelude-val">Some</span>(<span class="string">&quot;find&quot;</span>) =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::NodePreGypFind),
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::NodePreGyp),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(WellKnownObjectKind::NodePreGyp)),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on @mapbox/node-pre-gyp module&quot;</span>,
         ),
@@ -1464,8 +1500,10 @@
         <span class="prelude-val">Some</span>(<span class="string">&quot;set&quot;</span>) =&gt; JsValue::WellKnownFunction(WellKnownFunctionKind::NodeExpressSet),
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::NodeExpressApp),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(
+                    WellKnownObjectKind::NodeExpressApp,
+                )),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on require(&#39;express&#39;)() object&quot;</span>,
         ),
@@ -1479,8 +1517,10 @@
         }
         <span class="kw">_ </span>=&gt; JsValue::unknown(
             JsValue::member(
-                <span class="kw">box </span>JsValue::WellKnownObject(WellKnownObjectKind::NodeProtobufLoader),
-                <span class="kw">box </span>prop,
+                Box::new(JsValue::WellKnownObject(
+                    WellKnownObjectKind::NodeProtobufLoader,
+                )),
+                Box::new(prop),
             ),
             <span class="string">&quot;unsupported property on require(&#39;@grpc/proto-loader&#39;) object&quot;</span>,
         ),

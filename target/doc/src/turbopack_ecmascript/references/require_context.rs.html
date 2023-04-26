@@ -980,7 +980,7 @@
 
             context_map
                 .props
-                .push(PropOrSpread::Prop(<span class="kw">box </span>Prop::KeyValue(prop)));
+                .push(PropOrSpread::Prop(Box::new(Prop::KeyValue(prop))));
         }
 
         <span class="kw">let </span>expr = <span class="macro">quote_expr!</span>(

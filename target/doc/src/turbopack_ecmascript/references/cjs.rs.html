@@ -508,20 +508,20 @@
                 visitors.push(
                     <span class="macro">create_visitor!</span>(exact path, visit_mut_call_expr(call_expr: <span class="kw-2">&amp;mut </span>CallExpr) {
                         call_expr.callee = Callee::Expr(
-                            <span class="kw">box </span>Expr::Ident(Ident::new(
+                            Box::new(Expr::Ident(Ident::new(
                                 <span class="kw">if </span>pm.is_internal_import() {
                                     <span class="string">&quot;__turbopack_require__&quot;
                                 </span>} <span class="kw">else </span>{
                                     <span class="string">&quot;__turbopack_external_require__&quot;
                                 </span>}.into(), DUMMY_SP
-                            ))
+                            )))
                         );
                         <span class="kw">let </span>old_args = std::mem::take(<span class="kw-2">&amp;mut </span>call_expr.args);
                         <span class="kw">let </span>expr = <span class="kw">match </span>old_args.into_iter().next() {
                             <span class="prelude-val">Some</span>(ExprOrSpread { expr, spread: <span class="prelude-val">None </span>}) =&gt; pm.apply(<span class="kw-2">*</span>expr),
                             <span class="kw">_ </span>=&gt; pm.create(),
                         };
-                        call_expr.args.push(ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: <span class="kw">box </span>expr });
+                        call_expr.args.push(ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: Box::new(expr) });
                     }),
                 );
             }

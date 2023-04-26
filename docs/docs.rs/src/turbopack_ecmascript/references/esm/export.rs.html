@@ -451,14 +451,14 @@
                             <span class="string">&quot;(() =&gt; $expr)&quot; </span><span class="kw">as </span>Expr,
                             expr: Expr = Expr::Member(MemberExpr {
                                 span: DUMMY_SP,
-                                obj: <span class="kw">box </span>Expr::Ident(Ident::new(ident.into(), DUMMY_SP)),
+                                obj: Box::new(Expr::Ident(Ident::new(ident.into(), DUMMY_SP))),
                                 prop: MemberProp::Computed(ComputedPropName {
                                     span: DUMMY_SP,
-                                    expr: <span class="kw">box </span>Expr::Lit(Lit::Str(Str {
+                                    expr: Box::new(Expr::Lit(Lit::Str(Str {
                                         span: DUMMY_SP,
                                         value: (name <span class="kw">as </span><span class="kw-2">&amp;</span>str).into(),
                                         raw: <span class="prelude-val">None</span>,
-                                    }))
+                                    })))
                                 })
                             })
                         )
@@ -475,14 +475,14 @@
                 }
             };
             <span class="kw">if let </span><span class="prelude-val">Some</span>(expr) = expr {
-                props.push(PropOrSpread::Prop(<span class="kw">box </span>Prop::KeyValue(KeyValueProp {
+                props.push(PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
                     key: PropName::Str(Str {
                         span: DUMMY_SP,
                         value: exported.as_ref().into(),
                         raw: <span class="prelude-val">None</span>,
                     }),
-                    value: <span class="kw">box </span>expr,
-                })));
+                    value: Box::new(expr),
+                }))));
             }
         }
         <span class="kw">let </span>getters = Expr::Object(ObjectLit {

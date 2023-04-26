@@ -224,8 +224,8 @@
             </span><span class="kw">for </span>Box&lt;Visitor&lt;T&gt;&gt;
         {
             <span class="kw">fn </span>create&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>swc_core::ecma::visit::VisitMut + Send + Sync + <span class="lifetime">&#39;a</span>&gt; {
-                <span class="kw">box </span><span class="kw-2">&amp;**</span><span class="self">self
-            </span>}
+                Box::new(<span class="kw-2">&amp;**</span><span class="self">self</span>)
+            }
         }
 
         <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: Fn(<span class="kw-2">&amp;mut </span>swc_core::ecma::ast::<span class="macro-nonterminal">$ty</span>) + Send + Sync&gt; swc_core::ecma::visit::VisitMut
@@ -238,9 +238,9 @@
 
         (
             <span class="macro-nonterminal">$ast_path</span>,
-            <span class="kw">box box </span>Visitor {
+            Box::new(Box::new(Visitor {
                 <span class="macro-nonterminal">$name</span>: <span class="kw">move </span>|<span class="macro-nonterminal">$arg</span>: <span class="kw-2">&amp;mut </span>swc_core::ecma::ast::<span class="macro-nonterminal">$ty</span>| <span class="macro-nonterminal">$b</span>,
-            } <span class="kw">as </span>Box&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$crate::code_gen::VisitorFactory</span>&gt;,
+            })) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$crate::code_gen::VisitorFactory</span>&gt;,
         )
     }};
     (visit_mut_program(<span class="macro-nonterminal">$arg</span>:ident: <span class="kw-2">&amp;mut </span>Program) <span class="macro-nonterminal">$b</span>:block) =&gt; {{
@@ -252,8 +252,8 @@
             </span><span class="kw">for </span>Box&lt;Visitor&lt;T&gt;&gt;
         {
             <span class="kw">fn </span>create&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>swc_core::ecma::visit::VisitMut + Send + Sync + <span class="lifetime">&#39;a</span>&gt; {
-                <span class="kw">box </span><span class="kw-2">&amp;**</span><span class="self">self
-            </span>}
+                Box::new(<span class="kw-2">&amp;**</span><span class="self">self</span>)
+            }
         }
 
         <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T: Fn(<span class="kw-2">&amp;mut </span>swc_core::ecma::ast::Program) + Send + Sync&gt; swc_core::ecma::visit::VisitMut
@@ -266,9 +266,9 @@
 
         (
             Vec::new(),
-            <span class="kw">box box </span>Visitor {
+            Box::new(Box::new(Visitor {
                 visit_mut_program: <span class="kw">move </span>|<span class="macro-nonterminal">$arg</span>: <span class="kw-2">&amp;mut </span>swc_core::ecma::ast::Program| <span class="macro-nonterminal">$b</span>,
-            } <span class="kw">as </span>Box&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$crate::code_gen::VisitorFactory</span>&gt;,
+            })) <span class="kw">as </span>Box&lt;<span class="kw">dyn </span><span class="macro-nonterminal">$crate::code_gen::VisitorFactory</span>&gt;,
         )
     }};
 }

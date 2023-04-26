@@ -373,7 +373,7 @@
                         ];
                     } <span class="kw">else </span>{
                         call_expr.args = <span class="macro">vec!</span>[
-                            ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: <span class="kw">box </span>expr }
+                            ExprOrSpread { spread: <span class="prelude-val">None</span>, expr: Box::new(expr) }
                         ]
                     }
                 })

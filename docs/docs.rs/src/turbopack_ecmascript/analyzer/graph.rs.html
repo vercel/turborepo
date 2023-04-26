@@ -2105,7 +2105,7 @@
             }) =&gt; {
                 <span class="kw">let </span>arg = <span class="self">self</span>.eval(arg);
 
-                JsValue::logical_not(<span class="kw">box </span>arg)
+                JsValue::logical_not(Box::new(arg))
             }
 
             Expr::Bin(BinExpr {
@@ -2236,7 +2236,7 @@
                 ..
             }) =&gt; {
                 <span class="kw">let </span>obj = <span class="self">self</span>.eval(obj);
-                JsValue::member(<span class="kw">box </span>obj, <span class="kw">box </span>prop.sym.clone().into())
+                JsValue::member(Box::new(obj), Box::new(prop.sym.clone().into()))
             }
 
             Expr::Member(MemberExpr {
@@ -2246,7 +2246,7 @@
             }) =&gt; {
                 <span class="kw">let </span>obj = <span class="self">self</span>.eval(obj);
                 <span class="kw">let </span>prop = <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>computed.expr);
-                JsValue::member(<span class="kw">box </span>obj, <span class="kw">box </span>prop)
+                JsValue::member(Box::new(obj), Box::new(prop))
             }
 
             Expr::Call(CallExpr {
@@ -2261,8 +2261,8 @@
 
                 <span class="kw">let </span>args = args.iter().map(|arg| <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>arg.expr)).collect();
                 <span class="kw">if let </span>Expr::Member(MemberExpr { obj, prop, .. }) = unparen(callee) {
-                    <span class="kw">let </span>obj = <span class="kw">box </span><span class="self">self</span>.eval(obj);
-                    <span class="kw">let </span>prop = <span class="kw">box match </span>prop {
+                    <span class="kw">let </span>obj = Box::new(<span class="self">self</span>.eval(obj));
+                    <span class="kw">let </span>prop = Box::new(<span class="kw">match </span>prop {
                         <span class="comment">// TODO avoid clone
                         </span>MemberProp::Ident(i) =&gt; i.sym.clone().into(),
                         MemberProp::PrivateName(<span class="kw">_</span>) =&gt; {
@@ -2271,10 +2271,10 @@
                             );
                         }
                         MemberProp::Computed(ComputedPropName { expr, .. }) =&gt; <span class="self">self</span>.eval(expr),
-                    };
+                    });
                     JsValue::member_call(obj, prop, args)
                 } <span class="kw">else </span>{
-                    <span class="kw">let </span>callee = <span class="kw">box </span><span class="self">self</span>.eval(callee);
+                    <span class="kw">let </span>callee = Box::new(<span class="self">self</span>.eval(callee));
 
                     JsValue::call(callee, args)
                 }
@@ -2291,7 +2291,7 @@
                 }
                 <span class="kw">let </span>args = args.iter().map(|arg| <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>arg.expr)).collect();
 
-                <span class="kw">let </span>callee = <span class="kw">box </span>JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;import&quot;</span>));
+                <span class="kw">let </span>callee = Box::new(JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;import&quot;</span>)));
 
                 JsValue::call(callee, args)
             }
@@ -2690,9 +2690,9 @@
         <span class="kw">let </span>values = <span class="self">self</span>.cur_fn_return_values.take().unwrap();
 
         <span class="kw">match </span>values.len() {
-            <span class="number">0 </span>=&gt; <span class="kw">box </span>JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>)),
-            <span class="number">1 </span>=&gt; <span class="kw">box </span>values.into_iter().next().unwrap(),
-            <span class="kw">_ </span>=&gt; <span class="kw">box </span>JsValue::alternatives(values),
+            <span class="number">0 </span>=&gt; Box::new(JsValue::FreeVar(<span class="macro">js_word!</span>(<span class="string">&quot;undefined&quot;</span>))),
+            <span class="number">1 </span>=&gt; Box::new(values.into_iter().next().unwrap()),
+            <span class="kw">_ </span>=&gt; Box::new(JsValue::alternatives(values)),
         }
     }
 }
@@ -3064,7 +3064,7 @@
                 expr.visit_children_with_path(<span class="self">self</span>, ast_path);
                 <span class="kw">let </span>return_value = <span class="self">self</span>.eval_context.eval(inner_expr);
 
-                <span class="kw">let </span>fn_val = JsValue::function(<span class="self">self</span>.cur_fn_ident, <span class="kw">box </span>return_value);
+                <span class="kw">let </span>fn_val = JsValue::function(<span class="self">self</span>.cur_fn_ident, Box::new(return_value));
                 <span class="self">self</span>.cur_fn_ident = old_ident;
                 fn_val
             }
@@ -3169,9 +3169,9 @@
                         ast_path.with(AstParentNodeRef::Pat(pat, PatField::Array), |ast_path| {
                             <span class="kw">for </span>(idx, elem) <span class="kw">in </span>arr.elems.iter().enumerate() {
                                 <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::member(
-                                    <span class="kw">box </span>value.clone(),
-                                    <span class="kw">box </span>JsValue::Constant(ConstantValue::Num(ConstantNumber(
-                                        idx <span class="kw">as </span>f64,
+                                    Box::new(value.clone()),
+                                    Box::new(JsValue::Constant(ConstantValue::Num(
+                                        ConstantNumber(idx <span class="kw">as </span>f64),
                                     ))),
                                 ));
                                 ast_path.with(
@@ -3371,7 +3371,7 @@
         } <span class="kw">else </span>{
             <span class="self">self</span>.add_effect(Effect::Conditional {
                 condition,
-                kind: <span class="kw">box </span>cond_kind,
+                kind: Box::new(cond_kind),
                 ast_path: as_parent_path_with(ast_path, ast_kind),
                 span,
                 in_try: is_in_try(ast_path),
@@ -3407,8 +3407,8 @@
                                         },
                                     );
                                     <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::member(
-                                        <span class="kw">box </span>current_value.clone(),
-                                        <span class="kw">box </span>key_value,
+                                        Box::new(current_value.clone()),
+                                        Box::new(key_value),
                                     ));
                                     ast_path.with(
                                         AstParentNodeRef::KeyValuePatProp(
@@ -3443,15 +3443,15 @@
                                             <span class="kw">let </span>value = <span class="self">self</span>.eval_context.eval(value);
                                             JsValue::alternatives(<span class="macro">vec!</span>[
                                                 JsValue::member(
-                                                    <span class="kw">box </span>current_value.clone(),
-                                                    <span class="kw">box </span>key_value,
+                                                    Box::new(current_value.clone()),
+                                                    Box::new(key_value),
                                                 ),
                                                 value,
                                             ])
                                         } <span class="kw">else </span>{
                                             JsValue::member(
-                                                <span class="kw">box </span>current_value.clone(),
-                                                <span class="kw">box </span>key_value,
+                                                Box::new(current_value.clone()),
+                                                Box::new(key_value),
                                             )
                                         },
                                     );

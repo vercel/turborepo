@@ -612,7 +612,7 @@
                 body.insert(
                     <span class="number">0</span>,
                     ModuleItem::Stmt(Stmt::Expr(ExprStmt {
-                        expr: <span class="kw">box </span>Expr::Lit(Lit::Str((<span class="kw-2">*</span>ESM_HOISTING_LOCATION).into())),
+                        expr: Box::new(Expr::Lit(Lit::Str((<span class="kw-2">*</span>ESM_HOISTING_LOCATION).into()))),
                         span: DUMMY_SP,
                     })),
                 );
@@ -637,7 +637,7 @@
                 body.insert(
                     <span class="number">0</span>,
                     Stmt::Expr(ExprStmt {
-                        expr: <span class="kw">box </span>Expr::Lit(Lit::Str((<span class="kw-2">*</span>ESM_HOISTING_LOCATION).into())),
+                        expr: Box::new(Expr::Lit(Lit::Str((<span class="kw-2">*</span>ESM_HOISTING_LOCATION).into()))),
                         span: DUMMY_SP,
                     }),
                 );

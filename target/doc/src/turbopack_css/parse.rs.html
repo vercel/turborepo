@@ -413,11 +413,11 @@
     <span class="kw">let </span>handler = Handler::with_emitter(
         <span class="bool-val">true</span>,
         <span class="bool-val">false</span>,
-        <span class="kw">box </span>IssueEmitter {
+        Box::new(IssueEmitter {
             source,
             source_map: source_map.clone(),
             title: <span class="prelude-val">Some</span>(<span class="string">&quot;Parsing css source code failed&quot;</span>.to_string()),
-        },
+        }),
     );
 
     <span class="kw">let </span>fm = source_map.new_source_file(FileName::Custom(ident_str.to_string()), string);

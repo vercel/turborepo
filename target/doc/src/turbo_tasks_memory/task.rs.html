@@ -2964,10 +2964,6 @@
 <a href="#2964" id="2964">2964</a>
 <a href="#2965" id="2965">2965</a>
 <a href="#2966" id="2966">2966</a>
-<a href="#2967" id="2967">2967</a>
-<a href="#2968" id="2968">2968</a>
-<a href="#2969" id="2969">2969</a>
-<a href="#2970" id="2970">2970</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>meta_state;
 <span class="kw">mod </span>stats;
 
@@ -3498,10 +3494,10 @@
         <span class="self">Self </span>{
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(<span class="kw">box </span>TaskState::new(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(
                 description,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -3516,10 +3512,8 @@
         <span class="self">Self </span>{
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(<span class="kw">box </span>TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
             ))),
         }
     }
@@ -3535,10 +3529,8 @@
         <span class="self">Self </span>{
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(<span class="kw">box </span>TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
             ))),
         }
     }
@@ -3549,18 +3541,18 @@
         trait_type_id: TraitTypeId,
         stats_type: StatsType,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>ty = TaskType::ReadScopeCollectibles(<span class="kw">box </span>ReadScopeCollectiblesTaskType {
+        <span class="kw">let </span>ty = TaskType::ReadScopeCollectibles(Box::new(ReadScopeCollectiblesTaskType {
             scope: target_scope,
             trait_type: trait_type_id,
-        });
+        }));
         <span class="kw">let </span>description = <span class="self">Self</span>::get_event_description_static(id, <span class="kw-2">&amp;</span>ty);
         <span class="self">Self </span>{
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(<span class="kw">box </span>TaskState::new(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(
                 description,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -3571,19 +3563,19 @@
         trait_type_id: TraitTypeId,
         stats_type: StatsType,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>ty = TaskType::ReadTaskCollectibles(<span class="kw">box </span>ReadTaskCollectiblesTaskType {
+        <span class="kw">let </span>ty = TaskType::ReadTaskCollectibles(Box::new(ReadTaskCollectiblesTaskType {
             task: target_task,
             trait_type: trait_type_id,
-        });
+        }));
         <span class="kw">let </span>description = <span class="self">Self</span>::get_event_description_static(id, <span class="kw-2">&amp;</span>ty);
         <span class="self">Self </span>{
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(<span class="kw">box </span>TaskState::new_root_scoped(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new_root_scoped(
                 description,
                 scope,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -5757,7 +5749,7 @@
         <span class="kw">if </span>unset {
             <span class="kw-2">*</span>state = TaskMetaState::Unloaded(UnloadedTaskState { stats_type });
         } <span class="kw">else </span>{
-            <span class="kw-2">*</span>state = TaskMetaState::Partial(<span class="kw">box </span>PartialTaskState { scopes, stats_type });
+            <span class="kw-2">*</span>state = TaskMetaState::Partial(Box::new(PartialTaskState { scopes, stats_type }));
         }
         drop(state);
 

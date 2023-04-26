@@ -268,11 +268,11 @@
 
             visitors.push(
                 <span class="macro">create_visitor!</span>((<span class="kw-2">&amp;</span>this.path.<span class="kw">await</span><span class="question-mark">?</span>), visit_mut_url(u: <span class="kw-2">&amp;mut </span>Url) {
-                    u.value = <span class="prelude-val">Some</span>(<span class="kw">box </span>UrlValue::Str(Str {
+                    u.value = <span class="prelude-val">Some</span>(Box::new(UrlValue::Str(Str {
                         span: DUMMY_SP,
                         value: relative_path.as_str().into(),
                         raw: <span class="prelude-val">None</span>,
-                    }))
+                    })))
                 }),
             );
         }

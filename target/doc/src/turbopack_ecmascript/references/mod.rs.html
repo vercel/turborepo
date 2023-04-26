@@ -2562,6 +2562,19 @@
 <a href="#2562" id="2562">2562</a>
 <a href="#2563" id="2563">2563</a>
 <a href="#2564" id="2564">2564</a>
+<a href="#2565" id="2565">2565</a>
+<a href="#2566" id="2566">2566</a>
+<a href="#2567" id="2567">2567</a>
+<a href="#2568" id="2568">2568</a>
+<a href="#2569" id="2569">2569</a>
+<a href="#2570" id="2570">2570</a>
+<a href="#2571" id="2571">2571</a>
+<a href="#2572" id="2572">2572</a>
+<a href="#2573" id="2573">2573</a>
+<a href="#2574" id="2574">2574</a>
+<a href="#2575" id="2575">2575</a>
+<a href="#2576" id="2576">2576</a>
+<a href="#2577" id="2577">2577</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2946,11 +2959,11 @@
             <span class="kw">let </span>handler = Handler::with_emitter(
                 <span class="bool-val">true</span>,
                 <span class="bool-val">false</span>,
-                <span class="kw">box </span>IssueEmitter {
+                Box::new(IssueEmitter {
                     source,
                     source_map: source_map.clone(),
                     title: <span class="prelude-val">None</span>,
-                },
+                }),
             );
             <span class="kw">let </span>var_graph = HANDLER.set(<span class="kw-2">&amp;</span>handler, || {
                 GLOBALS.set(globals, || create_graph(program, eval_context))
@@ -3365,11 +3378,11 @@
                         <span class="kw">let </span>linked_func_call = state
                             .link_value(
                                 JsValue::call(
-                                    <span class="kw">box </span>JsValue::WellKnownFunction(
-                                        WellKnownFunctionKind::PathResolve(
-                                            <span class="kw">box </span>parent_path.path.as_str().into(),
-                                        ),
-                                    ),
+                                    Box::new(JsValue::WellKnownFunction(
+                                        WellKnownFunctionKind::PathResolve(Box::new(
+                                            parent_path.path.as_str().into(),
+                                        )),
+                                    )),
                                     args.clone(),
                                 ),
                                 in_try,
@@ -3396,7 +3409,9 @@
                         <span class="kw">let </span>linked_func_call = state
                             .link_value(
                                 JsValue::call(
-                                    <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
+                                    Box::new(JsValue::WellKnownFunction(
+                                        WellKnownFunctionKind::PathJoin,
+                                    )),
                                     args.clone(),
                                 ),
                                 in_try,
@@ -3424,8 +3439,10 @@
                             <span class="kw">let </span><span class="kw-2">mut </span>show_dynamic_warning = <span class="bool-val">false</span>;
                             <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
                             <span class="kw">if </span>pat.is_match(<span class="string">&quot;node&quot;</span>) &amp;&amp; args.len() &gt;= <span class="number">2 </span>{
-                                <span class="kw">let </span>first_arg =
-                                    JsValue::member(<span class="kw">box </span>args[<span class="number">1</span>].clone(), <span class="kw">box </span><span class="number">0_f64</span>.into());
+                                <span class="kw">let </span>first_arg = JsValue::member(
+                                    Box::new(args[<span class="number">1</span>].clone()),
+                                    Box::new(<span class="number">0_f64</span>.into()),
+                                );
                                 <span class="kw">let </span>first_arg = state.link_value(first_arg, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
                                 <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>first_arg);
                                 <span class="kw">if </span>!pat.has_constant_parts() {
@@ -3626,9 +3643,9 @@
                                                 <span class="kw">let </span>linked_func_call = state
                                                     .link_value(
                                                         JsValue::call(
-                                                            <span class="kw">box </span>JsValue::WellKnownFunction(
+                                                            Box::new(JsValue::WellKnownFunction(
                                                                 WellKnownFunctionKind::PathJoin,
-                                                            ),
+                                                            )),
                                                             <span class="macro">vec!</span>[
                                                                 JsValue::FreeVar(
                                                                     <span class="string">&quot;__dirname&quot;</span>.into(),
@@ -3689,9 +3706,9 @@
                                 <span class="kw">let </span>linked_func_call = state
                                     .link_value(
                                         JsValue::call(
-                                            <span class="kw">box </span>JsValue::WellKnownFunction(
+                                            Box::new(JsValue::WellKnownFunction(
                                                 WellKnownFunctionKind::PathJoin,
-                                            ),
+                                            )),
                                             <span class="macro">vec!</span>[
                                                 JsValue::FreeVar(<span class="string">&quot;__dirname&quot;</span>.into()),
                                                 p.into(),
@@ -4129,7 +4146,10 @@
                                 }
 
                                 <span class="kw">let </span>func = analysis_state
-                                    .link_value(JsValue::member(<span class="kw">box </span>obj.clone(), <span class="kw">box </span>prop), in_try)
+                                    .link_value(
+                                        JsValue::member(Box::new(obj.clone()), Box::new(prop)),
+                                        in_try,
+                                    )
                                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
                                 handle_call(
@@ -4593,7 +4613,9 @@
         <span class="kw">match </span>values.len() {
             <span class="number">0 </span>=&gt; JsValue::unknown(
                 JsValue::call(
-                    <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                    Box::new(JsValue::WellKnownFunction(
+                        WellKnownFunctionKind::RequireResolve,
+                    )),
                     args,
                 ),
                 <span class="string">&quot;unresolveable request&quot;</span>,
@@ -4604,7 +4626,9 @@
     } <span class="kw">else </span>{
         JsValue::unknown(
             JsValue::call(
-                <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
+                Box::new(JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::RequireResolve,
+                )),
                 args,
             ),
             <span class="string">&quot;only a single argument is supported&quot;</span>,
@@ -4622,7 +4646,9 @@
         <span class="prelude-val">Err</span>(err) =&gt; {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(JsValue::unknown(
                 JsValue::call(
-                    <span class="kw">box </span>JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+                    Box::new(JsValue::WellKnownFunction(
+                        WellKnownFunctionKind::RequireContext,
+                    )),
                     args,
                 ),
                 PrettyPrintError(<span class="kw-2">&amp;</span>err).to_string(),
