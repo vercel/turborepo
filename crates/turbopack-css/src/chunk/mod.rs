@@ -6,7 +6,7 @@ use std::fmt::Write;
 
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{primitives::StringVc, Value, ValueToString};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
 use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOptionVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
@@ -312,19 +312,46 @@ impl OutputChunk for CssChunk {
             Value::new(self.availability_info),
         )
         .await?;
-        let entries = self
+        let entries_chunk_items: Vec<_> = self
             .main_entries
             .await?
             .iter()
-            .map(|&entry| entry.as_chunk_item(self.context).id())
+            .map(|&entry| entry.as_chunk_item(self.context))
+            .collect();
+        let included_ids = entries_chunk_items
+            .iter()
+            .map(|chunk_item| chunk_item.id())
+            .collect();
+        let imports_chunk_items: Vec<_> = entries_chunk_items
+            .iter()
+            .map(|&chunk_item| async move {
+                Ok(chunk_item
+                    .content()
+                    .await?
+                    .imports
+                    .iter()
+                    .filter_map(|import| {
+                        if let CssImport::Internal(_, item) = import {
+                            Some(*item)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>())
+            })
+            .try_join()
+            .await?
+            .into_iter()
+            .flatten()
             .collect();
         let module_chunks: Vec<_> = content
             .chunk_items
             .iter()
+            .chain(imports_chunk_items.iter())
             .map(|item| SingleItemCssChunkVc::new(self.context, *item).into())
             .collect();
         Ok(OutputChunkRuntimeInfo {
-            included_ids: Some(ModuleIdsVc::cell(entries)),
+            included_ids: Some(ModuleIdsVc::cell(included_ids)),
             module_chunks: Some(AssetsVc::cell(module_chunks)),
             ..Default::default()
         }
