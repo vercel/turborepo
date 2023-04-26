@@ -110,6 +110,8 @@ impl DevServer {
         // Allow the socket to be reused immediately after closing. This ensures that
         // the dev server can be restarted on the same address without a buffer time for
         // the OS to release the socket.
+        // https://docs.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
+        #[cfg(not(windows))]
         let _ = socket.set_reuse_address(true);
         if matches!(addr, SocketAddr::V6(_)) {
             // When possible bind to v4 and v6, otherwise ignore the error
