@@ -65,7 +65,7 @@ baseline to generate cache
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-# env var=true, --flag (no value): cache bypass
+# env var=true, --flag (no value): cache hit
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -77,7 +77,7 @@ baseline to generate cache
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 
-# env var=false, missing flag, cache bypass
+# env var=false, missing flag, cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -88,7 +88,7 @@ baseline to generate cache
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-# env var=false, --flag=true: yes
+# env var=false, --flag=true: cache bypass
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -99,7 +99,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-# env var=false, --flag=false: no
+# env var=false, --flag=false: cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -110,7 +110,7 @@ baseline to generate cache
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-# env var=false, --flag (no value): yes
+# env var=false, --flag (no value): cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -122,7 +122,7 @@ baseline to generate cache
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 
-# missing env var, missing flag: no
+# missing env var, missing flag: cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -133,7 +133,7 @@ baseline to generate cache
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-# missing env var, --flag=true: yes
+# missing env var, --flag=true: cache bypass
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -144,7 +144,7 @@ baseline to generate cache
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-# missing env var, --flag=false: no
+# missing env var, --flag=false: cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -155,7 +155,7 @@ baseline to generate cache
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-# missing env var, --flag (no value): yes
+# missing env var, --flag (no value): cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
