@@ -260,15 +260,101 @@
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>futures::{prelude::<span class="kw-2">*</span>, Stream};
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
-<span class="kw">use </span>turbo_tasks::{CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::StringVc, CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance,
+};
+<span class="kw">use </span>turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
-    issue::{IssueVc, PlainIssueReadRef},
+    error::PrettyPrintError,
+    issue::{
+        Issue, IssueSeverity, IssueSeverityVc, IssueVc, OptionIssueProcessingPathItemsVc,
+        PlainIssueReadRef,
+    },
+    server_fs::ServerFileSystemVc,
     version::{
         NotFoundVersionVc, PartialUpdate, TotalUpdate, Update, UpdateReadRef, VersionVc,
         VersionedContent,
@@ -300,12 +386,43 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>get_update_stream_item(
+    resource: <span class="kw-2">&amp;</span>str,
     from: VersionStateVc,
     get_content: TransientInstance&lt;GetContentFn&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateStreamItemVc&gt; {
     <span class="kw">let </span>content = get_content();
+    <span class="kw">let </span><span class="kw-2">mut </span>plain_issues = peek_issues(content).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">match </span><span class="kw-2">*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">let </span>content_value = <span class="kw">match </span>content.<span class="kw">await </span>{
+        <span class="prelude-val">Ok</span>(content) =&gt; content,
+        <span class="prelude-val">Err</span>(e) =&gt; {
+            plain_issues.push(
+                FatalStreamIssue {
+                    resource: resource.to_string(),
+                    description: StringVc::cell(<span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, PrettyPrintError(<span class="kw-2">&amp;</span>e))),
+                }
+                .cell()
+                .as_issue()
+                .into_plain(OptionIssueProcessingPathItemsVc::none())
+                .<span class="kw">await</span><span class="question-mark">?</span>,
+            );
+
+            <span class="kw">let </span>update = Update::Total(TotalUpdate {
+                to: NotFoundVersionVc::new()
+                    .as_version()
+                    .into_trait_ref()
+                    .<span class="kw">await</span><span class="question-mark">?</span>,
+            })
+            .cell();
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(UpdateStreamItem::Found {
+                update: update.<span class="kw">await</span><span class="question-mark">?</span>,
+                issues: plain_issues,
+            }
+            .cell());
+        }
+    };
+
+    <span class="kw">match </span><span class="kw-2">*</span>content_value {
         ResolveSourceRequestResult::Static(static_content_vc, <span class="kw">_</span>) =&gt; {
             <span class="kw">let </span>static_content = static_content_vc.<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -318,8 +435,7 @@
             <span class="kw">let </span>from = from.get();
             <span class="kw">let </span>update = resolved_content.update(from);
 
-            <span class="kw">let </span><span class="kw-2">mut </span>plain_issues = peek_issues(update).<span class="kw">await</span><span class="question-mark">?</span>;
-            extend_issues(<span class="kw-2">&amp;mut </span>plain_issues, peek_issues(content).<span class="kw">await</span><span class="question-mark">?</span>);
+            extend_issues(<span class="kw-2">&amp;mut </span>plain_issues, peek_issues(update).<span class="kw">await</span><span class="question-mark">?</span>);
 
             <span class="kw">let </span>update = update.<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -336,7 +452,7 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(UpdateStreamItem::NotFound.cell());
             }
 
-            <span class="kw">let </span>plain_issues = peek_issues(proxy_result).<span class="kw">await</span><span class="question-mark">?</span>;
+            extend_issues(<span class="kw-2">&amp;mut </span>plain_issues, peek_issues(proxy_result).<span class="kw">await</span><span class="question-mark">?</span>);
 
             <span class="kw">let </span>from = from.get();
             <span class="kw">if let </span><span class="prelude-val">Some</span>(from) = ProxyResultVc::resolve_from(from).<span class="kw">await</span><span class="question-mark">? </span>{
@@ -360,8 +476,6 @@
             .cell())
         }
         <span class="kw">_ </span>=&gt; {
-            <span class="kw">let </span>plain_issues = peek_issues(content).<span class="kw">await</span><span class="question-mark">?</span>;
-
             <span class="kw">let </span>update = <span class="kw">if </span>plain_issues.is_empty() {
                 <span class="comment">// Client requested a non-existing asset
                 // It might be removed in meantime, reload client
@@ -389,19 +503,17 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>compute_update_stream(
+    resource: <span class="kw-2">&amp;</span>str,
     from: VersionStateVc,
     get_content: TransientInstance&lt;GetContentFn&gt;,
-    sender: TransientInstance&lt;Sender&lt;UpdateStreamItemReadRef&gt;&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>item = get_update_stream_item(from, get_content)
+    sender: TransientInstance&lt;Sender&lt;<span class="prelude-ty">Result</span>&lt;UpdateStreamItemReadRef&gt;&gt;&gt;,
+) {
+    <span class="kw">let </span>item = get_update_stream_item(resource, from, get_content)
         .strongly_consistent()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        .<span class="kw">await</span>;
 
-    <span class="kw">if </span>sender.send(item).<span class="kw">await</span>.is_err() {
-        <span class="macro">bail!</span>(<span class="string">&quot;channel closed&quot;</span>);
-    }
-
-    <span class="prelude-val">Ok</span>(())
+    <span class="comment">// Send update. Ignore channel closed error.
+    </span><span class="kw">let _ </span>= sender.send(item).<span class="kw">await</span>;
 }
 
 <span class="attr">#[turbo_tasks::value]
@@ -434,10 +546,15 @@
     }
 }
 
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>UpdateStream(Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = UpdateStreamItemReadRef&gt; + Send + Sync&gt;&gt;);
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>UpdateStream(
+    Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;UpdateStreamItemReadRef&gt;&gt; + Send + Sync&gt;&gt;,
+);
 
 <span class="kw">impl </span>UpdateStream {
-    <span class="kw">pub async fn </span>new(get_content: TransientInstance&lt;GetContentFn&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateStream&gt; {
+    <span class="kw">pub async fn </span>new(
+        resource: String,
+        get_content: TransientInstance&lt;GetContentFn&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateStream&gt; {
         <span class="kw">let </span>(sx, rx) = tokio::sync::mpsc::channel(<span class="number">32</span>);
 
         <span class="kw">let </span>content = get_content();
@@ -452,13 +569,18 @@
         };
         <span class="kw">let </span>version_state = VersionStateVc::new(version.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        compute_update_stream(version_state, get_content, TransientInstance::new(sx));
+        compute_update_stream(
+            <span class="kw-2">&amp;</span>resource,
+            version_state,
+            get_content,
+            TransientInstance::new(sx),
+        );
 
         <span class="kw">let </span><span class="kw-2">mut </span>last_had_issues = <span class="bool-val">false</span>;
 
         <span class="kw">let </span>stream = ReceiverStream::new(rx).filter_map(<span class="kw">move </span>|item| {
             <span class="kw">let </span>(has_issues, issues_changed) =
-                <span class="kw">if let </span>UpdateStreamItem::Found { issues, .. } = <span class="kw-2">&amp;*</span>item {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(UpdateStreamItem::Found { issues, .. }) = item.as_deref().ok() {
                     <span class="kw">let </span>has_issues = !issues.is_empty();
                     <span class="kw">let </span>issues_changed = has_issues != last_had_issues;
                     last_had_issues = has_issues;
@@ -468,12 +590,8 @@
                 };
 
             <span class="kw">async move </span>{
-                <span class="kw">match </span><span class="kw-2">&amp;*</span>item {
-                    UpdateStreamItem::NotFound =&gt; {
-                        <span class="comment">// Propagate not found updates so we can drop this update stream.
-                        </span><span class="prelude-val">Some</span>(item)
-                    }
-                    UpdateStreamItem::Found { update, .. } =&gt; {
+                <span class="kw">match </span>item.as_deref() {
+                    <span class="prelude-val">Ok</span>(UpdateStreamItem::Found { update, .. }) =&gt; {
                         <span class="kw">match </span><span class="kw-2">&amp;**</span>update {
                             Update::Partial(PartialUpdate { to, .. })
                             | Update::Total(TotalUpdate { to }) =&gt; {
@@ -494,6 +612,10 @@
                             }
                         }
                     }
+                    <span class="kw">_ </span>=&gt; {
+                        <span class="comment">// Propagate other updates
+                        </span><span class="prelude-val">Some</span>(item)
+                    }
                 }
             }
         });
@@ -503,7 +625,7 @@
 }
 
 <span class="kw">impl </span>Stream <span class="kw">for </span>UpdateStream {
-    <span class="kw">type </span>Item = UpdateStreamItemReadRef;
+    <span class="kw">type </span>Item = <span class="prelude-ty">Result</span>&lt;UpdateStreamItemReadRef&gt;;
 
     <span class="kw">fn </span>poll_next(
         <span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
@@ -521,6 +643,40 @@
         update: UpdateReadRef,
         issues: Vec&lt;PlainIssueReadRef&gt;,
     },
+}
+
+<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>)]
+</span><span class="kw">struct </span>FatalStreamIssue {
+    description: StringVc,
+    resource: String,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Issue <span class="kw">for </span>FatalStreamIssue {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>severity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IssueSeverityVc {
+        IssueSeverity::Fatal.into()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
+        ServerFileSystemVc::new().root().join(<span class="kw-2">&amp;</span><span class="self">self</span>.resource)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>category(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(<span class="string">&quot;websocket&quot;</span>.to_string())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>title(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(<span class="string">&quot;Fatal error while getting content to stream&quot;</span>.to_string())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>description(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        <span class="self">self</span>.description
+    }
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_dev_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

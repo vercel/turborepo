@@ -160,19 +160,6 @@
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::btree_map::Entry,
     sync::atomic::{AtomicU64, Ordering},
@@ -181,7 +168,6 @@
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>hyper::Uri;
 <span class="kw">use </span>turbo_tasks::{TransientInstance, Value};
-<span class="kw">use </span>turbopack_core::issue::IssueReporterVc;
 
 <span class="kw">use super</span>::{
     headers::{HeaderValue, Headers},
@@ -190,10 +176,7 @@
     ContentSourceContent, ContentSourceDataVary, ContentSourceResult, ContentSourceVc,
     HeaderListVc, ProxyResultVc, StaticContentVc,
 };
-<span class="kw">use crate</span>::{
-    handle_issues,
-    source::{ContentSource, ContentSourceData, GetContentSourceContent},
-};
+<span class="kw">use </span><span class="kw">crate</span>::source::{ContentSource, ContentSourceData, GetContentSourceContent};
 
 <span class="doccomment">/// The result of [`resolve_source_request`]. Similar to a
 /// `ContentSourceContent`, but without the `Rewrite` variant as this is taken
@@ -211,7 +194,6 @@
 </span><span class="kw">pub async fn </span>resolve_source_request(
     source: ContentSourceVc,
     request: TransientInstance&lt;SourceRequest&gt;,
-    issue_reporter: IssueReporterVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveSourceRequestResultVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>data = ContentSourceData::default();
     <span class="kw">let </span><span class="kw-2">mut </span>current_source = source;
@@ -222,14 +204,6 @@
     <span class="kw">let </span><span class="kw-2">mut </span>response_header_overwrites = Vec::new();
     <span class="kw">loop </span>{
         <span class="kw">let </span>result = current_source.get(<span class="kw-2">&amp;</span>current_asset_path, Value::new(data));
-        handle_issues(
-            result,
-            <span class="kw-2">&amp;</span>original_path,
-            <span class="string">&quot;get content from source&quot;</span>,
-            issue_reporter,
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
         <span class="kw">match </span><span class="kw-2">&amp;*</span>result.strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>{
             ContentSourceResult::NotFound =&gt; <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell()),
             ContentSourceResult::NeedData(needed) =&gt; {
