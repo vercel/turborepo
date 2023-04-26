@@ -621,6 +621,16 @@ mod test {
     }
 
     #[test]
+    fn test_empty_patch_list() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/minimal-berry.lock")).unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+
+        let empty_vec: Vec<&Path> = Vec::new();
+        assert_eq!(lockfile.patches(), empty_vec);
+    }
+
+    #[test]
     fn test_basic_descriptor_prune() {
         let data: LockfileData =
             serde_yaml::from_str(include_str!("../../fixtures/minimal-berry.lock")).unwrap();
