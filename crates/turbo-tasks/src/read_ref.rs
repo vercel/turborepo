@@ -131,18 +131,17 @@ impl<T, U: Serialize> Serialize for ReadRef<T, U> {
     }
 }
 
-impl<'de, T, U: Deserialize<'de>> Deserialize<'de> for ReadRef<T, U> {
+impl<'de, T: Deserialize<'de>, U> Deserialize<'de> for ReadRef<T, U> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let value = Arc::new(U::deserialize(deserializer)?);
-        let inner = unsafe { transmute(value) };
-        Ok(Self(inner, PhantomData))
+        let value = T::deserialize(deserializer)?;
+        Ok(Self(Arc::new(value), PhantomData))
     }
 }
 
-impl<T, U> ReadRef<T, U> {
+impl<T> ReadRef<T, T> {
     pub fn new(arc: Arc<T>) -> Self {
         Self(arc, PhantomData)
     }
