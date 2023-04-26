@@ -128,6 +128,10 @@ impl CommandBase {
         Ok(self.client_config.get().unwrap())
     }
 
+    pub fn args(&self) -> &Args {
+        &self.args
+    }
+
     pub fn api_client(&mut self) -> Result<APIClient> {
         let repo_config = self.repo_config()?;
         let client_config = self.client_config()?;

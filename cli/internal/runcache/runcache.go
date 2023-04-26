@@ -190,6 +190,7 @@ func (tc TaskCache) ReplayLogFile(prefixedUI *cli.PrefixedUi, progressLogger hcl
 // This is called if the task exited with an non-zero error code.
 func (tc TaskCache) OnError(terminal *cli.PrefixedUi, logger hclog.Logger) {
 	if tc.taskOutputMode == util.ErrorTaskOutput {
+		terminal.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 		tc.ReplayLogFile(terminal, logger)
 	}
 }

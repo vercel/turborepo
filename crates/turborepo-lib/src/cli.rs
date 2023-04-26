@@ -243,9 +243,9 @@ pub enum Command {
     Completion { shell: Shell },
     /// Runs the Turborepo background daemon
     Daemon {
-        /// Set the idle timeout for turbod (default 4h0m0s)
-        #[clap(long)]
-        idle_time: Option<String>,
+        /// Set the idle timeout for turbod
+        #[clap(long, default_value_t = String::from("4h0m0s"))]
+        idle_time: String,
         #[clap(subcommand)]
         #[serde(flatten)]
         command: Option<DaemonCommand>,
@@ -434,12 +434,12 @@ pub enum LogPrefix {
 /// returns: Result<Payload, Error>
 #[tokio::main]
 pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
-    let mut clap_args = Args::new()?;
+    let mut cli_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
-    if clap_args.command.is_none() {
-        if let Some(run_args) = mem::take(&mut clap_args.run_args) {
-            clap_args.command = Some(Command::Run(Box::new(run_args)));
+    if cli_args.command.is_none() {
+        if let Some(run_args) = mem::take(&mut cli_args.run_args) {
+            cli_args.command = Some(Command::Run(Box::new(run_args)));
         } else {
             return Err(anyhow!("No command specified"));
         }
@@ -447,8 +447,8 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
     // If this is a run command, and we know the actual invocation path, set the
     // inference root, as long as the user hasn't overridden the cwd
-    if clap_args.cwd.is_none() {
-        if let Some(Command::Run(run_args)) = &mut clap_args.command {
+    if cli_args.cwd.is_none() {
+        if let Some(Command::Run(run_args)) = &mut cli_args.command {
             if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
                 let invocation_path = Path::new(&invocation_dir);
 
@@ -473,16 +473,16 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
     // Do this after the above, since we're now always setting cwd.
     if let Some(repo_state) = repo_state {
-        if let Some(Command::Run(run_args)) = &mut clap_args.command {
+        if let Some(Command::Run(run_args)) = &mut cli_args.command {
             run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
         }
-        clap_args.cwd = Some(repo_state.root);
+        cli_args.cwd = Some(repo_state.root);
     }
 
-    let repo_root = if let Some(cwd) = &clap_args.cwd {
+    let repo_root = if let Some(cwd) = &cli_args.cwd {
         let canonical_cwd = fs_canonicalize(cwd)?;
         // Update on clap_args so that Go gets a canonical path.
-        clap_args.cwd = Some(canonical_cwd.clone());
+        cli_args.cwd = Some(canonical_cwd.clone());
         canonical_cwd
     } else {
         current_dir()?
@@ -490,27 +490,27 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
     let version = get_version();
 
-    match clap_args.command.as_ref().unwrap() {
+    match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version)?;
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Login { sso_team } => {
-            if clap_args.test_run {
+            if cli_args.test_run {
                 println!("Login test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
             let sso_team = sso_team.clone();
 
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version)?;
 
             if let Some(sso_team) = sso_team {
                 login::sso_login(&mut base, &sso_team).await?;
@@ -520,48 +520,52 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Link { no_gitignore, target} => {
-            if clap_args.test_run {
+        Command::Link {
+            no_gitignore,
+            target,
+        } => {
+            if cli_args.test_run {
                 println!("Link test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
             let modify_gitignore = !*no_gitignore;
             let to = *target;
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version)?;
 
             if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
                 error!("error: {}", err.to_string())
-            };
+            }
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Unlink { target } => {
-            if clap_args.test_run {
+            if cli_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
             let from = *target;
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version)?;
 
             unlink::unlink(&mut base, from)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon {
-            command: Some(command),
-            ..
-        } => {
-            let command = *command;
-            let base = CommandBase::new(clap_args, repo_root, version)?;
-            daemon::main(&command, &base).await?;
+        Command::Daemon { command, idle_time } => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version)?;
+
+            match command {
+                Some(command) => daemon::daemon_client(command, &base).await,
+                None => daemon::daemon_server(&base, idle_time).await,
+            }?;
+
             Ok(Payload::Rust(Ok(0)))
-        },
-        Command::Prune { .. }
-        | Command::Run(_)
-        // the daemon itself still delegates to Go
-        | Command::Daemon { .. } => Ok(Payload::Go(Box::new(clap_args))),
+        }
+        Command::Prune { .. } | Command::Run(_) => {
+            let base = CommandBase::new(cli_args, repo_root, version)?;
+            Ok(Payload::Go(Box::new(base)))
+        }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 

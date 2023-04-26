@@ -92,7 +92,8 @@ impl UserConfigLoader {
 
         let config = Config::builder()
             .add_source(raw_disk_config.clone())
-            .add_source(Environment::with_prefix("turbo").source(environment))
+            .add_source(Environment::with_prefix("TURBO").source(environment.clone()))
+            .add_source(Environment::with_prefix("VERCEL_ARTIFACTS").source(environment))
             .set_override_option("token", token)?
             .build()?
             .try_deserialize()?;
@@ -144,19 +145,28 @@ mod test {
         Ok(())
     }
 
+    static TOKEN_ENV_VARS: [&'static str; 2] = ["TURBO_TOKEN", "VERCEL_ARTIFACTS_TOKEN"];
+
     #[test]
     fn test_env_var_trumps_disk() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
-        let env = {
-            let mut map = HashMap::new();
-            map.insert("TURBO_TOKEN".into(), "bar".into());
-            map
-        };
-        let config = UserConfigLoader::new(config_file.path().to_path_buf())
-            .with_environment(Some(env))
-            .load()?;
-        assert_eq!(config.token(), Some("bar"));
+
+        for (idx, env_var) in TOKEN_ENV_VARS.into_iter().enumerate() {
+            let env_var_value = format!("bar{}", idx);
+
+            let env = {
+                let mut map = HashMap::new();
+                map.insert(env_var.into(), env_var_value.clone());
+                map
+            };
+            let config = UserConfigLoader::new(config_file.path().to_path_buf())
+                .with_environment(Some(env))
+                .load()?;
+
+            assert_eq!(config.token(), Some(env_var_value.as_str()));
+        }
+
         Ok(())
     }
 }

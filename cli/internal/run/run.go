@@ -32,18 +32,18 @@ import (
 )
 
 // ExecuteRun executes the run command
-func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
-	base, err := helper.GetCmdBase(args)
+func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.ExecutionState) error {
+	base, err := helper.GetCmdBase(executionState)
 	LogTag(base.Logger)
 	if err != nil {
 		return err
 	}
-	tasks := args.Command.Run.Tasks
-	passThroughArgs := args.Command.Run.PassThroughArgs
+	tasks := executionState.CLIArgs.Command.Run.Tasks
+	passThroughArgs := executionState.CLIArgs.Command.Run.PassThroughArgs
 	if len(tasks) == 0 {
 		return errors.New("at least one task must be specified")
 	}
-	opts, err := optsFromArgs(args)
+	opts, err := optsFromArgs(&executionState.CLIArgs)
 	if err != nil {
 		return err
 	}
@@ -66,8 +66,6 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 		return nil, err
 	}
 
-	// Cache flags
-	opts.clientOpts.Timeout = args.RemoteCacheTimeout
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
@@ -214,6 +212,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	// TODO: these values come from a config file, hopefully viper can help us merge these
 	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
+
+	// If a spaceID wasn't passed as a flag, read it from the turbo.json config.
+	// If that is not set either, we'll still end up with a blank string.
+	if r.opts.runOpts.ExperimentalSpaceID == "" {
+		r.opts.runOpts.ExperimentalSpaceID = turboJSON.SpaceID
+	}
 
 	pipeline := turboJSON.Pipeline
 	g.Pipeline = pipeline
