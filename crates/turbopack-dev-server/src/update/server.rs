@@ -71,7 +71,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                                     )
                                 }
                             };
-                            match UpdateStream::new(format!("{resource}"), TransientInstance::new(Box::new(get_content))).await {
+                            match UpdateStream::new(resource.to_string(), TransientInstance::new(Box::new(get_content))).await {
                                 Ok(stream) => {
                                     streams.insert(resource, stream);
                                 }
