@@ -4,9 +4,9 @@
     "test:setup_python": "python3 -m venv .cram_env",
     "test:setup_pip": "pnpm test:setup_python && .cram_env/bin/python3 -m pip install --quiet --upgrade pip",
     "test:setup_prysk": "pnpm test:setup_pip && .cram_env/bin/pip install prysk",
-    "test": "pnpm test:setup_prysk && .cram_env/bin/prysk --shell=`which bash` tests/**/*.t",
-    "test:interactive": ".cram_env/bin/prysk -i --shell=`which bash` tests/**/*.t",
-    "test:parallel": ".cram_env/bin/pytest -n auto tests/**/*.t --prysk-shell=`which bash`",
+    "test": "pnpm test:setup_prysk && .cram_env/bin/prysk --shell=`which bash` tests",
+    "test:interactive": ".cram_env/bin/prysk -i --shell=`which bash` tests",
+    "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
   },
   "dependencies": {

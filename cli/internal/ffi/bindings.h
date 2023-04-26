@@ -16,6 +16,6 @@ struct Buffer changed_files(struct Buffer buffer);
 
 struct Buffer previous_content(struct Buffer buffer);
 
-struct Buffer npm_transitive_closure(struct Buffer buf);
+struct Buffer transitive_closure(struct Buffer buf);
 
 struct Buffer npm_subgraph(struct Buffer buf);

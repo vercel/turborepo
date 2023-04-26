@@ -137,6 +137,7 @@ Test help flag for link command
         --no-gitignore                    Do not create or modify .gitignore (default false)
         --version                         
         --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
+        --target <TARGET>                 Specify what should be linked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
         --no-update-notifier              Disable the turbo update notification
         --api <API>                       Override the endpoint for API calls
         --color                           Force color usage in the terminal
@@ -163,6 +164,7 @@ Test help flag for unlink command
   Usage: turbo unlink [OPTIONS]
   
   Options:
+        --target <TARGET>                 Specify what should be unlinked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
         --version                         
         --skip-infer                      Skip any attempts to infer which version of Turbo the project is configured to use
         --no-update-notifier              Disable the turbo update notification

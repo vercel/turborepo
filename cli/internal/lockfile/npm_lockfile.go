@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io"
 
-	mapset "github.com/deckarep/golang-set"
 	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -84,24 +83,4 @@ var _ (Lockfile) = (*NpmLockfile)(nil)
 // DecodeNpmLockfile Parse contents of package-lock.json into NpmLockfile
 func DecodeNpmLockfile(contents []byte) (Lockfile, error) {
 	return &NpmLockfile{contents: contents}, nil
-}
-
-func npmTransitiveDeps(lockfile *NpmLockfile, workspacePath turbopath.AnchoredUnixPath, unresolvedDeps map[string]string) (mapset.Set, error) {
-	pkgDir := workspacePath.ToString()
-
-	packages, err := ffi.NpmTransitiveDeps(lockfile.contents, pkgDir, unresolvedDeps)
-	if err != nil {
-		return nil, err
-	}
-
-	deps := make([]interface{}, len(packages))
-	for i, pkg := range packages {
-		deps[i] = Package{
-			Found:   pkg.Found,
-			Key:     pkg.Key,
-			Version: pkg.Version,
-		}
-	}
-
-	return mapset.NewSetFromSlice(deps), nil
 }

@@ -90,6 +90,7 @@ Make sure error code isn't swallowed with continue
   my-app:okay2: > echo 'working'
   my-app:okay2: 
   my-app:okay2: working
+  command \((.*)/apps/my-app\) npm run error exited \(1\) (re)
   
    Tasks:    2 successful, 3 total
   Cached:    1 cached, 3 total
