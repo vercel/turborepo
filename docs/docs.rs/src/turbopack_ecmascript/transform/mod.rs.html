@@ -388,57 +388,10 @@
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
 <a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 <span class="kw">mod </span>util;
 
-<span class="kw">use </span>std::{
-    collections::hash_map::DefaultHasher,
-    fmt::Debug,
-    hash::{Hash, Hasher},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+<span class="kw">use </span>std::{fmt::Debug, hash::Hash, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
@@ -474,13 +427,7 @@
     ClientDirective(StringVc),
     ServerDirective(StringVc),
     CommonJs,
-    Custom(CustomTransformVc),
-    Emotion {
-        <span class="attr">#[serde(default)]
-        </span>sourcemap: bool,
-        label_format: OptionStringVc,
-        auto_label: <span class="prelude-ty">Option</span>&lt;bool&gt;,
-    },
+    Plugin(TransformPluginVc),
     PresetEnv(EnvironmentVc),
     React {
         <span class="attr">#[serde(default)]
@@ -524,7 +471,7 @@
     <span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, program: <span class="kw-2">&amp;mut </span>Program, ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Program&gt;;
 }
 
-<span class="doccomment">/// A wrapper around a CustomTransformer instance, allowing it to operate with
+<span class="doccomment">/// A wrapper around a TransformPlugin instance, allowing it to operate with
 /// the turbo_task caching requirements.
 </span><span class="attr">#[turbo_tasks::value(
     transparent,
@@ -534,9 +481,9 @@
     cell = <span class="string">&quot;new&quot;
 </span>)]
 #[derive(Debug)]
-</span><span class="kw">pub struct </span>CustomTransform(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Box&lt;<span class="kw">dyn </span>CustomTransformer + Send + Sync&gt;);
+</span><span class="kw">pub struct </span>TransformPlugin(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Box&lt;<span class="kw">dyn </span>CustomTransformer + Send + Sync&gt;);
 
-<span class="kw">impl </span>CustomTransformer <span class="kw">for </span>CustomTransform {
+<span class="kw">impl </span>CustomTransformer <span class="kw">for </span>TransformPlugin {
     <span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, program: <span class="kw-2">&amp;mut </span>Program, ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;Program&gt; {
         <span class="self">self</span>.<span class="number">0</span>.transform(program, ctx)
     }
@@ -642,35 +589,6 @@
                     <span class="prelude-val">Some</span>(comments.clone()),
                 ));
             }
-            EcmascriptInputTransform::Emotion {
-                sourcemap,
-                label_format,
-                auto_label,
-            } =&gt; {
-                <span class="kw">let </span>options = swc_emotion::EmotionOptions {
-                    <span class="comment">// this should be always enabled if match arrives here:
-                    // since moduleoptions expect to push emotion transform only if
-                    // there are valid, enabled config values.
-                    </span>enabled: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
-                    sourcemap: <span class="prelude-val">Some</span>(<span class="kw-2">*</span>sourcemap),
-                    label_format: label_format.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
-                    auto_label: <span class="kw-2">*</span>auto_label,
-                    ..Default::default()
-                };
-                <span class="kw">let </span>p = std::mem::replace(program, Program::Module(Module::dummy()));
-                <span class="kw">let </span>hash = {
-                    <span class="kw">let </span><span class="kw-2">mut </span>hasher = DefaultHasher::new();
-                    p.hash(<span class="kw-2">&amp;mut </span>hasher);
-                    hasher.finish()
-                };
-                <span class="kw-2">*</span>program = p.fold_with(<span class="kw-2">&amp;mut </span>swc_emotion::emotion(
-                    options,
-                    Path::new(file_name_str),
-                    hash <span class="kw">as </span>u32,
-                    source_map.clone(),
-                    comments.clone(),
-                ))
-            }
             EcmascriptInputTransform::PresetEnv(env) =&gt; {
                 <span class="kw">let </span>versions = env.runtime_versions().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>config = swc_core::ecma::preset_env::Config {
@@ -714,14 +632,14 @@
                 }
 
                 <span class="kw">let </span>top_level_import_paths = <span class="kw-2">&amp;*</span>top_level_import_paths.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if </span>top_level_import_paths.len() &gt; <span class="number">0 </span>{
+                <span class="kw">if </span>!top_level_import_paths.is_empty() {
                     options.top_level_import_paths = top_level_import_paths
                         .iter()
                         .map(|s| JsWord::from(s.clone()))
                         .collect();
                 }
                 <span class="kw">let </span>meaningless_file_names = <span class="kw-2">&amp;*</span>meaningless_file_names.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if </span>meaningless_file_names.len() &gt; <span class="number">0 </span>{
+                <span class="kw">if </span>!meaningless_file_names.is_empty() {
                     options.meaningless_file_names = meaningless_file_names.clone();
                 }
 
@@ -792,7 +710,7 @@
                         .emit();
                 }
             }
-            EcmascriptInputTransform::Custom(transform) =&gt; {
+            EcmascriptInputTransform::Plugin(transform) =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(output) = transform.<span class="kw">await</span><span class="question-mark">?</span>.transform(program, ctx) {
                     <span class="kw-2">*</span>program = output;
                 }
