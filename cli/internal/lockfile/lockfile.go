@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	mapset "github.com/deckarep/golang-set"
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"golang.org/x/sync/errgroup"
 )
@@ -61,17 +62,45 @@ func (p ByKey) Less(i, j int) bool {
 
 var _ (sort.Interface) = (*ByKey)(nil)
 
-// TransitiveClosure the set of all lockfile keys that pkg depends on
-func TransitiveClosure(
-	workspaceDir turbopath.AnchoredUnixPath,
-	unresolvedDeps map[string]string,
+type closureMsg struct {
+	workspace turbopath.AnchoredUnixPath
+	closure   mapset.Set
+}
+
+// AllTransitiveClosures computes closures for all workspaces
+func AllTransitiveClosures(
+	workspaces map[turbopath.AnchoredUnixPath]map[string]string,
 	lockFile Lockfile,
-) (mapset.Set, error) {
+) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
 	if lf, ok := lockFile.(*NpmLockfile); ok {
 		// We special case as Rust implementations have their own dep crawl
-		return npmTransitiveDeps(lf, workspaceDir, unresolvedDeps)
+		return rustTransitiveDeps(lf.contents, "npm", workspaces)
 	}
-	return transitiveClosure(workspaceDir, unresolvedDeps, lockFile)
+
+	g := new(errgroup.Group)
+	c := make(chan closureMsg, len(workspaces))
+	closures := make(map[turbopath.AnchoredUnixPath]mapset.Set, len(workspaces))
+	for workspace, deps := range workspaces {
+		workspace := workspace
+		deps := deps
+		g.Go(func() error {
+			closure, err := transitiveClosure(workspace, deps, lockFile)
+			if err != nil {
+				return err
+			}
+			c <- closureMsg{workspace: workspace, closure: closure}
+			return nil
+		})
+	}
+	err := g.Wait()
+	close(c)
+	if err != nil {
+		return nil, err
+	}
+	for msg := range c {
+		closures[msg.workspace] = msg.closure
+	}
+	return closures, nil
 }
 
 func transitiveClosure(
@@ -132,4 +161,29 @@ func transitiveClosureHelper(
 			return nil
 		})
 	}
+}
+
+func rustTransitiveDeps(content []byte, packageManager string, workspaces map[turbopath.AnchoredUnixPath]map[string]string) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
+	processedWorkspaces := make(map[string]map[string]string, len(workspaces))
+	for workspacePath, workspace := range workspaces {
+		processedWorkspaces[workspacePath.ToString()] = workspace
+	}
+	workspaceDeps, err := ffi.TransitiveDeps(content, packageManager, processedWorkspaces)
+	if err != nil {
+		return nil, err
+	}
+	resolvedWorkspaces := make(map[turbopath.AnchoredUnixPath]mapset.Set, len(workspaceDeps))
+	for workspace, dependencies := range workspaceDeps {
+		depsSet := mapset.NewSet()
+		for _, pkg := range dependencies.GetList() {
+			depsSet.Add(Package{
+				Found:   pkg.Found,
+				Key:     pkg.Key,
+				Version: pkg.Version,
+			})
+		}
+		workspacePath := turbopath.AnchoredUnixPath(workspace)
+		resolvedWorkspaces[workspacePath] = depsSet
+	}
+	return resolvedWorkspaces, nil
 }
