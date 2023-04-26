@@ -163,3 +163,26 @@ pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
     };
     response.into()
 }
+
+#[no_mangle]
+pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
+    let req: proto::RecursiveCopyRequest = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::RecursiveCopyResponse {
+                error: Some(err.to_string()),
+            };
+            return resp.into();
+        }
+    };
+    let response = match turborepo_fs::recursive_copy(
+        &AbsoluteSystemPathBuf::new_unchecked(req.src),
+        &AbsoluteSystemPathBuf::new_unchecked(req.dst),
+    ) {
+        Ok(()) => proto::RecursiveCopyResponse { error: None },
+        Err(e) => proto::RecursiveCopyResponse {
+            error: Some(e.to_string()),
+        },
+    };
+    response.into()
+}

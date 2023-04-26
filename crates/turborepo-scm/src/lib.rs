@@ -8,6 +8,10 @@ use thiserror::Error;
 use turbopath::PathError;
 
 pub mod git;
+mod hash_object;
+mod ls_tree;
+pub mod package_deps;
+mod status;
 
 #[derive(Debug, Error)]
 pub enum Error {
