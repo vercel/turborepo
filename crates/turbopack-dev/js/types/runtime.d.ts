@@ -1,6 +1,4 @@
-import { ModuleId } from "./index";
-import { RuntimeBackend, TurbopackGlobals } from "types";
-import { RefreshRuntimeGlobals } from "@next/react-refresh-utils/dist/runtime";
+import { ModuleId, ChunkPath } from "./index";
 
 export type ModuleEffect =
   | {
@@ -19,6 +17,6 @@ export type ModuleEffect =
     };
 
 export type DevRuntimeParams = {
-  otherChunks: ChunkPath[];
+  otherChunks: ChunkData[];
   runtimeModuleIds: ModuleId[];
 };

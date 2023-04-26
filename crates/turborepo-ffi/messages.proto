@@ -54,15 +54,32 @@ message PreviousContentResp {
   }
 }
 
+enum PackageManager {
+  NPM = 0;
+}
+
+message PackageDependency {
+  string name = 1;
+  string range = 2;
+}
+
+message PackageDependencyList {
+  repeated PackageDependency list = 1;
+}
+
+message WorkspaceDependencies {
+  map<string, LockfilePackageList> dependencies = 1;
+}
+
 message TransitiveDepsRequest {
   bytes contents = 1;
-  string workspace_dir = 2;
-  map<string, string> unresolved_deps = 3;
+  PackageManager package_manager = 2;
+  map<string, PackageDependencyList> workspaces = 3;
 }
 
 message TransitiveDepsResponse {
   oneof response {
-    LockfilePackageList packages = 1;
+    WorkspaceDependencies dependencies = 1;
     string error = 2;
   }
 }
@@ -79,8 +96,9 @@ message LockfilePackageList {
 
 message SubgraphRequest {
   bytes contents = 1;
-  repeated string workspaces = 2;
-  repeated string packages = 3;
+  string package_manager = 2;
+  repeated string workspaces = 3;
+  repeated string packages = 4;
 }
 
 message SubgraphResponse {

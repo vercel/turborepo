@@ -16,14 +16,13 @@ jobs:
       - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.release_branch }}
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-      - uses: ./.github/actions/setup-go
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Test
-        run: pnpm -- turbo run test --filter=cli --color
+          target: ${{ matrix.os.name }}
+      - name: Run Unit Tests
+        run: turbo run test --filter=cli --color
 
   darwin:
     needs: [smoke-test]

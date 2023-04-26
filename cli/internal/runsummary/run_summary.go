@@ -2,6 +2,7 @@
 package runsummary
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/mitchellh/cli"
 	"github.com/segmentio/ksuid"
 	"github.com/vercel/turbo/cli/internal/client"
+	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
@@ -59,6 +61,7 @@ type RunSummary struct {
 	TurboVersion      string             `json:"turboVersion"`
 	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages          []string           `json:"packages"`
+	EnvMode           util.EnvMode       `json:"envMode"`
 	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
 }
@@ -73,6 +76,7 @@ func NewRunSummary(
 	apiClient *client.APIClient,
 	runOpts util.RunOpts,
 	packages []string,
+	globalEnvMode util.EnvMode,
 	globalHashSummary *GlobalHashSummary,
 	synthesizedCommand string,
 ) Meta {
@@ -98,6 +102,7 @@ func NewRunSummary(
 			ExecutionSummary:  executionSummary,
 			TurboVersion:      turboVersion,
 			Packages:          packages,
+			EnvMode:           globalEnvMode,
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
 		},
@@ -121,7 +126,7 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
+func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspace.Catalog) error {
 	if rsm.runType == runTypeDryJSON || rsm.runType == runTypeDryText {
 		return rsm.closeDryRun(workspaceInfos)
 	}
@@ -158,14 +163,24 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 		return nil
 	}
 
-	url, errs := rsm.record()
+	// Wrap the record function so we can hoist out url/errors but keep
+	// the function signature/type the spinner.WaitFor expects.
+	var url string
+	var errs []error
+	record := func() {
+		url, errs = rsm.record()
+	}
 
+	func() {
+		_ = spinner.WaitFor(ctx, record, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
+	}()
+
+	// After the spinner is done, print any errors and the url
 	if len(errs) > 0 {
 		rsm.ui.Warn("Errors recording run to Spaces")
 		for _, err := range errs {
 			rsm.ui.Warn(fmt.Sprintf("%v", err))
 		}
-		return nil
 	}
 
 	if url != "" {
@@ -231,7 +246,7 @@ func (rsm *Meta) record() (string, []error) {
 	payload := rsm.newSpacesRunCreatePayload()
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(createRunEndpoint, startPayload); err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf("POST %s: %w", createRunEndpoint, err))
 		} else {
 			if err := json.Unmarshal(resp, response); err != nil {
 				errs = append(errs, fmt.Errorf("Error unmarshaling response: %w", err))
@@ -247,7 +262,7 @@ func (rsm *Meta) record() (string, []error) {
 		if donePayload, err := json.Marshal(newSpacesDonePayload(rsm.RunSummary)); err == nil {
 			patchURL := fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, response.ID)
 			if _, err := rsm.apiClient.JSONPatch(patchURL, donePayload); err != nil {
-				errs = append(errs, fmt.Errorf("Error marking run as done: %w", err))
+				errs = append(errs, fmt.Errorf("PATCH %s: %w", patchURL, err))
 			}
 		}
 	}

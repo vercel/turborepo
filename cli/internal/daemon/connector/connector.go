@@ -26,6 +26,7 @@ var (
 	// ErrVersionMismatch is returned when the daemon process was spawned by a different version than the connecting client
 	ErrVersionMismatch   = errors.New("daemon version does not match client version")
 	errConnectionFailure = errors.New("could not connect to daemon")
+	errUnavailable       = errors.New("the server is not ready yet")
 	// ErrTooManyAttempts is returned when the client fails to connect too many times
 	ErrTooManyAttempts = errors.New("reached maximum number of attempts contacting daemon")
 	// ErrDaemonNotRunning is returned when the client cannot contact the daemon and has
@@ -124,7 +125,7 @@ func (c *Connector) addr() string {
 // an error to the user that includes the file location so that
 // they can resolve it.
 const (
-	_maxAttempts       = 3
+	_maxAttempts       = 10
 	_shutdownTimeout   = 1 * time.Second
 	_socketPollTimeout = 1 * time.Second
 )
@@ -252,13 +253,9 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 				return nil, err
 			}
 			// Loops back around and tries again.
-		} else if errors.Is(err, errConnectionFailure) {
+		} else if errors.Is(err, errUnavailable) {
 			// close the client, see if we can kill the stale daemon
-			_ = client.Close()
-			if err := c.killDeadServer(serverPid); err != nil {
-				return nil, err
-			}
-			// if we successfully killed the dead server, loop around and try again
+			c.Logger.Debug("server not ready yet")
 		} else if err != nil {
 			// Some other error occurred, close the client and
 			// report the error to the user
@@ -331,7 +328,7 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	case codes.FailedPrecondition:
 		return ErrVersionMismatch
 	case codes.Unavailable:
-		return errConnectionFailure
+		return errUnavailable
 	default:
 		return err
 	}

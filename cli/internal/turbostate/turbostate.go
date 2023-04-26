@@ -4,17 +4,8 @@
 package turbostate
 
 import (
-	"fmt"
-
 	"github.com/vercel/turbo/cli/internal/util"
 )
-
-// RepoState is the state for repository. Consists of the root for the repo
-// along with the mode (single package or multi package)
-type RepoState struct {
-	Root string `json:"root"`
-	Mode string `json:"mode"`
-}
 
 // DaemonPayload is the extra flags and command that are
 // passed for the `daemon` subcommand
@@ -72,9 +63,8 @@ type RunPayload struct {
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
-	Daemon *DaemonPayload `json:"daemon"`
-	Prune  *PrunePayload  `json:"prune"`
-	Run    *RunPayload    `json:"run"`
+	Prune *PrunePayload `json:"prune"`
+	Run   *RunPayload   `json:"run"`
 }
 
 // ParsedArgsFromRust are the parsed command line arguments passed
@@ -97,45 +87,18 @@ type ParsedArgsFromRust struct {
 	Command            Command `json:"command"`
 }
 
-// GetColor returns the value of the `color` flag.
-func (a ParsedArgsFromRust) GetColor() bool {
-	return a.Color
+// ExecutionState is the entire state of a turbo execution that is passed from the Rust shim.
+type ExecutionState struct {
+	APIClientConfig APIClientConfig    `json:"api_client_config"`
+	CLIArgs         ParsedArgsFromRust `json:"cli_args"`
 }
 
-// GetNoColor returns the value of the `token` flag.
-func (a ParsedArgsFromRust) GetNoColor() bool {
-	return a.NoColor
-}
-
-// GetLogin returns the value of the `login` flag.
-func (a ParsedArgsFromRust) GetLogin() (string, error) {
-	return a.Login, nil
-}
-
-// GetAPI returns the value of the `api` flag.
-func (a ParsedArgsFromRust) GetAPI() (string, error) {
-	return a.API, nil
-}
-
-// GetTeam returns the value of the `team` flag.
-func (a ParsedArgsFromRust) GetTeam() (string, error) {
-	return a.Team, nil
-}
-
-// GetToken returns the value of the `token` flag.
-func (a ParsedArgsFromRust) GetToken() (string, error) {
-	return a.Token, nil
-}
-
-// GetCwd returns the value of the `cwd` flag.
-func (a ParsedArgsFromRust) GetCwd() (string, error) {
-	return a.CWD, nil
-}
-
-// GetRemoteCacheTimeout returns the value of the `remote-cache-timeout` flag.
-func (a ParsedArgsFromRust) GetRemoteCacheTimeout() (uint64, error) {
-	if a.RemoteCacheTimeout != 0 {
-		return a.RemoteCacheTimeout, nil
-	}
-	return 0, fmt.Errorf("no remote cache timeout provided")
+// APIClientConfig holds the authentication and endpoint details for the API client
+type APIClientConfig struct {
+	Token        string `json:"token"`
+	TeamID       string `json:"team_id"`
+	TeamSlug     string `json:"team_slug"`
+	APIURL       string `json:"api_url"`
+	UsePreflight bool   `json:"use_preflight"`
+	Timeout      uint64 `json:"timeout"`
 }

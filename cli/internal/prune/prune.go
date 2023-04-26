@@ -28,12 +28,12 @@ type opts struct {
 }
 
 // ExecutePrune executes the `prune` command.
-func ExecutePrune(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) error {
-	base, err := helper.GetCmdBase(args)
+func ExecutePrune(helper *cmdutil.Helper, executionState *turbostate.ExecutionState) error {
+	base, err := helper.GetCmdBase(executionState)
 	if err != nil {
 		return err
 	}
-	if len(args.Command.Prune.Scope) == 0 {
+	if len(executionState.CLIArgs.Command.Prune.Scope) == 0 {
 		err := errors.New("at least one target must be specified")
 		base.LogError(err.Error())
 		return err
@@ -41,7 +41,7 @@ func ExecutePrune(helper *cmdutil.Helper, args *turbostate.ParsedArgsFromRust) e
 	p := &prune{
 		base,
 	}
-	if err := p.prune(args.Command.Prune); err != nil {
+	if err := p.prune(executionState.CLIArgs.Command.Prune); err != nil {
 		logError(p.base.Logger, p.base.UI, err)
 		return err
 	}

@@ -1,6 +1,8 @@
 package runsummary
 
 import (
+	"os"
+
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -71,15 +73,27 @@ type TaskSummary struct {
 	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
 	ExpandedOutputs        []turbopath.AnchoredSystemPath        `json:"expandedOutputs"`
 	Framework              string                                `json:"framework"`
+	EnvMode                util.EnvMode                          `json:"envMode"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
 }
 
+// GetLogs reads the Logfile and returns the data
+func (ts *TaskSummary) GetLogs() []byte {
+	bytes, err := os.ReadFile(ts.LogFile)
+	if err != nil {
+		return []byte{}
+	}
+	return bytes
+}
+
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
 type TaskEnvVarSummary struct {
-	Configured []string `json:"configured"`
-	Inferred   []string `json:"inferred"`
-	Global     []string `json:"global"`
+	Configured        []string `json:"configured"`
+	Inferred          []string `json:"inferred"`
+	Global            []string `json:"global"`
+	Passthrough       []string `json:"passthrough"`
+	GlobalPassthrough []string `json:"globalPassthrough"`
 }
 
 // cleanForSinglePackage converts a TaskSummary to remove references to workspaces

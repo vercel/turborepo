@@ -10,7 +10,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
-	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/process"
 	"github.com/vercel/turbo/cli/internal/prune"
 	"github.com/vercel/turbo/cli/internal/run"
@@ -45,31 +44,29 @@ func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs *turbostate.Parsed
 	return nil
 }
 
-// RunWithArgs runs turbo with the ParsedArgsFromRust that is passed from the Rust side.
-func RunWithArgs(args *turbostate.ParsedArgsFromRust, turboVersion string) int {
+// RunWithExecutionState runs turbo with the ParsedArgsFromRust that is passed from the Rust side.
+func RunWithExecutionState(executionState *turbostate.ExecutionState, turboVersion string) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
-	helper := cmdutil.NewHelper(turboVersion, args)
+	helper := cmdutil.NewHelper(turboVersion, &executionState.CLIArgs)
 	ctx := context.Background()
 
-	err := initializeOutputFiles(helper, args)
+	err := initializeOutputFiles(helper, &executionState.CLIArgs)
 	if err != nil {
 		fmt.Printf("%v", err)
 		return 1
 	}
-	defer helper.Cleanup(args)
+	defer helper.Cleanup(&executionState.CLIArgs)
 
 	doneCh := make(chan struct{})
 	var execErr error
 	go func() {
-		command := args.Command
-		if command.Daemon != nil {
-			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, args)
-		} else if command.Prune != nil {
-			execErr = prune.ExecutePrune(helper, args)
+		command := executionState.CLIArgs.Command
+		if command.Prune != nil {
+			execErr = prune.ExecutePrune(helper, executionState)
 		} else if command.Run != nil {
-			execErr = run.ExecuteRun(ctx, helper, signalWatcher, args)
+			execErr = run.ExecuteRun(ctx, helper, signalWatcher, executionState)
 		} else {
 			execErr = fmt.Errorf("unknown command: %v", command)
 		}

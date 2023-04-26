@@ -14,12 +14,17 @@
       "dependsOn": ["^build", "rss", "schema"]
     },
     "dev": {
-      "dependsOn": ["schema"]
+      "dependsOn": ["schema"],
+      "persistent": true,
+      "cache": false
     },
     "schema": {
+      "inputs": [], // None of the files in this workspace matter
+      "dependsOn": ["@turbo/types#topo"],
       "outputs": ["public/schema.json"]
     },
     "rss": {
+      "inputs": ["pages/blog/**", "scripts/generate-rss.js"],
       "outputs": ["public/feed.xml"]
     }
   }

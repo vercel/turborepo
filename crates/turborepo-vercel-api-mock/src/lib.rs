@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use anyhow::Result;
 use axum::{routing::get, Json, Router};
 use turborepo_api_client::{
-    CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
-    UserResponse, VerificationResponse,
+    CachingStatus, CachingStatusResponse, Membership, Role, Space, SpacesResponse, Team,
+    TeamsResponse, User, UserResponse, VerificationResponse,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
@@ -17,6 +17,9 @@ pub const EXPECTED_TEAM_ID: &str = "expected_team_id";
 pub const EXPECTED_TEAM_SLUG: &str = "expected_team_slug";
 pub const EXPECTED_TEAM_NAME: &str = "expected_team_name";
 pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
+
+pub const EXPECTED_SPACE_ID: &str = "expected_space_id";
+pub const EXPECTED_SPACE_NAME: &str = "expected_space_name";
 
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
@@ -48,6 +51,17 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                         created_at: EXPECTED_TEAM_CREATED_AT,
                         created: Default::default(),
                         membership: Membership::new(Role::Owner),
+                    }],
+                })
+            }),
+        )
+        .route(
+            "/v0/spaces",
+            get(|| async move {
+                Json(SpacesResponse {
+                    spaces: vec![Space {
+                        id: EXPECTED_SPACE_ID.to_string(),
+                        name: EXPECTED_SPACE_NAME.to_string(),
                     }],
                 })
             }),

@@ -1,8 +1,12 @@
+#![feature(once_cell)]
+
+mod berry;
 mod error;
 mod npm;
 
 use std::collections::{HashMap, HashSet};
 
+pub use berry::*;
 pub use error::Error;
 pub use npm::*;
 
@@ -26,19 +30,19 @@ pub trait Lockfile {
     ) -> Result<Option<Package>, Error>;
     // Given a lockfile key return all (prod/dev/optional) dependencies of that
     // package
-    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error>;
+    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
 }
 
 // this should get replaced by petgraph in the future :)
 pub fn transitive_closure<L: Lockfile>(
     lockfile: &L,
-    workspace_path: String,
+    workspace_path: &str,
     unresolved_deps: HashMap<String, String>,
 ) -> Result<HashSet<Package>, Error> {
     let mut transitive_deps = HashSet::new();
     transitive_closure_helper(
         lockfile,
-        &workspace_path,
+        workspace_path,
         unresolved_deps,
         &mut transitive_deps,
     )?;
