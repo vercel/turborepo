@@ -1682,9 +1682,9 @@ impl FileContent {
                 let de = &mut serde_json::Deserializer::from_reader(file.read());
                 match serde_path_to_error::deserialize(de) {
                     Ok(data) => FileJsonContent::Content(data),
-                    Err(e) => FileJsonContent::Unparseable(
-                        Box::new(UnparseableJson::from_serde_path_to_error(e)),
-                    ),
+                    Err(e) => FileJsonContent::Unparseable(Box::new(
+                        UnparseableJson::from_serde_path_to_error(e),
+                    )),
                 }
             }
             FileContent::NotFound => FileJsonContent::NotFound,
@@ -1708,10 +1708,9 @@ impl FileContent {
                             "text content doesn't contain any json data",
                         ),
                     },
-                    Err(e) => FileJsonContent::Unparseable(Box::new(UnparseableJson::from_jsonc_error(
-                        e,
-                        string.as_ref(),
-                    ))),
+                    Err(e) => FileJsonContent::Unparseable(Box::new(
+                        UnparseableJson::from_jsonc_error(e, string.as_ref()),
+                    )),
                 },
                 Err(_) => FileJsonContent::unparseable("binary is not valid utf-8 text"),
             },

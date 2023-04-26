@@ -546,11 +546,9 @@ impl Task {
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
-            )))),
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
+            ))),
         }
     }
 
@@ -565,11 +563,9 @@ impl Task {
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
-            )))),
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
+            ))),
         }
     }
 

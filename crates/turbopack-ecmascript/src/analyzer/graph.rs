@@ -1408,9 +1408,9 @@ impl VisitAstPath for Analyzer<'_> {
                             for (idx, elem) in arr.elems.iter().enumerate() {
                                 self.current_value = Some(JsValue::member(
                                     Box::new(value.clone()),
-                                    Box::new(JsValue::Constant(ConstantValue::Num(ConstantNumber(
-                                        idx as f64,
-                                    )))),
+                                    Box::new(JsValue::Constant(ConstantValue::Num(
+                                        ConstantNumber(idx as f64),
+                                    ))),
                                 ));
                                 ast_path.with(
                                     AstParentNodeRef::ArrayPat(arr, ArrayPatField::Elems(idx)),

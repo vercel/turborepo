@@ -187,7 +187,8 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 )
                 .into_partial()
                 .unwrap();
-                *guard = TaskMetaState::Full(Box::new(partial.into_full(task.get_event_description())));
+                *guard =
+                    TaskMetaState::Full(Box::new(partial.into_full(task.get_event_description())));
             }
             TaskMetaState::Unloaded(_) => {
                 let unloaded = replace(
@@ -199,7 +200,8 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 )
                 .into_unloaded()
                 .unwrap();
-                *guard = TaskMetaState::Full(Box::new(unloaded.into_full(task.get_event_description())));
+                *guard =
+                    TaskMetaState::Full(Box::new(unloaded.into_full(task.get_event_description())));
             }
         }
         WriteGuard::new(guard, TaskMetaState::as_full, TaskMetaState::as_full_mut)

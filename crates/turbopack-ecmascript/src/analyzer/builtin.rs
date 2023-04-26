@@ -170,7 +170,10 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                     }
                     if include_unknown {
                         values.push(JsValue::unknown(
-                            JsValue::member(Box::new(JsValue::object(Vec::new())), Box::new(take(prop))),
+                            JsValue::member(
+                                Box::new(JsValue::object(Vec::new())),
+                                Box::new(take(prop)),
+                            ),
                             "unknown object prototype methods or values",
                         ));
                     }
@@ -361,7 +364,11 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                         take(alts)
                             .into_iter()
                             .map(|alt| {
-                                JsValue::member_call(Box::new(alt), Box::new(prop.clone()), args.clone())
+                                JsValue::member_call(
+                                    Box::new(alt),
+                                    Box::new(prop.clone()),
+                                    args.clone(),
+                                )
                             })
                             .collect(),
                     );
