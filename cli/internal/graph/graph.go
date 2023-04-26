@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/runsummary"
@@ -50,6 +51,7 @@ type CompleteGraph struct {
 func (g *CompleteGraph) GetPackageTaskVisitor(
 	ctx gocontext.Context,
 	taskGraph *dag.AcyclicGraph,
+	globalEnvMode util.EnvMode,
 	getArgs func(taskID string) []string,
 	logger hclog.Logger,
 	execFunc func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error,
@@ -76,12 +78,29 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			return fmt.Errorf("Could not find definition for task")
 		}
 
+		// Task env mode is only independent when global env mode is `infer`.
+		taskEnvMode := globalEnvMode
+		useOldTaskHashable := false
+		if taskEnvMode == util.Infer {
+			if taskDefinition.PassthroughEnv != nil {
+				taskEnvMode = util.Strict
+			} else {
+				// If we're in infer mode we have just detected non-usage of strict env vars.
+				// Since we haven't stabilized this we don't want to break their cache.
+				useOldTaskHashable = true
+
+				// But our old behavior's actual meaning of this state is `loose`.
+				taskEnvMode = util.Loose
+			}
+		}
+
 		// TODO: maybe we can remove this PackageTask struct at some point
 		packageTask := &nodes.PackageTask{
 			TaskID:          taskID,
 			Task:            taskName,
 			PackageName:     packageName,
 			Pkg:             pkg,
+			EnvMode:         taskEnvMode,
 			Dir:             pkg.Dir.ToString(),
 			TaskDefinition:  taskDefinition,
 			Outputs:         taskDefinition.Outputs.Inclusions,
@@ -94,6 +113,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			taskGraph.DownEdges(taskID),
 			logger,
 			passThruArgs,
+			useOldTaskHashable,
 		)
 
 		// Not being able to construct the task hash is a hard error
@@ -111,6 +131,13 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		packageTask.LogFile = logFile
 		packageTask.Command = command
 
+		var envVarPassthroughMap env.EnvironmentVariableMap
+		if taskDefinition.PassthroughEnv != nil {
+			if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(taskDefinition.PassthroughEnv, nil, ""); err == nil {
+				envVarPassthroughMap = envVarPassthroughDetailedMap.BySource.Explicit
+			}
+		}
+
 		summary := &runsummary.TaskSummary{
 			TaskID:                 taskID,
 			Task:                   taskName,
@@ -126,9 +153,11 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			Command:                command,
 			CommandArguments:       passThruArgs,
 			Framework:              framework,
+			EnvMode:                taskEnvMode,
 			EnvVars: runsummary.TaskEnvVarSummary{
-				Configured: envVars.BySource.Explicit.ToSecretHashable(),
-				Inferred:   envVars.BySource.Matching.ToSecretHashable(),
+				Configured:  envVars.BySource.Explicit.ToSecretHashable(),
+				Inferred:    envVars.BySource.Matching.ToSecretHashable(),
+				Passthrough: envVarPassthroughMap.ToSecretHashable(),
 			},
 			ExternalDepsHash: pkg.ExternalDepsHash,
 		}

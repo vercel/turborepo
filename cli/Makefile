@@ -321,29 +321,6 @@ clean-demo:
 	rm -rf node_modules
 	rm -rf demo
 
-CRAM_ENV := .cram_env
-
-$(CRAM_ENV)/bin/pip:
-	python3 -m venv $(CRAM_ENV)
-	.cram_env/bin/python3 -m pip install --quiet --upgrade pip
-
-$(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
-	$(CRAM_ENV)/bin/pip install prysk
-
-$(CRAM_ENV)/bin/pytest: $(CRAM_ENV)/bin/pip
-	$(CRAM_ENV)/bin/pip3 install --quiet pytest "prysk[pytest-plugin]" pytest-xdist
-
-INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
-
-integration-tests-serial: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
-	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
-
-integration-tests: $(CRAM_ENV)/bin/prysk $(CRAM_ENV)/bin/pytest turbo $(INTEGRATION_TEST_FILES) corepack turbo
-	$(CRAM_ENV)/bin/pytest -n auto $(INTEGRATION_TEST_FILES) --prysk-shell=`which bash`
-
-integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
-	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
-
 # use target fixture-<some directory under integration_tests/_fixtures> to set up the testbed directory
 .PHONY=fixture-%
 fixture-%:
@@ -351,5 +328,5 @@ fixture-%:
 	@echo "fixture setup $($@_FIXTURE)"
 	rm -rf testbed
 	mkdir -p testbed
-	./integration_tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
+	../turborepo-tests/integration/tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
 

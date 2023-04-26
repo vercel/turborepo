@@ -17,6 +17,7 @@ mod path_visitor;
 pub(crate) mod references;
 pub mod resolve;
 pub(crate) mod special_cases;
+pub mod text;
 pub(crate) mod transform;
 pub mod tree_shake;
 pub mod typescript;
@@ -42,8 +43,8 @@ use swc_core::{
     },
 };
 pub use transform::{
-    CustomTransform, CustomTransformVc, CustomTransformer, EcmascriptInputTransform,
-    EcmascriptInputTransformsVc, TransformContext,
+    CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransformsVc, TransformContext,
+    TransformPlugin, TransformPluginVc,
 };
 use turbo_tasks::{
     primitives::StringVc, trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,

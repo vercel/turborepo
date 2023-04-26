@@ -10,19 +10,25 @@
 package scm
 
 import (
+	"fmt"
 	"github.com/vercel/turbo/cli/internal/ffi"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 // git implements operations on a git repository.
 type git struct {
-	repoRoot string
+	repoRoot turbopath.AbsoluteSystemPath
 }
 
 // ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.
 func (g *git) ChangedFiles(fromCommit string, toCommit string, monorepoRoot string) ([]string, error) {
-	return ffi.ChangedFiles(g.repoRoot, monorepoRoot, fromCommit, toCommit)
+	return ffi.ChangedFiles(g.repoRoot.ToString(), monorepoRoot, fromCommit, toCommit)
 }
 
 func (g *git) PreviousContent(fromCommit string, filePath string) ([]byte, error) {
-	return ffi.PreviousContent(g.repoRoot, fromCommit, filePath)
+	if fromCommit == "" {
+		return nil, fmt.Errorf("Need commit sha to inspect file contents")
+	}
+
+	return ffi.PreviousContent(g.repoRoot.ToString(), fromCommit, filePath)
 }
