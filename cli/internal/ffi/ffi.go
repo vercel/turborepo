@@ -116,15 +116,14 @@ func stringToRef(s string) *string {
 }
 
 // ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
-func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCommit string) ([]string, error) {
+func ChangedFiles(gitRoot string, turboRoot string, fromCommit string, toCommit string) ([]string, error) {
 	fromCommitRef := stringToRef(fromCommit)
-	toCommitRef := stringToRef(toCommit)
 
 	req := ffi_proto.ChangedFilesReq{
-		RepoRoot:     repoRoot,
-		FromCommit:   fromCommitRef,
-		ToCommit:     toCommitRef,
-		MonorepoRoot: monorepoRoot,
+		GitRoot:    gitRoot,
+		FromCommit: fromCommitRef,
+		ToCommit:   toCommit,
+		TurboRoot:  turboRoot,
 	}
 
 	reqBuf := Marshal(&req)
@@ -144,9 +143,9 @@ func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCom
 }
 
 // PreviousContent returns the content of a file at a previous commit
-func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
+func PreviousContent(gitRoot, fromCommit, filePath string) ([]byte, error) {
 	req := ffi_proto.PreviousContentReq{
-		RepoRoot:   repoRoot,
+		GitRoot:    gitRoot,
 		FromCommit: fromCommit,
 		FilePath:   filePath,
 	}

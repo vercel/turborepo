@@ -1,3 +1,6 @@
+//go:build go || !rust
+// +build go !rust
+
 // Package scm abstracts operations on various tools like git
 // Currently, only git is supported.
 //
@@ -8,6 +11,7 @@ package scm
 
 import (
 	"fmt"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -17,13 +21,13 @@ import (
 
 // git implements operations on a git repository.
 type git struct {
-	repoRoot string
+	repoRoot turbopath.AbsoluteSystemPath
 }
 
 // ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.
 func (g *git) ChangedFiles(fromCommit string, toCommit string, relativeTo string) ([]string, error) {
 	if relativeTo == "" {
-		relativeTo = g.repoRoot
+		relativeTo = g.repoRoot.ToString()
 	}
 	relSuffix := []string{"--", relativeTo}
 	command := []string{"diff", "--name-only", toCommit}

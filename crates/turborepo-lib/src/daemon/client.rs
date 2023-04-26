@@ -137,6 +137,15 @@ pub enum DaemonError {
     /// There was an issue connecting to the daemon.
     #[error("unable to connect: {0}")]
     DaemonConnect(#[from] DaemonConnectorError),
+    /// The timeout specified was invalid.
+    #[error("invalid timeout specified ({0})")]
+    InvalidTimeout(String),
+    /// The server is unable to start file watching.
+    #[error("unable to start file watching")]
+    FileWatching(#[from] globwatch::Error),
+
+    #[error("unable to display output: {0}")]
+    DisplayError(#[from] serde_json::Error),
 }
 
 impl From<Status> for DaemonError {

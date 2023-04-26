@@ -458,6 +458,14 @@ function runModuleExecutionHooks(module, executeModule) {
   cleanupReactRefreshIntercept();
 }
 
+// noop fns to prevent refresh runtime errors when trying to access the runtime outside of the initial module execution.
+globalThis.$RefreshReg$ = function () {};
+globalThis.$RefreshSig$ = function () {
+  return function (type) {
+    return type;
+  };
+};
+
 /**
  * Retrieves a module from the cache, or instantiate it if it is not cached.
  *
@@ -1336,6 +1344,16 @@ function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
 }
 
 /**
+ * Returns the path of a chunk defined by its data.
+ *
+ * @param {ChunkData} chunkData
+ * @returns {ChunkPath} the chunk path
+ */
+function getChunkPath(chunkData) {
+  return typeof chunkData === "string" ? chunkData : chunkData.path;
+}
+
+/**
  * Subscribes to chunk list updates from the update server and applies them.
  *
  * @param {ChunkList} chunkList
@@ -1347,11 +1365,7 @@ function registerChunkList(chunkList) {
   ]);
 
   // Adding chunks to chunk lists and vice versa.
-  const chunks = new Set(
-    chunkList.chunks.map((chunkData) =>
-      typeof chunkData === "string" ? chunkData : chunkData.path
-    )
-  );
+  const chunks = new Set(chunkList.chunks.map(getChunkPath));
   chunkListChunksMap.set(chunkList.path, chunks);
   for (const chunkPath of chunks) {
     let chunkChunkLists = chunkChunkListsMap.get(chunkPath);
@@ -1382,7 +1396,7 @@ function markChunkListAsRuntime(chunkListPath) {
 /**
  * @param {ChunkRegistration} chunkRegistration
  */
-async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
+function registerChunk([chunkPath, chunkModules, runtimeParams]) {
   for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
     if (!moduleFactories[moduleId]) {
       moduleFactories[moduleId] = moduleFactory;
@@ -1390,7 +1404,7 @@ async function registerChunk([chunkPath, chunkModules, runtimeParams]) {
     addModuleToChunk(moduleId, chunkPath);
   }
 
-  BACKEND.registerChunk(chunkPath, runtimeParams);
+  return BACKEND.registerChunk(chunkPath, runtimeParams);
 }
 
 globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS =

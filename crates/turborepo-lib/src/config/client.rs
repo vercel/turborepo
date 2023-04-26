@@ -13,7 +13,7 @@ pub struct ClientConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 struct ClientConfigValue {
-    remote_cache_timeout: Option<u64>,
+    remote_cache_timeout: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -23,24 +23,13 @@ pub struct ClientConfigLoader {
 }
 
 impl ClientConfig {
-    #[allow(dead_code)]
-    pub fn remote_cache_timeout(&self) -> Option<u64> {
-        match self.config.remote_cache_timeout {
-            // Pass 0 to get no timeout.
-            Some(0) => None,
-
-            // Pass any non-zero uint64 to get a timeout of that duration measured in seconds.
-            Some(other) => Some(other),
-
-            // If the _config_ doesn't have a remote_cache_timeout, give them the default.
-            None => Some(DEFAULT_TIMEOUT),
-        }
+    pub fn remote_cache_timeout(&self) -> u64 {
+        self.config.remote_cache_timeout
     }
 }
 
 impl ClientConfigLoader {
     /// Creates a loader that will load the client config
-    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             remote_cache_timeout: None,
@@ -49,7 +38,6 @@ impl ClientConfigLoader {
     }
 
     /// Set an override for token that the user provided via the command line
-    #[allow(dead_code)]
     pub fn with_remote_cache_timeout(mut self, remote_cache_timeout: Option<u64>) -> Self {
         self.remote_cache_timeout = remote_cache_timeout;
         self
@@ -61,7 +49,6 @@ impl ClientConfigLoader {
         self
     }
 
-    #[allow(dead_code)]
     pub fn load(self) -> Result<ClientConfig> {
         let Self {
             remote_cache_timeout,
@@ -79,7 +66,7 @@ impl ClientConfigLoader {
         match config_attempt {
             Err(_) => Ok(ClientConfig {
                 config: ClientConfigValue {
-                    remote_cache_timeout: None,
+                    remote_cache_timeout: DEFAULT_TIMEOUT,
                 },
             }),
             Ok(config) => Ok(ClientConfig { config }),
@@ -107,16 +94,16 @@ mod test {
     fn test_client_default() -> Result<()> {
         let config = ClientConfigLoader::new().load()?;
 
-        assert_eq!(config.remote_cache_timeout(), Some(DEFAULT_TIMEOUT));
+        assert_eq!(config.remote_cache_timeout(), DEFAULT_TIMEOUT);
 
         Ok(())
     }
 
     fn test_client_arg_variable() -> Result<()> {
-        let arg_value = Some(1);
+        let arg_value: u64 = 1;
 
         let config = ClientConfigLoader::new()
-            .with_remote_cache_timeout(arg_value)
+            .with_remote_cache_timeout(Some(arg_value))
             .load()?;
 
         assert_eq!(config.remote_cache_timeout(), arg_value);
@@ -137,7 +124,7 @@ mod test {
 
         assert_eq!(
             config.remote_cache_timeout(),
-            Some(env_value.parse::<u64>().unwrap())
+            env_value.parse::<u64>().unwrap()
         );
 
         Ok(())
@@ -145,76 +132,78 @@ mod test {
 
     #[test]
     fn test_client_arg_env_variable() -> Result<()> {
+        #[derive(Debug)]
         struct TestCase {
             arg: Option<u64>,
             env: String,
-            output: Option<u64>,
+            output: u64,
         }
 
         let tests = [
             TestCase {
                 arg: Some(0),
                 env: String::from("0"),
-                output: None,
+                output: 0,
             },
             TestCase {
                 arg: Some(0),
                 env: String::from("2"),
-                output: None,
+                output: 0,
             },
             TestCase {
                 arg: Some(0),
                 env: String::from("garbage"),
-                output: None,
+                output: 0,
             },
             TestCase {
                 arg: Some(0),
                 env: String::from(""),
-                output: None,
+                output: 0,
             },
             TestCase {
                 arg: Some(1),
                 env: String::from("0"),
-                output: Some(1),
+                output: 1,
             },
             TestCase {
                 arg: Some(1),
                 env: String::from("2"),
-                output: Some(1),
+                output: 1,
             },
             TestCase {
                 arg: Some(1),
                 env: String::from("garbage"),
-                output: Some(1),
+                output: 1,
             },
             TestCase {
                 arg: Some(1),
                 env: String::from(""),
-                output: Some(1),
+                output: 1,
             },
             TestCase {
                 arg: None,
                 env: String::from("0"),
-                output: None,
+                output: 0,
             },
             TestCase {
                 arg: None,
                 env: String::from("2"),
-                output: Some(2),
+                output: 2,
             },
             TestCase {
                 arg: None,
                 env: String::from("garbage"),
-                output: Some(DEFAULT_TIMEOUT),
+                output: DEFAULT_TIMEOUT,
             },
             TestCase {
                 arg: None,
                 env: String::from(""),
-                output: Some(DEFAULT_TIMEOUT),
+                output: DEFAULT_TIMEOUT,
             },
         ];
 
         for test in &tests {
+            println!("{:?}", test);
             let config = ClientConfigLoader::new()
                 .with_remote_cache_timeout(test.arg)
                 .with_environment({

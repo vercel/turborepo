@@ -3,6 +3,8 @@ resolver = "2"
 
 members = [
   "crates/auto-hash-map",
+  "crates/globwatch",
+  "crates/pidlock",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
   "crates/turbo-binding",
@@ -28,7 +30,9 @@ members = [
   "crates/turbopack-dev",
   "crates/turbopack-dev-server",
   "crates/turbopack-ecmascript",
+  "crates/turbopack-ecmascript-plugins",
   "crates/turbopack-env",
+  "crates/turbopack-image",
   "crates/turbopack-json",
   "crates/turbopack-mdx",
   "crates/turbopack-node",
@@ -131,7 +135,9 @@ turbopack-css = { path = "crates/turbopack-css" }
 turbopack-dev = { path = "crates/turbopack-dev" }
 turbopack-dev-server = { path = "crates/turbopack-dev-server" }
 turbopack-ecmascript = { path = "crates/turbopack-ecmascript" }
+turbopack-ecmascript-plugins = { path = "crates/turbopack-ecmascript-plugins" }
 turbopack-env = { path = "crates/turbopack-env" }
+turbopack-image = { path = "crates/turbopack-image" }
 turbopack-json = { path = "crates/turbopack-json" }
 turbopack-mdx = { path = "crates/turbopack-mdx" }
 turbopack-node = { path = "crates/turbopack-node" }
@@ -185,6 +191,7 @@ dunce = "1.0.3"
 futures = "0.3.26"
 futures-retry = "0.6.0"
 httpmock = { version = "0.6.7", default-features = false }
+image = { version = "0.24.6", default-features = false }
 indexmap = "1.9.2"
 indicatif = "0.17.3"
 indoc = "2.0.0"
@@ -212,6 +219,7 @@ semver = "1.0.16"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 serde_qs = "0.11.0"
+serde_with = "2.3.2"
 serde_yaml = "0.9.17"
 syn = "1.0.107"
 tempfile = "3.3.0"
