@@ -4,6 +4,7 @@ use std::{
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
+    mem::transmute,
     sync::Arc,
 };
 
@@ -37,7 +38,7 @@ impl<T, U> std::ops::Deref for ReadRef<T, U> {
 
     fn deref(&self) -> &Self::Target {
         let inner: &T = &self.0;
-        unsafe { std::mem::transmute(inner) }
+        unsafe { transmute(inner) }
     }
 }
 
@@ -130,17 +131,18 @@ impl<T, U: Serialize> Serialize for ReadRef<T, U> {
     }
 }
 
-impl<'de, T: Deserialize<'de>> Deserialize<'de> for ReadRef<T, T> {
+impl<'de, T, U: Deserialize<'de>> Deserialize<'de> for ReadRef<T, U> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let value = T::deserialize(deserializer)?;
-        Ok(Self(Arc::new(value), PhantomData))
+        let value = Arc::new(U::deserialize(deserializer)?);
+        let inner = unsafe { transmute(value) };
+        Ok(Self(inner, PhantomData))
     }
 }
 
-impl<T> ReadRef<T, T> {
+impl<T, U> ReadRef<T, U> {
     pub fn new(arc: Arc<T>) -> Self {
         Self(arc, PhantomData)
     }

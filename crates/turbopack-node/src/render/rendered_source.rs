@@ -227,7 +227,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
                 path: format!("/{}", source.pathname.await?),
-                data: Some(self.render_data.await?.clone_value()),
+                data: Some(self.render_data.await?),
             }
             .cell(),
         )
