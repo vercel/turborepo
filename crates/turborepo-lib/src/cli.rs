@@ -379,8 +379,8 @@ pub struct RunArgs {
     pub profile: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long, env = "TURBO_REMOTE_ONLY", default_missing_value = "true")]
-    pub remote_only: Option<Option<bool>>,
+    #[clap(long)]
+    pub remote_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
     #[clap(long)]
@@ -1087,7 +1087,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    remote_only: Some(Some(true)),
+                    remote_only: true,
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
