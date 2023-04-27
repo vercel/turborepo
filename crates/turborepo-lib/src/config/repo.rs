@@ -189,7 +189,13 @@ mod test {
 
     #[test]
     fn test_repo_config_when_missing() -> Result<()> {
-        let config = RepoConfigLoader::new(PathBuf::from("missing")).load();
+        let path = if cfg!(windows) {
+            "C:\\missing"
+        } else {
+            "/missing"
+        };
+
+        let config = RepoConfigLoader::new(AbsoluteSystemPathBuf::new(path).unwrap()).load();
         assert!(config.is_ok());
 
         Ok(())
@@ -215,7 +221,13 @@ mod test {
 
     #[test]
     fn test_repo_config_includes_defaults() {
-        let config = RepoConfigLoader::new(PathBuf::from("missing"))
+        let path = if cfg!(windows) {
+            "C:\\missing"
+        } else {
+            "/missing"
+        };
+
+        let config = RepoConfigLoader::new(AbsoluteSystemPathBuf::new(path).unwrap())
             .load()
             .unwrap();
         assert_eq!(config.api_url(), DEFAULT_API_URL);

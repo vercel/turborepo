@@ -169,8 +169,25 @@ mod test {
 
     use crate::get_version;
 
+    #[cfg(not(target_os = "windows"))]
     #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
     fn test_repo_hash(path: &str, expected_hash: &str) {
+        use super::CommandBase;
+        use crate::Args;
+
+        let args = Args::default();
+        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version()).unwrap();
+
+        let hash = command_base.repo_hash();
+
+        assert_eq!(hash, expected_hash);
+        assert_eq!(hash.len(), 16);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test_case("C:\\\\tmp\\turborepo", "6e0cfa616f75a61c"; "basic example")]
+    fn test_repo_hash_win(path: &str, expected_hash: &str) {
         use super::CommandBase;
         use crate::Args;
 
