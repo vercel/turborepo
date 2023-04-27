@@ -191,7 +191,7 @@ impl fmt::Display for Resolution<'_> {
             f.write_fmt(format_args!("{from}/"))?;
         }
         f.write_fmt(format_args!("{}", self.descriptor))?;
-        todo!()
+        Ok(())
     }
 }
 
