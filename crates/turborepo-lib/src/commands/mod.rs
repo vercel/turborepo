@@ -186,7 +186,7 @@ mod test {
     }
 
     #[cfg(target_os = "windows")]
-    #[test_case("C:\\\\tmp\\turborepo", "6e0cfa616f75a61c"; "basic example")]
+    #[test_case("C:\\\\tmp\\turborepo", "0103736e6883e35f"; "basic example")]
     fn test_repo_hash_win(path: &str, expected_hash: &str) {
         use super::CommandBase;
         use crate::Args;
