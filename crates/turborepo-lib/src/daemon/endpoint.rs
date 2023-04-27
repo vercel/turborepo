@@ -1,11 +1,6 @@
-use std::{
-    io::ErrorKind,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::sync::{atomic::AtomicBool, Arc};
+#[cfg(windows)]
+use std::{io::ErrorKind, sync::atomic::Ordering, time::Duration};
 
 use futures::Stream;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -21,6 +16,7 @@ pub enum SocketOpenError {
     LockError(#[from] pidlock::PidlockError),
 }
 
+#[cfg(windows)]
 const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 
 /// Gets a stream of incoming connections from a Unix socket.
@@ -31,7 +27,7 @@ const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 ///       code path to shut down the non-blocking polling
 pub async fn open_socket(
     path: AbsoluteSystemPathBuf,
-    running: Arc<AtomicBool>,
+    #[allow(unused)] running: Arc<AtomicBool>,
 ) -> Result<
     (
         pidlock::Pidlock,

@@ -32,10 +32,12 @@ impl BumpTimeout {
         Duration::from_millis(self.deadline.load(Ordering::Relaxed))
     }
 
+    #[allow(dead_code)]
     pub fn deadline(&self) -> Instant {
         self.start + self.duration()
     }
 
+    #[allow(dead_code)]
     pub fn elapsed(&self) -> Duration {
         self.start.elapsed()
     }
