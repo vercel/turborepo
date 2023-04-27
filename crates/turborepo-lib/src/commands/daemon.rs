@@ -1,15 +1,10 @@
 use std::{path::PathBuf, time::Duration};
 
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
-
 use super::CommandBase;
-use crate::{
-    cli::DaemonCommand,
-    daemon::{DaemonConnector, DaemonError},
-};
+use crate::{cli::DaemonCommand, daemon::DaemonConnector};
 
 /// Runs the daemon command.
-pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
+pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result<()> {
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } => (false, false),
         DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
@@ -60,33 +55,6 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             }
         }
     };
-
-    Ok(())
-}
-
-pub async fn daemon_server(base: &CommandBase, idle_time: &String) -> Result<(), DaemonError> {
-    let log_file = {
-        let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
-            .expect("user has a home dir");
-
-        let folder = AbsoluteSystemPathBuf::new(directories.data_dir()).expect("absolute");
-
-        let hash = format!("{}-turbo.log", base.repo_hash());
-
-        let logs = RelativeSystemPathBuf::new("logs").expect("forward relative");
-        let file = RelativeSystemPathBuf::new(hash).expect("forward relative");
-
-        folder.join_relative(logs).join_relative(file)
-    };
-
-    let repo_root = AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("absolute");
-
-    let timeout = go_parse_duration::parse_duration(idle_time)
-        .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
-        .map(|d| Duration::from_nanos(d as u64))?;
-
-    let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
-    server.serve(repo_root).await;
 
     Ok(())
 }
