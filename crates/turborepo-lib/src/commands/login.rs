@@ -5,12 +5,12 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
 use axum::{extract::Query, response::Redirect, routing::get, Router};
-use log::debug;
-#[cfg(not(test))]
-use log::warn;
 use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
+use tracing::debug;
+#[cfg(not(test))]
+use tracing::warn;
 
 use crate::{
     commands::{
