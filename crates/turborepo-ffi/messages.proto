@@ -56,6 +56,7 @@ message PreviousContentResp {
 
 enum PackageManager {
   NPM = 0;
+  BERRY = 1;
 }
 
 message PackageDependency {
@@ -75,6 +76,7 @@ message TransitiveDepsRequest {
   bytes contents = 1;
   PackageManager package_manager = 2;
   map<string, PackageDependencyList> workspaces = 3;
+  optional AdditionalBerryData resolutions = 4;
 }
 
 message TransitiveDepsResponse {
@@ -82,6 +84,10 @@ message TransitiveDepsResponse {
     WorkspaceDependencies dependencies = 1;
     string error = 2;
   }
+}
+
+message AdditionalBerryData {
+  map<string, string> resolutions = 1;
 }
 
 message LockfilePackage {
@@ -96,9 +102,10 @@ message LockfilePackageList {
 
 message SubgraphRequest {
   bytes contents = 1;
-  string package_manager = 2;
+  PackageManager package_manager = 2;
   repeated string workspaces = 3;
   repeated string packages = 4;
+  optional AdditionalBerryData resolutions = 5;
 }
 
 message SubgraphResponse {
@@ -106,4 +113,30 @@ message SubgraphResponse {
     bytes contents = 1;
     string error = 2;
   }
+}
+
+message PatchesRequest {
+  bytes contents = 1;
+  PackageManager package_manager = 2;
+}
+
+message PatchesResponse {
+  oneof response {
+    Patches patches = 1;
+    string error = 2;
+  }
+}
+
+message Patches {
+  repeated string patches = 1;
+}
+
+message GlobalChangeRequest {
+  PackageManager package_manager = 1;
+  bytes  prev_contents = 2;
+  bytes curr_contents = 3;
+}
+
+message GlobalChangeResponse {
+  bool global_change = 1;
 }

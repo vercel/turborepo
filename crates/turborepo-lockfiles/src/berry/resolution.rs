@@ -103,6 +103,8 @@ impl<'a> Resolution<'a> {
         dependency: &Descriptor<'b>,
         locator: &Locator,
     ) -> Option<Descriptor<'b>> {
+        // if the ref is patch locator then it will have a suffix of
+        // ::locator={ROOT_WORKSPACE}@workspace:. ( with @ and : escaped)
         if let Some(from) = &self.from {
             let from_ident = from.ident();
             // If the from doesn't match the locator we skip
@@ -159,6 +161,20 @@ impl<'a> Resolution<'a> {
             dependency_override.range.to_mut().insert_str(0, "npm:")
         }
 
+        // Patch references aren't complete in the resolutions field so we
+        // instead resolve to the package getting patched.
+        // The patch still gets picked up as we include patches for any
+        // packages in the pruned lockfile if the package is a member.
+        if matches!(dependency_override.protocol(), Some("patch")) {
+            return Some(
+                Descriptor::from(
+                    Locator::from_patch_reference(reference)
+                        .expect("expected patch reference to contain locator"),
+                )
+                .into_owned(),
+            );
+        }
+
         Some(dependency_override)
     }
 }
@@ -175,7 +191,7 @@ impl fmt::Display for Resolution<'_> {
             f.write_fmt(format_args!("{from}/"))?;
         }
         f.write_fmt(format_args!("{}", self.descriptor))?;
-        todo!()
+        Ok(())
     }
 }
 
@@ -267,7 +283,21 @@ mod test {
                     description: None
                 }
             }
-        )
+        );
+
+        assert_eq!(
+            parse_resolution("is-even/is-odd").unwrap(),
+            Resolution {
+                from: Some(Specifier {
+                    full_name: "is-even",
+                    description: None
+                }),
+                descriptor: Specifier {
+                    full_name: "is-odd",
+                    description: None
+                }
+            }
+        );
     }
 
     #[test]
@@ -285,5 +315,19 @@ mod test {
                 }
             }
         )
+    }
+
+    #[test]
+    fn test_patch_resolution() {
+        let resolution = parse_resolution("lodash@^4.17.21").unwrap();
+        let dependency = resolution.reduce_dependency(
+            "patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch",
+            &Descriptor::try_from("lodash@^4.17.21").unwrap(),
+            &Locator::try_from("test@workspace:.").unwrap(),
+        );
+        assert_eq!(
+            dependency,
+            Some(Descriptor::try_from("lodash@npm:4.17.21").unwrap())
+        );
     }
 }

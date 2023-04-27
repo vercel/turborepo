@@ -169,7 +169,11 @@ func PreviousContent(gitRoot, fromCommit, filePath string) ([]byte, error) {
 }
 
 // TransitiveDeps returns the transitive external deps for all provided workspaces
-func TransitiveDeps(content []byte, packageManager string, workspaces map[string]map[string]string) (map[string]*ffi_proto.LockfilePackageList, error) {
+func TransitiveDeps(content []byte, packageManager string, workspaces map[string]map[string]string, resolutions map[string]string) (map[string]*ffi_proto.LockfilePackageList, error) {
+	var additionalData *ffi_proto.AdditionalBerryData
+	if resolutions != nil {
+		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
+	}
 	flatWorkspaces := make(map[string]*ffi_proto.PackageDependencyList)
 	for workspace, deps := range workspaces {
 		packageDependencyList := make([]*ffi_proto.PackageDependency, len(deps))
@@ -187,6 +191,7 @@ func TransitiveDeps(content []byte, packageManager string, workspaces map[string
 		Contents:       content,
 		PackageManager: toPackageManager(packageManager),
 		Workspaces:     flatWorkspaces,
+		Resolutions:    additionalData,
 	}
 	reqBuf := Marshal(&req)
 	resBuf := C.transitive_closure(reqBuf)
@@ -209,20 +214,28 @@ func toPackageManager(packageManager string) ffi_proto.PackageManager {
 	switch packageManager {
 	case "npm":
 		return ffi_proto.PackageManager_NPM
+	case "berry":
+		return ffi_proto.PackageManager_BERRY
 	default:
 		panic(fmt.Sprintf("Invalid package manager string: %s", packageManager))
 	}
 }
 
-// NpmSubgraph returns the contents of a npm lockfile subgraph
-func NpmSubgraph(content []byte, workspaces []string, packages []string) ([]byte, error) {
+// Subgraph returns the contents of a lockfile subgraph
+func Subgraph(packageManager string, content []byte, workspaces []string, packages []string, resolutions map[string]string) ([]byte, error) {
+	var additionalData *ffi_proto.AdditionalBerryData
+	if resolutions != nil {
+		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
+	}
 	req := ffi_proto.SubgraphRequest{
-		Contents:   content,
-		Workspaces: workspaces,
-		Packages:   packages,
+		Contents:       content,
+		Workspaces:     workspaces,
+		Packages:       packages,
+		PackageManager: toPackageManager(packageManager),
+		Resolutions:    additionalData,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.npm_subgraph(reqBuf)
+	resBuf := C.subgraph(reqBuf)
 	reqBuf.Free()
 
 	resp := ffi_proto.SubgraphResponse{}
@@ -235,4 +248,46 @@ func NpmSubgraph(content []byte, workspaces []string, packages []string) ([]byte
 	}
 
 	return resp.GetContents(), nil
+}
+
+// Patches returns all patch files referenced in the lockfile
+func Patches(content []byte, packageManager string) []string {
+	req := ffi_proto.PatchesRequest{
+		Contents:       content,
+		PackageManager: toPackageManager(packageManager),
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.patches(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.PatchesResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		panic(err)
+	}
+
+	return resp.GetPatches().GetPatches()
+}
+
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
+func GlobalChange(packageManager string, prevContents []byte, currContents []byte) bool {
+	req := ffi_proto.GlobalChangeRequest{
+		PackageManager: toPackageManager(packageManager),
+		PrevContents:   prevContents,
+		CurrContents:   currContents,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.patches(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GlobalChangeResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	return resp.GetGlobalChange()
 }
