@@ -4,7 +4,6 @@
 package turbostate
 
 import (
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -93,7 +92,6 @@ type ParsedArgsFromRust struct {
 type ExecutionState struct {
 	APIClientConfig APIClientConfig    `json:"api_client_config"`
 	PackageManager  string             `json:"package_manager"`
-	RootPackageJson fs.PackageJSON     `json:"root_package_json"`
 	CLIArgs         ParsedArgsFromRust `json:"cli_args"`
 }
 

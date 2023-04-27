@@ -1,4 +1,5 @@
 use serde::Serialize;
+use tracing::trace;
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
@@ -9,7 +10,6 @@ use crate::{
 pub struct ExecutionState<'a> {
     pub api_client_config: APIClientConfig<'a>,
     package_manager: PackageManager,
-    root_package_json: PackageJson,
     pub cli_args: &'a Args,
 }
 
@@ -25,14 +25,18 @@ pub struct APIClientConfig<'a> {
     pub timeout: u64,
 }
 
-impl<'a> TryFrom<&'a mut CommandBase> for ExecutionState<'a> {
+impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
     type Error = anyhow::Error;
 
-    fn try_from(base: &'a mut CommandBase) -> Result<Self, Self::Error> {
+    fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
         let root_package_json = PackageJson::load(&AbsoluteSystemPathBuf::new(
             base.repo_root.join("package.json"),
-        )?)?;
-        let package_manager = PackageManager::get_package_manager(base, &root_package_json)?;
+        )?)
+        .ok();
+
+        let package_manager =
+            PackageManager::get_package_manager(base, root_package_json.as_ref())?;
+        trace!("Found {} as package manager", package_manager);
 
         let repo_config = base.repo_config()?;
         let user_config = base.user_config()?;
@@ -51,7 +55,6 @@ impl<'a> TryFrom<&'a mut CommandBase> for ExecutionState<'a> {
         Ok(ExecutionState {
             api_client_config,
             package_manager,
-            root_package_json,
             cli_args: base.args(),
         })
     }

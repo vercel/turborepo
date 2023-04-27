@@ -566,8 +566,14 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             daemon::main(&command, &base).await?;
             Ok(Payload::Rust(Ok(0)))
         },
+        Command::Run(args) => {
+            if args.tasks.is_empty() {
+                return Err(anyhow!("at least one task must be specified"));
+            }
+            let base = CommandBase::new(cli_args, repo_root, version)?;
+            Ok(Payload::Go(Box::new(base)))
+        }
         Command::Prune { .. }
-        | Command::Run(_)
         // the daemon itself still delegates to Go
         | Command::Daemon { .. } => {
             let base = CommandBase::new(cli_args, repo_root, version)?;

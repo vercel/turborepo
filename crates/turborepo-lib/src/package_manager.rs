@@ -1,5 +1,5 @@
 use std::{
-    fmt, fs,
+    env, fmt, fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -49,6 +49,7 @@ impl From<Workspaces> for Vec<String> {
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq, Clone)]
+#[serde(rename_all = "lowercase")]
 pub enum PackageManager {
     Berry,
     Npm,
@@ -152,11 +153,13 @@ impl PackageManager {
         }))
     }
 
-    pub fn get_package_manager(base: &mut CommandBase, pkg: &PackageJson) -> Result<Self> {
+    pub fn get_package_manager(base: &CommandBase, pkg: Option<&PackageJson>) -> Result<Self> {
         // We don't surface errors for `read_package_manager` as we can fall back to
         // `detect_package_manager`
-        if let Ok(Some(package_manager)) = Self::read_package_manager(pkg) {
-            return Ok(package_manager);
+        if let Some(package_json) = pkg {
+            if let Ok(Some(package_manager)) = Self::read_package_manager(package_json) {
+                return Ok(package_manager);
+            }
         }
 
         Self::detect_package_manager(base)
@@ -198,7 +201,22 @@ impl PackageManager {
         Ok(manager)
     }
 
-    fn detect_package_manager(base: &mut CommandBase) -> Result<PackageManager> {
+    #[cfg(test)]
+    fn get_yarn_version(_: &AbsoluteSystemPathBuf) -> Result<Version> {
+        Ok(env::var("TEST_YARN_VERSION")?.parse()?)
+    }
+
+    #[cfg(not(test))]
+    fn get_yarn_version(project_directory: &AbsoluteSystemPathBuf) -> Result<Version> {
+        let output = Command::new("yarn")
+            .arg("--version")
+            .current_dir(&project_directory)
+            .output()?;
+        let yarn_version_output = String::from_utf8(output.stdout)?;
+        Ok(yarn_version_output.trim().parse()?)
+    }
+
+    fn detect_package_manager(base: &CommandBase) -> Result<PackageManager> {
         let mut detected_package_managers = vec![];
         let project_directory = AbsoluteSystemPathBuf::new(&base.repo_root)?;
         let npm_lockfile = project_directory
@@ -216,12 +234,7 @@ impl PackageManager {
         let yarn_lockfile =
             project_directory.join_relative(RelativeSystemPathBuf::new("yarn.lock").unwrap());
         if yarn_lockfile.exists() {
-            let output = Command::new("yarn")
-                .arg("--version")
-                .current_dir(&project_directory)
-                .output()?;
-            let yarn_version_output = String::from_utf8(output.stdout)?;
-            let version: Version = yarn_version_output.trim().parse()?;
+            let version = Self::get_yarn_version(&project_directory)?;
             detected_package_managers.push(Self::detect_berry_or_yarn(&version)?);
         }
 
@@ -323,30 +336,11 @@ mod tests {
         let yarn_lock_path = repo_root.path().join("yarn.lock");
         File::create(&yarn_lock_path)?;
 
-        // Create a yarn shim that outputs a non-berry version
-        let mut yarn_shim = File::create(repo_root.path().join("yarn"))?;
-        yarn_shim.write_all(b"echo \"1.9.0\"")?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            yarn_shim.set_permissions(fs::Permissions::from_mode(0o755))?;
-        }
-
-        env::set_var("PATH", repo_root.path());
-
+        env::set_var("TEST_YARN_VERSION", "1.9.0");
         let package_manager = PackageManager::detect_package_manager(&mut base)?;
         assert_eq!(package_manager, PackageManager::Yarn);
 
-        // Create a yarn shim that outputs a berry version
-        let mut berry_shim = File::create(repo_root.path().join("yarn"))?;
-        berry_shim.write_all(b"echo \"2.1.0\"")?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            berry_shim.set_permissions(fs::Permissions::from_mode(0o755))?;
-        }
+        env::set_var("TEST_YARN_VERSION", "2.0.1");
         let package_manager = PackageManager::detect_package_manager(&mut base)?;
         assert_eq!(package_manager, PackageManager::Berry);
 
