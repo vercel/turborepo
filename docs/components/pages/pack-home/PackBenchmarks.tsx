@@ -21,6 +21,7 @@ export interface BenchmarkData {
 
 export interface BenchmarkBar {
   label: string;
+  version: string;
   key: keyof BenchmarkData;
   turbo?: true;
   swc?: true;
@@ -30,40 +31,48 @@ export const DEFAULT_BARS: BenchmarkBar[] = [
   {
     key: "next13",
     label: "Next.js 13",
+    version: "13.3.1",
     turbo: true,
   },
   {
     key: "next12",
     label: "Next.js 12",
+    version: "12.3.4",
   },
   {
     key: "vite",
     label: "Vite",
+    version: "4.3.1",
     swc: true,
   },
   {
     key: "next11",
     label: "Next.js 11",
+    version: "11.1.4",
   },
 ];
 export const HMR_BARS: BenchmarkBar[] = [
   {
     key: "next13",
     label: "Next.js 13",
+    version: "13.3.1",
     turbo: true,
   },
   {
     key: "vite",
     label: "Vite",
+    version: "4.3.1",
     swc: true,
   },
   {
     key: "next12",
     label: "Next.js 12",
+    version: "12.3.4",
   },
   {
     key: "next11",
     label: "Next.js 11",
+    version: "11.1.4",
   },
 ];
 

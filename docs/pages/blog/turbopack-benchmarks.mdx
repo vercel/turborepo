@@ -51,8 +51,8 @@ We created a test generator that makes an application with a variable amount of 
 
 - Next.js 11
 - Next.js 12
-- Next.js 13 with Turbopack
-- Vite
+- Next.js 13 with Turbopack (13.0.1)
+- Vite (4.0.2)
 
 As the current state of the art, we are including [Vite](https://vitejs.dev/) along with webpack-based [Next.js](https://nextjs.org) solutions. All of these toolchains point to the same generated component tree, assembling a [Sierpiński triangle](https://en.wikipedia.org/wiki/Sierpi%C5%84ski_triangle) in the browser, where every triangle is a separate module.
 
@@ -77,8 +77,6 @@ As the current state of the art, we are including [Vite](https://vitejs.dev/) al
 This test measures how fast a local development server starts up on an application of various sizes. We measure this as the time from startup (without cache) until the app is rendered in the browser. We do not wait for the app to be interactive or hydrated in the browser for this dataset.
 
 Based on feedback and collaboration with the Vite team, we used the [SWC plugin](https://github.com/vitejs/vite-plugin-react-swc) with Vite in replacement for the [default Babel plugin](https://github.com/vitejs/vite-plugin-react) for improved performance in this benchmark.
-
-<DocsBenchmarksGraph category="cold" bars={DEFAULT_BARS} />
 
 <ThemedImageFigure
   borderRadius={true}
@@ -134,8 +132,6 @@ For Hot Module Reloading (HMR) benchmarks, we first start the dev server on a fr
 Once our tooling is warmed up, we run a series of updates to a list of modules within the test application. Modules are sampled randomly with a distribution that ensures we test a uniform number of modules per module depth. The depth of a module is its distance from the entry module in the dependency graph. For instance, if the entry module A imports module B, which imports modules C and D, the depth of the entry module A will be 0, that of module B will be 1, and that of modules C and D will be 2. Modules A and B will have an equal probability of being sampled, but modules C and D will only have half the probability of being sampled.
 
 We report the linear regression slope of the data points as the target metric. This is an estimate of the average time it takes for the tooling to apply an update to the application.
-
-<DocsBenchmarksGraph category="file_change" bars={HMR_BARS} />
 
 <ThemedImageFigure
   borderRadius={true}
