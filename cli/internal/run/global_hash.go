@@ -127,7 +127,7 @@ func getGlobalHashInputs(
 	envVars := []string{}
 	envVars = append(envVars, envVarDependencies...)
 	envVars = append(envVars, _defaultEnvVars...)
-	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, []string{".*THASH.*"}, "")
+	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, nil, "")
 	if err != nil {
 		return GlobalHashableInputs{}, err
 	}
