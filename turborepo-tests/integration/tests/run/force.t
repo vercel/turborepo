@@ -65,7 +65,7 @@ baseline to generate cache
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-# env var=true, --flag (no value): cache hit
+# env var=true, --flag (no value): cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -73,8 +73,8 @@ baseline to generate cache
   my-app:build: cache hit, suppressing output 2f192ed93e20f940
   
    Tasks:    1 successful, 1 total
-  Cached:    1 cached, 1 total
-    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
   
 
 # env var=false, missing flag, cache hit
@@ -110,7 +110,7 @@ baseline to generate cache
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-# env var=false, --flag (no value): cache hit
+# env var=false, --flag (no value): cache bypass
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -118,8 +118,8 @@ baseline to generate cache
   my-app:build: cache hit, suppressing output 2f192ed93e20f940
   
    Tasks:    1 successful, 1 total
-  Cached:    1 cached, 1 total
-    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
   
 
 # missing env var, missing flag: cache hit
@@ -155,7 +155,7 @@ baseline to generate cache
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
-# missing env var, --flag (no value): cache hit
+# missing env var, --flag (no value): cache bypass
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -163,6 +163,6 @@ baseline to generate cache
   my-app:build: cache hit, suppressing output 2f192ed93e20f940
   
    Tasks:    1 successful, 1 total
-  Cached:    1 cached, 1 total
-    Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
   

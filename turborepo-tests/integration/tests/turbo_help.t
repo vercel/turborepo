@@ -45,7 +45,7 @@ Test help flag
         --dry-run [<DRY_RUN>]            [possible values: text, json]
         --single-package                 Run turbo in single-package mode
     -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
-        --force                          Ignore the existing cache (to force execution)
+        --force [<FORCE>]                Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
         --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
@@ -56,7 +56,7 @@ Test help flag
         --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --parallel                       Execute all tasks in parallel
         --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
-        --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
+        --remote-only [<REMOTE_ONLY>]    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --summarize [<SUMMARIZE>]        Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
@@ -110,7 +110,7 @@ Test help flag
         --dry-run [<DRY_RUN>]            [possible values: text, json]
         --single-package                 Run turbo in single-package mode
     -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
-        --force                          Ignore the existing cache (to force execution)
+        --force [<FORCE>]                Ignore the existing cache (to force execution)
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
         --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
@@ -121,7 +121,7 @@ Test help flag
         --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --parallel                       Execute all tasks in parallel
         --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
-        --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
+        --remote-only [<REMOTE_ONLY>]    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --summarize [<SUMMARIZE>]        Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
