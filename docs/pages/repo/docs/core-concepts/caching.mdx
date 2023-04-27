@@ -262,7 +262,7 @@ To alter the cache for _all_ tasks, you can declare environment variables in the
 ### Automatic environment variable inclusion
 
 <Callout type="warning">
-  Turborepo only does automatic environment variable inclusion when the environment variable mode is set to `loose` or when using the default environment variable mode of `infer` without specifying `passthroughEnv`.
+  Turborepo does automatic environment variable inclusion unless you pass `--env-mode=strict` in order to disable this behavior.
 
 In `strict` environment variable mode you must specify every environment variable you want available in your execution environment via `env` or `globalEnv` if you want them considered for the hash and `passthroughEnv` or `globalPassthroughEnv` if not.
 

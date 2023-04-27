@@ -293,7 +293,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	currentState := env.GetEnvMap()
 	passthroughEnv := env.EnvironmentVariableMap{}
 
-	if packageTask.EnvMode == util.Strict {
+	if packageTask.EnvMode.IsStrict() {
 		defaultPassthrough := []string{
 			"PATH",
 			"SHELL",

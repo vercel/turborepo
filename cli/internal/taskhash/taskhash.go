@@ -325,6 +325,8 @@ func calculateTaskHashFromHashable(full *taskHashable, useOldTaskHashable bool) 
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
 		full.passthroughEnv = nil
 		return fs.HashObject(full)
+	case util.StrictIncludeFrameworkVars:
+		fallthrough
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
 		if full.passthroughEnv == nil {
@@ -382,7 +384,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	var framework *inference.Framework
 	envVarContainingExcludePrefix := ""
 
-	// In strict environment variable mode we don't do framework env var inference.
+	// In Strict environment variable mode we don't do framework env var inference.
 	// You must instead:
 	// - Specify all environment variables that you want available in your build environment.
 	// - Specify whether you want those considered for the hash or merely passed through.

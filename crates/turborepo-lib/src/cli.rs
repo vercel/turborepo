@@ -56,6 +56,7 @@ pub enum DryRunMode {
 pub enum EnvMode {
     Infer,
     Loose,
+    StrictIncludeFrameworkVars,
     Strict,
 }
 
@@ -726,6 +727,26 @@ mod test {
                 ..Args::default()
             },
             "env_mode: specified strict"
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "run",
+                "build",
+                "--experimental-env-mode",
+                "strict-include-framework-vars"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    env_mode: EnvMode::StrictIncludeFrameworkVars,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "env_mode: specified strict-include-framework-vars"
         );
 
         assert_eq!(

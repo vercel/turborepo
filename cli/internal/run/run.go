@@ -356,7 +356,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	globalEnvMode := rs.Opts.runOpts.EnvMode
 	if globalEnvMode == util.Infer && turboJSON.GlobalPassthroughEnv != nil {
-		globalEnvMode = util.Strict
+		globalEnvMode = util.StrictIncludeFrameworkVars
 	}
 
 	// RunSummary contains information that is statically analyzable about

@@ -10,13 +10,24 @@ const (
 	Infer EnvMode = "Infer"
 	// Loose - environment variables are unconstrained
 	Loose EnvMode = "Loose"
+	// StrictIncludeFrameworkVars - environment variables are limited.
+	// They include vars from detected frameworks.
+	StrictIncludeFrameworkVars EnvMode = "StrictIncludeFrameworkVars"
 	// Strict - environment variables are limited
 	Strict EnvMode = "Strict"
 )
 
 // MarshalText implements TextMarshaler for the struct.
-func (s EnvMode) MarshalText() (text []byte, err error) {
-	return []byte(strings.ToLower(string(s))), nil
+func (em EnvMode) MarshalText() (text []byte, err error) {
+	if em == StrictIncludeFrameworkVars {
+		return []byte("strict-include-framework-vars"), nil
+	}
+	return []byte(strings.ToLower(string(em))), nil
+}
+
+// IsStrict collapses the two Strict variants.
+func (em EnvMode) IsStrict() bool {
+	return em == Strict || em == StrictIncludeFrameworkVars
 }
 
 // RunOpts holds the options that control the execution of a turbo run

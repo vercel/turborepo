@@ -49,14 +49,27 @@ Run as `loose`
     "globalPassthrough": null
   }
 
+Run as `strict-include-framework-vars`
+  $ rm -rf .turbo/runs
+  $ ${TURBO} run build --experimental-env-mode=strict-include-framework-vars --summarize > /dev/null
+  $ cat .turbo/runs/*.json | jq -r '.envMode'
+  strict-include-framework-vars
+  $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
+  strict-include-framework-vars
+  $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
+  {
+    "passthrough": null,
+    "globalPassthrough": null
+  }
+
 All specified + infer
   $ rm -rf .turbo/runs
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/all.json" "$(pwd)/turbo.json" && git commit --allow-empty -am "no comment" --quiet
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  strict
+  strict-include-framework-vars
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
-  strict
+  strict-include-framework-vars
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": [
@@ -90,9 +103,9 @@ Global passthrough specified empty array + infer
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/global_pt-empty.json" "$(pwd)/turbo.json" && git commit --allow-empty -am "no comment" --quiet
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  strict
+  strict-include-framework-vars
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
-  strict
+  strict-include-framework-vars
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
@@ -104,9 +117,9 @@ Global passthrough specified value + infer
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/global_pt.json" "$(pwd)/turbo.json" && git commit --allow-empty -am "no comment" --quiet
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
-  strict
+  strict-include-framework-vars
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
-  strict
+  strict-include-framework-vars
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
@@ -152,7 +165,7 @@ Task passthrough specified empty array + infer
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
-  strict
+  strict-include-framework-vars
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": [],
@@ -166,7 +179,7 @@ Task passthrough specified value + infer
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
-  strict
+  strict-include-framework-vars
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": [

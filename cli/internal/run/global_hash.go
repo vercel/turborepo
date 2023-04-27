@@ -90,7 +90,7 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 			// In infer mode, if there is any passThru config (even if it is an empty array)
 			// we'll hash the whole object, so we can detect changes to that config
 			// Further, resolve the envMode to the concrete value.
-			full.envMode = util.Strict
+			full.envMode = util.StrictIncludeFrameworkVars
 			return newGlobalHash(full)
 		}
 
@@ -102,6 +102,8 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
 		full.envVarPassthroughs = nil
 		return newGlobalHash(full)
+	case util.StrictIncludeFrameworkVars:
+		fallthrough
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
 		if full.envVarPassthroughs == nil {

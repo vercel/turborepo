@@ -188,11 +188,12 @@ Task details include:
 
 Controls the available environment variables to your tasks.
 
-| option | description                                                |
-| ------ | ---------------------------------------------------------- |
-| infer  | infers strict mode or loose mode based on allowlist config |
-| loose  | allows all environment variables                           |
-| strict | only allow declared variables                              |
+| option                        | description                                                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+| infer                         | infers loose or strict-include-framework-vars mode based upon existence of configuration                 |
+| loose                         | allows all environment variables                                                                         |
+| strict-include-framework-vars | allows only environment variables detected from your framework and those specified by your configuration |
+| strict                        | allows only environment variables specified by your configuration                                        |
 
 `PATH`, `SHELL`, and `SYSTEMROOT` are always available to all tasks.
 
@@ -200,8 +201,8 @@ Controls the available environment variables to your tasks.
 
 In infer mode, Turborepo will look for [`experimentalPassThroughEnv`][1] for
 each task config, and [`experimentalGlobalPassThroughEnv`][2] in the root of the
-`turbo.json` config. If either is defined, "strict" mode is inferred. If
-neither is defined, then `loose` mode is inferred.
+`turbo.json` config. If either is defined, "strict-include-framework-vars" mode
+is inferred. If neither is defined, then `loose` mode is inferred.
 
 In this mode, the value of `experimentalGlobalPassThroughEnv` and the flag's
 value ("infer") will only be incorporated into the global hash if
@@ -210,8 +211,24 @@ value ("infer") will only be incorporated into the global hash if
 ##### `loose`
 
 In loose mode, all environment variables are made available to the task.
-The value of `experimentalGlobalPassThroughEnv` and the flag's value ("loose")
+The flag's value ("loose") itself will be incorporated into the global hash.
+
+##### `strict-include-framework-vars`
+
+In strict-include-framework-vars mode, environment variables specified in the following keys are
+available to the task:
+
+- `env` and `experimentalPassThroughEnv` in each task configuration
+- `globalEnv` and `experimentalGlobalPassThroughEnv` in the root of your config
+
+In addition, values detected by [automatic environment variable inclusion](../caching#automatic-environment-variable-inclusion)
+will also be available to the task.
+
+The value of `experimentalGlobalPassThroughEnv` and the flag's value ("strict-include-framework-vars")
 itself will be incorporated into the global hash.
+
+If strict-include-framework-vars mode is specified or inferred _all_ tasks are run in
+strict-include-framework-vars mode regardless of their configuration.
 
 ##### `strict`
 
@@ -224,7 +241,7 @@ available to the task:
 The value of `experimentalGlobalPassThroughEnv` and the flag's value ("strict")
 itself will be incorporated into the global hash.
 
-If strict mode is specified or inferred, _all_ tasks are run in strict mode,
+If strict mode is specified or inferred _all_ tasks are run in strict mode,
 regardless of their configuration.
 
 #### `--filter`

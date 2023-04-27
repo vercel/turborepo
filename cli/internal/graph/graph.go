@@ -83,7 +83,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		useOldTaskHashable := false
 		if taskEnvMode == util.Infer {
 			if taskDefinition.PassthroughEnv != nil {
-				taskEnvMode = util.Strict
+				taskEnvMode = util.StrictIncludeFrameworkVars
 			} else {
 				// If we're in infer mode we have just detected non-usage of strict env vars.
 				// Since we haven't stabilized this we don't want to break their cache.

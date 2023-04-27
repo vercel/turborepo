@@ -16,6 +16,15 @@ Check next
     "NEXT_PUBLIC_HELLO=7719a612cd8fb5d22a8207ee9dba3e55d2f7d712e3dfd40af2d9080a545ff427"
   ]
 
+Check next + strict-include-framework-vars
+  $ rm -rf .turbo/runs
+  $ ${TURBO} build --filter=next-app --experimental-env-mode=strict-include-framework-vars --summarize | grep "next-app:build: hello from "
+  next-app:build: hello from 
+  $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables.inferred'
+  [
+    "NEXT_PUBLIC_HELLO=7719a612cd8fb5d22a8207ee9dba3e55d2f7d712e3dfd40af2d9080a545ff427"
+  ]
+
 Check next + strict
   $ rm -rf .turbo/runs
   $ ${TURBO} build --filter=next-app --experimental-env-mode=strict --summarize | grep "next-app:build: hello from "
@@ -32,6 +41,15 @@ Check vite
     "VITE_HELLO=7e153fd3e8ad33597a4ecf6d1a96a91dfba32cbb695e2729228cb9af8f615567"
   ]
 
+Check vite + strict-include-framework-vars
+  $ rm -rf .turbo/runs
+  $ ${TURBO} build --filter=vite-app --experimental-env-mode=strict-include-framework-vars --summarize | grep "vite-app:build: hello from "
+  vite-app:build: hello from 
+  $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables.inferred'
+  [
+    "VITE_HELLO=7e153fd3e8ad33597a4ecf6d1a96a91dfba32cbb695e2729228cb9af8f615567"
+  ]
+
 Check vite + strict
   $ rm -rf .turbo/runs
   $ ${TURBO} build --filter=vite-app --experimental-env-mode=strict --summarize | grep "vite-app:build: hello from "
@@ -43,6 +61,15 @@ Check vue
   $ rm -rf .turbo/runs
   $ ${TURBO} build --filter=vue-app --summarize | grep "vue-app:build: hello from "
   vue-app:build: hello from hellofromvue
+  $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables.inferred'
+  [
+    "VUE_APP_HELLO=429b02cec7c8171389c5d0eaff1ef36b47e418bb96050979f9cf2bea34c07539"
+  ]
+
+Check vue + strict-include-framework-vars
+  $ rm -rf .turbo/runs
+  $ ${TURBO} build --filter=vue-app --experimental-env-mode=strict-include-framework-vars --summarize | grep "vue-app:build: hello from "
+  vue-app:build: hello from 
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables.inferred'
   [
     "VUE_APP_HELLO=429b02cec7c8171389c5d0eaff1ef36b47e418bb96050979f9cf2bea34c07539"
