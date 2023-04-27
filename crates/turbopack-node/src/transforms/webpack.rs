@@ -129,7 +129,7 @@ fn webpack_loaders_executor(context: AssetContextVc) -> AssetVc {
                     use_define_for_class_fields: false,
                 },
             ]),
-            compile_time_info: context.compile_time_info(),
+            compile_time_info: Some(context.compile_time_info()),
         }),
     )
     .into()

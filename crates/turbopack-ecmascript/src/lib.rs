@@ -94,7 +94,7 @@ pub struct EcmascriptOptions {
 
     pub transforms: EcmascriptInputTransformsVc,
 
-    pub compile_time_info: CompileTimeInfoVc,
+    pub compile_time_info: Option<CompileTimeInfoVc>,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]

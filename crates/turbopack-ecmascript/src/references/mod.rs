@@ -1361,7 +1361,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 handler: &handler,
                 source,
                 origin,
-                compile_time_info: options.compile_time_info,
+                compile_time_info: options.compile_time_info.unwrap(),
                 var_graph: &var_graph,
                 fun_args_values: Mutex::new(HashMap::<u32, Vec<JsValue>>::new()),
                 first_import_meta: true,
@@ -1664,7 +1664,12 @@ pub(crate) async fn analyze_ecmascript_module(
                                 analysis.add_reference(UrlAssetReferenceVc::new(
                                     origin,
                                     RequestVc::parse(Value::new(pat)),
-                                    options.compile_time_info.environment().rendering(),
+                                    options
+                                        .compile_time_info
+                                        .as_ref()
+                                        .unwrap()
+                                        .environment()
+                                        .rendering(),
                                     AstPathVc::cell(ast_path),
                                     IssueSourceVc::from_byte_offset(
                                         source,

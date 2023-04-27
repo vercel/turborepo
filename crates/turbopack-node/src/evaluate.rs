@@ -120,7 +120,7 @@ pub async fn get_evaluate_pool(
                     use_define_for_class_fields: false,
                 },
             ]),
-            compile_time_info: context.compile_time_info(),
+            compile_time_info: Some(context.compile_time_info()),
         }),
     )
     .as_asset();
@@ -155,7 +155,7 @@ pub async fn get_evaluate_pool(
                     use_define_for_class_fields: false,
                 },
             ]),
-            compile_time_info: context.compile_time_info(),
+            compile_time_info: Some(context.compile_time_info()),
         }),
         InnerAssetsVc::cell(indexmap! {
             "INNER".to_string() => module_asset,
@@ -180,7 +180,7 @@ pub async fn get_evaluate_pool(
                         use_define_for_class_fields: false,
                     },
                 ]),
-                compile_time_info: context.compile_time_info(),
+                compile_time_info: Some(context.compile_time_info()),
             }),
         )
         .as_evaluatable_asset();

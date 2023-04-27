@@ -155,7 +155,7 @@ async fn extra_configs(
                                 split_into_parts: false,
                                 import_parts: false,
                                 transforms: EcmascriptInputTransformsVc::cell(vec![]),
-                                compile_time_info: context.compile_time_info(),
+                                compile_time_info: Some(context.compile_time_info()),
                             }),
                         )
                         .into(),
@@ -195,7 +195,7 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
                     use_define_for_class_fields: false,
                 },
             ]),
-            compile_time_info: context.compile_time_info(),
+            compile_time_info: Some(context.compile_time_info()),
         }),
         InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset

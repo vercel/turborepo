@@ -133,7 +133,7 @@ async fn into_ecmascript_module_asset(
             split_into_parts: false,
             import_parts: false,
             transforms: this.transforms,
-            compile_time_info: this.context.compile_time_info(),
+            compile_time_info: Some(this.context.compile_time_info()),
         }),
     ))
 }

@@ -127,7 +127,7 @@ async fn apply_module_type(
             context.into(),
             Value::new(EcmascriptModuleAssetType::Typescript),
             Value::new(EcmascriptOptions {
-                compile_time_info: context.compile_time_info(),
+                compile_time_info: Some(context.compile_time_info()),
                 ..options.clone()
             }),
         )
@@ -137,7 +137,7 @@ async fn apply_module_type(
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptWithTypes),
             Value::new(EcmascriptOptions {
-                compile_time_info: context.compile_time_info(),
+                compile_time_info: Some(context.compile_time_info()),
                 ..options.clone()
             }),
         )
@@ -147,7 +147,7 @@ async fn apply_module_type(
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptDeclaration),
             Value::new(EcmascriptOptions {
-                compile_time_info: context.compile_time_info(),
+                compile_time_info: Some(context.compile_time_info()),
                 ..options.clone()
             }),
         )
