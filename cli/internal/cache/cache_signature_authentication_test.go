@@ -134,7 +134,7 @@ func Test_EdgecaseStrings(t *testing.T) {
 		tag, err := asa.generateTag(hash, []byte(artifactBody))
 		assert.NoError(t, err)
 
-		isValid, err := ffi.VerifySignature(teamID, hash, []byte(artifactBody), tag, []byte(secretKey))
+		isValid, err := ffi.VerifySignature([]byte(teamID), hash, []byte(artifactBody), tag, []byte(secretKey))
 		assert.NoError(t, err)
 		assert.True(t, isValid)
 	}

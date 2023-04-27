@@ -1,5 +1,7 @@
+// Package edgecases is a bunch of edge cases for testing purposes
 package edgecases
 
+// Strings is a bunch of edge cases for various things courtesy of https://github.com/minimaxir/big-list-of-naughty-strings
 var Strings = []string{
 	"undefined",
 	"undef",
