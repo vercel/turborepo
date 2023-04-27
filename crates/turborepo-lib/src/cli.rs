@@ -9,8 +9,8 @@ use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use dunce::canonicalize as fs_canonicalize;
-use log::{debug, error};
 use serde::Serialize;
+use tracing::{debug, error};
 
 use crate::{
     commands::{bin, daemon, link, login, logout, unlink, CommandBase},

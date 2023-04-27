@@ -8,9 +8,9 @@ use std::{
 };
 
 use futures::Stream;
-use log::debug;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::server::Connected;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 #[derive(thiserror::Error, Debug)]

@@ -205,6 +205,15 @@ pub fn npm_subgraph(
     Ok(new_contents)
 }
 
+pub fn npm_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
+    let prev_lockfile = NpmLockfile::load(prev_contents)?;
+    let curr_lockfile = NpmLockfile::load(curr_contents)?;
+
+    Ok(
+        prev_lockfile.lockfile_version != curr_lockfile.lockfile_version
+            || prev_lockfile.other.get("requires") != curr_lockfile.other.get("requires"),
+    )
+}
 #[cfg(test)]
 mod test {
     use super::*;

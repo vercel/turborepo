@@ -3,7 +3,6 @@ use std::{
     env::current_dir,
     ffi::OsString,
     fs::{self},
-    io::Write,
     path::{Path, PathBuf},
     process,
     process::Stdio,
@@ -11,17 +10,20 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use chrono::offset::Local;
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
-use env_logger::{fmt::Color, Builder, Env, WriteStyle};
-use log::{debug, Level, LevelFilter};
+use is_terminal::IsTerminal;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
+use tracing::{debug, metadata::LevelFilter};
+use tracing_subscriber::EnvFilter;
 use turbo_updater::check_for_updates;
 
-use crate::{cli, get_version, package_manager::Globs, spawn_child, PackageManager, Payload};
+use crate::{
+    cli, formatter::TurboFormatter, get_version, package_manager::Globs, spawn_child,
+    PackageManager, Payload,
+};
 
 // all arguments that result in a stdout that much be directly parsable and
 // should not be paired with additional output (from the update notifier for
@@ -677,70 +679,23 @@ fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
-fn init_env_logger(verbosity: usize) {
-    // configure logger
-    let level = match verbosity {
-        0 => LevelFilter::Warn,
-        1 => LevelFilter::Info,
-        2 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
+fn init_subscriber(verbosity: usize) {
+    let max_level = match verbosity {
+        0 => LevelFilter::WARN,
+        1 => LevelFilter::INFO,
+        2 => LevelFilter::DEBUG,
+        _ => LevelFilter::TRACE,
     };
 
-    let mut builder = Builder::new();
-    let env = Env::new().filter("TURBO_LOG_VERBOSITY");
-
-    builder
-        // set defaults
-        .filter_level(level)
-        .write_style(WriteStyle::Auto)
-        // override from env (if available)
-        .parse_env(env);
-
-    builder.format(|buf, record| match record.level() {
-        Level::Error => {
-            let mut level_style = buf.style();
-            let mut log_style = buf.style();
-            level_style.set_bg(Color::Red).set_color(Color::Black);
-            log_style.set_color(Color::Red);
-
-            writeln!(
-                buf,
-                "{} {}",
-                level_style.value(record.level()),
-                log_style.value(record.args())
-            )
-        }
-        Level::Warn => {
-            let mut level_style = buf.style();
-            let mut log_style = buf.style();
-            level_style.set_bg(Color::Yellow).set_color(Color::Black);
-            log_style.set_color(Color::Yellow);
-
-            writeln!(
-                buf,
-                "{} {}",
-                level_style.value(record.level()),
-                log_style.value(record.args())
-            )
-        }
-        Level::Info => writeln!(buf, "{}", record.args()),
-        // trace and debug use the same style
-        _ => {
-            let now = Local::now();
-            writeln!(
-                buf,
-                "{} [{}] {}: {}",
-                // build our own timestamp to match the hashicorp/go-hclog format used by the go
-                // binary
-                now.format("%Y-%m-%dT%H:%M:%S.%3f%z"),
-                record.level(),
-                record.target(),
-                record.args()
-            )
-        }
-    });
-
-    builder.init();
+    // respect TURBO_LOG_VERBOSITY env var
+    // respect verbosity arg
+    tracing_subscriber::fmt()
+        .event_format(TurboFormatter::new_with_ansi(
+            std::io::stdout().is_terminal(),
+        ))
+        .with_env_filter(EnvFilter::from_env("TURBO_LOG_VERBOSITY"))
+        .with_max_level(max_level)
+        .init();
 }
 
 fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
@@ -775,7 +730,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
 pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
 
-    init_env_logger(args.verbosity);
+    init_subscriber(args.verbosity);
     debug!("Global turbo version: {}", get_version());
 
     // If skip_infer is passed, we're probably running local turbo with

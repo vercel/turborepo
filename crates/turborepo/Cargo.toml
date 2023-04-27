@@ -29,12 +29,12 @@ clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
 command-group = { version = "2.0.1", features = ["with-tokio"] }
 dunce = { workspace = true }
-log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tiny-gradient = { workspace = true }
 tokio-util = { version = "0.7.7", features = ["io"] }
+tracing = { workspace = true }
 turborepo-lib = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

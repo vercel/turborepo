@@ -3,9 +3,9 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
+      "env": ["GO_TAG"],
       "outputs": ["turbo", "turbo.exe"]
     },
-
     "e2e": {
       "outputs": [],
       "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]

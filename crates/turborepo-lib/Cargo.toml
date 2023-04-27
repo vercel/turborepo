@@ -45,7 +45,6 @@ dialoguer = { workspace = true, features = ["fuzzy-select"] }
 directories = "4.0.1"
 dirs-next = "2.0.0"
 dunce = { workspace = true }
-env_logger = "0.10.0"
 futures = "0.3.26"
 glob-match = "0.2.1"
 globwatch = { path = "../globwatch" }
@@ -56,7 +55,6 @@ indicatif = { workspace = true }
 itertools = "0.10.5"
 lazy_static = { workspace = true }
 libc = "0.2.140"
-log = { workspace = true }
 notify = { version = "5.1.0", default-features = false, features = [
   "macos_kqueue",
 ] }
@@ -84,6 +82,9 @@ url = "2.3.1"
 
 const_format = "0.2.30"
 go-parse-duration = "0.1.1"
+is-terminal = "0.4.7"
+owo-colors.workspace = true
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }

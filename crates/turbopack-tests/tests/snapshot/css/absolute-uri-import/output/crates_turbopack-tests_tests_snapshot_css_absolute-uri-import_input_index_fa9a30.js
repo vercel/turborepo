@@ -1,7 +1,7 @@
 (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push([
     "output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_fa9a30.js",
     {},
-    {"otherChunks":[{"path":"output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_b53fce.js","included":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)"]},{"path":"output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.css (css)"]}],"runtimeModuleIds":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)"]}
+    {"otherChunks":[{"path":"output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_b53fce.js","included":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)"]},{"path":"output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.css (css)"],"moduleChunks":["output/a587c_tests_snapshot_css_absolute-uri-import_input_withduplicateurl_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_other_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_other_c9a116.css","output/a587c_tests_snapshot_css_absolute-uri-import_input_withduplicateurl_c9a116.css"]}],"runtimeModuleIds":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)"]}
 ]);
 (() => {
 if (!Array.isArray(globalThis.TURBOPACK)) {
@@ -30,6 +30,7 @@ if (!Array.isArray(globalThis.TURBOPACK)) {
 /** @typedef {import('../types').RequireContextMap} RequireContextMap */
 
 /** @typedef {import('../types').RefreshHelpers} RefreshHelpers */
+/** @typedef {import('../types').RefreshContext} RefreshContext */
 /** @typedef {import('../types/hot').Hot} Hot */
 /** @typedef {import('../types/hot').HotData} HotData */
 /** @typedef {import('../types/hot').AcceptCallback} AcceptCallback */
@@ -279,6 +280,9 @@ externalRequire.resolve = (name, opt) => {
 /** @type {Map<ModuleId, Promise<any> | true>} */
 const availableModules = new Map();
 
+/** @type {Map<ChunkPath, Promise<any> | true>} */
+const availableModuleChunks = new Map();
+
 /**
  * @param {SourceInfo} source
  * @param {ChunkData} chunkData
@@ -287,26 +291,72 @@ const availableModules = new Map();
 async function loadChunk(source, chunkData) {
   if (typeof chunkData === "string") {
     return loadChunkPath(source, chunkData);
-  } else {
-    const includedList = chunkData.included || [];
-    const promises = includedList.map((included) => {
-      if (moduleFactories[included]) return true;
-      return availableModules.get(included);
-    });
-    if (promises.length > 0 && promises.every((p) => p)) {
-      // When all included items are already loaded or loading, we can skip loading ourselves
-      return Promise.all(promises);
+  }
+
+  const includedList = chunkData.included || [];
+  const modulesPromises = includedList.map((included) => {
+    if (moduleFactories[included]) return true;
+    return availableModules.get(included);
+  });
+  if (modulesPromises.length > 0 && modulesPromises.every((p) => p)) {
+    // When all included items are already loaded or loading, we can skip loading ourselves
+    return Promise.all(modulesPromises);
+  }
+
+  const includedModuleChunksList = chunkData.moduleChunks || [];
+  const moduleChunksPromises = includedModuleChunksList
+    .map((included) => {
+      // TODO(alexkirsz) Do we need this check?
+      // if (moduleFactories[included]) return true;
+      return availableModuleChunks.get(included);
+    })
+    .filter((p) => p);
+
+  let promise;
+  if (moduleChunksPromises.length > 0) {
+    // Some module chunks are already loaded or loading.
+
+    if (moduleChunksPromises.length == includedModuleChunksList.length) {
+      // When all included module chunks are already loaded or loading, we can skip loading ourselves
+      return Promise.all(moduleChunksPromises);
     }
-    const promise = loadChunkPath(source, chunkData.path);
-    for (const included of includedList) {
-      if (!availableModules.has(included)) {
-        // It might be better to race old and new promises, but it's rare that the new promise will be faster than a request started earlier.
-        // In production it's even more rare, because the chunk optimization tries to deduplicate modules anyway.
-        availableModules.set(included, promise);
+
+    const moduleChunksToLoad = new Set();
+    for (const moduleChunk of includedModuleChunksList) {
+      if (!availableModuleChunks.has(moduleChunk)) {
+        moduleChunksToLoad.add(moduleChunk);
       }
     }
-    return promise;
+
+    for (const moduleChunkToLoad of moduleChunksToLoad) {
+      const promise = loadChunkPath(source, moduleChunkToLoad);
+
+      availableModuleChunks.set(moduleChunkToLoad, promise);
+
+      moduleChunksPromises.push(promise);
+    }
+
+    promise = Promise.all(moduleChunksPromises);
+  } else {
+    promise = loadChunkPath(source, chunkData.path);
+
+    // Mark all included module chunks as loading if they are not already loaded or loading.
+    for (const includedModuleChunk of includedModuleChunksList) {
+      if (!availableModuleChunks.has(includedModuleChunk)) {
+        availableModuleChunks.set(includedModuleChunk, promise);
+      }
+    }
   }
+
+  for (const included of includedList) {
+    if (!availableModules.has(included)) {
+      // It might be better to race old and new promises, but it's rare that the new promise will be faster than a request started earlier.
+      // In production it's even more rare, because the chunk optimization tries to deduplicate modules anyway.
+      availableModules.set(included, promise);
+    }
+  }
+
+  return promise;
 }
 
 /**
@@ -407,7 +457,7 @@ function instantiateModule(id, source) {
       break;
   }
 
-  runModuleExecutionHooks(module, () => {
+  runModuleExecutionHooks(module, (refresh) => {
     try {
       moduleFactory.call(module.exports, {
         e: module.exports,
@@ -422,6 +472,7 @@ function instantiateModule(id, source) {
         c: moduleCache,
         l: loadChunk.bind(null, { type: SourceTypeParent, parentId: id }),
         g: globalThis,
+        k: refresh,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
       });
     } catch (error) {
@@ -445,7 +496,7 @@ function instantiateModule(id, source) {
  * refresh registry.
  *
  * @param {Module} module
- * @param {() => void} executeModule
+ * @param {(ctx: RefreshContext) => void} executeModule
  */
 function runModuleExecutionHooks(module, executeModule) {
   const cleanupReactRefreshIntercept =
@@ -453,7 +504,10 @@ function runModuleExecutionHooks(module, executeModule) {
       ? globalThis.$RefreshInterceptModuleExecution$(module.id)
       : () => {};
 
-  executeModule();
+  executeModule({
+    register: globalThis.$RefreshReg$,
+    signature: globalThis.$RefreshSig$,
+  });
 
   if ("$RefreshHelpers$" in globalThis) {
     // This pattern can also be used to register the exports of
@@ -466,14 +520,6 @@ function runModuleExecutionHooks(module, executeModule) {
 
   cleanupReactRefreshIntercept();
 }
-
-// noop fns to prevent refresh runtime errors when trying to access the runtime outside of the initial module execution.
-globalThis.$RefreshReg$ = function () {};
-globalThis.$RefreshSig$ = function () {
-  return function (type) {
-    return type;
-  };
-};
 
 /**
  * Retrieves a module from the cache, or instantiate it if it is not cached.
