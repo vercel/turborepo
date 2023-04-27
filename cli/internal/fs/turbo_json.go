@@ -35,7 +35,7 @@ type rawTurboJSON struct {
 	GlobalEnv []string `json:"globalEnv,omitempty"`
 
 	// Global passthrough env
-	GlobalPassthroughEnv []string `json:"experimentalGlobalPassThroughEnv,omitempty"`
+	GlobalPassthroughEnv []string `json:"globalPassThroughEnv,omitempty"`
 
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
@@ -56,7 +56,7 @@ type rawTurboJSON struct {
 type pristineTurboJSON struct {
 	GlobalDependencies   []string           `json:"globalDependencies,omitempty"`
 	GlobalEnv            []string           `json:"globalEnv,omitempty"`
-	GlobalPassthroughEnv []string           `json:"experimentalGlobalPassThroughEnv,omitempty"`
+	GlobalPassthroughEnv []string           `json:"globalPassThroughEnv,omitempty"`
 	Pipeline             PristinePipeline   `json:"pipeline"`
 	RemoteCacheOptions   RemoteCacheOptions `json:"remoteCache,omitempty"`
 	Extends              []string           `json:"extends,omitempty"`
@@ -89,7 +89,7 @@ type rawTaskWithDefaults struct {
 	DependsOn      []string            `json:"dependsOn"`
 	Inputs         []string            `json:"inputs"`
 	OutputMode     util.TaskOutputMode `json:"outputMode"`
-	PassthroughEnv []string            `json:"experimentalPassThroughEnv,omitempty"`
+	PassthroughEnv []string            `json:"passThroughEnv,omitempty"`
 	Env            []string            `json:"env"`
 	Persistent     bool                `json:"persistent"`
 }
@@ -628,7 +628,7 @@ func (tj *TurboJSON) UnmarshalJSON(data []byte) error {
 	if err := gatherEnvVars(raw.GlobalEnv, "globalEnv", &envVarDependencies); err != nil {
 		return err
 	}
-	if err := gatherEnvVars(raw.GlobalPassthroughEnv, "experimentalGlobalPassThroughEnv", &envVarPassthroughs); err != nil {
+	if err := gatherEnvVars(raw.GlobalPassthroughEnv, "globalPassThroughEnv", &envVarPassthroughs); err != nil {
 		return err
 	}
 

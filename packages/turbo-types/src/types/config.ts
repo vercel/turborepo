@@ -75,13 +75,22 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Only applies in `--env=strict` mode.
+   * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalPassThroughEnv
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#experimentalGlobalPassThroughEnv
+   * @default []
+   * @deprecated
+   */
+  experimentalGlobalPassThroughEnv?: string[];
+
+  /**
+   * An allowlist of environment variables that should be made to all tasks, but
+   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   *
+   * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalPassThroughEnv
    *
    * @default []
    */
-  experimentalGlobalPassThroughEnv?: string[];
+  globalPassThroughEnv?: string[];
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
@@ -131,13 +140,23 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Only applies in `--env=strict` mode.
+   * Documentation: https://turbo.build/repo/docs/refernce/configuration#passThroughEnv
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#experimentalPassThroughEnv
+   * @default []
+   * @deprecated
+   */
+  experimentalPassThroughEnv?: string[];
+
+  /**
+   * An allowlist of environment variables that should be made available in this
+   * task's environment, but should not contribute to the task's cache key,
+   * e.g. `AWS_SECRET_KEY`.
+   *
+   * Documentation: https://turbo.build/repo/docs/refernce/configuration#passThroughEnv
    *
    * @default []
    */
-  experimentalPassThroughEnv?: string[];
+  passThroughEnv?: string[];
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.

@@ -428,7 +428,7 @@ pub struct RunArgs {
     /// Environment variable mode.
     /// Loose passes the entire environment.
     /// Strict uses an allowlist specified in turbo.json.
-    #[clap(long = "experimental-env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
+    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
     pub env_mode: EnvMode,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
@@ -839,7 +839,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode"]).unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -852,8 +852,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "infer"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "infer"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -866,8 +865,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "loose"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "loose"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -880,8 +878,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "strict"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "strict"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
