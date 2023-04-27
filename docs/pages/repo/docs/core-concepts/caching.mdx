@@ -261,11 +261,8 @@ To alter the cache for _all_ tasks, you can declare environment variables in the
 
 ### Automatic environment variable inclusion
 
-<Callout type="warning">
-  Turborepo does automatic environment variable inclusion unless you pass `--env-mode=strict` in order to disable this behavior.
-
-In `strict` environment variable mode you must specify every environment variable you want available in your execution environment via `env` or `globalEnv` if you want them considered for the hash and `passthroughEnv` or `globalPassthroughEnv` if not.
-
+<Callout type="info">
+  Turborepo does automatic environment variable inclusion unless you pass `--env-mode=strict` in order to disable this behavior. In `strict` environment variable mode you must specify every environment variable you want available in your execution environment via `env` or `globalEnv` if you want them considered for the hash and `experimentalPassThroughEnv` or `experimentalGlobalPassThroughEnv` if not.
 </Callout>
 
 To help ensure correct caching across environments, Turborepo automatically infers and includes public environment variables when calculating cache keys for apps built with detected frameworks. You can safely omit framework-specific public environment variables from `turbo.json`:
