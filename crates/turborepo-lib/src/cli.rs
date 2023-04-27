@@ -325,8 +325,8 @@ pub struct RunArgs {
     #[clap(short = 'F', long, action = ArgAction::Append)]
     pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
-    #[clap(long)]
-    pub force: bool,
+    #[clap(long, env = "TURBO_FORCE", default_missing_value = "true")]
+    pub force: Option<Option<bool>>,
     /// Specify glob of global filesystem dependencies to be hashed. Useful
     /// for .env and files
     #[clap(long = "global-deps", action = ArgAction::Append)]
@@ -876,7 +876,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    force: true,
+                    force: Some(Some(true)),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
