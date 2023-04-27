@@ -116,8 +116,8 @@ jobs:
             crates/turbopack-bench/**
             !*.md
 
-      - name: Turborepo related changes
-        id: turborepo
+      - name: Turborepo Rust related changes
+        id: turborepo_rust
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
@@ -138,23 +138,28 @@ jobs:
             !**.md
             !**.mdx
 
-      - name: Go related changes
-        id: go
+      - name: Turborepo Go related changes
+        id: turborepo_go
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
             cli/**
 
-      - name: Go E2E related changes
-        id: go_e2e
+      - name: Turborepo integration tests changes
+        id: turborepo_integration
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            cli/**
-            crates/turborepo*
-            crates/turborepo*/**
-            crates/turbo-updater
-            Cargo.lock
+            turborepo-tests/integration/**
+            turborepo-tests/helpers/**
+
+      - name: Turborepo e2e tests changes
+        id: turborepo_e2e
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            turborepo-tests/e2e/**
+            turborepo-tests/helpers/**
 
       - name: Examples related changes
         id: examples
@@ -178,10 +183,11 @@ jobs:
       # We only test workspace dependency changes on main, not on PRs to speed up CI
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
-      turborepo: ${{ steps.ci.outputs.diff != '' || steps.turborepo.outputs.diff != '' }}
+      turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
-      go: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' }}
-      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.go.outputs.diff != '' || steps.go_e2e.outputs.diff != '' }}
+      go: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' }}
+      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
+      go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
@@ -248,7 +254,7 @@ jobs:
   go_integration:
     name: Go Integration Tests
     needs: determine_jobs
-    if: needs.determine_jobs.outputs.go_e2e == 'true'
+    if: needs.determine_jobs.outputs.go_integration == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -581,7 +587,7 @@ jobs:
   turborepo_rust_test:
     needs: [determine_jobs, rust_prepare]
     # We test dependency changes only on main
-    if: needs.determine_jobs.outputs.turborepo == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
+    if: needs.determine_jobs.outputs.turborepo_rust == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     strategy:
       fail-fast: false
       matrix:

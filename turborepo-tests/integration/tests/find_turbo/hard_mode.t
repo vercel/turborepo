@@ -5,7 +5,7 @@ Setup
 
 When --skip-infer is used we use the current binary and output no global/local message
   $ cd $TESTROOT/subdir
-  $ ${TURBO} --help --skip-infer -vv | head -n 1
+  $ ${TURBO} --help --skip-infer -vv | head -n 2
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
   The build system that makes ship happen
 

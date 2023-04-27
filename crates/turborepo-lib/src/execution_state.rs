@@ -29,7 +29,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         let client_config = base.client_config()?;
         let args = base.args();
 
-        let remote_config = APIClientConfig {
+        let api_client_config = APIClientConfig {
             token: user_config.token(),
             team_id: repo_config.team_id(),
             team_slug: repo_config.team_slug(),
@@ -39,7 +39,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         };
 
         Ok(ExecutionState {
-            api_client_config: remote_config,
+            api_client_config,
             cli_args: base.args(),
         })
     }
