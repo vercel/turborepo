@@ -186,12 +186,64 @@
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Borrow,
     cmp::Ordering,
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
+    mem::transmute,
     sync::Arc,
 };
 
@@ -225,7 +277,7 @@
 
     <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
         <span class="kw">let </span>inner: <span class="kw-2">&amp;</span>T = <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>;
-        <span class="kw">unsafe </span>{ std::mem::transmute(inner) }
+        <span class="kw">unsafe </span>{ transmute(inner) }
     }
 }
 
@@ -309,16 +361,16 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T, U: Serialize&gt; Serialize <span class="kw">for </span>ReadRef&lt;T, U&gt; {
+<span class="kw">impl</span>&lt;T: Serialize, U&gt; Serialize <span class="kw">for </span>ReadRef&lt;T, U&gt; {
     <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
     <span class="kw">where
         </span>S: serde::Serializer,
     {
-        (<span class="kw-2">**</span><span class="self">self</span>).serialize(serializer)
+        T::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, serializer)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>, T: Deserialize&lt;<span class="lifetime">&#39;de</span>&gt;&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>ReadRef&lt;T, T&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>, T: Deserialize&lt;<span class="lifetime">&#39;de</span>&gt;, U&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>ReadRef&lt;T, U&gt; {
     <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
     <span class="kw">where
         </span>D: serde::Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
@@ -372,6 +424,56 @@
     /// This clone is more expensive, but allows to get an mutable owned value.
     </span><span class="kw">pub fn </span>clone_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; U {
         (<span class="kw-2">**</span><span class="self">self</span>).clone()
+    }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::sync::Arc;
+
+    <span class="kw">use </span>serde::{Deserialize, Serialize};
+    <span class="kw">use </span>serde_test::{assert_tokens, Token};
+
+    <span class="kw">use </span><span class="kw">super</span>::ReadRef;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>serde_transparent() {
+        <span class="attr">#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+        </span><span class="kw">struct </span>Foo16(u16);
+        <span class="kw">type </span>Foo16ReadRef = ReadRef&lt;Foo16, u16&gt;;
+
+        <span class="kw">let </span>v = Foo16(<span class="number">123</span>);
+        <span class="kw">let </span>v = <span class="kw">unsafe </span>{ Foo16ReadRef::new_transparent(Arc::new(v)) };
+
+        assert_tokens(
+            <span class="kw-2">&amp;</span>v,
+            <span class="kw-2">&amp;</span>[Token::NewtypeStruct { name: <span class="string">&quot;Foo16&quot; </span>}, Token::U16(<span class="number">123</span>)],
+        )
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>serde_non_transparent() {
+        <span class="attr">#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+        </span><span class="kw">struct </span>Foo16 {
+            value: u16,
+        }
+        <span class="kw">type </span>Foo16ReadRef = ReadRef&lt;Foo16, Foo16&gt;;
+
+        <span class="kw">let </span>v = Foo16 { value: <span class="number">123 </span>};
+        <span class="kw">let </span>v = Foo16ReadRef::new(Arc::new(v));
+
+        assert_tokens(
+            <span class="kw-2">&amp;</span>v,
+            <span class="kw-2">&amp;</span>[
+                Token::Struct {
+                    name: <span class="string">&quot;Foo16&quot;</span>,
+                    len: <span class="number">1</span>,
+                },
+                Token::Str(<span class="string">&quot;value&quot;</span>),
+                Token::U16(<span class="number">123</span>),
+                Token::StructEnd,
+            ],
+        )
     }
 }
 </code></pre></div>

@@ -202,9 +202,21 @@
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::{JsonValueVc, StringVc},
+    Value,
+};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::introspect::{
@@ -233,6 +245,7 @@
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
+    render_data: JsonValueVc,
 ) -&gt; ContentSourceVc {
     NodeApiContentSource {
         cwd,
@@ -242,6 +255,7 @@
         pathname,
         route_match,
         entry,
+        render_data,
     }
     .cell()
     .into()
@@ -262,6 +276,7 @@
     pathname: StringVc,
     route_match: RouteMatcherVc,
     entry: NodeEntryVc,
+    render_data: JsonValueVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -286,6 +301,7 @@
                 specificity: this.specificity,
                 get_content: NodeApiGetContentResult {
                     source: self_vc,
+                    render_data: this.render_data,
                     path: path.to_string(),
                 }
                 .cell()
@@ -300,6 +316,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>NodeApiGetContentResult {
     source: NodeApiContentSourceVc,
+    render_data: JsonValueVc,
     path: String,
 }
 
@@ -352,6 +369,7 @@
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
                 path: <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, <span class="self">self</span>.path),
+                data: <span class="prelude-val">Some</span>(<span class="self">self</span>.render_data.<span class="kw">await</span><span class="question-mark">?</span>),
             }
             .cell(),
             <span class="kw-2">*</span>body,
