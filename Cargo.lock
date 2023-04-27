@@ -7577,17 +7577,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-log"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38f0c854faeb68a048f0f2dc410c5ddae3bf83854ef0e4977d58306a5edef50e"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "testing"
 version = "0.33.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8914,16 +8903,13 @@ dependencies = [
  "bytes",
  "chrono",
  "dunce",
- "env_logger 0.10.0",
  "lazy_static",
- "log",
  "os_str_bytes",
  "ring",
  "serde",
  "serde_json",
  "tar",
  "tempfile",
- "test-log",
  "thiserror",
  "turbopath",
  "turborepo-api-client",
