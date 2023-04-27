@@ -1,7 +1,7 @@
 (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push([
     "output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_fa9a30.js",
     {},
-    {"otherChunks":[{"path":"output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_b53fce.js","included":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)"]},{"path":"output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.css (css)"],"moduleChunks":["output/a587c_tests_snapshot_css_absolute-uri-import_input_withduplicateurl_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_other_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_c9a116.css"]}],"runtimeModuleIds":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)"]}
+    {"otherChunks":[{"path":"output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_b53fce.js","included":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)"]},{"path":"output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.css (css)"],"moduleChunks":["output/a587c_tests_snapshot_css_absolute-uri-import_input_withduplicateurl_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_other_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_index_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_other_c9a116.css","output/a587c_tests_snapshot_css_absolute-uri-import_input_withduplicateurl_c9a116.css"]}],"runtimeModuleIds":["[project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.js (ecmascript)"]}
 ]);
 (() => {
 if (!Array.isArray(globalThis.TURBOPACK)) {
@@ -320,23 +320,22 @@ async function loadChunk(source, chunkData) {
       return Promise.all(moduleChunksPromises);
     }
 
-    const moduleChunksToLoad = new Set(includedModuleChunksList);
+    const moduleChunksToLoad = new Set();
     for (const moduleChunk of includedModuleChunksList) {
-      if (availableModuleChunks.has(moduleChunk)) {
-        moduleChunksToLoad.delete(moduleChunk);
+      if (!availableModuleChunks.has(moduleChunk)) {
+        moduleChunksToLoad.add(moduleChunk);
       }
     }
 
-    const promises = [];
     for (const moduleChunkToLoad of moduleChunksToLoad) {
       const promise = loadChunkPath(source, moduleChunkToLoad);
 
       availableModuleChunks.set(moduleChunkToLoad, promise);
 
-      promises.push(promise);
+      moduleChunksPromises.push(promise);
     }
 
-    promise = Promise.all(promises);
+    promise = Promise.all(moduleChunksPromises);
   } else {
     promise = loadChunkPath(source, chunkData.path);
 

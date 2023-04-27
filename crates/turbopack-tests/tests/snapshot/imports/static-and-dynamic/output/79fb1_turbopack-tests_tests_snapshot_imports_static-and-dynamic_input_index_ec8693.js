@@ -320,23 +320,22 @@ async function loadChunk(source, chunkData) {
       return Promise.all(moduleChunksPromises);
     }
 
-    const moduleChunksToLoad = new Set(includedModuleChunksList);
+    const moduleChunksToLoad = new Set();
     for (const moduleChunk of includedModuleChunksList) {
-      if (availableModuleChunks.has(moduleChunk)) {
-        moduleChunksToLoad.delete(moduleChunk);
+      if (!availableModuleChunks.has(moduleChunk)) {
+        moduleChunksToLoad.add(moduleChunk);
       }
     }
 
-    const promises = [];
     for (const moduleChunkToLoad of moduleChunksToLoad) {
       const promise = loadChunkPath(source, moduleChunkToLoad);
 
       availableModuleChunks.set(moduleChunkToLoad, promise);
 
-      promises.push(promise);
+      moduleChunksPromises.push(promise);
     }
 
-    promise = Promise.all(promises);
+    promise = Promise.all(moduleChunksPromises);
   } else {
     promise = loadChunkPath(source, chunkData.path);
 

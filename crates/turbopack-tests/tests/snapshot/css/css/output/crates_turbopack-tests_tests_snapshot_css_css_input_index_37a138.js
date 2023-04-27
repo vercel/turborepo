@@ -1,7 +1,7 @@
 (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push([
     "output/crates_turbopack-tests_tests_snapshot_css_css_input_index_37a138.js",
     {},
-    {"otherChunks":[{"path":"output/crates_turbopack-tests_tests_snapshot_css_css_input_index_b53fce.js","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/index.js (ecmascript)"]},{"path":"output/8697f_foo_style.module.css_7740ee._.js","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css module)"]},{"path":"output/8697f_foo_style.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.css (css)"],"moduleChunks":["output/8697f_foo_style_c9a116.css"]},{"path":"output/crates_turbopack-tests_tests_snapshot_css_css_input_style.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.css (css)"],"moduleChunks":["output/crates_turbopack-tests_tests_snapshot_css_css_input_imported_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_css_input_style_c9a116.css"]},{"path":"output/8697f_foo_style.module_b5a149.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css, css module)"],"moduleChunks":["output/8697f_foo_style.module_fb38f0.css"]},{"path":"output/crates_turbopack-tests_tests_snapshot_css_css_input_style.module_b5a149.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.module.css (css, css module)"],"moduleChunks":["output/crates_turbopack-tests_tests_snapshot_css_css_input_style.module_fb38f0.css"]}],"runtimeModuleIds":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/index.js (ecmascript)"]}
+    {"otherChunks":[{"path":"output/crates_turbopack-tests_tests_snapshot_css_css_input_index_b53fce.js","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/index.js (ecmascript)"]},{"path":"output/8697f_foo_style.module.css_7740ee._.js","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css module)"]},{"path":"output/8697f_foo_style.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.css (css)"],"moduleChunks":["output/8697f_foo_style_c9a116.css"]},{"path":"output/crates_turbopack-tests_tests_snapshot_css_css_input_style.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.css (css)"],"moduleChunks":["output/crates_turbopack-tests_tests_snapshot_css_css_input_imported_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_css_input_style_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_css_input_imported_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_css_input_imported_c9a116.css","output/crates_turbopack-tests_tests_snapshot_css_css_input_imported_c9a116.css"]},{"path":"output/8697f_foo_style.module_b5a149.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css, css module)"],"moduleChunks":["output/8697f_foo_style.module_fb38f0.css"]},{"path":"output/crates_turbopack-tests_tests_snapshot_css_css_input_style.module_b5a149.css","included":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.module.css (css, css module)"],"moduleChunks":["output/crates_turbopack-tests_tests_snapshot_css_css_input_style.module_fb38f0.css"]}],"runtimeModuleIds":["[project]/crates/turbopack-tests/tests/snapshot/css/css/input/index.js (ecmascript)"]}
 ]);
 (() => {
 if (!Array.isArray(globalThis.TURBOPACK)) {
@@ -320,23 +320,22 @@ async function loadChunk(source, chunkData) {
       return Promise.all(moduleChunksPromises);
     }
 
-    const moduleChunksToLoad = new Set(includedModuleChunksList);
+    const moduleChunksToLoad = new Set();
     for (const moduleChunk of includedModuleChunksList) {
-      if (availableModuleChunks.has(moduleChunk)) {
-        moduleChunksToLoad.delete(moduleChunk);
+      if (!availableModuleChunks.has(moduleChunk)) {
+        moduleChunksToLoad.add(moduleChunk);
       }
     }
 
-    const promises = [];
     for (const moduleChunkToLoad of moduleChunksToLoad) {
       const promise = loadChunkPath(source, moduleChunkToLoad);
 
       availableModuleChunks.set(moduleChunkToLoad, promise);
 
-      promises.push(promise);
+      moduleChunksPromises.push(promise);
     }
 
-    promise = Promise.all(promises);
+    promise = Promise.all(moduleChunksPromises);
   } else {
     promise = loadChunkPath(source, chunkData.path);
 
