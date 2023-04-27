@@ -612,6 +612,10 @@
 <a href="#612" id="612">612</a>
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
@@ -747,6 +751,10 @@
 </span><span class="kw">pub struct </span>OutputChunkRuntimeInfo {
     <span class="kw">pub </span>included_ids: <span class="prelude-ty">Option</span>&lt;ModuleIdsVc&gt;,
     <span class="kw">pub </span>excluded_ids: <span class="prelude-ty">Option</span>&lt;ModuleIdsVc&gt;,
+    <span class="doccomment">/// List of paths of chunks containing individual modules that are part of
+    /// this chunk. This is useful for selectively loading modules from a chunk
+    /// without loading the whole chunk.
+    </span><span class="kw">pub </span>module_chunks: <span class="prelude-ty">Option</span>&lt;AssetsVc&gt;,
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 

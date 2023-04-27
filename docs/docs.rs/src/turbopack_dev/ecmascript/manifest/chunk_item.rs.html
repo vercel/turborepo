@@ -77,9 +77,24 @@
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>indoc::formatdoc;
+<span class="kw">use </span>turbo_tasks::TryJoinIterExt;
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     chunk::{ChunkItem, ChunkItemVc, ChunkingContext},
@@ -95,7 +110,10 @@
 };
 
 <span class="kw">use </span><span class="kw">super</span>::chunk_asset::DevManifestChunkAssetVc;
-<span class="kw">use crate</span>::{ecmascript::chunk_data::ChunkData, DevChunkingContextVc};
+<span class="kw">use crate</span>::{
+    ecmascript::chunk_data::{ChunkDataVc, ChunksDataVc},
+    DevChunkingContextVc,
+};
 
 <span class="doccomment">/// The DevManifestChunkItem generates a __turbopack_load__ call for every chunk
 /// necessary to load the real asset. Once all the loads resolve, it is safe to
@@ -107,6 +125,18 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>DevManifestChunkItemVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>chunks_data(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksDataVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ChunkDataVc::from_assets(
+            this.context.output_root(),
+            this.manifest.chunks(),
+        ))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>DevManifestChunkItem {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptChunkingContextVc {
@@ -114,20 +144,13 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
-        <span class="kw">let </span>chunks = <span class="self">self</span>.manifest.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>output_root = <span class="self">self</span>.context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span><span class="kw-2">mut </span>chunks_data = IndexSet::new();
-        <span class="kw">for </span><span class="kw-2">&amp;</span>chunk <span class="kw">in </span>chunks.iter() {
-            <span class="comment">// The chunk data is necessary to load the chunk from the server.
-            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_data) = ChunkData::from_asset(<span class="kw-2">&amp;</span>output_root, chunk).<span class="kw">await</span><span class="question-mark">? </span>{
-                chunks_data.insert(chunk_data);
-            } <span class="kw">else </span>{
-                <span class="comment">// ignore all chunks that don&#39;t have chunk data
-                // they need to be handled by some external mechanism
-            </span>};
-        }
+    </span><span class="kw">async fn </span>content(self_vc: DevManifestChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkItemContentVc&gt; {
+        <span class="kw">let </span>chunks_data = self_vc.chunks_data().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunks_data = chunks_data.iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunks_data: Vec&lt;<span class="kw">_</span>&gt; = chunks_data
+            .iter()
+            .map(|chunk_data| chunk_data.runtime_chunk_data())
+            .collect();
 
         <span class="kw">let </span>code = <span class="macro">formatdoc! </span>{
             <span class="string">r#&quot;
@@ -152,8 +175,15 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetReferencesVc {
-        <span class="self">self</span>.manifest.references()
+    </span><span class="kw">async fn </span>references(self_vc: DevManifestChunkItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>references = this.manifest.references().<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+
+        <span class="kw">for </span>chunk_data <span class="kw">in </span><span class="kw-2">&amp;*</span>self_vc.chunks_data().<span class="kw">await</span><span class="question-mark">? </span>{
+            references.extend(chunk_data.references().<span class="kw">await</span><span class="question-mark">?</span>.iter().copied());
+        }
+
+        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
     }
 }
 </code></pre></div>

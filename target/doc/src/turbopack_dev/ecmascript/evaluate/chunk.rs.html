@@ -243,6 +243,31 @@
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -266,7 +291,10 @@
     utils::StringifyJs,
 };
 
-<span class="kw">use crate</span>::{ecmascript::chunk_data::ChunkData, DevChunkingContextVc};
+<span class="kw">use crate</span>::{
+    ecmascript::chunk_data::{ChunkDataVc, ChunksDataVc},
+    DevChunkingContextVc,
+};
 
 <span class="doccomment">/// An Ecmascript chunk that:
 /// * Contains the Turbopack dev runtime code; and
@@ -299,6 +327,15 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>chunks_data(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksDataVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ChunkDataVc::from_assets(
+            this.chunking_context.output_root(),
+            this.other_chunks,
+        ))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>code(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CodeVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -314,14 +351,12 @@
             );
         };
 
-        <span class="kw">let </span>other_chunks = this.other_chunks.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>other_chunks_data = Vec::with_capacity(other_chunks.len());
-        <span class="kw">for </span><span class="kw-2">&amp;</span>other_chunk <span class="kw">in </span><span class="kw-2">&amp;*</span>other_chunks {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(other_chunk_data) = ChunkData::from_asset(<span class="kw-2">&amp;</span>output_root, other_chunk).<span class="kw">await</span><span class="question-mark">?
-            </span>{
-                other_chunks_data.push(other_chunk_data);
-            }
-        }
+        <span class="kw">let </span>other_chunks_data = <span class="self">self</span>.chunks_data().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>other_chunks_data = other_chunks_data.iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>other_chunks_data: Vec&lt;<span class="kw">_</span>&gt; = other_chunks_data
+            .iter()
+            .map(|chunk_data| chunk_data.runtime_chunk_data())
+            .collect();
 
         <span class="kw">let </span>runtime_module_ids = this
             .evaluatable_assets
@@ -350,7 +385,7 @@
             .collect();
 
         <span class="kw">let </span>params = EcmascriptDevChunkRuntimeParams {
-            other_chunks: other_chunks_data,
+            other_chunks: <span class="kw-2">&amp;</span>other_chunks_data,
             runtime_module_ids,
         };
 
@@ -457,8 +492,23 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>references(self_vc: EcmascriptDevEvaluateChunkVc) -&gt; AssetReferencesVc {
-        AssetReferencesVc::cell(<span class="macro">vec!</span>[SourceMapAssetReferenceVc::new(self_vc.into()).into()])
+    </span><span class="kw">async fn </span>references(self_vc: EcmascriptDevEvaluateChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
+
+        <span class="kw">if </span><span class="kw-2">*</span>this
+            .chunking_context
+            .reference_chunk_source_maps(self_vc.into())
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>{
+            references.push(SourceMapAssetReferenceVc::new(self_vc.into()).into());
+        }
+
+        <span class="kw">for </span>chunk_data <span class="kw">in </span><span class="kw-2">&amp;*</span>self_vc.chunks_data().<span class="kw">await</span><span class="question-mark">? </span>{
+            references.extend(chunk_data.references().<span class="kw">await</span><span class="question-mark">?</span>.iter().copied());
+        }
+
+        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -478,13 +528,13 @@
 
 <span class="attr">#[derive(Debug, Serialize)]
 #[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
-</span><span class="kw">struct </span>EcmascriptDevChunkRuntimeParams&lt;T&gt; {
+</span><span class="kw">struct </span>EcmascriptDevChunkRuntimeParams&lt;<span class="lifetime">&#39;a</span>, T&gt; {
     <span class="doccomment">/// Other chunks in the chunk group this chunk belongs to, if any. Does not
     /// include the chunk itself.
     ///
     /// These chunks must be loaed before the runtime modules can be
     /// instantiated.
-    </span>other_chunks: Vec&lt;T&gt;,
+    </span>other_chunks: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>[T],
     <span class="doccomment">/// List of module IDs that this chunk should instantiate when executed.
     </span>runtime_module_ids: Vec&lt;ModuleIdReadRef&gt;,
 }

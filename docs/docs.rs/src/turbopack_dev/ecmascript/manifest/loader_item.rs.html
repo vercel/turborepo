@@ -155,6 +155,20 @@
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -176,7 +190,7 @@
 };
 
 <span class="kw">use </span><span class="kw">super</span>::chunk_asset::DevManifestChunkAssetVc;
-<span class="kw">use </span><span class="kw">crate</span>::ecmascript::chunk_data::ChunkData;
+<span class="kw">use crate</span>::{ChunkDataOptionVc, ChunkDataVc};
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>modifier() -&gt; StringVc {
@@ -206,6 +220,17 @@
     </span><span class="kw">pub fn </span>new(manifest: DevManifestChunkAssetVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(DevManifestLoaderItem { manifest })
     }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>chunk_data(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkDataOptionVc&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunk = this.manifest.manifest_chunk();
+        <span class="kw">let </span>manifest = this.manifest.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ChunkDataVc::from_asset(
+            manifest.chunking_context.output_root(),
+            chunk,
+        ))
+    }
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -221,12 +246,20 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
-        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(<span class="macro">vec!</span>[SingleAssetReferenceVc::new(
-            <span class="self">self</span>.manifest.manifest_chunk(),
+    </span><span class="kw">async fn </span>references(self_vc: DevManifestLoaderItemVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>references = <span class="macro">vec!</span>[SingleAssetReferenceVc::new(
+            this.manifest.manifest_chunk(),
             dev_manifest_loader_chunk_reference_description(),
         )
-        .into()]))
+        .into()];
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(chunk_data) = <span class="kw-2">&amp;*</span>self_vc.chunk_data().<span class="kw">await</span><span class="question-mark">? </span>{
+            references.extend(chunk_data.references().<span class="kw">await</span><span class="question-mark">?</span>.iter().copied());
+        }
+
+        <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
     }
 }
 
@@ -243,25 +276,20 @@
         <span class="kw">let </span><span class="kw-2">mut </span>code = Vec::new();
 
         <span class="kw">let </span>manifest = this.manifest.<span class="kw">await</span><span class="question-mark">?</span>;
-
         <span class="kw">let </span>asset = manifest.asset.as_asset();
-        <span class="kw">let </span>chunk = this.manifest.manifest_chunk();
-
-        <span class="kw">let </span>output_root = manifest.chunking_context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// We need several items in order for a dynamic import to fully load. First, we
         // need the chunk path of the manifest chunk, relative from the output root. The
         // chunk is a servable file, which will contain the manifest chunk item, which
         // will perform the actual chunk traversal and generate load statements.
-        </span><span class="kw">let </span>chunk_server_data =
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(data) = ChunkData::from_asset(<span class="kw-2">&amp;</span>output_root, chunk).<span class="kw">await</span><span class="question-mark">? </span>{
-                data
-            } <span class="kw">else </span>{
-                <span class="macro">bail!</span>(
-                    <span class="string">&quot;chunk {} doesn&#39;t have chunk data&quot;</span>,
-                    chunk.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
-                );
-            };
+        </span><span class="kw">let </span>chunk_server_data = <span class="kw">if let </span><span class="prelude-val">Some</span>(data) = <span class="kw-2">&amp;*</span>self_vc.chunk_data().<span class="kw">await</span><span class="question-mark">? </span>{
+            data.<span class="kw">await</span><span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            <span class="macro">bail!</span>(
+                <span class="string">&quot;chunk {} doesn&#39;t have chunk data&quot;</span>,
+                this.manifest.manifest_chunk().ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>,
+            );
+        };
 
         <span class="comment">// We also need the manifest chunk item&#39;s id, which points to a CJS module that
         // exports a promise for all of the necessary chunk loads.
@@ -300,7 +328,7 @@
                     }});
                 }});
             &quot;#</span>,
-            chunk_server_data = StringifyJs(<span class="kw-2">&amp;</span>chunk_server_data),
+            chunk_server_data = StringifyJs(<span class="kw-2">&amp;</span>chunk_server_data.runtime_chunk_data()),
             item_id = StringifyJs(item_id),
             dynamic_id = StringifyJs(dynamic_id),
         )<span class="question-mark">?</span>;
