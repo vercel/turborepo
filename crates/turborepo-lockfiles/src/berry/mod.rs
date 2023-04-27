@@ -753,8 +753,7 @@ mod test {
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
 
-        let closure =
-            transitive_closure(&lockfile, "packages/ui".to_string(), unresolved_deps).unwrap();
+        let closure = transitive_closure(&lockfile, "packages/ui", unresolved_deps).unwrap();
 
         assert!(closure.contains(&Package {
             key: "ajv@npm:8.11.2".into(),
