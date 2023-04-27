@@ -82,14 +82,14 @@ url = "2.3.1"
 
 const_format = "0.2.30"
 go-parse-duration = "0.1.1"
+is-terminal = "0.4.7"
+owo-colors.workspace = true
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }
 webbrowser = { workspace = true }
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-owo-colors.workspace = true
-is-terminal = "0.4.7"
 
 
 [target.'cfg(target_os = "windows")'.dependencies]

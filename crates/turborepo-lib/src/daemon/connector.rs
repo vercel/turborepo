@@ -381,6 +381,7 @@ mod test {
         select,
         sync::{oneshot::Sender, Mutex},
     };
+    use tracing::info;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
@@ -568,7 +569,7 @@ mod test {
             &self,
             req: tonic::Request<proto::ShutdownRequest>,
         ) -> tonic::Result<tonic::Response<proto::ShutdownResponse>> {
-            log::info!("shutdown request: {:?}", req);
+            info!("shutdown request: {:?}", req);
             self.shutdown
                 .lock()
                 .await
