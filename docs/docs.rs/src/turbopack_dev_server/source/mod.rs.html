@@ -1064,9 +1064,9 @@
 
 <span class="doccomment">/// A rewrite returned from a [ContentSource]. This tells the dev server to
 /// update its parsed url, path, and queries with this new information, and any
-/// later [NeededData] will receive data out of t these new values.
-</span><span class="attr">#[derive(Debug)]
-#[turbo_tasks::value(shared)]
+/// later [NeededData] will receive data out of these new values.
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Debug)]
 </span><span class="kw">pub struct </span>Rewrite {
     <span class="doccomment">/// The new path and query used to lookup content. This _does not_ need to
     /// be the original path or query.

@@ -388,6 +388,8 @@
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
 <a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 <span class="kw">mod </span>util;
 
@@ -559,6 +561,8 @@
                     import_source: import_source.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
                     refresh: <span class="kw">if </span><span class="kw-2">*</span>refresh {
                         <span class="prelude-val">Some</span>(swc_core::ecma::transforms::react::RefreshOptions {
+                            refresh_reg: <span class="string">&quot;__turbopack_refresh__.register&quot;</span>.to_string(),
+                            refresh_sig: <span class="string">&quot;__turbopack_refresh__.signature&quot;</span>.to_string(),
                             ..Default::default()
                         })
                     } <span class="kw">else </span>{
