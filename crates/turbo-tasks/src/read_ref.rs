@@ -122,12 +122,12 @@ where
     }
 }
 
-impl<T, U: Serialize> Serialize for ReadRef<T, U> {
+impl<T: Serialize, U> Serialize for ReadRef<T, U> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        (**self).serialize(serializer)
+        T::serialize(&self.0, serializer)
     }
 }
 
@@ -185,5 +185,55 @@ impl<T, U: Clone> ReadRef<T, U> {
     /// This clone is more expensive, but allows to get an mutable owned value.
     pub fn clone_value(&self) -> U {
         (**self).clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use serde::{Deserialize, Serialize};
+    use serde_test::{assert_tokens, Token};
+
+    use super::ReadRef;
+
+    #[test]
+    fn serde_transparent() {
+        #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+        struct Foo16(u16);
+        type Foo16ReadRef = ReadRef<Foo16, u16>;
+
+        let v = Foo16(123);
+        let v = unsafe { Foo16ReadRef::new_transparent(Arc::new(v)) };
+
+        assert_tokens(
+            &v,
+            &[Token::NewtypeStruct { name: "Foo16" }, Token::U16(123)],
+        )
+    }
+
+    #[test]
+    fn serde_non_transparent() {
+        #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+        struct Foo16 {
+            value: u16,
+        }
+        type Foo16ReadRef = ReadRef<Foo16, Foo16>;
+
+        let v = Foo16 { value: 123 };
+        let v = Foo16ReadRef::new(Arc::new(v));
+
+        assert_tokens(
+            &v,
+            &[
+                Token::Struct {
+                    name: "Foo16",
+                    len: 1,
+                },
+                Token::Str("value"),
+                Token::U16(123),
+                Token::StructEnd,
+            ],
+        )
     }
 }
