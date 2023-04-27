@@ -12,10 +12,11 @@ use std::{
 use anyhow::{anyhow, Result};
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
+use is_terminal::IsTerminal;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
-use tracing::{debug, error, info, metadata::LevelFilter, warn};
+use tracing::{debug, metadata::LevelFilter};
 use tracing_subscriber::EnvFilter;
 use turbo_updater::check_for_updates;
 
@@ -689,7 +690,9 @@ fn init_subscriber(verbosity: usize) {
     // respect TURBO_LOG_VERBOSITY env var
     // respect verbosity arg
     tracing_subscriber::fmt()
-        .event_format(TurboFormatter)
+        .event_format(TurboFormatter::new_with_ansi(
+            std::io::stdout().is_terminal(),
+        ))
         .with_env_filter(EnvFilter::from_env("TURBO_LOG_VERBOSITY"))
         .with_max_level(max_level)
         .init();
