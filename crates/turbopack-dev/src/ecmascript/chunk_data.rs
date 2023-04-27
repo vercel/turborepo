@@ -11,34 +11,32 @@ use turbopack_core::{
 };
 
 #[turbo_tasks::value]
-pub enum ChunkData {
-    Simple(String),
-    WithRuntimeInfo {
-        path: String,
-        included: Vec<ModuleIdReadRef>,
-        excluded: Vec<ModuleIdReadRef>,
-        module_chunks: Vec<String>,
-        references: AssetReferencesVc,
-    },
+pub struct ChunkData {
+    pub path: String,
+    pub included: Vec<ModuleIdReadRef>,
+    pub excluded: Vec<ModuleIdReadRef>,
+    pub module_chunks: Vec<String>,
+    pub references: AssetReferencesVc,
 }
 
 impl ChunkData {
     /// Returns a serializable version of this chunk data.
     pub fn runtime_chunk_data(&self) -> RuntimeChunkData {
-        match self {
-            ChunkData::Simple(path) => RuntimeChunkData::Simple(path),
-            ChunkData::WithRuntimeInfo {
-                path,
-                included,
-                excluded,
-                module_chunks,
-                ..
-            } => RuntimeChunkData::WithRuntimeInfo {
-                path,
-                included: &included,
-                excluded: &excluded,
-                module_chunks: &module_chunks,
-            },
+        let ChunkData {
+            path,
+            included,
+            excluded,
+            module_chunks,
+            references: _,
+        } = self;
+        if included.is_empty() && excluded.is_empty() && module_chunks.is_empty() {
+            return RuntimeChunkData::Simple(&path);
+        }
+        RuntimeChunkData::WithRuntimeInfo {
+            path,
+            included: &included,
+            excluded: &excluded,
+            module_chunks: &module_chunks,
         }
     }
 }
@@ -92,7 +90,13 @@ impl ChunkDataVc {
         let path = path.to_string();
 
         let Some(output_chunk) = OutputChunkVc::resolve_from(chunk).await? else {
-            return Ok(ChunkDataOptionVc::cell(Some(ChunkData::Simple(path).cell())));
+            return Ok(ChunkDataOptionVc::cell(Some(ChunkData {
+                path,
+                included: Vec::new(),
+                excluded: Vec::new(),
+                module_chunks: Vec::new(),
+                references: AssetReferencesVc::empty(),
+            }.cell())));
         };
 
         let runtime_info = output_chunk.runtime_info().await?;
@@ -145,14 +149,8 @@ impl ChunkDataVc {
             (Vec::new(), Vec::new())
         };
 
-        if included.is_empty() && excluded.is_empty() {
-            return Ok(ChunkDataOptionVc::cell(Some(
-                ChunkData::Simple(path).cell(),
-            )));
-        }
-
         Ok(ChunkDataOptionVc::cell(Some(
-            ChunkData::WithRuntimeInfo {
+            ChunkData {
                 path,
                 included,
                 excluded,
@@ -185,9 +183,6 @@ impl ChunkDataVc {
     /// references.
     #[turbo_tasks::function]
     pub async fn references(self) -> Result<AssetReferencesVc> {
-        Ok(match &*self.await? {
-            ChunkData::WithRuntimeInfo { references, .. } => *references,
-            ChunkData::Simple(_) => AssetReferencesVc::empty(),
-        })
+        Ok(self.await?.references)
     }
 }
