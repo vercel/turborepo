@@ -244,7 +244,6 @@ func (rsm *Meta) record() (string, []error) {
 	response := &spacesRunResponse{}
 
 	payload := rsm.newSpacesRunCreatePayload()
-	fmt.Printf("[debug] payload %#v\n", payload)
 	if startPayload, err := json.Marshal(payload); err == nil {
 		if resp, err := rsm.apiClient.JSONPost(createRunEndpoint, startPayload); err != nil {
 			errs = append(errs, fmt.Errorf("POST %s: %w", createRunEndpoint, err))
