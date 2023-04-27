@@ -9,13 +9,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/vercel/turbo/cli/internal/edgecases"
-	"github.com/vercel/turbo/cli/internal/xxhash"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vercel/turbo/cli/internal/edgecases"
 	"github.com/vercel/turbo/cli/internal/ffi"
+	"github.com/vercel/turbo/cli/internal/xxhash"
 )
 
 func Test_SecretKeySuccess(t *testing.T) {
