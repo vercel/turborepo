@@ -200,7 +200,7 @@ impl<'a> Locator<'a> {
         })
     }
 
-    fn from_patch_reference(patch_reference: &'a str) -> Option<Self> {
+    pub fn from_patch_reference(patch_reference: &'a str) -> Option<Self> {
         let caps = patch_ref().captures(patch_reference)?;
         let capture_group = caps.get(1)?;
         let Locator { ident, reference } = Locator::try_from(capture_group.as_str()).ok()?;
@@ -238,11 +238,25 @@ impl<'a> Locator<'a> {
         patch_ref()
             .captures(&self.reference)
             .and_then(|caps| caps.get(2))
-            .map(|m| m.as_str())
+            .map(|m| {
+                let s = m.as_str();
+                s.strip_prefix("./").unwrap_or(s)
+            })
     }
 
     pub fn patched_locator(&self) -> Option<Locator> {
+        // THis has an issue of cutting off the last char
         Locator::from_patch_reference(&self.reference)
+    }
+}
+
+impl<'a> From<Locator<'a>> for Descriptor<'a> {
+    fn from(value: Locator<'a>) -> Self {
+        let Locator { ident, reference } = value;
+        Descriptor {
+            ident,
+            range: reference,
+        }
     }
 }
 
@@ -293,6 +307,26 @@ mod test {
                 range: "npm:7.12.11".into(),
             }
         )
+    }
+
+    #[test]
+    fn test_locator_buildin_patch() {
+        assert_eq!(
+            Locator::try_from(
+                "resolve@patch:resolve@npm%3A1.22.1#~builtin<compat/resolve>::version=1.22.1&\
+                 hash=07638b"
+            )
+            .unwrap(),
+            Locator {
+                ident: Ident {
+                    scope: None,
+                    name: "resolve".into()
+                },
+                reference: "patch:resolve@npm%3A1.22.1#~builtin<compat/resolve>::version=1.22.1&\
+                            hash=07638b"
+                    .into()
+            },
+        );
     }
 
     #[test]
@@ -353,32 +387,33 @@ mod test {
     fn test_patch_primary_version() {
         struct TestCase {
             locator: &'static str,
-            version: Option<&'static str>,
+            original: Option<&'static str>,
         }
         let test_cases = [
             TestCase {
                 locator: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.\
                           21-6382451519.patch::locator=berry-patch%40workspace%3A.",
-                version: Some("npm:4.17.21"),
+                original: Some("lodash@npm:4.17.21"),
             },
             TestCase {
                 locator: "typescript@patch:typescript@^4.5.2#~builtin<compat/typescript>",
-                version: Some("npm:^4.5.2"),
+                original: Some("typescript@npm:^4.5.2"),
             },
             TestCase {
                 locator: "react@npm:18.2.0",
-                version: None,
+                original: None,
+            },
+            TestCase {
+                locator: "resolve@patch:resolve@npm%3A1.22.1#~builtin<compat/resolve>::version=1.\
+                          22.1&hash=07638b",
+                original: Some("resolve@npm:1.22.1"),
             },
         ];
         for tc in test_cases {
             let locator = Locator::try_from(tc.locator).unwrap();
+            let expected = tc.original.map(Locator::try_from).transpose().unwrap();
             let patch_locator = locator.patched_locator();
-            assert_eq!(
-                tc.version,
-                patch_locator.as_ref().map(|l| l.reference.as_ref()),
-                "{}",
-                tc.locator
-            );
+            assert_eq!(patch_locator, expected, "{}", tc.locator);
         }
     }
 }

@@ -364,6 +364,7 @@ impl<'a> BerryLockfile<'a> {
                 resolution.reduce_dependency(reference, &dependency, locator)
             {
                 dependency = override_dependency;
+                break;
             }
         }
 
@@ -391,29 +392,13 @@ impl<'a> Lockfile for BerryLockfile<'a> {
             })
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
 
-        let mut dependency = Descriptor::new(name, version)
+        let dependency = self
+            .resolve_dependency(workspace_locator, name, version)
             .unwrap_or_else(|_| panic!("{name} is an invalid lockfile identifier"));
-        for (resolution, reference) in &self.overrides {
-            if let Some(override_dependency) =
-                resolution.reduce_dependency(reference, &dependency, workspace_locator)
-            {
-                dependency = override_dependency;
-            }
-        }
 
-        if dependency.protocol().is_none() {
-            if let Some(range) = self.resolver.get(&dependency) {
-                dependency.range = range.into();
-            }
-        }
-
-        let locator = self.resolutions.get(&dependency);
-
-        if locator.is_none() {
+        let Some(locator) = self.resolutions.get(&dependency) else {
             return Ok(None);
-        }
-
-        let locator = locator.unwrap();
+        };
 
         let package = self
             .locator_package
@@ -432,9 +417,8 @@ impl<'a> Lockfile for BerryLockfile<'a> {
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
         let locator =
             Locator::try_from(key).unwrap_or_else(|_| panic!("Was passed invalid locator: {key}"));
-        let package = self.locator_package.get(&locator);
 
-        let Some(package) = package else {
+        let Some(package) = self.locator_package.get(&locator) else {
             return Ok(None);
         };
 
@@ -661,6 +645,27 @@ mod test {
             .get(&Descriptor::new("lodash", "npm:^3.0.0 || ^4.0.0").unwrap());
         assert!(lodash_desc.is_some());
         assert_eq!(lodash_desc.unwrap().reference, "npm:4.17.21");
+    }
+
+    #[test]
+    fn test_closure_with_patch() {
+        let data = LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
+        let resolutions = BerryManifest::with_resolutions(vec![(
+            "lodash@^4.17.21".into(),
+            "patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch".into(),
+        )]);
+        let lockfile = BerryLockfile::new(&data, Some(&resolutions)).unwrap();
+        let closure = crate::transitive_closure(
+            &lockfile,
+            "apps/docs",
+            HashMap::from_iter(vec![("lodash".into(), "^4.17.21".into())]),
+        )
+        .unwrap();
+
+        assert!(closure.contains(&Package {
+            key: "lodash@npm:4.17.21".into(),
+            version: "4.17.21".into()
+        }));
     }
 
     #[test]

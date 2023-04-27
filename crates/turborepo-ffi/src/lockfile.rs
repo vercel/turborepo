@@ -21,7 +21,7 @@ impl From<Package> for proto::LockfilePackage {
 
 #[derive(Debug, Error)]
 enum Error {
-    #[error("error performing lockfile operation")]
+    #[error("error performing lockfile operation: {0}")]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("error decoding protobuf")]
     Protobuf(#[from] prost::DecodeError),
