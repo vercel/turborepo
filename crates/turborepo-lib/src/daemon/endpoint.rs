@@ -1,6 +1,6 @@
 use std::sync::{atomic::AtomicBool, Arc};
 #[cfg(windows)]
-use std::{atomic::Ordering, io::ErrorKind, time::Duration};
+use std::{io::ErrorKind, sync::atomic::Ordering, time::Duration};
 
 use futures::Stream;
 use tokio::io::{AsyncRead, AsyncWrite};
