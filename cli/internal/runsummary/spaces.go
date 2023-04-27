@@ -61,7 +61,7 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 	}
 
 	// Get a list of env vars
-	sha, branch := getGitMetadata()
+	sha, branch := getStateOfRepo()
 
 	return &spacesRunPayload{
 		StartTime:      startTime,
@@ -103,7 +103,10 @@ func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
 	}
 }
 
-func getGitMetadata() (string, string) {
+// getStateOfRepo returns the sha and branch when in a git repo
+// Otherwise it should return empty strings right now.
+// We my add handling of other scms and non-git tracking in the future.
+func getStateOfRepo() (string, string) {
 	allEnvVars := env.GetEnvMap()
 
 	var sha string
@@ -114,6 +117,7 @@ func getGitMetadata() (string, string) {
 		vendor := ci.Info()
 		branchVarName := vendor.BranchEnvVar
 		shaVarName := vendor.ShaEnvVar
+		// Get the values of the vars
 		vars := env.FromKeys(allEnvVars, []string{shaVarName, branchVarName})
 		sha = vars[shaVarName]
 		branch = vars[branchVarName]
