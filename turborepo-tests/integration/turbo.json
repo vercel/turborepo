@@ -7,8 +7,12 @@
       "dependsOn": ["^topo"]
     },
     "test": {
-      "dependsOn": ["cli#build", "topo"],
-      "env": ["GO_TAG"]
+      "dependsOn": ["cli#build", "topo", "test:setup"]
+    },
+
+    "test:setup": {
+      "inputs": ["setup.sh"],
+      "outputs": [".cram_env/**"]
     }
   }
 }
