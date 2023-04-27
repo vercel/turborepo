@@ -14,10 +14,6 @@ import { Tabs, Tab } from '../../../components/Tabs'
 - Linux 64-bit, ARM 64-bit
 - Windows 64-bit, ARM 64-bit
 
-<Callout>
-  Note: Linux builds of `turbo` link against `glibc`. For Alpine Docker environments, you will need to ensure libc6-compat is installed as well, via `RUN apk add --no-cache libc6-compat`
-</Callout>
-
 ## Install Globally
 
 A global install of `turbo` can be used in any project, and enables automatic workspace
