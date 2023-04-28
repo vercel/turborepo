@@ -59,6 +59,7 @@ lazy_static = { workspace = true }
 libc = "0.2.140"
 notify = "5.1"
 pidlock = { path = "../turborepo-pidlock" }
+petgraph = { workspace = true }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
@@ -85,6 +86,7 @@ const_format = "0.2.30"
 go-parse-duration = "0.1.1"
 is-terminal = "0.4.7"
 node-semver = "2.1.0"
+num_cpus = "1.15.0"
 owo-colors.workspace = true
 regex.workspace = true
 tracing-appender = "0.2.2"
