@@ -19,18 +19,20 @@ static UNITS: Lazy<HashMap<&str, f64>> = Lazy::new(|| {
         ("pc", 96.0 / 72.0 / 12.0),
         ("pt", 96.0 / 72.0),
         ("px", 1.0),
+        ("", 1.0),
     ])
 });
 
 static UNIT_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^([0-9.]+(?:e\d+)?)(in|cm|em|ex|m|mm|pc|pt|px)?$").unwrap());
+    Lazy::new(|| Regex::new(r"^([0-9.]+(?:e\d+)?)((?:in|cm|em|ex|m|mm|pc|pt|px)?)$").unwrap());
 
-static ROOT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\swidth=(['\"])([^%]+?)\1"#).unwrap());
-static WIDTH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\swidth=(['\"])([^%]+?)\1"#).unwrap());
+static ROOT_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"<svg\s([^>"']|"[^"]*"|'[^']*')*>"#).unwrap());
+static WIDTH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\swidth=['"]([^%]+?)['"]"#).unwrap());
 static HEIGHT_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"\sheight=(['\"])([^%]+?)\1"#).unwrap());
+    Lazy::new(|| Regex::new(r#"\sheight=['"]([^%]+?)['"]"#).unwrap());
 static VIEW_BOX_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"\sviewBox=(['\"])(.+?)\1"#).unwrap());
+    Lazy::new(|| Regex::new(r#"\sviewBox=['"](.+?)['"]"#).unwrap());
 static VIEW_BOX_CONTENT_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"^\s*(\w+)\s+(\w+)\s+(\w+)\s+(\w+)\s*$"#).unwrap());
 
@@ -50,9 +52,8 @@ fn parse_viewbox(viewbox: &str) -> Result<(f64, f64)> {
     let captures = VIEW_BOX_CONTENT_REGEX
         .captures(viewbox)
         .ok_or_else(|| anyhow!("Unknown syntax for viewBox ({viewbox})"))?;
-    let bounds: Vec<&str> = viewbox.split(' ').collect();
-    let width = parse_length(&captures[2])?;
-    let height = parse_length(&captures[3])?;
+    let width = parse_length(&captures[3])?;
+    let height = parse_length(&captures[4])?;
     Ok((width, height))
 }
 
@@ -80,9 +81,9 @@ pub fn calculate(content: &str) -> Result<(u32, u32)> {
         bail!("Source code does not contain a <svg> root element");
     };
     let root = root.as_str();
-    let width = WIDTH_REGEX.captures(root).map(|c| parse_length(&c[2]));
-    let height = HEIGHT_REGEX.captures(root).map(|c| parse_length(&c[2]));
-    let viewbox = VIEW_BOX_REGEX.captures(root).map(|c| parse_viewbox(&c[2]));
+    let width = WIDTH_REGEX.captures(root).map(|c| parse_length(&c[1]));
+    let height = HEIGHT_REGEX.captures(root).map(|c| parse_length(&c[1]));
+    let viewbox = VIEW_BOX_REGEX.captures(root).map(|c| parse_viewbox(&c[1]));
     if let Some(width) = width {
         if let Some(height) = height {
             Ok((width?.round() as u32, height?.round() as u32))
@@ -93,5 +94,69 @@ pub fn calculate(content: &str) -> Result<(u32, u32)> {
         calculate_by_viewbox(viewbox?, width, height)
     } else {
         bail!("SVG source code does not contain width and height or viewBox attribute");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+
+    use super::calculate;
+
+    #[test]
+    fn test_calculate() {
+        let svg1 = r#"<svg width="100" height="50"></svg>"#;
+        assert_eq!(calculate(svg1).unwrap(), (100, 50));
+
+        let svg2 = r#"<svg width="100" height="50" viewBox="0 0 200 100"></svg>"#;
+        assert_eq!(calculate(svg2).unwrap(), (100, 50));
+
+        let svg3 = r#"<svg viewBox="0 0 200 100"></svg>"#;
+        assert_eq!(calculate(svg3).unwrap(), (200, 100));
+
+        let svg4 = r#"<svg width="100px" height="50px"></svg>"#;
+        assert_eq!(calculate(svg4).unwrap(), (100, 50));
+
+        let svg5 = r#"<svg width="100" height="50" viewBox="0 0 200 100"></svg>"#;
+        assert_eq!(calculate(svg5).unwrap(), (100, 50));
+
+        let svg6 = r#"<svg></svg>"#;
+        assert!(calculate(svg6).is_err());
+
+        let svg7 = r#"<svg width="100"></svg>"#;
+        assert!(calculate(svg7).is_err());
+
+        let svg8 = r#"<svg height="50"></svg>"#;
+        assert!(calculate(svg8).is_err());
+
+        let svg9 = r#"<svg viewBox="0 0 200"></svg>"#;
+        assert!(calculate(svg9).is_err());
+
+        let svg10 = r#"<svg width="100" height="invalid"></svg>"#;
+        assert!(calculate(svg10).is_err());
+    }
+
+    #[test]
+    fn test_calculate_with_units() -> Result<()> {
+        let svg = r#"<svg width="2cm" height="50mm"></svg>"#;
+        let result = calculate(svg)?;
+        assert_eq!(result, (76, 189));
+        Ok(())
+    }
+
+    #[test]
+    fn test_calculate_with_em() -> Result<()> {
+        let svg = r#"<svg width="20em" height="10em"></svg>"#;
+        let result = calculate(svg)?;
+        assert_eq!(result, (320, 160));
+        Ok(())
+    }
+
+    #[test]
+    fn test_calculate_with_ex() -> Result<()> {
+        let svg = r#"<svg width="20ex" height="10ex"></svg>"#;
+        let result = calculate(svg)?;
+        assert_eq!(result, (160, 80));
+        Ok(())
     }
 }
