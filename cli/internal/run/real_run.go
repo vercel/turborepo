@@ -215,8 +215,9 @@ func (ec *execContext) logError(prefix string, err error) {
 func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask) (*runsummary.TaskExecutionSummary, error) {
 	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
 	// So make sure to call it before returning.
-	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
+	successExitCode := 0 // We won't use this till later
 
+	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
 
@@ -236,7 +237,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Set building status now that we know it's going to run.
-	tracer(runsummary.TargetBuilding, nil, &successCode)
+	tracer(runsummary.TargetBuilding, nil, &successExitCode)
 
 	var prefix string
 	var prettyPrefix string
@@ -273,8 +274,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
 	} else if cacheStatus.Local || cacheStatus.Remote { // If there was a cache hit
 		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
-		// We only cache successful executions, so we can assume this is a successCode exit.
-		tracer(runsummary.TargetCached, nil, &successCode)
+		// We only cache successful executions, so we can assume this is a successExitCode exit.
+		tracer(runsummary.TargetCached, nil, &successExitCode)
 		return taskExecutionSummary, nil
 	}
 
@@ -411,9 +412,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Clean up tracing
-	tracer(runsummary.TargetBuilt, nil, &successCode)
+
+	tracer(runsummary.TargetBuilt, nil, &successExitCode)
 	progressLogger.Debug("done", "status", "complete", "duration", taskExecutionSummary.Duration)
 	return taskExecutionSummary, nil
 }
-
-var successCode = 0
