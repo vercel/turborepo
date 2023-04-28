@@ -51,8 +51,8 @@ impl TurboSubscriber {
     /// ## Logging behaviour:
     /// - If stdout is a terminal, we use ansi colors. Otherwise, we do not.
     /// - If the `TURBO_LOG_VERBOSITY` env var is set, it will be used to set
-    ///   the verbosity level. Otherwise, the default is `WARN`. This override
-    ///   per-module log levels.
+    ///   the verbosity level. Otherwise, the default is `WARN`. See the
+    ///   documentation on the RUST_LOG env var for syntax.
     /// - If the verbosity argument (usually detemined by a flag) is provided,
     ///   it overrides the default global log level. This means it overrides the
     ///   `TURBO_LOG_VERBOSITY` global setting, but not per-module settings.
@@ -76,6 +76,7 @@ impl TurboSubscriber {
                 EnvFilter::from_env("TURBO_LOG_VERBOSITY").add_directive(max_level.into()),
             );
 
+        // we set this layer to None to start with, effectively disabling it
         let (logrotate, update) = reload::Layer::new(Option::<DaemonLog>::None);
 
         Registry::default().with(stdout).with(logrotate).init();

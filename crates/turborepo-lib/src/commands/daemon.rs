@@ -87,6 +87,7 @@ pub async fn daemon_server(
         (log_folder, log_file)
     };
 
+    tracing::trace!("logging to file: {:?}", log_file);
     if let Err(e) = logging.set_daemon_logger(tracing_appender::rolling::never(
         log_folder,
         log_file.clone(),
