@@ -251,11 +251,8 @@ mod tests {
         let bad_tag = BASE64_STANDARD.encode(b"bad tag");
         assert!(!signature.validate(hash, artifact_body, &bad_tag)?);
 
-        // Change the key (to something that is not a valid unicode string)
-        env::set_var(
-            "TURBO_REMOTE_CACHE_SIGNATURE_KEY",
-            OsStr::assert_from_raw_bytes([0xf0, 0x28, 0x8c, 0xbc].as_ref()),
-        );
+        // Change the key
+        env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "some other key");
 
         // Confirm that the tag is no longer valid
         assert!(!signature.validate_tag(hash, artifact_body, tag.as_ref())?);
