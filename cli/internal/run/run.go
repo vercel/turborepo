@@ -365,7 +365,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,
-		pipeline,
 		runsummary.NewGlobalHashSummary(
 			globalHashInputs.globalFileHashMap,
 			globalHashInputs.rootExternalDepsHash,

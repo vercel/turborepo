@@ -42,9 +42,6 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
 	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Files\t=\t%d${RESET}", fileCount))
 	fmt.Fprintln(w1, util.Sprintf("  ${GREY}External Dependencies Hash\t=\t%s${RESET}", summary.GlobalHashSummary.RootExternalDepsHash))
 	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Cache Key\t=\t%s${RESET}", summary.GlobalHashSummary.GlobalCacheKey))
-	if bytes, err := json.Marshal(summary.Pipeline); err == nil {
-		fmt.Fprintln(w1, util.Sprintf("  ${GREY}Root pipeline\t=\t%s${RESET}", bytes))
-	}
 	if err := w1.Flush(); err != nil {
 		return err
 	}
