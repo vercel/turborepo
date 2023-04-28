@@ -56,7 +56,7 @@ func FromInRepo(repoRoot turbopath.AbsoluteSystemPath) (SCM, error) {
 
 // GetCurrentBranch returns the current branch
 func GetCurrentBranch() string {
-	command := []string{"rev-parse", "--abbrev-ref", "HEAD"}
+	command := []string{"branch", "--show-current"}
 	out, err := exec.Command("git", command...).CombinedOutput()
 	if err != nil {
 		return ""
