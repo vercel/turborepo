@@ -60,7 +60,6 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 		context = name
 	}
 
-	// Get a list of env vars
 	gitstate := getGitState()
 
 	return &spacesRunPayload{
