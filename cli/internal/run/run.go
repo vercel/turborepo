@@ -241,7 +241,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	globalHashable, err := calculateGlobalHash(
+	globalHashInputs, err := getGlobalHashInputs(
 		r.base.RepoRoot,
 		rootPackageJSON,
 		pipeline,
@@ -260,7 +260,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	if globalHash, err := calculateGlobalHashFromHashable(globalHashable); err == nil {
+	if globalHash, err := calculateGlobalHashFromHashableInputs(globalHashInputs); err == nil {
 		r.base.Logger.Debug("global hash", "value", globalHash)
 		g.GlobalHash = globalHash
 	} else {
@@ -348,8 +348,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	}
 
 	var envVarPassthroughMap env.EnvironmentVariableMap
-	if globalHashable.envVarPassthroughs != nil {
-		if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(globalHashable.envVarPassthroughs, nil, ""); err == nil {
+	if globalHashInputs.envVarPassthroughs != nil {
+		if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(globalHashInputs.envVarPassthroughs, nil, ""); err == nil {
 			envVarPassthroughMap = envVarPassthroughDetailedMap.BySource.Explicit
 		}
 	}
@@ -372,12 +372,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		packagesInScope,
 		globalEnvMode,
 		runsummary.NewGlobalHashSummary(
-			globalHashable.globalFileHashMap,
-			globalHashable.rootExternalDepsHash,
-			globalHashable.envVars,
+			globalHashInputs.globalFileHashMap,
+			globalHashInputs.rootExternalDepsHash,
+			globalHashInputs.envVars,
 			envVarPassthroughMap,
-			globalHashable.globalCacheKey,
-			globalHashable.pipeline,
+			globalHashInputs.globalCacheKey,
+			globalHashInputs.pipeline,
 		),
 		rs.Opts.SynthesizeCommand(rs.Targets),
 	)

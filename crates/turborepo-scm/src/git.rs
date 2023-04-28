@@ -74,7 +74,7 @@ fn execute_git_command(
     pathspec: &str,
 ) -> Result<Vec<u8>, Error> {
     let mut command = Command::new("git");
-    command.args(args).current_dir(&git_root);
+    command.args(args).current_dir(git_root);
 
     add_pathspec(&mut command, pathspec);
 
@@ -89,7 +89,7 @@ fn execute_git_command(
 }
 
 fn add_pathspec(command: &mut Command, pathspec: &str) {
-    if pathspec != "" {
+    if !pathspec.is_empty() {
         command.arg("--").arg(pathspec);
     }
 }

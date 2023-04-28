@@ -2123,13 +2123,13 @@ dependencies = [
 
 [[package]]
 name = "errno"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50d6a0976c999d473fe89ad888d5a284e55366d9dc9038b1ba2aa15128c4afa0"
+checksum = "4bcfec3a70f97c962c307b2d2c56e358cf1d00b558d74262b5f929ee8cc7e73a"
 dependencies = [
  "errno-dragonfly",
  "libc",
- "windows-sys 0.45.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -2325,7 +2325,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ab7d1bd1bd33cc98b0889831b72da23c0aa4df9cec7e0702f46ecea04b35db6"
 dependencies = [
  "bitflags 1.3.2",
- "fsevent-sys 2.0.1",
+ "fsevent-sys",
 ]
 
 [[package]]
@@ -2333,15 +2333,6 @@ name = "fsevent-sys"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f41b048a94555da0f42f1d632e2e19510084fb8e303b0daa2816e733fb3644a0"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "fsevent-sys"
-version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76ee7a02da4d231650c7cea31349b889be2f45ddb3ef3032d2ec8185f6313fd2"
 dependencies = [
  "libc",
 ]
@@ -2629,28 +2620,6 @@ dependencies = [
  "fnv",
  "log",
  "regex",
-]
-
-[[package]]
-name = "globwatch"
-version = "0.1.0"
-dependencies = [
- "futures",
- "glob-match 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "itertools",
- "merge-streams",
- "notify 5.1.0",
- "notify-debouncer-mini",
- "pin-project",
- "stop-token",
- "test-case",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-subscriber",
- "tracing-test",
- "unic-segment",
- "walkdir",
 ]
 
 [[package]]
@@ -3755,16 +3724,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "merge-streams"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f84f6452969abd246e7ac1fe4fe75906c76e8ec88d898df9aef37e0f3b6a7c2"
-dependencies = [
- "futures-core",
- "pin-project",
-]
-
-[[package]]
 name = "miette"
 version = "4.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4152,7 +4111,7 @@ dependencies = [
  "bitflags 1.3.2",
  "filetime",
  "fsevent",
- "fsevent-sys 2.0.1",
+ "fsevent-sys",
  "inotify 0.7.1",
  "libc",
  "mio 0.6.23",
@@ -4168,24 +4127,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58ea850aa68a06e48fdb069c0ec44d0d64c8dbffa49bf3b6f7f0a901fdea1ba9"
 dependencies = [
  "bitflags 1.3.2",
- "crossbeam-channel",
  "filetime",
- "fsevent-sys 4.1.0",
  "inotify 0.9.6",
  "kqueue",
  "libc",
  "mio 0.8.6",
  "walkdir",
  "windows-sys 0.42.0",
-]
-
-[[package]]
-name = "notify-debouncer-mini"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e23e9fa24f094b143c1eb61f90ac6457de87be6987bc70746e0179f7dbc9007b"
-dependencies = [
- "notify 5.1.0",
 ]
 
 [[package]]
@@ -4398,6 +4346,9 @@ name = "os_str_bytes"
 version = "6.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ceedf44fb00f2d1984b0bc98102627ce622e083e49a5bacdb3e514fa4238e267"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "output_vt100"
@@ -4632,7 +4583,6 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "tempdir",
- "thiserror",
  "windows-sys 0.45.0",
 ]
 
@@ -6224,18 +6174,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
 
 [[package]]
-name = "stop-token"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af91f480ee899ab2d9f8435bfdfc14d08a5754bd9d3fef1f1a1c23336aad6c8b"
-dependencies = [
- "async-channel",
- "cfg-if 1.0.0",
- "futures-core",
- "pin-project-lite",
-]
-
-[[package]]
 name = "string_cache"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7510,6 +7448,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tar"
+version = "0.4.38"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b55807c0344e1e6c04d7c965f5289c39a8d94ae23ed5c0b57aabac549f871c6"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8039,20 +7988,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tonic-reflection"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67494bad4dda4c9bffae901dfe14e2b2c0f760adb4706dc10beeb81799f7f7b2"
-dependencies = [
- "bytes",
- "prost",
- "prost-types",
- "tokio",
- "tokio-stream",
- "tonic",
-]
-
-[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8155,29 +8090,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "tracing-test"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a2c0ff408fe918a94c428a3f2ad04e4afd5c95bbc08fcf868eff750c15728a4"
-dependencies = [
- "lazy_static",
- "tracing-core",
- "tracing-subscriber",
- "tracing-test-macro",
-]
-
-[[package]]
-name = "tracing-test-macro"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "258bc1c4f8e2e73a977812ab339d503e6feeb92700f6d07a6de4d321522d5c08"
-dependencies = [
- "lazy_static",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -8340,6 +8252,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_regex",
+ "serde_test",
  "stable_deref_trait",
  "thiserror",
  "tokio",
@@ -8826,6 +8739,8 @@ dependencies = [
  "image",
  "indexmap",
  "mime",
+ "once_cell",
+ "regex",
  "serde",
  "serde_with",
  "turbo-tasks",
@@ -8980,6 +8895,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-cache"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.21.0",
+ "bytes",
+ "chrono",
+ "dunce",
+ "lazy_static",
+ "os_str_bytes",
+ "ring",
+ "serde",
+ "serde_json",
+ "tar",
+ "tempfile",
+ "thiserror",
+ "turbopath",
+ "turborepo-api-client",
+ "zstd",
+]
+
+[[package]]
 name = "turborepo-ffi"
 version = "0.1.0"
 dependencies = [
@@ -8988,6 +8925,7 @@ dependencies = [
  "prost",
  "prost-build",
  "thiserror",
+ "turborepo-cache",
  "turborepo-lockfiles",
  "turborepo-scm",
 ]
@@ -9012,12 +8950,10 @@ dependencies = [
  "const_format",
  "ctrlc",
  "dialoguer",
- "directories",
  "dirs-next",
  "dunce",
  "futures",
  "glob-match 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "globwatch",
  "go-parse-duration",
  "hex",
  "hostname",
@@ -9043,7 +8979,6 @@ dependencies = [
  "sha2",
  "shared_child",
  "sysinfo",
- "tempdir",
  "tempfile",
  "test-case",
  "thiserror",
@@ -9053,11 +8988,9 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tonic-build",
- "tonic-reflection",
  "tower",
  "tracing",
  "tracing-subscriber",
- "tracing-test",
  "turbo-updater",
  "turbopath",
  "turborepo-api-client",
@@ -10304,6 +10237,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "xattr"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d1526bbe5aaeb5eb06885f4d987bcdfa5e23187055de9b83fe00156a821fabc"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "xtask"
 version = "0.1.0"
 dependencies = [
@@ -10361,3 +10303,33 @@ name = "zeroize"
 version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c394b5bd0c6f669e7275d9c20aa90ae064cb22e75a1cad54e1b34088034b149f"
+
+[[package]]
+name = "zstd"
+version = "0.12.3+zstd.1.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76eea132fb024e0e13fd9c2f5d5d595d8a967aa72382ac2f9d39fcc95afd0806"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "6.0.5+zstd.1.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d56d9e60b4b1758206c238a10165fbcae3ca37b01744e394c463463f6529d23b"
+dependencies = [
+ "libc",
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.0.8+zstd.1.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5556e6ee25d32df2586c098bbfa278803692a20d0ab9565e049480d52707ec8c"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+]

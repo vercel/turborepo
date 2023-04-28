@@ -95,11 +95,10 @@ jobs:
             xtask/**
             .cargo/**
             rust-toolchain
-            !crates/glob-match/**
-            !crates/globwatch/**
-            !crates/pidlock/**
+            !glob-watch
             !crates/turborepo/**
             !crates/turborepo-api-client/**
+            !crates/turborepo-cache/**
             !crates/turborepo-lib/**
             !crates/turborepo-ffi/**
             !crates/turborepo-scm/**
@@ -123,11 +122,10 @@ jobs:
           PATTERNS: |
             pnpm-lock.yaml
             package.json
-            crates/glob-match/**
-            crates/globwatch/**
-            crates/pidlock/**
+            glob-watch
             crates/turborepo/**
             crates/turborepo-api-client/**
+            crates/turborepo-cache/**
             crates/turborepo-lib/**
             crates/turborepo-ffi/**
             crates/turborepo-scm/**

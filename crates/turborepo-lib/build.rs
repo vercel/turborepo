@@ -10,7 +10,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tonic_build::configure()
         .build_server(true)
-        .file_descriptor_set_path("src/daemon/file_descriptor_set.bin")
         .compile(&["turbod.proto"], &["../../cli/internal/turbodprotocol"])?;
     Ok(())
 }
