@@ -536,6 +536,17 @@
 <a href="#536" id="536">536</a>
 <a href="#537" id="537">537</a>
 <a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(min_specialization)]
 #![feature(iter_intersperse)]
@@ -622,6 +633,15 @@
 };
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
+#[derive(PartialOrd, Ord, Hash, Debug, Clone, Copy, Default)]
+</span><span class="kw">pub enum </span>SpecifiedModuleType {
+    <span class="attr">#[default]
+    </span>Automatic,
+    CommonJs,
+    EcmaScript,
+}
+
+<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
 </span><span class="kw">pub struct </span>EcmascriptOptions {
     <span class="doccomment">/// module is split into smaller module parts which can be selectively
@@ -629,6 +649,8 @@
     </span><span class="kw">pub </span>split_into_parts: bool,
     <span class="doccomment">/// imports will import parts of modules
     </span><span class="kw">pub </span>import_parts: bool,
+    <span class="doccomment">/// module is forced to a specific type (happens e. g. for .cjs and .mjs)
+    </span><span class="kw">pub </span>specified_module_type: SpecifiedModuleType,
 }
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]

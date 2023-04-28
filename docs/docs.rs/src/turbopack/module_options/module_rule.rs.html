@@ -68,6 +68,18 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -124,9 +136,21 @@
         <span class="attr">#[turbo_tasks(trace_ignore)]
         </span>options: EcmascriptOptions,
     },
-    Typescript(EcmascriptInputTransformsVc),
-    TypescriptWithTypes(EcmascriptInputTransformsVc),
-    TypescriptDeclaration(EcmascriptInputTransformsVc),
+    Typescript {
+        transforms: EcmascriptInputTransformsVc,
+        <span class="attr">#[turbo_tasks(trace_ignore)]
+        </span>options: EcmascriptOptions,
+    },
+    TypescriptWithTypes {
+        transforms: EcmascriptInputTransformsVc,
+        <span class="attr">#[turbo_tasks(trace_ignore)]
+        </span>options: EcmascriptOptions,
+    },
+    TypescriptDeclaration {
+        transforms: EcmascriptInputTransformsVc,
+        <span class="attr">#[turbo_tasks(trace_ignore)]
+        </span>options: EcmascriptOptions,
+    },
     Json,
     Raw,
     Mdx {

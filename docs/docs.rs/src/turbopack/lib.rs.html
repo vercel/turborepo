@@ -574,6 +574,19 @@
 <a href="#574" id="574">574</a>
 <a href="#575" id="575">575</a>
 <a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(trivial_bounds)]
 #![feature(min_specialization)]
@@ -703,30 +716,39 @@
 
             base.into()
         }
-        ModuleType::Typescript(transforms) =&gt; EcmascriptModuleAssetVc::new(
+        ModuleType::Typescript {
+            transforms,
+            options,
+        } =&gt; EcmascriptModuleAssetVc::new(
             source,
             context.into(),
             Value::new(EcmascriptModuleAssetType::Typescript),
             <span class="kw-2">*</span>transforms,
-            Value::new(Default::default()),
+            Value::new(<span class="kw-2">*</span>options),
             context.compile_time_info(),
         )
         .into(),
-        ModuleType::TypescriptWithTypes(transforms) =&gt; EcmascriptModuleAssetVc::new(
+        ModuleType::TypescriptWithTypes {
+            transforms,
+            options,
+        } =&gt; EcmascriptModuleAssetVc::new(
             source,
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptWithTypes),
             <span class="kw-2">*</span>transforms,
-            Value::new(Default::default()),
+            Value::new(<span class="kw-2">*</span>options),
             context.compile_time_info(),
         )
         .into(),
-        ModuleType::TypescriptDeclaration(transforms) =&gt; EcmascriptModuleAssetVc::new(
+        ModuleType::TypescriptDeclaration {
+            transforms,
+            options,
+        } =&gt; EcmascriptModuleAssetVc::new(
             source,
             context.with_types_resolving_enabled().into(),
             Value::new(EcmascriptModuleAssetType::TypescriptDeclaration),
             <span class="kw-2">*</span>transforms,
-            Value::new(Default::default()),
+            Value::new(<span class="kw-2">*</span>options),
             context.compile_time_info(),
         )
         .into(),
@@ -869,16 +891,20 @@
                                     transforms: transforms.extend(<span class="kw-2">*</span>additional_transforms),
                                     options,
                                 }),
-                                <span class="prelude-val">Some</span>(ModuleType::Typescript(transforms)) =&gt; {
-                                    <span class="prelude-val">Some</span>(ModuleType::Typescript(
-                                        transforms.extend(<span class="kw-2">*</span>additional_transforms),
-                                    ))
-                                }
-                                <span class="prelude-val">Some</span>(ModuleType::TypescriptWithTypes(transforms)) =&gt; {
-                                    <span class="prelude-val">Some</span>(ModuleType::TypescriptWithTypes(
-                                        transforms.extend(<span class="kw-2">*</span>additional_transforms),
-                                    ))
-                                }
+                                <span class="prelude-val">Some</span>(ModuleType::Typescript {
+                                    transforms,
+                                    options,
+                                }) =&gt; <span class="prelude-val">Some</span>(ModuleType::Typescript {
+                                    transforms: transforms.extend(<span class="kw-2">*</span>additional_transforms),
+                                    options,
+                                }),
+                                <span class="prelude-val">Some</span>(ModuleType::TypescriptWithTypes {
+                                    transforms,
+                                    options,
+                                }) =&gt; <span class="prelude-val">Some</span>(ModuleType::TypescriptWithTypes {
+                                    transforms: transforms.extend(<span class="kw-2">*</span>additional_transforms),
+                                    options,
+                                }),
                                 <span class="prelude-val">Some</span>(module_type) =&gt; {
                                     ModuleIssue {
                                         ident,

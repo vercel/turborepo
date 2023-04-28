@@ -412,6 +412,69 @@
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
 <a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -429,7 +492,8 @@
 };
 <span class="kw">use </span>turbopack_css::{CssInputTransform, CssInputTransformsVc};
 <span class="kw">use </span>turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, TransformPluginVc,
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType,
+    TransformPluginVc,
 };
 <span class="kw">use </span>turbopack_ecmascript_plugins::transform::emotion::build_emotion_transformer;
 <span class="kw">use </span>turbopack_mdx::MdxTransformOptions;
@@ -550,6 +614,7 @@
         <span class="kw">let </span>ecmascript_options = EcmascriptOptions {
             split_into_parts: enable_tree_shaking,
             import_parts: enable_tree_shaking,
+            ..Default::default()
         };
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(env) = preset_env_versions {
@@ -697,14 +762,20 @@
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mjs&quot;</span>.to_string()),
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: ecmascript_options.clone(),
+                    options: EcmascriptOptions {
+                        specified_module_type: SpecifiedModuleType::EcmaScript,
+                        ..ecmascript_options
+                    },
                 })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.cjs&quot;</span>.to_string()),
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: ecmascript_options.clone(),
+                    options: EcmascriptOptions {
+                        specified_module_type: SpecifiedModuleType::CommonJs,
+                        ..ecmascript_options
+                    },
                 })],
             ),
             ModuleRule::new(
@@ -713,15 +784,70 @@
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.tsx&quot;</span>.to_string()),
                 ]),
                 <span class="macro">vec!</span>[<span class="kw">if </span>enable_types {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes(ts_app_transforms))
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
+                        transforms: ts_app_transforms,
+                        options: ecmascript_options.clone(),
+                    })
                 } <span class="kw">else </span>{
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_app_transforms))
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                        transforms: ts_app_transforms,
+                        options: ecmascript_options.clone(),
+                    })
+                }],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::any(<span class="macro">vec!</span>[
+                    ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mts&quot;</span>.to_string()),
+                    ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mtsx&quot;</span>.to_string()),
+                ]),
+                <span class="macro">vec!</span>[<span class="kw">if </span>enable_types {
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
+                        transforms: ts_app_transforms,
+                        options: EcmascriptOptions {
+                            specified_module_type: SpecifiedModuleType::EcmaScript,
+                            ..ecmascript_options
+                        },
+                    })
+                } <span class="kw">else </span>{
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                        transforms: ts_app_transforms,
+                        options: EcmascriptOptions {
+                            specified_module_type: SpecifiedModuleType::EcmaScript,
+                            ..ecmascript_options
+                        },
+                    })
+                }],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::any(<span class="macro">vec!</span>[
+                    ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.cts&quot;</span>.to_string()),
+                    ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.ctsx&quot;</span>.to_string()),
+                ]),
+                <span class="macro">vec!</span>[<span class="kw">if </span>enable_types {
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
+                        transforms: ts_app_transforms,
+                        options: EcmascriptOptions {
+                            specified_module_type: SpecifiedModuleType::CommonJs,
+                            ..ecmascript_options
+                        },
+                    })
+                } <span class="kw">else </span>{
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                        transforms: ts_app_transforms,
+                        options: EcmascriptOptions {
+                            specified_module_type: SpecifiedModuleType::CommonJs,
+                            ..ecmascript_options
+                        },
+                    })
                 }],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.d.ts&quot;</span>.to_string()),
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(
-                    ModuleType::TypescriptDeclaration(vendor_transforms),
+                    ModuleType::TypescriptDeclaration {
+                        transforms: vendor_transforms,
+                        options: ecmascript_options.clone(),
+                    },
                 )],
             ),
             ModuleRule::new(
