@@ -8,6 +8,7 @@ mod daemon;
 mod execution_state;
 mod formatter;
 mod package_json;
+pub(crate) mod globwatcher;
 mod package_manager;
 mod shim;
 mod ui;
