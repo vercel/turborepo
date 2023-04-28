@@ -139,7 +139,7 @@ async fn resolve_extends(
         // All other types are treated as module imports, and joined with
         // "tsconfig.json". This includes "relative" imports like '.' and '..'.
         _ => {
-            [extends, "tsconfig.json"].join("/")
+            format!("{extends}/tsconfig.json")
         }
     };
 
