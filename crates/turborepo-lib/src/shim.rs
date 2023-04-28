@@ -21,8 +21,8 @@ use tracing_subscriber::EnvFilter;
 use turbo_updater::check_for_updates;
 
 use crate::{
-    cli, formatter::TurboFormatter, get_version, package_manager::Globs, spawn_child,
-    PackageManager, Payload,
+    cli, get_version, package_manager::Globs, spawn_child, tracing::TurboFormatter, PackageManager,
+    Payload,
 };
 
 // all arguments that result in a stdout that much be directly parsable and
