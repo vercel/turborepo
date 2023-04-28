@@ -119,12 +119,8 @@ func getGitState() *gitState {
 	// If we're in CI, try to get the values we need from environment variables
 	if ci.IsCi() {
 		vendor := ci.Info()
-		branchVarName := vendor.BranchEnvVar
-		shaVarName := vendor.ShaEnvVar
-		// Get the values of the vars
-		vars := env.FromKeys(allEnvVars, []string{shaVarName, branchVarName})
-		gitstate.Sha = vars[shaVarName]
-		gitstate.Branch = vars[branchVarName]
+		gitstate.Sha = allEnvVars[vendor.ShaEnvVar]
+		gitstate.Branch = allEnvVars[vendor.BranchEnvVar]
 	}
 
 	// Otherwise fallback to using `git`
