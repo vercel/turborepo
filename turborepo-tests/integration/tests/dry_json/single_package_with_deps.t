@@ -8,7 +8,7 @@ Setup
     "version": "0",
     "turboVersion": "[a-z0-9\.-]+", (re)
     "globalCacheInputs": {
-      "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
+      "rootKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
       "files": {
         "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
         "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0"
@@ -44,7 +44,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "22613c684c49b742",
+        "hash": "8fc80cfff3b64237",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
@@ -96,7 +96,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "c6c1c9fc26282a5c",
+        "hash": "c71366ccd6a86465",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",

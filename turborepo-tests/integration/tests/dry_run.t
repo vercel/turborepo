@@ -19,7 +19,7 @@ Setup
   Global Hash Inputs
     Global Files               = 1
     External Dependencies Hash = ccab0b28617f1f56
-    Global Cache Key           = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
+    Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
     Root pipeline              = {"//#something":{"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false},"build":{"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":["NODE_ENV"],"persistent":false},"maybefails":{"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false},"my-app#build":{"outputs":["apple.json","banana.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false},"something":{"outputs":[],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false}}
 
 # Part 3 are Tasks to Run, and we have to validate each task separately
@@ -27,7 +27,7 @@ Setup
   my-app#build
     Task                             = build                                                                                                                           
     Package                          = my-app                                                                                                                          
-    Hash                             = 5ac267a908f805a8                                                                                                                
+    Hash                             = 2f192ed93e20f940                                                                                                                
     Cached (Local)                   = false                                                                                                                           
     Cached (Remote)                  = false                                                                                                                           
     Directory                        = apps/my-app                                                                                                                     
@@ -45,7 +45,7 @@ Setup
   util#build
     Task                             = build                                                                                                            
     Package                          = util                                                                                                             
-    Hash                             = f99b445d4ff29bd0                                                                                                 
+    Hash                             = af2ba2d52192ee45                                                                                                 
     Cached (Local)                   = false                                                                                                            
     Cached (Remote)                  = false                                                                                                            
     Directory                        = packages/util                                                                                                    

@@ -7,6 +7,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -14,10 +15,8 @@ import (
 )
 
 type ArtifactSignatureAuthentication struct {
-	teamID string
-	// Used for testing purposes
-	secretKeyOverride []byte
-	enabled           bool
+	teamId  string
+	enabled bool
 }
 
 func (asa *ArtifactSignatureAuthentication) isEnabled() bool {
@@ -26,18 +25,12 @@ func (asa *ArtifactSignatureAuthentication) isEnabled() bool {
 
 // If the secret key is not found or the secret key length is 0, an error is returned
 // Preference is given to the environment specified secret key.
-func (asa *ArtifactSignatureAuthentication) getSecretKey() ([]byte, error) {
-	var secret []byte
-	if asa.secretKeyOverride != nil {
-		secret = asa.secretKeyOverride
-	} else {
-		secret = []byte(os.Getenv("TURBO_REMOTE_CACHE_SIGNATURE_KEY"))
-	}
-
+func (asa *ArtifactSignatureAuthentication) secretKey() ([]byte, error) {
+	secret := os.Getenv("TURBO_REMOTE_CACHE_SIGNATURE_KEY")
 	if len(secret) == 0 {
 		return nil, errors.New("signature secret key not found. You must specify a secret key in the TURBO_REMOTE_CACHE_SIGNATURE_KEY environment variable")
 	}
-	return secret, nil
+	return []byte(secret), nil
 }
 
 func (asa *ArtifactSignatureAuthentication) generateTag(hash string, artifactBody []byte) (string, error) {
@@ -50,13 +43,22 @@ func (asa *ArtifactSignatureAuthentication) generateTag(hash string, artifactBod
 }
 
 func (asa *ArtifactSignatureAuthentication) getTagGenerator(hash string) (hash.Hash, error) {
-	teamID := asa.teamID
-	secret, err := asa.getSecretKey()
+	teamId := asa.teamId
+	secret, err := asa.secretKey()
 	if err != nil {
 		return nil, err
 	}
-	metadata := []byte(hash)
-	metadata = append(metadata, []byte(teamID)...)
+	artifactMetadata := &struct {
+		Hash   string `json:"hash"`
+		TeamId string `json:"teamId"`
+	}{
+		Hash:   hash,
+		TeamId: teamId,
+	}
+	metadata, err := json.Marshal(artifactMetadata)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO(Gaspar) Support additional signing algorithms here
 	h := hmac.New(sha256.New, secret)

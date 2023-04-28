@@ -10,13 +10,13 @@ Check
   Global Hash Inputs
     Global Files               = 2
     External Dependencies Hash = 
-    Global Cache Key           = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
+    Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
     Root pipeline              = {"//#build":{"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false}}
   
   Tasks to Run
   build
     Task                             = build                                                                                                   
-    Hash                             = 1353234a1864d351                                                                                        
+    Hash                             = 5b5ae44052e3d624                                                                                        
     Cached (Local)                   = false                                                                                                   
     Cached (Remote)                  = false                                                                                                   
     Command                          = echo 'building' > foo                                                                                   
@@ -45,7 +45,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 1353234a1864d351
+  build: cache bypass, force executing 5b5ae44052e3d624
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -59,7 +59,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 1353234a1864d351
+  build: cache bypass, force executing 5b5ae44052e3d624
   build: 
   build: > build
   build: > echo 'building' > foo
