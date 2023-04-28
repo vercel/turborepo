@@ -13,9 +13,9 @@ mod shim;
 mod tracing;
 mod ui;
 
+use ::tracing::error;
 use anyhow::Result;
 pub use child::spawn_child;
-use tracing::error;
 
 pub use crate::{cli::Args, execution_state::ExecutionState};
 use crate::{commands::CommandBase, package_manager::PackageManager};

@@ -1,15 +1,105 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Mutex};
 
 use chrono::Local;
+use is_terminal::IsTerminal;
 use owo_colors::{
     colors::{Black, Default, Red, Yellow},
     Color, OwoColorize,
 };
-use tracing::{field::Visit, Event, Level, Subscriber};
-use tracing_subscriber::{
-    fmt::{format::Writer, FmtContext, FormatEvent, FormatFields},
-    registry::LookupSpan,
+use tracing::{field::Visit, metadata::LevelFilter, Event, Level, Subscriber};
+use tracing_appender::{
+    non_blocking::{NonBlocking, WorkerGuard},
+    rolling::RollingFileAppender,
 };
+use tracing_subscriber::{
+    filter::Filtered,
+    fmt::{
+        self,
+        format::{DefaultFields, Writer},
+        FmtContext, FormatEvent, FormatFields,
+    },
+    prelude::*,
+    registry::LookupSpan,
+    reload::{self, Error, Handle},
+    EnvFilter, Layer, Registry,
+};
+
+type StdOutLog = Filtered<
+    tracing_subscriber::fmt::Layer<Registry, DefaultFields, TurboFormatter>,
+    EnvFilter,
+    Registry,
+>;
+
+type DaemonLog = tracing_subscriber::fmt::Layer<
+    Layered,
+    DefaultFields,
+    tracing_subscriber::fmt::format::Format,
+    NonBlocking,
+>;
+
+type Layered = tracing_subscriber::layer::Layered<StdOutLog, Registry>;
+
+pub struct TurboSubscriber {
+    update: Handle<Option<DaemonLog>, Layered>,
+    guard: Mutex<Option<WorkerGuard>>,
+}
+
+impl TurboSubscriber {
+    /// Sets up the tracing subscriber, with a default stdout layer using the
+    /// TurboFormatter.
+    ///
+    /// ## Logging behaviour:
+    /// - If stdout is a terminal, we use ansi colors. Otherwise, we do not.
+    /// - If the `TURBO_LOG_VERBOSITY` env var is set, it will be used to set
+    ///   the verbosity level. Otherwise, the default is `WARN`. This override
+    ///   per-module log levels.
+    /// - If the verbosity argument (usually detemined by a flag) is provided,
+    ///   it overrides the default global log level. This means it overrides the
+    ///   `TURBO_LOG_VERBOSITY` global setting, but not per-module settings.
+    ///
+    /// Returns a `reload::Handle` that can be used to reload the subscriber.
+    /// This allows us to register additional layers after setup, for example
+    /// when configuring logrotation in the daemon.
+    pub fn new_with_verbosity(verbosity: usize) -> Self {
+        let max_level = match verbosity {
+            0 => LevelFilter::WARN,
+            1 => LevelFilter::INFO,
+            2 => LevelFilter::DEBUG,
+            _ => LevelFilter::TRACE,
+        };
+
+        let stdout = fmt::layer()
+            .event_format(TurboFormatter::new_with_ansi(
+                std::io::stdout().is_terminal(),
+            ))
+            .with_filter(
+                EnvFilter::from_env("TURBO_LOG_VERBOSITY").add_directive(max_level.into()),
+            );
+
+        let (logrotate, update) = reload::Layer::new(Option::<DaemonLog>::None);
+
+        Registry::default().with(stdout).with(logrotate).init();
+
+        Self {
+            update,
+            guard: Mutex::new(None),
+        }
+    }
+
+    /// Enables daemon logging with the specified rotation settings.
+    ///
+    /// Daemon logging uses the standard tracing formatter.
+    pub fn set_daemon_logger(&self, appender: RollingFileAppender) -> Result<(), Error> {
+        let (file_writer, guard) = tracing_appender::non_blocking(appender);
+
+        let layer = tracing_subscriber::fmt::layer().with_writer(file_writer);
+
+        self.update.reload(Some(layer))?;
+        self.guard.lock().expect("not poisoned").replace(guard);
+
+        Ok(())
+    }
+}
 
 /// The formatter for TURBOREPO
 ///

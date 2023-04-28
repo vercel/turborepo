@@ -6,6 +6,7 @@ use super::CommandBase;
 use crate::{
     cli::DaemonCommand,
     daemon::{DaemonConnector, DaemonError},
+    tracing::TurboSubscriber,
 };
 
 /// Runs the daemon command.
@@ -64,8 +65,12 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
     Ok(())
 }
 
-pub async fn daemon_server(base: &CommandBase, idle_time: &String) -> Result<(), DaemonError> {
-    let log_file = {
+pub async fn daemon_server(
+    base: &CommandBase,
+    idle_time: &String,
+    logging: &TurboSubscriber,
+) -> Result<(), DaemonError> {
+    let (log_folder, log_file) = {
         let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
             .expect("user has a home dir");
 
@@ -76,9 +81,20 @@ pub async fn daemon_server(base: &CommandBase, idle_time: &String) -> Result<(),
         let logs = RelativeSystemPathBuf::new("logs").expect("forward relative");
         let file = RelativeSystemPathBuf::new(hash).expect("forward relative");
 
-        folder.join_relative(logs).join_relative(file)
+        let log_folder = folder.join_relative(logs);
+        let log_file = log_folder.join_relative(file);
+
+        (log_folder, log_file)
     };
 
+    if let Err(e) = logging.set_daemon_logger(tracing_appender::rolling::never(
+        log_folder,
+        log_file.clone(),
+    )) {
+        // error here is not fatal, just log it
+        tracing::error!("failed to set file logger: {}", e);
+    }
+    
     let timeout = go_parse_duration::parse_duration(idle_time)
         .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
         .map(|d| Duration::from_nanos(d as u64))?;

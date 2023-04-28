@@ -176,7 +176,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 Err(e) => return CloseReason::SocketOpenError(e),
             };
 
-            tracing::info!("starting server");
+            tracing::warn!("starting server");
 
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(self.timeout.clone()))

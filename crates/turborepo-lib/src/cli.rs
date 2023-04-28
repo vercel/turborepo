@@ -17,6 +17,7 @@ use crate::{
     commands::{bin, daemon, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
+    tracing::TurboSubscriber,
     ui::UI,
     Payload,
 };
@@ -435,7 +436,7 @@ pub enum LogPrefix {
 ///
 /// returns: Result<Payload, Error>
 #[tokio::main]
-pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
+pub async fn run(repo_state: Option<RepoState>, logger: &TurboSubscriber) -> Result<Payload> {
     let mut cli_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
@@ -562,7 +563,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
-                None => daemon::daemon_server(&base, idle_time).await,
+                None => daemon::daemon_server(&base, idle_time, logger).await,
             }?;
 
             Ok(Payload::Rust(Ok(0)))
