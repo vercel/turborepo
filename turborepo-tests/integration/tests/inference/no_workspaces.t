@@ -13,7 +13,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=4c73ae6c71119fad (re)
+  2023-04-28T16:10:53.965Z [DEBUG] turbo: global hash: value=f0bac13df101b781
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -35,7 +35,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=96793eaf8b145bde (re)
+  2023-04-28T16:10:54.005Z [DEBUG] turbo: global hash: value=7d547f108de521ef
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -57,7 +57,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\["VERCEL_ANALYTICS_ID"] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=67527326c7931f8b (re)
+  2023-04-28T16:10:54.039Z [DEBUG] turbo: global hash: value=97bd8476a261145d
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
