@@ -238,9 +238,9 @@ pub enum Command {
     Completion { shell: Shell },
     /// Runs the Turborepo background daemon
     Daemon {
-        /// Set the idle timeout for turbod (default 4h0m0s)
-        #[clap(long)]
-        idle_time: Option<String>,
+        /// Set the idle timeout for turbod
+        #[clap(long, default_value_t = String::from("4h0m0s"))]
+        idle_time: String,
         #[clap(subcommand)]
         #[serde(flatten)]
         command: Option<DaemonCommand>,
@@ -547,22 +547,20 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon {
-            command: Some(command),
-            ..
-        } => {
-            let command = *command;
-            let base = CommandBase::new(cli_args, repo_root, version)?;
-            daemon::main(&command, &base).await?;
+        Command::Daemon { command, idle_time } => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version)?;
+
+            match command {
+                Some(command) => daemon::daemon_client(command, &base).await,
+                None => daemon::daemon_server(&base, idle_time).await,
+            }?;
+
             Ok(Payload::Rust(Ok(0)))
-        },
-        Command::Prune { .. }
-        | Command::Run(_)
-        // the daemon itself still delegates to Go
-        | Command::Daemon { .. } => {
+        }
+        Command::Prune { .. } | Command::Run(_) => {
             let base = CommandBase::new(cli_args, repo_root, version)?;
             Ok(Payload::Go(Box::new(base)))
-        },
+        }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
