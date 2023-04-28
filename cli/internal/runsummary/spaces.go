@@ -61,7 +61,7 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 	}
 
 	// Get a list of env vars
-	gitstate := getStateOfRepo()
+	gitstate := getGitState()
 
 	return &spacesRunPayload{
 		StartTime:      startTime,
@@ -108,10 +108,10 @@ type gitState struct {
 	Branch string `json:"branch"`
 }
 
-// getStateOfRepo returns the sha and branch when in a git repo
+// getGitState returns the sha and branch when in a git repo
 // Otherwise it should return empty strings right now.
 // We my add handling of other scms and non-git tracking in the future.
-func getStateOfRepo() *gitState {
+func getGitState() *gitState {
 	allEnvVars := env.GetEnvMap()
 
 	gitstate := &gitState{}
