@@ -61,7 +61,7 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 	}
 
 	// Get a list of env vars
-	sha, branch := getStateOfRepo()
+	gitstate := getStateOfRepo()
 
 	return &spacesRunPayload{
 		StartTime:      startTime,
@@ -70,8 +70,8 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 		RepositoryPath: rsm.repoPath.ToString(),
 		Type:           "TURBO",
 		Context:        context,
-		GitBranch:      branch,
-		GitSha:         sha,
+		GitBranch:      gitstate.Branch,
+		GitSha:         gitstate.Sha,
 	}
 }
 
@@ -103,14 +103,18 @@ func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
 	}
 }
 
+type gitState struct {
+	Sha    string `json:"gitSha"`
+	Branch string `json:"branch"`
+}
+
 // getStateOfRepo returns the sha and branch when in a git repo
 // Otherwise it should return empty strings right now.
 // We my add handling of other scms and non-git tracking in the future.
-func getStateOfRepo() (string, string) {
+func getStateOfRepo() *gitState {
 	allEnvVars := env.GetEnvMap()
 
-	var sha string
-	var branch string
+	gitstate := &gitState{}
 
 	// If we're in CI, try to get the values we need from environment variables
 	if ci.IsCi() {
@@ -119,17 +123,17 @@ func getStateOfRepo() (string, string) {
 		shaVarName := vendor.ShaEnvVar
 		// Get the values of the vars
 		vars := env.FromKeys(allEnvVars, []string{shaVarName, branchVarName})
-		sha = vars[shaVarName]
-		branch = vars[branchVarName]
+		gitstate.Sha = vars[shaVarName]
+		gitstate.Branch = vars[branchVarName]
 	}
 
 	// Otherwise fallback to using `git`
-	if branch == "" {
-		branch = scm.GetCurrentBranch()
+	if gitstate.Branch == "" {
+		gitstate.Branch = scm.GetCurrentBranch()
 	}
-	if sha == "" {
-		sha = scm.GetCurrentSha()
+	if gitstate.Sha == "" {
+		gitstate.Sha = scm.GetCurrentSha()
 	}
 
-	return sha, branch
+	return gitstate
 }
