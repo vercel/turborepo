@@ -266,11 +266,10 @@ impl<'a> BerryLockfile<'a> {
                     resolutions.insert(dependency, dep_locator.clone());
                 }
 
-                if let Some(descriptors) = reverse_lookup.get(locator) {
-                    for descriptor in descriptors {
-                        resolutions.insert((*descriptor).clone(), locator.clone());
-                    }
-                }
+                // Included workspaces will always have their locator listed as a descriptor.
+                // All other descriptors should show up in the other workspace package
+                // dependencies.
+                resolutions.insert(Descriptor::from(locator.clone()), locator.clone());
             }
         }
 
@@ -778,5 +777,46 @@ mod test {
             key: "uri-js@npm:4.4.1".into(),
             version: "4.4.1".into()
         }));
+    }
+
+    #[test]
+    fn test_workspace_collission() {
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/berry-protocol-collision.lock"
+        ))
+        .unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let no_proto = Descriptor::try_from("c@*").unwrap();
+        let workspace_proto = Descriptor::try_from("c@workspace:*").unwrap();
+        let full_path = Descriptor::try_from("c@workspace:packages/c").unwrap();
+        let a_lockfile = lockfile
+            .subgraph(&["packages/a".into(), "packages/c".into()], &[])
+            .unwrap();
+        let a_reverse_lookup = a_lockfile.locator_to_descriptors();
+        let a_c_descriptors = a_reverse_lookup
+            .get(&Locator::try_from("c@workspace:packages/c").unwrap())
+            .unwrap();
+
+        assert_eq!(
+            a_c_descriptors,
+            &(vec![&no_proto, &full_path]
+                .into_iter()
+                .collect::<HashSet<_>>())
+        );
+
+        let b_lockfile = lockfile
+            .subgraph(&["packages/b".into(), "packages/c".into()], &[])
+            .unwrap();
+        let b_reverse_lookup = b_lockfile.locator_to_descriptors();
+        let b_c_descriptors = b_reverse_lookup
+            .get(&Locator::try_from("c@workspace:packages/c").unwrap())
+            .unwrap();
+
+        assert_eq!(
+            b_c_descriptors,
+            &(vec![&workspace_proto, &full_path]
+                .into_iter()
+                .collect::<HashSet<_>>())
+        );
     }
 }
