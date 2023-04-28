@@ -14,20 +14,68 @@ const DESCRIPTION =
   "Rewrite experimentalPassThroughEnv and experimentalGlobalPassThroughEnv";
 const INTRODUCED_IN = "1.10.0";
 
-function migrateGlobalConfigs(config: RootSchema) {
-  if (config.experimentalGlobalPassThroughEnv) {
-    config.globalPassThroughEnv = config.experimentalGlobalPassThroughEnv;
-    delete config.experimentalGlobalPassThroughEnv;
+function migrateRootConfig(config: RootSchema) {
+  let oldConfig = config.experimentalGlobalPassThroughEnv;
+  let newConfig = config.globalPassThroughEnv;
+  // Set to an empty array is meaningful, so we have undefined as an option here.
+  let output: string[] | undefined;
+  if (Array.isArray(oldConfig) || Array.isArray(newConfig)) {
+    output = [];
+
+    if (Array.isArray(oldConfig)) {
+      output = output.concat(oldConfig);
+    }
+    if (Array.isArray(newConfig)) {
+      output = output.concat(newConfig);
+    }
+
+    // Deduplicate
+    output = [...new Set(output)];
+
+    output.sort();
   }
 
-  return config;
+  // Can blindly delete and repopulate with calculated value.
+  delete config.experimentalGlobalPassThroughEnv;
+  delete config.globalPassThroughEnv;
+
+  if (Array.isArray(output)) {
+    config.globalPassThroughEnv = output;
+  }
+
+  return migrateTaskConfigs(config);
 }
 
 function migrateTaskConfigs(config: TurboJsonSchema) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
-    if (taskDef.experimentalPassThroughEnv) {
-      taskDef.passThroughEnv = taskDef.experimentalPassThroughEnv;
-      delete taskDef.experimentalPassThroughEnv;
+    let oldConfig = taskDef.experimentalPassThroughEnv;
+    let newConfig = taskDef.passThroughEnv;
+
+    // Set to an empty array is meaningful, so we have undefined as an option here.
+    let output: string[] | undefined;
+    if (Array.isArray(oldConfig) || Array.isArray(newConfig)) {
+      output = [];
+
+      if (Array.isArray(oldConfig)) {
+        output = output.concat(oldConfig);
+      }
+      if (Array.isArray(newConfig)) {
+        output = output.concat(newConfig);
+      }
+
+      // Deduplicate
+      output = [...new Set(output)];
+
+      // Sort
+      output.sort();
+    }
+
+    // Can blindly delete and repopulate with calculated value.
+    delete taskDef.experimentalPassThroughEnv;
+    delete taskDef.passThroughEnv;
+
+    if (Array.isArray(output)) {
+      taskDef.passThroughEnv = output;
     }
   }
 
@@ -75,21 +123,19 @@ export function transformer({
   const turboJson: RootSchema = fs.readJsonSync(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateGlobalConfigs(turboJson),
-  });
-  runner.modifyFile({
-    filePath: turboConfigPath,
-    after: migrateTaskConfigs(turboJson),
+    after: migrateRootConfig(turboJson),
   });
 
   // find and migrate any workspace configs
-  const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
-    const { config, turboConfigPath } = workspaceConfig;
-    runner.modifyFile({
-      filePath: turboConfigPath,
-      after: migrateTaskConfigs(config),
-    });
+  const allTurboJsons = getTurboConfigs(root);
+  allTurboJsons.forEach((workspaceConfig) => {
+    const { config, turboConfigPath, isRootConfig } = workspaceConfig;
+    if (!isRootConfig) {
+      runner.modifyFile({
+        filePath: turboConfigPath,
+        after: migrateTaskConfigs(config),
+      });
+    }
   });
 
   return runner.finish();
