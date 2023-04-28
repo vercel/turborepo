@@ -7,8 +7,8 @@ package ffi
 
 // #include "bindings.h"
 //
-// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv
-// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv
+// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv -framework Security
+// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv -framework Security
 // #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind
 // #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind
 // #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz
@@ -290,4 +290,29 @@ func GlobalChange(packageManager string, prevContents []byte, currContents []byt
 	}
 
 	return resp.GetGlobalChange()
+}
+
+// VerifySignature checks that the signature of an artifact matches the expected tag
+func VerifySignature(teamID []byte, hash string, artifactBody []byte, expectedTag string, secretKeyOverride []byte) (bool, error) {
+	req := ffi_proto.VerifySignatureRequest{
+		TeamId:            teamID,
+		Hash:              hash,
+		ArtifactBody:      artifactBody,
+		ExpectedTag:       expectedTag,
+		SecretKeyOverride: secretKeyOverride,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.verify_signature(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.VerifySignatureResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return false, errors.New(err)
+	}
+
+	return resp.GetVerified(), nil
 }
