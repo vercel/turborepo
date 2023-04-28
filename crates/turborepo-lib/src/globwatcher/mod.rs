@@ -107,10 +107,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
             };
 
             for glob in globs_to_exclude {
-                self.config
-                    .exclude(self.relative_to.as_path(), &glob)
-                    .await
-                    .unwrap();
+                self.config.exclude(self.relative_to.as_path(), &glob).await;
             }
         }
     }
@@ -266,10 +263,11 @@ fn populate_hash_globs<'a>(
 
         for hash in hash_status.iter() {
             let globs = match hash_globs.get_mut(hash).filter(|globs| {
-                !globs
-                    .exclude
-                    .iter()
-                    .any(|f| glob_match::glob_match(f, path.to_str().unwrap()))
+                !globs.exclude.iter().any(|f| {
+                    path.to_str()
+                        .map(|s| glob_match::glob_match(f, s))
+                        .unwrap_or(false) // invalid utf8 cannot be matched
+                })
             }) {
                 Some(globs) => globs,
                 None => {
