@@ -50,6 +50,7 @@ members = [
   "crates/turborepo-vercel-api-mock",
   "crates/utils/signposter",
   "crates/utils/signposter-sys",
+  "crates/utils/tracing-signpost",
   "xtask",
 ]
 
@@ -88,6 +89,7 @@ default-members = [
   "crates/turbopack-tests",
   "crates/utils/signposter",
   "crates/utils/signposter-sys",
+  "crates/utils/tracing-signpost",
   "xtask",
 ]
 
@@ -117,6 +119,7 @@ node-file-trace = { path = "crates/node-file-trace", default-features = false }
 signposter = { path = "crates/utils/signposter" }
 signposter-sys = { path = "crates/utils/signposter-sys" }
 swc-ast-explorer = { path = "crates/swc-ast-explorer" }
+tracing-signpost = { path = "crates/utils/tracing-signpost" }
 turbo-malloc = { path = "crates/turbo-malloc", default-features = false }
 turbo-tasks = { path = "crates/turbo-tasks" }
 turbo-tasks-build = { path = "crates/turbo-tasks-build" }
@@ -233,6 +236,7 @@ tiny-gradient = "0.1.0"
 tokio = "1.25.0"
 tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
 url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"

@@ -10,7 +10,6 @@ autobenches = false
 bench = false
 
 [features]
-signpost = ["dep:signposter"]
 log_request_stats = []
 
 [dependencies]
@@ -32,9 +31,9 @@ socket2 = "0.4.9"
 tokio = { workspace = true }
 tokio-stream = "0.1.9"
 tokio-util = { workspace = true }
+tracing = { workspace = true }
 urlencoding = "2.1.2"
 
-signposter = { optional = true, workspace = true }
 turbo-tasks = { workspace = true }
 turbo-tasks-bytes = { workspace = true }
 turbo-tasks-fs = { workspace = true }
