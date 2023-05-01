@@ -405,6 +405,61 @@
 <a href="#405" id="405">405</a>
 <a href="#406" id="406">406</a>
 <a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, fmt::Write};
 
 <span class="kw">use </span>anyhow::Result;
@@ -417,7 +472,7 @@
     FileContent, FileContentVc, FileJsonContent, FileJsonContentVc, FileSystemPathVc,
 };
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetVc},
+    asset::{Asset, AssetOptionVc, AssetVc},
     context::AssetContext,
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc, OptionIssueSourceVc},
@@ -432,7 +487,7 @@
         },
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::{Request, RequestVc},
-        pattern::QueryMapVc,
+        pattern::{Pattern, QueryMapVc},
         resolve, AliasPattern, ResolveResultVc,
     },
     source_asset::SourceAssetVc,
@@ -470,7 +525,6 @@
                 .cell()
                 .as_issue()
                 .emit();
-                <span class="kw">break</span>;
             }
             FileJsonContent::NotFound =&gt; {
                 TsConfigIssue {
@@ -481,43 +535,99 @@
                 .cell()
                 .as_issue()
                 .emit();
-                <span class="kw">break</span>;
             }
             FileJsonContent::Content(json) =&gt; {
                 configs.push((parsed_data, tsconfig));
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(extends) = json[<span class="string">&quot;extends&quot;</span>].as_str() {
-                    <span class="kw">let </span>context = tsconfig.ident().path().parent();
-                    <span class="kw">let </span>result = resolve(
-                        context,
-                        RequestVc::parse(Value::new(extends.to_string().into())),
-                        resolve_options,
-                    )
-                    .first_asset()
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="comment">// There might be multiple alternatives like
-                    // &quot;some/path/node_modules/xyz/abc.json&quot; and &quot;some/node_modules/xyz/abc.json&quot;.
-                    // We only want to use the first one.
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">*</span>result {
+                    <span class="kw">let </span>resolved = resolve_extends(tsconfig, extends, resolve_options).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">&amp;*</span>resolved.<span class="kw">await</span><span class="question-mark">? </span>{
                         data = asset.content().file_content();
-                        tsconfig = asset;
+                        tsconfig = <span class="kw-2">*</span>asset;
+                        <span class="kw">continue</span>;
                     } <span class="kw">else </span>{
                         TsConfigIssue {
                             severity: IssueSeverity::Error.into(),
                             source_ident: tsconfig.ident(),
-                            message: StringVc::cell(<span class="string">&quot;extends doesn&#39;t resolve correctly&quot;</span>.into()),
+                            message: StringVc::cell(
+                                <span class="string">&quot;extends doesn&#39;t resolve correctly&quot;</span>.to_string(),
+                            ),
                         }
                         .cell()
                         .as_issue()
                         .emit();
-                        <span class="kw">break</span>;
                     }
-                } <span class="kw">else </span>{
-                    <span class="kw">break</span>;
                 }
             }
         }
+        <span class="kw">break</span>;
     }
     <span class="prelude-val">Ok</span>(configs)
+}
+
+<span class="doccomment">/// Resolves tsconfig files according to TS&#39;s implementation:
+/// https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3294-L3326
+</span><span class="kw">async fn </span>resolve_extends(
+    tsconfig: AssetVc,
+    extends: <span class="kw-2">&amp;</span>str,
+    resolve_options: ResolveOptionsVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;AssetOptionVc&gt; {
+    <span class="kw">let </span>context = tsconfig.ident().path().parent();
+    <span class="kw">let </span>request = RequestVc::parse_string(extends.to_string());
+
+    <span class="comment">// TS&#39;s resolution is weird, and has special behavior for different import
+    // types.
+    </span><span class="kw">let </span>extends = <span class="kw">match </span><span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="comment">// TS has special behavior for &quot;rooted&quot; paths (absolute paths):
+        // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3303-L3313
+        </span>Request::Windows { path: Pattern::Constant(path) } |
+        <span class="comment">// Server relative is treated as absolute
+        </span>Request::ServerRelative { path: Pattern::Constant(path) } =&gt; {
+            <span class="kw">return </span>resolve_extends_rooted_or_relative(context, request, resolve_options, path).<span class="kw">await</span>;
+        }
+
+        <span class="comment">// TS has special behavior for (explicitly) &#39;./&#39; and &#39;../&#39;, but not &#39;.&#39; nor &#39;..&#39;:
+        // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3303-L3313
+        </span>Request::Relative {
+            path: Pattern::Constant(path),
+            ..
+        } <span class="kw">if </span>path.starts_with(<span class="string">&quot;./&quot;</span>) || path.starts_with(<span class="string">&quot;../&quot;</span>) =&gt; {
+            <span class="kw">return </span>resolve_extends_rooted_or_relative(context, request, resolve_options, path).<span class="kw">await</span>;
+        }
+
+        <span class="comment">// An empty extends is treated as &quot;tsconfig.json&quot;
+        </span>Request::Empty =&gt; {
+            <span class="string">&quot;tsconfig.json&quot;</span>.to_string()
+        }
+        <span class="comment">// All other types are treated as module imports, and joined with
+        // &quot;tsconfig.json&quot;. This includes &quot;relative&quot; imports like &#39;.&#39; and &#39;..&#39;.
+        </span><span class="kw">_ </span>=&gt; {
+            <span class="macro">format!</span>(<span class="string">&quot;{extends}/tsconfig.json&quot;</span>)
+        }
+    };
+
+    <span class="kw">let </span>request = RequestVc::parse_string(extends);
+    <span class="comment">// There might be multiple alternatives like
+    // &quot;some/path/node_modules/xyz/abc.json&quot; and &quot;some/node_modules/xyz/abc.json&quot;.
+    // We only want to use the first one.
+    </span><span class="prelude-val">Ok</span>(resolve(context, request, resolve_options).first_asset())
+}
+
+<span class="kw">async fn </span>resolve_extends_rooted_or_relative(
+    context: FileSystemPathVc,
+    request: RequestVc,
+    resolve_options: ResolveOptionsVc,
+    path: <span class="kw-2">&amp;</span>str,
+) -&gt; <span class="prelude-ty">Result</span>&lt;AssetOptionVc&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>result = resolve(context, request, resolve_options).first_asset();
+
+    <span class="comment">// If the file doesn&#39;t end with &quot;.json&quot; and we can&#39;t find the file, then we have
+    // to try again with it.
+    // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3305
+    </span><span class="kw">if </span>!path.ends_with(<span class="string">&quot;.json&quot;</span>) &amp;&amp; result.<span class="kw">await</span><span class="question-mark">?</span>.is_none() {
+        <span class="kw">let </span>request = RequestVc::parse_string(<span class="macro">format!</span>(<span class="string">&quot;{path}.json&quot;</span>));
+        result = resolve(context, request, resolve_options).first_asset();
+    }
+    <span class="prelude-val">Ok</span>(result)
 }
 
 <span class="kw">pub async fn </span>read_from_tsconfigs&lt;T&gt;(
