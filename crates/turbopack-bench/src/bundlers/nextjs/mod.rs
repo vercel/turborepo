@@ -129,7 +129,7 @@ impl Bundler for NextJs {
         match (self.render_type, self.turbo) {
             (RenderType::ServerSidePrerendered, true) => Duration::from_millis(500),
             // Arbitrary default timeout that seems to work well for Next.js Webpack
-            _ => Duration::from_millis(500 + (module_count as f64 / 2.0).ceil() as u64),
+            _ => Duration::from_millis(5000 + (module_count as f64 / 2.0).ceil() as u64),
         }
     }
 }
