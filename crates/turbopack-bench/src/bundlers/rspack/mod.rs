@@ -26,7 +26,7 @@ impl Bundler for Rspack {
             install_dir,
             &[
                 NpmPackage::new("react-refresh", "^0.14.0"),
-                NpmPackage::new("@rspack/cli", "0.1.7"),
+                NpmPackage::new("@rspack/cli", "0.1.9"),
             ],
         )
         .context("failed to install from npm")?;
