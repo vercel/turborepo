@@ -495,6 +495,44 @@
 <a href="#495" id="495">495</a>
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fs::{<span class="self">self</span>},
     panic::AssertUnwindSafe,
@@ -529,8 +567,6 @@
 
 <span class="kw">pub mod </span>bundlers;
 <span class="kw">pub mod </span>util;
-
-<span class="kw">const </span>MAX_UPDATE_TIMEOUT: Duration = Duration::from_secs(<span class="number">60</span>);
 
 <span class="kw">pub fn </span>bench_startup(c: <span class="kw-2">&amp;mut </span>Criterion, bundlers: <span class="kw-2">&amp;</span>[Box&lt;<span class="kw">dyn </span>Bundler&gt;]) {
     <span class="kw">let </span><span class="kw-2">mut </span>g = c.benchmark_group(<span class="string">&quot;bench_startup&quot;</span>);
@@ -679,6 +715,9 @@
                         <span class="kw">let </span>module_picker = <span class="kw-2">&amp;*</span>module_picker;
                         <span class="kw">let </span>browser = <span class="kw-2">&amp;*</span>browser;
 
+                        <span class="kw">let </span>max_init_update_timeout = bundler.max_init_update_timeout(module_count);
+                        <span class="kw">let </span>max_update_timeout = bundler.max_update_timeout(module_count);
+
                         b.to_async(<span class="kw-2">&amp;</span>runtime).try_iter_async(
                             <span class="kw-2">&amp;</span>runtime,
                             || <span class="kw">async </span>{
@@ -723,7 +762,7 @@
                                         }
                                         <span class="prelude-val">Err</span>(e) =&gt; {
                                             exponential_duration <span class="kw-2">*</span>= <span class="number">2</span>;
-                                            <span class="kw">if </span>exponential_duration &gt; MAX_UPDATE_TIMEOUT {
+                                            <span class="kw">if </span>exponential_duration &gt; max_init_update_timeout {
                                                 <span class="kw">return </span><span class="prelude-val">Err</span>(
                                                     e.context(<span class="string">&quot;failed to make warmup change&quot;</span>)
                                                 );
@@ -734,16 +773,34 @@
 
                                 <span class="comment">// Once we know the HMR server is connected, we make a few warmup
                                 // changes.
-                                </span><span class="kw">for _ in </span><span class="number">0</span>..hmr_warmup {
-                                    make_change(
+                                </span><span class="kw">let </span><span class="kw-2">mut </span>hmr_warmup_iter = <span class="number">0</span>;
+                                <span class="kw">let </span><span class="kw-2">mut </span>hmr_warmup_dropped = <span class="number">0</span>;
+                                <span class="kw">while </span>hmr_warmup_iter &lt; hmr_warmup {
+                                    <span class="kw">match </span>make_change(
                                         <span class="kw-2">&amp;</span>modules[<span class="number">0</span>].<span class="number">0</span>,
                                         bundler,
                                         <span class="kw-2">&amp;mut </span>guard,
                                         location,
-                                        MAX_UPDATE_TIMEOUT,
+                                        max_update_timeout,
                                         <span class="kw-2">&amp;</span>WallTime,
                                     )
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                                    .<span class="kw">await
+                                    </span>{
+                                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                                            <span class="comment">// We don&#39;t care about dropped updates during warmup.
+                                            </span>hmr_warmup_dropped += <span class="number">1</span>;
+
+                                            <span class="kw">if </span>hmr_warmup_dropped &gt;= hmr_warmup {
+                                                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+                                                    <span class="string">&quot;failed to make warmup change {} times&quot;</span>,
+                                                    hmr_warmup_dropped
+                                                ));
+                                            }
+                                        }
+                                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                                            hmr_warmup_iter += <span class="number">1</span>;
+                                        }
+                                    }
                                 }
 
                                 <span class="prelude-val">Ok</span>(guard)
@@ -752,26 +809,45 @@
                                 <span class="kw">let </span>module_picker = Arc::clone(module_picker);
                                 <span class="kw">async move </span>{
                                     <span class="kw">let </span><span class="kw-2">mut </span>value = m.zero();
-                                    <span class="kw">for </span>iter <span class="kw">in </span><span class="number">0</span>..iters {
+                                    <span class="kw">let </span><span class="kw-2">mut </span>dropped = <span class="number">0</span>;
+                                    <span class="kw">let </span><span class="kw-2">mut </span>iter = <span class="number">0</span>;
+                                    <span class="kw">while </span>iter &lt; iters {
                                         <span class="kw">let </span>module = module_picker.pick();
-                                        <span class="kw">let </span>duration = make_change(
+                                        <span class="kw">let </span>duration = <span class="kw">match </span>make_change(
                                             module,
                                             bundler,
                                             <span class="kw-2">&amp;mut </span>guard,
                                             location,
-                                            MAX_UPDATE_TIMEOUT,
+                                            max_update_timeout,
                                             <span class="kw-2">&amp;</span>m,
                                         )
-                                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                                        .<span class="kw">await
+                                        </span>{
+                                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                                                <span class="comment">// Some bundlers (e.g. Turbopack and Vite) can drop
+                                                // updates under certain conditions. We don&#39;t want
+                                                // to crash or stop the benchmark
+                                                // because of this. Instead, we keep going and
+                                                // report the number of dropped updates at the end.
+                                                </span>dropped += <span class="number">1</span>;
+                                                <span class="kw">continue</span>;
+                                            }
+                                            <span class="prelude-val">Ok</span>(duration) =&gt; duration,
+                                        };
                                         value = m.add(<span class="kw-2">&amp;</span>value, <span class="kw-2">&amp;</span>duration);
 
-                                        <span class="kw">let </span>i: u64 = iter + <span class="number">1</span>;
-                                        <span class="kw">if </span>verbose &amp;&amp; i != iters &amp;&amp; i.count_ones() == <span class="number">1 </span>{
+                                        iter += <span class="number">1</span>;
+                                        <span class="kw">if </span>verbose &amp;&amp; iter != iters &amp;&amp; iter.count_ones() == <span class="number">1 </span>{
                                             <span class="macro">eprint!</span>(
-                                                <span class="string">&quot; [{:?} {:?}/{}]&quot;</span>,
+                                                <span class="string">&quot; [{:?} {:?}/{}{}]&quot;</span>,
                                                 duration,
-                                                FormatDuration(value / (i <span class="kw">as </span>u32)),
-                                                i
+                                                FormatDuration(value / (iter <span class="kw">as </span>u32)),
+                                                iter,
+                                                <span class="kw">if </span>dropped &gt; <span class="number">0 </span>{
+                                                    <span class="macro">format!</span>(<span class="string">&quot; ({} dropped)&quot;</span>, dropped)
+                                                } <span class="kw">else </span>{
+                                                    <span class="string">&quot;&quot;</span>.to_string()
+                                                }
                                             );
                                         }
                                     }

@@ -166,7 +166,21 @@
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::{path::Path, process::Child};
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::{path::Path, process::Child, time::Duration};
 
 <span class="kw">use </span>anyhow::Result;
 
@@ -224,6 +238,20 @@
         <span class="prelude-val">Ok</span>(())
     }
     <span class="kw">fn </span>start_server(<span class="kw-2">&amp;</span><span class="self">self</span>, test_dir: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;(Child, String)&gt;;
+
+    <span class="doccomment">/// The maximum amount of time to wait for HMR during the setup and warmup
+    /// phase.
+    </span><span class="kw">fn </span>max_init_update_timeout(<span class="kw-2">&amp;</span><span class="self">self</span>, _module_count: usize) -&gt; Duration {
+        Duration::from_secs(<span class="number">60</span>)
+    }
+
+    <span class="doccomment">/// The maximum amount of time to wait for HMR during the actual benchmark.
+    /// This is a lot shorter than the init timeout because we expect
+    /// updates to generally happen quickly, and we don&#39;t want to wait for a
+    /// long time when an update is dropped.
+    </span><span class="kw">fn </span>max_update_timeout(<span class="kw-2">&amp;</span><span class="self">self</span>, _module_count: usize) -&gt; Duration {
+        Duration::from_secs(<span class="number">5</span>)
+    }
 }
 
 <span class="kw">pub fn </span>get_bundlers() -&gt; Vec&lt;Box&lt;<span class="kw">dyn </span>Bundler&gt;&gt; {
