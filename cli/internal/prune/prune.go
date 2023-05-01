@@ -151,7 +151,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 			return errors.Wrapf(err, "failed to create folder %s for %v", targetDir, internalDep)
 		}
 
-		if err := fs.RecursiveCopy(ctx.WorkspaceInfos.PackageJSONs[internalDep].Dir.ToStringDuringMigration(), targetDir.ToStringDuringMigration()); err != nil {
+		if err := fs.RecursiveCopy(ctx.WorkspaceInfos.PackageJSONs[internalDep].Dir.RestoreAnchor(p.base.RepoRoot), targetDir); err != nil {
 			return errors.Wrapf(err, "failed to copy %v into %v", internalDep, targetDir)
 		}
 		if opts.Docker {
@@ -159,7 +159,7 @@ func (p *prune) prune(opts *turbostate.PrunePayload) error {
 			if err := jsonDir.EnsureDir(); err != nil {
 				return errors.Wrapf(err, "failed to create folder %v for %v", jsonDir, internalDep)
 			}
-			if err := fs.RecursiveCopy(ctx.WorkspaceInfos.PackageJSONs[internalDep].PackageJSONPath.ToStringDuringMigration(), jsonDir.ToStringDuringMigration()); err != nil {
+			if err := fs.RecursiveCopy(ctx.WorkspaceInfos.PackageJSONs[internalDep].PackageJSONPath.RestoreAnchor(p.base.RepoRoot), jsonDir); err != nil {
 				return errors.Wrapf(err, "failed to copy %v into %v", internalDep, jsonDir)
 			}
 		}

@@ -1560,6 +1560,108 @@ func (x *GlobalChangeResponse) GetGlobalChange() bool {
 	return false
 }
 
+type RecursiveCopyRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Src string `protobuf:"bytes,1,opt,name=src,proto3" json:"src,omitempty"`
+	Dst string `protobuf:"bytes,2,opt,name=dst,proto3" json:"dst,omitempty"`
+}
+
+func (x *RecursiveCopyRequest) Reset() {
+	*x = RecursiveCopyRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_turborepo_ffi_messages_proto_msgTypes[24]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RecursiveCopyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecursiveCopyRequest) ProtoMessage() {}
+
+func (x *RecursiveCopyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_turborepo_ffi_messages_proto_msgTypes[24]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecursiveCopyRequest.ProtoReflect.Descriptor instead.
+func (*RecursiveCopyRequest) Descriptor() ([]byte, []int) {
+	return file_turborepo_ffi_messages_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *RecursiveCopyRequest) GetSrc() string {
+	if x != nil {
+		return x.Src
+	}
+	return ""
+}
+
+func (x *RecursiveCopyRequest) GetDst() string {
+	if x != nil {
+		return x.Dst
+	}
+	return ""
+}
+
+type RecursiveCopyResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Error *string `protobuf:"bytes,1,opt,name=error,proto3,oneof" json:"error,omitempty"`
+}
+
+func (x *RecursiveCopyResponse) Reset() {
+	*x = RecursiveCopyResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_turborepo_ffi_messages_proto_msgTypes[25]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RecursiveCopyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecursiveCopyResponse) ProtoMessage() {}
+
+func (x *RecursiveCopyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_turborepo_ffi_messages_proto_msgTypes[25]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecursiveCopyResponse.ProtoReflect.Descriptor instead.
+func (*RecursiveCopyResponse) Descriptor() ([]byte, []int) {
+	return file_turborepo_ffi_messages_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *RecursiveCopyResponse) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
 var File_turborepo_ffi_messages_proto protoreflect.FileDescriptor
 
 var file_turborepo_ffi_messages_proto_rawDesc = []byte{
@@ -1733,11 +1835,18 @@ var file_turborepo_ffi_messages_proto_rawDesc = []byte{
 	0x47, 0x6c, 0x6f, 0x62, 0x61, 0x6c, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x65, 0x73, 0x70,
 	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x23, 0x0a, 0x0d, 0x67, 0x6c, 0x6f, 0x62, 0x61, 0x6c, 0x5f, 0x63,
 	0x68, 0x61, 0x6e, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0c, 0x67, 0x6c, 0x6f,
-	0x62, 0x61, 0x6c, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x2a, 0x24, 0x0a, 0x0e, 0x50, 0x61, 0x63,
-	0x6b, 0x61, 0x67, 0x65, 0x4d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x12, 0x07, 0x0a, 0x03, 0x4e,
-	0x50, 0x4d, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x45, 0x52, 0x52, 0x59, 0x10, 0x01, 0x42,
-	0x0b, 0x5a, 0x09, 0x66, 0x66, 0x69, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x62, 0x61, 0x6c, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x22, 0x3a, 0x0a, 0x14, 0x52, 0x65, 0x63,
+	0x75, 0x72, 0x73, 0x69, 0x76, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x72, 0x63, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03,
+	0x73, 0x72, 0x63, 0x12, 0x10, 0x0a, 0x03, 0x64, 0x73, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x03, 0x64, 0x73, 0x74, 0x22, 0x3c, 0x0a, 0x15, 0x52, 0x65, 0x63, 0x75, 0x72, 0x73, 0x69,
+	0x76, 0x65, 0x43, 0x6f, 0x70, 0x79, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x19,
+	0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52,
+	0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x88, 0x01, 0x01, 0x42, 0x08, 0x0a, 0x06, 0x5f, 0x65, 0x72,
+	0x72, 0x6f, 0x72, 0x2a, 0x24, 0x0a, 0x0e, 0x50, 0x61, 0x63, 0x6b, 0x61, 0x67, 0x65, 0x4d, 0x61,
+	0x6e, 0x61, 0x67, 0x65, 0x72, 0x12, 0x07, 0x0a, 0x03, 0x4e, 0x50, 0x4d, 0x10, 0x00, 0x12, 0x09,
+	0x0a, 0x05, 0x42, 0x45, 0x52, 0x52, 0x59, 0x10, 0x01, 0x42, 0x0b, 0x5a, 0x09, 0x66, 0x66, 0x69,
+	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1753,7 +1862,7 @@ func file_turborepo_ffi_messages_proto_rawDescGZIP() []byte {
 }
 
 var file_turborepo_ffi_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_turborepo_ffi_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_turborepo_ffi_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_turborepo_ffi_messages_proto_goTypes = []interface{}{
 	(PackageManager)(0),            // 0: PackageManager
 	(*TurboDataDirResp)(nil),       // 1: TurboDataDirResp
@@ -1780,20 +1889,22 @@ var file_turborepo_ffi_messages_proto_goTypes = []interface{}{
 	(*Patches)(nil),                // 22: Patches
 	(*GlobalChangeRequest)(nil),    // 23: GlobalChangeRequest
 	(*GlobalChangeResponse)(nil),   // 24: GlobalChangeResponse
-	nil,                            // 25: WorkspaceDependencies.DependenciesEntry
-	nil,                            // 26: TransitiveDepsRequest.WorkspacesEntry
-	nil,                            // 27: AdditionalBerryData.ResolutionsEntry
+	(*RecursiveCopyRequest)(nil),   // 25: RecursiveCopyRequest
+	(*RecursiveCopyResponse)(nil),  // 26: RecursiveCopyResponse
+	nil,                            // 27: WorkspaceDependencies.DependenciesEntry
+	nil,                            // 28: TransitiveDepsRequest.WorkspacesEntry
+	nil,                            // 29: AdditionalBerryData.ResolutionsEntry
 }
 var file_turborepo_ffi_messages_proto_depIdxs = []int32{
 	4,  // 0: GlobResp.files:type_name -> GlobRespList
 	7,  // 1: ChangedFilesResp.files:type_name -> ChangedFilesList
 	10, // 2: PackageDependencyList.list:type_name -> PackageDependency
-	25, // 3: WorkspaceDependencies.dependencies:type_name -> WorkspaceDependencies.DependenciesEntry
+	27, // 3: WorkspaceDependencies.dependencies:type_name -> WorkspaceDependencies.DependenciesEntry
 	0,  // 4: TransitiveDepsRequest.package_manager:type_name -> PackageManager
-	26, // 5: TransitiveDepsRequest.workspaces:type_name -> TransitiveDepsRequest.WorkspacesEntry
+	28, // 5: TransitiveDepsRequest.workspaces:type_name -> TransitiveDepsRequest.WorkspacesEntry
 	15, // 6: TransitiveDepsRequest.resolutions:type_name -> AdditionalBerryData
 	12, // 7: TransitiveDepsResponse.dependencies:type_name -> WorkspaceDependencies
-	27, // 8: AdditionalBerryData.resolutions:type_name -> AdditionalBerryData.ResolutionsEntry
+	29, // 8: AdditionalBerryData.resolutions:type_name -> AdditionalBerryData.ResolutionsEntry
 	16, // 9: LockfilePackageList.list:type_name -> LockfilePackage
 	0,  // 10: SubgraphRequest.package_manager:type_name -> PackageManager
 	15, // 11: SubgraphRequest.resolutions:type_name -> AdditionalBerryData
@@ -2103,6 +2214,30 @@ func file_turborepo_ffi_messages_proto_init() {
 				return nil
 			}
 		}
+		file_turborepo_ffi_messages_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RecursiveCopyRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_turborepo_ffi_messages_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RecursiveCopyResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	file_turborepo_ffi_messages_proto_msgTypes[2].OneofWrappers = []interface{}{
 		(*GlobResp_Files)(nil),
@@ -2131,13 +2266,14 @@ func file_turborepo_ffi_messages_proto_init() {
 		(*PatchesResponse_Patches)(nil),
 		(*PatchesResponse_Error)(nil),
 	}
+	file_turborepo_ffi_messages_proto_msgTypes[25].OneofWrappers = []interface{}{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_turborepo_ffi_messages_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   27,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -7,6 +7,7 @@ mod lockfile;
 use std::{mem::ManuallyDrop, path::PathBuf};
 
 pub use lockfile::{patches, subgraph, transitive_closure};
+use turbopath::AbsoluteSystemPathBuf;
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
@@ -120,4 +121,45 @@ pub extern "C" fn previous_content(buffer: Buffer) -> Buffer {
         response: Some(response),
     };
     resp.into()
+}
+
+#[no_mangle]
+pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
+    let req: proto::RecursiveCopyRequest = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::RecursiveCopyResponse {
+                error: Some(err.to_string()),
+            };
+            return resp.into();
+        }
+    };
+
+    let src = match AbsoluteSystemPathBuf::new(req.src) {
+        Ok(src) => src,
+        Err(e) => {
+            let response = proto::RecursiveCopyResponse {
+                error: Some(e.to_string()),
+            };
+            return response.into();
+        }
+    };
+
+    let dst = match AbsoluteSystemPathBuf::new(req.dst) {
+        Ok(dst) => dst,
+        Err(e) => {
+            let response = proto::RecursiveCopyResponse {
+                error: Some(e.to_string()),
+            };
+            return response.into();
+        }
+    };
+
+    let response = match turborepo_fs::recursive_copy(&src, &dst) {
+        Ok(()) => proto::RecursiveCopyResponse { error: None },
+        Err(e) => proto::RecursiveCopyResponse {
+            error: Some(e.to_string()),
+        },
+    };
+    response.into()
 }
