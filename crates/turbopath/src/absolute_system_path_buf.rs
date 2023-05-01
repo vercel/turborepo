@@ -61,10 +61,6 @@ impl AbsoluteSystemPathBuf {
         Ok(AbsoluteSystemPathBuf(system_path))
     }
 
-    pub fn new_unchecked(raw: impl Into<PathBuf>) -> Self {
-        Self(raw.into())
-    }
-
     /// Anchors `path` at `self`.
     ///
     /// # Arguments

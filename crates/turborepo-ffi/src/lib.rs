@@ -134,10 +134,28 @@ pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
             return resp.into();
         }
     };
-    let response = match turborepo_fs::recursive_copy(
-        &AbsoluteSystemPathBuf::new_unchecked(req.src),
-        &AbsoluteSystemPathBuf::new_unchecked(req.dst),
-    ) {
+
+    let src = match AbsoluteSystemPathBuf::new(req.src) {
+        Ok(src) => src,
+        Err(e) => {
+            let response = proto::RecursiveCopyResponse {
+                error: Some(e.to_string()),
+            };
+            return response.into();
+        }
+    };
+
+    let dst = match AbsoluteSystemPathBuf::new(req.dst) {
+        Ok(dst) => dst,
+        Err(e) => {
+            let response = proto::RecursiveCopyResponse {
+                error: Some(e.to_string()),
+            };
+            return response.into();
+        }
+    };
+
+    let response = match turborepo_fs::recursive_copy(&src, &dst) {
         Ok(()) => proto::RecursiveCopyResponse { error: None },
         Err(e) => proto::RecursiveCopyResponse {
             error: Some(e.to_string()),
