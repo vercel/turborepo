@@ -33,15 +33,6 @@ use crate::{bundlers::Bundler, util::PageGuard};
 pub mod bundlers;
 pub mod util;
 
-/// The maximum amount of time to wait for HMR during the setup and warmup
-/// phase.
-const MAX_INIT_UPDATE_TIMEOUT: Duration = Duration::from_secs(60);
-/// The maximum amount of time to wait for HMR during the actual benchmark. This
-/// is a lot shorter than the init timeout because we expect updates to
-/// generally happen quickly, and we don't want to wait for a long time when an
-/// update is dropped.
-const MAX_UPDATE_TIMEOUT: Duration = Duration::from_secs(5);
-
 pub fn bench_startup(c: &mut Criterion, bundlers: &[Box<dyn Bundler>]) {
     let mut g = c.benchmark_group("bench_startup");
     g.sample_size(10);
@@ -189,6 +180,9 @@ fn bench_hmr_internal(
                         let module_picker = &*module_picker;
                         let browser = &*browser;
 
+                        let max_init_update_timeout = bundler.max_init_update_timeout(module_count);
+                        let max_update_timeout = bundler.max_update_timeout(module_count);
+
                         b.to_async(&runtime).try_iter_async(
                             &runtime,
                             || async {
@@ -233,7 +227,7 @@ fn bench_hmr_internal(
                                         }
                                         Err(e) => {
                                             exponential_duration *= 2;
-                                            if exponential_duration > MAX_INIT_UPDATE_TIMEOUT {
+                                            if exponential_duration > max_init_update_timeout {
                                                 return Err(
                                                     e.context("failed to make warmup change")
                                                 );
@@ -252,7 +246,7 @@ fn bench_hmr_internal(
                                         bundler,
                                         &mut guard,
                                         location,
-                                        MAX_UPDATE_TIMEOUT,
+                                        max_update_timeout,
                                         &WallTime,
                                     )
                                     .await
@@ -289,7 +283,7 @@ fn bench_hmr_internal(
                                             bundler,
                                             &mut guard,
                                             location,
-                                            MAX_UPDATE_TIMEOUT,
+                                            max_update_timeout,
                                             &m,
                                         )
                                         .await
