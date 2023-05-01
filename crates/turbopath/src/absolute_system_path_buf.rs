@@ -17,6 +17,7 @@ use serde::Serialize;
 
 use crate::{
     AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError, RelativeSystemPathBuf,
+    RelativeUnixPath,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
@@ -51,10 +52,10 @@ impl AbsoluteSystemPathBuf {
     /// #[cfg(not(windows))]
     /// assert_eq!(absolute_path.as_path(), Path::new("/Users/user"));
     /// ```
-    pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathValidationError> {
+    pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathError> {
         let unchecked_path = unchecked_path.into();
         if !unchecked_path.is_absolute() {
-            return Err(PathValidationError::NotAbsolute(unchecked_path));
+            return Err(PathValidationError::NotAbsolute(unchecked_path).into());
         }
 
         let system_path = unchecked_path.into_system()?;
@@ -90,10 +91,7 @@ impl AbsoluteSystemPathBuf {
     ///  assert_eq!(anchored_path.as_path(), Path::new("Documents"));
     /// }
     /// ```
-    pub fn anchor(
-        &self,
-        path: &AbsoluteSystemPathBuf,
-    ) -> Result<AnchoredSystemPathBuf, PathValidationError> {
+    pub fn anchor(&self, path: &AbsoluteSystemPathBuf) -> Result<AnchoredSystemPathBuf, PathError> {
         AnchoredSystemPathBuf::new(self, path)
     }
 
@@ -125,6 +123,14 @@ impl AbsoluteSystemPathBuf {
     /// ```
     pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
         AbsoluteSystemPathBuf(self.0.join(path.as_path()))
+    }
+
+    pub fn join_unix_path(
+        &self,
+        unix_path: &RelativeUnixPath,
+    ) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let tail = unix_path.to_system_path()?;
+        Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path())))
     }
 
     pub fn as_path(&self) -> &Path {
@@ -268,15 +274,21 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn test_absolute_system_path_buf_on_unix() {
+        use crate::PathError;
+
         assert!(AbsoluteSystemPathBuf::new("/Users/user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new("./Users/user/"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         );
 
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         );
     }
 
@@ -286,15 +298,21 @@ mod tests {
         assert!(AbsoluteSystemPathBuf::new("C:\\Users\\user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new(".\\Users\\user\\"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         );
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         );
         assert_matches!(
             AbsoluteSystemPathBuf::new("/Users/home"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         )
     }
 }
