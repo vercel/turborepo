@@ -79,18 +79,19 @@ struct ReadScopeCollectiblesTaskType {
 
 /// Different Task types
 enum TaskType {
+    // Note: double boxed to reduce TaskType size
     /// A root task that will track dependencies and re-execute when
     /// dependencies change. Task will eventually settle to the correct
     /// execution.
-    Root(NativeTaskFn),
+    Root(Box<NativeTaskFn>),
 
-    // TODO implement these strongly consistency
+    // Note: double boxed to reduce TaskType size
     /// A single root task execution. It won't track dependencies.
     /// Task will definitely include all invalidations that happened before the
     /// start of the task. It may or may not include invalidations that
     /// happened after that. It may see these invalidations partially
     /// applied.
-    Once(OnceTaskFn),
+    Once(Box<OnceTaskFn>),
 
     /// A task that reads all collectibles of a certain trait from a
     /// [TaskScope]. It will do that by recursively calling
@@ -527,10 +528,10 @@ impl Task {
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(
                 description,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -540,15 +541,13 @@ impl Task {
         functor: impl Fn() -> NativeTaskFuture + Sync + Send + 'static,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::Root(Box::new(functor));
+        let ty = TaskType::Root(Box::new(Box::new(functor)));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
             ))),
         }
     }
@@ -559,15 +558,13 @@ impl Task {
         functor: impl Future<Output = Result<RawVc>> + Send + 'static,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::Once(Mutex::new(Some(Box::pin(functor))));
+        let ty = TaskType::Once(Box::new(Mutex::new(Some(Box::pin(functor)))));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
             ))),
         }
     }
@@ -578,18 +575,18 @@ impl Task {
         trait_type_id: TraitTypeId,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::ReadScopeCollectibles(box ReadScopeCollectiblesTaskType {
+        let ty = TaskType::ReadScopeCollectibles(Box::new(ReadScopeCollectiblesTaskType {
             scope: target_scope,
             trait_type: trait_type_id,
-        });
+        }));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(
                 description,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -600,19 +597,19 @@ impl Task {
         trait_type_id: TraitTypeId,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::ReadTaskCollectibles(box ReadTaskCollectiblesTaskType {
+        let ty = TaskType::ReadTaskCollectibles(Box::new(ReadTaskCollectiblesTaskType {
             task: target_task,
             trait_type: trait_type_id,
-        });
+        }));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_root_scoped(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new_root_scoped(
                 description,
                 scope,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -2786,7 +2783,7 @@ impl Task {
         if unset {
             *state = TaskMetaState::Unloaded(UnloadedTaskState { stats_type });
         } else {
-            *state = TaskMetaState::Partial(box PartialTaskState { scopes, stats_type });
+            *state = TaskMetaState::Partial(Box::new(PartialTaskState { scopes, stats_type }));
         }
         drop(state);
 

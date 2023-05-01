@@ -5,12 +5,12 @@ use std::{
 };
 
 use command_group::AsyncCommandGroup;
-use log::{debug, error};
 use notify::{Config, Event, EventKind, Watcher};
 use sysinfo::{Pid, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
 use thiserror::Error;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
+use tracing::debug;
 
 use super::{client::proto::turbod_client::TurbodClient, DaemonClient};
 use crate::daemon::DaemonError;
@@ -374,6 +374,7 @@ mod test {
         select,
         sync::{oneshot::Sender, Mutex},
     };
+    use tracing::info;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
@@ -561,7 +562,7 @@ mod test {
             &self,
             req: tonic::Request<proto::ShutdownRequest>,
         ) -> tonic::Result<tonic::Response<proto::ShutdownResponse>> {
-            log::info!("shutdown request: {:?}", req);
+            info!("shutdown request: {:?}", req);
             self.shutdown
                 .lock()
                 .await

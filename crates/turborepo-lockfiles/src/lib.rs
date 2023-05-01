@@ -1,12 +1,17 @@
+#![feature(once_cell)]
+
+mod berry;
 mod error;
 mod npm;
 
 use std::collections::{HashMap, HashSet};
 
+pub use berry::{Error as BerryError, *};
 pub use error::Error;
 pub use npm::*;
+use serde::Serialize;
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
     pub key: String,
     pub version: String,
@@ -26,19 +31,32 @@ pub trait Lockfile {
     ) -> Result<Option<Package>, Error>;
     // Given a lockfile key return all (prod/dev/optional) dependencies of that
     // package
-    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error>;
+    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
+}
+
+pub fn all_transitive_closures<L: Lockfile + Sync>(
+    lockfile: &L,
+    workspaces: HashMap<String, HashMap<String, String>>,
+) -> Result<HashMap<String, HashSet<Package>>, Error> {
+    workspaces
+        .into_iter()
+        .map(|(workspace, unresolved_deps)| {
+            let closure = transitive_closure(lockfile, &workspace, unresolved_deps)?;
+            Ok((workspace, closure))
+        })
+        .collect()
 }
 
 // this should get replaced by petgraph in the future :)
 pub fn transitive_closure<L: Lockfile>(
     lockfile: &L,
-    workspace_path: String,
+    workspace_path: &str,
     unresolved_deps: HashMap<String, String>,
 ) -> Result<HashSet<Package>, Error> {
     let mut transitive_deps = HashSet::new();
     transitive_closure_helper(
         lockfile,
-        &workspace_path,
+        workspace_path,
         unresolved_deps,
         &mut transitive_deps,
     )?;

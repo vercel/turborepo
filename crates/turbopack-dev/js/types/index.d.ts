@@ -5,6 +5,11 @@ import { DevRuntimeParams } from "./runtime";
 
 export type RefreshHelpers = RefreshRuntimeGlobals["$RefreshHelpers$"];
 
+export type RefreshContext = {
+  register: RefreshRuntimeGlobals["$RefreshReg$"];
+  signature: RefreshRuntimeGlobals["$RefreshSig$"];
+};
+
 type ChunkPath = string;
 type ModuleId = string;
 
@@ -22,9 +27,17 @@ export type ChunkRegistration = [
   chunkModules: ChunkModule[],
   DevRuntimeParams | undefined
 ];
+export type ChunkData =
+  | ChunkPath
+  | {
+      path: ChunkPath;
+      included: ModuleId[];
+      excluded: ModuleId[];
+      moduleChunks: ChunkPath[];
+    };
 export type ChunkList = {
   path: ChunkPath;
-  chunks: ChunkPath[];
+  chunks: ChunkData[];
   source: "entry" | "dynamic";
 };
 
@@ -36,7 +49,7 @@ interface Module {
   hot?: Hot;
   children: ModuleId[];
   parents: ModuleId[];
-  interopNamespace?: EsmInteropNamespace;
+  namespaceObject?: EsmNamespaceObject;
 }
 
 enum SourceType {
@@ -73,12 +86,29 @@ type SourceInfo =
 type ModuleCache = Record<ModuleId, Module>;
 
 type CommonJsRequire = (moduleId: ModuleId) => Exports;
+type CommonJsExport = (exports: Record<string, any>) => void;
 
-export type EsmInteropNamespace = Record<string, any>;
+type RequireContextFactory = (
+  dir: string,
+  useSubdirectories = true
+) => RequireContext;
+
+type RequireContextMap = Record<
+  ModuleId,
+  { internal: boolean; id: () => ModuleId }
+>;
+
+interface RequireContext {
+  (moduleId: ModuleId): Exports | EsmNamespaceObject;
+  keys(): ModuleId[];
+  resolve(moduleId: ModuleId): ModuleId;
+}
+
+export type EsmNamespaceObject = Record<string, any>;
 type EsmImport = (
   moduleId: ModuleId,
   allowExportDefault: boolean
-) => EsmInteropNamespace;
+) => EsmNamespaceObject;
 type EsmExport = (exportGetters: Record<string, () => any>) => void;
 type ExportValue = (value: any) => void;
 
@@ -87,13 +117,18 @@ type LoadChunk = (chunkPath: ChunkPath) => Promise<any> | undefined;
 interface TurbopackContext {
   e: Module["exports"];
   r: CommonJsRequire;
+  x: NodeJS.Require;
+  f: RequireContextFactory;
   i: EsmImport;
   s: EsmExport;
+  j: CommonJsExport;
   v: ExportValue;
   m: Module;
   c: ModuleCache;
   l: LoadChunk;
-  p: Partial<NodeJS.Process> & Pick<NodeJS.Process, "env">;
+  g: globalThis;
+  k: RefreshContext;
+  __dirname: string;
 }
 
 type ModuleFactory = (
@@ -129,11 +164,17 @@ export interface TurbopackGlobals {
   TURBOPACK_CHUNK_LISTS?: ChunkList[];
 }
 
+export type GetChunkPath = (chunkData: ChunkData) => ChunkPath;
+
 export type GetFirstModuleChunk = (moduleId: ModuleId) => ChunkPath | null;
 export type GetOrInstantiateRuntimeModule = (
   moduleId: ModuleId,
   chunkPath: ChunkPath
 ) => Module;
+export type InternalLoadChunk = (
+  source: SourceInfo,
+  chunkData: ChunkData
+) => Promise<any>;
 
 export interface Loader {
   promise: Promise<undefined>;

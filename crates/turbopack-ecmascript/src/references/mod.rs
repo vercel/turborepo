@@ -1,10 +1,13 @@
 pub mod amd;
 pub mod cjs;
 pub mod constant_condition;
+pub mod constant_value;
 pub mod esm;
 pub mod node;
 pub mod pattern_mapping;
 pub mod raw;
+pub mod require_context;
+pub mod type_issue;
 pub mod typescript;
 pub mod unreachable;
 pub mod util;
@@ -15,11 +18,11 @@ use std::{
     future::Future,
     mem::take,
     pin::Pin,
-    sync::Arc,
 };
 
 use anyhow::Result;
 use constant_condition::{ConstantConditionValue, ConstantConditionVc};
+use constant_value::ConstantValueVc;
 use indexmap::IndexSet;
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
@@ -37,11 +40,15 @@ use swc_core::{
         visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::{primitives::BoolVc, TryJoinIterExt, Value};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{
+    primitives::{BoolVc, RegexVc},
+    TryJoinIterExt, Value,
+};
+use turbo_tasks_fs::{FileJsonContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetVc},
     compile_time_info::{CompileTimeInfoVc, FreeVarReference},
+    error::PrettyPrintError,
     issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReferenceVc, AssetReferencesVc, SourceMapReferenceVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
@@ -97,7 +104,7 @@ use crate::{
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext, VarGraph},
         imports::{ImportedSymbol, Reexport},
-        ModuleValue,
+        parse_require_context, ModuleValue, RequireContextValueVc,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{
@@ -109,11 +116,13 @@ use crate::{
             CjsRequireAssetReferenceVc, CjsRequireCacheAccess, CjsRequireResolveAssetReferenceVc,
         },
         esm::{module_id::EsmModuleIdAssetReferenceVc, EsmBindingVc, EsmExportsVc},
+        require_context::{RequireContextAssetReferenceVc, RequireContextMapVc},
+        type_issue::SpecifiedModuleTypeIssue,
     },
     resolve::try_to_severity,
     tree_shake::{part_of_module, split},
     typescript::resolve::tsconfig,
-    EcmascriptInputTransformsVc, EcmascriptOptions,
+    EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType, SpecifiedModuleTypeVc,
 };
 
 #[turbo_tasks::value(shared)]
@@ -242,6 +251,20 @@ impl Default for AnalyzeEcmascriptModuleResultBuilder {
     }
 }
 
+#[turbo_tasks::function]
+async fn specified_module_type(package_json: FileSystemPathVc) -> Result<SpecifiedModuleTypeVc> {
+    if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
+        if let Some(r#type) = content.get("type") {
+            match r#type.as_str() {
+                Some("module") => return Ok(SpecifiedModuleType::EcmaScript.cell()),
+                Some("commonjs") => return Ok(SpecifiedModuleType::CommonJs.cell()),
+                _ => {}
+            }
+        }
+    }
+    Ok(SpecifiedModuleType::Automatic.cell())
+}
+
 struct AnalysisState<'a> {
     handler: &'a Handler,
     source: AssetVc,
@@ -285,11 +308,18 @@ pub(crate) async fn analyze_ecmascript_module(
         parse(source, ty, transforms)
     };
 
-    match &*find_context_file(path.parent(), package_json()).await? {
-        FindContextFileResult::Found(package_json, _) => {
-            analysis.add_reference(PackageJsonReferenceVc::new(*package_json));
+    let specified_type = match options.specified_module_type {
+        SpecifiedModuleType::Automatic => {
+            match *find_context_file(path.parent(), package_json()).await? {
+                FindContextFileResult::Found(package_json, _) => {
+                    analysis.add_reference(PackageJsonReferenceVc::new(package_json));
+                    *specified_module_type(package_json).await?
+                }
+                FindContextFileResult::NotFound(_) => SpecifiedModuleType::Automatic,
+            }
         }
-        FindContextFileResult::NotFound(_) => {}
+        SpecifiedModuleType::EcmaScript => SpecifiedModuleType::EcmaScript,
+        SpecifiedModuleType::CommonJs => SpecifiedModuleType::CommonJs,
     };
 
     if analyze_types {
@@ -375,11 +405,11 @@ pub(crate) async fn analyze_ecmascript_module(
             let handler = Handler::with_emitter(
                 true,
                 false,
-                box IssueEmitter {
+                Box::new(IssueEmitter {
                     source,
                     source_map: source_map.clone(),
                     title: None,
-                },
+                }),
             );
             let var_graph = HANDLER.set(&handler, || {
                 GLOBALS.set(globals, || create_graph(program, eval_context))
@@ -513,13 +543,39 @@ pub(crate) async fn analyze_ecmascript_module(
             }
 
             let exports = if !esm_exports.is_empty() || !esm_star_exports.is_empty() {
+                if matches!(specified_type, SpecifiedModuleType::CommonJs) {
+                    SpecifiedModuleTypeIssue {
+                        path: source.ident().path(),
+                        specified_type,
+                    }
+                    .cell()
+                    .as_issue()
+                    .emit();
+                }
                 let esm_exports: EsmExportsVc = EsmExports {
                     exports: esm_exports,
                     star_exports: esm_star_exports,
                 }
-                .into();
+                .cell();
                 analysis.add_code_gen(esm_exports);
                 EcmascriptExports::EsmExports(esm_exports)
+            } else if matches!(specified_type, SpecifiedModuleType::EcmaScript) {
+                if has_cjs_export(program) {
+                    SpecifiedModuleTypeIssue {
+                        path: source.ident().path(),
+                        specified_type,
+                    }
+                    .cell()
+                    .as_issue()
+                    .emit();
+                }
+                EcmascriptExports::EsmExports(
+                    EsmExports {
+                        exports: Default::default(),
+                        star_exports: Default::default(),
+                    }
+                    .cell(),
+                )
             } else if has_cjs_export(program) {
                 EcmascriptExports::CommonJs
             } else {
@@ -585,7 +641,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                         value
                                     }
                                     EffectArg::Spread => {
-                                        JsValue::Unknown(None, "spread is not supported yet")
+                                        JsValue::unknown_empty("spread is not supported yet")
                                     }
                                 };
                                 state.link_value(value, in_try).await
@@ -725,6 +781,40 @@ pub(crate) async fn analyze_ecmascript_module(
                         )
                     }
 
+                    JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext) => {
+                        let args = linked_args(args).await?;
+                        let options = match parse_require_context(&args) {
+                            Ok(options) => options,
+                            Err(err) => {
+                                let (args, hints) = explain_args(&args);
+                                handler.span_err_with_code(
+                                    span,
+                                    &format!(
+                                        "require.context({args}) is not statically analyze-able: \
+                                         {}{hints}",
+                                        PrettyPrintError(&err)
+                                    ),
+                                    DiagnosticId::Error(
+                                        errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT
+                                            .to_string(),
+                                    ),
+                                );
+                                return Ok(());
+                            }
+                        };
+
+                        analysis.add_reference(RequireContextAssetReferenceVc::new(
+                            source,
+                            origin,
+                            options.dir,
+                            options.include_subdirs,
+                            RegexVc::cell(options.filter),
+                            AstPathVc::cell(ast_path.to_vec()),
+                            OptionIssueSourceVc::some(issue_source(source, span)),
+                            in_try,
+                        ));
+                    }
+
                     JsValue::WellKnownFunction(WellKnownFunctionKind::FsReadMethod(name)) => {
                         let args = linked_args(args).await?;
                         if !args.is_empty() {
@@ -760,11 +850,11 @@ pub(crate) async fn analyze_ecmascript_module(
                         let linked_func_call = state
                             .link_value(
                                 JsValue::call(
-                                    box JsValue::WellKnownFunction(
-                                        WellKnownFunctionKind::PathResolve(
-                                            box parent_path.path.as_str().into(),
-                                        ),
-                                    ),
+                                    Box::new(JsValue::WellKnownFunction(
+                                        WellKnownFunctionKind::PathResolve(Box::new(
+                                            parent_path.path.as_str().into(),
+                                        )),
+                                    )),
                                     args.clone(),
                                 ),
                                 in_try,
@@ -791,7 +881,9 @@ pub(crate) async fn analyze_ecmascript_module(
                         let linked_func_call = state
                             .link_value(
                                 JsValue::call(
-                                    box JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin),
+                                    Box::new(JsValue::WellKnownFunction(
+                                        WellKnownFunctionKind::PathJoin,
+                                    )),
                                     args.clone(),
                                 ),
                                 in_try,
@@ -819,8 +911,10 @@ pub(crate) async fn analyze_ecmascript_module(
                             let mut show_dynamic_warning = false;
                             let pat = js_value_to_pattern(&args[0]);
                             if pat.is_match("node") && args.len() >= 2 {
-                                let first_arg =
-                                    JsValue::member(box args[1].clone(), box 0_f64.into());
+                                let first_arg = JsValue::member(
+                                    Box::new(args[1].clone()),
+                                    Box::new(0_f64.into()),
+                                );
                                 let first_arg = state.link_value(first_arg, in_try).await?;
                                 let pat = js_value_to_pattern(&first_arg);
                                 if !pat.has_constant_parts() {
@@ -1021,9 +1115,9 @@ pub(crate) async fn analyze_ecmascript_module(
                                                 let linked_func_call = state
                                                     .link_value(
                                                         JsValue::call(
-                                                            box JsValue::WellKnownFunction(
+                                                            Box::new(JsValue::WellKnownFunction(
                                                                 WellKnownFunctionKind::PathJoin,
-                                                            ),
+                                                            )),
                                                             vec![
                                                                 JsValue::FreeVar(
                                                                     "__dirname".into(),
@@ -1084,9 +1178,9 @@ pub(crate) async fn analyze_ecmascript_module(
                                 let linked_func_call = state
                                     .link_value(
                                         JsValue::call(
-                                            box JsValue::WellKnownFunction(
+                                            Box::new(JsValue::WellKnownFunction(
                                                 WellKnownFunctionKind::PathJoin,
-                                            ),
+                                            )),
                                             vec![
                                                 JsValue::FreeVar("__dirname".into()),
                                                 p.into(),
@@ -1236,6 +1330,12 @@ pub(crate) async fn analyze_ecmascript_module(
                             .eq(name.iter().map(Cow::Borrowed).rev())
                         {
                             match value {
+                                FreeVarReference::Value(value) => {
+                                    analysis.add_code_gen(ConstantValueVc::new(
+                                        Value::new(value.clone()),
+                                        AstPathVc::cell(ast_path.to_vec()),
+                                    ));
+                                }
                                 FreeVarReference::EcmaScriptModule {
                                     request,
                                     context,
@@ -1340,6 +1440,7 @@ pub(crate) async fn analyze_ecmascript_module(
                             } => {
                                 let condition =
                                     analysis_state.link_value(condition, in_try).await?;
+
                                 macro_rules! inactive {
                                     ($block:ident) => {
                                         analysis.add_code_gen(UnreachableVc::new(AstPathVc::cell(
@@ -1455,7 +1556,7 @@ pub(crate) async fn analyze_ecmascript_module(
                                     &ast_path,
                                     span,
                                     func,
-                                    JsValue::Unknown(None, "no this provided"),
+                                    JsValue::unknown_empty("no this provided"),
                                     args,
                                     &analysis_state,
                                     &add_effects,
@@ -1517,7 +1618,10 @@ pub(crate) async fn analyze_ecmascript_module(
                                 }
 
                                 let func = analysis_state
-                                    .link_value(JsValue::member(box obj.clone(), box prop), in_try)
+                                    .link_value(
+                                        JsValue::member(Box::new(obj.clone()), Box::new(prop)),
+                                        in_try,
+                                    )
                                     .await?;
 
                                 handle_call(
@@ -1870,52 +1974,24 @@ async fn value_visitor_inner(
             _,
             box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
             args,
+        ) => require_resolve_visitor(origin, args, in_try).await?,
+        JsValue::Call(
+            _,
+            box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+            args,
+        ) => require_context_visitor(origin, args, in_try).await?,
+        JsValue::Call(
+            _,
+            box JsValue::WellKnownFunction(
+                WellKnownFunctionKind::RequireContextRequire(..)
+                | WellKnownFunctionKind::RequireContextRequireKeys(..)
+                | WellKnownFunctionKind::RequireContextRequireResolve(..),
+            ),
+            _,
         ) => {
-            if args.len() == 1 {
-                let pat = js_value_to_pattern(&args[0]);
-                let request = RequestVc::parse(Value::new(pat.clone()));
-                let resolved = cjs_resolve(
-                    origin,
-                    request,
-                    OptionIssueSourceVc::none(),
-                    try_to_severity(in_try),
-                )
-                .await?;
-                let mut values = resolved
-                    .primary
-                    .iter()
-                    .map(|result| async move {
-                        Ok(if let PrimaryResolveResult::Asset(asset) = result {
-                            Some(require_resolve(asset.ident().path()).await?)
-                        } else {
-                            None
-                        })
-                    })
-                    .try_join()
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
-                match values.len() {
-                    0 => JsValue::Unknown(
-                        Some(Arc::new(JsValue::call(
-                            box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
-                            args,
-                        ))),
-                        "unresolveable request",
-                    ),
-                    1 => values.pop().unwrap(),
-                    _ => JsValue::alternatives(values),
-                }
-            } else {
-                JsValue::Unknown(
-                    Some(Arc::new(JsValue::call(
-                        box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
-                        args,
-                    ))),
-                    "only a single argument is supported",
-                )
-            }
+            // TODO: figure out how to do static analysis without invalidating the while
+            // analysis when a new file gets added
+            v.into_unknown("require.context() static analysis is currently limited")
         }
         JsValue::FreeVar(ref kind) => match &**kind {
             "__dirname" => as_abs_path(origin.origin_path().parent()).await?,
@@ -1958,22 +2034,13 @@ async fn value_visitor_inner(
                     "@grpc/proto-loader" => {
                         JsValue::WellKnownObject(WellKnownObjectKind::NodeProtobufLoader)
                     }
-                    _ => JsValue::Unknown(
-                        Some(Arc::new(v)),
-                        "cross module analyzing is not yet supported",
-                    ),
+                    _ => v.into_unknown("cross module analyzing is not yet supported"),
                 }
             } else {
-                JsValue::Unknown(
-                    Some(Arc::new(v)),
-                    "cross module analyzing is not yet supported",
-                )
+                v.into_unknown("cross module analyzing is not yet supported")
             }
         }
-        JsValue::Argument(..) => JsValue::Unknown(
-            Some(Arc::new(v)),
-            "cross function analyzing is not yet supported",
-        ),
+        JsValue::Argument(..) => v.into_unknown("cross function analyzing is not yet supported"),
         _ => {
             let (mut v, mut modified) = replace_well_known(v, compile_time_info).await?;
             modified = replace_builtin(&mut v) || modified;
@@ -1982,6 +2049,99 @@ async fn value_visitor_inner(
         }
     };
     Ok((value, true))
+}
+
+async fn require_resolve_visitor(
+    origin: ResolveOriginVc,
+    args: Vec<JsValue>,
+    in_try: bool,
+) -> Result<JsValue> {
+    Ok(if args.len() == 1 {
+        let pat = js_value_to_pattern(&args[0]);
+        let request = RequestVc::parse(Value::new(pat.clone()));
+        let resolved = cjs_resolve(
+            origin,
+            request,
+            OptionIssueSourceVc::none(),
+            try_to_severity(in_try),
+        )
+        .await?;
+        let mut values = resolved
+            .primary
+            .iter()
+            .map(|result| async move {
+                Ok(if let PrimaryResolveResult::Asset(asset) = result {
+                    Some(require_resolve(asset.ident().path()).await?)
+                } else {
+                    None
+                })
+            })
+            .try_join()
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        match values.len() {
+            0 => JsValue::unknown(
+                JsValue::call(
+                    Box::new(JsValue::WellKnownFunction(
+                        WellKnownFunctionKind::RequireResolve,
+                    )),
+                    args,
+                ),
+                "unresolveable request",
+            ),
+            1 => values.pop().unwrap(),
+            _ => JsValue::alternatives(values),
+        }
+    } else {
+        JsValue::unknown(
+            JsValue::call(
+                Box::new(JsValue::WellKnownFunction(
+                    WellKnownFunctionKind::RequireResolve,
+                )),
+                args,
+            ),
+            "only a single argument is supported",
+        )
+    })
+}
+
+async fn require_context_visitor(
+    origin: ResolveOriginVc,
+    args: Vec<JsValue>,
+    in_try: bool,
+) -> Result<JsValue> {
+    let options = match parse_require_context(&args) {
+        Ok(options) => options,
+        Err(err) => {
+            return Ok(JsValue::unknown(
+                JsValue::call(
+                    Box::new(JsValue::WellKnownFunction(
+                        WellKnownFunctionKind::RequireContext,
+                    )),
+                    args,
+                ),
+                PrettyPrintError(&err).to_string(),
+            ))
+        }
+    };
+
+    let dir = origin.origin_path().parent().join(&options.dir);
+
+    let map = RequireContextMapVc::generate(
+        origin,
+        dir,
+        options.include_subdirs,
+        RegexVc::cell(options.filter),
+        OptionIssueSourceVc::none(),
+        try_to_severity(in_try),
+    );
+
+    Ok(JsValue::WellKnownFunction(
+        WellKnownFunctionKind::RequireContextRequire(RequireContextValueVc::from_context_map(map)),
+    ))
 }
 
 #[derive(Debug)]

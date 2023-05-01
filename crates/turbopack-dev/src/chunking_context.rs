@@ -3,7 +3,7 @@ use std::fmt::Write;
 use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
+    graph::{GraphTraversal, ReverseTopological},
     primitives::{BoolVc, StringVc},
     TryJoinIterExt, Value, ValueToString,
 };
@@ -12,25 +12,28 @@ use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        availability_info::AvailabilityInfo, optimize, ChunkVc, ChunkableAsset, ChunkableAssetVc,
-        ChunkingContext, ChunkingContextVc, ChunksVc, EvaluatableAssetsVc, ParallelChunkReference,
-        ParallelChunkReferenceVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        ChunkingContext, ChunkingContextVc, ChunksVc, EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
     ident::{AssetIdent, AssetIdentVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{ModulePart, PrimaryResolveResult},
+    resolve::ModulePart,
 };
+use turbopack_css::chunk::{CssChunkVc, CssChunksVc};
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkItemVc, EcmascriptChunkVc, EcmascriptChunkingContext,
-    EcmascriptChunkingContextVc,
+    EcmascriptChunkingContextVc, EcmascriptChunksVc,
 };
 
-use crate::ecmascript::{
-    chunk::EcmascriptDevChunkVc,
-    evaluate::chunk::EcmascriptDevEvaluateChunkVc,
-    list::asset::{EcmascriptDevChunkListSource, EcmascriptDevChunkListVc},
-    manifest::{chunk_asset::DevManifestChunkAssetVc, loader_item::DevManifestLoaderItemVc},
+use crate::{
+    css::optimize::optimize_css_chunks,
+    ecmascript::{
+        chunk::EcmascriptDevChunkVc,
+        evaluate::chunk::EcmascriptDevEvaluateChunkVc,
+        list::asset::{EcmascriptDevChunkListSource, EcmascriptDevChunkListVc},
+        manifest::{chunk_asset::DevManifestChunkAssetVc, loader_item::DevManifestLoaderItemVc},
+        optimize::optimize_ecmascript_chunks,
+    },
 };
 
 pub struct DevChunkingContextBuilder {
@@ -45,11 +48,6 @@ impl DevChunkingContextBuilder {
 
     pub fn layer(mut self, layer: &str) -> Self {
         self.context.layer = (!layer.is_empty()).then(|| layer.to_string());
-        self
-    }
-
-    pub fn css_chunk_root_path(mut self, path: FileSystemPathVc) -> Self {
-        self.context.css_chunk_root_path = Some(path);
         self
     }
 
@@ -84,8 +82,6 @@ pub struct DevChunkingContext {
     chunk_root_path: FileSystemPathVc,
     /// Chunks reference source maps assets
     reference_chunk_source_maps: bool,
-    /// Css Chunks are placed at this path
-    css_chunk_root_path: Option<FileSystemPathVc>,
     /// Css chunks reference source maps assets
     reference_css_chunk_source_maps: bool,
     /// Static assets are placed at this path
@@ -112,7 +108,6 @@ impl DevChunkingContextVc {
                 output_root,
                 chunk_root_path,
                 reference_chunk_source_maps: true,
-                css_chunk_root_path: None,
                 reference_css_chunk_source_maps: true,
                 asset_root_path,
                 layer: None,
@@ -298,16 +293,7 @@ impl ChunkingContext for DevChunkingContext {
             name += "._";
         }
         name += extension;
-        let mut root_path = self.chunk_root_path;
-        #[allow(clippy::single_match, reason = "future extensions")]
-        match extension {
-            ".css" => {
-                if let Some(path) = self.css_chunk_root_path {
-                    root_path = path;
-                }
-            }
-            _ => {}
-        }
+        let root_path = self.chunk_root_path;
         let root_path = if let Some(layer) = self.layer.as_deref() {
             root_path.join(layer)
         } else {
@@ -370,9 +356,11 @@ impl ChunkingContext for DevChunkingContext {
 
     #[turbo_tasks::function]
     async fn chunk_group(self_vc: DevChunkingContextVc, entry_chunk: ChunkVc) -> Result<AssetsVc> {
-        let chunks = get_optimized_parallel_chunks([entry_chunk]).await?;
+        let parallel_chunks = get_parallel_chunks([entry_chunk]).await?;
 
-        let mut assets: Vec<AssetVc> = chunks
+        let optimized_chunks = get_optimized_chunks(parallel_chunks).await?;
+
+        let mut assets: Vec<AssetVc> = optimized_chunks
             .await?
             .iter()
             .map(|chunk| self_vc.generate_chunk(*chunk))
@@ -412,9 +400,11 @@ impl ChunkingContext for DevChunkingContext {
 
         entry_assets.insert(entry_chunk.resolve().await?);
 
-        let chunks = get_optimized_parallel_chunks(entry_assets).await?;
+        let parallel_chunks = get_parallel_chunks(entry_assets).await?;
 
-        let mut assets: Vec<AssetVc> = chunks
+        let optimized_chunks = get_optimized_chunks(parallel_chunks).await?;
+
+        let mut assets: Vec<AssetVc> = optimized_chunks
             .await?
             .iter()
             .map(|chunk| self_vc.generate_chunk(*chunk))
@@ -447,60 +437,56 @@ impl EcmascriptChunkingContext for DevChunkingContext {
     }
 }
 
-async fn get_optimized_parallel_chunks<I>(entries: I) -> Result<ChunksVc>
+async fn get_parallel_chunks<I>(entries: I) -> Result<impl Iterator<Item = ChunkVc>>
 where
     I: IntoIterator<Item = ChunkVc>,
 {
-    let chunks: Vec<_> = GraphTraversal::<SkipDuplicates<ReverseTopological<_>, _>>::visit(
-        entries,
-        get_chunk_children,
-    )
-    .await
-    .completed()?
-    .into_inner()
-    .into_iter()
-    .collect();
-
-    let chunks = ChunksVc::cell(chunks);
-    let chunks = optimize(chunks);
-
-    Ok(chunks)
-}
-
-/// Computes the list of all chunk children of a given chunk.
-async fn get_chunk_children(parent: ChunkVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
-    Ok(parent
-        .references()
-        .await?
-        .iter()
-        .copied()
-        .map(reference_to_chunks)
-        .try_join()
-        .await?
-        .into_iter()
-        .flatten())
-}
-
-/// Get all parallel chunks from a parallel chunk reference.
-async fn reference_to_chunks(r: AssetReferenceVc) -> Result<impl Iterator<Item = ChunkVc> + Send> {
-    let mut result = Vec::new();
-    if let Some(pc) = ParallelChunkReferenceVc::resolve_from(r).await? {
-        if *pc.is_loaded_in_parallel().await? {
-            result = r
-                .resolve_reference()
+    Ok(ReverseTopological::new()
+        .skip_duplicates()
+        .visit(entries, |chunk: ChunkVc| async move {
+            Ok(chunk
+                .parallel_chunks()
                 .await?
-                .primary
                 .iter()
-                .map(|r| async move {
-                    Ok(if let PrimaryResolveResult::Asset(a) = r {
-                        ChunkVc::resolve_from(a).await?
-                    } else {
-                        None
-                    })
-                })
-                .try_join()
-                .await?;
+                .copied()
+                .collect::<Vec<_>>()
+                .into_iter())
+        })
+        .await
+        .completed()?
+        .into_inner()
+        .into_iter())
+}
+
+async fn get_optimized_chunks<I>(chunks: I) -> Result<ChunksVc>
+where
+    I: IntoIterator<Item = ChunkVc>,
+{
+    let mut ecmascript_chunks = vec![];
+    let mut css_chunks = vec![];
+    let mut other_chunks = vec![];
+
+    for chunk in chunks.into_iter() {
+        if let Some(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(&chunk).await? {
+            ecmascript_chunks.push(ecmascript_chunk);
+        } else if let Some(css_chunk) = CssChunkVc::resolve_from(&chunk).await? {
+            css_chunks.push(css_chunk);
+        } else {
+            other_chunks.push(chunk);
         }
     }
-    Ok(result.into_iter().flatten())
+
+    let ecmascript_chunks =
+        optimize_ecmascript_chunks(EcmascriptChunksVc::cell(ecmascript_chunks)).await?;
+    let css_chunks = optimize_css_chunks(CssChunksVc::cell(css_chunks)).await?;
+
+    let chunks = ecmascript_chunks
+        .iter()
+        .copied()
+        .map(|chunk| chunk.as_chunk())
+        .chain(css_chunks.iter().copied().map(|chunk| chunk.as_chunk()))
+        .chain(other_chunks.into_iter())
+        .collect();
+
+    Ok(ChunksVc::cell(chunks))
 }

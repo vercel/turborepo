@@ -20,7 +20,10 @@ use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     condition::ContextCondition,
     ecmascript::EcmascriptModuleAssetVc,
-    module_options::{JsxTransformOptions, JsxTransformOptionsVc, ModuleOptionsContext},
+    module_options::{
+        JsxTransformOptions, JsxTransformOptionsVc, ModuleOptionsContext,
+        StyledComponentsTransformConfigVc,
+    },
     resolve_options_context::ResolveOptionsContext,
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
@@ -40,12 +43,14 @@ use turbopack_core::{
     source_asset::SourceAssetVc,
 };
 use turbopack_dev::DevChunkingContextVc;
+use turbopack_ecmascript_plugins::transform::emotion::EmotionTransformConfig;
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_test_utils::snapshot::{diff, expected, matches_expected, snapshot_issues};
 
 fn register() {
     turbopack::register();
     turbopack_dev::register();
+    turbopack_ecmascript_plugins::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_snapshot.rs"));
 }
 
@@ -193,8 +198,13 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
             enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
                 ..Default::default()
             })),
-            enable_emotion: true,
-            enable_styled_components: true,
+            enable_emotion: Some(EmotionTransformConfig::cell(EmotionTransformConfig {
+                sourcemap: Some(false),
+                ..Default::default()
+            })),
+            enable_styled_components: Some(StyledComponentsTransformConfigVc::cell(
+                Default::default(),
+            )),
             preset_env_versions: Some(env),
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),

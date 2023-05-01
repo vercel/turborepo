@@ -1,4 +1,3 @@
-#![feature(box_syntax)]
 #![feature(box_patterns)]
 #![feature(min_specialization)]
 #![feature(iter_intersperse)]
@@ -17,6 +16,7 @@ mod path_visitor;
 pub(crate) mod references;
 pub mod resolve;
 pub(crate) mod special_cases;
+pub mod text;
 pub(crate) mod transform;
 pub mod tree_shake;
 pub mod typescript;
@@ -42,8 +42,8 @@ use swc_core::{
     },
 };
 pub use transform::{
-    CustomTransform, CustomTransformVc, CustomTransformer, EcmascriptInputTransform,
-    EcmascriptInputTransformsVc, TransformContext,
+    CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransformsVc, TransformContext,
+    TransformPlugin, TransformPluginVc,
 };
 use turbo_tasks::{
     primitives::StringVc, trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,
@@ -84,6 +84,15 @@ use crate::{
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
+#[derive(PartialOrd, Ord, Hash, Debug, Clone, Copy, Default)]
+pub enum SpecifiedModuleType {
+    #[default]
+    Automatic,
+    CommonJs,
+    EcmaScript,
+}
+
+#[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
 pub struct EcmascriptOptions {
     /// module is split into smaller module parts which can be selectively
@@ -91,6 +100,8 @@ pub struct EcmascriptOptions {
     pub split_into_parts: bool,
     /// imports will import parts of modules
     pub import_parts: bool,
+    /// module is forced to a specific type (happens e. g. for .cjs and .mjs)
+    pub specified_module_type: SpecifiedModuleType,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]

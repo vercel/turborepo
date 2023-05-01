@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     iter,
     mem::{replace, take},
-    sync::Arc,
 };
 
 use swc_core::{
@@ -303,7 +302,7 @@ impl EvalContext {
                             values.push(JsValue::from(v.clone()));
                         }
                         // This is actually unreachable
-                        None => return JsValue::Unknown(None, ""),
+                        None => return JsValue::unknown_empty(""),
                     }
                 }
             } else {
@@ -321,28 +320,30 @@ impl EvalContext {
         JsValue::concat(values)
     }
 
+    fn eval_ident(&self, i: &Ident) -> JsValue {
+        let id = i.to_id();
+        if let Some(imported) = self.imports.get_import(&id) {
+            return imported;
+        }
+        if is_unresolved(i, self.unresolved_mark) {
+            JsValue::FreeVar(i.sym.clone())
+        } else {
+            JsValue::Variable(id)
+        }
+    }
+
     pub fn eval(&self, e: &Expr) -> JsValue {
         match e {
             Expr::Paren(e) => self.eval(&e.expr),
             Expr::Lit(e) => JsValue::Constant(e.clone().into()),
-            Expr::Ident(i) => {
-                let id = i.to_id();
-                if let Some(imported) = self.imports.get_import(&id) {
-                    return imported;
-                }
-                if is_unresolved(i, self.unresolved_mark) {
-                    JsValue::FreeVar(i.sym.clone())
-                } else {
-                    JsValue::Variable(id)
-                }
-            }
+            Expr::Ident(i) => self.eval_ident(i),
 
             Expr::Unary(UnaryExpr {
                 op: op!("!"), arg, ..
             }) => {
                 let arg = self.eval(arg);
 
-                JsValue::logical_not(box arg)
+                JsValue::logical_not(Box::new(arg))
             }
 
             Expr::Bin(BinExpr {
@@ -436,7 +437,7 @@ impl EvalContext {
                 {
                     self.eval_tpl(tpl, true)
                 } else {
-                    JsValue::Unknown(None, "tagged template literal is not supported yet")
+                    JsValue::unknown_empty("tagged template literal is not supported yet")
                 }
             }
 
@@ -457,7 +458,7 @@ impl EvalContext {
 
             Expr::Await(AwaitExpr { arg, .. }) => self.eval(arg),
 
-            Expr::New(..) => JsValue::Unknown(None, "unknown new expression"),
+            Expr::New(..) => JsValue::unknown_empty("unknown new expression"),
 
             Expr::Seq(e) => {
                 if let Some(e) = e.exprs.last() {
@@ -473,7 +474,7 @@ impl EvalContext {
                 ..
             }) => {
                 let obj = self.eval(obj);
-                JsValue::member(box obj, box prop.sym.clone().into())
+                JsValue::member(Box::new(obj), Box::new(prop.sym.clone().into()))
             }
 
             Expr::Member(MemberExpr {
@@ -483,7 +484,7 @@ impl EvalContext {
             }) => {
                 let obj = self.eval(obj);
                 let prop = self.eval(&computed.expr);
-                JsValue::member(box obj, box prop)
+                JsValue::member(Box::new(obj), Box::new(prop))
             }
 
             Expr::Call(CallExpr {
@@ -493,26 +494,25 @@ impl EvalContext {
             }) => {
                 // We currently do not handle spreads.
                 if args.iter().any(|arg| arg.spread.is_some()) {
-                    return JsValue::Unknown(None, "spread in function calls is not supported");
+                    return JsValue::unknown_empty("spread in function calls is not supported");
                 }
 
                 let args = args.iter().map(|arg| self.eval(&arg.expr)).collect();
                 if let Expr::Member(MemberExpr { obj, prop, .. }) = unparen(callee) {
-                    let obj = box self.eval(obj);
-                    let prop = box match prop {
+                    let obj = Box::new(self.eval(obj));
+                    let prop = Box::new(match prop {
                         // TODO avoid clone
                         MemberProp::Ident(i) => i.sym.clone().into(),
                         MemberProp::PrivateName(_) => {
-                            return JsValue::Unknown(
-                                None,
+                            return JsValue::unknown_empty(
                                 "private names in function calls is not supported",
                             );
                         }
                         MemberProp::Computed(ComputedPropName { expr, .. }) => self.eval(expr),
-                    };
+                    });
                     JsValue::member_call(obj, prop, args)
                 } else {
-                    let callee = box self.eval(callee);
+                    let callee = Box::new(self.eval(callee));
 
                     JsValue::call(callee, args)
                 }
@@ -525,18 +525,18 @@ impl EvalContext {
             }) => {
                 // We currently do not handle spreads.
                 if args.iter().any(|arg| arg.spread.is_some()) {
-                    return JsValue::Unknown(None, "spread in import() is not supported");
+                    return JsValue::unknown_empty("spread in import() is not supported");
                 }
                 let args = args.iter().map(|arg| self.eval(&arg.expr)).collect();
 
-                let callee = box JsValue::FreeVar(js_word!("import"));
+                let callee = Box::new(JsValue::FreeVar(js_word!("import")));
 
                 JsValue::call(callee, args)
             }
 
             Expr::Array(arr) => {
                 if arr.elems.iter().flatten().any(|v| v.spread.is_some()) {
-                    return JsValue::Unknown(None, "spread is not supported");
+                    return JsValue::unknown_empty("spread is not supported");
                 }
 
                 let arr = arr
@@ -566,8 +566,7 @@ impl EvalContext {
                                 ident.sym.clone().into(),
                                 self.eval(&Expr::Ident(ident.clone())),
                             ),
-                            _ => ObjectPart::Spread(JsValue::Unknown(
-                                None,
+                            _ => ObjectPart::Spread(JsValue::unknown_empty(
                                 "unsupported object part",
                             )),
                         })
@@ -575,7 +574,7 @@ impl EvalContext {
                 )
             }
 
-            _ => JsValue::Unknown(None, "unsupported expression"),
+            _ => JsValue::unknown_empty("unsupported expression"),
         }
     }
 }
@@ -929,9 +928,9 @@ impl Analyzer<'_> {
         let values = self.cur_fn_return_values.take().unwrap();
 
         match values.len() {
-            0 => box JsValue::FreeVar(js_word!("undefined")),
-            1 => box values.into_iter().next().unwrap(),
-            _ => box JsValue::alternatives(values),
+            0 => Box::new(JsValue::FreeVar(js_word!("undefined"))),
+            1 => Box::new(values.into_iter().next().unwrap()),
+            _ => Box::new(JsValue::alternatives(values)),
         }
     }
 }
@@ -946,6 +945,29 @@ impl VisitAstPath for Analyzer<'_> {
             AstParentNodeRef::AssignExpr(n, AssignExprField::Left),
             |ast_path| match &n.left {
                 PatOrExpr::Expr(expr) => {
+                    if let Some(key) = expr.as_ident() {
+                        let value = match n.op {
+                            AssignOp::Assign => unreachable!(
+                                "AssignOp::Assign will never have an expression in n.left"
+                            ),
+                            AssignOp::AndAssign | AssignOp::OrAssign | AssignOp::NullishAssign => {
+                                let right = self.eval_context.eval(&n.right);
+                                // We can handle the right value as alternative to the existing
+                                // value
+                                Some(right)
+                            }
+                            AssignOp::AddAssign => {
+                                let left = self.eval_context.eval(expr);
+                                let right = self.eval_context.eval(&n.right);
+                                Some(JsValue::add(vec![left, right]))
+                            }
+                            _ => Some(JsValue::unknown_empty("unsupported assign operation")),
+                        };
+                        if let Some(value) = value {
+                            self.add_value(key.to_id(), value);
+                        }
+                    }
+
                     ast_path.with(
                         AstParentNodeRef::PatOrExpr(&n.left, PatOrExprField::Expr),
                         |ast_path| {
@@ -954,6 +976,7 @@ impl VisitAstPath for Analyzer<'_> {
                     );
                 }
                 PatOrExpr::Pat(pat) => {
+                    debug_assert!(n.op == AssignOp::Assign);
                     ast_path.with(
                         AstParentNodeRef::PatOrExpr(&n.left, PatOrExprField::Pat),
                         |ast_path| {
@@ -969,6 +992,26 @@ impl VisitAstPath for Analyzer<'_> {
             AstParentNodeRef::AssignExpr(n, AssignExprField::Right),
             |ast_path| {
                 self.visit_expr(&n.right, ast_path);
+            },
+        );
+    }
+
+    fn visit_update_expr<'ast: 'r, 'r>(
+        &mut self,
+        n: &'ast UpdateExpr,
+        ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
+    ) {
+        if let Some(key) = n.arg.as_ident() {
+            self.add_value(
+                key.to_id(),
+                JsValue::unknown_empty("updated with update expression"),
+            );
+        }
+
+        ast_path.with(
+            AstParentNodeRef::UpdateExpr(n, UpdateExprField::Arg),
+            |ast_path| {
+                self.visit_expr(&n.arg, ast_path);
             },
         );
     }
@@ -1259,7 +1302,7 @@ impl VisitAstPath for Analyzer<'_> {
                 expr.visit_children_with_path(self, ast_path);
                 let return_value = self.eval_context.eval(inner_expr);
 
-                let fn_val = JsValue::function(self.cur_fn_ident, box return_value);
+                let fn_val = JsValue::function(self.cur_fn_ident, Box::new(return_value));
                 self.cur_fn_ident = old_ident;
                 fn_val
             }
@@ -1336,10 +1379,7 @@ impl VisitAstPath for Analyzer<'_> {
                 self.add_value(
                     i.to_id(),
                     value.unwrap_or_else(|| {
-                        JsValue::Unknown(
-                            Some(Arc::new(JsValue::Variable(i.to_id()))),
-                            "pattern without value",
-                        )
+                        JsValue::unknown(JsValue::Variable(i.to_id()), "pattern without value")
                     }),
                 );
             }
@@ -1367,9 +1407,9 @@ impl VisitAstPath for Analyzer<'_> {
                         ast_path.with(AstParentNodeRef::Pat(pat, PatField::Array), |ast_path| {
                             for (idx, elem) in arr.elems.iter().enumerate() {
                                 self.current_value = Some(JsValue::member(
-                                    box value.clone(),
-                                    box JsValue::Constant(ConstantValue::Num(ConstantNumber(
-                                        idx as f64,
+                                    Box::new(value.clone()),
+                                    Box::new(JsValue::Constant(ConstantValue::Num(
+                                        ConstantNumber(idx as f64),
                                     ))),
                                 ));
                                 ast_path.with(
@@ -1569,7 +1609,7 @@ impl<'a> Analyzer<'a> {
         } else {
             self.add_effect(Effect::Conditional {
                 condition,
-                kind: box cond_kind,
+                kind: Box::new(cond_kind),
                 ast_path: as_parent_path_with(ast_path, ast_kind),
                 span,
                 in_try: is_in_try(ast_path),
@@ -1605,8 +1645,8 @@ impl<'a> Analyzer<'a> {
                                         },
                                     );
                                     self.current_value = Some(JsValue::member(
-                                        box current_value.clone(),
-                                        box key_value,
+                                        Box::new(current_value.clone()),
+                                        Box::new(key_value),
                                     ));
                                     ast_path.with(
                                         AstParentNodeRef::KeyValuePatProp(
@@ -1641,15 +1681,15 @@ impl<'a> Analyzer<'a> {
                                             let value = self.eval_context.eval(value);
                                             JsValue::alternatives(vec![
                                                 JsValue::member(
-                                                    box current_value.clone(),
-                                                    box key_value,
+                                                    Box::new(current_value.clone()),
+                                                    Box::new(key_value),
                                                 ),
                                                 value,
                                             ])
                                         } else {
                                             JsValue::member(
-                                                box current_value.clone(),
-                                                box key_value,
+                                                Box::new(current_value.clone()),
+                                                Box::new(key_value),
                                             )
                                         },
                                     );

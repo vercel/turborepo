@@ -15,7 +15,13 @@ async function getVersion(
     env: { COREPACK_ENABLE_STRICT: "0" },
   };
 
+  let available = false;
   try {
+    const userAgent = process.env.npm_config_user_agent;
+    if (userAgent && userAgent.startsWith(packageManager)) {
+      available = true;
+    }
+
     const result = await execa(packageManager, ["--version"], execOptions);
     return {
       available: true,
@@ -23,7 +29,7 @@ async function getVersion(
     };
   } catch (e) {
     return {
-      available: false,
+      available,
     };
   }
 }
@@ -31,7 +37,7 @@ async function getVersion(
 async function getAvailablePackageManagers(): Promise<
   Record<PackageManager, PackageManagerAvailable>
 > {
-  const [yarn, pnpm, npm] = await Promise.all([
+  const [yarn, npm, pnpm] = await Promise.all([
     getVersion("yarnpkg"),
     getVersion("npm"),
     getVersion("pnpm"),

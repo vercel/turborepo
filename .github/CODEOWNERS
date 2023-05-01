@@ -15,6 +15,7 @@
 .github/workflows/pr-js-tests-*.yml @vercel/turbo-oss
 /version.txt @vercel/turbo-oss
 .github/turborepo-release.yml @vercel/turbo-oss
+/turborepo-tests @vercel/turbo-oss
 
 # Nobody owns these files, so nobody should get tagged on changes
 Cargo.lock
@@ -33,6 +34,7 @@ pnpm-lock.yaml
 # crates in alphabetical order
 /crates @vercel/web-tooling
 # overrides for crates that are owned by turbo-oss
+/crates/globwatch @vercel/turbo-oss
 /crates/turbopath @vercel/turbo-oss
 /crates/turborepo @vercel/turbo-oss
 /crates/turborepo-api-client @vercel/turbo-oss
@@ -40,6 +42,7 @@ pnpm-lock.yaml
 /crates/turborepo-lib @vercel/turbo-oss
 /crates/turborepo-lockfiles @vercel/turbo-oss
 /crates/turborepo-scm @vercel/turbo-oss
+/crates/turborepo-vercel-api-mock @vercel/turbo-oss
 /crates/turbo-updater @vercel/turbo-oss
 
 # packages in alphabetical order, to match view github https://github.com/vercel/turbo/tree/main/packages

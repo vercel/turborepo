@@ -24,8 +24,8 @@ var _defaultEnvVars = []string{
 	"VERCEL_ANALYTICS_ID",
 }
 
-// GlobalHashable represents all the things that we use to create the global hash
-type GlobalHashable struct {
+// GlobalHashableInputs represents all the things that we use to create the global hash
+type GlobalHashableInputs struct {
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
 	envVars              env.DetailedMap
@@ -35,9 +35,31 @@ type GlobalHashable struct {
 	envMode              util.EnvMode
 }
 
-// This exists because the global hash used to have different fields. Changing
-// to a new struct layout changes the global hash. We can remove this converter
-// when we are going to have to update the global hash for something else.
+type newGlobalHashable struct {
+	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	rootExternalDepsHash string
+	envVars              env.EnvironmentVariablePairs
+	globalCacheKey       string
+	pipeline             fs.PristinePipeline
+	envVarPassthroughs   []string
+	envMode              util.EnvMode
+}
+
+// newGlobalHash is a transformation of GlobalHashableInputs.
+// It's used for the situations where we have an `EnvMode` specified
+// as that is not compatible with existing global hashes.
+func newGlobalHash(full GlobalHashableInputs) (string, error) {
+	return fs.HashObject(newGlobalHashable{
+		globalFileHashMap:    full.globalFileHashMap,
+		rootExternalDepsHash: full.rootExternalDepsHash,
+		envVars:              full.envVars.All.ToHashable(),
+		globalCacheKey:       full.globalCacheKey,
+		pipeline:             full.pipeline,
+		envVarPassthroughs:   full.envVarPassthroughs,
+		envMode:              full.envMode,
+	})
+}
+
 type oldGlobalHashable struct {
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
@@ -46,32 +68,52 @@ type oldGlobalHashable struct {
 	pipeline             fs.PristinePipeline
 }
 
-// calculateGlobalHashFromHashable returns a hash string from the globalHashable
-func calculateGlobalHashFromHashable(named GlobalHashable) (string, error) {
-	// When we aren't in infer mode, we can hash the whole object
-	if named.envMode != util.Infer {
-		return fs.HashObject(named)
-	}
-
-	// In infer mode, if there is any passThru config (even if it is an empty array)
-	// we'll hash the whole object, so we can detect changes to that config
-	if named.envVarPassthroughs != nil {
-		return fs.HashObject(named)
-	}
-
-	// If we're in infer mode, and there is no global pass through config,
-	// we need to use the old struct layout. This will be true for everyone
-	// not using the strict env feature and we don't want to break their cache.
+// oldGlobalHash is a transformation of GlobalHashableInputs.
+// This exists because the existing global hashes are still usable
+// in some configurations that do not include a specified `EnvMode`.
+// We can remove this whenever we want to migrate users.
+func oldGlobalHash(full GlobalHashableInputs) (string, error) {
 	return fs.HashObject(oldGlobalHashable{
-		globalFileHashMap:    named.globalFileHashMap,
-		rootExternalDepsHash: named.rootExternalDepsHash,
-		envVars:              named.envVars.All.ToHashable(),
-		globalCacheKey:       named.globalCacheKey,
-		pipeline:             named.pipeline,
+		globalFileHashMap:    full.globalFileHashMap,
+		rootExternalDepsHash: full.rootExternalDepsHash,
+		envVars:              full.envVars.All.ToHashable(),
+		globalCacheKey:       full.globalCacheKey,
+		pipeline:             full.pipeline,
 	})
 }
 
-func calculateGlobalHash(
+// calculateGlobalHashFromHashableInputs returns a hash string from the GlobalHashableInputs
+func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, error) {
+	switch full.envMode {
+	case util.Infer:
+		if full.envVarPassthroughs != nil {
+			// In infer mode, if there is any passThru config (even if it is an empty array)
+			// we'll hash the whole object, so we can detect changes to that config
+			// Further, resolve the envMode to the concrete value.
+			full.envMode = util.Strict
+			return newGlobalHash(full)
+		}
+
+		// If we're in infer mode, and there is no global pass through config,
+		// we use the old struct layout. this will be true for everyone not using the strict env
+		// feature, and we don't want to break their cache.
+		return oldGlobalHash(full)
+	case util.Loose:
+		// Remove the passthroughs from hash consideration if we're explicitly loose.
+		full.envVarPassthroughs = nil
+		return newGlobalHash(full)
+	case util.Strict:
+		// Collapse `nil` and `[]` in strict mode.
+		if full.envVarPassthroughs == nil {
+			full.envVarPassthroughs = make([]string, 0)
+		}
+		return newGlobalHash(full)
+	default:
+		panic("unimplemented environment mode")
+	}
+}
+
+func getGlobalHashInputs(
 	rootpath turbopath.AbsoluteSystemPath,
 	rootPackageJSON *fs.PackageJSON,
 	pipeline fs.Pipeline,
@@ -84,14 +126,14 @@ func calculateGlobalHash(
 	logger hclog.Logger,
 	ui cli.Ui,
 	isStructuredOutput bool,
-) (GlobalHashable, error) {
+) (GlobalHashableInputs, error) {
 	// Calculate env var dependencies
 	envVars := []string{}
 	envVars = append(envVars, envVarDependencies...)
 	envVars = append(envVars, _defaultEnvVars...)
 	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, []string{".*THASH.*"}, "")
 	if err != nil {
-		return GlobalHashable{}, err
+		return GlobalHashableInputs{}, err
 	}
 
 	// The only way we can add env vars into the hash via matching is via THASH,
@@ -109,12 +151,12 @@ func calculateGlobalHash(
 	if len(globalFileDependencies) > 0 {
 		ignores, err := packageManager.GetWorkspaceIgnores(rootpath)
 		if err != nil {
-			return GlobalHashable{}, err
+			return GlobalHashableInputs{}, err
 		}
 
 		f, err := globby.GlobFiles(rootpath.ToStringDuringMigration(), globalFileDependencies, ignores)
 		if err != nil {
-			return GlobalHashable{}, err
+			return GlobalHashableInputs{}, err
 		}
 
 		for _, val := range f {
@@ -137,15 +179,10 @@ func calculateGlobalHash(
 
 	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
 	if err != nil {
-		return GlobalHashable{}, fmt.Errorf("error hashing files: %w", err)
+		return GlobalHashableInputs{}, fmt.Errorf("error hashing files: %w", err)
 	}
 
-	// Remove the passthroughs from hash consideration if we're explicitly loose.
-	if envMode == util.Loose {
-		envVarPassthroughs = nil
-	}
-
-	return GlobalHashable{
+	return GlobalHashableInputs{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		envVars:              globalHashableEnvVars,

@@ -15,6 +15,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/daemonclient"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/process"
@@ -31,18 +32,18 @@ import (
 )
 
 // ExecuteRun executes the run command
-func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
-	base, err := helper.GetCmdBase(args)
+func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.ExecutionState) error {
+	base, err := helper.GetCmdBase(executionState)
 	LogTag(base.Logger)
 	if err != nil {
 		return err
 	}
-	tasks := args.Command.Run.Tasks
-	passThroughArgs := args.Command.Run.PassThroughArgs
+	tasks := executionState.CLIArgs.Command.Run.Tasks
+	passThroughArgs := executionState.CLIArgs.Command.Run.PassThroughArgs
 	if len(tasks) == 0 {
 		return errors.New("at least one task must be specified")
 	}
-	opts, err := optsFromArgs(args)
+	opts, err := optsFromArgs(&executionState.CLIArgs)
 	if err != nil {
 		return err
 	}
@@ -61,10 +62,10 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 
 	opts := getDefaultOptions()
 	// aliases := make(map[string]string)
-	scope.OptsFromArgs(&opts.scopeOpts, args)
+	if err := scope.OptsFromArgs(&opts.scopeOpts, args); err != nil {
+		return nil, err
+	}
 
-	// Cache flags
-	opts.clientOpts.Timeout = args.RemoteCacheTimeout
 	opts.cacheOpts.SkipFilesystem = runPayload.RemoteOnly
 	opts.cacheOpts.OverrideDir = runPayload.CacheDir
 	opts.cacheOpts.Workers = runPayload.CacheWorkers
@@ -128,10 +129,6 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 }
 
 func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watcher) *run {
-	if os.Getenv("TURBO_FORCE") == "true" {
-		opts.runcacheOpts.SkipReads = true
-	}
-
 	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
 		opts.cacheOpts.SkipFilesystem = true
 	}
@@ -212,6 +209,12 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 	// TODO: these values come from a config file, hopefully viper can help us merge these
 	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
 
+	// If a spaceID wasn't passed as a flag, read it from the turbo.json config.
+	// If that is not set either, we'll still end up with a blank string.
+	if r.opts.runOpts.ExperimentalSpaceID == "" {
+		r.opts.runOpts.ExperimentalSpaceID = turboJSON.SpaceID
+	}
+
 	pipeline := turboJSON.Pipeline
 	g.Pipeline = pipeline
 	scmInstance, err := scm.FromInRepo(r.base.RepoRoot)
@@ -238,7 +241,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
-	globalHashable, err := calculateGlobalHash(
+	globalHashInputs, err := getGlobalHashInputs(
 		r.base.RepoRoot,
 		rootPackageJSON,
 		pipeline,
@@ -257,7 +260,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		return fmt.Errorf("failed to collect global hash inputs: %v", err)
 	}
 
-	if globalHash, err := calculateGlobalHashFromHashable(globalHashable); err == nil {
+	if globalHash, err := calculateGlobalHashFromHashableInputs(globalHashInputs); err == nil {
 		r.base.Logger.Debug("global hash", "value", globalHash)
 		g.GlobalHash = globalHash
 	} else {
@@ -344,23 +347,39 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		}
 	}
 
+	var envVarPassthroughMap env.EnvironmentVariableMap
+	if globalHashInputs.envVarPassthroughs != nil {
+		if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(globalHashInputs.envVarPassthroughs, nil, ""); err == nil {
+			envVarPassthroughMap = envVarPassthroughDetailedMap.BySource.Explicit
+		}
+	}
+
+	globalEnvMode := rs.Opts.runOpts.EnvMode
+	if globalEnvMode == util.Infer && turboJSON.GlobalPassthroughEnv != nil {
+		globalEnvMode = util.Strict
+	}
+
 	// RunSummary contains information that is statically analyzable about
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
 		startAt,
 		r.base.UI,
 		r.base.RepoRoot,
+		rs.Opts.scopeOpts.PackageInferenceRoot,
 		r.base.TurboVersion,
 		r.base.APIClient,
 		rs.Opts.runOpts,
 		packagesInScope,
+		globalEnvMode,
 		runsummary.NewGlobalHashSummary(
-			globalHashable.globalFileHashMap,
-			globalHashable.rootExternalDepsHash,
-			globalHashable.envVars,
-			globalHashable.globalCacheKey,
-			globalHashable.pipeline,
+			globalHashInputs.globalFileHashMap,
+			globalHashInputs.rootExternalDepsHash,
+			globalHashInputs.envVars,
+			envVarPassthroughMap,
+			globalHashInputs.globalCacheKey,
+			globalHashInputs.pipeline,
 		),
+		rs.Opts.SynthesizeCommand(rs.Targets),
 	)
 
 	// Dry Run
@@ -372,6 +391,8 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 			engine,
 			taskHashTracker,
 			turboCache,
+			turboJSON,
+			globalEnvMode,
 			r.base,
 			summary,
 		)
@@ -386,6 +407,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		taskHashTracker,
 		turboCache,
 		turboJSON,
+		globalEnvMode,
 		packagesInScope,
 		r.base,
 		summary,

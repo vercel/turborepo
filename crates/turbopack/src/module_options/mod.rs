@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
-use turbo_tasks::primitives::OptionStringVc;
+use turbo_tasks::primitives::{OptionStringVc, StringsVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
@@ -15,8 +15,11 @@ use turbopack_core::{
 };
 use turbopack_css::{CssInputTransform, CssInputTransformsVc};
 use turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions,
+    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType,
+    TransformPluginVc,
 };
+use turbopack_ecmascript_plugins::transform::emotion::build_emotion_transformer;
+use turbopack_mdx::MdxTransformOptions;
 use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
 use crate::evaluate_context::node_evaluate_asset_context;
@@ -61,15 +64,16 @@ impl ModuleOptionsVc {
     ) -> Result<ModuleOptionsVc> {
         let ModuleOptionsContext {
             enable_jsx,
-            enable_emotion,
+            ref enable_emotion,
             enable_react_refresh,
             enable_styled_jsx,
-            enable_styled_components,
+            ref enable_styled_components,
             enable_types,
             enable_tree_shaking,
             ref enable_typescript_transform,
             ref decorators,
             enable_mdx,
+            enable_mdx_rs,
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
             preset_env_versions,
@@ -82,8 +86,9 @@ impl ModuleOptionsVc {
         } = *context.await?;
         if !rules.is_empty() {
             let path_value = path.await?;
+
             for (condition, new_context) in rules.iter() {
-                if condition.matches(&path_value) {
+                if condition.matches(&path_value).await {
                     return Ok(ModuleOptionsVc::new(path, *new_context));
                 }
             }
@@ -96,14 +101,32 @@ impl ModuleOptionsVc {
         if enable_styled_jsx {
             transforms.push(EcmascriptInputTransform::StyledJsx);
         }
-        if enable_emotion {
-            transforms.push(EcmascriptInputTransform::Emotion);
+
+        if let Some(transformer) = build_emotion_transformer(enable_emotion).await? {
+            transforms.push(EcmascriptInputTransform::Plugin(TransformPluginVc::cell(
+                transformer,
+            )));
         }
-        if enable_styled_components {
-            transforms.push(EcmascriptInputTransform::StyledComponents);
+
+        if let Some(enable_styled_components) = enable_styled_components {
+            let styled_components_transform = &*enable_styled_components.await?;
+            transforms.push(EcmascriptInputTransform::StyledComponents {
+                display_name: styled_components_transform.display_name,
+                ssr: styled_components_transform.ssr,
+                file_name: styled_components_transform.file_name,
+                top_level_import_paths: StringsVc::cell(
+                    styled_components_transform.top_level_import_paths.clone(),
+                ),
+                meaningless_file_names: StringsVc::cell(
+                    styled_components_transform.meaningless_file_names.clone(),
+                ),
+                css_prop: styled_components_transform.css_prop,
+                namespace: OptionStringVc::cell(styled_components_transform.namespace.clone()),
+            });
         }
         if let Some(enable_jsx) = enable_jsx {
             let jsx = enable_jsx.await?;
+
             transforms.push(EcmascriptInputTransform::React {
                 refresh: enable_react_refresh,
                 import_source: OptionStringVc::cell(jsx.import_source.clone()),
@@ -114,6 +137,7 @@ impl ModuleOptionsVc {
         let ecmascript_options = EcmascriptOptions {
             split_into_parts: enable_tree_shaking,
             import_parts: enable_tree_shaking,
+            ..Default::default()
         };
 
         if let Some(env) = preset_env_versions {
@@ -261,14 +285,20 @@ impl ModuleOptionsVc {
                 ModuleRuleCondition::ResourcePathEndsWith(".mjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: ecmascript_options.clone(),
+                    options: EcmascriptOptions {
+                        specified_module_type: SpecifiedModuleType::EcmaScript,
+                        ..ecmascript_options
+                    },
                 })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".cjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: ecmascript_options.clone(),
+                    options: EcmascriptOptions {
+                        specified_module_type: SpecifiedModuleType::CommonJs,
+                        ..ecmascript_options
+                    },
                 })],
             ),
             ModuleRule::new(
@@ -277,15 +307,70 @@ impl ModuleOptionsVc {
                     ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
                 ]),
                 vec![if enable_types {
-                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes(ts_app_transforms))
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
+                        transforms: ts_app_transforms,
+                        options: ecmascript_options.clone(),
+                    })
                 } else {
-                    ModuleRuleEffect::ModuleType(ModuleType::Typescript(ts_app_transforms))
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                        transforms: ts_app_transforms,
+                        options: ecmascript_options.clone(),
+                    })
+                }],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::any(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".mts".to_string()),
+                    ModuleRuleCondition::ResourcePathEndsWith(".mtsx".to_string()),
+                ]),
+                vec![if enable_types {
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
+                        transforms: ts_app_transforms,
+                        options: EcmascriptOptions {
+                            specified_module_type: SpecifiedModuleType::EcmaScript,
+                            ..ecmascript_options
+                        },
+                    })
+                } else {
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                        transforms: ts_app_transforms,
+                        options: EcmascriptOptions {
+                            specified_module_type: SpecifiedModuleType::EcmaScript,
+                            ..ecmascript_options
+                        },
+                    })
+                }],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::any(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".cts".to_string()),
+                    ModuleRuleCondition::ResourcePathEndsWith(".ctsx".to_string()),
+                ]),
+                vec![if enable_types {
+                    ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
+                        transforms: ts_app_transforms,
+                        options: EcmascriptOptions {
+                            specified_module_type: SpecifiedModuleType::CommonJs,
+                            ..ecmascript_options
+                        },
+                    })
+                } else {
+                    ModuleRuleEffect::ModuleType(ModuleType::Typescript {
+                        transforms: ts_app_transforms,
+                        options: EcmascriptOptions {
+                            specified_module_type: SpecifiedModuleType::CommonJs,
+                            ..ecmascript_options
+                        },
+                    })
                 }],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathEndsWith(".d.ts".to_string()),
                 vec![ModuleRuleEffect::ModuleType(
-                    ModuleType::TypescriptDeclaration(vendor_transforms),
+                    ModuleType::TypescriptDeclaration {
+                        transforms: vendor_transforms,
+                        options: ecmascript_options.clone(),
+                    },
                 )],
             ),
             ModuleRule::new(
@@ -318,12 +403,31 @@ impl ModuleOptionsVc {
             ),
         ];
 
-        if enable_mdx {
+        if enable_mdx || enable_mdx_rs {
+            let (jsx_runtime, jsx_import_source) = if let Some(enable_jsx) = enable_jsx {
+                let jsx = enable_jsx.await?;
+                (jsx.runtime.clone(), jsx.import_source.clone())
+            } else {
+                (None, None)
+            };
+
+            let mdx_transform_options = (MdxTransformOptions {
+                development: true,
+                preserve_jsx: false,
+                jsx_runtime,
+                jsx_import_source,
+            })
+            .cell();
+
             rules.push(ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(".mdx".to_string()),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::Mdx(
-                    mdx_transforms,
-                ))],
+                ModuleRuleCondition::any(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".md".to_string()),
+                    ModuleRuleCondition::ResourcePathEndsWith(".mdx".to_string()),
+                ]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Mdx {
+                    transforms: mdx_transforms,
+                    options: mdx_transform_options,
+                })],
             ));
         }
 

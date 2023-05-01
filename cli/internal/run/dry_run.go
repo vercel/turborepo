@@ -10,10 +10,12 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/taskhash"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // DryRun gets all the info needed from tasks and prints out a summary, but doesn't actually
@@ -25,6 +27,8 @@ func DryRun(
 	engine *core.Engine,
 	_ *taskhash.Tracker, // unused, but keep here for parity with RealRun method signature
 	turboCache cache.Cache,
+	_ *fs.TurboJSON, // unused, but keep here for parity with RealRun method signature
+	globalEnvMode util.EnvMode,
 	base *cmdutil.CmdBase,
 	summary runsummary.Meta,
 ) error {
@@ -59,7 +63,7 @@ func DryRun(
 		return rs.ArgsForTask(taskID)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, execFunc)
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, globalEnvMode, getArgs, base.Logger, execFunc)
 	execOpts := core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
@@ -82,7 +86,7 @@ func DryRun(
 
 	// The exitCode isn't really used by the Run Summary Close() method for dry runs
 	// but we pass in a successful value to match Real Runs.
-	return summary.Close(0, g.WorkspaceInfos)
+	return summary.Close(ctx, 0, g.WorkspaceInfos)
 }
 
 func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {
@@ -105,7 +109,7 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.Task
 			for index := range queue {
 				task := taskSummaries[index]
 				itemStatus := turboCache.Exists(task.Hash)
-				task.CacheState = itemStatus
+				task.CacheSummary = runsummary.NewTaskCacheSummary(itemStatus, nil)
 			}
 		}()
 	}

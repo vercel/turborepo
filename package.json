@@ -15,12 +15,12 @@
     "turbo": "pnpm run build:turbo && node turbow.js",
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
-    "run-example": "./scripts/run-example.sh",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
-    "@types/react": "18.0.26",
+    "@types/react": "18.2.0",
     "eslint": "^8.29.0",
     "eslint-config-next": "^13.0.6",
     "eslint-config-prettier": "^8.5.0",
@@ -55,5 +55,9 @@
       "next@latest": "13.0.6"
     }
   },
-  "packageManager": "pnpm@7.18.2"
+  "packageManager": "pnpm@7.18.2",
+  "engines": {
+    "node": "16.x",
+    "pnpm": "7"
+  }
 }

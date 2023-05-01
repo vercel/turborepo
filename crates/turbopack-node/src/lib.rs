@@ -10,7 +10,7 @@ pub use node_entry::{
     NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 use turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
+    graph::{GraphTraversal, ReverseTopological},
     CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString,
 };
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
@@ -33,7 +33,7 @@ use self::{
 };
 
 pub mod bootstrap;
-mod embed_js;
+pub mod embed_js;
 pub mod evaluate;
 pub mod execution_context;
 mod node_entry;
@@ -170,13 +170,12 @@ async fn separate_assets(
             .await
     };
 
-    let graph = GraphTraversal::<SkipDuplicates<ReverseTopological<Type>, _>>::visit(
-        once(Type::Internal(intermediate_asset)),
-        get_asset_children,
-    )
-    .await
-    .completed()?
-    .into_inner();
+    let graph = ReverseTopological::new()
+        .skip_duplicates()
+        .visit(once(Type::Internal(intermediate_asset)), get_asset_children)
+        .await
+        .completed()?
+        .into_inner();
 
     let mut internal_assets = IndexSet::new();
     let mut external_asset_entrypoints = IndexSet::new();
@@ -264,13 +263,11 @@ pub async fn get_intermediate_asset(
     main_entry: EvaluatableAssetVc,
     other_entries: EvaluatableAssetsVc,
 ) -> Result<AssetVc> {
-    let chunks = chunking_context.evaluated_chunk_group(
-        main_entry.as_root_chunk(chunking_context),
-        other_entries.with_entry(main_entry),
-    );
     Ok(NodeJsBootstrapAsset {
         path: chunking_context.chunk_path(main_entry.ident(), ".js"),
-        chunks,
+        chunking_context,
+        entry: main_entry.as_root_chunk(chunking_context),
+        evaluatable_assets: other_entries.with_entry(main_entry),
     }
     .cell()
     .into())

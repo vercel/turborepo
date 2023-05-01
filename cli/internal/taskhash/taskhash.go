@@ -10,13 +10,13 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	gitignore "github.com/sabhiram/go-gitignore"
-	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
+	"github.com/vercel/turbo/cli/internal/runsummary"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
@@ -47,7 +47,7 @@ type Tracker struct {
 	packageTaskHashes      map[string]string          // taskID -> hash
 	packageTaskFramework   map[string]string          // taskID -> inferred framework for package
 	packageTaskOutputs     map[string][]turbopath.AnchoredSystemPath
-	packageTaskCacheStatus map[string]cache.ItemStatus
+	packageTaskCacheStatus map[string]runsummary.TaskCacheSummary
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
@@ -60,7 +60,7 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 		packageTaskFramework:   make(map[string]string),
 		packageTaskEnvVars:     make(map[string]env.DetailedMap),
 		packageTaskOutputs:     make(map[string][]turbopath.AnchoredSystemPath),
-		packageTaskCacheStatus: make(map[string]cache.ItemStatus),
+		packageTaskCacheStatus: make(map[string]runsummary.TaskCacheSummary),
 	}
 }
 
@@ -277,7 +277,21 @@ func (th *Tracker) CalculateFileHashes(
 	return nil
 }
 
-type taskHashInputs struct {
+type taskHashable struct {
+	packageDir           turbopath.AnchoredUnixPath
+	hashOfFiles          string
+	externalDepsHash     string
+	task                 string
+	outputs              fs.TaskOutputs
+	passThruArgs         []string
+	envMode              util.EnvMode
+	passthroughEnv       []string
+	hashableEnvPairs     []string
+	globalHash           string
+	taskDependencyHashes []string
+}
+
+type oldTaskHashable struct {
 	packageDir           turbopath.AnchoredUnixPath
 	hashOfFiles          string
 	externalDepsHash     string
@@ -287,6 +301,41 @@ type taskHashInputs struct {
 	hashableEnvPairs     []string
 	globalHash           string
 	taskDependencyHashes []string
+}
+
+// calculateTaskHashFromHashable returns a hash string from the taskHashable
+func calculateTaskHashFromHashable(full *taskHashable, useOldTaskHashable bool) (string, error) {
+	// The user is not using the strict environment variables feature.
+	if useOldTaskHashable {
+		return fs.HashObject(&oldTaskHashable{
+			packageDir:           full.packageDir,
+			hashOfFiles:          full.hashOfFiles,
+			externalDepsHash:     full.externalDepsHash,
+			task:                 full.task,
+			outputs:              full.outputs,
+			passThruArgs:         full.passThruArgs,
+			hashableEnvPairs:     full.hashableEnvPairs,
+			globalHash:           full.globalHash,
+			taskDependencyHashes: full.taskDependencyHashes,
+		})
+	}
+
+	switch full.envMode {
+	case util.Loose:
+		// Remove the passthroughs from hash consideration if we're explicitly loose.
+		full.passthroughEnv = nil
+		return fs.HashObject(full)
+	case util.Strict:
+		// Collapse `nil` and `[]` in strict mode.
+		if full.passthroughEnv == nil {
+			full.passthroughEnv = make([]string, 0)
+		}
+		return fs.HashObject(full)
+	case util.Infer:
+		panic("task inferred status should have already been resolved")
+	default:
+		panic("unimplemented environment mode")
+	}
 }
 
 func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, error) {
@@ -320,7 +369,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string) (string, error) {
+func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string, useOldTaskHashable bool) (string, error) {
 	pfs := specFromPackageTask(packageTask)
 	pkgFileHashKey := pfs.ToKey()
 
@@ -354,17 +403,19 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 	// log any auto detected env vars
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
-	hash, err := fs.HashObject(&taskHashInputs{
+	hash, err := calculateTaskHashFromHashable(&taskHashable{
 		packageDir:           packageTask.Pkg.Dir.ToUnixPath(),
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,
 		outputs:              outputs.Sort(),
 		passThruArgs:         args,
+		envMode:              packageTask.EnvMode,
+		passthroughEnv:       packageTask.TaskDefinition.PassthroughEnv,
 		hashableEnvPairs:     hashableEnvPairs,
 		globalHash:           th.globalHash,
 		taskDependencyHashes: taskDependencyHashes,
-	})
+	}, useOldTaskHashable)
 	if err != nil {
 		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)
 	}
@@ -426,19 +477,21 @@ func (th *Tracker) SetExpandedOutputs(taskID string, outputs []turbopath.Anchore
 }
 
 // SetCacheStatus records the task status for the given taskID
-func (th *Tracker) SetCacheStatus(taskID string, cacheStatus cache.ItemStatus) {
+func (th *Tracker) SetCacheStatus(taskID string, cacheSummary runsummary.TaskCacheSummary) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
-	th.packageTaskCacheStatus[taskID] = cacheStatus
+	th.packageTaskCacheStatus[taskID] = cacheSummary
 }
 
 // GetCacheStatus records the task status for the given taskID
-func (th *Tracker) GetCacheStatus(taskID string) cache.ItemStatus {
+func (th *Tracker) GetCacheStatus(taskID string) runsummary.TaskCacheSummary {
 	th.mu.Lock()
 	defer th.mu.Unlock()
-	status, ok := th.packageTaskCacheStatus[taskID]
-	if !ok {
-		return cache.ItemStatus{Local: false, Remote: false}
+
+	if status, ok := th.packageTaskCacheStatus[taskID]; ok {
+		return status
 	}
-	return status
+
+	// Return an empty one, all the fields will be false and 0
+	return runsummary.TaskCacheSummary{}
 }

@@ -24,6 +24,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Request, Response, Server,
 };
+use socket2::{Domain, Protocol, Socket, Type};
 use turbo_tasks::{
     run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
     TransientInstance, TransientValue, TurboTasksApi,
@@ -104,11 +105,28 @@ impl DevServer {
         // because the OS will remap that to an actual free port, and we need to know
         // that port before we build the request handler. So we need to construct a
         // real TCP listener, see if it bound, and get its bound address.
-        let listener = TcpListener::bind(addr).context("not able to bind address")?;
+        let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))
+            .context("unable to create socket")?;
+        // Allow the socket to be reused immediately after closing. This ensures that
+        // the dev server can be restarted on the same address without a buffer time for
+        // the OS to release the socket.
+        // https://docs.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
+        #[cfg(not(windows))]
+        let _ = socket.set_reuse_address(true);
+        if matches!(addr, SocketAddr::V6(_)) {
+            // When possible bind to v4 and v6, otherwise ignore the error
+            let _ = socket.set_only_v6(false);
+        }
+        let sock_addr = addr.into();
+        socket
+            .bind(&sock_addr)
+            .context("not able to bind address")?;
+        socket.listen(128).context("not able to listen on socket")?;
+
+        let listener: TcpListener = socket.into();
         let addr = listener
             .local_addr()
             .context("not able to get bound address")?;
-
         let server = Server::from_tcp(listener).context("Not able to start server")?;
         Ok(DevServerBuilder { addr, server })
     }

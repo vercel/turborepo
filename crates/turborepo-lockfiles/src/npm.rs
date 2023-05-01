@@ -78,7 +78,7 @@ impl Lockfile for NpmLockfile {
             .transpose()
     }
 
-    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error> {
+    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
         self.packages
             .get(key)
             .map(|pkg| {
@@ -91,7 +91,7 @@ impl Lockfile for NpmLockfile {
                                     let version = entry.version.as_deref().ok_or_else(|| {
                                         Error::MissingVersion(possible_key.clone())
                                     })?;
-                                    Ok((possible_key, version))
+                                    Ok((possible_key, version.to_string()))
                                 })
                             })
                     })
@@ -205,6 +205,15 @@ pub fn npm_subgraph(
     Ok(new_contents)
 }
 
+pub fn npm_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
+    let prev_lockfile = NpmLockfile::load(prev_contents)?;
+    let curr_lockfile = NpmLockfile::load(curr_contents)?;
+
+    Ok(
+        prev_lockfile.lockfile_version != curr_lockfile.lockfile_version
+            || prev_lockfile.other.get("requires") != curr_lockfile.other.get("requires"),
+    )
+}
 #[cfg(test)]
 mod test {
     use super::*;

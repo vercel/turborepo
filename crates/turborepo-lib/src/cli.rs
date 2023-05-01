@@ -9,8 +9,8 @@ use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use dunce::canonicalize as fs_canonicalize;
-use log::{debug, error};
 use serde::Serialize;
+use tracing::{debug, error};
 
 use crate::{
     commands::{bin, daemon, link, login, logout, unlink, CommandBase},
@@ -52,17 +52,12 @@ pub enum DryRunMode {
     Json,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
 pub enum EnvMode {
+    #[default]
     Infer,
     Loose,
     Strict,
-}
-
-impl Default for EnvMode {
-    fn default() -> EnvMode {
-        EnvMode::Infer
-    }
 }
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
@@ -177,6 +172,12 @@ pub enum DaemonCommand {
     Stop,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum LinkTarget {
+    RemoteCache,
+    Spaces,
+}
+
 impl Args {
     pub fn new() -> Result<Self> {
         let mut clap_args = match Args::try_parse() {
@@ -250,6 +251,10 @@ pub enum Command {
         /// Do not create or modify .gitignore (default false)
         #[clap(long)]
         no_gitignore: bool,
+
+        /// Specify what should be linked (default "remote cache")
+        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
+        target: LinkTarget,
     },
     /// Login to your Vercel account
     Login {
@@ -280,7 +285,11 @@ pub enum Command {
     Run(Box<RunArgs>),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink {},
+    Unlink {
+        /// Specify what should be unlinked (default "remote cache")
+        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
+        target: LinkTarget,
+    },
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -311,8 +320,8 @@ pub struct RunArgs {
     #[clap(short = 'F', long, action = ArgAction::Append)]
     pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
-    #[clap(long)]
-    pub force: bool,
+    #[clap(long, env = "TURBO_FORCE", default_missing_value = "true")]
+    pub force: Option<Option<bool>>,
     /// Specify glob of global filesystem dependencies to be hashed. Useful
     /// for .env and files
     #[clap(long = "global-deps", action = ArgAction::Append)]
@@ -420,12 +429,12 @@ pub enum LogPrefix {
 /// returns: Result<Payload, Error>
 #[tokio::main]
 pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
-    let mut clap_args = Args::new()?;
+    let mut cli_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
-    if clap_args.command.is_none() {
-        if let Some(run_args) = mem::take(&mut clap_args.run_args) {
-            clap_args.command = Some(Command::Run(Box::new(run_args)));
+    if cli_args.command.is_none() {
+        if let Some(run_args) = mem::take(&mut cli_args.run_args) {
+            cli_args.command = Some(Command::Run(Box::new(run_args)));
         } else {
             return Err(anyhow!("No command specified"));
         }
@@ -433,8 +442,8 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
     // If this is a run command, and we know the actual invocation path, set the
     // inference root, as long as the user hasn't overridden the cwd
-    if clap_args.cwd.is_none() {
-        if let Some(Command::Run(run_args)) = &mut clap_args.command {
+    if cli_args.cwd.is_none() {
+        if let Some(Command::Run(run_args)) = &mut cli_args.command {
             if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
                 let invocation_path = Path::new(&invocation_dir);
 
@@ -459,16 +468,16 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
     // Do this after the above, since we're now always setting cwd.
     if let Some(repo_state) = repo_state {
-        if let Some(Command::Run(run_args)) = &mut clap_args.command {
+        if let Some(Command::Run(run_args)) = &mut cli_args.command {
             run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
         }
-        clap_args.cwd = Some(repo_state.root);
+        cli_args.cwd = Some(repo_state.root);
     }
 
-    let repo_root = if let Some(cwd) = &clap_args.cwd {
+    let repo_root = if let Some(cwd) = &cli_args.cwd {
         let canonical_cwd = fs_canonicalize(cwd)?;
         // Update on clap_args so that Go gets a canonical path.
-        clap_args.cwd = Some(canonical_cwd.clone());
+        cli_args.cwd = Some(canonical_cwd.clone());
         canonical_cwd
     } else {
         current_dir()?
@@ -476,27 +485,27 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
     let version = get_version();
 
-    match clap_args.command.as_ref().unwrap() {
+    match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version)?;
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Login { sso_team } => {
-            if clap_args.test_run {
+            if cli_args.test_run {
                 println!("Login test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
             let sso_team = sso_team.clone();
 
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version)?;
 
             if let Some(sso_team) = sso_team {
                 login::sso_login(&mut base, &sso_team).await?;
@@ -506,30 +515,35 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Link { no_gitignore } => {
-            if clap_args.test_run {
+        Command::Link {
+            no_gitignore,
+            target,
+        } => {
+            if cli_args.test_run {
                 println!("Link test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
             let modify_gitignore = !*no_gitignore;
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let to = *target;
+            let mut base = CommandBase::new(cli_args, repo_root, version)?;
 
-            if let Err(err) = link::link(&mut base, modify_gitignore).await {
+            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
                 error!("error: {}", err.to_string())
-            };
+            }
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Unlink { .. } => {
-            if clap_args.test_run {
+        Command::Unlink { target } => {
+            if cli_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let from = *target;
+            let mut base = CommandBase::new(cli_args, repo_root, version)?;
 
-            unlink::unlink(&mut base)?;
+            unlink::unlink(&mut base, from)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -538,14 +552,17 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             ..
         } => {
             let command = *command;
-            let base = CommandBase::new(clap_args, repo_root, version)?;
+            let base = CommandBase::new(cli_args, repo_root, version)?;
             daemon::main(&command, &base).await?;
             Ok(Payload::Rust(Ok(0)))
         },
         Command::Prune { .. }
         | Command::Run(_)
         // the daemon itself still delegates to Go
-        | Command::Daemon { .. } => Ok(Payload::Go(Box::new(clap_args))),
+        | Command::Daemon { .. } => {
+            let base = CommandBase::new(cli_args, repo_root, version)?;
+            Ok(Payload::Go(Box::new(base)))
+        },
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
@@ -856,7 +873,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    force: true,
+                    force: Some(Some(true)),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -1212,7 +1229,9 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink {}),
+                command: Some(Command::Unlink {
+                    target: crate::cli::LinkTarget::RemoteCache
+                }),
                 ..Args::default()
             }
         );
@@ -1222,7 +1241,9 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink {}),
+                command: Some(Command::Unlink {
+                    target: crate::cli::LinkTarget::RemoteCache,
+                }),
                 cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },

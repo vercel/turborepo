@@ -7,6 +7,7 @@ license = "MPL-2.0"
 [features]
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
+default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 
@@ -15,16 +16,18 @@ rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 assert_cmd = { workspace = true }
 async-stream = "0.3.4"
 itertools = { workspace = true }
+port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
 test-case = "3.0.0"
+vercel-api-mock = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 atty = { workspace = true }
-axum = "0.6.2"
-axum-server = "0.4.4"
+axum = { workspace = true }
+axum-server = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }
@@ -35,7 +38,6 @@ ctrlc = { version = "3.2.5", features = ["termination"] }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 dirs-next = "2.0.0"
 dunce = { workspace = true }
-env_logger = "0.10.0"
 futures = "0.3.26"
 glob-match = "0.2.1"
 hex = "0.4.3"
@@ -44,7 +46,6 @@ humantime = "2.1.0"
 indicatif = { workspace = true }
 lazy_static = { workspace = true }
 libc = "0.2.140"
-log = { workspace = true }
 notify = { version = "5.1.0", default-features = false, features = [
   "macos_kqueue",
 ] }
@@ -70,6 +71,11 @@ uds_windows = "1.0.2"
 url = "2.3.1"
 
 const_format = "0.2.30"
+go-parse-duration = "0.1.1"
+is-terminal = "0.4.7"
+owo-colors.workspace = true
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+tracing.workspace = true
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }

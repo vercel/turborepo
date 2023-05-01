@@ -8,7 +8,7 @@ import {
   tryGitInit,
 } from "../src/utils/git";
 import childProcess from "child_process";
-import { setupTestFixtures } from "turbo-test-utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("git", () => {
   // just to make sure this doesn't get lost

@@ -42,6 +42,7 @@ func RealRun(
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
 	turboJSON *fs.TurboJSON,
+	globalEnvMode util.EnvMode,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	runSummary runsummary.Meta,
@@ -98,9 +99,6 @@ func RealRun(
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		taskExecutionSummary, err := ec.exec(ctx, packageTask)
-		if err != nil {
-			return err
-		}
 
 		// taskExecutionSummary will be nil if the task never executed
 		// (i.e. if the workspace didn't implement the script corresponding to the task)
@@ -108,13 +106,18 @@ func RealRun(
 		if taskExecutionSummary != nil {
 			taskSummary.ExpandedOutputs = taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
 			taskSummary.Execution = taskExecutionSummary
-			taskSummary.CacheState = taskHashTracker.GetCacheStatus(taskSummary.TaskID)
+			taskSummary.CacheSummary = taskHashTracker.GetCacheStatus(taskSummary.TaskID)
 
 			// lock since multiple things to be appending to this array at the same time
 			mu.Lock()
 			taskSummaries = append(taskSummaries, taskSummary)
 			// not using defer, just release the lock
 			mu.Unlock()
+		}
+
+		// Return the error when there is one
+		if err != nil {
+			return err
 		}
 
 		return nil
@@ -124,7 +127,7 @@ func RealRun(
 		return rs.ArgsForTask(taskID)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, execFunc)
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, globalEnvMode, getArgs, base.Logger, execFunc)
 	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
@@ -169,7 +172,7 @@ func RealRun(
 		}
 	}
 
-	if err := runSummary.Close(exitCode, g.WorkspaceInfos); err != nil {
+	if err := runSummary.Close(ctx, exitCode, g.WorkspaceInfos); err != nil {
 		// We don't need to throw an error, but we can warn on this.
 		// Note: this method doesn't actually return an error for Real Runs at the time of writing.
 		base.UI.Info(fmt.Sprintf("Failed to close Run Summary %v", err))
@@ -212,24 +215,11 @@ func (ec *execContext) logError(prefix string, err error) {
 func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask) (*runsummary.TaskExecutionSummary, error) {
 	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
 	// So make sure to call it before returning.
-	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
+	successExitCode := 0 // We won't use this till later
 
+	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
-
-	strictEnv := false
-	switch ec.rs.Opts.runOpts.EnvMode {
-	case util.Infer:
-		globalStrict := ec.passthroughEnv != nil
-		taskStrict := packageTask.TaskDefinition.PassthroughEnv != nil
-		inferredStrict := taskStrict || globalStrict
-
-		strictEnv = inferredStrict
-	case util.Loose:
-		strictEnv = false
-	case util.Strict:
-		strictEnv = true
-	}
 
 	passThroughArgs := ec.rs.ArgsForTask(packageTask.Task)
 	hash := packageTask.Hash
@@ -247,7 +237,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Set building status now that we know it's going to run.
-	tracer(runsummary.TargetBuilding, nil, &successCode)
+	tracer(runsummary.TargetBuilding, nil, &successExitCode)
 
 	var prefix string
 	var prettyPrefix string
@@ -269,16 +259,23 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		ErrorPrefix:  prettyPrefix,
 		WarnPrefix:   prettyPrefix,
 	}
-	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
-	ec.taskHashTracker.SetCacheStatus(packageTask.TaskID, cacheStatus)
 
-	hit := cacheStatus.Local || cacheStatus.Remote
+	cacheStatus, timeSaved, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
+
+	// It's safe to set the CacheStatus even if there's an error, because if there's
+	// an error, the 0 values are actually what we want. We save cacheStatus and timeSaved
+	// for the task, so that even if there's an error, we have those values for the taskSummary.
+	ec.taskHashTracker.SetCacheStatus(
+		packageTask.TaskID,
+		runsummary.NewTaskCacheSummary(cacheStatus, &timeSaved),
+	)
+
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-	} else if hit {
+	} else if cacheStatus.Local || cacheStatus.Remote { // If there was a cache hit
 		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
-		// We only cache successful executions, so we can assume this is a successCode exit.
-		tracer(runsummary.TargetCached, nil, &successCode)
+		// We only cache successful executions, so we can assume this is a successExitCode exit.
+		tracer(runsummary.TargetCached, nil, &successExitCode)
 		return taskExecutionSummary, nil
 	}
 
@@ -296,7 +293,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	currentState := env.GetEnvMap()
 	passthroughEnv := env.EnvironmentVariableMap{}
 
-	if strictEnv {
+	if packageTask.EnvMode == util.Strict {
 		defaultPassthrough := []string{
 			"PATH",
 			"SHELL",
@@ -326,7 +323,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 		ec.logError(prettyPrefix, err)
 		if !ec.rs.Opts.runOpts.ContinueOnError {
-			return nil, errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID)
+			return nil, core.StopExecution(errors.Wrapf(err, "failed to capture outputs for \"%v\"", packageTask.TaskID))
 		}
 	}
 
@@ -385,21 +382,23 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			tracer(runsummary.TargetBuildFailed, err, nil)
 		}
 
+		// If there was an error, flush the buffered output
+		taskCache.OnError(prefixedUI, progressLogger)
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.ContinueOnError {
 			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
 			ec.processes.Close()
+			// We're not continuing, stop graph traversal
+			err = core.StopExecution(err)
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
-			// Set to nil so we don't short-circuit any other execution
-			err = nil
 		}
-
-		// If there was an error, flush the buffered output
-		taskCache.OnError(prefixedUI, progressLogger)
 
 		return taskExecutionSummary, err
 	}
+
+	// Add another timestamp into the tracer, so we have an accurate timestamp for how long the task took.
+	tracer(runsummary.TargetExecuted, nil, nil)
 
 	// Close off our outputs and cache them
 	if err := closeOutputs(); err != nil {
@@ -413,9 +412,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Clean up tracing
-	tracer(runsummary.TargetBuilt, nil, &successCode)
+
+	tracer(runsummary.TargetBuilt, nil, &successExitCode)
 	progressLogger.Debug("done", "status", "complete", "duration", taskExecutionSummary.Duration)
 	return taskExecutionSummary, nil
 }
-
-var successCode = 0

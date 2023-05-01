@@ -1,4 +1,4 @@
-import { getTurboConfigs } from "turbo-utils";
+import { getTurboConfigs } from "@turbo/utils";
 
 function findDependsOnEnvVars({
   dependencies,

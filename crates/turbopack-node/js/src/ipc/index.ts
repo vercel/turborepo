@@ -1,9 +1,6 @@
 import { createConnection } from "node:net";
-
-import {
-  StackFrame,
-  parse as parseStackTrace,
-} from "../compiled/stacktrace-parser";
+import type { StackFrame } from "../compiled/stacktrace-parser";
+import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
 
 export type StructuredError = {
   name: string;
@@ -137,8 +134,9 @@ function createIpc<TIncoming, TOutgoing>(
         });
       } catch (err) {
         // ignore and exit anyway
+        process.exit(1);
       }
-      process.exit(1);
+      process.exit(0);
     },
   };
 }

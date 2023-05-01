@@ -1,5 +1,5 @@
 import path from "path";
-import { setupTestFixtures } from "turbo-test-utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 import { Logger } from "../src/logger";
 import MANAGERS from "../src/managers";
 import { PackageJson } from "../src/types";
