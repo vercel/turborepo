@@ -55,9 +55,7 @@ indicatif = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 libc = "0.2.140"
-notify = { version = "5.1.0", default-features = false, features = [
-  "macos_kqueue",
-] }
+notify = "5.1"
 pidlock = { path = "../pidlock" }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
