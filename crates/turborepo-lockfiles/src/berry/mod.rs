@@ -775,7 +775,7 @@ mod test {
     }
 
     #[test]
-    fn test_workspace_collission() {
+    fn test_workspace_collision() {
         let data = LockfileData::from_bytes(include_bytes!(
             "../../fixtures/berry-protocol-collision.lock"
         ))
