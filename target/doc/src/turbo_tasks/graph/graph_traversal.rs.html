@@ -182,44 +182,80 @@
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
 <a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>futures::{stream::FuturesUnordered, Stream};
 
-<span class="kw">use super</span>::{graph_store::GraphStore, with_future::With, Visit, VisitControlFlow};
+<span class="kw">use super</span>::{
+    graph_store::{GraphNode, GraphStore},
+    with_future::With,
+    SkipDuplicates, Visit, VisitControlFlow,
+};
 
 <span class="doccomment">/// [`GraphTraversal`] is a utility type that can be used to traverse a graph of
 /// nodes, where each node can have a variable number of outgoing edges. The
 /// traversal is done in parallel, and the order of the nodes in the traversal
 /// result is determined by the [`GraphStore`] parameter.
-</span><span class="kw">pub struct </span>GraphTraversal&lt;Store&gt; {
-    _store: std::marker::PhantomData&lt;Store&gt;,
+</span><span class="kw">pub trait </span>GraphTraversal: GraphStore + Sized {
+    <span class="kw">fn </span>visit&lt;RootEdgesIt, VisitImpl, Abort, Impl&gt;(
+        <span class="self">self</span>,
+        root_edges: RootEdgesIt,
+        visit: VisitImpl,
+    ) -&gt; GraphTraversalFuture&lt;<span class="self">Self</span>, VisitImpl, Abort, Impl&gt;
+    <span class="kw">where
+        </span>VisitImpl: Visit&lt;<span class="self">Self</span>::Node, Abort, Impl&gt;,
+        RootEdgesIt: IntoIterator&lt;Item = VisitImpl::Edge&gt;;
+
+    <span class="kw">fn </span>skip_duplicates(<span class="self">self</span>) -&gt; SkipDuplicates&lt;<span class="self">Self</span>&gt;;
 }
 
-<span class="kw">impl</span>&lt;Store&gt; GraphTraversal&lt;Store&gt; {
+<span class="kw">impl</span>&lt;Store&gt; GraphTraversal <span class="kw">for </span>Store
+<span class="kw">where
+    </span>Store: GraphStore,
+{
     <span class="doccomment">/// Visits the graph starting from the given `roots`, and returns a future
     /// that will resolve to the traversal result.
-    </span><span class="kw">pub fn </span>visit&lt;Node, RootEdgesIt, VisitImpl, Abort, Impl&gt;(
+    </span><span class="kw">fn </span>visit&lt;RootEdgesIt, VisitImpl, Abort, Impl&gt;(
+        <span class="kw-2">mut </span><span class="self">self</span>,
         root_edges: RootEdgesIt,
         <span class="kw-2">mut </span>visit: VisitImpl,
-    ) -&gt; GraphTraversalFuture&lt;Node, Store, VisitImpl, Abort, Impl&gt;
+    ) -&gt; GraphTraversalFuture&lt;<span class="self">Self</span>, VisitImpl, Abort, Impl&gt;
     <span class="kw">where
-        </span>Store: GraphStore&lt;Node&gt;,
-        VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
+        </span>VisitImpl: Visit&lt;<span class="self">Self</span>::Node, Abort, Impl&gt;,
         RootEdgesIt: IntoIterator&lt;Item = VisitImpl::Edge&gt;,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>store = Store::default();
         <span class="kw">let </span>futures = FuturesUnordered::new();
         <span class="kw">for </span>edge <span class="kw">in </span>root_edges {
             <span class="kw">match </span>visit.visit(edge) {
                 VisitControlFlow::Continue(node) =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>((parent_handle, node_ref)) = store.insert(<span class="prelude-val">None</span>, node) {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>((parent_handle, node_ref)) = <span class="self">self</span>.insert(<span class="prelude-val">None</span>, GraphNode(node)) {
                         futures.push(With::new(visit.edges(node_ref), parent_handle));
                     }
                 }
                 VisitControlFlow::Skip(node) =&gt; {
-                    store.insert(<span class="prelude-val">None</span>, node);
+                    <span class="self">self</span>.insert(<span class="prelude-val">None</span>, GraphNode(node));
                 }
                 VisitControlFlow::Abort(abort) =&gt; {
                     <span class="kw">return </span>GraphTraversalFuture {
@@ -230,42 +266,46 @@
         }
         GraphTraversalFuture {
             state: GraphTraversalState::Running(GraphTraversalRunningState {
-                store,
+                store: <span class="self">self</span>,
                 futures,
                 visit,
             }),
         }
     }
+
+    <span class="kw">fn </span>skip_duplicates(<span class="self">self</span>) -&gt; SkipDuplicates&lt;<span class="self">Self</span>&gt; {
+        SkipDuplicates::new(<span class="self">self</span>)
+    }
 }
 
 <span class="doccomment">/// A future that resolves to a [`GraphStore`] containing the result of a graph
 /// traversal.
-</span><span class="kw">pub struct </span>GraphTraversalFuture&lt;Node, Store, VisitImpl, Abort, Impl&gt;
+</span><span class="kw">pub struct </span>GraphTraversalFuture&lt;Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>Store: GraphStore&lt;Node&gt;,
-    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
+    </span>Store: GraphStore,
+    VisitImpl: Visit&lt;Store::Node, Abort, Impl&gt;,
 {
-    state: GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;,
+    state: GraphTraversalState&lt;Store, VisitImpl, Abort, Impl&gt;,
 }
 
 <span class="attr">#[derive(Default)]
-</span><span class="kw">enum </span>GraphTraversalState&lt;Node, Store, VisitImpl, Abort, Impl&gt;
+</span><span class="kw">enum </span>GraphTraversalState&lt;Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>Store: GraphStore&lt;Node&gt;,
-    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
+    </span>Store: GraphStore,
+    VisitImpl: Visit&lt;Store::Node, Abort, Impl&gt;,
 {
     <span class="attr">#[default]
     </span>Completed,
     Aborted {
         abort: Abort,
     },
-    Running(GraphTraversalRunningState&lt;Node, Store, VisitImpl, Abort, Impl&gt;),
+    Running(GraphTraversalRunningState&lt;Store, VisitImpl, Abort, Impl&gt;),
 }
 
-<span class="kw">struct </span>GraphTraversalRunningState&lt;Node, Store, VisitImpl, Abort, Impl&gt;
+<span class="kw">struct </span>GraphTraversalRunningState&lt;Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>Store: GraphStore&lt;Node&gt;,
-    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
+    </span>Store: GraphStore,
+    VisitImpl: Visit&lt;Store::Node, Abort, Impl&gt;,
 {
     store: Store,
     futures: FuturesUnordered&lt;With&lt;VisitImpl::EdgesFuture, Store::Handle&gt;&gt;,
@@ -286,11 +326,10 @@
     }
 }
 
-<span class="kw">impl</span>&lt;Node, Store, VisitImpl, Abort, Impl&gt; Future
-    <span class="kw">for </span>GraphTraversalFuture&lt;Node, Store, VisitImpl, Abort, Impl&gt;
+<span class="kw">impl</span>&lt;Store, VisitImpl, Abort, Impl&gt; Future <span class="kw">for </span>GraphTraversalFuture&lt;Store, VisitImpl, Abort, Impl&gt;
 <span class="kw">where
-    </span>Store: GraphStore&lt;Node&gt;,
-    VisitImpl: Visit&lt;Node, Abort, Impl&gt;,
+    </span>Store: GraphStore,
+    VisitImpl: Visit&lt;Store::Node, Abort, Impl&gt;,
 {
     <span class="kw">type </span>Output = GraphTraversalResult&lt;<span class="prelude-ty">Result</span>&lt;Store&gt;, Abort&gt;;
 
@@ -316,8 +355,9 @@
                         <span class="kw">for </span>edge <span class="kw">in </span>edges {
                             <span class="kw">match </span>running.visit.visit(edge) {
                                 VisitControlFlow::Continue(node) =&gt; {
-                                    <span class="kw">if let </span><span class="prelude-val">Some</span>((node_handle, node_ref)) =
-                                        running.store.insert(<span class="prelude-val">Some</span>(parent_handle.clone()), node)
+                                    <span class="kw">if let </span><span class="prelude-val">Some</span>((node_handle, node_ref)) = running
+                                        .store
+                                        .insert(<span class="prelude-val">Some</span>(parent_handle.clone()), GraphNode(node))
                                     {
                                         running.futures.push(With::new(
                                             running.visit.edges(node_ref),
@@ -326,7 +366,9 @@
                                     }
                                 }
                                 VisitControlFlow::Skip(node) =&gt; {
-                                    running.store.insert(<span class="prelude-val">Some</span>(parent_handle.clone()), node);
+                                    running
+                                        .store
+                                        .insert(<span class="prelude-val">Some</span>(parent_handle.clone()), GraphNode(node));
                                 }
                                 VisitControlFlow::Abort(abort) =&gt; {
                                     <span class="kw">break </span><span class="lifetime">&#39;outer </span>(

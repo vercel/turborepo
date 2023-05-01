@@ -41,10 +41,9 @@
 <a href="#41" id="41">41</a>
 <a href="#42" id="42">42</a>
 <a href="#43" id="43">43</a>
-<a href="#44" id="44">44</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
-    graph::{GraphTraversal, NonDeterministic, SkipDuplicates},
+    graph::{GraphTraversal, NonDeterministic},
     CompletionVc, CompletionsVc,
 };
 
@@ -64,16 +63,15 @@
 /// asset graph changes.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>any_content_changed(root: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
-    <span class="kw">let </span>completions = GraphTraversal::&lt;SkipDuplicates&lt;NonDeterministic&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;::visit(
-        [root],
-        get_referenced_assets,
-    )
-    .<span class="kw">await
-    </span>.completed()<span class="question-mark">?
-    </span>.into_inner()
-    .into_iter()
-    .map(content_changed)
-    .collect();
+    <span class="kw">let </span>completions = NonDeterministic::new()
+        .skip_duplicates()
+        .visit([root], get_referenced_assets)
+        .<span class="kw">await
+        </span>.completed()<span class="question-mark">?
+        </span>.into_inner()
+        .into_iter()
+        .map(content_changed)
+        .collect();
 
     <span class="prelude-val">Ok</span>(CompletionsVc::cell(completions).completed())
 }

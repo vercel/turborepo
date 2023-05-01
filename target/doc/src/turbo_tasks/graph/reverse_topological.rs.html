@@ -116,9 +116,19 @@
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{HashMap, HashSet};
 
-<span class="kw">use </span><span class="kw">super</span>::graph_store::GraphStore;
+<span class="kw">use </span><span class="kw">super</span>::graph_store::{GraphNode, GraphStore};
 
 <span class="doccomment">/// A graph traversal that returns nodes in reverse topological order.
 </span><span class="kw">pub struct </span>ReverseTopological&lt;T&gt;
@@ -134,6 +144,15 @@
     </span>T: Eq + std::hash::Hash + Clone,
 {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new()
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; ReverseTopological&lt;T&gt;
+<span class="kw">where
+    </span>T: Eq + std::hash::Hash + Clone,
+{
+    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             adjacency_map: HashMap::new(),
             roots: Vec::new(),
@@ -141,13 +160,14 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T&gt; GraphStore&lt;T&gt; <span class="kw">for </span>ReverseTopological&lt;T&gt;
+<span class="kw">impl</span>&lt;T&gt; GraphStore <span class="kw">for </span>ReverseTopological&lt;T&gt;
 <span class="kw">where
     </span>T: Eq + std::hash::Hash + Clone,
 {
+    <span class="kw">type </span>Node = T;
     <span class="kw">type </span>Handle = T;
 
-    <span class="kw">fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, from_handle: <span class="prelude-ty">Option</span>&lt;T&gt;, node: T) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>T)&gt; {
+    <span class="kw">fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, from_handle: <span class="prelude-ty">Option</span>&lt;T&gt;, node: GraphNode&lt;T&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>T)&gt; {
         <span class="kw">let </span>vec = <span class="kw">if let </span><span class="prelude-val">Some</span>(from_handle) = from_handle {
             <span class="self">self</span>.adjacency_map
                 .entry(from_handle)
@@ -156,8 +176,8 @@
             <span class="kw-2">&amp;mut </span><span class="self">self</span>.roots
         };
 
-        vec.push(node.clone());
-        <span class="prelude-val">Some</span>((node, vec.last().unwrap()))
+        vec.push(node.node().clone());
+        <span class="prelude-val">Some</span>((node.into_node(), vec.last().unwrap()))
     }
 }
 

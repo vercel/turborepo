@@ -113,12 +113,11 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::iter::once;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
+    graph::{GraphTraversal, ReverseTopological},
     primitives::{BoolVc, U64Vc},
     TryJoinIterExt, ValueToString,
 };
@@ -198,9 +197,9 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>chunkable_assets_set(root: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsSetVc&gt; {
-    <span class="kw">let </span>assets = GraphTraversal::&lt;SkipDuplicates&lt;ReverseTopological&lt;AssetVc&gt;, <span class="kw">_</span>&gt;&gt;::visit(
-        once(root),
-        |<span class="kw-2">&amp;</span>asset: <span class="kw-2">&amp;</span>AssetVc| <span class="kw">async move </span>{
+    <span class="kw">let </span>assets = ReverseTopological::new()
+        .skip_duplicates()
+        .visit(once(root), |<span class="kw-2">&amp;</span>asset: <span class="kw-2">&amp;</span>AssetVc| <span class="kw">async move </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
             <span class="kw">for </span>reference <span class="kw">in </span>asset.references().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
@@ -224,10 +223,9 @@
                 }
             }
             <span class="prelude-val">Ok</span>(results)
-        },
-    )
-    .<span class="kw">await
-    </span>.completed()<span class="question-mark">?</span>;
+        })
+        .<span class="kw">await
+        </span>.completed()<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(AssetsSetVc::cell(assets.into_inner().into_iter().collect()))
 }
 </code></pre></div>

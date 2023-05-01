@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GraphTraversalResult","VisitControlFlow"],"struct":["GraphTraversal","NonDeterministic","ReverseTopological","SkipDuplicates"],"trait":["GraphStore","Visit"]};
+window.SIDEBAR_ITEMS = {"enum":["GraphTraversalResult","VisitControlFlow"],"struct":["NonDeterministic","ReverseTopological","SkipDuplicates"],"trait":["GraphStore","GraphTraversal","Visit"]};

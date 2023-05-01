@@ -615,7 +615,6 @@
 <a href="#615" id="615">615</a>
 <a href="#616" id="616">616</a>
 <a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
@@ -1180,10 +1179,9 @@
         _phantom: PhantomData,
     };
 
-    <span class="kw">let </span>GraphTraversalResult::Completed(traversal_result) =
-        GraphTraversal::&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;&gt;::visit(root_edges, visit).<span class="kw">await else </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
-        };
+    <span class="kw">let </span>GraphTraversalResult::Completed(traversal_result) = ReverseTopological::new().visit(root_edges, visit).<span class="kw">await else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+    };
 
     <span class="kw">let </span>graph_nodes: Vec&lt;<span class="kw">_</span>&gt; = traversal_result<span class="question-mark">?</span>.into_iter().collect();
 

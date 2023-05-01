@@ -163,6 +163,9 @@
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{path::Path, process::Child};
 
 <span class="kw">use </span>anyhow::Result;
@@ -173,9 +176,11 @@
     vite::Vite,
     webpack::Webpack,
 };
+<span class="kw">use </span><span class="kw">crate</span>::bundlers::rspack::Rspack;
 
 <span class="kw">mod </span>nextjs;
 <span class="kw">mod </span>parcel;
+<span class="kw">mod </span>rspack;
 <span class="kw">mod </span>vite;
 <span class="kw">mod </span>webpack;
 
@@ -326,6 +331,7 @@
         Box::new(Vite::new(<span class="bool-val">true</span>, <span class="bool-val">false</span>)),
         Box::new(Vite::new(<span class="bool-val">false</span>, <span class="bool-val">true</span>)),
         Box::new(Webpack {}),
+        Box::new(Rspack {}),
     ]
 }
 </code></pre></div>

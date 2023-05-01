@@ -33,7 +33,14 @@
 <a href="#33" id="33">33</a>
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::graph_store::GraphStore;
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::graph_store::{GraphNode, GraphStore};
 
 <span class="doccomment">/// A graph traversal that does not guarantee any particular order, and may not
 /// return the same order every time it is run.
@@ -43,19 +50,26 @@
 
 <span class="kw">impl</span>&lt;T&gt; Default <span class="kw">for </span>NonDeterministic&lt;T&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new()
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; NonDeterministic&lt;T&gt; {
+    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ output: Vec::new() }
     }
 }
 
-<span class="kw">impl</span>&lt;T&gt; GraphStore&lt;T&gt; <span class="kw">for </span>NonDeterministic&lt;T&gt; {
+<span class="kw">impl</span>&lt;T&gt; GraphStore <span class="kw">for </span>NonDeterministic&lt;T&gt; {
+    <span class="kw">type </span>Node = T;
     <span class="kw">type </span>Handle = ();
 
     <span class="kw">fn </span>insert(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         _from_handle: <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Handle&gt;,
-        node: T,
+        node: GraphNode&lt;T&gt;,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>T)&gt; {
-        <span class="self">self</span>.output.push(node);
+        <span class="self">self</span>.output.push(node.into_node());
         <span class="prelude-val">Some</span>(((), <span class="self">self</span>.output.last().unwrap()))
     }
 }

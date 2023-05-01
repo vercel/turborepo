@@ -288,7 +288,6 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
@@ -301,7 +300,7 @@
     NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 <span class="kw">use </span>turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
+    graph::{GraphTraversal, ReverseTopological},
     CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
@@ -461,13 +460,12 @@
             .<span class="kw">await
     </span>};
 
-    <span class="kw">let </span>graph = GraphTraversal::&lt;SkipDuplicates&lt;ReverseTopological&lt;Type&gt;, <span class="kw">_</span>&gt;&gt;::visit(
-        once(Type::Internal(intermediate_asset)),
-        get_asset_children,
-    )
-    .<span class="kw">await
-    </span>.completed()<span class="question-mark">?
-    </span>.into_inner();
+    <span class="kw">let </span>graph = ReverseTopological::new()
+        .skip_duplicates()
+        .visit(once(Type::Internal(intermediate_asset)), get_asset_children)
+        .<span class="kw">await
+        </span>.completed()<span class="question-mark">?
+        </span>.into_inner();
 
     <span class="kw">let </span><span class="kw-2">mut </span>internal_assets = IndexSet::new();
     <span class="kw">let </span><span class="kw-2">mut </span>external_asset_entrypoints = IndexSet::new();

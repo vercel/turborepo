@@ -75,11 +75,36 @@
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="doccomment">/// A graph store is a data structure that will be built up during a graph
 /// traversal. It is used to store the results of the traversal.
-</span><span class="kw">pub trait </span>GraphStore&lt;Node&gt;: Default {
+</span><span class="kw">pub trait </span>GraphStore {
+    <span class="kw">type </span>Node;
     <span class="kw">type </span>Handle: Clone;
 
     <span class="comment">// TODO(alexkirsz) An `entry(from_handle) -&gt; Entry` API would be more
@@ -90,48 +115,71 @@
     </span><span class="kw">fn </span>insert(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         from_handle: <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Handle&gt;,
-        node: Node,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>Node)&gt;;
+        node: GraphNode&lt;<span class="self">Self</span>::Node&gt;,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span><span class="self">Self</span>::Node)&gt;;
+}
+
+<span class="doccomment">/// Utility type to ensure that GraphStore::insert can only ever be called from
+/// within this module, as a GraphNode can&#39;t be constructed outside of it.
+</span><span class="attr">#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash, Ord, PartialOrd)]
+</span><span class="kw">pub struct </span>GraphNode&lt;Node&gt;(<span class="kw">pub</span>(<span class="kw">super</span>) Node);
+
+<span class="kw">impl</span>&lt;Node&gt; GraphNode&lt;Node&gt; {
+    <span class="doccomment">/// Consumes this `GraphNode` and returns the underlying node.
+    </span><span class="kw">pub fn </span>into_node(<span class="self">self</span>) -&gt; Node {
+        <span class="self">self</span>.<span class="number">0
+    </span>}
+
+    <span class="doccomment">/// Returns a reference the underlying node.
+    </span><span class="kw">pub fn </span>node(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Node {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+
+    <span class="doccomment">/// Returns a mutable reference the underlying node.
+    </span><span class="kw">pub fn </span>node_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>Node {
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>.<span class="number">0
+    </span>}
 }
 
 <span class="doccomment">/// A [`GraphStore`] wrapper that skips nodes that have already been
 /// visited. This is necessary to avoid repeated work when traversing non-tree
 /// graphs (i.e. where a node can have more than one incoming edge).
 </span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>SkipDuplicates&lt;StoreImpl, Node&gt;
+</span><span class="kw">pub struct </span>SkipDuplicates&lt;StoreImpl&gt;
 <span class="kw">where
-    </span>StoreImpl: GraphStore&lt;Node&gt;,
+    </span>StoreImpl: GraphStore,
 {
     store: StoreImpl,
-    visited: HashSet&lt;Node&gt;,
+    visited: HashSet&lt;StoreImpl::Node&gt;,
 }
 
-<span class="kw">impl</span>&lt;StoreImpl, Node&gt; Default <span class="kw">for </span>SkipDuplicates&lt;StoreImpl, Node&gt;
+<span class="kw">impl</span>&lt;StoreImpl&gt; SkipDuplicates&lt;StoreImpl&gt;
 <span class="kw">where
-    </span>StoreImpl: GraphStore&lt;Node&gt;,
+    </span>StoreImpl: GraphStore,
 {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(store: StoreImpl) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            store: Default::default(),
+            store: store,
             visited: Default::default(),
         }
     }
 }
 
-<span class="kw">impl</span>&lt;StoreImpl, Node&gt; GraphStore&lt;Node&gt; <span class="kw">for </span>SkipDuplicates&lt;StoreImpl, Node&gt;
+<span class="kw">impl</span>&lt;StoreImpl&gt; GraphStore <span class="kw">for </span>SkipDuplicates&lt;StoreImpl&gt;
 <span class="kw">where
-    </span>StoreImpl: GraphStore&lt;Node&gt;,
-    Node: Eq + std::hash::Hash + Clone,
+    </span>StoreImpl: GraphStore,
+    StoreImpl::Node: Eq + std::hash::Hash + Clone,
 {
+    <span class="kw">type </span>Node = StoreImpl::Node;
     <span class="kw">type </span>Handle = StoreImpl::Handle;
 
     <span class="kw">fn </span>insert(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         from_handle: <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Handle&gt;,
-        node: Node,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>Node)&gt; {
-        <span class="kw">if </span>!<span class="self">self</span>.visited.contains(<span class="kw-2">&amp;</span>node) {
-            <span class="self">self</span>.visited.insert(node.clone());
+        node: GraphNode&lt;StoreImpl::Node&gt;,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>::Handle, <span class="kw-2">&amp;</span>StoreImpl::Node)&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.visited.contains(node.node()) {
+            <span class="self">self</span>.visited.insert(node.node().clone());
             <span class="self">self</span>.store.insert(from_handle, node)
         } <span class="kw">else </span>{
             <span class="comment">// Always insert the node into the store, even if we&#39;ve already
@@ -143,9 +191,9 @@
     }
 }
 
-<span class="kw">impl</span>&lt;StoreImpl, Node&gt; SkipDuplicates&lt;StoreImpl, Node&gt;
+<span class="kw">impl</span>&lt;StoreImpl&gt; SkipDuplicates&lt;StoreImpl&gt;
 <span class="kw">where
-    </span>StoreImpl: GraphStore&lt;Node&gt;,
+    </span>StoreImpl: GraphStore,
 {
     <span class="doccomment">/// Consumes the wrapper and returns the underlying store.
     </span><span class="kw">pub fn </span>into_inner(<span class="self">self</span>) -&gt; StoreImpl {

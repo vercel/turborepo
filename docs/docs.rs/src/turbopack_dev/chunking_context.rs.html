@@ -490,15 +490,12 @@
 <a href="#490" id="490">490</a>
 <a href="#491" id="491">491</a>
 <a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
+    graph::{GraphTraversal, ReverseTopological},
     primitives::{BoolVc, StringVc},
     TryJoinIterExt, Value, ValueToString,
 };
@@ -936,24 +933,21 @@
 <span class="kw">where
     </span>I: IntoIterator&lt;Item = ChunkVc&gt;,
 {
-    <span class="prelude-val">Ok</span>(
-        GraphTraversal::&lt;SkipDuplicates&lt;ReverseTopological&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;::visit(
-            entries,
-            |chunk: ChunkVc| <span class="kw">async move </span>{
-                <span class="prelude-val">Ok</span>(chunk
-                    .parallel_chunks()
-                    .<span class="kw">await</span><span class="question-mark">?
-                    </span>.iter()
-                    .copied()
-                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                    .into_iter())
-            },
-        )
+    <span class="prelude-val">Ok</span>(ReverseTopological::new()
+        .skip_duplicates()
+        .visit(entries, |chunk: ChunkVc| <span class="kw">async move </span>{
+            <span class="prelude-val">Ok</span>(chunk
+                .parallel_chunks()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.iter()
+                .copied()
+                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                .into_iter())
+        })
         .<span class="kw">await
         </span>.completed()<span class="question-mark">?
         </span>.into_inner()
-        .into_iter(),
-    )
+        .into_iter())
 }
 
 <span class="kw">async fn </span>get_optimized_chunks&lt;I&gt;(chunks: I) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt;
