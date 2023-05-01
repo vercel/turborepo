@@ -115,7 +115,7 @@ async fn resolve_extends(
     // TS's resolution is weird, and has special behavior for different import
     // types.
     let extends = match &*request.await? {
-        // TS has special behvaior for "rooted" paths (absolute paths):
+        // TS has special behavior for "rooted" paths (absolute paths):
         // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3303-L3313
         Request::Windows { path: Pattern::Constant(path) } |
         // Server relative is treated as absolute
@@ -123,7 +123,7 @@ async fn resolve_extends(
             return resolve_extends_rooted_or_relative(context, request, resolve_options, path).await;
         }
 
-        // TS has special behvaior for (explicitly) './' and '../', but not '.' nor '..':
+        // TS has special behavior for (explicitly) './' and '../', but not '.' nor '..':
         // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3303-L3313
         Request::Relative {
             path: Pattern::Constant(path),
@@ -144,6 +144,9 @@ async fn resolve_extends(
     };
 
     let request = RequestVc::parse_string(extends);
+    // There might be multiple alternatives like
+    // "some/path/node_modules/xyz/abc.json" and "some/node_modules/xyz/abc.json".
+    // We only want to use the first one.
     Ok(resolve(context, request, resolve_options).first_asset())
 }
 
