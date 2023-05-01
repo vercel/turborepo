@@ -52,17 +52,12 @@ pub enum DryRunMode {
     Json,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
 pub enum EnvMode {
+    #[default]
     Infer,
     Loose,
     Strict,
-}
-
-impl Default for EnvMode {
-    fn default() -> EnvMode {
-        EnvMode::Infer
-    }
 }
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]

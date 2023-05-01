@@ -8,13 +8,13 @@ Check
   Global Hash Inputs
     Global Files               = 3
     External Dependencies Hash = 
-    Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
+    Global Cache Key           = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
     Root pipeline              = {"//#build":{"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false}}
   
   Tasks to Run
   build
     Task                             = build                                                                                                       
-    Hash                             = dd4a9a7b508b0e38                                                                                            
+    Hash                             = a6012909f5655e58                                                                                            
     Cached (Local)                   = false                                                                                                       
     Cached (Remote)                  = false                                                                                                       
     Command                          = echo 'building' > foo                                                                                       

@@ -46,16 +46,16 @@ where
         let level = event.metadata().level();
         let target = event.metadata().target();
 
-        match level {
-            &Level::ERROR => {
+        match *level {
+            Level::ERROR => {
                 write_string::<Red, Black>(writer.by_ref(), self.is_ansi, level.as_str())
                     .and_then(|_| write_message::<Red, Default>(writer, self.is_ansi, event))
             }
-            &Level::WARN => {
+            Level::WARN => {
                 write_string::<Yellow, Black>(writer.by_ref(), self.is_ansi, level.as_str())
                     .and_then(|_| write_message::<Yellow, Default>(writer, self.is_ansi, event))
             }
-            &Level::INFO => write_message::<Default, Default>(writer, self.is_ansi, event),
+            Level::INFO => write_message::<Default, Default>(writer, self.is_ansi, event),
             // trace and debug use the same style
             _ => {
                 let now = Local::now();

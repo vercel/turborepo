@@ -190,7 +190,7 @@ pub async fn link(
                 base.ui.apply(BOLD.apply_to(chosen_team_name)),
                 GREY.apply_to("To disable Remote Caching, run `npx turbo unlink`")
             );
-            return Ok(());
+            Ok(())
         }
         LinkTarget::Spaces => {
             println!(
@@ -213,17 +213,15 @@ pub async fn link(
             let selected_space = select_space(base, &spaces_response.spaces)?;
 
             // print result from selected_space
-            let space = match selected_space {
-                SelectedSpace::Space(space) => space,
-            };
+            let SelectedSpace::Space(space) = selected_space;
 
             add_space_id_to_turbo_json(base, &space.id).map_err(|err| {
-                return anyhow!(
+                anyhow!(
                     "Could not persist selected space ({}) to `experimentalSpaces.id` in \
                      turbo.json {}",
                     space.id,
                     err
-                );
+                )
             })?;
 
             println!(
@@ -240,7 +238,7 @@ pub async fn link(
                 )
             );
 
-            return Ok(());
+            Ok(())
         }
     }
 }
