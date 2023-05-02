@@ -1,12 +1,9 @@
-use std::{
-    collections::HashMap,
-    env,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, env};
 
 use anyhow::Result;
 use config::Config;
 use serde::{Deserialize, Serialize};
+use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 use super::{write_to_disk, MappedEnvironment};
 
@@ -17,7 +14,7 @@ const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 pub struct RepoConfig {
     disk_config: RepoConfigValue,
     config: RepoConfigValue,
-    path: PathBuf,
+    path: AbsoluteSystemPathBuf,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
@@ -34,7 +31,7 @@ struct RepoConfigValue {
 
 #[derive(Debug, Clone)]
 pub struct RepoConfigLoader {
-    path: PathBuf,
+    path: AbsoluteSystemPathBuf,
     api: Option<String>,
     login: Option<String>,
     team_slug: Option<String>,
@@ -77,18 +74,18 @@ impl RepoConfig {
     }
 
     fn write_to_disk(&self) -> Result<()> {
-        write_to_disk(&self.path, &self.disk_config)
+        write_to_disk(&self.path.as_path(), &self.disk_config)
     }
 }
 
-#[allow(dead_code)]
-pub fn get_repo_config_path(repo_root: &Path) -> PathBuf {
-    repo_root.join(".turbo").join("config.json")
+pub fn get_repo_config_path(repo_root: &AbsoluteSystemPathBuf) -> AbsoluteSystemPathBuf {
+    let config = RelativeSystemPathBuf::new(".turbo/config.json").expect("is relative");
+    repo_root.join_relative(config)
 }
 
 impl RepoConfigLoader {
     #[allow(dead_code)]
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: AbsoluteSystemPathBuf) -> Self {
         Self {
             path,
             api: None,
@@ -188,7 +185,13 @@ mod test {
 
     #[test]
     fn test_repo_config_when_missing() -> Result<()> {
-        let config = RepoConfigLoader::new(PathBuf::from("missing")).load();
+        let path = if cfg!(windows) {
+            "C:\\missing"
+        } else {
+            "/missing"
+        };
+
+        let config = RepoConfigLoader::new(AbsoluteSystemPathBuf::new(path).unwrap()).load();
         assert!(config.is_ok());
 
         Ok(())
@@ -197,9 +200,10 @@ mod test {
     #[test]
     fn test_repo_config_with_team_and_api_flags() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
 
-        let config = RepoConfigLoader::new(config_file.path().to_path_buf())
+        let config = RepoConfigLoader::new(config_path)
             .with_team_slug(Some("my-team-slug".into()))
             .with_api(Some("http://my-login-url".into()))
             .load()?;
@@ -213,7 +217,13 @@ mod test {
 
     #[test]
     fn test_repo_config_includes_defaults() {
-        let config = RepoConfigLoader::new(PathBuf::from("missing"))
+        let path = if cfg!(windows) {
+            "C:\\missing"
+        } else {
+            "/missing"
+        };
+
+        let config = RepoConfigLoader::new(AbsoluteSystemPathBuf::new(path).unwrap())
             .load()
             .unwrap();
         assert_eq!(config.api_url(), DEFAULT_API_URL);
@@ -225,9 +235,9 @@ mod test {
     #[test]
     fn test_team_override_clears_id() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
-        let loader = RepoConfigLoader::new(config_file.path().to_path_buf())
-            .with_team_slug(Some("foo".into()));
+        let loader = RepoConfigLoader::new(config_path).with_team_slug(Some("foo".into()));
 
         let config = loader.load()?;
         assert_eq!(config.team_slug(), Some("foo"));
@@ -239,10 +249,11 @@ mod test {
     #[test]
     fn test_set_team_clears_id() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
         // We will never pragmatically write the "teamslug" field as camelCase,
         // but viper is case insensitive and we want to keep this functionality.
         writeln!(&mut config_file, "{{\"teamSlug\": \"my-team\"}}")?;
-        let loader = RepoConfigLoader::new(config_file.path().to_path_buf());
+        let loader = RepoConfigLoader::new(config_path);
 
         let mut config = loader.clone().load()?;
         config.set_team_id(Some("my-team-id".into()))?;
@@ -257,12 +268,13 @@ mod test {
     #[test]
     fn test_repo_env_variable() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamslug\": \"other-team\"}}")?;
         let login_url = "http://my-login-url";
         let api_url = "http://my-api";
         let team_id = "123";
         let team_slug = "my-team";
-        let config = RepoConfigLoader::new(config_file.path().to_path_buf())
+        let config = RepoConfigLoader::new(config_path)
             .with_environment({
                 let mut env = HashMap::new();
                 env.insert("TURBO_API".into(), api_url.into());

@@ -11,6 +11,7 @@ use clap_complete::{generate, Shell};
 use dunce::canonicalize as fs_canonicalize;
 use serde::Serialize;
 use tracing::{debug, error};
+use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
     commands::{bin, daemon, link, login, logout, unlink, CommandBase},
@@ -488,6 +489,9 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
     } else {
         current_dir()?
     };
+
+    // a non-absolute repo root is a bug
+    let repo_root = AbsoluteSystemPathBuf::new(repo_root).expect("repo_root is not absolute");
 
     let version = get_version();
 

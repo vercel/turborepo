@@ -201,9 +201,12 @@ Copy the value to a safe place. You'll need it in a moment.
 ![GitHub Secrets](/images/docs/github-actions-secrets.png)
 ![GitHub Secrets Create](/images/docs/github-actions-create-secret.png)
 
-3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`. Your Team URL can be found inside your team's general project settings from the dashboard.
+3. Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`.
+   Using a repository variable rather than a secret will keep Github Actions from censoring your team name in log output.
 
-   If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
+![GitHub Repository Variables](/images/docs/vercel-team-repo-var.png)
+
+Your Team URL can be found inside your team's general project settings from the dashboard. If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
 
 ![Vercel Account Slug](/images/docs/vercel-slug.png)
 
