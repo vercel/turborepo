@@ -223,7 +223,7 @@ impl PackageManager {
         }
     }
 
-    fn parse_package_manager_string(manager: &str) -> Result<(&str, &str)> {
+    pub(crate) fn parse_package_manager_string(manager: &str) -> Result<(&str, &str)> {
         let package_manager_pattern =
             Regex::new(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)")?;
         if let Some(captures) = package_manager_pattern.captures(manager) {
@@ -249,6 +249,94 @@ mod tests {
 
     use super::*;
     use crate::{get_version, package_manager::yarn::YARN_RC, Args};
+
+    struct TestCase {
+        name: String,
+        package_manager: String,
+        expected_manager: String,
+        expected_version: String,
+        expected_error: bool,
+    }
+
+    #[test]
+    fn test_parse_package_manager_string() {
+        let tests = vec![
+            TestCase {
+                name: "errors with a tag version".to_owned(),
+                package_manager: "npm@latest".to_owned(),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
+                name: "errors with no version".to_owned(),
+                package_manager: "npm".to_owned(),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
+                name: "requires fully-qualified semver versions (one digit)".to_owned(),
+                package_manager: "npm@1".to_owned(),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
+                name: "requires fully-qualified semver versions (two digits)".to_owned(),
+                package_manager: "npm@1.2".to_owned(),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
+                name: "supports custom labels".to_owned(),
+                package_manager: "npm@1.2.3-alpha.1".to_owned(),
+                expected_manager: "npm".to_owned(),
+                expected_version: "1.2.3-alpha.1".to_owned(),
+                expected_error: false,
+            },
+            TestCase {
+                name: "only supports specified package managers".to_owned(),
+                package_manager: "pip@1.2.3".to_owned(),
+                expected_manager: "".to_owned(),
+                expected_version: "".to_owned(),
+                expected_error: true,
+            },
+            TestCase {
+                name: "supports npm".to_owned(),
+                package_manager: "npm@0.0.1".to_owned(),
+                expected_manager: "npm".to_owned(),
+                expected_version: "0.0.1".to_owned(),
+                expected_error: false,
+            },
+            TestCase {
+                name: "supports pnpm".to_owned(),
+                package_manager: "pnpm@0.0.1".to_owned(),
+                expected_manager: "pnpm".to_owned(),
+                expected_version: "0.0.1".to_owned(),
+                expected_error: false,
+            },
+            TestCase {
+                name: "supports yarn".to_owned(),
+                package_manager: "yarn@111.0.1".to_owned(),
+                expected_manager: "yarn".to_owned(),
+                expected_version: "111.0.1".to_owned(),
+                expected_error: false,
+            },
+        ];
+
+        for case in tests {
+            let result = PackageManager::parse_package_manager_string(&case.package_manager);
+            let Ok((received_manager, received_version)) = result else {
+                assert!(case.expected_error, "{}: received error", case.name);
+                continue
+            };
+
+            assert_eq!(received_manager, case.expected_manager);
+            assert_eq!(received_version, case.expected_version);
+        }
+    }
 
     #[test]
     fn test_read_package_manager() -> Result<()> {
