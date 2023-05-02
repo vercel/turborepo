@@ -205,19 +205,6 @@ pub enum WatcherCommand {
     Flush(oneshot::Sender<()>),
 }
 
-/// A change to the watcher configuration.
-///
-/// This is used to communicate changes to the watcher
-/// from other threads. Can optionally contain the span
-/// that the change was made in, for tracing purposes.
-#[derive(Debug)]
-pub enum WatcherChange {
-    /// Register a glob to be included by the watcher.
-    Include(String, Option<Id>),
-    /// Register a glob to be excluded by the watcher.
-    Exclude(String, Option<Id>),
-}
-
 /// A sender for watcher configuration changes.
 #[derive(Debug, Clone)]
 pub struct WatchConfig<T: Watcher> {
