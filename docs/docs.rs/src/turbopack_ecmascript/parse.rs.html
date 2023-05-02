@@ -339,6 +339,83 @@
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -368,6 +445,8 @@
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
+    error::PrettyPrintError,
+    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
     SOURCE_MAP_ROOT_NAME,
 };
@@ -482,13 +561,40 @@
     ty: Value&lt;EcmascriptModuleAssetType&gt;,
     transforms: EcmascriptInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
+    <span class="kw">match </span>parse_internal(source, ty, transforms).<span class="kw">await </span>{
+        <span class="prelude-val">Ok</span>(result) =&gt; <span class="prelude-val">Ok</span>(result),
+        <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(error.context(<span class="macro">format!</span>(
+            <span class="string">&quot;failed to parse {}&quot;</span>,
+            source.ident().to_string().<span class="kw">await</span><span class="question-mark">?
+        </span>))),
+    }
+}
+
+<span class="kw">async fn </span>parse_internal(
+    source: AssetVc,
+    ty: Value&lt;EcmascriptModuleAssetType&gt;,
+    transforms: EcmascriptInputTransformsVc,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
     <span class="kw">let </span>content = source.content();
     <span class="kw">let </span>fs_path_vc = source.ident().path();
     <span class="kw">let </span>fs_path = <span class="kw-2">&amp;*</span>fs_path_vc.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>ident = <span class="kw-2">&amp;*</span>source.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>file_path_hash = <span class="kw-2">*</span>hash_ident(source.ident().to_string()).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">as </span>u128;
     <span class="kw">let </span>ty = ty.into_value();
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">let </span>content = <span class="kw">match </span>content.<span class="kw">await </span>{
+        <span class="prelude-val">Ok</span>(content) =&gt; content,
+        <span class="prelude-val">Err</span>(error) =&gt; {
+            ReadSourceIssue {
+                source,
+                error: PrettyPrintError(<span class="kw-2">&amp;</span>error).to_string(),
+            }
+            .cell()
+            .as_issue()
+            .emit();
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ParseResult::Unparseable.cell());
+        }
+    };
+    <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>content {
         AssetContent::File(file) =&gt; <span class="kw">match </span><span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
             FileContent::NotFound =&gt; ParseResult::NotFound.cell(),
             FileContent::Content(file) =&gt; <span class="kw">match </span>file.content().to_str() {
@@ -515,8 +621,16 @@
                         }
                     }
                 }
-                <span class="comment">// FIXME: report error
-                </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; ParseResult::Unparseable.cell(),
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    ReadSourceIssue {
+                        source,
+                        error: PrettyPrintError(<span class="kw-2">&amp;</span>error).to_string(),
+                    }
+                    .cell()
+                    .as_issue()
+                    .emit();
+                    ParseResult::Unparseable.cell()
+                }
             },
         },
         AssetContent::Redirect { .. } =&gt; ParseResult::Unparseable.cell(),
@@ -679,6 +793,46 @@
 </span><span class="kw">async fn </span>hash_ident(ident: StringVc) -&gt; <span class="prelude-ty">Result</span>&lt;U64Vc&gt; {
     <span class="kw">let </span>ident = <span class="kw-2">&amp;*</span>ident.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(U64Vc::cell(hash_xxh3_hash64(ident)))
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>ReadSourceIssue {
+    source: AssetVc,
+    error: String,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Issue <span class="kw">for </span>ReadSourceIssue {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FileSystemPathVc {
+        <span class="self">self</span>.source.ident().path()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>title(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(<span class="string">&quot;Reading source code for parsing failed&quot;</span>.to_string())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>description(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(
+            <span class="macro">format!</span>(
+                <span class="string">&quot;An unexpected error happened while trying to read the source code to parse: {}&quot;</span>,
+                <span class="self">self</span>.error
+            )
+            .into(),
+        )
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>severity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IssueSeverityVc {
+        IssueSeverity::Error.cell()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>category(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(<span class="string">&quot;parse&quot;</span>.to_string())
+    }
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="turbopack_ecmascript" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
