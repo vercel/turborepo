@@ -69,24 +69,24 @@ func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
 func gitRm(t *testing.T, dir turbopath.AbsoluteSystemPath) {
 	cmd := exec.Command("rm", []string{"-rf", ".git"}...)
 	cmd.Dir = dir.ToString()
-	if _, err := cmd.Output(); err != nil {
-		t.Fatalf("Failed to cleanup git dir: %v", err)
+	if out, err := cmd.Output(); err != nil {
+		t.Fatalf("Failed to cleanup git dir: %v\n%v", out, err)
 	}
 }
 
 func gitSetup(t *testing.T, dir turbopath.AbsoluteSystemPath) {
 	cmd := exec.Command("git", []string{"init"}...)
 	cmd.Dir = dir.ToString()
-	if _, err := cmd.Output(); err != nil {
-		t.Fatalf("Failed to checkout new branch in fixture repo: %v", err)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to setup git: %v\n%v", out, err)
 	}
 }
 
 func gitCommit(t *testing.T, dir turbopath.AbsoluteSystemPath) {
 	cmd := exec.Command("git", []string{"commit", "--allow-empty", "-am", "new commit"}...)
 	cmd.Dir = dir.ToString()
-	if _, err := cmd.Output(); err != nil {
-		t.Fatalf("Failed to checkout new branch in fixture repo: %v", err)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to create new commit: %v\n%v", out, err)
 	}
 }
 
@@ -94,7 +94,7 @@ func gitCheckoutBranch(t *testing.T, dir turbopath.AbsoluteSystemPath, branchnam
 	// using capital -B instead of -b, so we avoid "branch already exists errors"
 	cmd := exec.Command("git", []string{"checkout", "-B", branchname}...)
 	cmd.Dir = dir.ToString()
-	if _, err := cmd.Output(); err != nil {
-		t.Fatalf("Failed to checkout new branch in fixture repo: %v", err)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to checkout new branch: %v\n%v", out, err)
 	}
 }
