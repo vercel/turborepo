@@ -460,6 +460,17 @@
 <a href="#460" id="460">460</a>
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, fmt::Write};
 
 <span class="kw">use </span>anyhow::Result;
@@ -500,12 +511,20 @@
     <span class="kw">pub </span>message: StringVc,
 }
 
+<span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>json_only(resolve_options: ResolveOptionsVc) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveOptionsVc&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>opts = resolve_options.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+    opts.extensions = <span class="macro">vec!</span>[<span class="string">&quot;.json&quot;</span>.to_string()];
+    <span class="prelude-val">Ok</span>(opts.cell())
+}
+
 <span class="kw">pub async fn </span>read_tsconfigs(
     <span class="kw-2">mut </span>data: FileContentVc,
     <span class="kw-2">mut </span>tsconfig: AssetVc,
     resolve_options: ResolveOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(FileJsonContentVc, AssetVc)&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>configs = Vec::new();
+    <span class="kw">let </span>resolve_options = json_only(resolve_options);
     <span class="kw">loop </span>{
         <span class="kw">let </span>parsed_data = data.parse_json_with_comments();
         <span class="kw">match </span><span class="kw-2">&amp;*</span>parsed_data.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -575,15 +594,17 @@
     <span class="kw">let </span>request = RequestVc::parse_string(extends.to_string());
 
     <span class="comment">// TS&#39;s resolution is weird, and has special behavior for different import
-    // types.
-    </span><span class="kw">let </span>extends = <span class="kw">match </span><span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">? </span>{
+    // types. There might be multiple alternatives like
+    // &quot;some/path/node_modules/xyz/abc.json&quot; and &quot;some/node_modules/xyz/abc.json&quot;.
+    // We only want to use the first one.
+    </span><span class="kw">match </span><span class="kw-2">&amp;*</span>request.<span class="kw">await</span><span class="question-mark">? </span>{
         <span class="comment">// TS has special behavior for &quot;rooted&quot; paths (absolute paths):
         // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3303-L3313
         </span>Request::Windows { path: Pattern::Constant(path) } |
         <span class="comment">// Server relative is treated as absolute
         </span>Request::ServerRelative { path: Pattern::Constant(path) } =&gt; {
-            <span class="kw">return </span>resolve_extends_rooted_or_relative(context, request, resolve_options, path).<span class="kw">await</span>;
-        }
+            resolve_extends_rooted_or_relative(context, request, resolve_options, path).<span class="kw">await
+        </span>}
 
         <span class="comment">// TS has special behavior for (explicitly) &#39;./&#39; and &#39;../&#39;, but not &#39;.&#39; nor &#39;..&#39;:
         // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3303-L3313
@@ -591,25 +612,26 @@
             path: Pattern::Constant(path),
             ..
         } <span class="kw">if </span>path.starts_with(<span class="string">&quot;./&quot;</span>) || path.starts_with(<span class="string">&quot;../&quot;</span>) =&gt; {
-            <span class="kw">return </span>resolve_extends_rooted_or_relative(context, request, resolve_options, path).<span class="kw">await</span>;
+            resolve_extends_rooted_or_relative(context, request, resolve_options, path).<span class="kw">await
+        </span>}
+
+        <span class="comment">// An empty extends is treated as &quot;./tsconfig&quot;
+        </span>Request::Empty =&gt; {
+            <span class="kw">let </span>request = RequestVc::parse_string(<span class="string">&quot;./tsconfig&quot;</span>.to_string());
+            <span class="prelude-val">Ok</span>(resolve(context, request, resolve_options).first_asset())
         }
 
-        <span class="comment">// An empty extends is treated as &quot;tsconfig.json&quot;
-        </span>Request::Empty =&gt; {
-            <span class="string">&quot;tsconfig.json&quot;</span>.to_string()
-        }
-        <span class="comment">// All other types are treated as module imports, and joined with
+        <span class="comment">// All other types are treated as module imports, and potentially joined with
         // &quot;tsconfig.json&quot;. This includes &quot;relative&quot; imports like &#39;.&#39; and &#39;..&#39;.
         </span><span class="kw">_ </span>=&gt; {
-            <span class="macro">format!</span>(<span class="string">&quot;{extends}/tsconfig.json&quot;</span>)
+            <span class="kw">let </span><span class="kw-2">mut </span>result = resolve(context, request, resolve_options).first_asset();
+            <span class="kw">if </span>result.<span class="kw">await</span><span class="question-mark">?</span>.is_none() {
+                <span class="kw">let </span>request = RequestVc::parse_string(<span class="macro">format!</span>(<span class="string">&quot;{extends}/tsconfig&quot;</span>));
+                result = resolve(context, request, resolve_options).first_asset();
+            }
+            <span class="prelude-val">Ok</span>(result)
         }
-    };
-
-    <span class="kw">let </span>request = RequestVc::parse_string(extends);
-    <span class="comment">// There might be multiple alternatives like
-    // &quot;some/path/node_modules/xyz/abc.json&quot; and &quot;some/node_modules/xyz/abc.json&quot;.
-    // We only want to use the first one.
-    </span><span class="prelude-val">Ok</span>(resolve(context, request, resolve_options).first_asset())
+    }
 }
 
 <span class="kw">async fn </span>resolve_extends_rooted_or_relative(
