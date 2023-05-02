@@ -64,6 +64,7 @@ type RunSummary struct {
 	EnvMode           util.EnvMode       `json:"envMode"`
 	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
+	GitState          *gitState          `json:"git"`
 }
 
 // NewRunSummary returns a RunSummary instance
@@ -105,6 +106,7 @@ func NewRunSummary(
 			EnvMode:           globalEnvMode,
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
+			GitState:          getGitState(),
 		},
 		ui:                 ui,
 		runType:            runType,
