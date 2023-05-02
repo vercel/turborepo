@@ -141,18 +141,11 @@ message GlobalChangeResponse {
   bool global_change = 1;
 }
 
-message VerifySignatureRequest {
-  string hash = 1;
-  bytes artifact_body = 2;
-  bytes team_id = 3;
-  string expected_tag = 4;
-  optional bytes secret_key_override = 5;
+message RecursiveCopyRequest {
+  string src = 1;
+  string dst = 2;
 }
 
-message VerifySignatureResponse {
-  oneof response {
-    bool verified = 1;
-    string error = 2;
-  }
+message RecursiveCopyResponse {
+  optional string error = 1;
 }
-

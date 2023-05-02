@@ -138,10 +138,10 @@ func TestRecursiveCopy(t *testing.T) {
 	circlePath := filepath.Join(childDir, "circle")
 	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
 
-	err = RecursiveCopy(src.Path(), dst.Path())
+	err = RecursiveCopy(turbopath.AbsoluteSystemPathFromUpstream(src.Path()), turbopath.AbsoluteSystemPathFromUpstream(dst.Path()))
 	assert.NilError(t, err, "RecursiveCopy")
 	// For ensure multiple times copy will not broken
-	err = RecursiveCopy(src.Path(), dst.Path())
+	err = RecursiveCopy(turbopath.AbsoluteSystemPathFromUpstream(src.Path()), turbopath.AbsoluteSystemPathFromUpstream(dst.Path()))
 	assert.NilError(t, err, "RecursiveCopy")
 
 	dstChildDir := filepath.Join(dst.Path(), "child")

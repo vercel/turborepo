@@ -7,6 +7,7 @@ mod lockfile;
 use std::{mem::ManuallyDrop, path::PathBuf};
 
 pub use lockfile::{patches, subgraph, transitive_closure};
+use turbopath::AbsoluteSystemPathBuf;
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
@@ -123,41 +124,42 @@ pub extern "C" fn previous_content(buffer: Buffer) -> Buffer {
 }
 
 #[no_mangle]
-pub extern "C" fn verify_signature(buffer: Buffer) -> Buffer {
-    let req: proto::VerifySignatureRequest = match buffer.into_proto() {
+pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
+    let req: proto::RecursiveCopyRequest = match buffer.into_proto() {
         Ok(req) => req,
         Err(err) => {
-            let resp = proto::VerifySignatureResponse {
-                response: Some(proto::verify_signature_response::Response::Error(
-                    err.to_string(),
-                )),
+            let resp = proto::RecursiveCopyResponse {
+                error: Some(err.to_string()),
             };
             return resp.into();
         }
     };
 
-    let authenticator =
-        turborepo_cache::signature_authentication::ArtifactSignatureAuthenticator::new(
-            req.team_id,
-            req.secret_key_override,
-        );
+    let src = match AbsoluteSystemPathBuf::new(req.src) {
+        Ok(src) => src,
+        Err(e) => {
+            let response = proto::RecursiveCopyResponse {
+                error: Some(e.to_string()),
+            };
+            return response.into();
+        }
+    };
 
-    match authenticator.validate(req.hash.as_bytes(), &req.artifact_body, &req.expected_tag) {
-        Ok(verified) => {
-            let resp = proto::VerifySignatureResponse {
-                response: Some(proto::verify_signature_response::Response::Verified(
-                    verified,
-                )),
+    let dst = match AbsoluteSystemPathBuf::new(req.dst) {
+        Ok(dst) => dst,
+        Err(e) => {
+            let response = proto::RecursiveCopyResponse {
+                error: Some(e.to_string()),
             };
-            resp.into()
+            return response.into();
         }
-        Err(err) => {
-            let resp = proto::VerifySignatureResponse {
-                response: Some(proto::verify_signature_response::Response::Error(
-                    err.to_string(),
-                )),
-            };
-            resp.into()
-        }
-    }
+    };
+
+    let response = match turborepo_fs::recursive_copy(&src, &dst) {
+        Ok(()) => proto::RecursiveCopyResponse { error: None },
+        Err(e) => proto::RecursiveCopyResponse {
+            error: Some(e.to_string()),
+        },
+    };
+    response.into()
 }

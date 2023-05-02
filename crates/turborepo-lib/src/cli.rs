@@ -67,6 +67,7 @@ pub enum EnvMode {
 #[clap(arg_required_else_help = true)]
 pub struct Args {
     #[clap(long, global = true)]
+    #[serde(skip)]
     pub version: bool,
     #[clap(long, global = true)]
     #[serde(skip)]
@@ -75,6 +76,7 @@ pub struct Args {
     pub skip_infer: bool,
     /// Disable the turbo update notification
     #[clap(long, global = true)]
+    #[serde(skip)]
     pub no_update_notifier: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
@@ -116,12 +118,16 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
-    #[clap(long, global = true, hide = true)]
     /// Force a check for a new version of turbo
+    #[clap(long, global = true, hide = true)]
+    #[serde(skip)]
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
+    // We don't serialize this because by the time we're calling
+    // Go, we've moved it to the command field as a Command::Run
+    #[serde(skip)]
     pub run_args: Option<RunArgs>,
     #[clap(subcommand)]
     pub command: Option<Command>,
@@ -209,8 +215,8 @@ impl Args {
                 process::exit(0);
             }
         };
-        // --version flag doesn't work with ignore_errors in clap, so we have to handle
-        // it manually
+        // We have to override the --version flag because we use `get_version`
+        // instead of a hard-coded version or the crate version
         if clap_args.version {
             println!("{}", get_version());
             process::exit(0);
