@@ -106,7 +106,7 @@ func NewRunSummary(
 			EnvMode:           globalEnvMode,
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
-			GitState:          getGitState(),
+			GitState:          getGitState(repoRoot),
 		},
 		ui:                 ui,
 		runType:            runType,
