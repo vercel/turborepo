@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    env,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, env};
 
 use anyhow::Result;
 use config::Config;
