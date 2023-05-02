@@ -9,10 +9,8 @@
     "test": {
       "dependsOn": ["cli#build", "topo", "test:setup"]
     },
-
     "test:setup": {
-      "inputs": ["setup.sh"],
-      "outputs": [".cram_env/**"]
+      "cache": false
     }
   }
 }
