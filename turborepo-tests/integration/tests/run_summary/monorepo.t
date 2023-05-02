@@ -33,18 +33,19 @@ Setup
   [
     "envMode",
     "execution",
-    "git",
     "globalCacheInputs",
     "id",
     "packages",
+    "scm",
     "tasks",
     "turboVersion",
     "version"
   ]
 
 # some top level run summary validation
-  $ cat $FIRST | jq '.git'
+  $ cat $FIRST | jq '.scm'
   {
+    "type": "git",
     "sha": "[a-z0-9]+", (re)
     "branch": ".+" (re)
   }

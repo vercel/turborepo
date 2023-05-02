@@ -33,16 +33,17 @@ Check
   [
     "envMode",
     "execution",
-    "git",
     "globalCacheInputs",
     "id",
+    "scm",
     "tasks",
     "turboVersion",
     "version"
   ]
 
-  $ cat $SUMMARY | jq '.git'
+  $ cat $SUMMARY | jq '.scm'
   {
+    "type": "git",
     "sha": "[a-z0-9]+", (re)
     "branch": ".+" (re)
   }
