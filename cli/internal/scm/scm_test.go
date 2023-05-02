@@ -54,13 +54,13 @@ func TestGetCurrentSHA(t *testing.T) {
 	initSha := GetCurrentSha(testDir)
 	assert.True(t, initSha == "", "initial sha is empty")
 
-	// create new commit
+	// first commit
 	gitCommand(t, testDir, []string{"commit", "--allow-empty", "-am", "new commit"})
 	sha1 := GetCurrentSha(testDir)
 	assert.True(t, sha1 != "sha on commit 1 is not empty")
-	gitCommand(t, testDir, []string{"commit", "--allow-empty", "-am", "new commit"})
 
-	// second sha
+	// second commit
+	gitCommand(t, testDir, []string{"commit", "--allow-empty", "-am", "new commit"})
 	sha2 := GetCurrentSha(testDir)
 	assert.True(t, sha2 != "", "sha on commit 2 is not empty")
 	assert.True(t, sha2 != sha1, "sha on commit 2 changes from commit 1")
