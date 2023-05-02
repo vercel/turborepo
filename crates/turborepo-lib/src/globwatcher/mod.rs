@@ -2,12 +2,14 @@ use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
+    time::Duration,
 };
 
 use futures::{stream::iter, StreamExt};
 use globwatch::{ConfigError, GlobWatcher, StopToken, WatchConfig, Watcher};
 use itertools::Itertools;
 use notify::RecommendedWatcher;
+use tokio::time::timeout;
 use tracing::{trace, warn};
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -128,7 +130,12 @@ impl<T: Watcher> HashGlobWatcher<T> {
         // *by the calling client*. Other tasks _could_ write to the
         // same output directories, however we are relying on task
         // execution dependencies to prevent that.
-        self.config.flush().await.unwrap();
+        //
+        // this is a best effort, and times out after 500ms in
+        // case there is a lot of activity on the filesystem
+        timeout(Duration::from_millis(500), self.config.flush())
+            .await
+            .ok();
 
         let include: HashSet<_> = include.into_iter().map(Arc::new).collect();
         let exclude = exclude.into_iter().map(Arc::new).collect();
@@ -207,7 +214,12 @@ impl<T: Watcher> HashGlobWatcher<T> {
         // *by the calling client*. Other tasks _could_ write to the
         // same output directories, however we are relying on task
         // execution dependencies to prevent that.
-        self.config.flush().await.unwrap();
+        //
+        // this is a best effort, and times out after 500ms in
+        // case there is a lot of activity on the filesystem
+        timeout(Duration::from_millis(500), self.config.flush())
+            .await
+            .ok();
 
         // hash_globs tracks all unchanged globs for a given hash.
         // if a hash is not in globs, then either everything has changed
