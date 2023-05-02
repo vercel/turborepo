@@ -1,6 +1,6 @@
 use serde::Serialize;
 use tracing::trace;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 use crate::{
     cli::Args, commands::CommandBase, package_json::PackageJson, package_manager::PackageManager,
@@ -30,7 +30,8 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
 
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
         let root_package_json = PackageJson::load(&AbsoluteSystemPathBuf::new(
-            base.repo_root.join("package.json"),
+            base.repo_root
+                .join_relative(RelativeSystemPathBuf::new("package.json")?),
         )?)
         .ok();
 

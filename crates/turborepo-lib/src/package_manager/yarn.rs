@@ -125,11 +125,8 @@ mod tests {
     #[test]
     fn test_detect_yarn() -> Result<()> {
         let repo_root = tempdir()?;
-        let base = CommandBase::new(
-            Args::default(),
-            repo_root.path().to_path_buf(),
-            get_version(),
-        )?;
+        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
+        let base = CommandBase::new(Args::default(), repo_root_path, get_version())?;
 
         let yarn_lock_path = repo_root.path().join(LOCKFILE);
         File::create(&yarn_lock_path)?;

@@ -166,10 +166,9 @@ impl PackageManager {
         // We don't surface errors for `read_package_manager` as we can fall back to
         // `detect_package_manager`
         if let Some(package_json) = pkg {
-            if let Ok(Some(package_manager)) = Self::read_package_manager(
-                &AbsoluteSystemPathBuf::new(&base.repo_root)?,
-                package_json,
-            ) {
+            if let Ok(Some(package_manager)) =
+                Self::read_package_manager(&base.repo_root, package_json)
+            {
                 return Ok(package_manager);
             }
         }
@@ -199,10 +198,9 @@ impl PackageManager {
     }
 
     fn detect_package_manager(base: &CommandBase) -> Result<PackageManager> {
-        let project_directory = AbsoluteSystemPathBuf::new(&base.repo_root)?;
-        let mut detected_package_managers = PnpmDetector::new(&project_directory)
-            .chain(NpmDetector::new(&project_directory))
-            .chain(YarnDetector::new(&project_directory))
+        let mut detected_package_managers = PnpmDetector::new(&base.repo_root)
+            .chain(NpmDetector::new(&base.repo_root))
+            .chain(YarnDetector::new(&base.repo_root))
             .collect::<Result<Vec<_>>>()?;
 
         match detected_package_managers.len() {
@@ -288,11 +286,8 @@ mod tests {
     #[test]
     fn test_detect_multiple_package_managers() -> Result<()> {
         let repo_root = tempdir()?;
-        let base = CommandBase::new(
-            Args::default(),
-            repo_root.path().to_path_buf(),
-            get_version(),
-        )?;
+        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
+        let base = CommandBase::new(Args::default(), repo_root_path, get_version())?;
 
         let package_lock_json_path = repo_root.path().join(npm::LOCKFILE);
         File::create(&package_lock_json_path)?;

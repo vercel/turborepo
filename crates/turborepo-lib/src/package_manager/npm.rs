@@ -46,6 +46,7 @@ mod tests {
 
     use anyhow::Result;
     use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::LOCKFILE;
     use crate::{commands::CommandBase, get_version, package_manager::PackageManager, Args};
@@ -53,11 +54,8 @@ mod tests {
     #[test]
     fn test_detect_npm() -> Result<()> {
         let repo_root = tempdir()?;
-        let mut base = CommandBase::new(
-            Args::default(),
-            repo_root.path().to_path_buf(),
-            get_version(),
-        )?;
+        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
+        let mut base = CommandBase::new(Args::default(), repo_root_path, get_version())?;
 
         let lockfile_path = repo_root.path().join(LOCKFILE);
         File::create(&lockfile_path)?;
