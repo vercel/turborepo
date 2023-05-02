@@ -51,25 +51,6 @@ var nodejsBerry = PackageManager{
 		return true, nil
 	},
 
-	// Versions newer than 2.0 are berry, and before that we simply call them yarn.
-	Matches: func(manager string, version string) (bool, error) {
-		if manager != "yarn" {
-			return false, nil
-		}
-
-		v, err := semver.NewVersion(version)
-		if err != nil {
-			return false, fmt.Errorf("could not parse yarn version: %w", err)
-		}
-		// -0 allows pre-releases versions to be considered valid
-		c, err := semver.NewConstraint(">=2.0.0-0")
-		if err != nil {
-			return false, fmt.Errorf("could not create constraint: %w", err)
-		}
-
-		return c.Check(v), nil
-	},
-
 	// Detect for berry needs to identify which version of yarn is running on the system.
 	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
 	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {

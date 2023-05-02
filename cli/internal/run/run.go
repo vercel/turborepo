@@ -150,7 +150,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	packageJSONPath := r.base.RepoRoot.UntypedJoin("package.json")
 	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read package.json: %w", err)
 	}
 
 	isStructuredOutput := r.opts.runOpts.GraphDot || r.opts.runOpts.DryRunJSON

@@ -73,11 +73,6 @@ var packageManagers = []PackageManager{
 	nodejsPnpm6,
 }
 
-var (
-	packageManagerPattern = `(npm|pnpm|yarn)@(\d+)\.\d+\.\d+(-.+)?`
-	packageManagerRegex   = regexp.MustCompile(packageManagerPattern)
-)
-
 // GetPackageManager reads the package manager name sent by the Rust side
 func GetPackageManager(name string) (packageManager *PackageManager, err error) {
 	switch name {

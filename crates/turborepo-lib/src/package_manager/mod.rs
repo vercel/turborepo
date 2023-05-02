@@ -1,17 +1,24 @@
+mod npm;
+mod pnpm;
+mod yarn;
+
 use std::{
-    env, fmt, fs,
+    fmt, fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use anyhow::{anyhow, Result};
 use itertools::Itertools;
-use node_semver::{Range, Version};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
-use crate::{commands::CommandBase, package_json::PackageJson, ui::UNDERLINE};
+use crate::{
+    commands::CommandBase,
+    package_json::PackageJson,
+    package_manager::{npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
+    ui::UNDERLINE,
+};
 
 #[derive(Debug, Deserialize)]
 struct PnpmWorkspace {
@@ -60,6 +67,8 @@ pub enum PackageManager {
 
 impl fmt::Display for PackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Do not change these without also changing `GetPackageManager` in
+        // packagemanager.go
         match self {
             PackageManager::Berry => write!(f, "berry"),
             PackageManager::Npm => write!(f, "npm"),
@@ -157,7 +166,10 @@ impl PackageManager {
         // We don't surface errors for `read_package_manager` as we can fall back to
         // `detect_package_manager`
         if let Some(package_json) = pkg {
-            if let Ok(Some(package_manager)) = Self::read_package_manager(package_json) {
+            if let Ok(Some(package_manager)) = Self::read_package_manager(
+                &AbsoluteSystemPathBuf::new(&base.repo_root)?,
+                package_json,
+            ) {
                 return Ok(package_manager);
             }
         }
@@ -165,26 +177,11 @@ impl PackageManager {
         Self::detect_package_manager(base)
     }
 
-    fn detect_berry_or_yarn(version: &Version) -> Result<Self> {
-        let berry_constraint: Range = ">=2.0.0-0".parse()?;
-        if berry_constraint.satisfies(version) {
-            Ok(PackageManager::Berry)
-        } else {
-            Ok(PackageManager::Yarn)
-        }
-    }
-
-    fn detect_pnpm6_or_pnpm(version: &Version) -> Result<Self> {
-        let pnpm6_constraint: Range = "<7.0.0".parse()?;
-        if pnpm6_constraint.satisfies(version) {
-            Ok(PackageManager::Pnpm6)
-        } else {
-            Ok(PackageManager::Pnpm)
-        }
-    }
-
     // Attempts to read the package manager from the package.json
-    fn read_package_manager(pkg: &PackageJson) -> Result<Option<Self>> {
+    fn read_package_manager(
+        repo_root: &AbsoluteSystemPathBuf,
+        pkg: &PackageJson,
+    ) -> Result<Option<Self>> {
         let Some(package_manager) = &pkg.package_manager else {
             return Ok(None)
         };
@@ -193,50 +190,20 @@ impl PackageManager {
         let version = version.parse()?;
         let manager = match manager {
             "npm" => Some(PackageManager::Npm),
-            "yarn" => Some(Self::detect_berry_or_yarn(&version)?),
-            "pnpm" => Some(Self::detect_pnpm6_or_pnpm(&version)?),
+            "yarn" => Some(YarnDetector::detect_berry_or_yarn(repo_root, &version)?),
+            "pnpm" => Some(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
             _ => None,
         };
 
         Ok(manager)
     }
 
-    #[cfg(test)]
-    fn get_yarn_version(_: &AbsoluteSystemPathBuf) -> Result<Version> {
-        Ok(env::var("TEST_YARN_VERSION")?.parse()?)
-    }
-
-    #[cfg(not(test))]
-    fn get_yarn_version(project_directory: &AbsoluteSystemPathBuf) -> Result<Version> {
-        let output = Command::new("yarn")
-            .arg("--version")
-            .current_dir(&project_directory)
-            .output()?;
-        let yarn_version_output = String::from_utf8(output.stdout)?;
-        Ok(yarn_version_output.trim().parse()?)
-    }
-
     fn detect_package_manager(base: &CommandBase) -> Result<PackageManager> {
-        let mut detected_package_managers = vec![];
         let project_directory = AbsoluteSystemPathBuf::new(&base.repo_root)?;
-        let npm_lockfile = project_directory
-            .join_relative(RelativeSystemPathBuf::new("package-lock.json").unwrap());
-        if npm_lockfile.exists() {
-            detected_package_managers.push(PackageManager::Npm);
-        }
-
-        let pnpm_lockfile =
-            project_directory.join_relative(RelativeSystemPathBuf::new("pnpm-lock.yaml").unwrap());
-        if pnpm_lockfile.exists() {
-            detected_package_managers.push(PackageManager::Pnpm);
-        }
-
-        let yarn_lockfile =
-            project_directory.join_relative(RelativeSystemPathBuf::new("yarn.lock").unwrap());
-        if yarn_lockfile.exists() {
-            let version = Self::get_yarn_version(&project_directory)?;
-            detected_package_managers.push(Self::detect_berry_or_yarn(&version)?);
-        }
+        let mut detected_package_managers = PnpmDetector::new(&project_directory)
+            .chain(NpmDetector::new(&project_directory))
+            .chain(YarnDetector::new(&project_directory))
+            .collect::<Result<Vec<_>>>()?;
 
         match detected_package_managers.len() {
             0 => {
@@ -278,73 +245,71 @@ impl PackageManager {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs::File, io::Write, os, path::Path};
+    use std::{fs::File, path::Path};
 
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{get_version, Args};
+    use crate::{get_version, package_manager::yarn::YARN_RC, Args};
 
     #[test]
     fn test_read_package_manager() -> Result<()> {
+        let repo_root = tempdir()?;
         let mut package_json = PackageJson::default();
+        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
+
+        // Set up .yarnrc.yml file
+        let yarn_rc_path = repo_root.path().join(YARN_RC);
+        fs::write(&yarn_rc_path, "nodeLinker: node-modules")?;
+
         package_json.package_manager = Some("npm@8.19.4".to_string());
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Npm));
 
         package_json.package_manager = Some("yarn@2.0.0".to_string());
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Berry));
 
         package_json.package_manager = Some("yarn@1.9.0".to_string());
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Yarn));
 
         package_json.package_manager = Some("pnpm@6.0.0".to_string());
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Pnpm6));
 
         package_json.package_manager = Some("pnpm@7.2.0".to_string());
-        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Pnpm));
 
         Ok(())
     }
 
     #[test]
-    fn test_detect_package_manager() -> Result<()> {
+    fn test_detect_multiple_package_managers() -> Result<()> {
         let repo_root = tempdir()?;
-        let mut base = CommandBase::new(
+        let base = CommandBase::new(
             Args::default(),
             repo_root.path().to_path_buf(),
             get_version(),
         )?;
 
-        let lockfiles = [
-            (PackageManager::Npm, "package-lock.json"),
-            (PackageManager::Pnpm, "pnpm-lock.yaml"),
-        ];
+        let package_lock_json_path = repo_root.path().join(npm::LOCKFILE);
+        File::create(&package_lock_json_path)?;
+        let pnpm_lock_path = repo_root.path().join(pnpm::LOCKFILE);
+        File::create(&pnpm_lock_path)?;
 
-        for (expected_package_manager, lockfile) in lockfiles {
-            let lockfile_path = repo_root.path().join(lockfile);
-            File::create(&lockfile_path)?;
-            let package_manager = PackageManager::detect_package_manager(&mut base)?;
-            assert_eq!(package_manager, expected_package_manager);
-            fs::remove_file(lockfile_path)?;
-        }
+        let error = PackageManager::detect_package_manager(&base).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "We detected multiple package managers in your repository: pnpm, npm. Please remove \
+             one of them."
+        );
 
-        let yarn_lock_path = repo_root.path().join("yarn.lock");
-        File::create(&yarn_lock_path)?;
+        fs::remove_file(&package_lock_json_path)?;
 
-        env::set_var("TEST_YARN_VERSION", "1.9.0");
-        let package_manager = PackageManager::detect_package_manager(&mut base)?;
-        assert_eq!(package_manager, PackageManager::Yarn);
-
-        env::set_var("TEST_YARN_VERSION", "2.0.1");
-        let package_manager = PackageManager::detect_package_manager(&mut base)?;
-        assert_eq!(package_manager, PackageManager::Berry);
-
-        fs::remove_file(yarn_lock_path)?;
+        let package_manager = PackageManager::detect_package_manager(&base)?;
+        assert_eq!(package_manager, PackageManager::Pnpm);
 
         Ok(())
     }

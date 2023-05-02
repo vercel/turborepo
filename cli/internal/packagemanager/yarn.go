@@ -72,44 +72,6 @@ var nodejsYarn = PackageManager{
 		return true, nil
 	},
 
-	// Versions older than 2.0 are yarn, after that they become berry
-	Matches: func(manager string, version string) (bool, error) {
-		if manager != "yarn" {
-			return false, nil
-		}
-
-		v, err := semver.NewVersion(version)
-		if err != nil {
-			return false, fmt.Errorf("could not parse yarn version: %w", err)
-		}
-		c, err := semver.NewConstraint("<2.0.0-0")
-		if err != nil {
-			return false, fmt.Errorf("could not create constraint: %w", err)
-		}
-
-		return c.Check(v), nil
-	},
-
-	// Detect for yarn needs to identify which version of yarn is running on the system.
-	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.UntypedJoin(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
-
-		// Short-circuit, definitely not Yarn.
-		if !specfileExists || !lockfileExists {
-			return false, nil
-		}
-
-		cmd := exec.Command("yarn", "--version")
-		cmd.Dir = projectDirectory.ToString()
-		out, err := cmd.Output()
-		if err != nil {
-			return false, fmt.Errorf("could not detect yarn version: %w", err)
-		}
-
-		return packageManager.Matches(packageManager.Slug, strings.TrimSpace(string(out)))
-	},
-
 	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
 		return lockfile.DecodeYarnLockfile(contents)
 	},
