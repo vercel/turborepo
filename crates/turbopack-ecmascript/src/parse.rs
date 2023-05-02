@@ -399,7 +399,7 @@ impl Issue for ReadSourceIssue {
     fn description(&self) -> StringVc {
         StringVc::cell(
             format!(
-                "An unexpected error happened while trying to read the source source to parse: {}",
+                "An unexpected error happened while trying to read the source code to parse: {}",
                 self.error
             )
             .into(),
