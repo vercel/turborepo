@@ -7,33 +7,35 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
-type gitState struct {
+type scmState struct {
+	Type   string `json:"type"`
 	Sha    string `json:"sha"`
 	Branch string `json:"branch"`
 }
 
-// getGitState returns the sha and branch when in a git repo
+// getSCMState returns the sha and branch when in a git repo
 // Otherwise it should return empty strings right now.
 // We my add handling of other scms and non-git tracking in the future.
-func getGitState(dir turbopath.AbsoluteSystemPath) *gitState {
+func getSCMState(dir turbopath.AbsoluteSystemPath) *scmState {
 	allEnvVars := env.GetEnvMap()
 
-	gitstate := &gitState{}
+	state := &scmState{Type: "git"}
 
 	// If we're in CI, try to get the values we need from environment variables
 	if ci.IsCi() {
 		vendor := ci.Info()
-		gitstate.Sha = allEnvVars[vendor.ShaEnvVar]
-		gitstate.Branch = allEnvVars[vendor.BranchEnvVar]
+		state.Sha = allEnvVars[vendor.ShaEnvVar]
+		state.Branch = allEnvVars[vendor.BranchEnvVar]
 	}
 
 	// Otherwise fallback to using `git`
-	if gitstate.Branch == "" {
-		gitstate.Branch = scm.GetCurrentBranch(dir)
-	}
-	if gitstate.Sha == "" {
-		gitstate.Sha = scm.GetCurrentSha(dir)
+	if state.Branch == "" {
+		state.Branch = scm.GetCurrentBranch(dir)
 	}
 
-	return gitstate
+	if state.Sha == "" {
+		state.Sha = scm.GetCurrentSha(dir)
+	}
+
+	return state
 }

@@ -63,5 +63,5 @@ type nonMonorepoRunSummary struct {
 	EnvMode           util.EnvMode       `json:"envMode"`
 	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
-	GitState          *gitState          `json:"git"`
+	SCM               *scmState          `json:"scm"`
 }

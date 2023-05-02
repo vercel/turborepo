@@ -65,8 +65,8 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 		RepositoryPath: rsm.repoPath.ToString(),
 		Type:           "TURBO",
 		Context:        context,
-		GitBranch:      rsm.RunSummary.GitState.Branch,
-		GitSha:         rsm.RunSummary.GitState.Sha,
+		GitBranch:      rsm.RunSummary.SCM.Branch,
+		GitSha:         rsm.RunSummary.SCM.Sha,
 	}
 }
 
