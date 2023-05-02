@@ -3,11 +3,8 @@ package packagemanager
 import (
 	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
-	"github.com/Masterminds/semver"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"

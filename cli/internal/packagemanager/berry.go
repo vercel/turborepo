@@ -2,10 +2,8 @@ package packagemanager
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
-	"github.com/Masterminds/semver"
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/lockfile"
@@ -48,49 +46,6 @@ var nodejsBerry = PackageManager{
 		} else if !isNMLinker {
 			return false, errors.New("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
 		}
-		return true, nil
-	},
-
-	// Detect for berry needs to identify which version of yarn is running on the system.
-	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
-	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.UntypedJoin(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
-
-		// Short-circuit, definitely not Yarn.
-		if !specfileExists || !lockfileExists {
-			return false, nil
-		}
-
-		cmd := exec.Command("yarn", "--version")
-		cmd.Dir = projectDirectory.ToString()
-		out, err := cmd.Output()
-		if err != nil {
-			return false, fmt.Errorf("could not detect yarn version: %w", err)
-		}
-
-		// See if we're a match when we compare these two things.
-		matches, _ := packageManager.Matches(packageManager.Slug, string(out))
-
-		// Short-circuit, definitely not Berry because version number says we're Yarn.
-		if !matches {
-			return false, nil
-		}
-
-		// We're Berry!
-
-		// Check for supported configuration.
-		isNMLinker, err := util.IsNMLinker(projectDirectory.ToStringDuringMigration())
-
-		if err != nil {
-			// Failed to read the linker state, so we treat an unknown configuration as a failure.
-			return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
-		} else if !isNMLinker {
-			// Not using nm-linker, so unsupported configuration.
-			return false, fmt.Errorf("only yarn nm-linker is supported")
-		}
-
-		// Berry, supported configuration.
 		return true, nil
 	},
 

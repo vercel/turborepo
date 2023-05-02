@@ -7,7 +7,6 @@ package packagemanager
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -51,12 +50,6 @@ type PackageManager struct {
 
 	// Detect if Turbo knows how to produce a pruned workspace for the project
 	canPrune func(cwd turbopath.AbsoluteSystemPath) (bool, error)
-
-	// Test a manager and version tuple to see if it is the Package Manager.
-	Matches func(manager string, version string) (bool, error)
-
-	// Detect if the project is using the Package Manager by inspecting the system.
-	detect func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error)
 
 	// Read a lockfile for a given package manager
 	UnmarshalLockfile func(rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error)
