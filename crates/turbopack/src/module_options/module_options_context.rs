@@ -159,13 +159,13 @@ impl Default for StyledComponentsTransformConfigVc {
 /// Configuration options for the custom ecma transform to be applied.
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
-pub struct CustomEcmaTransformPlugins {
+pub struct CustomEcmascriptTransformPlugins {
     /// List of plugins to be applied before the main transform.
     /// Transform will be applied in the order of the list.
-    pub before: Vec<TransformPluginVc>,
+    pub source_transforms: Vec<TransformPluginVc>,
     /// List of plugins to be applied after the main transform.
     /// Transform will be applied in the order of the list.
-    pub after: Vec<TransformPluginVc>,
+    pub output_transforms: Vec<TransformPluginVc>,
 }
 
 #[turbo_tasks::value(shared)]
@@ -206,7 +206,7 @@ pub struct ModuleOptionsContext {
     #[serde(default)]
     pub custom_ecmascript_transforms: Vec<EcmascriptInputTransform>,
     #[serde(default)]
-    pub custom_ecma_transform_plugins: Option<CustomEcmaTransformPluginsVc>,
+    pub custom_ecma_transform_plugins: Option<CustomEcmascriptTransformPluginsVc>,
     #[serde(default)]
     /// Custom rules to be applied after all default rules.
     pub custom_rules: Vec<ModuleRule>,

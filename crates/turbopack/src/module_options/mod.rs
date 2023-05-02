@@ -100,13 +100,13 @@ impl ModuleOptionsVc {
                 let transform_plugins = transform_plugins.await?;
                 (
                     transform_plugins
-                        .before
+                        .source_transforms
                         .iter()
                         .cloned()
                         .map(|plugin| EcmascriptInputTransform::Plugin(plugin))
                         .collect(),
                     transform_plugins
-                        .after
+                        .output_transforms
                         .iter()
                         .cloned()
                         .map(|plugin| EcmascriptInputTransform::Plugin(plugin))
