@@ -56,9 +56,9 @@ func FromInRepo(repoRoot turbopath.AbsoluteSystemPath) (SCM, error) {
 }
 
 // GetCurrentBranch returns the current branch
-func GetCurrentBranch(dir string) string {
+func GetCurrentBranch(dir turbopath.AbsoluteSystemPath) string {
 	cmd := exec.Command("git", []string{"branch", "--show-current"}...)
-	cmd.Dir = dir
+	cmd.Dir = dir.ToString()
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -68,9 +68,9 @@ func GetCurrentBranch(dir string) string {
 }
 
 // GetCurrentSha returns the current SHA
-func GetCurrentSha(dir string) string {
+func GetCurrentSha(dir turbopath.AbsoluteSystemPath) string {
 	cmd := exec.Command("git", []string{"rev-parse", "HEAD"}...)
-	cmd.Dir = dir
+	cmd.Dir = dir.ToString()
 
 	out, err := cmd.Output()
 	if err != nil {
