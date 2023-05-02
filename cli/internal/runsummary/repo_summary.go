@@ -27,7 +27,7 @@ func getGitState(dir turbopath.AbsoluteSystemPath) *gitState {
 		gitstate.Branch = allEnvVars[vendor.BranchEnvVar]
 	}
 
-	dirString = dir.ToString()
+	dirString := dir.ToString()
 	// Otherwise fallback to using `git`
 	if gitstate.Branch == "" {
 		gitstate.Branch = scm.GetCurrentBranch(dirString)
