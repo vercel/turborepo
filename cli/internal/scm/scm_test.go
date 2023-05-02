@@ -13,36 +13,52 @@ import (
 func TestGetCurrentBranchMain(t *testing.T) {
 	targetbranch := "main"
 	testDir := getTestDir(t, "myrepo")
-	gitSetup(t, testDir)
-	gitCheckoutBranch(t, testDir, targetbranch)
+
+	// Setup git
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"init"})
+
+	gitCommand(t, testDir, []string{"checkout", "-B", targetbranch})
 	branch := GetCurrentBranch(testDir)
 	assert.Equal(t, branch, targetbranch)
+
+	// cleanup
 	gitRm(t, testDir)
 }
 
 func TestGetCurrentBranchNonMain(t *testing.T) {
 	targetbranch := "mybranch"
 	testDir := getTestDir(t, "myrepo")
-	gitSetup(t, testDir)
-	gitCheckoutBranch(t, testDir, targetbranch)
+	// Setup git
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"init"})
+	gitCommand(t, testDir, []string{"checkout", "-B", targetbranch})
+
 	branch := GetCurrentBranch(testDir)
 	assert.Equal(t, branch, targetbranch)
+
+	// cleanup
 	gitRm(t, testDir)
 }
 
 func TestGetCurrentSHA(t *testing.T) {
 	testDir := getTestDir(t, "myrepo")
-	gitSetup(t, testDir)
+	// Setup git
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"init"})
 
 	// initial sha is blank because there are no commits
 	initSha := GetCurrentSha(testDir)
 	assert.True(t, initSha == "", "initial sha is empty")
 
 	// create new commit
-	gitCommit(t, testDir)
+	gitCommand(t, testDir, []string{"commit", "--allow-empty", "-am", "new commit"})
 	sha1 := GetCurrentSha(testDir)
 	assert.True(t, sha1 != "sha on commit 1 is not empty")
-	gitCommit(t, testDir)
+	gitCommand(t, testDir, []string{"commit", "--allow-empty", "-am", "new commit"})
 
 	// second sha
 	sha2 := GetCurrentSha(testDir)
@@ -74,26 +90,9 @@ func gitRm(t *testing.T, dir turbopath.AbsoluteSystemPath) {
 	}
 }
 
-func gitSetup(t *testing.T, dir turbopath.AbsoluteSystemPath) {
-	cmd := exec.Command("git", []string{"init"}...)
-	cmd.Dir = dir.ToString()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to setup git: %s\n%v", out, err)
-	}
-}
-
-func gitCommit(t *testing.T, dir turbopath.AbsoluteSystemPath) {
-	cmd := exec.Command("git", []string{"commit", "--allow-empty", "-am", "new commit"}...)
-	cmd.Dir = dir.ToString()
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("Failed to create new commit: %s\n%v", out, err)
-	}
-}
-
-func gitCheckoutBranch(t *testing.T, dir turbopath.AbsoluteSystemPath, branchname string) {
-	// using capital -B instead of -b, so we avoid "branch already exists errors"
-	cmd := exec.Command("git", []string{"checkout", "-B", branchname}...)
-	cmd.Dir = dir.ToString()
+func gitCommand(t *testing.T, cwd turbopath.AbsoluteSystemPath, args []string) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = cwd.ToString()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to checkout new branch: %s\n%v", out, err)
 	}
