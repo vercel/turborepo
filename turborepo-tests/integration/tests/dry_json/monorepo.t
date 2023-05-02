@@ -73,6 +73,7 @@ Setup
   $ cat tmpjson.log | jq 'keys'
   [
     "envMode",
+    "git",
     "globalCacheInputs",
     "id",
     "packages",

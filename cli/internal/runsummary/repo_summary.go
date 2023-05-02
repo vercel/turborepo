@@ -7,7 +7,7 @@ import (
 )
 
 type gitState struct {
-	Sha    string `json:"gitSha"`
+	Sha    string `json:"sha"`
 	Branch string `json:"branch"`
 }
 

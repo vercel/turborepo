@@ -8,6 +8,7 @@ package scm
 
 import (
 	"os/exec"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -61,7 +62,7 @@ func GetCurrentBranch() string {
 	if err != nil {
 		return ""
 	}
-	return string(out)
+	return strings.TrimRight(string(out), "\n")
 }
 
 // GetCurrentSha returns the current SHA
@@ -71,5 +72,5 @@ func GetCurrentSha() string {
 	if err != nil {
 		return ""
 	}
-	return string(out)
+	return strings.TrimRight(string(out), "\n")
 }

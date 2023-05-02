@@ -29,7 +29,26 @@ Setup
   $ FIRST=$(/bin/ls .turbo/runs/*.json | head -n1)
   $ SECOND=$(/bin/ls .turbo/runs/*.json | tail -n1)
 
+  $ cat $FIRST | jq 'keys'
+  [
+    "envMode",
+    "execution",
+    "git",
+    "globalCacheInputs",
+    "id",
+    "packages",
+    "tasks",
+    "turboVersion",
+    "version"
+  ]
+
 # some top level run summary validation
+  $ cat $FIRST | jq '.git'
+  {
+    "sha": "[a-z0-9]+", (re)
+    "branch": "[a-zA-Z0-9]+" (re)
+  }
+
   $ cat $FIRST | jq '.tasks | length'
   2
   $ cat $FIRST | jq '.version'
