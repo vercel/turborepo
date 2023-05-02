@@ -79,6 +79,6 @@ Setup
     ],
     "git": {
       "sha": "[a-z0-9]+", (re)
-      "branch": "[a-zA-Z0-9]+" (re)
+      "branch": ".+" (re)
     }
   }

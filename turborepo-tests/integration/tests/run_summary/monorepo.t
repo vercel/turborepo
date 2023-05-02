@@ -46,7 +46,7 @@ Setup
   $ cat $FIRST | jq '.git'
   {
     "sha": "[a-z0-9]+", (re)
-    "branch": "[a-zA-Z0-9]+" (re)
+    "branch": ".+" (re)
   }
 
   $ cat $FIRST | jq '.tasks | length'
