@@ -80,8 +80,11 @@ pub enum EcmascriptInputTransform {
 /// transformer to run over all ECMAScript files imported in the graph.
 #[async_trait]
 pub trait CustomTransformer: Debug {
-    async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>)
-        -> Option<Program>;
+    async fn transform(
+        &self,
+        program: &mut Program,
+        ctx: &TransformContext<'_>,
+    ) -> Result<Option<Program>>;
 }
 
 /// A wrapper around a TransformPlugin instance, allowing it to operate with
@@ -111,7 +114,7 @@ impl CustomTransformer for TransformPlugin {
         &self,
         program: &mut Program,
         ctx: &TransformContext<'_>,
-    ) -> Option<Program> {
+    ) -> Result<Option<Program>> {
         self.0.transform(program, ctx).await
     }
 }
@@ -340,7 +343,7 @@ impl EcmascriptInputTransform {
                 }
             }
             EcmascriptInputTransform::Plugin(transform) => {
-                if let Some(output) = transform.await?.transform(program, ctx).await {
+                if let Some(output) = transform.await?.transform(program, ctx).await? {
                     *program = output;
                 }
             }

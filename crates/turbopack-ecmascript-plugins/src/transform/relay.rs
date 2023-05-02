@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use swc_core::{
     common::{util::take::Take, FileName},
@@ -28,16 +29,14 @@ impl CustomTransformer for RelayTransformer {
         &self,
         program: &mut Program,
         ctx: &TransformContext<'_>,
-    ) -> Option<Program> {
-        let root = if let Ok(file_path) = ctx.file_path.await {
-            file_path
-                .fs
-                .root()
-                .await
-                .map_or(PathBuf::new(), |v| PathBuf::from(v.path.to_string()))
-        } else {
-            PathBuf::new()
-        };
+    ) -> Result<Option<Program>> {
+        let root = ctx
+            .file_path
+            .await?
+            .fs
+            .root()
+            .await
+            .map_or(PathBuf::new(), |v| PathBuf::from(v.path.to_string()));
 
         let (root, config) = if self.config.artifact_directory.is_some() {
             (root, None)
@@ -67,6 +66,6 @@ impl CustomTransformer for RelayTransformer {
             Some(ctx.unresolved_mark),
         ));
 
-        None
+        Ok(None)
     }
 }

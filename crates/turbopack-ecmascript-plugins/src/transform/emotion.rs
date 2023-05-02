@@ -98,7 +98,7 @@ impl CustomTransformer for EmotionTransformer {
         &self,
         program: &mut Program,
         ctx: &TransformContext<'_>,
-    ) -> Option<Program> {
+    ) -> Result<Option<Program>> {
         #[cfg(feature = "transform_emotion")]
         {
             let p = std::mem::replace(program, Program::Module(Module::dummy()));
@@ -117,7 +117,7 @@ impl CustomTransformer for EmotionTransformer {
             ));
         }
 
-        None
+        Ok(None)
     }
 }
 
