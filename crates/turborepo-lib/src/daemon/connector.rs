@@ -195,6 +195,7 @@ impl DaemonConnector {
         // note, this endpoint is just a dummy. the actual path is passed in
         Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
+            .timeout(Duration::from_secs(1))
             .connect_with_connector(tower::service_fn(make_service))
             .await
             .map(TurbodClient::new)

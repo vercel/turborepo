@@ -32,8 +32,7 @@ async fn main() {
             tokio::time::sleep(Duration::from_secs(1)).await;
             config
                 .exclude(&PathBuf::try_from(".").unwrap(), "globwatch/src/**")
-                .await
-                .unwrap();
+                .await;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
 

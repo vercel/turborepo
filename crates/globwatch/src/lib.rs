@@ -36,7 +36,7 @@ pub use notify::{Error, Event, Watcher};
 pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{event, span, trace, warn, Id, Level};
+use tracing::{event, span, trace, warn, Level};
 
 /// A wrapper around notify that allows for glob-based watching.
 #[derive(Debug)]
@@ -205,19 +205,6 @@ pub enum WatcherCommand {
     Flush(oneshot::Sender<()>),
 }
 
-/// A change to the watcher configuration.
-///
-/// This is used to communicate changes to the watcher
-/// from other threads. Can optionally contain the span
-/// that the change was made in, for tracing purposes.
-#[derive(Debug)]
-pub enum WatcherChange {
-    /// Register a glob to be included by the watcher.
-    Include(String, Option<Id>),
-    /// Register a glob to be excluded by the watcher.
-    Exclude(String, Option<Id>),
-}
-
 /// A sender for watcher configuration changes.
 #[derive(Debug, Clone)]
 pub struct WatchConfig<T: Watcher> {
@@ -286,7 +273,7 @@ impl<T: Watcher> WatchConfig<T> {
 
     /// Register a glob to be excluded by the watcher.
     #[tracing::instrument(skip(self))]
-    pub async fn exclude(&self, relative_to: &Path, glob: &str) -> Result<(), ConfigError> {
+    pub async fn exclude(&self, relative_to: &Path, glob: &str) {
         trace!("excluding {:?}", glob);
 
         for p in glob_to_paths(&glob).iter().map(|p| relative_to.join(p)) {
@@ -297,7 +284,6 @@ impl<T: Watcher> WatchConfig<T> {
                 .unwatch(&p)
                 .ok();
         }
-        Ok(())
     }
 
     /// Await a full filesystem flush from the watcher.
