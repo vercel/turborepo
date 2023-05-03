@@ -3,6 +3,7 @@
 mod berry;
 mod error;
 mod npm;
+mod pnpm;
 
 use std::collections::{HashMap, HashSet};
 
