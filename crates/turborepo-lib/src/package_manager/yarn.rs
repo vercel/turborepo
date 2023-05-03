@@ -54,7 +54,7 @@ impl<'a> YarnDetector<'a> {
         let yarnrc_path = repo_root.join_relative(RelativeSystemPathBuf::new(YARN_RC)?);
         let yarnrc = File::open(yarnrc_path)?;
         let yarnrc: YarnRC = serde_yaml::from_reader(&yarnrc)?;
-        Ok(yarnrc.node_linker == Some("node-modules".to_string()))
+        Ok(yarnrc.node_linker.as_deref() == Some("node-modules"))
     }
 
     pub fn detect_berry_or_yarn(
