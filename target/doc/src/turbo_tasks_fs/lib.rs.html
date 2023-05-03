@@ -1955,6 +1955,9 @@
 <a href="#1955" id="1955">1955</a>
 <a href="#1956" id="1956">1956</a>
 <a href="#1957" id="1957">1957</a>
+<a href="#1958" id="1958">1958</a>
+<a href="#1959" id="1959">1959</a>
+<a href="#1960" id="1960">1960</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -2829,7 +2832,10 @@
         <span class="self">self</span>.path.is_empty()
     }
 
-    <span class="kw">pub fn </span>get_path_to&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>FileSystemPath) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str&gt; {
+    <span class="doccomment">/// Returns the path of `inner` relative to `self`.
+    ///
+    /// Note: this method always strips the leading `/` from the result.
+    </span><span class="kw">pub fn </span>get_path_to&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, inner: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>FileSystemPath) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str&gt; {
         <span class="kw">if </span><span class="self">self</span>.fs != inner.fs {
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }

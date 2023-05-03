@@ -534,14 +534,14 @@
                 url: url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: <span class="macro">format!</span>(<span class="string">&quot;/{}&quot;</span>, source.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
+                path: source.pathname.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
                 data: <span class="prelude-val">Some</span>(<span class="self">self</span>.render_data.<span class="kw">await</span><span class="question-mark">?</span>),
             }
             .cell(),
         )
         .issue_context(
             entry.module.ident().path(),
-            <span class="macro">format!</span>(<span class="string">&quot;server-side rendering /{}&quot;</span>, source.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;server-side rendering {}&quot;</span>, source.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">*</span>result.<span class="kw">await</span><span class="question-mark">? </span>{
