@@ -1469,6 +1469,12 @@ impl VisitAstPath for Analyzer<'_> {
         ident: &'ast Ident,
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
+        if matches!(
+            ast_path.last(),
+            Some(AstParentNodeRef::MemberProp(_, MemberPropField::Ident))
+        ) {
+            return;
+        }
         if let Some((esm_reference_index, export)) =
             self.eval_context.imports.get_binding(&ident.to_id())
         {
