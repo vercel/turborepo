@@ -155,11 +155,15 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 
 	rsm.printExecutionSummary()
 
-	// If we're not supposed to save or if there's no spaceID
-	if !rsm.shouldSave || rsm.spaceID == "" {
+	// If we don't have a spaceID, we can exit now
+	if rsm.spaceID == "" {
 		return nil
 	}
 
+	return rsm.sendToSpace(ctx)
+}
+
+func (rsm *Meta) sendToSpace(ctx context.Context) error {
 	if !rsm.apiClient.IsLinked() {
 		rsm.ui.Warn("Failed to post to space because repo is not linked to a Space. Run `turbo link` first.")
 		return nil
