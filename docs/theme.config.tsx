@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { useConfig, useTheme } from "nextra-theme-docs";
+import { useConfig, useTheme, type DocsThemeConfig } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
 import Navigation from "./components/Navigation";
 import HeaderLogo from "./components/HeaderLogo";
@@ -9,12 +9,9 @@ import { Discord, Github } from "./components/Social";
 
 const SITE_ROOT = "https://turbo.build";
 
-/**
- * @type {import('nextra-theme-docs').DocsThemeConfig}
- */
-const theme = {
+const config: DocsThemeConfig = {
   sidebar: {
-    defaultMenuCollapseLevel: Number.POSITIVE_INFINITY,
+    defaultMenuCollapseLevel: 10000,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
   useNextSeoProps: function SEO() {
@@ -59,16 +56,11 @@ const theme = {
 
     return <>Last updated on {dateString}</>;
   },
-  unstable_flexsearch: true,
-  unstable_staticImage: true,
   toc: {
     float: true,
     extraContent: ExtraContent,
   },
-  font: false,
-  feedback: {
-    link: "Question? Give us feedback →",
-  },
+  // font: false,
   logo: HeaderLogo,
   logoLink: false,
   head: function Head() {
@@ -175,4 +167,5 @@ const theme = {
     defaultTheme: "dark",
   },
 };
-export default theme;
+
+export default config;
