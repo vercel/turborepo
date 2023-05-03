@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, sync::Mutex};
 
 use chrono::Local;
-use is_terminal::IsTerminal;
 use owo_colors::{
     colors::{Black, Default, Red, Yellow},
     Color, OwoColorize,
@@ -24,6 +23,8 @@ use tracing_subscriber::{
     EnvFilter, Layer, Registry,
 };
 
+use crate::ui::UI;
+
 type StdOutLog = Filtered<
     tracing_subscriber::fmt::Layer<Registry, DefaultFields, TurboFormatter>,
     EnvFilter,
@@ -41,6 +42,9 @@ type Layered = tracing_subscriber::layer::Layered<StdOutLog, Registry>;
 
 pub struct TurboSubscriber {
     update: Handle<Option<DaemonLog>, Layered>,
+
+    /// The non-blocking file logger only continues to log while this guard is
+    /// held. We keep it here so that it doesn't get dropped.
     guard: Mutex<Option<WorkerGuard>>,
 }
 
@@ -60,7 +64,7 @@ impl TurboSubscriber {
     /// Returns a `reload::Handle` that can be used to reload the subscriber.
     /// This allows us to register additional layers after setup, for example
     /// when configuring logrotation in the daemon.
-    pub fn new_with_verbosity(verbosity: usize) -> Self {
+    pub fn new_with_verbosity(verbosity: usize, ui: &UI) -> Self {
         let max_level = match verbosity {
             0 => LevelFilter::WARN,
             1 => LevelFilter::INFO,
@@ -69,9 +73,7 @@ impl TurboSubscriber {
         };
 
         let stdout = fmt::layer()
-            .event_format(TurboFormatter::new_with_ansi(
-                std::io::stdout().is_terminal(),
-            ))
+            .event_format(TurboFormatter::new_with_ansi(!ui.should_strip_ansi))
             .with_filter(
                 EnvFilter::from_env("TURBO_LOG_VERBOSITY").add_directive(max_level.into()),
             );

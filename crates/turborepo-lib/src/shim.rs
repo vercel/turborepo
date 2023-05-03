@@ -19,7 +19,7 @@ use tracing::debug;
 use turbo_updater::check_for_updates;
 
 use crate::{
-    cli, get_version, package_manager::Globs, spawn_child, tracing::TurboSubscriber,
+    cli, get_version, package_manager::Globs, spawn_child, tracing::TurboSubscriber, ui::UI,
     PackageManager, Payload,
 };
 
@@ -57,6 +57,8 @@ struct ShimArgs {
     force_update_check: bool,
     remaining_turbo_args: Vec<String>,
     forwarded_args: Vec<String>,
+    color: bool,
+    no_color: bool,
 }
 
 impl ShimArgs {
@@ -70,6 +72,8 @@ impl ShimArgs {
         let mut remaining_turbo_args = Vec::new();
         let mut forwarded_args = Vec::new();
         let mut is_forwarded_args = false;
+        let mut color = false;
+        let mut no_color = false;
         let args = env::args().skip(1);
         for arg in args {
             // We've seen a `--` and therefore we do no parsing
@@ -113,6 +117,10 @@ impl ShimArgs {
                     return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
                 }
                 cwd = Some(cwd_arg.into());
+            } else if arg == "--color" {
+                color = true;
+            } else if arg == "--no-color" {
+                no_color = true;
             } else {
                 remaining_turbo_args.push(arg);
             }
@@ -136,6 +144,8 @@ impl ShimArgs {
                 force_update_check,
                 remaining_turbo_args,
                 forwarded_args,
+                color,
+                no_color,
             })
         }
     }
@@ -164,6 +174,16 @@ impl ShimArgs {
         }
 
         true
+    }
+
+    pub fn ui(&self) -> UI {
+        if self.no_color {
+            UI::new(true)
+        } else if self.color {
+            UI::new(false)
+        } else {
+            UI::infer()
+        }
     }
 }
 
@@ -589,6 +609,7 @@ impl RepoState {
         self,
         shim_args: ShimArgs,
         subscriber: &TurboSubscriber,
+        ui: UI,
     ) -> Result<Payload> {
         if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
             try_check_for_updates(&shim_args, version);
@@ -602,7 +623,7 @@ impl RepoState {
             // calling old versions without passing unknown flags.
             env::set_var(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir);
             debug!("Running command as global turbo");
-            cli::run(Some(self), subscriber)
+            cli::run(Some(self), subscriber, ui)
         }
     }
 
@@ -712,8 +733,8 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
 
 pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
-
-    let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity);
+    let ui = args.ui();
+    let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
 
     debug!("Global turbo version: {}", get_version());
 
@@ -721,7 +742,7 @@ pub fn run() -> Result<Payload> {
     // global turbo having handled the inference. We can run without any
     // concerns.
     if args.skip_infer {
-        return cli::run(None, &subscriber);
+        return cli::run(None, &subscriber, ui);
     }
 
     // If the TURBO_BINARY_PATH is set, we do inference but we do not use
@@ -730,20 +751,20 @@ pub fn run() -> Result<Payload> {
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
         debug!("Repository Root: {}", repo_state.root.to_string_lossy());
-        return cli::run(Some(repo_state), &subscriber);
+        return cli::run(Some(repo_state), &subscriber, ui);
     }
 
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root.to_string_lossy());
-            repo_state.run_correct_turbo(args, &subscriber)
+            repo_state.run_correct_turbo(args, &subscriber, ui)
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
-            cli::run(None, &subscriber)
+            cli::run(None, &subscriber, ui)
         }
     }
 }

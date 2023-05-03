@@ -295,7 +295,7 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
     use super::DaemonServer;
-    use crate::{commands::CommandBase, Args};
+    use crate::{commands::CommandBase, ui::UI, Args};
 
     // the windows runner starts a new thread to accept uds requests,
     // so we need a multi-threaded runtime
@@ -314,6 +314,7 @@ mod test {
                 },
                 path.clone(),
                 "test",
+                UI::new(true),
             )
             .unwrap(),
             Duration::from_secs(60 * 60),
@@ -354,6 +355,7 @@ mod test {
                 },
                 path.clone(),
                 "test",
+                UI::new(true),
             )
             .unwrap(),
             Duration::from_millis(5),
