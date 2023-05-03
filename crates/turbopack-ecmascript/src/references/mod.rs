@@ -1372,24 +1372,16 @@ pub(crate) async fn analyze_ecmascript_module(
                 analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
             ) -> Result<bool> {
                 // We don't want to replace assignments as this would lead to invalid code.
-                if ast_path.len() > 4
-                    && matches!(
-                        ast_path[ast_path.len() - 1],
-                        AstParentKind::Expr(ExprField::Member)
-                    )
-                    && matches!(
-                        ast_path[ast_path.len() - 2],
-                        AstParentKind::Pat(PatField::Expr)
-                    )
-                    && matches!(
-                        ast_path[ast_path.len() - 3],
-                        AstParentKind::PatOrExpr(PatOrExprField::Pat)
-                    )
-                    && matches!(
-                        ast_path[ast_path.len() - 4],
-                        AstParentKind::AssignExpr(AssignExprField::Left)
-                    )
-                {
+                if matches!(
+                    &ast_path[..],
+                    [
+                        ..,
+                        AstParentKind::AssignExpr(AssignExprField::Left),
+                        AstParentKind::PatOrExpr(PatOrExprField::Pat),
+                        AstParentKind::Pat(PatField::Expr),
+                        AstParentKind::Expr(ExprField::Member),
+                    ]
+                ) {
                     return Ok(false);
                 }
                 match value {

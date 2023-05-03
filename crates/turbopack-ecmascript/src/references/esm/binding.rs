@@ -78,6 +78,8 @@ impl CodeGenerateable for EsmBinding {
 
         loop {
             match ast_path.last() {
+                // Shorthand properties get special treatment because we need to rewrite them to
+                // normal key-value pairs.
                 Some(swc_core::ecma::visit::AstParentKind::Prop(PropField::Shorthand)) => {
                     ast_path.pop();
                     visitors.push(
@@ -92,12 +94,13 @@ impl CodeGenerateable for EsmBinding {
                     );
                     break;
                 }
+                // Any other expression can be replaced with the import accessor.
                 Some(swc_core::ecma::visit::AstParentKind::Expr(_)) => {
                     ast_path.pop();
                     visitors.push(
                         create_visitor!(exact ast_path, visit_mut_expr(expr: &mut Expr) {
                             if let Some(ident) = imported_module.as_deref() {
-                              *expr = make_expr(ident, this.export.as_deref());
+                                *expr = make_expr(ident, this.export.as_deref());
                             }
                             // If there's no identifier for the imported module,
                             // resolution failed and will insert code that throws

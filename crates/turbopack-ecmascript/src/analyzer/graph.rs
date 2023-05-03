@@ -1469,9 +1469,10 @@ impl VisitAstPath for Analyzer<'_> {
         ident: &'ast Ident,
         ast_path: &mut AstNodePath<AstParentNodeRef<'r>>,
     ) {
-        if matches!(
+        if !matches!(
             ast_path.last(),
-            Some(AstParentNodeRef::MemberProp(_, MemberPropField::Ident))
+            Some(AstParentNodeRef::Expr(_, ExprField::Ident))
+                | Some(AstParentNodeRef::Prop(_, PropField::Shorthand))
         ) {
             return;
         }
