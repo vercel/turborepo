@@ -115,6 +115,10 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
                     return;
                 } else {
                     current_visitors = &visitors[nested_visitors_start..];
+                    if current_visitors.is_empty() {
+                        // Nothing to do in this subtree, skip it
+                        return;
+                    }
                 }
             } else {
                 // Skip visiting this sub tree
