@@ -8,7 +8,8 @@
     "ndjson": "^2.0.0"
   },
   "scripts": {
-    "benchmark": "node -r esbuild-register src/index.ts"
+    "benchmark": "node -r esbuild-register src/index.ts",
+    "lint:prettier": "prettier -c . --ignore-path=../.prettierignore"
   },
   "devDependencies": {
     "@types/node": "^16.11.49"

@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "build": "ncc build src/index.ts -o dist --source-map --minify",
-    "prepare": "pnpm run build"
+    "prepare": "pnpm run build",
+    "lint:prettier": "prettier -c . --ignore-path=../../../.prettierignore"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",

@@ -19,7 +19,8 @@
     "build": "tsup",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "lint:prettier": "prettier -c . --ignore-path=../../.prettierignore"
   },
   "dependencies": {
     "chalk": "2.4.2",

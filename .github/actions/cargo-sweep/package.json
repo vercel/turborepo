@@ -6,7 +6,8 @@
     "build:main": "ncc build src/main.js -o dist/main --source-map",
     "build:post": "ncc build src/post.js -o dist/post --source-map",
     "prepare": "pnpm run build:main && pnpm run build:post",
-    "lint": "eslint . --ext js,jsx,ts,tsx"
+    "lint": "eslint . --ext js,jsx,ts,tsx",
+    "lint:prettier": "prettier -c . --ignore-path=../../../.prettierignore"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",

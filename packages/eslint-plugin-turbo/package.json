@@ -27,7 +27,8 @@
     "test": "jest",
     "build": "tsup",
     "check-types": "tsc --noEmit",
-    "lint": "eslint lib/**/*.ts"
+    "lint": "eslint lib/**/*.ts",
+    "lint:prettier": "prettier -c . --ignore-path=../../.prettierignore"
   },
   "devDependencies": {
     "@types/eslint": "^8.4.5",

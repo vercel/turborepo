@@ -11,7 +11,8 @@
     "ts-json-schema-generator": "1.1.2"
   },
   "scripts": {
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "lint:prettier": "prettier -c ."
   },
   "devDependencies": {
     "@turbo/tsconfig": "workspace:^0.0.0"

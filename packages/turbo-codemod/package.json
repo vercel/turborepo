@@ -18,7 +18,8 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "check-types": "tsc --noEmit",
-    "add-transformer": "plop"
+    "add-transformer": "plop",
+    "lint:prettier": "prettier -c . --ignore-path=../../.prettierignore"
   },
   "dependencies": {
     "axios": "0.27.2",

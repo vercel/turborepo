@@ -3,7 +3,8 @@
   "private": true,
   "main": "src/index.js",
   "scripts": {
-    "pack": "ncc -t -o . build src/index.ts"
+    "pack": "ncc -t -o . build src/index.ts",
+    "lint:prettier": "prettier -c . --ignore-path=../../../.prettierignore"
   },
   "devDependencies": {
     "@types/node": "^18.11.18",
