@@ -9,7 +9,6 @@ use swc_core::{
         visit::FoldWith,
     },
 };
-use turbo_tasks_fs::FileSystem;
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 
 #[derive(Debug)]
@@ -30,29 +29,16 @@ impl CustomTransformer for RelayTransformer {
         program: &mut Program,
         ctx: &TransformContext<'_>,
     ) -> Result<Option<Program>> {
-        let root = ctx
-            .file_path
-            .await?
-            .fs
-            .root()
-            .await
-            .map_or(PathBuf::new(), |v| PathBuf::from(v.path.to_string()));
-
+        // If user supplied artifactory_directory, it should be resolvable already.
+        // Otherwise, supply default relative path (./__generated__)
         let (root, config) = if self.config.artifact_directory.is_some() {
-            (root, None)
+            (PathBuf::new(), None)
         } else {
             let config = swc_relay::Config {
                 artifact_directory: Some(PathBuf::from("__generated__")),
                 ..self.config
             };
-            (
-                if root.as_os_str().is_empty() {
-                    PathBuf::from(".")
-                } else {
-                    root
-                },
-                Some(config),
-            )
+            (PathBuf::from("."), Some(config))
         };
 
         let p = std::mem::replace(program, Program::Module(Module::dummy()));
