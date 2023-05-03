@@ -64,6 +64,7 @@ type RunSummary struct {
 	EnvMode           util.EnvMode       `json:"envMode"`
 	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
 	Tasks             []*TaskSummary     `json:"tasks"`
+	SCM               *scmState          `json:"scm"`
 }
 
 // NewRunSummary returns a RunSummary instance
@@ -105,6 +106,7 @@ func NewRunSummary(
 			EnvMode:           globalEnvMode,
 			Tasks:             []*TaskSummary{},
 			GlobalHashSummary: globalHashSummary,
+			SCM:               getSCMState(repoRoot),
 		},
 		ui:                 ui,
 		runType:            runType,

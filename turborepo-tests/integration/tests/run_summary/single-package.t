@@ -29,6 +29,25 @@ Check
     "success"
   ]
 
+  $ cat $SUMMARY | jq 'keys'
+  [
+    "envMode",
+    "execution",
+    "globalCacheInputs",
+    "id",
+    "scm",
+    "tasks",
+    "turboVersion",
+    "version"
+  ]
+
+  $ cat $SUMMARY | jq '.scm'
+  {
+    "type": "git",
+    "sha": "[a-z0-9]+", (re)
+    "branch": ".+" (re)
+  }
+
   $ cat $SUMMARY | jq '.execution.exitCode'
   0
   $ cat $SUMMARY | jq '.execution.attempted'
