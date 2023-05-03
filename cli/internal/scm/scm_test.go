@@ -111,7 +111,7 @@ func gitCommand(t *testing.T, cwd turbopath.AbsoluteSystemPath, args []string) s
 	out, err := cmd.CombinedOutput()
 
 	if err != nil {
-		t.Fatalf("Failed to checkout new branch: %s\n%v", out, err)
+		t.Fatalf("Failed git command %s: %s\n%v", args, out, err)
 	}
 
 	return string(out)
