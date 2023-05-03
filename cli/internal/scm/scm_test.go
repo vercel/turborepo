@@ -15,8 +15,8 @@ func TestGetCurrentBranchMain(t *testing.T) {
 	testDir := getTestDir(t, "myrepo")
 
 	// Setup git
-	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
-	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"config", "--local", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--local", "user.name", "Turbobot"})
 	gitCommand(t, testDir, []string{"init"})
 
 	gitCommand(t, testDir, []string{"checkout", "-B", targetbranch})
@@ -31,8 +31,8 @@ func TestGetCurrentBranchNonMain(t *testing.T) {
 	targetbranch := "mybranch"
 	testDir := getTestDir(t, "myrepo")
 	// Setup git
-	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
-	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"config", "--local", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--local", "user.name", "Turbobot"})
 	gitCommand(t, testDir, []string{"init"})
 	gitCommand(t, testDir, []string{"checkout", "-B", targetbranch})
 
@@ -46,8 +46,8 @@ func TestGetCurrentBranchNonMain(t *testing.T) {
 func TestGetCurrentSHA(t *testing.T) {
 	testDir := getTestDir(t, "myrepo")
 	// Setup git
-	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
-	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"config", "--local", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--local", "user.name", "Turbobot"})
 	gitCommand(t, testDir, []string{"init"})
 
 	// initial sha is blank because there are no commits
