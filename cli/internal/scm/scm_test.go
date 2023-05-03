@@ -13,10 +13,12 @@ import (
 func TestGetCurrentBranchMain(t *testing.T) {
 	targetbranch := "main"
 	testDir := getTestDir(t, "myrepo")
+	originalEmail := gitCommand(t, testDir, []string{"config", "--global", "user.email"})
+	originalName := gitCommand(t, testDir, []string{"config", "--global", "user.name"})
 
 	// Setup git
-	gitCommand(t, testDir, []string{"config", "user.email", "turbo@vercel.com"})
-	gitCommand(t, testDir, []string{"config", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
 	gitCommand(t, testDir, []string{"init"})
 
 	gitCommand(t, testDir, []string{"checkout", "-B", targetbranch})
@@ -25,14 +27,20 @@ func TestGetCurrentBranchMain(t *testing.T) {
 
 	// cleanup
 	gitRm(t, testDir)
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", originalEmail})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", originalName})
 }
 
 func TestGetCurrentBranchNonMain(t *testing.T) {
 	targetbranch := "mybranch"
 	testDir := getTestDir(t, "myrepo")
+
+	originalEmail := gitCommand(t, testDir, []string{"config", "--global", "user.email"})
+	originalName := gitCommand(t, testDir, []string{"config", "--global", "user.name"})
+
 	// Setup git
-	gitCommand(t, testDir, []string{"config", "user.email", "turbo@vercel.com"})
-	gitCommand(t, testDir, []string{"config", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
 	gitCommand(t, testDir, []string{"init"})
 	gitCommand(t, testDir, []string{"checkout", "-B", targetbranch})
 
@@ -41,13 +49,18 @@ func TestGetCurrentBranchNonMain(t *testing.T) {
 
 	// cleanup
 	gitRm(t, testDir)
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", originalEmail})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", originalName})
 }
 
 func TestGetCurrentSHA(t *testing.T) {
 	testDir := getTestDir(t, "myrepo")
+	originalEmail := gitCommand(t, testDir, []string{"config", "--global", "user.email"})
+	originalName := gitCommand(t, testDir, []string{"config", "--global", "user.name"})
+
 	// Setup git
-	gitCommand(t, testDir, []string{"config", "user.email", "turbo@vercel.com"})
-	gitCommand(t, testDir, []string{"config", "user.name", "Turbobot"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", "Turbobot"})
 	gitCommand(t, testDir, []string{"init"})
 
 	// initial sha is blank because there are no commits
@@ -67,6 +80,8 @@ func TestGetCurrentSHA(t *testing.T) {
 
 	// cleanup
 	gitRm(t, testDir)
+	gitCommand(t, testDir, []string{"config", "--global", "user.email", originalEmail})
+	gitCommand(t, testDir, []string{"config", "--global", "user.name", originalName})
 }
 
 func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
@@ -90,10 +105,14 @@ func gitRm(t *testing.T, dir turbopath.AbsoluteSystemPath) {
 	}
 }
 
-func gitCommand(t *testing.T, cwd turbopath.AbsoluteSystemPath, args []string) {
+func gitCommand(t *testing.T, cwd turbopath.AbsoluteSystemPath, args []string) string {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = cwd.ToString()
-	if out, err := cmd.CombinedOutput(); err != nil {
+	out, err := cmd.CombinedOutput()
+
+	if err != nil {
 		t.Fatalf("Failed to checkout new branch: %s\n%v", out, err)
 	}
+
+	return string(out)
 }
