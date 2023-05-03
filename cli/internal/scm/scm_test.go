@@ -13,8 +13,7 @@ import (
 func TestGetCurrentBranchMain(t *testing.T) {
 	targetbranch := "main"
 	testDir := getTestDir(t, "myrepo")
-	originalEmail := gitCommand(t, testDir, []string{"config", "--global", "user.email"})
-	originalName := gitCommand(t, testDir, []string{"config", "--global", "user.name"})
+	originalName, originalEmail := getOriginalConfig(testDir)
 
 	// Setup git
 	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
@@ -35,8 +34,7 @@ func TestGetCurrentBranchNonMain(t *testing.T) {
 	targetbranch := "mybranch"
 	testDir := getTestDir(t, "myrepo")
 
-	originalEmail := gitCommand(t, testDir, []string{"config", "--global", "user.email"})
-	originalName := gitCommand(t, testDir, []string{"config", "--global", "user.name"})
+	originalName, originalEmail := getOriginalConfig(testDir)
 
 	// Setup git
 	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
@@ -55,8 +53,7 @@ func TestGetCurrentBranchNonMain(t *testing.T) {
 
 func TestGetCurrentSHA(t *testing.T) {
 	testDir := getTestDir(t, "myrepo")
-	originalEmail := gitCommand(t, testDir, []string{"config", "--global", "user.email"})
-	originalName := gitCommand(t, testDir, []string{"config", "--global", "user.name"})
+	originalName, originalEmail := getOriginalConfig(testDir)
 
 	// Setup git
 	gitCommand(t, testDir, []string{"config", "--global", "user.email", "turbo@vercel.com"})
@@ -84,6 +81,7 @@ func TestGetCurrentSHA(t *testing.T) {
 	gitCommand(t, testDir, []string{"config", "--global", "user.name", originalName})
 }
 
+// Helper functions
 func getTestDir(t *testing.T, testName string) turbopath.AbsoluteSystemPath {
 	defaultCwd, err := os.Getwd()
 	if err != nil {
@@ -105,14 +103,34 @@ func gitRm(t *testing.T, dir turbopath.AbsoluteSystemPath) {
 	}
 }
 
+func getOriginalConfig(cwd turbopath.AbsoluteSystemPath) (string, string) {
+	// Ignore errors. If there was an error, it's likely because there was no value for these
+	// configs (e.g. in CI), so git is returning non-zero status code. This is ok, and we'll use the
+	// zero-value empty strings.
+	name, _ := _gitCommand(cwd, []string{"config", "--global", "user.name"})
+	email, _ := _gitCommand(cwd, []string{"config", "--global", "user.name"})
+
+	return name, email
+}
+
 func gitCommand(t *testing.T, cwd turbopath.AbsoluteSystemPath, args []string) string {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd.ToString()
-	out, err := cmd.CombinedOutput()
+	out, err := _gitCommand(cwd, args)
 
 	if err != nil {
 		t.Fatalf("Failed git command %s: %s\n%v", args, out, err)
 	}
 
 	return string(out)
+}
+
+func _gitCommand(cwd turbopath.AbsoluteSystemPath, args []string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = cwd.ToString()
+	out, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
 }
