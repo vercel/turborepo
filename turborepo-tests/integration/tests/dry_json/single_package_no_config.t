@@ -29,6 +29,7 @@ Setup
       }
     },
     "envMode": "infer",
+    "frameworkInference": true,
     "tasks": [
       {
         "taskId": "build",
