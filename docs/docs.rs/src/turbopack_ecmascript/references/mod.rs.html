@@ -2624,6 +2624,53 @@
 <a href="#2624" id="2624">2624</a>
 <a href="#2625" id="2625">2625</a>
 <a href="#2626" id="2626">2626</a>
+<a href="#2627" id="2627">2627</a>
+<a href="#2628" id="2628">2628</a>
+<a href="#2629" id="2629">2629</a>
+<a href="#2630" id="2630">2630</a>
+<a href="#2631" id="2631">2631</a>
+<a href="#2632" id="2632">2632</a>
+<a href="#2633" id="2633">2633</a>
+<a href="#2634" id="2634">2634</a>
+<a href="#2635" id="2635">2635</a>
+<a href="#2636" id="2636">2636</a>
+<a href="#2637" id="2637">2637</a>
+<a href="#2638" id="2638">2638</a>
+<a href="#2639" id="2639">2639</a>
+<a href="#2640" id="2640">2640</a>
+<a href="#2641" id="2641">2641</a>
+<a href="#2642" id="2642">2642</a>
+<a href="#2643" id="2643">2643</a>
+<a href="#2644" id="2644">2644</a>
+<a href="#2645" id="2645">2645</a>
+<a href="#2646" id="2646">2646</a>
+<a href="#2647" id="2647">2647</a>
+<a href="#2648" id="2648">2648</a>
+<a href="#2649" id="2649">2649</a>
+<a href="#2650" id="2650">2650</a>
+<a href="#2651" id="2651">2651</a>
+<a href="#2652" id="2652">2652</a>
+<a href="#2653" id="2653">2653</a>
+<a href="#2654" id="2654">2654</a>
+<a href="#2655" id="2655">2655</a>
+<a href="#2656" id="2656">2656</a>
+<a href="#2657" id="2657">2657</a>
+<a href="#2658" id="2658">2658</a>
+<a href="#2659" id="2659">2659</a>
+<a href="#2660" id="2660">2660</a>
+<a href="#2661" id="2661">2661</a>
+<a href="#2662" id="2662">2662</a>
+<a href="#2663" id="2663">2663</a>
+<a href="#2664" id="2664">2664</a>
+<a href="#2665" id="2665">2665</a>
+<a href="#2666" id="2666">2666</a>
+<a href="#2667" id="2667">2667</a>
+<a href="#2668" id="2668">2668</a>
+<a href="#2669" id="2669">2669</a>
+<a href="#2670" id="2670">2670</a>
+<a href="#2671" id="2671">2671</a>
+<a href="#2672" id="2672">2672</a>
+<a href="#2673" id="2673">2673</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2663,7 +2710,10 @@
     },
     ecma::{
         ast::<span class="kw-2">*</span>,
-        visit::{AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath},
+        visit::{
+            fields::{AssignExprField, ExprField, PatField, PatOrExprField},
+            AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath,
+        },
     },
 };
 <span class="kw">use </span>turbo_tasks::{
@@ -3918,8 +3968,31 @@
                 ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
                 obj: JsValue,
                 prop: JsValue,
+                state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
                 analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(prop) = prop.as_str() {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(def_name_len) = obj.get_defineable_name_len() {
+                        <span class="kw">let </span>compile_time_info = state.compile_time_info.<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">let </span>free_var_references = compile_time_info.free_var_references.<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">for </span>(name, value) <span class="kw">in </span>free_var_references.iter() {
+                            <span class="kw">if </span>name.len() != def_name_len + <span class="number">1 </span>{
+                                <span class="kw">continue</span>;
+                            }
+                            <span class="kw">let </span><span class="kw-2">mut </span>it = name.iter().map(Cow::Borrowed).rev();
+                            <span class="kw">if </span>it.next().unwrap() != Cow::Borrowed(prop) {
+                                <span class="kw">continue</span>;
+                            }
+                            <span class="kw">if </span>obj.iter_defineable_name_rev().eq(it) {
+                                <span class="kw">if </span>handle_free_var_reference(ast_path, value, state, analysis)
+                                    .<span class="kw">await</span><span class="question-mark">?
+                                </span>{
+                                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                                }
+                            }
+                        }
+                    }
+                }
                 <span class="kw">match </span>(obj, prop) {
                     (
                         JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
@@ -3955,53 +4028,73 @@
                             .iter_defineable_name_rev()
                             .eq(name.iter().map(Cow::Borrowed).rev())
                         {
-                            <span class="kw">match </span>value {
-                                FreeVarReference::Value(value) =&gt; {
-                                    analysis.add_code_gen(ConstantValueVc::new(
-                                        Value::new(value.clone()),
-                                        AstPathVc::cell(ast_path.to_vec()),
-                                    ));
-                                }
-                                FreeVarReference::EcmaScriptModule {
-                                    request,
-                                    context,
-                                    export,
-                                } =&gt; {
-                                    <span class="kw">let </span>esm_reference = EsmAssetReferenceVc::new(
-                                        context.map_or(state.origin, |context| {
-                                            PlainResolveOriginVc::new(
-                                                state.origin.context(),
-                                                context,
-                                            )
-                                            .into()
-                                        }),
-                                        RequestVc::parse(Value::new(request.clone().into())),
-                                        Default::default(),
-                                        state
-                                            .import_parts
-                                            .then(|| {
-                                                export.as_ref().map(|export| {
-                                                    ModulePartVc::export(export.to_string())
-                                                })
-                                            })
-                                            .flatten(),
-                                    )
-                                    .resolve()
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                                    analysis.add_reference(esm_reference);
-                                    analysis.add_code_gen(EsmBindingVc::new(
-                                        esm_reference,
-                                        export.clone(),
-                                        AstPathVc::cell(ast_path.to_vec()),
-                                    ));
-                                }
+                            <span class="kw">if </span>handle_free_var_reference(ast_path, value, state, analysis).<span class="kw">await</span><span class="question-mark">? </span>{
+                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                             }
-                            <span class="kw">break</span>;
                         }
                     }
                 }
 
                 <span class="prelude-val">Ok</span>(())
+            }
+
+            <span class="kw">async fn </span>handle_free_var_reference(
+                ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
+                value: <span class="kw-2">&amp;</span>FreeVarReference,
+                state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
+                analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+                <span class="comment">// We don&#39;t want to replace assignments as this would lead to invalid code.
+                </span><span class="kw">if </span><span class="macro">matches!</span>(
+                    <span class="kw-2">&amp;</span>ast_path[..],
+                    [
+                        ..,
+                        AstParentKind::AssignExpr(AssignExprField::Left),
+                        AstParentKind::PatOrExpr(PatOrExprField::Pat),
+                        AstParentKind::Pat(PatField::Expr),
+                        AstParentKind::Expr(ExprField::Member),
+                    ]
+                ) {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">false</span>);
+                }
+                <span class="kw">match </span>value {
+                    FreeVarReference::Value(value) =&gt; {
+                        analysis.add_code_gen(ConstantValueVc::new(
+                            Value::new(value.clone()),
+                            AstPathVc::cell(ast_path.to_vec()),
+                        ));
+                    }
+                    FreeVarReference::EcmaScriptModule {
+                        request,
+                        context,
+                        export,
+                    } =&gt; {
+                        <span class="kw">let </span>esm_reference = EsmAssetReferenceVc::new(
+                            context.map_or(state.origin, |context| {
+                                PlainResolveOriginVc::new(state.origin.context(), context).into()
+                            }),
+                            RequestVc::parse(Value::new(request.clone().into())),
+                            Default::default(),
+                            state
+                                .import_parts
+                                .then(|| {
+                                    export
+                                        .as_ref()
+                                        .map(|export| ModulePartVc::export(export.to_string()))
+                                })
+                                .flatten(),
+                        )
+                        .resolve()
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                        analysis.add_reference(esm_reference);
+                        analysis.add_code_gen(EsmBindingVc::new(
+                            esm_reference,
+                            export.clone(),
+                            AstPathVc::cell(ast_path.to_vec()),
+                        ));
+                    }
+                }
+                <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
             }
 
             <span class="kw">let </span>effects = take(<span class="kw-2">&amp;mut </span>var_graph.effects);
@@ -4282,7 +4375,8 @@
                                 <span class="kw">let </span>obj = analysis_state.link_value(obj, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
                                 <span class="kw">let </span>prop = analysis_state.link_value(prop, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                                handle_member(<span class="kw-2">&amp;</span>ast_path, obj, prop, <span class="kw-2">&amp;mut </span>analysis).<span class="kw">await</span><span class="question-mark">?</span>;
+                                handle_member(<span class="kw-2">&amp;</span>ast_path, obj, prop, <span class="kw-2">&amp;</span>analysis_state, <span class="kw-2">&amp;mut </span>analysis)
+                                    .<span class="kw">await</span><span class="question-mark">?</span>;
                             }
                             Effect::ImportedBinding {
                                 esm_reference_index,

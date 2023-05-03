@@ -297,6 +297,12 @@
 <a href="#297" id="297">297</a>
 <a href="#298" id="298">298</a>
 <a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 
 <span class="kw">use </span>swc_core::{
@@ -413,7 +419,13 @@
                     }
                     <span class="kw">return</span>;
                 } <span class="kw">else </span>{
-                    current_visitors = <span class="kw-2">&amp;</span>visitors[nested_visitors_start..];
+                    <span class="comment">// `current_visitors` has the invariant that is must not be empty.
+                    // When it becomes empty, we must early exit
+                    </span>current_visitors = <span class="kw-2">&amp;</span>visitors[nested_visitors_start..];
+                    <span class="kw">if </span>current_visitors.is_empty() {
+                        <span class="comment">// Nothing to do in this subtree, skip it
+                        </span><span class="kw">return</span>;
+                    }
                 }
             } <span class="kw">else </span>{
                 <span class="comment">// Skip visiting this sub tree

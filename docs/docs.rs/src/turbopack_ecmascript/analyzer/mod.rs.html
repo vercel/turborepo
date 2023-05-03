@@ -3454,6 +3454,20 @@
 <a href="#3454" id="3454">3454</a>
 <a href="#3455" id="3455">3455</a>
 <a href="#3456" id="3456">3456</a>
+<a href="#3457" id="3457">3457</a>
+<a href="#3458" id="3458">3458</a>
+<a href="#3459" id="3459">3459</a>
+<a href="#3460" id="3460">3460</a>
+<a href="#3461" id="3461">3461</a>
+<a href="#3462" id="3462">3462</a>
+<a href="#3463" id="3463">3463</a>
+<a href="#3464" id="3464">3464</a>
+<a href="#3465" id="3465">3465</a>
+<a href="#3466" id="3466">3466</a>
+<a href="#3467" id="3467">3467</a>
+<a href="#3468" id="3468">3468</a>
+<a href="#3469" id="3469">3469</a>
+<a href="#3470" id="3470">3470</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::Ordering,
@@ -4978,7 +4992,15 @@
 
 <span class="comment">// Defineable name management
 </span><span class="kw">impl </span>JsValue {
-    <span class="kw">pub fn </span>get_defineable_name_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {
+    <span class="doccomment">/// When the value has a user-defineable name, return the length of it (in
+    /// segments). Otherwise returns None.
+    /// - any free var has itself as user-defineable name.
+    /// - any member access adds the identifier as segement to the name of the
+    ///   object.
+    /// - some well-known objects/functions have a user-defineable names.
+    /// - member calls without arguments also have a user-defineable name which
+    ///   is the property with `()` appended.
+    </span><span class="kw">pub fn </span>get_defineable_name_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             JsValue::FreeVar(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="number">1</span>),
             JsValue::Member(<span class="kw">_</span>, obj, prop) <span class="kw">if </span>prop.as_str().is_some() =&gt; {
@@ -4996,7 +5018,13 @@
         }
     }
 
-    <span class="kw">pub fn </span>iter_defineable_name_rev(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DefineableNameIter&lt;<span class="lifetime">&#39;_</span>&gt; {
+    <span class="doccomment">/// Returns a reverse iterator over the segments of the user-defineable
+    /// name. e. g. `foo.bar().baz` would yield `baz`, `bar()`, `foo`.
+    /// `(1+2).foo.baz` would also yield `baz`, `foo` even while the value is
+    /// not a complete user-defineable name. Before calling this method you must
+    /// use [JsValue::get_defineable_name_len] to determine if the value has a
+    /// user-defineable name at all.
+    </span><span class="kw">pub fn </span>iter_defineable_name_rev(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DefineableNameIter&lt;<span class="lifetime">&#39;_</span>&gt; {
         DefineableNameIter {
             next: <span class="prelude-val">Some</span>(<span class="self">self</span>),
             index: <span class="number">0</span>,

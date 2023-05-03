@@ -228,9 +228,8 @@
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
-
-<span class="kw">use </span>anyhow::Result;
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use </span><span class="kw">crate</span>::environment::EnvironmentVc;
@@ -284,7 +283,7 @@
 </span><span class="macro">macro_rules! </span>compile_time_defines {
     ($(<span class="macro-nonterminal">$more</span>:tt)+) =&gt; {
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>map = std::collections::HashMap::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>map = <span class="macro-nonterminal">$crate::__private::IndexMap::new</span>();
             <span class="macro-nonterminal">$</span><span class="macro">crate::definable_name_map_internal!</span>(<span class="macro-nonterminal">map</span>, $(<span class="macro-nonterminal">$more</span>)+);
             <span class="macro-nonterminal">$crate::compile_time_info::CompileTimeDefines</span>(map)
         }
@@ -295,7 +294,7 @@
 </span><span class="macro">macro_rules! </span>free_var_references {
     ($(<span class="macro-nonterminal">$more</span>:tt)+) =&gt; {
         {
-            <span class="kw">let </span><span class="kw-2">mut </span>map = std::collections::HashMap::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>map = <span class="macro-nonterminal">$crate::__private::IndexMap::new</span>();
             <span class="macro-nonterminal">$</span><span class="macro">crate::definable_name_map_internal!</span>(<span class="macro-nonterminal">map</span>, $(<span class="macro-nonterminal">$more</span>)+);
             <span class="macro-nonterminal">$crate::compile_time_info::FreeVarReferences</span>(map)
         }
@@ -328,11 +327,11 @@
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>CompileTimeDefines(<span class="kw">pub </span>HashMap&lt;Vec&lt;String&gt;, CompileTimeDefineValue&gt;);
+</span><span class="kw">pub struct </span>CompileTimeDefines(<span class="kw">pub </span>IndexMap&lt;Vec&lt;String&gt;, CompileTimeDefineValue&gt;);
 
 <span class="kw">impl </span>IntoIterator <span class="kw">for </span>CompileTimeDefines {
     <span class="kw">type </span>Item = (Vec&lt;String&gt;, CompileTimeDefineValue);
-    <span class="kw">type </span>IntoIter = std::collections::hash_map::IntoIter&lt;Vec&lt;String&gt;, CompileTimeDefineValue&gt;;
+    <span class="kw">type </span>IntoIter = indexmap::map::IntoIter&lt;Vec&lt;String&gt;, CompileTimeDefineValue&gt;;
 
     <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
         <span class="self">self</span>.<span class="number">0</span>.into_iter()
@@ -343,11 +342,12 @@
 </span><span class="kw">impl </span>CompileTimeDefinesVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(HashMap::new())
+        <span class="self">Self</span>::cell(IndexMap::new())
     }
 }
 
 <span class="attr">#[turbo_tasks::value]
+#[derive(Debug)]
 </span><span class="kw">pub enum </span>FreeVarReference {
     EcmaScriptModule {
         request: String,
@@ -382,13 +382,13 @@
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>FreeVarReferences(<span class="kw">pub </span>HashMap&lt;Vec&lt;String&gt;, FreeVarReference&gt;);
+</span><span class="kw">pub struct </span>FreeVarReferences(<span class="kw">pub </span>IndexMap&lt;Vec&lt;String&gt;, FreeVarReference&gt;);
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>FreeVarReferencesVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(HashMap::new())
+        <span class="self">Self</span>::cell(IndexMap::new())
     }
 }
 

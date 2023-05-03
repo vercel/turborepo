@@ -1760,6 +1760,13 @@
 <a href="#1760" id="1760">1760</a>
 <a href="#1761" id="1761">1761</a>
 <a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -3231,6 +3238,13 @@
         ident: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>Ident,
         ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
     ) {
+        <span class="kw">if </span>!<span class="macro">matches!</span>(
+            ast_path.last(),
+            <span class="prelude-val">Some</span>(AstParentNodeRef::Expr(<span class="kw">_</span>, ExprField::Ident))
+                | <span class="prelude-val">Some</span>(AstParentNodeRef::Prop(<span class="kw">_</span>, PropField::Shorthand))
+        ) {
+            <span class="kw">return</span>;
+        }
         <span class="kw">if let </span><span class="prelude-val">Some</span>((esm_reference_index, export)) =
             <span class="self">self</span>.eval_context.imports.get_binding(<span class="kw-2">&amp;</span>ident.to_id())
         {
