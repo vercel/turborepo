@@ -1,13 +1,149 @@
 package runsummary
 
 import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/ci"
+	"github.com/vercel/turbo/cli/internal/client"
 )
 
-// spacesRunResponse deserialized the response from POST Run endpoint
-type spacesRunResponse struct {
+// spaceRequest contains all the information for a single request to Spaces
+type spaceRequest struct {
+	method   string
+	url      string
+	body     interface{}
+	response []byte
+	err      error
+}
+
+type spacesClient struct {
+	requests []*spaceRequest
+	errors   []error
+	api      *client.APIClient
+	ui       cli.Ui
+	run      *spaceRun
+}
+
+type spaceRun struct {
 	ID  string
 	URL string
+}
+
+func (c *spacesClient) makeRequest(req *spaceRequest) {
+	// closure to make errors so we can consistently get the request details
+	makeError := func(msg string) error {
+		return fmt.Errorf("%s: %s - %s", req.method, req.url, msg)
+	}
+
+	// We only care about POST and PATCH right now
+	if req.method != "POST" && req.method != "PATCH" {
+		c.errors = append(c.errors, makeError(fmt.Sprintf("Unsupported method %s", req.method)))
+		return
+	}
+
+	payload, err := json.Marshal(req.body)
+	if err != nil {
+		c.errors = append(c.errors, makeError(fmt.Sprintf("Failed to create payload: %s", err)))
+		return
+	}
+
+	// Make the request
+	var resp []byte
+	var reqErr error
+	if req.method == "POST" {
+		resp, reqErr = c.api.JSONPost(req.url, payload)
+	} else if req.method == "PATCH" {
+		resp, reqErr = c.api.JSONPatch(req.url, payload)
+	} else {
+		c.errors = append(c.errors, makeError("Spaces client: Unsupported method"))
+	}
+
+	if reqErr != nil {
+		req.err = makeError(fmt.Sprintf("%s", reqErr))
+		return
+	}
+
+	// If there are no errors, we can assign the response back to the request so we can read it later
+	req.response = resp
+
+	// Append into global requests
+	c.requests = append(c.requests, req)
+}
+
+func (c *spacesClient) start(rsm *Meta) {
+	if !rsm.apiClient.IsLinked() {
+		c.errors = append(c.errors, fmt.Errorf("Failed to post to space because repo is not linked to a Space. Run `turbo link` first"))
+		return
+	}
+
+	req := &spaceRequest{
+		method: "POST",
+		url:    fmt.Sprintf(runsEndpoint, rsm.spaceID),
+		body:   newSpacesRunCreatePayload(rsm),
+	}
+
+	// This will assign the response to the request if all is well
+	c.makeRequest(req)
+
+	// Set a default, empty one here, so we'll have something downstream and not a segfault
+	c.run = &spaceRun{}
+
+	if req.response == nil {
+		return
+	}
+
+	// unmarshal the response into our c.run struct and catch errors
+	if err := json.Unmarshal(req.response, c.run); err != nil {
+		c.errors = append(c.errors, fmt.Errorf("Error unmarshaling response: %w", err))
+	}
+}
+
+func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
+	if !c.api.IsLinked() {
+		c.errors = append(c.errors, fmt.Errorf("Failed to post %s, because repo is not linked to a Space. Run `turbo link` first", task.TaskID))
+		return
+	}
+
+	if rsm.spaceID == "" {
+		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post %s", task.TaskID))
+		return
+	}
+
+	if c.run.ID == "" {
+		c.errors = append(c.errors, fmt.Errorf("No Run ID found to post task %s", task.TaskID))
+		return
+	}
+
+	c.makeRequest(&spaceRequest{
+		method: "POST",
+		url:    fmt.Sprintf(tasksEndpoint, rsm.spaceID, c.run.ID),
+		body:   newSpacesTaskPayload(task),
+	})
+}
+
+func (c *spacesClient) done(rsm *Meta) {
+	if !c.api.IsLinked() {
+		c.errors = append(c.errors, fmt.Errorf("Failed to post to space because repo is not linked to a Space. Run `turbo link` first"))
+		return
+	}
+
+	if rsm.spaceID == "" {
+		c.errors = append(c.errors, fmt.Errorf("No spaceID found to send PATCH request"))
+		return
+	}
+
+	if c.run.ID == "" {
+		c.errors = append(c.errors, fmt.Errorf("No Run ID found to send PATCH request"))
+		return
+	}
+
+	c.makeRequest(&spaceRequest{
+		method: "PATCH",
+		url:    fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, c.run.ID),
+		body:   newSpacesDonePayload(rsm.RunSummary),
+	})
 }
 
 type spacesClientSummary struct {
@@ -56,7 +192,7 @@ type spacesTask struct {
 	Logs         string            `json:"log"`
 }
 
-func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
+func newSpacesRunCreatePayload(rsm *Meta) *spacesRunPayload {
 	startTime := rsm.RunSummary.ExecutionSummary.startedAt.UnixMilli()
 	context := "LOCAL"
 	if name := ci.Constant(); name != "" {
