@@ -367,7 +367,7 @@ func TestGetPackageDeps(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		got := GetPackageFileHashes(repoRoot, tt.opts.PackagePath, tt.opts.InputPatterns)
+		got, _ := GetPackageFileHashes(repoRoot, tt.opts.PackagePath, tt.opts.InputPatterns)
 		assert.DeepEqual(t, got, tt.expected)
 	}
 }

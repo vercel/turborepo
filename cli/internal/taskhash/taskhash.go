@@ -84,7 +84,7 @@ func (pfs packageFileSpec) ToKey() packageFileHashKey {
 	return packageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
 }
 
-func (pfs *packageFileSpec) getHashObject(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) map[turbopath.AnchoredUnixPath]string {
+func (pfs *packageFileSpec) getHashObject(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	return hashing.GetPackageFileHashes(repoRoot, pkg.Dir, pfs.inputs)
 }
 
@@ -149,7 +149,10 @@ func (th *Tracker) CalculateFileHashes(
 				if !ok {
 					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
 				}
-				hashObject := packageFileSpec.getHashObject(pkg, repoRoot)
+				hashObject, err := packageFileSpec.getHashObject(pkg, repoRoot)
+				if err != nil {
+					return err
+				}
 				hash, err := packageFileSpec.hash(hashObject)
 				if err != nil {
 					return err

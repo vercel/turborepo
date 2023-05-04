@@ -225,29 +225,20 @@ func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packa
 }
 
 // GetPackageFileHashes Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) map[turbopath.AnchoredUnixPath]string {
+func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
 	if len(inputs) == 0 {
 		result, err := getPackageFileHashesFromGitIndex(rootPath, packagePath)
 		if err != nil {
-			result, err := getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, nil)
-			if err != nil {
-				return make(map[turbopath.AnchoredUnixPath]string)
-			}
-			return result
+			return getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, nil)
 		}
-		return result
+		return result, nil
 	}
 
 	result, err := getPackageFileHashesFromInputs(rootPath, packagePath, inputs)
 	if err != nil {
-		result, err := getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, inputs)
-		if err != nil {
-			return make(map[turbopath.AnchoredUnixPath]string)
-		}
-		return result
+		return getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, inputs)
 	}
-	return result
-
+	return result, nil
 }
 
 // GetHashesForFiles hashes the list of given files, then returns a map of normalized path to hash.
