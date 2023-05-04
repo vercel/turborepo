@@ -138,7 +138,7 @@ func getPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSyst
 						return nil
 					}
 				}
-				hash, err := fs.GitLikeHashFile(convertedName.ToString())
+				hash, err := fs.GitLikeHashFile(convertedName)
 				if err != nil {
 					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
 				}
@@ -253,7 +253,7 @@ func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath tur
 func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	hashObject := make(map[turbopath.AnchoredUnixPath]string)
 	for _, file := range files {
-		hash, err := fs.GitLikeHashFile(file.ToString())
+		hash, err := fs.GitLikeHashFile(file.RestoreAnchor(rootPath))
 		if err != nil {
 			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
 		}
