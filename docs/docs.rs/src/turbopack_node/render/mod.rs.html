@@ -67,6 +67,7 @@
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::primitives::JsonValueReadRef;
@@ -86,6 +87,7 @@
     params: IndexMap&lt;String, Param&gt;,
     method: String,
     url: String,
+    original_url: String,
     raw_query: String,
     raw_headers: Vec&lt;(String, String)&gt;,
     path: String,

@@ -557,6 +557,16 @@
 <a href="#557" id="557">557</a>
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -795,6 +805,9 @@
     </span><span class="kw">pub </span>method: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// The full url (including query string), if requested.
     </span><span class="kw">pub </span>url: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="doccomment">/// The full url (including query string) before rewrites where applied, if
+    /// requested.
+    </span><span class="kw">pub </span>original_url: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// Query string items, if requested.
     </span><span class="kw">pub </span>query: <span class="prelude-ty">Option</span>&lt;Query&gt;,
     <span class="doccomment">/// raw query string, if requested. Does not include the `?`.
@@ -927,6 +940,7 @@
 </span><span class="kw">pub struct </span>ContentSourceDataVary {
     <span class="kw">pub </span>method: bool,
     <span class="kw">pub </span>url: bool,
+    <span class="kw">pub </span>original_url: bool,
     <span class="kw">pub </span>query: <span class="prelude-ty">Option</span>&lt;ContentSourceDataFilter&gt;,
     <span class="kw">pub </span>raw_query: bool,
     <span class="kw">pub </span>headers: <span class="prelude-ty">Option</span>&lt;ContentSourceDataFilter&gt;,
@@ -946,6 +960,7 @@
         <span class="kw">let </span>ContentSourceDataVary {
             method,
             url,
+            original_url,
             query,
             raw_query,
             headers,
@@ -956,6 +971,7 @@
         } = <span class="self">self</span>;
         <span class="kw-2">*</span>method = <span class="kw-2">*</span>method || other.method;
         <span class="kw-2">*</span>url = <span class="kw-2">*</span>url || other.url;
+        <span class="kw-2">*</span>original_url = <span class="kw-2">*</span>original_url || other.original_url;
         <span class="kw-2">*</span>body = <span class="kw-2">*</span>body || other.body;
         <span class="kw-2">*</span>cache_buster = <span class="kw-2">*</span>cache_buster || other.cache_buster;
         <span class="kw-2">*</span>raw_query = <span class="kw-2">*</span>raw_query || other.raw_query;
@@ -971,6 +987,7 @@
         </span><span class="kw">let </span>ContentSourceDataVary {
             method,
             url,
+            original_url,
             query,
             raw_query,
             headers,
@@ -983,6 +1000,9 @@
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
         <span class="kw">if </span>other.url &amp;&amp; !url {
+            <span class="kw">return </span><span class="bool-val">false</span>;
+        }
+        <span class="kw">if </span>other.original_url &amp;&amp; !original_url {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
         <span class="kw">if </span>other.body &amp;&amp; !body {

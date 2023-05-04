@@ -160,6 +160,11 @@
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::btree_map::Entry,
     sync::atomic::{AtomicU64, Ordering},
@@ -209,11 +214,12 @@
             ContentSourceResult::NeedData(needed) =&gt; {
                 current_source = needed.source.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
                 current_asset_path = needed.path.clone();
-                data = request_to_data(<span class="kw-2">&amp;</span>request_overwrites, <span class="kw-2">&amp;</span>needed.vary).<span class="kw">await</span><span class="question-mark">?</span>;
+                data = request_to_data(<span class="kw-2">&amp;</span>request_overwrites, <span class="kw-2">&amp;</span>request, <span class="kw-2">&amp;</span>needed.vary).<span class="kw">await</span><span class="question-mark">?</span>;
             }
             ContentSourceResult::Result { get_content, .. } =&gt; {
                 <span class="kw">let </span>content_vary = get_content.vary().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>content_data = request_to_data(<span class="kw-2">&amp;</span>request_overwrites, <span class="kw-2">&amp;</span>content_vary).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>content_data =
+                    request_to_data(<span class="kw-2">&amp;</span>request_overwrites, <span class="kw-2">&amp;</span>request, <span class="kw-2">&amp;</span>content_vary).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>content = get_content.get(Value::new(content_data));
                 <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
                     ContentSourceContent::Rewrite(rewrite) =&gt; {
@@ -258,6 +264,7 @@
 
 <span class="kw">async fn </span>request_to_data(
     request: <span class="kw-2">&amp;</span>SourceRequest,
+    original_request: <span class="kw-2">&amp;</span>SourceRequest,
     vary: <span class="kw-2">&amp;</span>ContentSourceDataVary,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceData&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>data = ContentSourceData::default();
@@ -266,6 +273,9 @@
     }
     <span class="kw">if </span>vary.url {
         data.url = <span class="prelude-val">Some</span>(request.uri.to_string());
+    }
+    <span class="kw">if </span>vary.original_url {
+        data.original_url = <span class="prelude-val">Some</span>(original_request.uri.to_string());
     }
     <span class="kw">if </span>vary.body {
         data.body = <span class="prelude-val">Some</span>(request.body.clone().into());

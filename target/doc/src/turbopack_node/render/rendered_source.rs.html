@@ -306,6 +306,9 @@
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
@@ -494,6 +497,7 @@
         ContentSourceDataVary {
             method: <span class="bool-val">true</span>,
             url: <span class="bool-val">true</span>,
+            original_url: <span class="bool-val">true</span>,
             raw_headers: <span class="bool-val">true</span>,
             raw_query: <span class="bool-val">true</span>,
             ..Default::default()
@@ -510,6 +514,7 @@
         <span class="kw">let </span>ContentSourceData {
             method: <span class="prelude-val">Some</span>(method),
             url: <span class="prelude-val">Some</span>(url),
+            original_url: <span class="prelude-val">Some</span>(original_url),
             raw_headers: <span class="prelude-val">Some</span>(raw_headers),
             raw_query: <span class="prelude-val">Some</span>(raw_query),
             ..
@@ -532,6 +537,7 @@
                 params: params.clone(),
                 method: method.clone(),
                 url: url.clone(),
+                original_url: original_url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
                 path: source.pathname.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
