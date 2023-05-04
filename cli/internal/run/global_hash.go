@@ -172,12 +172,18 @@ func getGlobalHashInputs(
 
 	// No prefix, global deps already have full paths
 	globalDepsArray := globalDeps.UnsafeListOfStrings()
-	globalDepsPaths := make([]turbopath.AbsoluteSystemPath, len(globalDepsArray))
+	globalDepsPaths := make([]turbopath.AnchoredSystemPath, len(globalDepsArray))
 	for i, path := range globalDepsArray {
-		globalDepsPaths[i] = turbopath.AbsoluteSystemPathFromUpstream(path)
+		fullyQualifiedPath := turbopath.AbsoluteSystemPathFromUpstream(path)
+		anchoredPath, err := fullyQualifiedPath.RelativeTo(rootpath)
+		if err != nil {
+			return GlobalHashableInputs{}, err
+		}
+
+		globalDepsPaths[i] = anchoredPath
 	}
 
-	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
+	globalFileHashMap, err := hashing.GetHashesForFiles(rootpath, globalDepsPaths)
 	if err != nil {
 		return GlobalHashableInputs{}, fmt.Errorf("error hashing files: %w", err)
 	}

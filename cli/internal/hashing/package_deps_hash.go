@@ -57,7 +57,7 @@ func getPackageFileHashesFromGitIndex(rootPath turbopath.AbsoluteSystemPath, pac
 	}
 
 	// Get the hashes for any modified files in the working directory.
-	hashes, err := getHashesForFiles(absolutePackagePath, filesToHash)
+	hashes, err := GetHashesForFiles(absolutePackagePath, filesToHash)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +216,7 @@ func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packa
 
 	// Note that in this scenario, we don't need to check git status.
 	// We're hashing the current state, not state at a commit.
-	result, err := getHashesForFiles(absolutePackagePath, filesToHash)
+	result, err := GetHashesForFiles(absolutePackagePath, filesToHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
 	}
@@ -250,23 +250,9 @@ func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath tur
 
 }
 
-// GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
-// this map is suitable for cross-platform caching.
-func GetHashableDeps(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	output := make([]turbopath.AnchoredSystemPath, len(files))
-
-	for index, file := range files {
-		anchoredSystemPath, err := file.RelativeTo(rootPath)
-		if err != nil {
-			return nil, err
-		}
-		output[index] = anchoredSystemPath
-	}
-
-	return getHashesForFiles(rootPath, output)
-}
-
-func getHashesForFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+// GetHashesForFiles hashes the list of given files, then returns a map of normalized path to hash.
+// This map is suitable for cross-platform caching.
+func GetHashesForFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	// Try to use `git` first.
 	gitHashedFiles, err := gitHashObject(rootPath, files)
 	if err == nil {
