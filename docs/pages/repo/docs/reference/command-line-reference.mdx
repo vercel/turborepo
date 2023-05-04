@@ -432,19 +432,6 @@ turbo run lint --scope="@example/**"
 turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
 ```
 
-#### `--serial`
-
-<Callout type="error">
-  `serial` is deprecated in `0.5.3`.Please use
-  [`--concurrency=1`](#--concurrency) instead.
-</Callout>
-
-Executes all tasks serially (i.e. one-at-a-time).
-
-```sh
-turbo run build --serial
-```
-
 #### `--since`
 
 <Callout type="error">
