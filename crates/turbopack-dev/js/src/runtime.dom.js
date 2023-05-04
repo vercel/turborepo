@@ -77,9 +77,11 @@ let BACKEND;
           reject(new Error("The DOM backend can only reload CSS chunks"));
           return;
         }
+        
+        const encodedChunkPath = encodeURIComponent(chunkPath).replace(/%2F/g, "/");
 
         const previousLink = document.querySelector(
-          `link[type=stylesheet][href^="/${chunkPath}"]`
+          `link[rel=stylesheet][href^="/${encodedChunkPath}"]`
         );
 
         if (previousLink == null) {
@@ -89,7 +91,7 @@ let BACKEND;
 
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = `/${chunkPath}?t=${Date.now()}`;
+        link.href = `/${encodedChunkPath}`;
         link.onerror = () => {
           reject();
         };
