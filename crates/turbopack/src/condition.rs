@@ -9,6 +9,7 @@ pub enum ContextCondition {
     All(Vec<ContextCondition>),
     Any(Vec<ContextCondition>),
     Not(Box<ContextCondition>),
+    PathEndsWith(String),
     InDirectory(String),
     InPath(FileSystemPathVc),
 }
@@ -58,6 +59,7 @@ impl ContextCondition {
                     || context.path.ends_with(&format!("/{dir}"))
                     || context.path == *dir
             }
+            ContextCondition::PathEndsWith(end) => context.path.ends_with(end),
         }
     }
 }
