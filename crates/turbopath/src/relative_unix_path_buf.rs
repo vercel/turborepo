@@ -42,9 +42,9 @@ impl RelativeUnixPathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::path::Path;
+
+    use super::*;
 
     #[test]
     fn test_relative_unix_path_buf() {
