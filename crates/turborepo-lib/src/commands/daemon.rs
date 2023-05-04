@@ -95,7 +95,7 @@ pub async fn daemon_server(
         // error here is not fatal, just log it
         tracing::error!("failed to set file logger: {}", e);
     }
-    
+
     let timeout = go_parse_duration::parse_duration(idle_time)
         .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
         .map(|d| Duration::from_nanos(d as u64))?;
