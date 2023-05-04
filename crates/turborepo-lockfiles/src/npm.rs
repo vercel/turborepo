@@ -88,8 +88,6 @@ impl Lockfile for NpmLockfile {
                             .into_iter()
                             .find_map(|possible_key| {
                                 self.packages.get(&possible_key).map(|entry| {
-                                    // We should instead look at the "resolved" field and handle
-                                    // that
                                     let version = entry.version.as_deref().ok_or_else(|| {
                                         Error::MissingVersion(possible_key.clone())
                                     })?;
