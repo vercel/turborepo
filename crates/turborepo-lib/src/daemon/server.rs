@@ -377,8 +377,8 @@ mod test {
             "must wait at least 5ms"
         );
         assert_matches::assert_matches!(
-            super::CloseReason::Timeout,
             close_reason,
+            super::CloseReason::Timeout,
             "must close due to timeout"
         );
         assert!(!pid_path.exists(), "pid file must be deleted");

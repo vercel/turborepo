@@ -18,6 +18,9 @@ use turbopath::AbsoluteSystemPathBuf;
 type Glob = Arc<String>;
 type Hash = Arc<String>;
 
+/// timeout for flushing the watcher
+const FLUSH_TIMEOUT: Duration = Duration::from_millis(500);
+
 /// Tracks changes for a given hash. A hash is a unique identifier for a set of
 /// files. Given a hash and a set of globs to track, this will watch for file
 /// changes and allow the user to query for changes. Once all globs for a
@@ -130,9 +133,12 @@ impl<T: Watcher> HashGlobWatcher<T> {
         //
         // this is a best effort, and times out after 500ms in
         // case there is a lot of activity on the filesystem
-        timeout(Duration::from_millis(500), self.config.flush())
-            .await
-            .ok();
+        match timeout(FLUSH_TIMEOUT, self.config.flush()).await {
+            Ok(_) => {}
+            Err(_) => {
+                trace!("timed out waiting for flush");
+            }
+        }
 
         let include: HashSet<_> = include.into_iter().map(Arc::new).collect();
         let exclude = exclude.into_iter().map(Arc::new).collect();
@@ -214,9 +220,12 @@ impl<T: Watcher> HashGlobWatcher<T> {
         //
         // this is a best effort, and times out after 500ms in
         // case there is a lot of activity on the filesystem
-        timeout(Duration::from_millis(500), self.config.flush())
-            .await
-            .ok();
+        match timeout(FLUSH_TIMEOUT, self.config.flush()).await {
+            Ok(_) => {}
+            Err(_) => {
+                trace!("timed out waiting for flush");
+            }
+        }
 
         // hash_globs tracks all unchanged globs for a given hash.
         // if a hash is not in globs, then either everything has changed
