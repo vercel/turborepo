@@ -367,11 +367,7 @@ func TestGetPackageDeps(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		got, err := GetPackageDeps(repoRoot, tt.opts)
-		if err != nil {
-			t.Errorf("GetPackageDeps got error %v", err)
-			continue
-		}
+		got := GetPackageFileHashes(repoRoot, tt.opts.PackagePath, tt.opts.InputPatterns)
 		assert.DeepEqual(t, got, tt.expected)
 	}
 }
@@ -385,7 +381,7 @@ func Test_memoizedGetTraversePath(t *testing.T) {
 	assert.Check(t, gotOne == gotTwo, "The strings are identical.")
 }
 
-func TestGetPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
+func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	rootIgnore := strings.Join([]string{
 		"ignoreme",
 		"ignorethisdir/",
@@ -460,7 +456,7 @@ func TestGetPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	pkg := &fs.PackageJSON{
 		Dir: pkgName,
 	}
-	hashes, err := GetPackageFileHashesFromProcessingGitIgnore(repoRoot, pkg.Dir, []string{})
+	hashes, err := getPackageFileHashesFromProcessingGitIgnore(repoRoot, pkg.Dir, []string{})
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
@@ -487,7 +483,7 @@ func TestGetPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	}
 
 	count = 0
-	justFileHashes, err := GetPackageFileHashesFromProcessingGitIgnore(repoRoot, pkg.Dir, []string{filepath.FromSlash("**/*file"), "!" + filepath.FromSlash("some-dir/excluded-file")})
+	justFileHashes, err := getPackageFileHashesFromProcessingGitIgnore(repoRoot, pkg.Dir, []string{filepath.FromSlash("**/*file"), "!" + filepath.FromSlash("some-dir/excluded-file")})
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}

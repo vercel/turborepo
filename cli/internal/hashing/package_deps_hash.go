@@ -78,7 +78,7 @@ func safeCompileIgnoreFile(filepath turbopath.AbsoluteSystemPath) (*gitignore.Gi
 	return gitignore.CompileIgnoreLines([]string{}...), nil
 }
 
-func GetPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+func getPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
 	result := make(map[turbopath.AnchoredUnixPath]string)
 	absolutePackagePath := packagePath.RestoreAnchor(rootPath)
 
@@ -224,12 +224,28 @@ func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packa
 	return result, nil
 }
 
-// GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
-	if len(p.InputPatterns) == 0 {
-		return getPackageFileHashesFromGitIndex(rootPath, p.PackagePath)
+// GetPackageFileHashes Builds an object containing git hashes for the files under the specified `packagePath` folder.
+func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) map[turbopath.AnchoredUnixPath]string {
+	if len(inputs) == 0 {
+		result, err := getPackageFileHashesFromGitIndex(rootPath, packagePath)
+		if err != nil {
+			result, err := getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, nil)
+			if err != nil {
+				return make(map[turbopath.AnchoredUnixPath]string)
+			}
+			return result
+		}
+		return result
 	} else {
-		return getPackageFileHashesFromInputs(rootPath, p.PackagePath, p.InputPatterns)
+		result, err := getPackageFileHashesFromInputs(rootPath, packagePath, inputs)
+		if err != nil {
+			result, err := getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, inputs)
+			if err != nil {
+				return make(map[turbopath.AnchoredUnixPath]string)
+			}
+			return result
+		}
+		return result
 	}
 }
 

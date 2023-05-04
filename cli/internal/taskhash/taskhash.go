@@ -85,19 +85,7 @@ func (pfs packageFileSpec) ToKey() packageFileHashKey {
 }
 
 func (pfs *packageFileSpec) getHashObject(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) map[turbopath.AnchoredUnixPath]string {
-	hashObject, pkgDepsErr := hashing.GetPackageDeps(repoRoot, &hashing.PackageDepsOptions{
-		PackagePath:   pkg.Dir,
-		InputPatterns: pfs.inputs,
-	})
-	if pkgDepsErr != nil {
-		manualHashObject, err := manuallyHashPackage(pkg, pfs.inputs, repoRoot)
-		if err != nil {
-			return make(map[turbopath.AnchoredUnixPath]string)
-		}
-		hashObject = manualHashObject
-	}
-
-	return hashObject
+	return hashing.GetPackageFileHashes(repoRoot, pkg.Dir, pfs.inputs)
 }
 
 func (pfs *packageFileSpec) hash(hashObject map[turbopath.AnchoredUnixPath]string) (string, error) {
@@ -106,10 +94,6 @@ func (pfs *packageFileSpec) hash(hashObject map[turbopath.AnchoredUnixPath]strin
 		return "", otherErr
 	}
 	return hashOfFiles, nil
-}
-
-func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	return hashing.GetPackageFileHashesFromProcessingGitIgnore(rootPath, pkg.Dir, inputs)
 }
 
 // packageFileHashes is a map from a package and optional input globs to the hash of
