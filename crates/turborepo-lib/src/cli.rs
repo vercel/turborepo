@@ -11,6 +11,7 @@ use clap_complete::{generate, Shell};
 use dunce::canonicalize as fs_canonicalize;
 use serde::Serialize;
 use tracing::{debug, error};
+use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
     commands::{bin, daemon, link, login, logout, unlink, CommandBase},
@@ -489,6 +490,9 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
         current_dir()?
     };
 
+    // a non-absolute repo root is a bug
+    let repo_root = AbsoluteSystemPathBuf::new(repo_root).expect("repo_root is not absolute");
+
     let version = get_version();
 
     match cli_args.command.as_ref().unwrap() {
@@ -562,8 +566,14 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             daemon::main(&command, &base).await?;
             Ok(Payload::Rust(Ok(0)))
         },
+        Command::Run(args) => {
+            if args.tasks.is_empty() {
+                return Err(anyhow!("at least one task must be specified"));
+            }
+            let base = CommandBase::new(cli_args, repo_root, version)?;
+            Ok(Payload::Go(Box::new(base)))
+        }
         Command::Prune { .. }
-        | Command::Run(_)
         // the daemon itself still delegates to Go
         | Command::Daemon { .. } => {
             let base = CommandBase::new(cli_args, repo_root, version)?;

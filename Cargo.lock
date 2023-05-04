@@ -3741,7 +3741,7 @@ checksum = "1c90329e44f9208b55f45711f9558cec15d7ef8295cc65ecd6d4188ae8edc58c"
 dependencies = [
  "atty",
  "backtrace",
- "miette-derive",
+ "miette-derive 4.7.1",
  "once_cell",
  "owo-colors",
  "supports-color",
@@ -3749,6 +3749,18 @@ dependencies = [
  "supports-unicode",
  "terminal_size 0.1.17",
  "textwrap 0.15.2",
+ "thiserror",
+ "unicode-width",
+]
+
+[[package]]
+name = "miette"
+version = "5.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92a992891d5579caa9efd8e601f82e30a1caa79a27a5db075dde30ecb9eab357"
+dependencies = [
+ "miette-derive 5.8.0",
+ "once_cell",
  "thiserror",
  "unicode-width",
 ]
@@ -3762,6 +3774,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "miette-derive"
+version = "5.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c65c625186a9bcce6699394bee511e1b1aec689aa7e3be1bf4e996e75834153"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -4079,6 +4102,19 @@ dependencies = [
  "turbopack",
  "turbopack-cli-utils",
  "turbopack-core",
+]
+
+[[package]]
+name = "node-semver"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84f390c1756333538f2aed01cf280a56bc683e199b9804a504df6e7320d40116"
+dependencies = [
+ "bytecount",
+ "miette 5.8.0",
+ "nom",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -7205,7 +7241,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3afbf2e52ddce38da1ee204252f7b9019a12176ca73aaa0fd0c36ded1ecbec7d"
 dependencies = [
  "anyhow",
- "miette",
+ "miette 4.7.1",
  "once_cell",
  "parking_lot",
  "swc_common",
@@ -8954,6 +8990,7 @@ dependencies = [
  "itertools",
  "lazy_static",
  "libc",
+ "node-semver",
  "notify 5.1.0",
  "owo-colors",
  "pidlock",
@@ -8961,6 +8998,7 @@ dependencies = [
  "pretty_assertions",
  "prost",
  "rand 0.8.5",
+ "regex",
  "reqwest",
  "rustc_version_runtime",
  "semver 1.0.17",

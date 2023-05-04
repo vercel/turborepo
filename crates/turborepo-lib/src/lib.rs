@@ -7,6 +7,7 @@ mod config;
 mod daemon;
 mod execution_state;
 mod formatter;
+mod package_json;
 mod package_manager;
 mod shim;
 mod ui;

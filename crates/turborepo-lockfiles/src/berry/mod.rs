@@ -290,18 +290,13 @@ impl<'a> BerryLockfile<'a> {
                 resolutions.insert(dependency, dep_locator.clone());
             }
 
+            // If the package has an associated patch we include it in the subgraph
             if let Some(patch_locator) = self.patches.get(&locator) {
                 patches.insert(locator.as_owned(), patch_locator.clone());
-                let patch_descriptors = reverse_lookup
-                    .get(patch_locator)
-                    .unwrap_or_else(|| panic!("No descriptors found for {patch_locator}"));
-                for patch_descriptor in patch_descriptors {
-                    resolutions.insert((*patch_descriptor).clone(), patch_locator.clone());
-                }
             }
         }
 
-        for patch in self.patches.values() {
+        for patch in patches.values() {
             let patch_descriptors = reverse_lookup
                 .get(patch)
                 .unwrap_or_else(|| panic!("Unable to find {patch} in reverse lookup"));
@@ -780,7 +775,7 @@ mod test {
     }
 
     #[test]
-    fn test_workspace_collission() {
+    fn test_workspace_collision() {
         let data = LockfileData::from_bytes(include_bytes!(
             "../../fixtures/berry-protocol-collision.lock"
         ))
@@ -817,6 +812,34 @@ mod test {
             &(vec![&workspace_proto, &full_path]
                 .into_iter()
                 .collect::<HashSet<_>>())
+        );
+    }
+
+    #[test]
+    fn test_builtin_patch_descriptors() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry-builtin.lock")).unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let subgraph = lockfile
+            .subgraph(
+                &["packages/a".into(), "packages/c".into()],
+                &["resolve@npm:1.22.3".into()],
+            )
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+        let (resolve_key, _) = subgraph_data
+            .packages
+            .iter()
+            .find(|(_, v)| {
+                v.resolution
+                    == "resolve@patch:resolve@npm%3A1.22.3#~builtin<compat/resolve>::version=1.22.\
+                        3&hash=c3c19d"
+            })
+            .unwrap();
+        assert_eq!(
+            resolve_key,
+            "resolve@patch:resolve@^1.22.0#~builtin<compat/resolve>, \
+             resolve@patch:resolve@^1.22.2#~builtin<compat/resolve>"
         );
     }
 }

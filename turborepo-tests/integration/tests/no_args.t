@@ -63,5 +63,5 @@ Make sure exit code is 2 when no args are passed
         --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Note that tasks running in parallel interleave their logs and prefix is the only way to identify which task produced a log [possible values: none]
   [1]
   $ ${TURBO} run
-  Turbo error: at least one task must be specified
+  ERROR at least one task must be specified
   [1]
