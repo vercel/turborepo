@@ -250,42 +250,31 @@ func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath tur
 
 }
 
-func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	hashObject := make(map[turbopath.AnchoredUnixPath]string)
-	for _, file := range files {
-		hash, err := fs.GitLikeHashFile(file.RestoreAnchor(rootPath))
-		if err != nil {
-			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
-		}
-
-		hashObject[file.ToUnixPath()] = hash
-	}
-	return hashObject, nil
-}
-
 // GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
 // this map is suitable for cross-platform caching.
 func GetHashableDeps(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
 	output := make([]turbopath.AnchoredSystemPath, len(files))
-	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
 
 	for index, file := range files {
-		anchoredSystemPath, err := file.RelativeTo(convertedRootPath)
+		anchoredSystemPath, err := file.RelativeTo(rootPath)
 		if err != nil {
 			return nil, err
 		}
 		output[index] = anchoredSystemPath
 	}
-	hashObject, err := gitHashObject(convertedRootPath, output)
-	if err != nil {
-		manuallyHashedObject, err := manuallyHashFiles(convertedRootPath, output)
-		if err != nil {
-			return nil, err
-		}
-		hashObject = manuallyHashedObject
+
+	return getHashesForFiles(rootPath, output)
+}
+
+func getHashesForFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	// Try to use `git` first.
+	gitHashedFiles, err := gitHashObject(rootPath, files)
+	if err == nil {
+		return gitHashedFiles, nil
 	}
 
-	return hashObject, nil
+	// Fall back to manual hashing.
+	return manuallyHashFiles(rootPath, files)
 }
 
 // gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths to `git hash-object`.
@@ -403,6 +392,19 @@ func gitHashObject(anchor turbopath.AbsoluteSystemPath, filesToHash []turbopath.
 	}
 
 	return output, nil
+}
+
+func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	hashObject := make(map[turbopath.AnchoredUnixPath]string)
+	for _, file := range files {
+		hash, err := fs.GitLikeHashFile(file.RestoreAnchor(rootPath))
+		if err != nil {
+			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
+		}
+
+		hashObject[file.ToUnixPath()] = hash
+	}
+	return hashObject, nil
 }
 
 // runGitCommand provides boilerplate command handling for `ls-tree`, `ls-files`, and `status`
