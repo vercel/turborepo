@@ -269,13 +269,11 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 mod tests {
     use std::assert_matches::assert_matches;
 
-    use crate::{AbsoluteSystemPathBuf, PathValidationError};
+    use crate::{AbsoluteSystemPathBuf, PathError, PathValidationError};
 
     #[cfg(not(windows))]
     #[test]
     fn test_absolute_system_path_buf_on_unix() {
-        use crate::PathError;
-
         assert!(AbsoluteSystemPathBuf::new("/Users/user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new("./Users/user/"),

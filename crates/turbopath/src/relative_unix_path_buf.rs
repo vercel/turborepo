@@ -44,6 +44,8 @@ impl RelativeUnixPathBuf {
 mod tests {
     use super::*;
 
+    use std::path::Path;
+
     #[test]
     fn test_relative_unix_path_buf() {
         let path = RelativeUnixPathBuf::new(PathBuf::from("foo/bar")).unwrap();
@@ -68,6 +70,6 @@ mod tests {
     #[test]
     fn test_convert_from_windows_path() {
         let path = RelativeUnixPathBuf::new(PathBuf::from("foo\\bar")).unwrap();
-        assert_eq!(path.as_path(), Path::new("foo/bar"));
+        assert_eq!(path.0.as_path(), Path::new("foo/bar"));
     }
 }
