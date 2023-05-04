@@ -329,30 +329,24 @@ mod test {
     #[test_case("ab{c,d,*}", None, 5, 5 ; "pattern with curly braces and wildcard match")]
     #[test_case("ab{c,d}[", Some(WalkError::BadPattern("ab{c,d}[".into())), 0, 0)]
     // ; "pattern with curly braces and unclosed character class error"
-    // {"a{,bc}", "a", true, None, false, true, 2, 2},
-    // {"a{,bc}", "abc", true, None, false, true, 2, 2},
-    // {"a/{b/c,c/b}", "a/b/c", true, None, false, true, 2, 2},
-    // {"a/{b/c,c/b}", "a/c/b", true, None, false, true, 2, 2},
-    // {"{a/{b,c},abc}", "a/b", true, None, false, true, 3, 3},
-    // {"{a/{b,c},abc}", "a/c", true, None, false, true, 3, 3},
-    // {"{a/{b,c},abc}", "abc", true, None, false, true, 3, 3},
-    // {"{a/{b,c},abc}", "a/b/c", false, None, false, true, 3, 3},
-    // {"{a/ab*}", "a/abc", true, None, false, true, 1, 1},
-    // {"{a/*}", "a/b", true, None, false, true, 3, 3},
-    // {"{a/abc}", "a/abc", true, None, false, true, 1, 1},
-    // {"{a/b,a/c}", "a/c", true, None, false, true, 2, 2},
-    // {"abc/**", "abc/b", true, None, false, true, 3, 3},
-    // {"**/abc", "abc", true, None, false, true, 2, 2},
-    // {"abc**", "abc/b", false, None, false, true, 3, 3},
-    // {"**/*.txt", "abc/【test】.txt", true, None, false, true, 1, 1},
-    // {"**/【*", "abc/【test】.txt", true, None, false, true, 1, 1},
-    // // unfortunately, io/fs can't handle this, so neither can Glob =(
-    // {"broken-symlink", "broken-symlink", true, None, true, false, 1, 1},
+    #[test_case("a{,bc}", None, 1, 1 ; "a followed by comma or b or c")]
+    #[test_case("a/{b/c,c/b}", None, 2, 2)]
+    #[test_case("{a/{b,c},abc}", None, 3, 3)]
+    #[test_case("{a/ab*}", None, 1, 1)]
+    #[test_case("{a/*}", None, 3, 3)]
+    #[test_case("{a/abc}", None, 1, 1)]
+    #[test_case("{a/b,a/c}", None, 2, 2)]
+    #[test_case("abc/**", None, 2, 2 ; "abc then doublestar")]
+    #[test_case("**/abc", None, 2, 2)]
+    #[test_case("**/*.txt", None, 1, 1)]
+    #[test_case("**/【*", None, 1, 1)]
+    // broken symlinks will not appear
+    #[test_case("broken-symlink", None, 0, 0)]
     // // We don't care about matching a particular file, we want to verify
     // // that we don't traverse the symlink
-    // {"working-symlink/c/*", "working-symlink/c/d", true, None, true, cfg!(unix),
-    // 1, 1}, {"working-sym*/*", "irrelevant", false, None, false, cfg!(unix), 0,
-    // 0}, {"b/**/f", "irrelevant", false, None, false, cfg!(unix), 0, 0},
+    #[test_case("working-symlink/c/*", None, 1, 1)]
+    #[test_case("working-sym*/*", None, 1, 0)]
+    #[test_case("b/**/f", None, 2, 0)]
     fn glob_walk(
         pattern: &str,
         err_expected: Option<WalkError>,
