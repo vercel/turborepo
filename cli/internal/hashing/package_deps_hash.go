@@ -56,8 +56,8 @@ func getPackageFileHashesFromGitIndex(rootPath turbopath.AbsoluteSystemPath, pac
 		}
 	}
 
-	// Ask `git` to hash any files currently in the working directory.
-	hashes, err := gitHashObject(absolutePackagePath, filesToHash)
+	// Get the hashes for any modified files in the working directory.
+	hashes, err := getHashesForFiles(absolutePackagePath, filesToHash)
 	if err != nil {
 		return nil, err
 	}
@@ -214,9 +214,9 @@ func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packa
 		filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
 	}
 
-	// Note that in this scenario, we don't need to check git status, we're using hash-object directly which
-	// hashes the current state, not state at a commit
-	result, err := gitHashObject(absolutePackagePath, filesToHash)
+	// Note that in this scenario, we don't need to check git status.
+	// We're hashing the current state, not state at a commit.
+	result, err := getHashesForFiles(absolutePackagePath, filesToHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
 	}
