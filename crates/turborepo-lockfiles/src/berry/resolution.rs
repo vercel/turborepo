@@ -15,7 +15,7 @@ fn tag_regex() -> &'static Regex {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("unable to parse")]
+    #[error("unable to parse: {0}")]
     // Boxed due to this enum variant being much larger than the others
     Pest(#[from] Box<pest::error::Error<Rule>>),
     #[error("unexpected end of input")]
