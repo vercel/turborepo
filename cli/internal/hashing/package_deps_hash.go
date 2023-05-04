@@ -26,6 +26,53 @@ type PackageDepsOptions struct {
 	InputPatterns []string
 }
 
+func getPackageFileHashesFromGitIndex(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	var result map[turbopath.AnchoredUnixPath]string
+	absolutePackagePath := packagePath.RestoreAnchor(rootPath)
+
+	// Get the state of the git index.
+	gitLsTreeOutput, err := gitLsTree(absolutePackagePath)
+	if err != nil {
+		return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", packagePath, err)
+	}
+	result = gitLsTreeOutput
+
+	// Update the with the state of the working directory.
+	// The paths returned from this call are anchored at the package directory
+	gitStatusOutput, err := gitStatus(absolutePackagePath)
+	if err != nil {
+		return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
+	}
+
+	// Review status output to identify the delta.
+	var filesToHash []turbopath.AnchoredSystemPath
+	for filePath, status := range gitStatusOutput {
+		if status.isDelete() {
+			delete(result, filePath)
+		} else {
+			filesToHash = append(filesToHash, filePath.ToSystemPath())
+		}
+	}
+
+	// Ask `git` to hash any files currently in the working directory.
+	hashes, err := gitHashObject(absolutePackagePath, filesToHash)
+	if err != nil {
+		return nil, err
+	}
+
+	// Zip up file paths and hashes together
+	for filePath, hash := range hashes {
+		result[filePath] = hash
+	}
+
+	return result, nil
+}
+
+// func getFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+// }
+// func getFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+// }
+
 // GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
 func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
 	pkgPath := rootPath.UntypedJoin(p.PackagePath.ToStringDuringMigration())
@@ -37,37 +84,7 @@ func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions
 	copy(calculatedInputs, p.InputPatterns)
 
 	if len(calculatedInputs) == 0 {
-		gitLsTreeOutput, err := gitLsTree(pkgPath)
-		if err != nil {
-			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
-		}
-		result = gitLsTreeOutput
-
-		// Update the checked in hashes with the current repo status
-		// The paths returned from this call are anchored at the package directory
-		gitStatusOutput, err := gitStatus(pkgPath, calculatedInputs)
-		if err != nil {
-			return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
-		}
-
-		var filesToHash []turbopath.AnchoredSystemPath
-		for filePath, status := range gitStatusOutput {
-			if status.isDelete() {
-				delete(result, filePath)
-			} else {
-				filesToHash = append(filesToHash, filePath.ToSystemPath())
-			}
-		}
-
-		hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToString()), filesToHash)
-		if err != nil {
-			return nil, err
-		}
-
-		// Zip up file paths and hashes together
-		for filePath, hash := range hashes {
-			result[filePath] = hash
-		}
+		return getPackageFileHashesFromGitIndex(rootPath, p.PackagePath)
 	} else {
 		// Add in package.json and turbo.json to input patterns. Both file paths are relative to pkgPath
 		//
@@ -404,7 +421,7 @@ func (s statusCode) isDelete() bool {
 // We need to calculate where the repository's location is in order to determine what the full path is
 // before we can return those paths relative to the calling directory, normalizing to the behavior of
 // `ls-files` and `ls-tree`.
-func gitStatus(rootPath turbopath.AbsoluteSystemPath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
+func gitStatus(rootPath turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]statusCode, error) {
 	cmd := exec.Command(
 		"git",               // Using `git` from $PATH,
 		"status",            // tell me about the status of the working tree,
@@ -413,13 +430,8 @@ func gitStatus(rootPath turbopath.AbsoluteSystemPath, patterns []string) (map[tu
 		"-z",                // with each file path relative to the repository root and \000-terminated,
 		"--",                // and any additional argument you see is a path, promise.
 	)
-	if len(patterns) == 0 {
-		cmd.Args = append(cmd.Args, ".") // Operate in the current directory instead of the root of the working tree.
-	} else {
-		// FIXME: Globbing is using `git`'s globbing rules which are not consistent with `doublestar``.
-		cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
-	}
-	cmd.Dir = rootPath.ToString() // Include files only from this directory.
+	cmd.Args = append(cmd.Args, ".") // Operate in the current directory instead of the root of the working tree.
+	cmd.Dir = rootPath.ToString()    // Include files only from this directory.
 
 	entries, err := runGitCommand(cmd, "status", gitoutput.NewStatusReader)
 	if err != nil {
