@@ -70,80 +70,80 @@ func getPackageFileHashesFromGitIndex(rootPath turbopath.AbsoluteSystemPath, pac
 
 // func getFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
 // }
-// func getFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
-// }
 
-// GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
-	pkgPath := rootPath.UntypedJoin(p.PackagePath.ToStringDuringMigration())
+func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+	absolutePackagePath := packagePath.RestoreAnchor(rootPath)
 	// Add all the checked in hashes.
-	var result map[turbopath.AnchoredUnixPath]string
 
 	// make a copy of the inputPatterns array, because we may be appending to it later.
-	calculatedInputs := make([]string, len(p.InputPatterns))
-	copy(calculatedInputs, p.InputPatterns)
+	calculatedInputs := make([]string, len(inputs))
+	copy(calculatedInputs, inputs)
 
-	if len(calculatedInputs) == 0 {
-		return getPackageFileHashesFromGitIndex(rootPath, p.PackagePath)
-	} else {
-		// Add in package.json and turbo.json to input patterns. Both file paths are relative to pkgPath
-		//
-		// - package.json is an input because if the `scripts` in
-		// 		the package.json change (i.e. the tasks that turbo executes), we want
-		// 		a cache miss, since any existing cache could be invalid.
-		// - turbo.json because it's the definition of the tasks themselves. The root turbo.json
-		// 		is similarly included in the global hash. This file may not exist in the workspace, but
-		// 		that is ok, because it will get ignored downstream.
-		calculatedInputs = append(calculatedInputs, "package.json")
-		calculatedInputs = append(calculatedInputs, "turbo.json")
+	// Add in package.json and turbo.json to input patterns. Both file paths are relative to pkgPath
+	//
+	// - package.json is an input because if the `scripts` in
+	// 		the package.json change (i.e. the tasks that turbo executes), we want
+	// 		a cache miss, since any existing cache could be invalid.
+	// - turbo.json because it's the definition of the tasks themselves. The root turbo.json
+	// 		is similarly included in the global hash. This file may not exist in the workspace, but
+	// 		that is ok, because it will get ignored downstream.
+	calculatedInputs = append(calculatedInputs, "package.json")
+	calculatedInputs = append(calculatedInputs, "turbo.json")
 
-		// The input patterns are relative to the package.
-		// However, we need to change the globbing to be relative to the repo root.
-		// Prepend the package path to each of the input patterns.
-		prefixedInputPatterns := []string{}
-		prefixedExcludePatterns := []string{}
-		for _, pattern := range calculatedInputs {
-			if len(pattern) > 0 && pattern[0] == '!' {
-				rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern[1:]))
-				if err != nil {
-					return nil, err
-				}
-				prefixedExcludePatterns = append(prefixedExcludePatterns, rerooted)
-			} else {
-				rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern))
-				if err != nil {
-					return nil, err
-				}
-				prefixedInputPatterns = append(prefixedInputPatterns, rerooted)
-			}
-		}
-		absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns)
-
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
-		}
-
-		filesToHash := make([]turbopath.AnchoredSystemPath, len(absoluteFilesToHash))
-		for i, rawPath := range absoluteFilesToHash {
-			relativePathString, err := pkgPath.RelativePathString(rawPath)
-
+	// The input patterns are relative to the package.
+	// However, we need to change the globbing to be relative to the repo root.
+	// Prepend the package path to each of the input patterns.
+	prefixedInputPatterns := []string{}
+	prefixedExcludePatterns := []string{}
+	for _, pattern := range calculatedInputs {
+		if len(pattern) > 0 && pattern[0] == '!' {
+			rerooted, err := rootPath.PathTo(absolutePackagePath.UntypedJoin(pattern[1:]))
 			if err != nil {
-				return nil, errors.Wrapf(err, "not relative to package: %v", rawPath)
+				return nil, err
 			}
-
-			filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
+			prefixedExcludePatterns = append(prefixedExcludePatterns, rerooted)
+		} else {
+			rerooted, err := rootPath.PathTo(absolutePackagePath.UntypedJoin(pattern))
+			if err != nil {
+				return nil, err
+			}
+			prefixedInputPatterns = append(prefixedInputPatterns, rerooted)
 		}
+	}
+	absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns)
 
-		hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToStringDuringMigration()), filesToHash)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
+	}
+
+	filesToHash := make([]turbopath.AnchoredSystemPath, len(absoluteFilesToHash))
+	for i, rawPath := range absoluteFilesToHash {
+		relativePathString, err := absolutePackagePath.RelativePathString(rawPath)
+
 		if err != nil {
-			return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
+			return nil, errors.Wrapf(err, "not relative to package: %v", rawPath)
 		}
-		result = hashes
-		// Note that in this scenario, we don't need to check git status, we're using hash-object directly which
-		// hashes the current state, not state at a commit
+
+		filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
+	}
+
+	// Note that in this scenario, we don't need to check git status, we're using hash-object directly which
+	// hashes the current state, not state at a commit
+	result, err := gitHashObject(absolutePackagePath, filesToHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
 	}
 
 	return result, nil
+}
+
+// GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
+func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
+	if len(p.InputPatterns) == 0 {
+		return getPackageFileHashesFromGitIndex(rootPath, p.PackagePath)
+	} else {
+		return getPackageFileHashesFromInputs(rootPath, p.PackagePath, p.InputPatterns)
+	}
 }
 
 func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
