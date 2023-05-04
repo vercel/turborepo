@@ -77,8 +77,11 @@ let BACKEND;
           reject(new Error("The DOM backend can only reload CSS chunks"));
           return;
         }
-        
-        const encodedChunkPath = encodeURIComponent(chunkPath).replace(/%2F/g, "/");
+
+        const encodedChunkPath = chunkPath
+          .split("/")
+          .map((p) => encodeURIComponent(p))
+          .join("/");
 
         const previousLink = document.querySelector(
           `link[rel=stylesheet][href^="/${encodedChunkPath}"]`
