@@ -566,7 +566,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             }?;
 
             Ok(Payload::Rust(Ok(0)))
-        },
+        }
         Command::Run(args) => {
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));

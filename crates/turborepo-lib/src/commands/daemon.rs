@@ -79,14 +79,12 @@ pub async fn daemon_server(base: &CommandBase, idle_time: &String) -> Result<(),
         folder.join_relative(logs).join_relative(file)
     };
 
-    let repo_root = AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("absolute");
-
     let timeout = go_parse_duration::parse_duration(idle_time)
         .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
         .map(|d| Duration::from_nanos(d as u64))?;
 
     let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
-    server.serve(repo_root).await;
+    server.serve().await;
 
     Ok(())
 }

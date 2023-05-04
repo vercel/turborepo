@@ -112,10 +112,10 @@ impl<T: Watcher> Drop for DaemonServer<T> {
 
 impl<T: Watcher + Send + 'static> DaemonServer<T> {
     /// Serve the daemon server, while also watching for filesystem changes.
-    pub async fn serve(mut self, repo_root: AbsoluteSystemPathBuf) -> CloseReason {
+    pub async fn serve(mut self) -> CloseReason {
         let stop = StopSource::new();
         let watcher = self.watcher.clone();
-        let watcher_fut = watcher.watch(repo_root.as_path().to_owned(), stop.token());
+        let watcher_fut = watcher.watch(stop.token());
 
         let timer = self.timeout.clone();
         let timeout_fut = timer.wait();
@@ -333,7 +333,7 @@ mod test {
         let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
 
         select! {
-            _ = daemon.serve(path) => panic!("must not close"),
+            _ = daemon.serve() => panic!("must not close"),
             _ = tokio::time::sleep(Duration::from_millis(10)) => (),
         }
 
@@ -370,7 +370,7 @@ mod test {
         let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
 
         let now = Instant::now();
-        let close_reason = daemon.serve(path).await;
+        let close_reason = daemon.serve().await;
 
         assert!(
             now.elapsed() >= Duration::from_millis(5),

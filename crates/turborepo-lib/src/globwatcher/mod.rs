@@ -27,7 +27,7 @@ const FLUSH_TIMEOUT: Duration = Duration::from_millis(500);
 /// particular hash have changed, that hash is no longer tracked.
 #[derive(Clone)]
 pub struct HashGlobWatcher<T: Watcher> {
-    relative_to: AbsoluteSystemPathBuf,
+    relative_to: PathBuf,
 
     /// maintains the list of <GlobSet> to watch for a given hash
     hash_globs: Arc<Mutex<HashMap<Hash, GlobSet>>>,
@@ -52,7 +52,7 @@ impl HashGlobWatcher<RecommendedWatcher> {
     ) -> Result<Self, globwatch::Error> {
         let (watcher, config) = GlobWatcher::new(flush_folder)?;
         Ok(Self {
-            relative_to,
+            relative_to: relative_to.as_path().canonicalize()?,
             hash_globs: Default::default(),
             glob_statuses: Default::default(),
             watcher: Arc::new(Mutex::new(Some(watcher))),
@@ -64,7 +64,7 @@ impl HashGlobWatcher<RecommendedWatcher> {
 impl<T: Watcher> HashGlobWatcher<T> {
     /// Watches a given path, using the flush_folder as temporary storage to
     /// make sure that file events are handled in the appropriate order.
-    pub async fn watch(&self, root_folder: PathBuf, token: StopToken) {
+    pub async fn watch(&self, token: StopToken) {
         let start_globs = {
             let lock = self.hash_globs.lock().expect("only fails if poisoned");
             lock.iter()
@@ -83,16 +83,16 @@ impl<T: Watcher> HashGlobWatcher<T> {
 
         // watch all the globs currently in the map
         for glob in start_globs {
-            self.config.include(&root_folder, &glob).await.ok();
+            self.config.include(&self.relative_to, &glob).await.ok();
         }
 
         while let Some(Ok(event)) = stream.next().await {
-            trace!("event: {:?}", event);
+            trace!("processing event: {:?}", event);
 
             let repo_relative_paths = event
                 .paths
                 .iter()
-                .filter_map(|path| path.strip_prefix(&root_folder).ok());
+                .filter_map(|path| path.strip_prefix(&self.relative_to).ok());
 
             // put these in a block so we can drop the locks before we await
             let globs_to_exclude = {
@@ -110,7 +110,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
             };
 
             for glob in globs_to_exclude {
-                self.config.exclude(self.relative_to.as_path(), &glob).await;
+                self.config.exclude(&self.relative_to, &glob).await;
             }
         }
     }
@@ -377,11 +377,10 @@ mod test {
         let stop = StopSource::new();
 
         let task_watcher = watcher.clone();
-        let watch_dir = dir.path().to_owned();
         let token = stop.token();
 
         // dropped when the test ends
-        let _s = tokio::task::spawn(async move { task_watcher.watch(watch_dir, token).await });
+        let _s = tokio::task::spawn(async move { task_watcher.watch(token).await });
 
         let hash = Arc::new("the-hash".to_string());
         let include = ["my-pkg/dist/**".to_string(), "my-pkg/.next/**".to_string()];
@@ -489,11 +488,10 @@ mod test {
         let stop = StopSource::new();
 
         let task_watcher = watcher.clone();
-        let watch_dir = dir.path().to_owned();
         let token = stop.token();
 
         // dropped when the test ends
-        let _s = tokio::task::spawn(async move { task_watcher.watch(watch_dir, token).await });
+        let _s = tokio::task::spawn(async move { task_watcher.watch(token).await });
 
         let hash1 = Arc::new("the-hash-1".to_string());
         let hash2 = Arc::new("the-hash-2".to_string());
@@ -607,11 +605,10 @@ mod test {
         let stop = StopSource::new();
 
         let task_watcher = watcher.clone();
-        let watch_dir = dir.path().to_owned();
         let token = stop.token();
 
         // dropped when the test ends
-        let _s = tokio::task::spawn(async move { task_watcher.watch(watch_dir, token).await });
+        let _s = tokio::task::spawn(async move { task_watcher.watch(token).await });
 
         let hash = Arc::new("the-hash".to_string());
         let inclusions = ["my-pkg/.next/next-file".to_string()];

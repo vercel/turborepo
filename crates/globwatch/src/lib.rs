@@ -60,6 +60,7 @@ impl GlobWatcher {
 
         // even if this fails, we may still be able to continue
         std::fs::create_dir_all(&flush_dir).ok();
+        let flush_dir = flush_dir.canonicalize()?;
 
         let mut watcher = notify::recommended_watcher(move |event: Result<Event, Error>| {
             let span = span!(tracing::Level::TRACE, "watcher");
@@ -113,7 +114,7 @@ impl GlobWatcher {
         token: stop_token::StopToken,
     ) -> impl Stream<Item = Result<Event, TimedOutError>> + Send + Sync + 'static + Unpin {
         let flush_id = Arc::new(AtomicU64::new(1));
-        let flush_dir = Arc::new(self.flush_dir.clone());
+        let flush_dir = Arc::new(self.flush_dir);
         let flush = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<()>>::new()));
 
         Box::pin(
