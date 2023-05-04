@@ -95,16 +95,6 @@
 <a href="#95" id="95">95</a>
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -113,7 +103,6 @@
 
 <span class="kw">use super</span>::{Issue, IssueVc};
 <span class="kw">use crate</span>::{
-    error::PrettyPrintError,
     issue::{IssueSeverityVc, OptionIssueSourceVc},
     resolve::{options::ResolveOptionsVc, parse::RequestVc},
 };
@@ -190,16 +179,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(import_map) = <span class="kw-2">&amp;</span><span class="self">self</span>.resolve_options.<span class="kw">await</span><span class="question-mark">?</span>.import_map {
             <span class="kw">let </span>result = import_map.lookup(<span class="self">self</span>.context, <span class="self">self</span>.request);
 
-            <span class="kw">match </span>result.to_string().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(str) =&gt; <span class="macro">writeln!</span>(detail, <span class="string">&quot;Import map: {}&quot;</span>, str)<span class="question-mark">?</span>,
-                <span class="prelude-val">Err</span>(err) =&gt; {
-                    <span class="macro">writeln!</span>(
-                        detail,
-                        <span class="string">&quot;Error while looking up import map: {}&quot;</span>,
-                        PrettyPrintError(<span class="kw-2">&amp;</span>err)
-                    )<span class="question-mark">?</span>;
-                }
-            }
+            <span class="macro">writeln!</span>(detail, <span class="string">&quot;Import map: {}&quot;</span>, result.to_string().<span class="kw">await</span><span class="question-mark">?</span>)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(StringVc::cell(detail))
     }
