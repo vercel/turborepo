@@ -9,8 +9,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
-	gitignore "github.com/sabhiram/go-gitignore"
-	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/hashing"
@@ -86,14 +84,6 @@ func (pfs packageFileSpec) ToKey() packageFileHashKey {
 	return packageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
 }
 
-func safeCompileIgnoreFile(filepath string) (*gitignore.GitIgnore, error) {
-	if fs.FileExists(filepath) {
-		return gitignore.CompileIgnoreFile(filepath)
-	}
-	// no op
-	return gitignore.CompileIgnoreLines([]string{}...), nil
-}
-
 func (pfs *packageFileSpec) getHashObject(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) map[turbopath.AnchoredUnixPath]string {
 	hashObject, pkgDepsErr := hashing.GetPackageDeps(repoRoot, &hashing.PackageDepsOptions{
 		PackagePath:   pkg.Dir,
@@ -119,82 +109,7 @@ func (pfs *packageFileSpec) hash(hashObject map[turbopath.AnchoredUnixPath]strin
 }
 
 func manuallyHashPackage(pkg *fs.PackageJSON, inputs []string, rootPath turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	hashObject := make(map[turbopath.AnchoredUnixPath]string)
-	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
-	// the directory of a package.
-	ignore, err := safeCompileIgnoreFile(rootPath.UntypedJoin(".gitignore").ToString())
-	if err != nil {
-		return nil, err
-	}
-
-	ignorePkg, err := safeCompileIgnoreFile(rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration(), ".gitignore").ToString())
-	if err != nil {
-		return nil, err
-	}
-
-	pathPrefix := rootPath.UntypedJoin(pkg.Dir.ToStringDuringMigration())
-	includePattern := ""
-	excludePattern := ""
-	if len(inputs) > 0 {
-		var includePatterns []string
-		var excludePatterns []string
-		for _, pattern := range inputs {
-			if len(pattern) > 0 && pattern[0] == '!' {
-				excludePatterns = append(excludePatterns, pathPrefix.UntypedJoin(pattern[1:]).ToString())
-			} else {
-				includePatterns = append(includePatterns, pathPrefix.UntypedJoin(pattern).ToString())
-			}
-		}
-		if len(includePatterns) > 0 {
-			includePattern = "{" + strings.Join(includePatterns, ",") + "}"
-		}
-		if len(excludePatterns) > 0 {
-			excludePattern = "{" + strings.Join(excludePatterns, ",") + "}"
-		}
-	}
-
-	err = fs.Walk(pathPrefix.ToStringDuringMigration(), func(name string, isDir bool) error {
-		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
-		rootMatch := ignore.MatchesPath(convertedName.ToString())
-		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
-		if !rootMatch && !otherMatch {
-			if !isDir {
-				if includePattern != "" {
-					val, err := doublestar.PathMatch(includePattern, convertedName.ToString())
-					if err != nil {
-						return err
-					}
-					if !val {
-						return nil
-					}
-				}
-				if excludePattern != "" {
-					val, err := doublestar.PathMatch(excludePattern, convertedName.ToString())
-					if err != nil {
-						return err
-					}
-					if val {
-						return nil
-					}
-				}
-				hash, err := fs.GitLikeHashFile(convertedName.ToString())
-				if err != nil {
-					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
-				}
-
-				relativePath, err := convertedName.RelativeTo(pathPrefix)
-				if err != nil {
-					return fmt.Errorf("File path cannot be made relative: %w", err)
-				}
-				hashObject[relativePath.ToUnixPath()] = hash
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return hashObject, nil
+	return hashing.GetPackageFileHashesFromProcessingGitIgnore(rootPath, pkg.Dir, inputs)
 }
 
 // packageFileHashes is a map from a package and optional input globs to the hash of
