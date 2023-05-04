@@ -41,7 +41,7 @@ func ExecutePrune(helper *cmdutil.Helper, executionState *turbostate.ExecutionSt
 	p := &prune{
 		base,
 	}
-	if err := p.prune(executionState.CLIArgs.Command.Prune); err != nil {
+	if err := p.prune(executionState.CLIArgs.Command.Prune, executionState.PackageManager); err != nil {
 		logError(p.base.Logger, p.base.UI, err)
 		return err
 	}
@@ -59,13 +59,13 @@ type prune struct {
 }
 
 // Prune creates a smaller monorepo with only the required workspaces
-func (p *prune) prune(opts *turbostate.PrunePayload) error {
+func (p *prune) prune(opts *turbostate.PrunePayload, packageManagerName string) error {
 	rootPackageJSONPath := p.base.RepoRoot.UntypedJoin("package.json")
 	rootPackageJSON, err := fs.ReadPackageJSON(rootPackageJSONPath)
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
-	ctx, err := context.BuildPackageGraph(p.base.RepoRoot, rootPackageJSON)
+	ctx, err := context.BuildPackageGraph(p.base.RepoRoot, rootPackageJSON, packageManagerName)
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}

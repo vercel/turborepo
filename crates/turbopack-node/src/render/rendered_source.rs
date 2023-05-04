@@ -186,6 +186,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
         ContentSourceDataVary {
             method: true,
             url: true,
+            original_url: true,
             raw_headers: true,
             raw_query: true,
             ..Default::default()
@@ -202,6 +203,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
         let ContentSourceData {
             method: Some(method),
             url: Some(url),
+            original_url: Some(original_url),
             raw_headers: Some(raw_headers),
             raw_query: Some(raw_query),
             ..
@@ -224,16 +226,17 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
                 params: params.clone(),
                 method: method.clone(),
                 url: url.clone(),
+                original_url: original_url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: format!("/{}", source.pathname.await?),
+                path: source.pathname.await?.clone_value(),
                 data: Some(self.render_data.await?),
             }
             .cell(),
         )
         .issue_context(
             entry.module.ident().path(),
-            format!("server-side rendering /{}", source.pathname.await?),
+            format!("server-side rendering {}", source.pathname.await?),
         )
         .await?;
         Ok(match *result.await? {

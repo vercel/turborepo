@@ -76,6 +76,7 @@ Setup
     "globalCacheInputs",
     "id",
     "packages",
+    "scm",
     "tasks",
     "turboVersion",
     "version"
