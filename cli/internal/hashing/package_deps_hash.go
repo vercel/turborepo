@@ -236,17 +236,18 @@ func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath tur
 			return result
 		}
 		return result
-	} else {
-		result, err := getPackageFileHashesFromInputs(rootPath, packagePath, inputs)
+	}
+
+	result, err := getPackageFileHashesFromInputs(rootPath, packagePath, inputs)
+	if err != nil {
+		result, err := getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, inputs)
 		if err != nil {
-			result, err := getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, inputs)
-			if err != nil {
-				return make(map[turbopath.AnchoredUnixPath]string)
-			}
-			return result
+			return make(map[turbopath.AnchoredUnixPath]string)
 		}
 		return result
 	}
+	return result
+
 }
 
 func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
