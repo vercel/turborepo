@@ -318,7 +318,7 @@ mod test {
                 Args {
                     ..Default::default()
                 },
-                path.as_path().to_path_buf(),
+                path.clone(),
                 "test",
             )
             .unwrap(),
@@ -358,7 +358,7 @@ mod test {
                 Args {
                     ..Default::default()
                 },
-                path.as_path().to_path_buf(),
+                path.clone(),
                 "test",
             )
             .unwrap(),
