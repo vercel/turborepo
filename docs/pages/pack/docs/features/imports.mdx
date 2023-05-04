@@ -14,14 +14,6 @@ const { add } = require('./math');
 add(1, 2);
 ```
 
-We also support dynamic `require()` syntax, for if you want to import a dynamically named asset:
-
-```ts
-const imgName = getRandomImgName();
-
-const img = require(`./images/${imgName}.png`);
-```
-
 ## ESM
 
 Importing via the `import` syntax is also supported out-of-the-box. This includes static assets, and `import type`:
