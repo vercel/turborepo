@@ -65,18 +65,27 @@ impl TurboSubscriber {
     /// This allows us to register additional layers after setup, for example
     /// when configuring logrotation in the daemon.
     pub fn new_with_verbosity(verbosity: usize, ui: &UI) -> Self {
-        let max_level = match verbosity {
-            0 => LevelFilter::WARN,
-            1 => LevelFilter::INFO,
-            2 => LevelFilter::DEBUG,
-            _ => LevelFilter::TRACE,
+        let level_override = match verbosity {
+            0 => None,
+            1 => Some(LevelFilter::INFO),
+            2 => Some(LevelFilter::DEBUG),
+            _ => Some(LevelFilter::TRACE),
+        };
+
+        let filter = EnvFilter::builder()
+            .with_default_directive(LevelFilter::WARN.into())
+            .with_env_var("TURBO_LOG_VERBOSITY")
+            .from_env_lossy();
+
+        let filter = if let Some(max_level) = level_override {
+            filter.add_directive(max_level.into())
+        } else {
+            filter
         };
 
         let stdout = fmt::layer()
             .event_format(TurboFormatter::new_with_ansi(!ui.should_strip_ansi))
-            .with_filter(
-                EnvFilter::from_env("TURBO_LOG_VERBOSITY").add_directive(max_level.into()),
-            );
+            .with_filter(filter);
 
         // we set this layer to None to start with, effectively disabling it
         let (logrotate, update) = reload::Layer::new(Option::<DaemonLog>::None);
