@@ -88,6 +88,8 @@ impl Lockfile for NpmLockfile {
                             .into_iter()
                             .find_map(|possible_key| {
                                 self.packages.get(&possible_key).map(|entry| {
+                                    // We should instead look at the "resolved" field and handle
+                                    // that
                                     let version = entry.version.as_deref().ok_or_else(|| {
                                         Error::MissingVersion(possible_key.clone())
                                     })?;
@@ -189,7 +191,6 @@ impl NpmPackage {
             .keys()
             .chain(self.dev_dependencies.keys())
             .chain(self.optional_dependencies.keys())
-            .chain(self.peer_dependencies.keys())
     }
 }
 
@@ -393,6 +394,34 @@ mod test {
             serde_json::to_string_pretty(&lockfile)?,
             serde_json::to_string_pretty(&lockfile)?,
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_workspace_peer_dependencies() -> Result<(), Error> {
+        let lockfile =
+            NpmLockfile::load(include_bytes!("../fixtures/workspace-peer-dependency.json"))?;
+        let closures = crate::all_transitive_closures(
+            &lockfile,
+            vec![
+                (
+                    "packages/a".into(),
+                    vec![("eslint-plugin-turbo".into(), "^1.9.3".into())]
+                        .into_iter()
+                        .collect(),
+                ),
+                ("packages/b".into(), HashMap::new()),
+                ("packages/c".into(), HashMap::new()),
+            ]
+            .into_iter()
+            .collect(),
+        )?;
+        assert!(closures.get("packages/a").unwrap().contains(&Package {
+            key: "node_modules/eslint-plugin-turbo".into(),
+            version: "1.9.3".into()
+        }));
+        assert!(closures.get("packages/b").unwrap().is_empty());
+        assert!(closures.get("packages/c").unwrap().is_empty());
         Ok(())
     }
 }
