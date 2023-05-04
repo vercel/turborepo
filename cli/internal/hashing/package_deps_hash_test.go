@@ -419,7 +419,10 @@ func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to write contents to .gitignore: %v", err)
 	}
-	rootIgnoreFile.Close()
+	err = rootIgnoreFile.Close()
+	if err != nil {
+		t.Fatalf("failed to close root ignore file")
+	}
 	pkgIgnoreFilename := pkgName.RestoreAnchor(repoRoot).Join(".gitignore")
 	err = pkgIgnoreFilename.EnsureDir()
 	if err != nil {
@@ -433,7 +436,10 @@ func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to write contents to libA/.gitignore: %v", err)
 	}
-	pkgIgnoreFile.Close()
+	err = pkgIgnoreFile.Close()
+	if err != nil {
+		t.Fatalf("failed to close package ignore file")
+	}
 	for path, spec := range files {
 		filename := path.ToSystemPath().RestoreAnchor(repoRoot)
 		err = filename.EnsureDir()
@@ -448,7 +454,10 @@ func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to write contents to %v: %v", filename, err)
 		}
-		f.Close()
+		err = f.Close()
+		if err != nil {
+			t.Fatalf("failed to close package ignore file")
+		}
 	}
 	// now that we've created the repo, expect our .gitignore file too
 	files[turbopath.AnchoredUnixPath("child-dir/libA/.gitignore")] = fileHash{contents: "", hash: "3237694bc3312ded18386964a855074af7b066af"}
