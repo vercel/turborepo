@@ -31,12 +31,12 @@ type Tracker struct {
 	globalHash string
 	pipeline   fs.Pipeline
 
-	packageInputsHashes packageFileHashes
+	packageInputsHashes map[string]string
 
 	// packageInputsExpandedHashes is a map of a hashkey to a list of files that are inputs to the task.
 	// Writes to this map happen during CalculateFileHash(). Since this happens synchronously
 	// before walking the task graph, it does not need to be protected by a mutex.
-	packageInputsExpandedHashes map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string
+	packageInputsExpandedHashes map[string]map[turbopath.AnchoredUnixPath]string
 
 	// mu is a mutex that we can lock/unlock to read/write from maps
 	// the fields below should be protected by the mutex.
@@ -62,43 +62,12 @@ func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Track
 	}
 }
 
-// packageFileSpec defines a combination of a package and optional set of input globs
-type packageFileSpec struct {
-	pkg    string
-	inputs []string
+// packageFileHashInputs defines a combination of a package and optional set of input globs
+type packageFileHashInputs struct {
+	taskID         string
+	taskDefinition *fs.TaskDefinition
+	packageName    string
 }
-
-func specFromPackageTask(packageTask *nodes.PackageTask) packageFileSpec {
-	return packageFileSpec{
-		pkg:    packageTask.PackageName,
-		inputs: packageTask.TaskDefinition.Inputs,
-	}
-}
-
-// packageFileHashKey is a hashable representation of a packageFileSpec.
-type packageFileHashKey string
-
-// hashes the inputs for a packageTask
-func (pfs packageFileSpec) ToKey() packageFileHashKey {
-	sort.Strings(pfs.inputs)
-	return packageFileHashKey(fmt.Sprintf("%v#%v", pfs.pkg, strings.Join(pfs.inputs, "!")))
-}
-
-func (pfs *packageFileSpec) getHashObject(pkg *fs.PackageJSON, repoRoot turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	return hashing.GetPackageFileHashes(repoRoot, pkg.Dir, pfs.inputs)
-}
-
-func (pfs *packageFileSpec) hash(hashObject map[turbopath.AnchoredUnixPath]string) (string, error) {
-	hashOfFiles, otherErr := fs.HashObject(hashObject)
-	if otherErr != nil {
-		return "", otherErr
-	}
-	return hashOfFiles, nil
-}
-
-// packageFileHashes is a map from a package and optional input globs to the hash of
-// the matched files in the package.
-type packageFileHashes map[packageFileHashKey]string
 
 // CalculateFileHashes hashes each unique package-inputs combination that is present
 // in the task graph. Must be called before calculating task hashes.
@@ -119,8 +88,9 @@ func (th *Tracker) CalculateFileHashes(
 		if taskID == th.rootNode {
 			continue
 		}
-		pkgName, _ := util.GetPackageTaskFromId(taskID)
-		if pkgName == th.rootNode {
+
+		packageName, _ := util.GetPackageTaskFromId(taskID)
+		if packageName == th.rootNode {
 			continue
 		}
 
@@ -129,45 +99,51 @@ func (th *Tracker) CalculateFileHashes(
 			return fmt.Errorf("missing pipeline entry %v", taskID)
 		}
 
-		pfs := &packageFileSpec{
-			pkg:    pkgName,
-			inputs: taskDefinition.Inputs,
+		pfs := &packageFileHashInputs{
+			taskID,
+			taskDefinition,
+			packageName,
 		}
 
 		hashTasks.Add(pfs)
 	}
 
-	hashes := make(map[packageFileHashKey]string, len(hashTasks))
-	hashObjects := make(map[packageFileHashKey]map[turbopath.AnchoredUnixPath]string, len(hashTasks))
-	hashQueue := make(chan *packageFileSpec, workerCount)
+	hashes := make(map[string]string, len(hashTasks))
+	hashObjects := make(map[string]map[turbopath.AnchoredUnixPath]string, len(hashTasks))
+	hashQueue := make(chan *packageFileHashInputs, workerCount)
 	hashErrs := &errgroup.Group{}
 
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
-			for packageFileSpec := range hashQueue {
-				pkg, ok := workspaceInfos.PackageJSONs[packageFileSpec.pkg]
+			for packageFileHashInputs := range hashQueue {
+				pkg, ok := workspaceInfos.PackageJSONs[packageFileHashInputs.packageName]
 				if !ok {
-					return fmt.Errorf("cannot find package %v", packageFileSpec.pkg)
+					return fmt.Errorf("cannot find package %v", packageFileHashInputs.packageName)
 				}
-				hashObject, err := packageFileSpec.getHashObject(pkg, repoRoot)
+
+				// Get the hashes of each file, keyed by the path.
+				hashObject, err := hashing.GetPackageFileHashes(repoRoot, pkg.Dir, packageFileHashInputs.taskDefinition.Inputs)
 				if err != nil {
 					return err
 				}
-				hash, err := packageFileSpec.hash(hashObject)
+
+				// Get the combined hash of all the files.
+				hash, err := fs.HashObject(hashObject)
 				if err != nil {
 					return err
 				}
+
+				// Save off the hash information, keyed by package task.
 				th.mu.Lock()
-				pfsKey := packageFileSpec.ToKey()
-				hashes[pfsKey] = hash
-				hashObjects[pfsKey] = hashObject
+				hashes[packageFileHashInputs.taskID] = hash
+				hashObjects[packageFileHashInputs.taskID] = hashObject
 				th.mu.Unlock()
 			}
 			return nil
 		})
 	}
 	for ht := range hashTasks {
-		hashQueue <- ht.(*packageFileSpec)
+		hashQueue <- ht.(*packageFileHashInputs)
 	}
 	close(hashQueue)
 	err := hashErrs.Wait()
@@ -272,12 +248,9 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
 func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string, useOldTaskHashable bool) (string, error) {
-	pfs := specFromPackageTask(packageTask)
-	pkgFileHashKey := pfs.ToKey()
-
-	hashOfFiles, ok := th.packageInputsHashes[pkgFileHashKey]
+	hashOfFiles, ok := th.packageInputsHashes[packageTask.TaskID]
 	if !ok {
-		return "", fmt.Errorf("cannot find package-file hash for %v", pkgFileHashKey)
+		return "", fmt.Errorf("cannot find package-file hash for %v", packageTask.TaskID)
 	}
 
 	var keyMatchers []string
@@ -333,8 +306,7 @@ func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencyS
 
 // GetExpandedInputs gets the expanded set of inputs for a given PackageTask
 func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopath.AnchoredUnixPath]string {
-	pfs := specFromPackageTask(packageTask)
-	expandedInputs := th.packageInputsExpandedHashes[pfs.ToKey()]
+	expandedInputs := th.packageInputsExpandedHashes[packageTask.TaskID]
 	inputsCopy := make(map[turbopath.AnchoredUnixPath]string, len(expandedInputs))
 
 	for path, hash := range expandedInputs {
