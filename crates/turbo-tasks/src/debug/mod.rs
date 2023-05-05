@@ -284,6 +284,52 @@ tuple_impls! { A B C D E F G H I J }
 tuple_impls! { A B C D E F G H I J K }
 tuple_impls! { A B C D E F G H I J K L }
 
+impl<T, E> ValueDebugFormat for Result<T, E>
+where
+    T: ValueDebugFormat,
+    E: ValueDebugFormat,
+{
+    fn value_debug_format(&self, depth: usize) -> ValueDebugFormatString {
+        if depth == 0 {
+            return ValueDebugFormatString::Sync(std::any::type_name::<Self>().to_string());
+        }
+        type Good<'a> = Result<PassthroughDebug<'a>, ()>;
+        type Bad<'a> = Result<(), PassthroughDebug<'a>>;
+        match self {
+            Ok(value) => match value.value_debug_format(depth.saturating_sub(1)) {
+                ValueDebugFormatString::Sync(string) => ValueDebugFormatString::Sync(format!(
+                    "{:#?}",
+                    Good::Ok(PassthroughDebug::new_string(string))
+                )),
+                ValueDebugFormatString::Async(future) => {
+                    ValueDebugFormatString::Async(Box::pin(async move {
+                        let string = future.await?;
+                        Ok(format!(
+                            "{:#?}",
+                            Good::Ok(PassthroughDebug::new_string(string))
+                        ))
+                    }))
+                }
+            },
+            Err(error) => match error.value_debug_format(depth.saturating_sub(1)) {
+                ValueDebugFormatString::Sync(string) => ValueDebugFormatString::Sync(format!(
+                    "{:#?}",
+                    Bad::Err(PassthroughDebug::new_string(string))
+                )),
+                ValueDebugFormatString::Async(future) => {
+                    ValueDebugFormatString::Async(Box::pin(async move {
+                        let string = future.await?;
+                        Ok(format!(
+                            "{:#?}",
+                            Bad::Err(PassthroughDebug::new_string(string))
+                        ))
+                    }))
+                }
+            },
+        }
+    }
+}
+
 /// Output of `ValueDebugFormat::value_debug_format`.
 pub enum ValueDebugFormatString<'a> {
     /// For the `T: Debug` fallback implementation, we can output a string

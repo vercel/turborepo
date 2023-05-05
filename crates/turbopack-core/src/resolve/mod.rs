@@ -27,10 +27,8 @@ use self::{
 };
 use crate::{
     asset::{Asset, AssetOptionVc, AssetVc, AssetsVc},
-    issue::{
-        package_json::{PackageJsonIssue, PackageJsonIssueVc},
-        resolve::{ResolvingIssue, ResolvingIssueVc},
-    },
+    issue::resolve::{ResolvingIssue, ResolvingIssueVc},
+    package_json::{read_package_json, PackageJsonIssue, PackageJsonIssueVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::ReferenceType,
     resolve::{
