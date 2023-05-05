@@ -375,7 +375,7 @@ func (c *Connector) waitForSocket() error {
 
 // startDaemon starts the daemon and returns the pid for the new process
 func (c *Connector) startDaemon() (int, error) {
-	args := []string{"daemon"}
+	args := []string{"--skip-infer", "daemon"}
 	if c.Opts.ServerTimeout != 0 {
 		args = append(args, fmt.Sprintf("--idle-time=%v", c.Opts.ServerTimeout.String()))
 	}
