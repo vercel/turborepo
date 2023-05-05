@@ -6,16 +6,16 @@ mod commands;
 mod config;
 mod daemon;
 mod execution_state;
-mod formatter;
 pub(crate) mod globwatcher;
 mod package_json;
 mod package_manager;
 mod shim;
+mod tracing;
 mod ui;
 
+use ::tracing::error;
 use anyhow::Result;
 pub use child::spawn_child;
-use tracing::error;
 
 pub use crate::{cli::Args, execution_state::ExecutionState};
 use crate::{commands::CommandBase, package_manager::PackageManager};

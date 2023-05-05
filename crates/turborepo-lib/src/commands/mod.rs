@@ -35,10 +35,11 @@ impl CommandBase {
         args: Args,
         repo_root: AbsoluteSystemPathBuf,
         version: &'static str,
+        ui: UI,
     ) -> Result<Self> {
         Ok(Self {
             repo_root,
-            ui: args.ui(),
+            ui,
             args,
             repo_config: OnceCell::new(),
             user_config: OnceCell::new(),
@@ -167,7 +168,7 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::get_version;
+    use crate::{get_version, ui::UI};
 
     #[cfg(not(target_os = "windows"))]
     #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
@@ -177,7 +178,7 @@ mod test {
 
         let args = Args::default();
         let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version()).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true)).unwrap();
 
         let hash = command_base.repo_hash();
 
@@ -193,7 +194,7 @@ mod test {
 
         let args = Args::default();
         let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version()).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true)).unwrap();
 
         let hash = command_base.repo_hash();
 

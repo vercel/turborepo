@@ -17,6 +17,7 @@ use crate::{
     commands::{bin, daemon, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
+    tracing::TurboSubscriber,
     ui::UI,
     Payload,
 };
@@ -432,10 +433,16 @@ pub enum LogPrefix {
 /// * `repo_state`: If we have done repository inference and NOT executed
 /// local turbo, such as in the case where `TURBO_BINARY_PATH` is set,
 /// we use it here to modify clap's arguments.
+/// * `logger`: The logger to use for the run.
+/// * `ui`: The UI to use for the run.
 ///
 /// returns: Result<Payload, Error>
 #[tokio::main]
-pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
+pub async fn run(
+    repo_state: Option<RepoState>,
+    logger: &TurboSubscriber,
+    ui: UI,
+) -> Result<Payload> {
     let mut cli_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
@@ -502,7 +509,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            let mut base = CommandBase::new(cli_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
@@ -515,7 +522,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             let sso_team = sso_team.clone();
 
-            let mut base = CommandBase::new(cli_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
 
             if let Some(sso_team) = sso_team {
                 login::sso_login(&mut base, &sso_team).await?;
@@ -536,7 +543,7 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             let modify_gitignore = !*no_gitignore;
             let to = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
 
             if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
                 error!("error: {}", err.to_string())
@@ -551,18 +558,18 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             }
 
             let from = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
 
             unlink::unlink(&mut base, from)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Daemon { command, idle_time } => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version)?;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
-                None => daemon::daemon_server(&base, idle_time).await,
+                None => daemon::daemon_server(&base, idle_time, logger).await,
             }?;
 
             Ok(Payload::Rust(Ok(0)))
@@ -571,29 +578,17 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
-            let base = CommandBase::new(cli_args, repo_root, version)?;
+            let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
             Ok(Payload::Go(Box::new(base)))
         }
         Command::Prune { .. } => {
-            let base = CommandBase::new(cli_args, repo_root, version)?;
+            let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
             Ok(Payload::Go(Box::new(base)))
         }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
             Ok(Payload::Rust(Ok(0)))
-        }
-    }
-}
-
-impl Args {
-    pub fn ui(&self) -> UI {
-        if self.no_color {
-            UI::new(true)
-        } else if self.color {
-            UI::new(false)
-        } else {
-            UI::infer()
         }
     }
 }

@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 
+	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/xxhash"
 )
 
@@ -19,25 +19,10 @@ func HashObject(i interface{}) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), err
 }
 
-func HashFile(filePath string) (string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	hash := xxhash.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
 // GitLikeHashFile is a function that mimics how Git
 // calculates the SHA1 for a file (or, in Git terms, a "blob") (without git)
-func GitLikeHashFile(filePath string) (string, error) {
-	file, err := os.Open(filePath)
+func GitLikeHashFile(filePath turbopath.AbsoluteSystemPath) (string, error) {
+	file, err := filePath.Open()
 	if err != nil {
 		return "", err
 	}

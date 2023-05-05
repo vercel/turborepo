@@ -25,7 +25,7 @@ const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 ///
 /// note: the running param is used by the windows
 ///       code path to shut down the non-blocking polling
-pub async fn open_socket(
+pub async fn listen_socket(
     path: AbsoluteSystemPathBuf,
     #[allow(unused)] running: Arc<AtomicBool>,
 ) -> Result<
@@ -39,11 +39,12 @@ pub async fn open_socket(
     let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
     let mut lock = pidlock::Pidlock::new(pid_path.as_path().to_owned());
 
-    debug!("opening socket at {} {}", pid_path, sock_path);
-
     // this will fail if the pid is already owned
     lock.acquire()?;
     std::fs::remove_file(&sock_path).ok();
+
+    debug!("pidlock acquired as {}", pid_path);
+    debug!("listening on socket at {}", sock_path);
 
     #[cfg(unix)]
     {
