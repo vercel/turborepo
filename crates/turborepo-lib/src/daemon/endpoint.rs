@@ -10,9 +10,12 @@ use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SocketOpenError {
+    /// Returned when there is an IO error opening the socket,
+    /// such as the path being too long, or the path being
+    /// invalid.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("pidlock error")]
+    #[error("pidlock error: {0}")]
     LockError(#[from] pidlock::PidlockError),
 }
 
@@ -43,7 +46,7 @@ pub async fn listen_socket(
     lock.acquire()?;
     std::fs::remove_file(&sock_path).ok();
 
-    debug!("pidlock acquired as {}", pid_path);
+    debug!("pidlock acquired at {}", pid_path);
     debug!("listening on socket at {}", sock_path);
 
     #[cfg(unix)]
