@@ -193,7 +193,7 @@ fn glob_match_internal<'a>(
             continue;
           }
         }
-        b'{' if state.path_index < path.len() => {
+        b'{' => {
           if brace_stack.length as usize >= brace_stack.stack.len() {
             // Invalid pattern! Too many nested braces.
             return None;
@@ -208,8 +208,9 @@ fn glob_match_internal<'a>(
         }
         b'}' if brace_stack.length > 0 => {
           // If we hit the end of the braces, we matched the last option.
-          brace_stack.longest_brace_match =
-            brace_stack.longest_brace_match.max(state.path_index as u32);
+          brace_stack.longest_brace_match = brace_stack
+            .longest_brace_match
+            .max(Some(state.path_index as u32));
           state.glob_index += 1;
           state = brace_stack.pop(&state, &mut captures);
           continue;
@@ -217,8 +218,9 @@ fn glob_match_internal<'a>(
         b',' if brace_stack.length > 0 => {
           // If we hit a comma, we matched one of the options!
           // But we still need to check the others in case there is a longer match.
-          brace_stack.longest_brace_match =
-            brace_stack.longest_brace_match.max(state.path_index as u32);
+          brace_stack.longest_brace_match = brace_stack
+            .longest_brace_match
+            .max(Some(state.path_index as u32));
           state.path_index = brace_stack.last().path_index;
           state.glob_index += 1;
           state.wildcard = Wildcard::default();
@@ -243,7 +245,7 @@ fn glob_match_internal<'a>(
 
             if brace_stack.length > 0 && state.glob_index > 0 && glob[state.glob_index - 1] == b'}'
             {
-              brace_stack.longest_brace_match = state.path_index as u32;
+              brace_stack.longest_brace_match = Some(state.path_index as u32);
               state = brace_stack.pop(&state, &mut captures);
             }
             state.glob_index += 1;
@@ -275,7 +277,7 @@ fn glob_match_internal<'a>(
 
       // Hit the end. Pop the stack.
       // If we matched a previous option, use that.
-      if brace_stack.longest_brace_match > 0 {
+      if brace_stack.longest_brace_match.is_some() {
         state = brace_stack.pop(&state, &mut captures);
         continue;
       } else {
@@ -296,7 +298,7 @@ fn glob_match_internal<'a>(
   }
 
   if brace_stack.length > 0 && state.glob_index > 0 && glob[state.glob_index - 1] == b'}' {
-    brace_stack.longest_brace_match = state.path_index as u32;
+    brace_stack.longest_brace_match = Some(state.path_index as u32);
     brace_stack.pop(&state, &mut captures);
   }
 
@@ -503,7 +505,7 @@ fn skip_globstars(glob: &[u8], mut glob_index: usize) -> usize {
 struct BraceStack {
   stack: [State; 10],
   length: u32,
-  longest_brace_match: u32,
+  longest_brace_match: Option<u32>, // handle 0-width matches
 }
 
 impl Default for BraceStack {
@@ -513,7 +515,7 @@ impl Default for BraceStack {
     BraceStack {
       stack: [State::default(); 10],
       length: 0,
-      longest_brace_match: 0,
+      longest_brace_match: None,
     }
   }
 }
@@ -536,7 +538,7 @@ impl BraceStack {
   fn pop(&mut self, state: &State, captures: &mut Option<&mut Vec<Capture>>) -> State {
     self.length -= 1;
     let mut state = State {
-      path_index: self.longest_brace_match as usize,
+      path_index: self.longest_brace_match.unwrap_or(0) as usize,
       glob_index: state.glob_index,
       // But restore star state if needed later.
       wildcard: self.stack[self.length as usize].wildcard,
@@ -544,7 +546,7 @@ impl BraceStack {
       capture_index: self.stack[self.length as usize].capture_index,
     };
     if self.length == 0 {
-      self.longest_brace_match = 0;
+      self.longest_brace_match = None;
     }
     state.extend_capture(captures);
     if let Some(captures) = captures {
@@ -1996,6 +1998,8 @@ mod tests {
   #[test_case("*{a,b}*", "xbx")]
   #[test_case("*{*a,b}", "xba")]
   #[test_case("*{*a,b}", "xb")]
+  #[test_case("a{,bc}", "a")]
+  #[test_case("a{,bc}", "abc")]
   #[test_case("*???", "aaa" ; "aaa 1")]
   #[test_case("*****???", "aaa" ; "aaa 2")]
   #[test_case("a*?c", "aac")]
