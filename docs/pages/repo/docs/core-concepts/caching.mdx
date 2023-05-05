@@ -437,7 +437,6 @@ First, `turbo` constructs a hash of the current global state of the codebase:
 Then it adds more factors relevant to a given workspace's task:
 
 - Hash the contents of all version-controlled files in the workspace folder or the files matching the `inputs` globs, if present
-- The hashes of all internal dependencies
 - The `outputs` option specified in the [`pipeline`](/repo/docs/reference/configuration#pipeline)
 - The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a workspace's `package.json` from the root lockfile
 - The workspace task's name
