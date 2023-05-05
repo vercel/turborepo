@@ -5,6 +5,7 @@ description: Turborepo helps you specify task dependencies declaratively.
 
 import Callout from "../../../../../components/Callout";
 import HeartIcon from "@heroicons/react/solid/HeartIcon";
+import { Tabs, Tab } from '../../../../../components/Tabs'
 
 # Running Tasks in a Monorepo
 
@@ -304,12 +305,74 @@ In this pipeline, we create an intermediary placeholder `topo` task. Since we do
   fanning out tasks in such a concise and elegant way.
 </Callout>
 
-### Tips
+### Incremental Adoption
 
-#### Tasks that are in the `pipeline` but not in SOME `package.json`
+After you've declared a task in `turbo.json`, it's up to you to implement it in
+your `package.json` manifests. You can add scripts all at once, or one workspace
+at at a time. Turborepo will gracefully skip workspaces that don't include the
+task in their respective package.json manifest. We think this is a great way to
+try out Turborepo without making large changes to your codebase.
 
-Sometimes tasks declared in the `pipeline` are not present in all workspaces' `package.json` files. `turbo` will gracefully ignore those. No problem!
+For example, if your repository has three workspaces:
 
-#### `pipeline` tasks are the only ones that `turbo` knows about
+```bash
+apps/
+  web/package.json
+  docs/package.json
+packages/
+  ui/package.json
+turbo.json
+package.json
+```
 
-`turbo` will only account for tasks declared in the `pipeline` configuration. If it's not listed there, `turbo` will not know how to run them.
+where `turbo.json` declares a `build` task, but only two `package.json`'s implement that `build`
+task:
+
+<Tabs items={['turbo.json', 'web', 'docs', 'ui']} storageKey="skipped-tasks-example">
+  <Tab>
+  ```jsonc filename="turbo.json"
+  {
+    "$schema": "https://turbo.build/schema.json",
+    "pipeline": {
+      "build": {}
+    }
+  }
+  ```
+  </Tab>
+  <Tab>
+   ```jsonc filename="apps/web/package.json"
+  {
+    "name": "web",
+    "scripts": {
+      "build": "next build"
+    }
+  }
+  ```
+  </Tab>
+  <Tab>
+   ```jsonc filename="apps/docs/package.json"
+  {
+    "name": "docs",
+    "scripts": {
+      "build": "svelte build"
+    }
+  }
+  ```
+  </Tab>
+  <Tab>
+  ⚠️ Note the missing `build` script!
+   ```jsonc filename="packages/ui/package.json"
+  {
+    "name": "ui",
+    "scripts": {}
+  }
+  ```
+  </Tab>
+</Tabs>
+
+```bash
+turbo run build
+```
+
+A turbo build will only execute the `build` script for the `web` and `docs` workspaces. The
+`ui` package will still be in the task graph, but will gracefully be skipped.
