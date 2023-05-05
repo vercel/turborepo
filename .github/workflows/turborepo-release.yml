@@ -57,7 +57,7 @@ jobs:
         id: stage
         run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
       - name: Show Stage Commit
-        run: echo "${{ env.STAGE_BRANCH }}"
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
     outputs:
       stage-branch: "${{ steps.stage.outputs.STAGE_BRANCH }}"
 
@@ -65,13 +65,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [stage]
     steps:
-      - name: Set Stage Branch Name
-        run: echo "STAGE_BRANCH=${{ needs.stage.outputs.stage-branch }}" >> $GITHUB_ENV
       - name: Show Stage Commit
-        run: echo "${{ env.STAGE_BRANCH }}"
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@v3
         with:
-          ref: ${{ env.STAGE_BRANCH }}
+          ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Build turborepo CLI from source
         uses: ./.github/actions/setup-turborepo-environment
         with:
@@ -85,13 +83,11 @@ jobs:
     runs-on: macos-latest
     needs: [stage, smoke-test]
     steps:
-      - name: Set Stage Branch Name
-        run: echo "STAGE_BRANCH=${{ needs.stage.outputs.stage-branch }}" >> $GITHUB_ENV
       - name: Show Stage Commit
-        run: echo "${{ env.STAGE_BRANCH }}"
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@v3
         with:
-          ref: ${{ env.STAGE_BRANCH }}
+          ref: ${{ needs.stage.outputs.stage-branch }}
       - run: git fetch origin --tags
       - uses: ./.github/actions/setup-go
         with:
@@ -115,7 +111,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: turbo-go-darwin-${{ env.STAGE_BRANCH }}
+          name: turbo-go-darwin-${{ needs.stage.outputs.stage-branch }}
           path: cli/dist-darwin
 
   # compiles linux and windows in a container
@@ -126,13 +122,11 @@ jobs:
     container:
       image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
     steps:
-      - name: Set Stage Branch Name
-        run: echo "STAGE_BRANCH=${{ needs.stage.outputs.stage-branch }}" >> $GITHUB_ENV
       - name: Show Stage Commit
-        run: echo "${{ env.STAGE_BRANCH }}"
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@v3
         with:
-          ref: "${{ env.STAGE_BRANCH }}"
+          ref: "${{ needs.stage.outputs.stage-branch }}"
       - run: git fetch origin --tags
       - uses: ./.github/actions/setup-go
         with:
@@ -166,7 +160,7 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: turbo-go-cross-${{ env.STAGE_BRANCH }}
+          name: turbo-go-cross-${{ needs.stage.outputs.stage-branch }}
           path: cli/dist-cross
 
   build-rust:
@@ -202,14 +196,12 @@ jobs:
       image: ${{ matrix.settings.container }}
       options: ${{ matrix.settings.container-options }}
     steps:
-      - name: Set Stage Branch Name
-        run: echo "STAGE_BRANCH=${{ needs.stage.outputs.stage-branch }}" >> $GITHUB_ENV
       - name: Show Stage Commit
-        run: echo "${{ env.STAGE_BRANCH }}"
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
-          ref: "${{ env.STAGE_BRANCH }}"
+          ref: "${{ needs.stage.outputs.stage-branch }}"
 
       - name: Setup Container
         if: ${{ matrix.settings.container-setup }}
@@ -246,13 +238,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [stage, build-go-darwin, build-go-cross, build-rust]
     steps:
-      - name: Set Stage Branch Name
-        run: echo "STAGE_BRANCH=${{ needs.stage.outputs.stage-branch }}" >> $GITHUB_ENV
       - name: Show Stage Commit
-        run: echo "${{ env.STAGE_BRANCH }}"
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@v3
         with:
-          ref: "${{ env.STAGE_BRANCH }}"
+          ref: "${{ needs.stage.outputs.stage-branch }}"
       - run: git fetch origin --tags
       - uses: ./.github/actions/setup-node
         with:
@@ -299,27 +289,27 @@ jobs:
       - name: Move Go artifacts into place
         run: |
           ls go-artifacts
-          mv go-artifacts/turbo-go-cross-${{ env.STAGE_BRANCH }}/turbo_linux_amd64_v1/bin/* cli/dist-linux-amd64
+          mv go-artifacts/turbo-go-cross-${{ needs.stage.outputs.stage-branch }}/turbo_linux_amd64_v1/bin/* cli/dist-linux-amd64
           chmod a+x cli/dist-linux-amd64/turbo
           chmod a+x cli/dist-linux-amd64/go-turbo
-          mv go-artifacts/turbo-go-cross-${{ env.STAGE_BRANCH }}/turbo_linux_arm64/bin/* cli/dist-linux-arm64
+          mv go-artifacts/turbo-go-cross-${{ needs.stage.outputs.stage-branch }}/turbo_linux_arm64/bin/* cli/dist-linux-arm64
           chmod a+x cli/dist-linux-arm64/turbo
           chmod a+x cli/dist-linux-arm64/go-turbo
 
           # rust doesn't have a toolchain for arm + windows + gnu, so we just use the exe from the amd64 build
           # and rely on windows' arm JITer to do the work for us. this is because the go exe cannot be build w/ msvc
-          cp -r go-artifacts/turbo-go-cross-${{ env.STAGE_BRANCH }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-arm64
+          cp -r go-artifacts/turbo-go-cross-${{ needs.stage.outputs.stage-branch }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-arm64
           chmod a+x cli/dist-windows-arm64/turbo.exe
           chmod a+x cli/dist-windows-arm64/go-turbo.exe
 
-          mv go-artifacts/turbo-go-cross-${{ env.STAGE_BRANCH }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-amd64
+          mv go-artifacts/turbo-go-cross-${{ needs.stage.outputs.stage-branch }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-amd64
           chmod a+x cli/dist-windows-amd64/turbo.exe
           chmod a+x cli/dist-windows-amd64/go-turbo.exe
 
-          mv go-artifacts/turbo-go-darwin-${{ env.STAGE_BRANCH }}/turbo_darwin_amd64_v1/bin/* cli/dist-darwin-amd64
+          mv go-artifacts/turbo-go-darwin-${{ needs.stage.outputs.stage-branch }}/turbo_darwin_amd64_v1/bin/* cli/dist-darwin-amd64
           chmod a+x cli/dist-darwin-amd64/turbo
           chmod a+x cli/dist-darwin-amd64/go-turbo
-          mv go-artifacts/turbo-go-darwin-${{ env.STAGE_BRANCH }}/turbo_darwin_arm64/bin/* cli/dist-darwin-arm64
+          mv go-artifacts/turbo-go-darwin-${{ needs.stage.outputs.stage-branch }}/turbo_darwin_arm64/bin/* cli/dist-darwin-arm64
           chmod a+x cli/dist-darwin-arm64/turbo
           chmod a+x cli/dist-darwin-arm64/go-turbo
 
@@ -341,13 +331,11 @@ jobs:
     needs: [stage, npm-publish]
     runs-on: ubuntu-latest
     steps:
-      - name: Set Stage Branch Name
-        run: echo "STAGE_BRANCH=${{ needs.stage.outputs.stage-branch }}" >> $GITHUB_ENV
       - name: Show Stage Commit
-        run: echo "${{ env.STAGE_BRANCH }}"
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@1.0.0
         with:
-          ref: ${{ env.STAGE_BRANCH }}
+          ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Get version
         id: getVersion
         run: echo ::set-output name=version::$(head -n 1 version.txt)
@@ -356,6 +344,6 @@ jobs:
         if: ${{ !inputs.dry_run }}
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          head: ${{ env.STAGE_BRANCH }}
+          head: ${{ needs.stage.outputs.stage-branch }}
           base: main
           title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
