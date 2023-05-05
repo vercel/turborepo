@@ -143,8 +143,6 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
             };
         };
 
-        tracing::info!("here");
-
         #[cfg(feature = "http")]
         let server_fut = {
             // set up grpc reflection
@@ -166,7 +164,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
 
         #[cfg(not(feature = "http"))]
         let (_lock, server_fut) = {
-            let (lock, stream) = match crate::daemon::endpoint::open_socket(
+            let (lock, stream) = match crate::daemon::endpoint::listen_socket(
                 self.daemon_root.clone(),
                 self.running.clone(),
             )
@@ -175,8 +173,6 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 Ok(val) => val,
                 Err(e) => return CloseReason::SocketOpenError(e),
             };
-
-            tracing::info!("starting server");
 
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(self.timeout.clone()))
@@ -189,8 +185,6 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                     .serve_with_incoming_shutdown(stream, shutdown_fut),
             )
         };
-
-        tracing::info!("select!");
 
         select! {
             _ = server_fut => {
@@ -301,7 +295,7 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
     use super::DaemonServer;
-    use crate::{commands::CommandBase, Args};
+    use crate::{commands::CommandBase, ui::UI, Args};
 
     // the windows runner starts a new thread to accept uds requests,
     // so we need a multi-threaded runtime
@@ -320,6 +314,7 @@ mod test {
                 },
                 path.clone(),
                 "test",
+                UI::new(true),
             )
             .unwrap(),
             Duration::from_secs(60 * 60),
@@ -360,6 +355,7 @@ mod test {
                 },
                 path.clone(),
                 "test",
+                UI::new(true),
             )
             .unwrap(),
             Duration::from_millis(5),

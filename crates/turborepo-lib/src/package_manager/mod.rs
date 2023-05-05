@@ -248,7 +248,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{get_version, package_manager::yarn::YARN_RC, Args};
+    use crate::{get_version, package_manager::yarn::YARN_RC, ui::UI, Args};
 
     struct TestCase {
         name: String,
@@ -375,7 +375,12 @@ mod tests {
     fn test_detect_multiple_package_managers() -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
-        let base = CommandBase::new(Args::default(), repo_root_path, get_version())?;
+        let base = CommandBase::new(
+            Args::default(),
+            repo_root_path,
+            get_version(),
+            UI::new(true),
+        )?;
 
         let package_lock_json_path = repo_root.path().join(npm::LOCKFILE);
         File::create(&package_lock_json_path)?;

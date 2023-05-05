@@ -119,6 +119,7 @@ mod tests {
             yarn::{YarnDetector, YARN_RC},
             PackageManager,
         },
+        ui::UI,
         Args,
     };
 
@@ -126,7 +127,12 @@ mod tests {
     fn test_detect_yarn() -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
-        let base = CommandBase::new(Args::default(), repo_root_path, get_version())?;
+        let base = CommandBase::new(
+            Args::default(),
+            repo_root_path,
+            get_version(),
+            UI::new(true),
+        )?;
 
         let yarn_lock_path = repo_root.path().join(LOCKFILE);
         File::create(&yarn_lock_path)?;
