@@ -7,15 +7,11 @@ importers:
       eslint: ^7.32.0
       eslint-config-custom: workspace:*
       prettier: ^2.5.1
-      turbo: latest
+      turbo: ^1.9.3
     devDependencies:
       eslint: 7.32.0
       eslint-config-custom: link:packages/eslint-config-custom
-<<<<<<< HEAD
-      prettier: 2.8.0
-=======
       prettier: 2.8.8
->>>>>>> d4b14ce24 (Update basic example for App Router.)
       turbo: 1.9.3
 
   apps/docs:
@@ -24,18 +20,14 @@ importers:
       '@types/react': ^18.0.22
       '@types/react-dom': ^18.0.7
       eslint-config-custom: workspace:*
-      next: latest
+      next: ^13.4.1
       react: ^18.2.0
       react-dom: ^18.2.0
       tsconfig: workspace:*
       typescript: ^4.5.3
       ui: workspace:*
     dependencies:
-<<<<<<< HEAD
-      next: 13.3.1_biqbaboplfbrettd7655fr4n2y
-=======
-      next: 13.4.0_biqbaboplfbrettd7655fr4n2y
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+      next: 13.4.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       ui: link:../../packages/ui
@@ -53,18 +45,14 @@ importers:
       '@types/react': ^18.0.22
       '@types/react-dom': ^18.0.7
       eslint-config-custom: workspace:*
-      next: latest
+      next: ^13.4.1
       react: ^18.2.0
       react-dom: ^18.2.0
       tsconfig: workspace:*
       typescript: ^4.5.3
       ui: workspace:*
     dependencies:
-<<<<<<< HEAD
-      next: 13.3.1_biqbaboplfbrettd7655fr4n2y
-=======
-      next: 13.4.0_biqbaboplfbrettd7655fr4n2y
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+      next: 13.4.1_biqbaboplfbrettd7655fr4n2y
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       ui: link:../../packages/ui
@@ -78,22 +66,15 @@ importers:
 
   packages/eslint-config-custom:
     specifiers:
-      eslint-config-next: latest
+      eslint-config-next: ^13.4.1
       eslint-config-prettier: ^8.3.0
-      eslint-config-turbo: latest
+      eslint-config-turbo: ^1.9.3
       eslint-plugin-react: 7.28.0
     dependencies:
-<<<<<<< HEAD
-      eslint-config-next: 13.3.1_77fvizpdb3y4icyeo2mf4eo7em
-      eslint-config-prettier: 8.5.0_eslint@7.32.0
-      eslint-config-turbo: 1.9.3_eslint@7.32.0
-      eslint-plugin-react: 7.28.0_eslint@7.32.0
-=======
-      eslint-config-next: 13.4.0_iacogk7kkaymxepzhgcbytyi7q
+      eslint-config-next: 13.4.1_iacogk7kkaymxepzhgcbytyi7q
       eslint-config-prettier: 8.8.0_eslint@8.39.0
       eslint-config-turbo: 1.9.3_eslint@8.39.0
       eslint-plugin-react: 7.28.0_eslint@8.39.0
->>>>>>> d4b14ce24 (Update basic example for App Router.)
 
   packages/tsconfig:
     specifiers: {}
@@ -108,13 +89,8 @@ importers:
       tsconfig: workspace:*
       typescript: ^4.5.2
     devDependencies:
-<<<<<<< HEAD
-      '@types/react': 18.2.0
-      '@types/react-dom': 18.2.1
-=======
-      '@types/react': 17.0.58
-      '@types/react-dom': 17.0.20
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+      '@types/react': 18.2.5
+      '@types/react-dom': 18.2.3
       eslint: 7.32.0
       eslint-config-custom: link:../eslint-config-custom
       react: 17.0.2
@@ -234,32 +210,18 @@ packages:
   /@humanwhocodes/object-schema/1.2.1:
     resolution: {integrity: sha512-ZnQMnLV4e7hDlUvw8H+U8ASL02SS2Gn6+9Ac3wGGLIe7+je2AeAOxPY+izIPJDfFDb7eDjev0Us8MO1iFRN8hA==}
 
-<<<<<<< HEAD
-  /@next/env/13.3.1:
-    resolution: {integrity: sha512-EDtCoedIZC7JlUQ3uaQpSc4aVmyhbLHmQVALg7pFfQgOTjgSnn7mKtA0DiCMkYvvsx6aFb5octGMtWrOtGXW9A==}
+  /@next/env/13.4.1:
+    resolution: {integrity: sha512-eD6WCBMFjLFooLM19SIhSkWBHtaFrZFfg2Cxnyl3vS3DAdFRfnx5TY2RxlkuKXdIRCC0ySbtK9JXXt8qLCqzZg==}
     dev: false
 
-  /@next/eslint-plugin-next/13.3.1:
-    resolution: {integrity: sha512-Hpd74UrYGF+bq9bBSRDXRsRfaWkPpcwjhvachy3sr/R/5fY6feC0T0s047pUthyqcaeNsqKOY1nUGQQJNm4WyA==}
-=======
-  /@next/env/13.4.0:
-    resolution: {integrity: sha512-LKofmUuxwGXk2OZJSSJ2SlJE62s6z+56aRsze7chc5TPoVouLR9liTiSWxzYuVzuxk0ui2wtIjyR2tcgS1dIyw==}
-    dev: false
-
-  /@next/eslint-plugin-next/13.4.0:
-    resolution: {integrity: sha512-ZqQi1slguDavpuNUcl9va8+WtHHpgymIW2g+4Gs9FdI+5rjAvrUqqjfCec2hi3Cjbbp7zULFQuAiPwASKHbrxw==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/eslint-plugin-next/13.4.1:
+    resolution: {integrity: sha512-tVPS/2FKlA3ANCRCYZVT5jdbUKasBU8LG6bYqcNhyORDFTlDYa4cAWQJjZ7msIgLwMQIbL8CAsxrOL8maa/4Lg==}
     dependencies:
       glob: 7.1.7
     dev: false
 
-<<<<<<< HEAD
-  /@next/swc-darwin-arm64/13.3.1:
-    resolution: {integrity: sha512-UXPtriEc/pBP8luSLSCZBcbzPeVv+SSjs9cH/KygTbhmACye8/OOXRZO13Z2Wq1G0gLmEAIHQAOuF+vafPd2lw==}
-=======
-  /@next/swc-darwin-arm64/13.4.0:
-    resolution: {integrity: sha512-C39AGL3ANXA+P3cFclQjFZaJ4RHPmuBhskmyy0N3VyCntDmRrNkS4aXeNY4Xwure9IL1nuw02D8bM55I+FsbuQ==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-darwin-arm64/13.4.1:
+    resolution: {integrity: sha512-eF8ARHtYfnoYtDa6xFHriUKA/Mfj/cCbmKb3NofeKhMccs65G6/loZ15a6wYCCx4rPAd6x4t1WmVYtri7EdeBg==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
@@ -267,13 +229,8 @@ packages:
     dev: false
     optional: true
 
-<<<<<<< HEAD
-  /@next/swc-darwin-x64/13.3.1:
-    resolution: {integrity: sha512-lT36yYxosCfLtplFzJWgo0hrPu6/do8+msgM7oQkPeohDNdhjtjFUgOOwdSnPublLR6Mo2Ym4P/wl5OANuD2bw==}
-=======
-  /@next/swc-darwin-x64/13.4.0:
-    resolution: {integrity: sha512-nj6nx6o7rnBXjo1woZFWLk7OUs7y0SQ0k65SX62kc88GqXtYi3BCqbBznjOX8qtrO//NmtAde/Jd5qkjSgINUQ==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-darwin-x64/13.4.1:
+    resolution: {integrity: sha512-7cmDgF9tGWTgn5Gw+vP17miJbH4wcraMHDCOHTYWkO/VeKT73dUWG23TNRLfgtCNSPgH4V5B4uLHoZTanx9bAw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
@@ -281,13 +238,8 @@ packages:
     dev: false
     optional: true
 
-<<<<<<< HEAD
-  /@next/swc-linux-arm64-gnu/13.3.1:
-    resolution: {integrity: sha512-wRb76nLWJhonH8s3kxC/1tFguEkeOPayIwe9mkaz1G/yeS3OrjeyKMJsb4+Kdg0zbTo53bNCOl59NNtDM7yyyw==}
-=======
-  /@next/swc-linux-arm64-gnu/13.4.0:
-    resolution: {integrity: sha512-FBYL7kpzI2KG3lv8gO4xVYmWcFohptjzD9RCLdXsAz+Kqz5VCJILF21DoRcz4Nwj/jMe0SO7l5kBVW4POl4EaQ==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-linux-arm64-gnu/13.4.1:
+    resolution: {integrity: sha512-qwJqmCri2ie8aTtE5gjTSr8S6O8B67KCYgVZhv9gKH44yvc/zXbAY8u23QGULsYOyh1islWE5sWfQNLOj9iryg==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -295,13 +247,8 @@ packages:
     dev: false
     optional: true
 
-<<<<<<< HEAD
-  /@next/swc-linux-arm64-musl/13.3.1:
-    resolution: {integrity: sha512-qz3BzjJRZ16Iq/jrp+pjiYOc0jTjHlfmxQmZk9x/+5uhRP6/eWQSTAPVJ33BMo6oK5O5N4644OgTAbzXzorecg==}
-=======
-  /@next/swc-linux-arm64-musl/13.4.0:
-    resolution: {integrity: sha512-S3htBbcovnLMgVn0z1ThrP1iAeEM43fw8B7S3KyHTAGe0I21ww4rvUkLdgPCqLNvMpv899lmG7NU5rs6rTkGvg==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-linux-arm64-musl/13.4.1:
+    resolution: {integrity: sha512-qcC54tWNGDv/VVIFkazxhqH1Bnagjfs4enzELVRlUOoJPD2BGJTPI7z08pQPbbgxLtRiu8gl2mXvpB8WlOkMeA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -309,13 +256,8 @@ packages:
     dev: false
     optional: true
 
-<<<<<<< HEAD
-  /@next/swc-linux-x64-gnu/13.3.1:
-    resolution: {integrity: sha512-6mgkLmwlyWlomQmpl21I3hxgqE5INoW4owTlcLpNsd1V4wP+J46BlI/5zV5KWWbzjfncIqzXoeGs5Eg+1GHODA==}
-=======
-  /@next/swc-linux-x64-gnu/13.4.0:
-    resolution: {integrity: sha512-H8GhCgQwFl6iWJ6azQ2tG/GY8BUg1nhPtg4Tp2kIPljdyQypTGJe8oRnPDx0N48WWvB2fNeA7LNEwzVuSidH2w==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-linux-x64-gnu/13.4.1:
+    resolution: {integrity: sha512-9TeWFlpLsBosZ+tsm/rWBaMwt5It9tPH8m3nawZqFUUrZyGRfGcI67js774vtx0k3rL9qbyY6+3pw9BCVpaYUA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -323,13 +265,8 @@ packages:
     dev: false
     optional: true
 
-<<<<<<< HEAD
-  /@next/swc-linux-x64-musl/13.3.1:
-    resolution: {integrity: sha512-uqm5sielhQmKJM+qayIhgZv1KlS5pqTdQ99b+Z7hMWryXS96qE0DftTmMZowBcUL6x7s2vSXyH5wPtO1ON7LBg==}
-=======
-  /@next/swc-linux-x64-musl/13.4.0:
-    resolution: {integrity: sha512-mztVybRPY39NfPOA3QrRQKzYuw7A/D8ElR6ruvM1cBsXMEfF5xTzdZqfTtrE/gNTPUFug9FJPpiRpkZ4mDUl8w==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-linux-x64-musl/13.4.1:
+    resolution: {integrity: sha512-sNDGaWmSqTS4QRUzw61wl4mVPeSqNIr1OOjLlQTRuyInxMxtqImRqdvzDvFTlDfdeUMU/DZhWGYoHrXLlZXe6A==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -337,13 +274,8 @@ packages:
     dev: false
     optional: true
 
-<<<<<<< HEAD
-  /@next/swc-win32-arm64-msvc/13.3.1:
-    resolution: {integrity: sha512-WomIiTj/v3LevltlibNQKmvrOymNRYL+a0dp5R73IwPWN5FvXWwSELN/kiNALig/+T3luc4qHNTyvMCp9L6U5Q==}
-=======
-  /@next/swc-win32-arm64-msvc/13.4.0:
-    resolution: {integrity: sha512-mdVh/n0QqT2uXqn8kaTywUoLxY1OYqTpiKbt5b51pDwOStqgbIbqBqG0A7XDaiqWa7RKwllOYxPlPm16EDfWUA==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-win32-arm64-msvc/13.4.1:
+    resolution: {integrity: sha512-+CXZC7u1iXdLRudecoUYbhbsXpglYv8KFYsFxKBPn7kg+bk7eJo738wAA4jXIl8grTF2mPdmO93JOQym+BlYGA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [win32]
@@ -351,13 +283,8 @@ packages:
     dev: false
     optional: true
 
-<<<<<<< HEAD
-  /@next/swc-win32-ia32-msvc/13.3.1:
-    resolution: {integrity: sha512-M+PoH+0+q658wRUbs285RIaSTYnGBSTdweH/0CdzDgA6Q4rBM0sQs4DHmO3BPP0ltCO/vViIoyG7ks66XmCA5g==}
-=======
-  /@next/swc-win32-ia32-msvc/13.4.0:
-    resolution: {integrity: sha512-GNRqT2mqxxH0x9VthFqziBj8X8HsoBUougmLe3kOouRq/jF73LpKXG0Qs2MYkylqvv/Wg31EYjFNcJnBi1Nimg==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-win32-ia32-msvc/13.4.1:
+    resolution: {integrity: sha512-vIoXVVc7UYO68VwVMDKwJC2+HqAZQtCYiVlApyKEeIPIQpz2gpufzGxk1z3/gwrJt/kJ5CDZjlhYDCzd3hdz+g==}
     engines: {node: '>= 10'}
     cpu: [ia32]
     os: [win32]
@@ -365,13 +292,8 @@ packages:
     dev: false
     optional: true
 
-<<<<<<< HEAD
-  /@next/swc-win32-x64-msvc/13.3.1:
-    resolution: {integrity: sha512-Sl1F4Vp5Z1rNXWZYqJwMuWRRol4bqOB6+/d7KqkgQ4AcafKPN1PZmpkCoxv4UFHtFNIB7EotnuIhtXu3zScicQ==}
-=======
-  /@next/swc-win32-x64-msvc/13.4.0:
-    resolution: {integrity: sha512-0AkvhUBUqeb4WKN75IW1KjPkN3HazQFA0OpMuTK+6ptJUXMaMwDDcF3sIPCI741BJ2fpODB7BPM4C63hXWEypg==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /@next/swc-win32-x64-msvc/13.4.1:
+    resolution: {integrity: sha512-n8V5ImLQZibKTu10UUdI3nIeTLkliEXe628qxqW9v8My3BAH2a7H0SaCqkV2OgqFnn8sG1wxKYw9/SNJ632kSA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
@@ -416,13 +338,8 @@ packages:
     resolution: {integrity: sha512-sXo/qW2/pAcmT43VoRKOJbDOfV3cYpq3szSVfIThQXNt+E4DfKj361vaAt3c88U5tPUxzEswam7GW48PJqtKAg==}
     dev: false
 
-<<<<<<< HEAD
-  /@swc/helpers/0.5.0:
-    resolution: {integrity: sha512-SjY/p4MmECVVEWspzSRpQEM3sjR17sP8PbGxELWrT+YZMBfiUyt1MRUNjMV23zohwlG2HYtCQOsCwsTHguXkyg==}
-=======
   /@swc/helpers/0.5.1:
     resolution: {integrity: sha512-sJ902EfIzn1Fa+qYmjdQqh8tPsoxyBz+8yBKC2HKUxyezKJFwPGOn7pv4WY6QuQW//ySQi5lJjA/ZT9sNWWNTg==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
     dependencies:
       tslib: 2.5.0
     dev: false
@@ -439,49 +356,14 @@ packages:
     resolution: {integrity: sha512-JCB8C6SnDoQf0cNycqd/35A7MjcnK+ZTqE7judS6o7utxUCg6imJg3QK2qzHKszlTjcj2cn+NwMB2i96ubpj7w==}
     dev: true
 
-<<<<<<< HEAD
-  /@types/react-dom/18.0.9:
-    resolution: {integrity: sha512-qnVvHxASt/H7i+XG1U1xMiY5t+IHcPGUK7TDMDzom08xa7e86eCeKOiLZezwCKVxJn6NEiiy2ekgX8aQssjIKg==}
-=======
-  /@types/react-dom/17.0.20:
-    resolution: {integrity: sha512-4pzIjSxDueZZ90F52mU3aPoogkHIoSIDG+oQ+wQK7Cy2B9S+MvOqY0uEA/qawKz381qrEDkvpwyt8Bm31I8sbA==}
-    dependencies:
-      '@types/react': 17.0.58
-    dev: true
-
   /@types/react-dom/18.2.3:
     resolution: {integrity: sha512-hxXEXWxFJXbY0LMj/T69mznqOZJXNtQMqVxIiirVAZnnpeYiD4zt+lPsgcr/cfWg2VLsxZ1y26vigG03prYB+Q==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
     dependencies:
       '@types/react': 18.2.5
     dev: true
 
-<<<<<<< HEAD
-  /@types/react-dom/18.2.1:
-    resolution: {integrity: sha512-8QZEV9+Kwy7tXFmjJrp3XUKQSs9LTnE0KnoUb0YCguWBiNW0Yfb2iBMYZ08WPg35IR6P3Z0s00B15SwZnO26+w==}
-    dependencies:
-      '@types/react': 18.2.0
-    dev: true
-
-  /@types/react/18.0.25:
-    resolution: {integrity: sha512-xD6c0KDT4m7n9uD4ZHi02lzskaiqcBxf4zi+tXZY98a04wvc0hi/TcCPC2FOESZi51Nd7tlUeOJY8RofL799/g==}
-=======
-  /@types/react/17.0.58:
-    resolution: {integrity: sha512-c1GzVY97P0fGxwGxhYq989j4XwlcHQoto6wQISOC2v6wm3h0PORRWJFHlkRjfGsiG3y1609WdQ+J+tKxvrEd6A==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
-    dependencies:
-      '@types/prop-types': 15.7.5
-      '@types/scheduler': 0.16.3
-      csstype: 3.1.2
-    dev: true
-
-<<<<<<< HEAD
-  /@types/react/18.2.0:
-    resolution: {integrity: sha512-0FLj93y5USLHdnhIhABk83rm8XEGA7kH3cr+YUlvxoUGp1xNt/DINUMvqPxLyOQMzLmZe8i4RTHbvb8MC7NmrA==}
-=======
   /@types/react/18.2.5:
     resolution: {integrity: sha512-RuoMedzJ5AOh23Dvws13LU9jpZHIc/k90AgmK7CecAYeWmSr3553L4u5rk4sWAPBuQosfT7HmTfG4Rg5o4nGEA==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
     dependencies:
       '@types/prop-types': 15.7.5
       '@types/scheduler': 0.16.3
@@ -743,8 +625,6 @@ packages:
       fill-range: 7.0.1
     dev: false
 
-<<<<<<< HEAD
-=======
   /bundle-name/3.0.0:
     resolution: {integrity: sha512-PKA4BeSvBpQKQ8iPOGCSiell+N8P+Tf1DlwqmYhpe2gAhKPHn8EYOxVT+ShuGmhg8lN8XiSlS80yiExKXrURlw==}
     engines: {node: '>=12'}
@@ -752,7 +632,6 @@ packages:
       run-applescript: 5.0.0
     dev: false
 
->>>>>>> d4b14ce24 (Update basic example for App Router.)
   /busboy/1.6.0:
     resolution: {integrity: sha512-8SFQbg/0hQ9xy3UNTB0YEnsNBbWfhf7RtnzpL7TkBiTBRfrQ9Fxcnz7VJsleJpyp6rVLvXiuORqjlHi5q+PYuA==}
     engines: {node: '>=10.16.0'}
@@ -1042,13 +921,8 @@ packages:
     resolution: {integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==}
     engines: {node: '>=10'}
 
-<<<<<<< HEAD
-  /eslint-config-next/13.3.1_77fvizpdb3y4icyeo2mf4eo7em:
-    resolution: {integrity: sha512-DieA5djybeE3Q0IqnDXihmhgRSp44x1ywWBBpVRA9pSx+m5Icj8hFclx7ffXlAvb9MMLN6cgj/hqJ4lka/QmvA==}
-=======
-  /eslint-config-next/13.4.0_iacogk7kkaymxepzhgcbytyi7q:
-    resolution: {integrity: sha512-FkO3QRyUEKAHM4ie0xAcxo7fQ8gWevuLqgf6/g1Y6zWybqSa4FNeJr4hqqTbP25xIRgUUIPILBlx9RSH4C6+gQ==}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+  /eslint-config-next/13.4.1_iacogk7kkaymxepzhgcbytyi7q:
+    resolution: {integrity: sha512-ajuxjCkW1hvirr0EQZb3/B/bFH52Z7CT89uCtTcICFL9l30i5c8hN4p0LXvTjdOXNPV5fEDcxBgGHgXdzTj1/A==}
     peerDependencies:
       eslint: ^7.23.0 || ^8.0.0
       typescript: '>=3.3.1'
@@ -1056,11 +930,7 @@ packages:
       typescript:
         optional: true
     dependencies:
-<<<<<<< HEAD
-      '@next/eslint-plugin-next': 13.3.1
-=======
-      '@next/eslint-plugin-next': 13.4.0
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+      '@next/eslint-plugin-next': 13.4.1
       '@rushstack/eslint-patch': 1.2.0
       '@typescript-eslint/parser': 5.59.2_iacogk7kkaymxepzhgcbytyi7q
       eslint: 8.39.0
@@ -1085,22 +955,13 @@ packages:
       eslint: 8.39.0
     dev: false
 
-<<<<<<< HEAD
-  /eslint-config-turbo/1.9.3_eslint@7.32.0:
-=======
   /eslint-config-turbo/1.9.3_eslint@8.39.0:
->>>>>>> d4b14ce24 (Update basic example for App Router.)
     resolution: {integrity: sha512-QG6jxFQkrGSpQqlFKefPdtgUfr20EbU0s4tGGIuGFOcPuJEdsY6VYZpZUxNJvmMcTGqPgMyOPjAFBKhy/DPHLA==}
     peerDependencies:
       eslint: '>6.6.0'
     dependencies:
-<<<<<<< HEAD
-      eslint: 7.32.0
-      eslint-plugin-turbo: 1.9.3_eslint@7.32.0
-=======
       eslint: 8.39.0
       eslint-plugin-turbo: 1.9.3_eslint@8.39.0
->>>>>>> d4b14ce24 (Update basic example for App Router.)
     dev: false
 
   /eslint-import-resolver-node/0.3.7:
@@ -1308,11 +1169,7 @@ packages:
       string.prototype.matchall: 4.0.8
     dev: false
 
-<<<<<<< HEAD
-  /eslint-plugin-turbo/1.9.3_eslint@7.32.0:
-=======
   /eslint-plugin-turbo/1.9.3_eslint@8.39.0:
->>>>>>> d4b14ce24 (Update basic example for App Router.)
     resolution: {integrity: sha512-ZsRtksdzk3v+z5/I/K4E50E4lfZ7oYmLX395gkrUMBz4/spJlYbr+GC8hP9oVNLj9s5Pvnm9rLv/zoj5PVYaVw==}
     peerDependencies:
       eslint: '>6.6.0'
@@ -2159,15 +2016,9 @@ packages:
   /natural-compare/1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
-<<<<<<< HEAD
-  /next/13.3.1_biqbaboplfbrettd7655fr4n2y:
-    resolution: {integrity: sha512-eByWRxPzKHs2oQz1yE41LX35umhz86ZSZ+mYyXBqn2IBi2hyUqxBA88avywdr4uyH+hCJczegGsDGWbzQA5Rqw==}
-    engines: {node: '>=14.18.0'}
-=======
-  /next/13.4.0_biqbaboplfbrettd7655fr4n2y:
-    resolution: {integrity: sha512-y3E+2ZjiVrphkz7zcJvd2rEG6miOekI8krPfWV4AZZ9TaF0LDuFdP/f+RQ5M9wRvsz6GWw8k8+7jsO860GxSqg==}
+  /next/13.4.1_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-JBw2kAIyhKDpjhEWvNVoFeIzNp9xNxg8wrthDOtMctfn3EpqGCmW0FSviNyGgOSOSn6zDaX48pmvbdf6X2W9xA==}
     engines: {node: '>=16.8.0'}
->>>>>>> d4b14ce24 (Update basic example for App Router.)
     hasBin: true
     peerDependencies:
       '@opentelemetry/api': ^1.1.0
@@ -2186,44 +2037,25 @@ packages:
       sass:
         optional: true
     dependencies:
-<<<<<<< HEAD
-      '@next/env': 13.3.1
-      '@swc/helpers': 0.5.0
-      busboy: 1.6.0
-      caniuse-lite: 1.0.30001434
-=======
-      '@next/env': 13.4.0
+      '@next/env': 13.4.1
       '@swc/helpers': 0.5.1
       busboy: 1.6.0
       caniuse-lite: 1.0.30001482
->>>>>>> d4b14ce24 (Update basic example for App Router.)
       postcss: 8.4.14
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
       styled-jsx: 5.1.1_react@18.2.0
       zod: 3.21.4
     optionalDependencies:
-<<<<<<< HEAD
-      '@next/swc-darwin-arm64': 13.3.1
-      '@next/swc-darwin-x64': 13.3.1
-      '@next/swc-linux-arm64-gnu': 13.3.1
-      '@next/swc-linux-arm64-musl': 13.3.1
-      '@next/swc-linux-x64-gnu': 13.3.1
-      '@next/swc-linux-x64-musl': 13.3.1
-      '@next/swc-win32-arm64-msvc': 13.3.1
-      '@next/swc-win32-ia32-msvc': 13.3.1
-      '@next/swc-win32-x64-msvc': 13.3.1
-=======
-      '@next/swc-darwin-arm64': 13.4.0
-      '@next/swc-darwin-x64': 13.4.0
-      '@next/swc-linux-arm64-gnu': 13.4.0
-      '@next/swc-linux-arm64-musl': 13.4.0
-      '@next/swc-linux-x64-gnu': 13.4.0
-      '@next/swc-linux-x64-musl': 13.4.0
-      '@next/swc-win32-arm64-msvc': 13.4.0
-      '@next/swc-win32-ia32-msvc': 13.4.0
-      '@next/swc-win32-x64-msvc': 13.4.0
->>>>>>> d4b14ce24 (Update basic example for App Router.)
+      '@next/swc-darwin-arm64': 13.4.1
+      '@next/swc-darwin-x64': 13.4.1
+      '@next/swc-linux-arm64-gnu': 13.4.1
+      '@next/swc-linux-arm64-musl': 13.4.1
+      '@next/swc-linux-x64-gnu': 13.4.1
+      '@next/swc-linux-x64-musl': 13.4.1
+      '@next/swc-win32-arm64-msvc': 13.4.1
+      '@next/swc-win32-ia32-msvc': 13.4.1
+      '@next/swc-win32-x64-msvc': 13.4.1
     transitivePeerDependencies:
       - '@babel/core'
       - babel-plugin-macros
@@ -2623,11 +2455,6 @@ packages:
     engines: {node: '>= 0.4'}
     dependencies:
       internal-slot: 1.0.5
-    dev: false
-
-  /streamsearch/1.1.0:
-    resolution: {integrity: sha512-Mcc5wHehp9aXz1ax6bZUyY5afg9u2rv5cqQI3mRrYkGC8rW2hM02jWuwjtL++LS5qinSyhj2QfLyNsuc+VsExg==}
-    engines: {node: '>=10.0.0'}
     dev: false
 
   /streamsearch/1.1.0:
