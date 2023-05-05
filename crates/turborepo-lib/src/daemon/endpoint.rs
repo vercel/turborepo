@@ -5,7 +5,7 @@ use std::{io::ErrorKind, sync::atomic::Ordering, time::Duration};
 use futures::Stream;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::server::Connected;
-use tracing::debug;
+use tracing::{debug, trace};
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 #[derive(thiserror::Error, Debug)]
@@ -28,6 +28,7 @@ const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 ///
 /// note: the running param is used by the windows
 ///       code path to shut down the non-blocking polling
+#[tracing::instrument]
 pub async fn listen_socket(
     path: AbsoluteSystemPathBuf,
     #[allow(unused)] running: Arc<AtomicBool>,
@@ -42,6 +43,7 @@ pub async fn listen_socket(
     let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
     let mut lock = pidlock::Pidlock::new(pid_path.as_path().to_owned());
 
+    trace!("acquiring pidlock");
     // this will fail if the pid is already owned
     lock.acquire()?;
     std::fs::remove_file(&sock_path).ok();

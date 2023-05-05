@@ -67,6 +67,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
     Ok(())
 }
 
+#[tracing::instrument(skip(base, logging), fields(repo_root = %base.repo_root))]
 pub async fn daemon_server(
     base: &CommandBase,
     idle_time: &String,
