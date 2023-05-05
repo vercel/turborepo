@@ -1,11 +1,13 @@
 use std::{path::PathBuf, time::Duration};
 
+use pidlock::PidlockError::AlreadyOwned;
+use tracing::{trace, warn};
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 use super::CommandBase;
 use crate::{
     cli::DaemonCommand,
-    daemon::{DaemonConnector, DaemonError},
+    daemon::{endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonError},
     tracing::TurboSubscriber,
 };
 
@@ -101,7 +103,22 @@ pub async fn daemon_server(
         .map(|d| Duration::from_nanos(d as u64))?;
 
     let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
-    server.serve().await;
+    let reason = server.serve().await;
+
+    match reason {
+        CloseReason::SocketOpenError(SocketOpenError::LockError(AlreadyOwned)) => {
+            warn!("daemon already running");
+        }
+        CloseReason::SocketOpenError(e) => return Err(e.into()),
+        CloseReason::Interrupt
+        | CloseReason::ServerClosed
+        | CloseReason::WatcherClosed
+        | CloseReason::Timeout
+        | CloseReason::Shutdown => {
+            // these are all ok, just exit
+            trace!("shutting down daemon: {:?}", reason);
+        }
+    };
 
     Ok(())
 }
