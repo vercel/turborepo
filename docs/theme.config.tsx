@@ -145,6 +145,7 @@ const config: DocsThemeConfig = {
       </>
     );
   },
+  i18n: [],
   editLink: {
     text: "Edit this page on GitHub",
   },
