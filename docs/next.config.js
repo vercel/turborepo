@@ -2,6 +2,9 @@ const { withSentryConfig } = require("@sentry/nextjs");
 const withNextra = require("nextra")({
   theme: "nextra-theme-docs",
   themeConfig: "./theme.config.tsx",
+  // options
+  flexsearch: true,
+  staticImage: true,
   defaultShowCopyCode: true,
 });
 
