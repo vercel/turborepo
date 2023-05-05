@@ -82,17 +82,18 @@ pub fn match_expansion<
 }
 
 /// Formats the fields of any structure or enum variant.
-fn expand_fields<
-    EN: Fn(&Ident, &FieldsNamed) -> (TokenStream, TokenStream),
-    EU: Fn(&Ident, &FieldsUnnamed) -> (TokenStream, TokenStream),
-    U: Fn(&Ident) -> (TokenStream, TokenStream),
+pub fn expand_fields<
+    EN: Fn(&Ident, &FieldsNamed) -> R,
+    EU: Fn(&Ident, &FieldsUnnamed) -> R,
+    U: Fn(&Ident) -> R,
+    R,
 >(
     ident: &Ident,
     fields: &Fields,
     expand_named: &EN,
     expand_unnamed: &EU,
     expand_unit: &U,
-) -> (TokenStream, TokenStream) {
+) -> R {
     match fields {
         Fields::Named(named) => expand_named(ident, named),
         Fields::Unnamed(unnamed) => expand_unnamed(ident, unnamed),
@@ -123,6 +124,33 @@ pub fn generate_destructuring<'a, I: Fn(&Field) -> bool>(
     (
         quote! {
             { #(#captures,)* .. }
+        },
+        fields_idents,
+    )
+}
+
+/// Generates an exhaustive match arm destructuring pattern for the given
+/// fields.
+///
+/// Returns both the capture pattern token stream and the name of the bound
+/// identifiers corresponding to the input fields.
+pub fn generate_exhaustive_destructuring<'a>(
+    fields: impl Iterator<Item = &'a Field>,
+) -> (TokenStream, Vec<TokenStream>) {
+    let (captures, fields_idents): (Vec<_>, Vec<_>) = fields
+        .enumerate()
+        .map(|(i, field)| match &field.ident {
+            Some(ident) => (quote! { #ident }, quote! { #ident }),
+            None => {
+                let ident = Ident::new(&format!("field_{}", i), field.span());
+                let index = syn::Index::from(i);
+                (quote! { #index: #ident }, quote! { #ident })
+            }
+        })
+        .unzip();
+    (
+        quote! {
+            { #(#captures,)* }
         },
         fields_idents,
     )
