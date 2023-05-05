@@ -95,16 +95,7 @@ jobs:
             xtask/**
             .cargo/**
             rust-toolchain
-            !crates/glob-match/**
-            !crates/globwatch/**
-            !crates/pidlock/**
-            !crates/turborepo/**
-            !crates/turborepo-api-client/**
-            !crates/turborepo-lib/**
-            !crates/turborepo-ffi/**
-            !crates/turborepo-scm/**
-            !crates/turborepo-lockfiles/**
-            !crates/turbo-updater/**
+            !crates/turborepo*/**
             !**.md
             !**.mdx
 
@@ -123,16 +114,7 @@ jobs:
           PATTERNS: |
             pnpm-lock.yaml
             package.json
-            crates/glob-match/**
-            crates/globwatch/**
-            crates/pidlock/**
-            crates/turborepo/**
-            crates/turborepo-api-client/**
-            crates/turborepo-lib/**
-            crates/turborepo-ffi/**
-            crates/turborepo-scm/**
-            crates/turborepo-lockfiles/**
-            crates/turbo-updater/**
+            crates/turborepo*/**
             .cargo/**
             rust-toolchain
             !**.md
@@ -625,7 +607,6 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 120
-        # We exclude turbo as it requires linking Go and all logic resides in turborepo-lib
         run: |
           cargo tr-test
 
