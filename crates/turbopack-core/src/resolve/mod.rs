@@ -17,13 +17,13 @@ use turbo_tasks_fs::{
 };
 
 use self::{
-    exports::ExportsField,
     options::{
         resolve_modules_options, ImportMapResult, ResolveInPackage, ResolveIntoPackage,
         ResolveModules, ResolveModulesOptionsVc, ResolveOptionsVc,
     },
     parse::{Request, RequestVc},
     pattern::QueryMapVc,
+    remap::ExportsField,
 };
 use crate::{
     asset::{Asset, AssetOptionVc, AssetVc, AssetsVc},
@@ -40,18 +40,18 @@ use crate::{
 };
 
 mod alias_map;
-pub(crate) mod exports;
 pub mod node;
 pub mod options;
 pub mod origin;
 pub mod parse;
 pub mod pattern;
 pub mod plugin;
+pub(crate) mod remap;
 
 pub use alias_map::{
     AliasMap, AliasMapIntoIter, AliasMapLookupIterator, AliasMatch, AliasPattern, AliasTemplate,
 };
-pub use exports::{ExportsValue, ResolveAliasMap, ResolveAliasMapVc};
+pub use remap::{ResolveAliasMap, ResolveAliasMapVc, SubpathValue};
 
 use crate::issue::{IssueSeverity, IssueSeverityVc, OptionIssueSourceVc};
 
@@ -736,6 +736,7 @@ async fn resolve_internal(
                     }
                     PatternMatch::Directory(_, path) => {
                         let package_json_path = path.join("package.json");
+                        // TODO: call read_package_json for consistent error handling
                         let package_json = package_json_path.read_json();
                         results.push(
                             resolve_into_folder(*path, package_json, package_json_path, options)
@@ -808,19 +809,8 @@ async fn resolve_internal(
             ResolveResult::unresolveable().into()
         }
         Request::Empty => ResolveResult::unresolveable().into(),
-        Request::PackageInternal { path: _ } => {
-            let issue: ResolvingIssueVc = ResolvingIssue {
-                severity: IssueSeverity::Error.cell(),
-                request_type: "package internal import: not implemented yet".to_string(),
-                request,
-                context,
-                resolve_options: options,
-                error_message: Some("package internal imports are not implemented yet".to_string()),
-                source: OptionIssueSourceVc::none(),
-            }
-            .into();
-            issue.as_issue().emit();
-            ResolveResult::unresolveable().into()
+        Request::PackageInternal { path } => {
+            resolve_package_internal_with_imports_field(context, path).await?
         }
         Request::Uri {
             protocol,
@@ -940,6 +930,7 @@ async fn resolve_module_request(
                 if let FindContextFileResult::Found(package_json, refs) =
                     &*find_context_file(context, package_json()).await?
                 {
+                    // TODO: call read_package_json for consistent error handling
                     if let FileJsonContent::Content(package) = &*package_json.read_json().await? {
                         if let Some(field_value) = package[field].as_object() {
                             let package_path = package_json.parent();
@@ -988,6 +979,7 @@ async fn resolve_module_request(
     // try both.
     for package_path in &result.packages {
         let package_json_path = package_path.join("package.json");
+        // TODO: call read_package_json for consistent error handling
         let package_json = package_json_path.read_json();
         if is_match {
             results.push(
@@ -1163,6 +1155,7 @@ async fn resolved(
                 if let FindContextFileResult::Found(package_json, refs) =
                     &*find_context_file(fs_path.parent(), package_json()).await?
                 {
+                    // TODO: call read_package_json for consistent error handling
                     if let FileJsonContent::Content(package) = &*package_json.read_json().await? {
                         if let Some(field_value) = package[field].as_object() {
                             let package_path = package_json.parent();
@@ -1230,7 +1223,7 @@ fn handle_exports_field(
     let values = exports_field
         .lookup(path)
         .map(AliasMatch::try_into_self)
-        .collect::<Result<Vec<Cow<'_, ExportsValue>>>>()?;
+        .collect::<Result<Vec<Cow<'_, SubpathValue>>>>()?;
     for value in values.iter() {
         if value.add_results(
             conditions,
@@ -1257,6 +1250,31 @@ fn handle_exports_field(
         resolved_results,
         vec![AffectingResolvingAssetReferenceVc::new(package_json).into()],
     ))
+}
+
+/// Resolves a `#dep` import using the containing package.json's `imports`
+/// field. The dep may be a constant string or a pattern, and the values can be
+/// static strings or conditions like `import` or `require` to handle ESM/CJS
+/// with differently compiled files.
+// https://github.com/nodejs/node/blob/v20.1.0/lib/internal/modules/esm/resolve.js#L614-L672
+async fn resolve_package_internal_with_imports_field(
+    context: FileSystemPathVc,
+    specifier: &Pattern,
+) -> Result<ResolveResultVc> {
+    let package_json_context = find_context_file(context, package_json()).await?;
+    let FindContextFileResult::Found(package_json_path, refs) = &*package_json_context else {
+        return Ok(ResolveResult::unresolveable().into());
+    };
+
+    let package_json = match &*read_package_json(*package_json_path).await? {
+        Ok(json) => json,
+        Err(e) => {
+            e.as_issue().emit();
+            return Ok(ResolveResult::unresolveable().into());
+        }
+    };
+
+    todo!("implementing package internal imports");
 }
 
 #[turbo_tasks::value]

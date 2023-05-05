@@ -10,45 +10,62 @@ use super::{
     options::ConditionValue,
 };
 
-/// The result an "exports" field describes. Can represent multiple
+/// The result an "exports"/"imports" field describes. Can represent multiple
 /// alternatives, conditional result, ignored result (null mapping) and a plain
 /// result.
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub enum ExportsValue {
-    Alternatives(Vec<ExportsValue>),
-    Conditional(Vec<(String, ExportsValue)>),
+pub enum SubpathValue {
+    /// Alternative subpaths, defined with `"path": ["other1", "other2"]`,
+    /// allows for specifying multiple possible remappings to be tried. This
+    /// may be that conditions didn't match, or that a particular path
+    /// wasn't found.
+    Alternatives(Vec<SubpathValue>),
+
+    /// Conditional subpaths, defined with `"path": { "condition": "other"}`,
+    /// allow remapping based on certain predefined conditions. Eg, if using
+    /// ESM import syntax, the `import` condition allows you to remap to a
+    /// file that uses ESM syntax.
+    /// Node defines several conditions in https://nodejs.org/api/packages.html#conditional-exports
+    /// TODO: Should this use an enum of predefined keys?
+    Conditional(Vec<(String, SubpathValue)>),
+
+    /// A result subpath, defined with `"path": "other"`, remaps imports of
+    /// `path` to `other`.
     Result(String),
+
+    /// An excluded subpath, defined with `"path": null`, prevents importing
+    /// this subpath.
     Excluded,
 }
 
-impl AliasTemplate for ExportsValue {
+impl AliasTemplate for SubpathValue {
     type Output<'a> = Result<Self> where Self: 'a;
 
     fn replace(&self, capture: &str) -> Result<Self> {
         Ok(match self {
-            ExportsValue::Alternatives(list) => ExportsValue::Alternatives(
+            SubpathValue::Alternatives(list) => SubpathValue::Alternatives(
                 list.iter()
                     .map(|value| value.replace(capture))
                     .collect::<Result<Vec<_>>>()?,
             ),
-            ExportsValue::Conditional(list) => ExportsValue::Conditional(
+            SubpathValue::Conditional(list) => SubpathValue::Conditional(
                 list.iter()
                     .map(|(condition, value)| Ok((condition.clone(), value.replace(capture)?)))
                     .collect::<Result<Vec<_>>>()?,
             ),
-            ExportsValue::Result(value) => ExportsValue::Result(value.replace('*', capture)),
-            ExportsValue::Excluded => ExportsValue::Excluded,
+            SubpathValue::Result(value) => SubpathValue::Result(value.replace('*', capture)),
+            SubpathValue::Excluded => SubpathValue::Excluded,
         })
     }
 }
 
-impl ExportsValue {
+impl SubpathValue {
     /// Returns an iterator over all leaf results.
     fn results_mut(&mut self) -> ResultsIterMut<'_> {
         ResultsIterMut { stack: vec![self] }
     }
 
-    /// Walks the [ExportsValue] and adds results to the `target` vector. It
+    /// Walks the [SubpathValue] and adds results to the `target` vector. It
     /// uses the `conditions` to skip or enter conditional results.
     /// The state of conditions is stored within `condition_overrides`, which is
     /// also exposed to the consumer.
@@ -60,7 +77,7 @@ impl ExportsValue {
         target: &mut Vec<&'a str>,
     ) -> bool {
         match self {
-            ExportsValue::Alternatives(list) => {
+            SubpathValue::Alternatives(list) => {
                 for value in list {
                     if value.add_results(
                         conditions,
@@ -73,7 +90,7 @@ impl ExportsValue {
                 }
                 false
             }
-            ExportsValue::Conditional(list) => {
+            SubpathValue::Conditional(list) => {
                 for (condition, value) in list {
                     let condition_value = if condition == "default" {
                         &ConditionValue::Set
@@ -112,17 +129,17 @@ impl ExportsValue {
                 }
                 false
             }
-            ExportsValue::Result(r) => {
+            SubpathValue::Result(r) => {
                 target.push(r);
                 true
             }
-            ExportsValue::Excluded => true,
+            SubpathValue::Excluded => true,
         }
     }
 }
 
 struct ResultsIterMut<'a> {
-    stack: Vec<&'a mut ExportsValue>,
+    stack: Vec<&'a mut SubpathValue>,
 }
 
 impl<'a> Iterator for ResultsIterMut<'a> {
@@ -131,38 +148,38 @@ impl<'a> Iterator for ResultsIterMut<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(value) = self.stack.pop() {
             match value {
-                ExportsValue::Alternatives(list) => {
+                SubpathValue::Alternatives(list) => {
                     for value in list {
                         self.stack.push(value);
                     }
                 }
-                ExportsValue::Conditional(list) => {
+                SubpathValue::Conditional(list) => {
                     for (_, value) in list {
                         self.stack.push(value);
                     }
                 }
-                ExportsValue::Result(r) => return Some(r),
-                ExportsValue::Excluded => {}
+                SubpathValue::Result(r) => return Some(r),
+                SubpathValue::Excluded => {}
             }
         }
         None
     }
 }
 
-impl TryFrom<&Value> for ExportsValue {
+impl TryFrom<&Value> for SubpathValue {
     type Error = anyhow::Error;
 
     fn try_from(value: &Value) -> Result<Self> {
         match value {
-            Value::Null => Ok(ExportsValue::Excluded),
-            Value::String(s) => Ok(ExportsValue::Result(s.to_string())),
+            Value::Null => Ok(SubpathValue::Excluded),
+            Value::String(s) => Ok(SubpathValue::Result(s.to_string())),
             Value::Number(_) => Err(anyhow!(
                 "numeric values are invalid in exports field entries"
             )),
             Value::Bool(_) => Err(anyhow!(
                 "boolean values are invalid in exports field entries"
             )),
-            Value::Object(object) => Ok(ExportsValue::Conditional(
+            Value::Object(object) => Ok(SubpathValue::Conditional(
                 object
                     .iter()
                     .map(|(key, value)| {
@@ -177,7 +194,7 @@ impl TryFrom<&Value> for ExportsValue {
                     })
                     .collect::<Result<Vec<_>>>()?,
             )),
-            Value::Array(array) => Ok(ExportsValue::Alternatives(
+            Value::Array(array) => Ok(SubpathValue::Alternatives(
                 array
                     .iter()
                     .map(|value| value.try_into())
@@ -189,7 +206,7 @@ impl TryFrom<&Value> for ExportsValue {
 
 /// Content of an "exports" field in a package.json
 #[derive(PartialEq, Eq, Serialize, Deserialize)]
-pub struct ExportsField(AliasMap<ExportsValue>);
+pub struct ExportsField(AliasMap<SubpathValue>);
 
 impl TryFrom<&Value> for ExportsField {
     type Error = anyhow::Error;
@@ -212,7 +229,7 @@ impl TryFrom<&Value> for ExportsField {
                         continue;
                     }
 
-                    let mut value: ExportsValue = value.try_into()?;
+                    let mut value: SubpathValue = value.try_into()?;
 
                     let pattern = if is_folder_shorthand(key) {
                         expand_folder_shorthand(key, &mut value)?
@@ -226,7 +243,7 @@ impl TryFrom<&Value> for ExportsField {
                 if !conditions.is_empty() {
                     map.insert(
                         AliasPattern::Exact(".".to_string()),
-                        ExportsValue::Conditional(
+                        SubpathValue::Conditional(
                             conditions
                                 .into_iter()
                                 .map(|(key, value)| Ok((key.to_string(), value.try_into()?)))
@@ -241,7 +258,7 @@ impl TryFrom<&Value> for ExportsField {
                 let mut map = AliasMap::new();
                 map.insert(
                     AliasPattern::exact("."),
-                    ExportsValue::Result(string.to_string()),
+                    SubpathValue::Result(string.to_string()),
                 );
                 map
             }
@@ -252,7 +269,7 @@ impl TryFrom<&Value> for ExportsField {
                     // This allows for more complex patterns than the spec allows, since we accept
                     // the following:
                     // [{ "node": "./node.js", "default": "./index.js" }, "./index.js"]
-                    ExportsValue::Alternatives(
+                    SubpathValue::Alternatives(
                         array
                             .iter()
                             .map(|value| value.try_into())
@@ -281,7 +298,7 @@ fn is_folder_shorthand(key: &str) -> bool {
 /// This is not implemented directly by [`AliasMap`] as it is not
 /// shared behavior with the tsconfig.json `paths` field. Instead,
 /// we do the expansion here.
-fn expand_folder_shorthand(key: &str, value: &mut ExportsValue) -> Result<AliasPattern> {
+fn expand_folder_shorthand(key: &str, value: &mut SubpathValue) -> Result<AliasPattern> {
     // Transform folder patterns into wildcard patterns.
     let pattern = AliasPattern::wildcard(key, "");
 
@@ -315,7 +332,7 @@ impl ExportsField {
     /// Looks up a request string in the "exports" field. Returns an iterator of
     /// matching requests. Usually only the first one is relevant, except
     /// when conditions don't match or only partially match.
-    pub fn lookup<'a>(&'a self, request: &'a str) -> AliasMapLookupIterator<'a, ExportsValue> {
+    pub fn lookup<'a>(&'a self, request: &'a str) -> AliasMapLookupIterator<'a, SubpathValue> {
         self.0.lookup(request)
     }
 }
@@ -323,7 +340,7 @@ impl ExportsField {
 /// Content of an "alias" configuration
 #[turbo_tasks::value(shared)]
 #[derive(Default)]
-pub struct ResolveAliasMap(#[turbo_tasks(trace_ignore)] AliasMap<ExportsValue>);
+pub struct ResolveAliasMap(#[turbo_tasks(trace_ignore)] AliasMap<SubpathValue>);
 
 impl TryFrom<&IndexMap<String, Value>> for ResolveAliasMap {
     type Error = anyhow::Error;
@@ -332,7 +349,7 @@ impl TryFrom<&IndexMap<String, Value>> for ResolveAliasMap {
         let mut map = AliasMap::new();
 
         for (key, value) in object.iter() {
-            let mut value: ExportsValue = value.try_into()?;
+            let mut value: SubpathValue = value.try_into()?;
 
             let pattern = if is_folder_shorthand(key) {
                 expand_folder_shorthand(key, &mut value)?
@@ -347,8 +364,8 @@ impl TryFrom<&IndexMap<String, Value>> for ResolveAliasMap {
 }
 
 impl<'a> IntoIterator for &'a ResolveAliasMap {
-    type Item = (AliasPattern, &'a ExportsValue);
-    type IntoIter = AliasMapIter<'a, ExportsValue>;
+    type Item = (AliasPattern, &'a SubpathValue);
+    type IntoIter = AliasMapIter<'a, SubpathValue>;
 
     fn into_iter(self) -> Self::IntoIter {
         (&self.0).into_iter()
