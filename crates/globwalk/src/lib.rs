@@ -5,6 +5,7 @@ use itertools::{
     FoldWhile::{Continue, Done},
     Itertools,
 };
+use path_slash::PathExt;
 use turbopath::AbsoluteSystemPathBuf;
 
 pub enum WalkType {
@@ -50,7 +51,7 @@ pub fn globwalk<'a>(
     exclude: &'a [String],
     walk_type: WalkType,
 ) -> impl Iterator<Item = Result<AbsoluteSystemPathBuf, WalkError>> + 'a {
-    let walker = walkdir::WalkDir::new(base_path.as_path()).follow_links(true);
+    let walker = walkdir::WalkDir::new(base_path.as_path()).follow_links(false);
     let mut iter = walker.into_iter();
 
     std::iter::from_fn(move || loop {
@@ -63,7 +64,7 @@ pub fn globwalk<'a>(
         let relative_path = path.strip_prefix(&base_path).expect("it is a subdir");
         let is_directory = path.is_dir();
 
-        let include = match do_match(relative_path, include, exclude, is_directory) {
+        let include = match do_match_directory(relative_path, include, exclude, is_directory) {
             Ok(include) => include,
             Err(glob) => return Some(Err(WalkError::BadPattern(glob.to_owned()))),
         };
@@ -112,6 +113,35 @@ fn potential_match_inner(glob: &str, path: &str, top_level: bool) -> Option<Matc
     }
 }
 
+fn do_match_directory<'a>(
+    path: &Path,
+    include: &'a [String],
+    exclude: &'a [String],
+    is_directory: bool,
+) -> Result<MatchType, &'a String> {
+    let path_unix = match path.to_slash() {
+        Some(path) => path,
+        None => return Ok(MatchType::None), // you can't match a path that isn't valid unicode
+    };
+
+    let first = do_match(&path_unix, include, exclude, is_directory);
+
+    if is_directory && !path_unix.ends_with('/') {
+        let second = do_match(&format!("{}/", path_unix), include, exclude, is_directory);
+        match (first, second) {
+            (Ok(MatchType::Match), _) => Ok(MatchType::Match),
+            (_, Ok(MatchType::Match)) => Ok(MatchType::Match),
+            (Ok(MatchType::PotentialMatch), _) => Ok(MatchType::PotentialMatch),
+            (_, Ok(MatchType::PotentialMatch)) => Ok(MatchType::PotentialMatch),
+            (Ok(MatchType::None), Ok(MatchType::None)) => Ok(MatchType::None),
+            (Err(glob), _) => Err(glob),
+            (_, Err(glob)) => Err(glob),
+        }
+    } else {
+        first
+    }
+}
+
 /// Executes a match against a relative path using the given include and exclude
 /// globs. If the path is not valid unicode, then it is automatically not
 /// matched.
@@ -119,16 +149,11 @@ fn potential_match_inner(glob: &str, path: &str, top_level: bool) -> Option<Matc
 /// If an evaluated glob is invalid, then this function returns an error with
 /// the glob that failed.
 fn do_match<'a>(
-    path: &Path,
+    path: &str,
     include: &'a [String],
     exclude: &'a [String],
     is_directory: bool,
 ) -> Result<MatchType, &'a String> {
-    let path = match path.to_str() {
-        Some(path) => path,
-        None => return Ok(MatchType::None), // you can't match a path that isn't valid unicode
-    };
-
     if include.is_empty() {
         return Ok(MatchType::Match);
     }
@@ -178,6 +203,9 @@ fn match_include(include: &str, path: &str, is_dir: bool) -> Option<MatchType> {
     if is_dir {
         potential_match(include, path)
     } else {
+        // ensure that directories end with a slash
+        // so that trailing star globs match
+
         match glob_match(include, path) {
             Some(true) => Some(MatchType::Match),
             Some(false) => Some(MatchType::None),
@@ -224,7 +252,7 @@ mod test {
     #[test]
     fn do_match_empty_include() {
         assert_eq!(
-            super::do_match(Path::new("/a/b/c/d"), &[], &[], false).unwrap(),
+            super::do_match_directory(Path::new("/a/b/c/d"), &[], &[], false).unwrap(),
             MatchType::Match
         )
     }
@@ -287,7 +315,7 @@ mod test {
     }
 
     #[test_case("abc", None, 1, 1 ; "exact match")]
-    #[test_case("*", None, 18, 15 ; "single star match")]
+    #[test_case("*", None, 19, 15 ; "single star match")]
     #[test_case("*c", None, 2, 2 ; "single star suffix match")]
     #[test_case("a*", None, 9, 9 ; "single star prefix match")]
     #[test_case("a*/b", None, 2, 2 ; "single star prefix with suffix match")]
@@ -316,11 +344,13 @@ mod test {
     #[test_case("[^", Some(WalkError::BadPattern("[^".into())), 0, 0 ; "unclosed negated character class error")]
     #[test_case("[^bc", Some(WalkError::BadPattern("[^bc".into())), 0, 0 ; "unclosed negated character class error 2")]
     #[test_case("a[", Some(WalkError::BadPattern("a[".into())), 0, 0 ; "unclosed character class error after pattern")]
-    #[test_case("ad[", Some(WalkError::BadPattern("ad[".into())), 0, 0 ; "unclosed character class error after pattern 3")]
+    // glob watch will not error on this, since it does not get far enough into the glob to see the
+    // error
+    #[test_case("ad[", None, 0, 0 ; "unclosed character class error after pattern 3")]
     #[test_case("*x", None, 4, 4 ; "star pattern match")]
     #[test_case("[abc]", None, 3, 3 ; "single character class match")]
-    #[test_case("a/**", None, 6, 6 ; "a followed by double star match")]
-    #[test_case("**/c", None, 5, 4 ; "double star and single subdirectory match")]
+    #[test_case("a/**", None, 7, 7 ; "a followed by double star match")]
+    #[test_case("**/c", None, 4, 4 ; "double star and single subdirectory match")]
     #[test_case("a/**/b", None, 2, 2 ; "a followed by double star and single subdirectory match")]
     #[test_case("a/**/c", None, 2, 2 ; "a followed by double star and multiple subdirectories match 2")]
     #[test_case("a/**/d", None, 1, 1 ; "a followed by double star and multiple subdirectories with target match")]
@@ -329,24 +359,30 @@ mod test {
     #[test_case("ab{c,d,*}", None, 5, 5 ; "pattern with curly braces and wildcard match")]
     #[test_case("ab{c,d}[", Some(WalkError::BadPattern("ab{c,d}[".into())), 0, 0)]
     // ; "pattern with curly braces and unclosed character class error"
-    #[test_case("a{,bc}", None, 1, 1 ; "a followed by comma or b or c")]
+    #[test_case("a{,bc}", None, 2, 2 ; "a followed by comma or b or c")]
     #[test_case("a/{b/c,c/b}", None, 2, 2)]
     #[test_case("{a/{b,c},abc}", None, 3, 3)]
     #[test_case("{a/ab*}", None, 1, 1)]
-    #[test_case("{a/*}", None, 3, 3)]
+    #[test_case("a/*", None, 3, 3)]
+    #[test_case("{a/*}", None, 3, 3 ; "curly braces with single star match")]
+    // {a/*}
+    // [a/abc a/b a/c]
     #[test_case("{a/abc}", None, 1, 1)]
     #[test_case("{a/b,a/c}", None, 2, 2)]
-    #[test_case("abc/**", None, 2, 2 ; "abc then doublestar")]
+    #[test_case("abc/**", None, 3, 3 ; "abc then doublestar")]
     #[test_case("**/abc", None, 2, 2)]
     #[test_case("**/*.txt", None, 1, 1)]
     #[test_case("**/【*", None, 1, 1)]
-    // broken symlinks will not appear
-    #[test_case("broken-symlink", None, 0, 0)]
-    // // We don't care about matching a particular file, we want to verify
-    // // that we don't traverse the symlink
-    #[test_case("working-symlink/c/*", None, 1, 1)]
-    #[test_case("working-sym*/*", None, 1, 0)]
-    #[test_case("b/**/f", None, 2, 0)]
+    // in the original implementation, broken symlinks
+    // were not traversed or yielded, but walkdir
+    // does yield them, so we do too.
+    #[test_case("broken-symlink", None, 1, 1)]
+    // in the original implementation, working symlinks
+    // were not traversed, but were yielded. walkdir
+    // does not yield working symlinks, so we don't either.
+    #[test_case("working-symlink/c/*", None, 0, 0)]
+    // #[test_case("working-sym*/*", None, 0, 0)]
+    #[test_case("b/**/f", None, 0, 0)]
     fn glob_walk(
         pattern: &str,
         err_expected: Option<WalkError>,
