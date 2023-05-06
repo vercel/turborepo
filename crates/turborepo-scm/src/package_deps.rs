@@ -1,50 +1,26 @@
 use std::{collections::HashMap, process::Command};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{hash_object::hash_objects, ls_tree::git_ls_tree, status::append_git_status};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
-pub fn get_package_deps(
+pub fn get_package_file_hashes_from_git_index(
     turbo_root: &AbsoluteSystemPathBuf,
     package_path: &AnchoredSystemPathBuf,
-    inputs: &[&str],
 ) -> Result<GitHashes> {
     // TODO: memoize git root -> turbo root calculation once we aren't crossing ffi
     let git_root = find_git_root(turbo_root)?;
     let full_pkg_path = turbo_root.resolve(package_path);
     let git_to_pkg_path = git_root.anchor(&full_pkg_path)?;
     let pkg_prefix = git_to_pkg_path.to_unix()?;
-    let result = if inputs.len() == 0 {
-        let mut hashes = git_ls_tree(&full_pkg_path)?;
-        // Note: to_hash is *git repo relative*
-        let to_hash = append_git_status(&full_pkg_path, &pkg_prefix, inputs, &mut hashes)?;
-        hash_objects(&full_pkg_path, to_hash, &pkg_prefix, &mut hashes)?;
-        hashes
-    } else {
-        let pkg_prefix_str = pkg_prefix.as_str()?;
-        let mut inputs = inputs.to_vec();
-        inputs.push("package.json");
-        inputs.push("turbo.json");
-        let mut prefixed_input_patterns = vec![];
-        let mut prefixed_exclude_patterns = vec![];
-        for input in inputs {
-            if input.starts_with("!") {
-                let glob = input
-                    .get(1..)
-                    .ok_or_else(|| anyhow!("invalid glob: {}", input))?;
-                let pkg_glob = format!("{}/{}", pkg_prefix_str, glob);
-                prefixed_exclude_patterns.push(pkg_glob);
-            } else {
-                let pkg_glob = format!("{}/{}", pkg_prefix_str, input);
-                prefixed_input_patterns.push(pkg_glob);
-            }
-        }
-        let files_to_hash = unimplemented!();
-    };
-    Ok(result)
+    let mut hashes = git_ls_tree(&full_pkg_path)?;
+    // Note: to_hash is *git repo relative*
+    let to_hash = append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
+    hash_objects(&full_pkg_path, to_hash, &pkg_prefix, &mut hashes)?;
+    Ok(hashes)
 }
 
 pub(crate) fn find_git_root(turbo_root: &AbsoluteSystemPathBuf) -> Result<AbsoluteSystemPathBuf> {

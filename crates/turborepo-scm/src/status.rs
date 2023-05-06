@@ -13,18 +13,17 @@ use crate::{package_deps::GitHashes, Error};
 pub(crate) fn append_git_status(
     root_path: &AbsoluteSystemPathBuf,
     pkg_prefix: &RelativeUnixPathBuf,
-    patterns: &[&str],
     hashes: &mut GitHashes,
 ) -> Result<Vec<RelativeUnixPathBuf>> {
-    let mut args = vec!["status", "--untracked-files", "--no-renames", "-z", "--"];
-    if patterns.len() == 0 {
-        args.push(".");
-    } else {
-        let mut patterns = Vec::from(patterns);
-        args.append(&mut patterns);
-    }
     let mut git = Command::new("git")
-        .args(args.as_slice())
+        .args([
+            "status",
+            "--untracked-files",
+            "--no-renames",
+            "-z",
+            "--",
+            ".",
+        ])
         .current_dir(root_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
