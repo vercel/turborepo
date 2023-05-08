@@ -629,6 +629,23 @@ async function getTestResultDiffBase(
   }
 }
 
+function withoutRetries(results: Array<JobResult>): Array<JobResult> {
+  results = results.slice().reverse();
+  const seenNames = new Set();
+  results = results.filter((job) => {
+    if (
+      job.data.testResults.some((testResult) => seenNames.has(testResult.name))
+    ) {
+      return false;
+    }
+    job.data.testResults.forEach((testResult) =>
+      seenNames.add(testResult.name)
+    );
+    return true;
+  });
+  return results.reverse();
+}
+
 function getTestSummary(
   sha: string,
   shouldDiffWithMain: boolean,
@@ -645,7 +662,7 @@ function getTestSummary(
     currentTestPassedCaseCount,
     currentTestTotalCaseCount,
     currentTestFailedNames,
-  } = jobResults.result.reduce(
+  } = withoutRetries(jobResults.result).reduce(
     (acc, value) => {
       const { data } = value;
       acc.currentTestFailedSuiteCount += data.numFailedTestSuites;
@@ -722,7 +739,7 @@ function getTestSummary(
     baseTestPassedCaseCount,
     baseTestTotalCaseCount,
     baseTestFailedNames,
-  } = baseResults.result.reduce(
+  } = withoutRetries(baseResults.result).reduce(
     (acc, value) => {
       const { data } = value;
       acc.baseTestFailedSuiteCount += data.numFailedTestSuites;

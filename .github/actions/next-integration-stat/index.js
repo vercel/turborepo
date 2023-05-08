@@ -16515,6 +16515,24 @@
         }
       });
     }
+    function withoutRetries(results) {
+      results = results.slice().reverse();
+      const seenNames = new Set();
+      results = results.filter((job) => {
+        if (
+          job.data.testResults.some((testResult) =>
+            seenNames.has(testResult.name)
+          )
+        ) {
+          return false;
+        }
+        job.data.testResults.forEach((testResult) =>
+          seenNames.add(testResult.name)
+        );
+        return true;
+      });
+      return results.reverse();
+    }
     function getTestSummary(
       sha,
       shouldDiffWithMain,
@@ -16531,7 +16549,7 @@
         currentTestPassedCaseCount,
         currentTestTotalCaseCount,
         currentTestFailedNames,
-      } = jobResults.result.reduce(
+      } = withoutRetries(jobResults.result).reduce(
         (acc, value) => {
           var _a;
           const { data } = value;
@@ -16606,7 +16624,7 @@
         baseTestPassedCaseCount,
         baseTestTotalCaseCount,
         baseTestFailedNames,
-      } = baseResults.result.reduce(
+      } = withoutRetries(baseResults.result).reduce(
         (acc, value) => {
           var _a;
           const { data } = value;
