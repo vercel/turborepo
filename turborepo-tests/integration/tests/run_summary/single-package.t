@@ -33,6 +33,7 @@ Check
   [
     "envMode",
     "execution",
+    "frameworkInference",
     "globalCacheInputs",
     "id",
     "scm",

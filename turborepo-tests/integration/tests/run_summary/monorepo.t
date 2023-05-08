@@ -33,6 +33,7 @@ Setup
   [
     "envMode",
     "execution",
+    "frameworkInference",
     "globalCacheInputs",
     "id",
     "packages",
