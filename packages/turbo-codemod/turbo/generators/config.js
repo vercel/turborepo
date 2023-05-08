@@ -1,8 +1,8 @@
 const fs = require("fs-extra");
+const path = require("path");
 
-module.exports = function plopConfig(plop) {
-  // controller generator
-  plop.setGenerator("controller", {
+module.exports = function (plop, config) {
+  plop.setGenerator("transformer", {
     description: "Add a new transformer",
     prompts: [
       {
@@ -36,8 +36,13 @@ module.exports = function plopConfig(plop) {
       },
       function createFixturesDirectory(answers) {
         process.chdir(plop.getPlopfilePath());
-        const directory = `__tests__/__fixtures__/${answers.name}`;
-        fs.mkdirSync(`__tests__/__fixtures__/${answers.name}`);
+        const directory = path.join(
+          config.destBasePath,
+          "__tests__",
+          "__fixtures__",
+          answers.name
+        );
+        fs.mkdirSync(directory);
 
         return `created empty ${directory} directory for fixtures`;
       },

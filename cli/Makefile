@@ -172,6 +172,7 @@ build: install
 	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo build --filter=@turbo/codemod...
 	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo build --filter=turbo-ignore...
 	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/workspaces && pnpm turbo build --filter=@turbo/workspaces...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/gen && pnpm turbo build --filter=@turbo/gen...
 	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-plugin-turbo && pnpm turbo build --filter=eslint-plugin-turbo...
 	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-config-turbo && pnpm turbo build --filter=eslint-config-turbo...
 
@@ -239,6 +240,7 @@ stage-release: cmd/turbo/version.go
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-gen && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
@@ -266,6 +268,7 @@ publish-turbo: clean build
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-gen && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
 
@@ -277,6 +280,7 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-workspaces-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-gen-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-plugin-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz
 endif

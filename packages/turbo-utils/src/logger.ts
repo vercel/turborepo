@@ -30,3 +30,11 @@ export const error = (...args: any[]) => {
 export const warn = (...args: any[]) => {
   console.error(yellow.bold(">>>"), ...args);
 };
+
+export const dimmed = (...args: any[]) => {
+  console.log(chalk.dim(...args));
+};
+
+export const item = (...args: any[]) => {
+  console.log(turboBlue.bold("  •"), ...args);
+};
