@@ -40,9 +40,6 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 	}
 	tasks := executionState.CLIArgs.Command.Run.Tasks
 	passThroughArgs := executionState.CLIArgs.Command.Run.PassThroughArgs
-	if len(tasks) == 0 {
-		return errors.New("at least one task must be specified")
-	}
 	opts, err := optsFromArgs(&executionState.CLIArgs)
 	if err != nil {
 		return err
@@ -50,7 +47,7 @@ func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *si
 
 	opts.runOpts.PassThroughArgs = passThroughArgs
 	run := configureRun(base, opts, signalWatcher)
-	if err := run.run(ctx, tasks); err != nil {
+	if err := run.run(ctx, tasks, executionState); err != nil {
 		base.LogError("run failed: %v", err)
 		return err
 	}
@@ -75,6 +72,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.runOpts.Summarize = runPayload.Summarize
 	opts.runOpts.ExperimentalSpaceID = runPayload.ExperimentalSpaceID
 	opts.runOpts.EnvMode = runPayload.EnvMode
+	opts.runOpts.FrameworkInference = runPayload.FrameworkInference
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force
@@ -148,7 +146,7 @@ type run struct {
 	processes *process.Manager
 }
 
-func (r *run) run(ctx gocontext.Context, targets []string) error {
+func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbostate.ExecutionState) error {
 	startAt := time.Now()
 	packageJSONPath := r.base.RepoRoot.UntypedJoin("package.json")
 	rootPackageJSON, err := fs.ReadPackageJSON(packageJSONPath)
@@ -160,9 +158,9 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 
 	var pkgDepGraph *context.Context
 	if r.opts.runOpts.SinglePackage {
-		pkgDepGraph, err = context.SinglePackageGraph(r.base.RepoRoot, rootPackageJSON)
+		pkgDepGraph, err = context.SinglePackageGraph(rootPackageJSON, executionState.PackageManager)
 	} else {
-		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON)
+		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON, executionState.PackageManager)
 	}
 	if err != nil {
 		var warnings *context.Warnings
@@ -251,6 +249,7 @@ func (r *run) run(ctx gocontext.Context, targets []string) error {
 		pkgDepGraph.Lockfile,
 		turboJSON.GlobalPassthroughEnv,
 		r.opts.runOpts.EnvMode,
+		r.opts.runOpts.FrameworkInference,
 		r.base.Logger,
 		r.base.UI,
 		isStructuredOutput,

@@ -1,18 +1,18 @@
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::{AbsoluteSystemPathBuf, IntoSystem, PathValidationError};
+use crate::{AbsoluteSystemPathBuf, IntoSystem, PathError, PathValidationError};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct AnchoredSystemPathBuf(PathBuf);
 
 impl TryFrom<&Path> for AnchoredSystemPathBuf {
-    type Error = PathValidationError;
+    type Error = PathError;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
         if path.is_absolute() {
-            return Err(PathValidationError::NotRelative(path.to_path_buf()));
+            return Err(PathValidationError::NotRelative(path.to_path_buf()).into());
         }
 
         Ok(AnchoredSystemPathBuf(path.into_system()?))
@@ -23,7 +23,7 @@ impl AnchoredSystemPathBuf {
     pub fn new(
         root: &AbsoluteSystemPathBuf,
         path: &AbsoluteSystemPathBuf,
-    ) -> Result<Self, PathValidationError> {
+    ) -> Result<Self, PathError> {
         let stripped_path = path
             .as_path()
             .strip_prefix(root.as_path())
@@ -37,15 +37,15 @@ impl AnchoredSystemPathBuf {
         self.0.as_path()
     }
 
-    pub fn to_str(&self) -> Result<&str, PathValidationError> {
+    pub fn to_str(&self) -> Result<&str, PathError> {
         self.0
             .to_str()
-            .ok_or_else(|| PathValidationError::InvalidUnicode(self.0.clone()))
+            .ok_or_else(|| PathValidationError::InvalidUnicode(self.0.clone()).into())
     }
 }
 
-impl Into<PathBuf> for AnchoredSystemPathBuf {
-    fn into(self) -> PathBuf {
-        self.0
+impl From<AnchoredSystemPathBuf> for PathBuf {
+    fn from(path: AnchoredSystemPathBuf) -> PathBuf {
+        path.0
     }
 }

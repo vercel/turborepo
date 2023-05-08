@@ -16,6 +16,7 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
+use turbopath::RelativeSystemPathBuf;
 use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
 
 #[cfg(not(test))]
@@ -166,8 +167,11 @@ pub async fn link(
             verify_caching_enabled(&api_client, team_id, token, Some(selected_team.clone()))
                 .await?;
 
-            fs::create_dir_all(base.repo_root.join(".turbo"))
-                .context("could not create .turbo directory")?;
+            fs::create_dir_all(
+                base.repo_root
+                    .join_relative(RelativeSystemPathBuf::new(".turbo").expect("relative")),
+            )
+            .context("could not create .turbo directory")?;
             base.repo_config_mut()?
                 .set_team_id(Some(team_id.to_string()))?;
 
@@ -190,7 +194,7 @@ pub async fn link(
                 base.ui.apply(BOLD.apply_to(chosen_team_name)),
                 GREY.apply_to("To disable Remote Caching, run `npx turbo unlink`")
             );
-            return Ok(());
+            Ok(())
         }
         LinkTarget::Spaces => {
             println!(
@@ -213,17 +217,15 @@ pub async fn link(
             let selected_space = select_space(base, &spaces_response.spaces)?;
 
             // print result from selected_space
-            let space = match selected_space {
-                SelectedSpace::Space(space) => space,
-            };
+            let SelectedSpace::Space(space) = selected_space;
 
             add_space_id_to_turbo_json(base, &space.id).map_err(|err| {
-                return anyhow!(
+                anyhow!(
                     "Could not persist selected space ({}) to `experimentalSpaces.id` in \
                      turbo.json {}",
                     space.id,
                     err
-                );
+                )
             })?;
 
             println!(
@@ -240,7 +242,7 @@ pub async fn link(
                 )
             );
 
-            return Ok(());
+            Ok(())
         }
     }
 }
@@ -397,7 +399,9 @@ fn enable_caching(url: &str) -> Result<()> {
 }
 
 fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
-    let gitignore_path = base.repo_root.join(".gitignore");
+    let gitignore_path = base
+        .repo_root
+        .join_relative(RelativeSystemPathBuf::new(".gitignore").expect("relative"));
 
     if !gitignore_path.exists() {
         let mut gitignore = File::create(gitignore_path)?;
@@ -421,7 +425,9 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
 }
 
 fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> {
-    let turbo_json_path = base.repo_root.join("turbo.json");
+    let turbo_json_path = base
+        .repo_root
+        .join_relative(RelativeSystemPathBuf::new("turbo.json").expect("relative"));
 
     if !turbo_json_path.exists() {
         return Err(anyhow!("turbo.json not found."));
@@ -455,6 +461,7 @@ mod test {
 
     use tempfile::{NamedTempFile, TempDir};
     use tokio::sync::OnceCell;
+    use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
     use vercel_api_mock::start_test_server;
 
     use crate::{
@@ -470,6 +477,7 @@ mod test {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
         fs::write(
             repo_config_file.path(),
             r#"{ "apiurl": "http://localhost:3000" }"#,
@@ -489,7 +497,7 @@ mod test {
                     .unwrap(),
             ),
             repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                RepoConfigLoader::new(repo_config_path)
                     .with_api(Some(format!("http://localhost:{}", port)))
                     .with_login(Some(format!("http://localhost:{}", port)))
                     .load()
@@ -519,6 +527,7 @@ mod test {
 
         // repo config
         let repo_config_file = NamedTempFile::new().unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
         fs::write(
             repo_config_file.path(),
             r#"{ "apiurl": "http://localhost:3000" }"#,
@@ -528,7 +537,7 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            repo_root: TempDir::new().unwrap().into_path(),
+            repo_root: AbsoluteSystemPathBuf::new(TempDir::new().unwrap().into_path()).unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
@@ -538,7 +547,7 @@ mod test {
                     .unwrap(),
             ),
             repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                RepoConfigLoader::new(repo_config_path)
                     .with_api(Some(format!("http://localhost:{}", port)))
                     .with_login(Some(format!("http://localhost:{}", port)))
                     .load()
@@ -549,7 +558,10 @@ mod test {
         };
 
         // turbo config
-        let turbo_json_file = base.repo_root.join("turbo.json");
+        let turbo_json_file = base
+            .repo_root
+            .join_relative(RelativeSystemPathBuf::new("turbo.json").expect("relative"));
+
         fs::write(
             turbo_json_file.as_path(),
             r#"{ "globalEnv": [], "pipeline": {} }"#,

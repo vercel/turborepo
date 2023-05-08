@@ -1,11 +1,6 @@
-use std::{
-    backtrace::Backtrace,
-    collections::HashSet,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{backtrace::Backtrace, collections::HashSet, path::PathBuf, process::Command};
 
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath};
 
 use crate::Error;
 
@@ -74,7 +69,7 @@ fn execute_git_command(
     pathspec: &str,
 ) -> Result<Vec<u8>, Error> {
     let mut command = Command::new("git");
-    command.args(args).current_dir(&git_root);
+    command.args(args).current_dir(git_root);
 
     add_pathspec(&mut command, pathspec);
 
@@ -89,7 +84,7 @@ fn execute_git_command(
 }
 
 fn add_pathspec(command: &mut Command, pathspec: &str) {
-    if pathspec != "" {
+    if !pathspec.is_empty() {
         command.arg("--").arg(pathspec);
     }
 }
@@ -102,7 +97,7 @@ fn add_files_from_stdout(
 ) {
     let stdout = String::from_utf8(stdout).unwrap();
     for line in stdout.lines() {
-        let path = Path::new(line);
+        let path = RelativeUnixPath::new(&line).unwrap();
         let anchored_to_turbo_root_file_path =
             reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, path).unwrap();
         files.insert(
@@ -117,10 +112,9 @@ fn add_files_from_stdout(
 fn reanchor_path_from_git_root_to_turbo_root(
     git_root: &AbsoluteSystemPathBuf,
     turbo_root: &AbsoluteSystemPathBuf,
-    path: &Path,
+    path: &RelativeUnixPath,
 ) -> Result<AnchoredSystemPathBuf, Error> {
-    let anchored_to_git_root_file_path: AnchoredSystemPathBuf = path.try_into()?;
-    let absolute_file_path = git_root.resolve(&anchored_to_git_root_file_path);
+    let absolute_file_path = git_root.join_unix_path(path)?;
     let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
     Ok(anchored_to_turbo_root_file_path)
 }
@@ -185,7 +179,7 @@ mod tests {
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
-    use turbopath::PathValidationError;
+    use turbopath::{PathError, PathValidationError};
 
     use super::previous_content;
     use crate::{git::changed_files, Error};
@@ -615,7 +609,10 @@ mod tests {
 
         assert_matches!(
             turbo_root_is_not_subdir_of_git_root,
-            Err(Error::Path(PathValidationError::NotParent(_, _), _))
+            Err(Error::Path(
+                PathError::PathValidationError(PathValidationError::NotParent(_, _)),
+                _
+            ))
         );
 
         Ok(())

@@ -264,12 +264,34 @@ func Patches(content []byte, packageManager string) []string {
 	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
 		panic(err)
 	}
-
 	if err := resp.GetError(); err != "" {
 		panic(err)
 	}
 
 	return resp.GetPatches().GetPatches()
+}
+
+// RecursiveCopy copies src and its contents to dst
+func RecursiveCopy(src string, dst string) error {
+	req := ffi_proto.RecursiveCopyRequest{
+		Src: src,
+		Dst: dst,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.recursive_copy(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.RecursiveCopyResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+	// Error is optional, so a nil value means no error was set
+	// GetError() papers over the difference and returns the zero
+	// value if it isn't set, so we need to check the value directly.
+	if resp.Error != nil {
+		return errors.New(*resp.Error)
+	}
+	return nil
 }
 
 // GlobalChange checks if there are any differences between lockfiles that would completely invalidate

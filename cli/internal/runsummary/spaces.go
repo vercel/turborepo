@@ -10,20 +10,27 @@ type spacesRunResponse struct {
 	URL string
 }
 
+type spacesClientSummary struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 type spacesRunPayload struct {
-	StartTime      int64  `json:"startTime,omitempty"`      // when the run was started
-	EndTime        int64  `json:"endTime,omitempty"`        // when the run ended. we should never submit start and end at the same time.
-	Status         string `json:"status,omitempty"`         // Status is "running" or "completed"
-	Type           string `json:"type,omitempty"`           // hardcoded to "TURBO"
-	ExitCode       int    `json:"exitCode,omitempty"`       // exit code for the full run
-	Command        string `json:"command,omitempty"`        // the thing that kicked off the turbo run
-	RepositoryPath string `json:"repositoryPath,omitempty"` // where the command was invoked from
-	Context        string `json:"context,omitempty"`        // the host on which this Run was executed (e.g. Github Action, Vercel, etc)
+	StartTime      int64               `json:"startTime,omitempty"`      // when the run was started
+	EndTime        int64               `json:"endTime,omitempty"`        // when the run ended. we should never submit start and end at the same time.
+	Status         string              `json:"status,omitempty"`         // Status is "running" or "completed"
+	Type           string              `json:"type,omitempty"`           // hardcoded to "TURBO"
+	ExitCode       int                 `json:"exitCode,omitempty"`       // exit code for the full run
+	Command        string              `json:"command,omitempty"`        // the thing that kicked off the turbo run
+	RepositoryPath string              `json:"repositoryPath,omitempty"` // where the command was invoked from
+	Context        string              `json:"context,omitempty"`        // the host on which this Run was executed (e.g. Github Action, Vercel, etc)
+	Client         spacesClientSummary `json:"client"`                   // Details about the turbo client
+	GitBranch      string              `json:"gitBranch"`
+	GitSha         string              `json:"gitSha"`
 
 	// TODO: we need to add these in
 	// originationUser string
-	// gitBranch       string
-	// gitSha          string
 }
 
 // spacesCacheStatus is the same as TaskCacheSummary so we can convert
@@ -57,6 +64,7 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 	if name := ci.Constant(); name != "" {
 		context = name
 	}
+
 	return &spacesRunPayload{
 		StartTime:      startTime,
 		Status:         "running",
@@ -64,6 +72,13 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 		RepositoryPath: rsm.repoPath.ToString(),
 		Type:           "TURBO",
 		Context:        context,
+		GitBranch:      rsm.RunSummary.SCM.Branch,
+		GitSha:         rsm.RunSummary.SCM.Sha,
+		Client: spacesClientSummary{
+			ID:      "turbo",
+			Name:    "Turbo",
+			Version: rsm.RunSummary.TurboVersion,
+		},
 	}
 }
 

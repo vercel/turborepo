@@ -261,6 +261,10 @@ To alter the cache for _all_ tasks, you can declare environment variables in the
 
 ### Automatic environment variable inclusion
 
+<Callout type="info">
+  This feature can be disabled by passing [`--framework-inference=false`](../reference/command-line-reference#--framework-inference) to your `turbo` command.
+</Callout>
+
 To help ensure correct caching across environments, Turborepo automatically infers and includes public environment variables when calculating cache keys for apps built with detected frameworks. You can safely omit framework-specific public environment variables from `turbo.json`:
 
 ```diff filename="turbo.json"
@@ -437,7 +441,6 @@ First, `turbo` constructs a hash of the current global state of the codebase:
 Then it adds more factors relevant to a given workspace's task:
 
 - Hash the contents of all version-controlled files in the workspace folder or the files matching the `inputs` globs, if present
-- The hashes of all internal dependencies
 - The `outputs` option specified in the [`pipeline`](/repo/docs/reference/configuration#pipeline)
 - The set of resolved versions of all installed `dependencies`, `devDependencies`, and `optionalDependencies` specified in a workspace's `package.json` from the root lockfile
 - The workspace task's name

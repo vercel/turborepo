@@ -23,8 +23,11 @@ import (
 // the RunSummary will print this, instead of the script (e.g. `next build`).
 const MissingTaskLabel = "<NONEXISTENT>"
 
-// MissingFrameworkLabel is a string to identify when a workspace doesn't detect a framework
-const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
+// NoFrameworkDetected is a string to identify when a workspace doesn't detect a framework
+const NoFrameworkDetected = "<NO FRAMEWORK DETECTED>"
+
+// FrameworkDetectionSkipped is a string to identify when framework detection was skipped
+const FrameworkDetectionSkipped = "<FRAMEWORK DETECTION SKIPPED>"
 
 const runSummarySchemaVersion = "0"
 const runsEndpoint = "/v0/spaces/%s/runs"
@@ -56,14 +59,16 @@ type Meta struct {
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
-	ID                ksuid.KSUID        `json:"id"`
-	Version           string             `json:"version"`
-	TurboVersion      string             `json:"turboVersion"`
-	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
-	Packages          []string           `json:"packages"`
-	EnvMode           util.EnvMode       `json:"envMode"`
-	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
-	Tasks             []*TaskSummary     `json:"tasks"`
+	ID                 ksuid.KSUID        `json:"id"`
+	Version            string             `json:"version"`
+	TurboVersion       string             `json:"turboVersion"`
+	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
+	Packages           []string           `json:"packages"`
+	EnvMode            util.EnvMode       `json:"envMode"`
+	FrameworkInference bool               `json:"frameworkInference"`
+	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
+	Tasks              []*TaskSummary     `json:"tasks"`
+	SCM                *scmState          `json:"scm"`
 }
 
 // NewRunSummary returns a RunSummary instance
@@ -97,14 +102,16 @@ func NewRunSummary(
 
 	return Meta{
 		RunSummary: &RunSummary{
-			ID:                ksuid.New(),
-			Version:           runSummarySchemaVersion,
-			ExecutionSummary:  executionSummary,
-			TurboVersion:      turboVersion,
-			Packages:          packages,
-			EnvMode:           globalEnvMode,
-			Tasks:             []*TaskSummary{},
-			GlobalHashSummary: globalHashSummary,
+			ID:                 ksuid.New(),
+			Version:            runSummarySchemaVersion,
+			ExecutionSummary:   executionSummary,
+			TurboVersion:       turboVersion,
+			Packages:           packages,
+			EnvMode:            globalEnvMode,
+			FrameworkInference: runOpts.FrameworkInference,
+			Tasks:              []*TaskSummary{},
+			GlobalHashSummary:  globalHashSummary,
+			SCM:                getSCMState(repoRoot),
 		},
 		ui:                 ui,
 		runType:            runType,
@@ -153,11 +160,15 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 
 	rsm.printExecutionSummary()
 
-	// If we're not supposed to save or if there's no spaceID
-	if !rsm.shouldSave || rsm.spaceID == "" {
+	// If we don't have a spaceID, we can exit now
+	if rsm.spaceID == "" {
 		return nil
 	}
 
+	return rsm.sendToSpace(ctx)
+}
+
+func (rsm *Meta) sendToSpace(ctx context.Context) error {
 	if !rsm.apiClient.IsLinked() {
 		rsm.ui.Warn("Failed to post to space because repo is not linked to a Space. Run `turbo link` first.")
 		return nil

@@ -3,6 +3,8 @@ resolver = "2"
 
 members = [
   "crates/auto-hash-map",
+  "crates/globwatch",
+  "crates/pidlock",
   "crates/node-file-trace",
   "crates/swc-ast-explorer",
   "crates/turbo-binding",
@@ -43,6 +45,7 @@ members = [
   "crates/turborepo",
   "crates/turborepo-api-client",
   "crates/turborepo-ffi",
+  "crates/turborepo-fs",
   "crates/turborepo-lib",
   "crates/turborepo-lockfiles",
   "crates/turborepo-scm",
@@ -99,13 +102,13 @@ opt-level = 3
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
 mdxjs = { version = "0.1.11" }
-modularize_imports = { version = "0.27.5" }
-styled_components = { version = "0.54.5" }
-styled_jsx = { version = "0.31.5" }
-swc_core = { version = "0.75.23" }
-swc_emotion = { version = "0.30.5" }
-swc_relay = { version = "0.2.5" }
-testing = { version = "0.33.4" }
+modularize_imports = { version = "0.27.7" }
+styled_components = { version = "0.54.7" }
+styled_jsx = { version = "0.31.7" }
+swc_core = { version = "0.75.41" }
+swc_emotion = { version = "0.30.7" }
+swc_relay = { version = "0.2.7" }
+testing = { version = "0.33.6" }
 
 auto-hash-map = { path = "crates/auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -147,6 +150,7 @@ turbopath = { path = "crates/turbopath" }
 turborepo = { path = "crates/turborepo" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
+turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib" }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-scm = { path = "crates/turborepo-scm" }

@@ -8,7 +8,7 @@ pub enum Error {
     MissingPackage(String),
     #[error("Missing version from non-workspace package: '{0}'")]
     MissingVersion(String),
-    #[error("Unable to convert from json")]
+    #[error("Unable to convert from json: {0}")]
     JsonError(#[from] serde_json::Error),
     #[error("Turbo doesn't support npm lockfiles without a 'packages' field")]
     UnsupportedNpmVersion,

@@ -5,7 +5,7 @@
 use std::backtrace;
 
 use thiserror::Error;
-use turbopath::PathValidationError;
+use turbopath::PathError;
 
 pub mod git;
 
@@ -18,8 +18,5 @@ pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error("path error: {0}")]
-    Path(
-        #[from] PathValidationError,
-        #[backtrace] backtrace::Backtrace,
-    ),
+    Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
 }

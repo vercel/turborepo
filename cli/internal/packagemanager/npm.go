@@ -38,17 +38,6 @@ var nodejsNpm = PackageManager{
 		}, nil
 	},
 
-	Matches: func(manager string, version string) (bool, error) {
-		return manager == "npm", nil
-	},
-
-	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.UntypedJoin(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
-
-		return (specfileExists && lockfileExists), nil
-	},
-
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
 		return true, nil
 	},

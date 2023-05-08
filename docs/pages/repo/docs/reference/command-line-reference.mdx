@@ -293,6 +293,16 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
 
 You can also specify these in your `turbo` configuration as `globalDependencies` key.
 
+#### `--framework-inference`
+
+`type: bool`
+
+Specify whether or not to do framework inference for tasks. Defaults to `true`, can be configured to be `false` which skips framework inference for tasks. This disables [automatic environment variable inclusion](../core-concepts/caching#automatic-environment-variable-inclusion).
+
+```sh
+turbo run build --framework-inference=false
+```
+
 #### `--ignore`
 
 `type: string[]`
@@ -430,19 +440,6 @@ Specify/filter workspaces to act as entry points for execution. Globs against `p
 ```sh
 turbo run lint --scope="@example/**"
 turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
-```
-
-#### `--serial`
-
-<Callout type="error">
-  `serial` is deprecated in `0.5.3`.Please use
-  [`--concurrency=1`](#--concurrency) instead.
-</Callout>
-
-Executes all tasks serially (i.e. one-at-a-time).
-
-```sh
-turbo run build --serial
 ```
 
 #### `--since`

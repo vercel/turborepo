@@ -16,7 +16,7 @@
 /** @typedef {import('../types').SourceType.Parent} SourceTypeParent */
 /** @typedef {import('../types').SourceType.Update} SourceTypeUpdate */
 /** @typedef {import('../types').Exports} Exports */
-/** @typedef {import('../types').EsmInteropNamespace} EsmInteropNamespace */
+/** @typedef {import('../types').EsmNamespaceObject} EsmNamespaceObject */
 /** @typedef {import('../types').RequireContext} RequireContext */
 /** @typedef {import('../types').RequireContextMap} RequireContextMap */
 
@@ -119,6 +119,16 @@ function esm(exports, getters) {
 }
 
 /**
+ * Makes the module an ESM with exports
+ *
+ * @param {Module} module
+ * @param {Record<string, () => any>} getters
+ */
+function makeEsm(module, getters) {
+  esm((module.namespaceObject = module.exports), getters);
+}
+
+/**
  * Adds the getters to the exports object
  *
  * @param {Exports} exports
@@ -139,6 +149,14 @@ function exportValue(module, value) {
 }
 
 /**
+ * @param {Module} module
+ * @param {any} namespace
+ */
+function exportNamespace(module, namespace) {
+  module.exports = module.namespaceObject = namespace;
+}
+
+/**
  * @param {Record<string, any>} obj
  * @param {string} key
  */
@@ -147,15 +165,33 @@ function createGetter(obj, key) {
 }
 
 /**
+ * @param {any} obj
+ * @returns {any} prototype of the object
+ */
+const getProto = Object.getPrototypeOf
+  ? (obj) => Object.getPrototypeOf(obj)
+  : (obj) => obj.__proto__;
+
+/** Prototypes that are not expanded for exports */
+const LEAF_PROTOTYPES = [null, getProto({}), getProto([]), getProto(getProto)];
+
+/**
  * @param {Exports} raw
- * @param {EsmInteropNamespace} ns
- * @param {boolean} [allowExportDefault]
+ * @param {EsmNamespaceObject} ns
+ * @param {boolean} [allowExportDefault] false: will have the raw module as default export, true: will have the default property as default export
  */
 function interopEsm(raw, ns, allowExportDefault) {
   /** @type {Object.<string, () => any>} */
   const getters = { __proto__: null };
-  for (const key in raw) {
-    getters[key] = createGetter(raw, key);
+  for (
+    let current = raw;
+    (typeof current === "object" || typeof current === "function") &&
+    !LEAF_PROTOTYPES.includes(current);
+    current = getProto(current)
+  ) {
+    for (const key of Object.getOwnPropertyNames(current)) {
+      getters[key] = createGetter(raw, key);
+    }
   }
   if (!(allowExportDefault && "default" in getters)) {
     getters["default"] = () => raw;
@@ -166,17 +202,15 @@ function interopEsm(raw, ns, allowExportDefault) {
 /**
  * @param {Module} sourceModule
  * @param {ModuleId} id
- * @param {boolean} allowExportDefault
- * @returns {EsmInteropNamespace}
+ * @returns {EsmNamespaceObject}
  */
-function esmImport(sourceModule, id, allowExportDefault) {
+function esmImport(sourceModule, id) {
   const module = getOrInstantiateModuleFromParent(id, sourceModule);
   if (module.error) throw module.error;
+  if (module.namespaceObject) return module.namespaceObject;
   const raw = module.exports;
-  if (raw.__esModule) return raw;
-  if (module.interopNamespace) return module.interopNamespace;
-  const ns = (module.interopNamespace = {});
-  interopEsm(raw, ns, allowExportDefault);
+  const ns = (module.namespaceObject = {});
+  interopEsm(raw, ns, raw.__esModule);
   return ns;
 }
 
@@ -244,7 +278,7 @@ function requireContext(sourceModule, map) {
 /**
  * @param {ModuleId} id
  * @param {boolean} esm
- * @returns {Exports | EsmInteropNamespace}
+ * @returns {Exports | EsmNamespaceObject}
  */
 function externalRequire(id, esm) {
   let raw;
@@ -257,11 +291,11 @@ function externalRequire(id, esm) {
     // compilation error.
     throw new Error(`Failed to load external module ${id}: ${err}`);
   }
-  if (!esm || raw.__esModule) {
+  if (!esm) {
     return raw;
   }
   const ns = {};
-  interopEsm(raw, ns, true);
+  interopEsm(raw, ns, raw.__esModule);
   return ns;
 }
 externalRequire.resolve = (name, opt) => {
@@ -427,7 +461,7 @@ function instantiateModule(id, source) {
     id,
     parents: undefined,
     children: [],
-    interopNamespace: undefined,
+    namespaceObject: undefined,
     hot,
   };
   moduleCache[id] = module;
@@ -456,9 +490,10 @@ function instantiateModule(id, source) {
         x: externalRequire,
         f: requireContext.bind(null, module),
         i: esmImport.bind(null, module),
-        s: esm.bind(null, module.exports),
+        s: makeEsm.bind(null, module),
         j: cjs.bind(null, module.exports),
         v: exportValue.bind(null, module),
+        n: exportNamespace.bind(null, module),
         m: module,
         c: moduleCache,
         l: loadChunk.bind(null, { type: SourceTypeParent, parentId: id }),
@@ -473,9 +508,9 @@ function instantiateModule(id, source) {
   });
 
   module.loaded = true;
-  if (module.interopNamespace) {
+  if (module.namespaceObject && module.exports !== module.namespaceObject) {
     // in case of a circular dependency: cjs1 -> esm2 -> cjs1
-    interopEsm(module.exports, module.interopNamespace);
+    interopEsm(module.exports, module.namespaceObject);
   }
 
   return module;

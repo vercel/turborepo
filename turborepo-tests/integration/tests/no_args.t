@@ -46,6 +46,7 @@ Make sure exit code is 2 when no args are passed
         --single-package                 Run turbo in single-package mode
     -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force [<FORCE>]                Ignore the existing cache (to force execution) [env: TURBO_FORCE=] [possible values: true, false]
+        --framework-inference [<BOOL>]   Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
         --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
@@ -63,5 +64,5 @@ Make sure exit code is 2 when no args are passed
         --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Note that tasks running in parallel interleave their logs and prefix is the only way to identify which task produced a log [possible values: none]
   [1]
   $ ${TURBO} run
-  Turbo error: at least one task must be specified
+  ERROR at least one task must be specified
   [1]

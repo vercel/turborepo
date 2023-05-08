@@ -27,6 +27,8 @@ type RunOpts struct {
 	Parallel bool
 
 	EnvMode EnvMode
+	// Whether or not to infer the framework for each workspace.
+	FrameworkInference bool
 	// The filename to write a perf profile.
 	Profile string
 	// If true, continue task executions even if a task fails.

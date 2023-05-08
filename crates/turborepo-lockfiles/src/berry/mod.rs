@@ -21,13 +21,13 @@ use super::Lockfile;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("unable to parse")]
+    #[error("unable to parse yaml: {0}")]
     Parse(#[from] serde_yaml::Error),
-    #[error("unable to parse")]
+    #[error("unable to parse identifier: {0}")]
     Identifiers(#[from] identifiers::Error),
     #[error("unable to find original package in patch locator {0}")]
     PatchMissingOriginalLocator(Locator<'static>),
-    #[error("unable to parse resolutions field")]
+    #[error("unable to parse resolutions field: {0}")]
     Resolutions(#[from] resolution::Error),
     #[error("unable to find entry for {0}")]
     MissingPackageForLocator(Locator<'static>),
@@ -266,11 +266,10 @@ impl<'a> BerryLockfile<'a> {
                     resolutions.insert(dependency, dep_locator.clone());
                 }
 
-                if let Some(descriptors) = reverse_lookup.get(locator) {
-                    for descriptor in descriptors {
-                        resolutions.insert((*descriptor).clone(), locator.clone());
-                    }
-                }
+                // Included workspaces will always have their locator listed as a descriptor.
+                // All other descriptors should show up in the other workspace package
+                // dependencies.
+                resolutions.insert(Descriptor::from(locator.clone()), locator.clone());
             }
         }
 
@@ -291,18 +290,13 @@ impl<'a> BerryLockfile<'a> {
                 resolutions.insert(dependency, dep_locator.clone());
             }
 
+            // If the package has an associated patch we include it in the subgraph
             if let Some(patch_locator) = self.patches.get(&locator) {
                 patches.insert(locator.as_owned(), patch_locator.clone());
-                let patch_descriptors = reverse_lookup
-                    .get(patch_locator)
-                    .unwrap_or_else(|| panic!("No descriptors found for {patch_locator}"));
-                for patch_descriptor in patch_descriptors {
-                    resolutions.insert((*patch_descriptor).clone(), patch_locator.clone());
-                }
             }
         }
 
-        for patch in self.patches.values() {
+        for patch in patches.values() {
             let patch_descriptors = reverse_lookup
                 .get(patch)
                 .unwrap_or_else(|| panic!("Unable to find {patch} in reverse lookup"));
@@ -778,5 +772,74 @@ mod test {
             key: "uri-js@npm:4.4.1".into(),
             version: "4.4.1".into()
         }));
+    }
+
+    #[test]
+    fn test_workspace_collision() {
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/berry-protocol-collision.lock"
+        ))
+        .unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let no_proto = Descriptor::try_from("c@*").unwrap();
+        let workspace_proto = Descriptor::try_from("c@workspace:*").unwrap();
+        let full_path = Descriptor::try_from("c@workspace:packages/c").unwrap();
+        let a_lockfile = lockfile
+            .subgraph(&["packages/a".into(), "packages/c".into()], &[])
+            .unwrap();
+        let a_reverse_lookup = a_lockfile.locator_to_descriptors();
+        let a_c_descriptors = a_reverse_lookup
+            .get(&Locator::try_from("c@workspace:packages/c").unwrap())
+            .unwrap();
+
+        assert_eq!(
+            a_c_descriptors,
+            &(vec![&no_proto, &full_path]
+                .into_iter()
+                .collect::<HashSet<_>>())
+        );
+
+        let b_lockfile = lockfile
+            .subgraph(&["packages/b".into(), "packages/c".into()], &[])
+            .unwrap();
+        let b_reverse_lookup = b_lockfile.locator_to_descriptors();
+        let b_c_descriptors = b_reverse_lookup
+            .get(&Locator::try_from("c@workspace:packages/c").unwrap())
+            .unwrap();
+
+        assert_eq!(
+            b_c_descriptors,
+            &(vec![&workspace_proto, &full_path]
+                .into_iter()
+                .collect::<HashSet<_>>())
+        );
+    }
+
+    #[test]
+    fn test_builtin_patch_descriptors() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry-builtin.lock")).unwrap();
+        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let subgraph = lockfile
+            .subgraph(
+                &["packages/a".into(), "packages/c".into()],
+                &["resolve@npm:1.22.3".into()],
+            )
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+        let (resolve_key, _) = subgraph_data
+            .packages
+            .iter()
+            .find(|(_, v)| {
+                v.resolution
+                    == "resolve@patch:resolve@npm%3A1.22.3#~builtin<compat/resolve>::version=1.22.\
+                        3&hash=c3c19d"
+            })
+            .unwrap();
+        assert_eq!(
+            resolve_key,
+            "resolve@patch:resolve@^1.22.0#~builtin<compat/resolve>, \
+             resolve@patch:resolve@^1.22.2#~builtin<compat/resolve>"
+        );
     }
 }
