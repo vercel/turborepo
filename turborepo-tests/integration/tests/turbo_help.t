@@ -46,6 +46,7 @@ Test help flag
         --single-package                 Run turbo in single-package mode
     -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force [<FORCE>]                Ignore the existing cache (to force execution) [env: TURBO_FORCE=] [possible values: true, false]
+        --framework-inference [<BOOL>]   Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
         --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
@@ -111,6 +112,7 @@ Test help flag
         --single-package                 Run turbo in single-package mode
     -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
         --force [<FORCE>]                Ignore the existing cache (to force execution) [env: TURBO_FORCE=] [possible values: true, false]
+        --framework-inference [<BOOL>]   Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
         --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
