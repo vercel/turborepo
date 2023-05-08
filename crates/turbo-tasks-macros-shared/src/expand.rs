@@ -83,16 +83,18 @@ pub fn match_expansion<
 
 /// Formats the fields of any structure or enum variant.
 pub fn expand_fields<
-    EN: Fn(&Ident, &FieldsNamed) -> R,
-    EU: Fn(&Ident, &FieldsUnnamed) -> R,
-    U: Fn(&Ident) -> R,
+    'ident,
+    'fields,
+    EN: Fn(&'ident Ident, &'fields FieldsNamed) -> R,
+    EU: Fn(&'ident Ident, &'fields FieldsUnnamed) -> R,
+    U: Fn(&'ident Ident) -> R,
     R,
 >(
-    ident: &Ident,
-    fields: &Fields,
-    expand_named: &EN,
-    expand_unnamed: &EU,
-    expand_unit: &U,
+    ident: &'ident Ident,
+    fields: &'fields Fields,
+    expand_named: EN,
+    expand_unnamed: EU,
+    expand_unit: U,
 ) -> R {
     match fields {
         Fields::Named(named) => expand_named(ident, named),

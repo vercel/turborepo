@@ -55,6 +55,14 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
         }
     }
 
+    let inputs_list_ident = Ident::new(
+        &format!("__{}_inputs_list", ident),
+        derive_input.ident.span(),
+    );
+
+    let expand_named = |ident, fields| expand_named(ident, fields, &inputs_list_ident);
+    let expand_unnamed = |ident, fields| expand_unnamed(ident, fields, &inputs_list_ident);
+
     let (try_from_impl, from_impl) = match &derive_input.data {
         Data::Enum(DataEnum { variants, .. }) => {
             let mut variants_idents = vec![];
@@ -100,9 +108,9 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                 quote! {
                     match value {
                         turbo_tasks::TaskInput::List(value) => {
-                            let mut iter = value.iter();
+                            let mut #inputs_list_ident = value.iter();
 
-                            let discriminant = iter.next().ok_or_else(|| anyhow::anyhow!(concat!("missing discriminant for ", stringify!(#ident))))?;
+                            let discriminant = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing discriminant for ", stringify!(#ident))))?;
                             let discriminant: #repr = turbo_tasks::FromTaskInput::try_from(discriminant)?;
 
                             Ok(match discriminant {
@@ -122,12 +130,12 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                     match value {
                         #(
                             #ident::#variants_idents #variants_fields_destructuring => {
-                                let mut list = Vec::with_capacity(1 + #variants_fields_len);
+                                let mut #inputs_list_ident = Vec::with_capacity(1 + #variants_fields_len);
                                 let discriminant: #repr = #variants_discriminants;
                                 let discriminant: turbo_tasks::TaskInput = discriminant.into();
-                                list.push(discriminant);
+                                #inputs_list_ident.push(discriminant);
                                 #variants_from_expansion
-                                turbo_tasks::TaskInput::List(list)
+                                turbo_tasks::TaskInput::List(inputs_list)
                             }
                         )*
                     }
@@ -143,7 +151,7 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                 quote! {
                     match value {
                         turbo_tasks::TaskInput::List(value) => {
-                            let mut iter = value.iter();
+                            let mut inputs_list = value.iter();
                             #try_from_expansion
                             Ok(#ident #destructuring)
                         },
@@ -151,10 +159,10 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                     }
                 },
                 quote! {
-                    let mut list = Vec::with_capacity(#fields_len);
+                    let mut inputs_list = Vec::with_capacity(#fields_len);
                     let #ident #destructuring = value;
                     #from_expansion
-                    turbo_tasks::TaskInput::List(list)
+                    turbo_tasks::TaskInput::List(inputs_list)
                 },
             )
         }
@@ -221,20 +229,21 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
 fn expand_named(
     _ident: &Ident,
     fields: &FieldsNamed,
+    inputs_list_ident: &Ident,
 ) -> (TokenStream2, TokenStream2, TokenStream2) {
     let (destructuring, fields_idents) = generate_exhaustive_destructuring(fields.named.iter());
     (
         destructuring,
         quote! {
             #(
-                let #fields_idents = iter.next().ok_or_else(|| anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
+                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
                 let #fields_idents = turbo_tasks::FromTaskInput::try_from(#fields_idents)?;
             )*
         },
         quote! {
             #(
                 let #fields_idents: turbo_tasks::TaskInput = #fields_idents.into();
-                list.push(#fields_idents);
+                #inputs_list_ident.push(#fields_idents);
             )*
         },
     )
@@ -243,20 +252,21 @@ fn expand_named(
 fn expand_unnamed(
     _ident: &Ident,
     fields: &FieldsUnnamed,
+    inputs_list_ident: &Ident,
 ) -> (TokenStream2, TokenStream2, TokenStream2) {
     let (destructuring, fields_idents) = generate_exhaustive_destructuring(fields.unnamed.iter());
     (
         destructuring,
         quote! {
             #(
-                let #fields_idents = iter.next().ok_or_else(|| anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
+                let #fields_idents = #inputs_list_ident.next().ok_or_else(|| anyhow::anyhow!(concat!("missing element for ", stringify!(#fields_idents))))?;
                 let #fields_idents = turbo_tasks::FromTaskInput::try_from(#fields_idents)?;
             )*
         },
         quote! {
             #(
                 let #fields_idents: turbo_tasks::TaskInput = #fields_idents.into();
-                list.push(#fields_idents);
+                #inputs_list_ident.push(#fields_idents);
             )*
         },
     )
