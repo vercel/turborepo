@@ -152,6 +152,9 @@ pub enum DaemonError {
 
     #[error("unable to display output: {0}")]
     DisplayError(#[from] serde_json::Error),
+
+    #[error("unable to construct log file name: {0}")]
+    InvalidLogFile(#[from] time::Error),
 }
 
 impl From<Status> for DaemonError {
