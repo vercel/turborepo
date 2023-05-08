@@ -14,14 +14,14 @@ import (
 // It's implemented over github.com/karrick/godirwalk but the provided interface doesn't use that
 // to make it a little easier to handle.
 func Walk(rootPath string, callback func(name string, isDir bool) error) error {
-	return WalkMode(rootPath, func(name string, isDir bool, mode os.FileMode) error {
+	return walkMode(rootPath, func(name string, isDir bool, mode os.FileMode) error {
 		return callback(name, isDir)
 	})
 }
 
-// WalkMode is like Walk but the callback receives an additional type specifying the file mode type.
+// walkMode is like Walk but the callback receives an additional type specifying the file mode type.
 // N.B. This only includes the bits of the mode that determine the mode type, not the permissions.
-func WalkMode(rootPath string, callback func(name string, isDir bool, mode os.FileMode) error) error {
+func walkMode(rootPath string, callback func(name string, isDir bool, mode os.FileMode) error) error {
 	return godirwalk.Walk(rootPath, &godirwalk.Options{
 		Callback: func(name string, info *godirwalk.Dirent) error {
 			// currently we support symlinked files, but not symlinked directories:
