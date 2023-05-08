@@ -372,6 +372,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			globalHashInputs.envVars,
 			envVarPassthroughMap,
 			globalHashInputs.globalCacheKey,
+			globalHashInputs.dotEnv,
 		),
 		rs.Opts.SynthesizeCommand(rs.Targets),
 	)

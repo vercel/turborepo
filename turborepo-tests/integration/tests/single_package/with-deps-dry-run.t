@@ -22,10 +22,11 @@ Check
     Dependencies                     =                                                                                                                                   
     Dependendents                    = test                                                                                                                              
     Inputs Files Considered          = 4                                                                                                                                 
+    .env Files Considered            = 0                                                                                                                     
     Configured Environment Variables =                                                                                                                                   
     Inferred Environment Variables   =                                                                                                                                   
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                              
-    ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"env":[],"persistent":false} 
+    ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                                           
   test
     Task                             = test                                                                                                                                
@@ -38,8 +39,9 @@ Check
     Dependencies                     = build                                                                                                                               
     Dependendents                    =                                                                                                                                     
     Inputs Files Considered          = 4                                                                                                                                   
+    .env Files Considered            = 0                                                                                                                     
     Configured Environment Variables =                                                                                                                                     
     Inferred Environment Variables   =                                                                                                                                     
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                                
-    ResolvedTaskDefinition           = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","passThroughEnv":null,"env":[],"persistent":false} 
+    ResolvedTaskDefinition           = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                                             

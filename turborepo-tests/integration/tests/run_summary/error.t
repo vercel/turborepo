@@ -59,6 +59,7 @@ Validate that we got a full task summary for the failed task with an error in .e
       "inputs": [],
       "outputMode": "full",
       "passThroughEnv": null,
+      "dotEnv": null,
       "env": [],
       "persistent": false
     },
@@ -75,6 +76,7 @@ Validate that we got a full task summary for the failed task with an error in .e
       "passthrough": null,
       "globalPassthrough": null
     },
+    "dotEnv": null,
     "execution": {
       "startTime": [0-9]+, (re)
       "endTime": [0-9]+, (re)

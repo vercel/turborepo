@@ -93,6 +93,16 @@ export interface RootSchema extends BaseSchema {
   globalPassThroughEnv?: null | string[];
 
   /**
+   * An enumarated list of `.env` files to include in the task hash.
+   * This field is ordered.
+   *
+   * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalDotEnv
+   *
+   * @default null
+   */
+  globalDotEnv?: null | string[];
+
+  /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
    * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
@@ -157,6 +167,16 @@ export interface Pipeline {
    * @default null
    */
   passThroughEnv?: null | string[];
+
+  /**
+   * An enumarated list of `.env` files to include in the task hash.
+   * This field is ordered.
+   *
+   * Documentation: https://turbo.build/repo/docs/refernce/configuration#dotEnv
+   *
+   * @default null
+   */
+  dotEnv?: null | string[];
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.

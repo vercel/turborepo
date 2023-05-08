@@ -13,7 +13,8 @@ Setup
         "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
         "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0"
       },
-      "hashOfExternalDependencies": ""
+      "hashOfExternalDependencies": "",
+      "dotEnv": null
     },
     "envMode": "infer",
     "frameworkInference": true,
@@ -54,7 +55,7 @@ Setup
           "dependsOn": [],
           "inputs": [],
           "outputMode": "full",
-          "passThroughEnv": null,
+          "dotEnv": null,
           "env": [],
           "persistent": false
         },
@@ -69,7 +70,8 @@ Setup
           ],
           "passthrough": null,
           "globalPassthrough": null
-        }
+        },
+        "dotEnv": null
       },
       {
         "taskId": "test",
@@ -105,7 +107,7 @@ Setup
           ],
           "inputs": [],
           "outputMode": "full",
-          "passThroughEnv": null,
+          "dotEnv": null,
           "env": [],
           "persistent": false
         },
@@ -120,7 +122,8 @@ Setup
           ],
           "passthrough": null,
           "globalPassthrough": null
-        }
+        },
+        "dotEnv": null
       }
     ],
     "user": ".*", (re)

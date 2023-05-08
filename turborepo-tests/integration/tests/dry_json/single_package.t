@@ -14,7 +14,8 @@ Setup
         "package.json": "185771929d92c3865ce06c863c07d357500d3364",
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
-      "hashOfExternalDependencies": ""
+      "hashOfExternalDependencies": "",
+      "dotEnv": null
     },
     "envMode": "infer",
     "frameworkInference": true,
@@ -55,6 +56,7 @@ Setup
           "inputs": [],
           "outputMode": "full",
           "passThroughEnv": null,
+          "dotEnv": null,
           "env": [],
           "persistent": false
         },
@@ -69,7 +71,8 @@ Setup
           ],
           "passthrough": null,
           "globalPassthrough": null
-        }
+        },
+        "dotEnv": null
       }
     ],
     "user": ".*", (re)

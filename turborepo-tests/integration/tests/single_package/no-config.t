@@ -24,10 +24,11 @@ Check
     Dependencies                     =                                                                                                                               
     Dependendents                    =                                                                                                                               
     Inputs Files Considered          = 4                                                                                                                             
+    .env Files Considered            = 0                                                                                                                     
     Configured Environment Variables =                                                                                                                               
     Inferred Environment Variables   =                                                                                                                               
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                          
-    ResolvedTaskDefinition           = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"env":[],"persistent":false} 
+    ResolvedTaskDefinition           = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                                       
 
   $ ${TURBO} run build --graph

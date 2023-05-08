@@ -33,6 +33,7 @@ Setup
     "inputs": [],
     "outputMode": "full",
     "passThroughEnv": null,
+    "dotEnv": null,
     "env": [],
     "persistent": false
   }
@@ -47,6 +48,7 @@ Setup
     "inputs": [],
     "outputMode": "full",
     "passThroughEnv": null,
+    "dotEnv": null,
     "env": [],
     "persistent": false
   }

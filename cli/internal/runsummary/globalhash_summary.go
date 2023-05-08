@@ -10,6 +10,7 @@ type GlobalHashSummary struct {
 	GlobalCacheKey       string                                `json:"rootKey"`
 	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"files"`
 	RootExternalDepsHash string                                `json:"hashOfExternalDependencies"`
+	DotEnv               turbopath.AnchoredUnixPathArray       `json:"dotEnv"`
 
 	// This is a private field because and not in JSON, because we'll add it to each task
 	envVars            env.EnvironmentVariablePairs
@@ -23,6 +24,7 @@ func NewGlobalHashSummary(
 	envVars env.DetailedMap,
 	passthroughEnvVars env.EnvironmentVariableMap,
 	globalCacheKey string,
+	globalDotEnv turbopath.AnchoredUnixPathArray,
 ) *GlobalHashSummary {
 	return &GlobalHashSummary{
 		envVars:              envVars.All.ToSecretHashable(),
@@ -30,5 +32,6 @@ func NewGlobalHashSummary(
 		GlobalFileHashMap:    fileHashMap,
 		RootExternalDepsHash: rootExternalDepsHash,
 		GlobalCacheKey:       globalCacheKey,
+		DotEnv:               globalDotEnv,
 	}
 }

@@ -15,7 +15,8 @@ Setup
     "files": {
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
-    "hashOfExternalDependencies": "ccab0b28617f1f56"
+    "hashOfExternalDependencies": "ccab0b28617f1f56",
+    "dotEnv": null
   }
 
   $ cat tmpjson.log | jq 'keys'
@@ -70,6 +71,7 @@ Setup
       "inputs": [],
       "outputMode": "full",
       "passThroughEnv": null,
+      "dotEnv": null,
       "env": [],
       "persistent": false
     },
@@ -85,7 +87,8 @@ Setup
       ],
       "passthrough": null,
       "globalPassthrough": null
-    }
+    },
+    "dotEnv": null
   }
 
 # Validate output of util#build task
@@ -120,6 +123,7 @@ Setup
       "inputs": [],
       "outputMode": "full",
       "passThroughEnv": null,
+      "dotEnv": null,
       "env": [
         "NODE_ENV"
       ],
@@ -139,7 +143,8 @@ Setup
       ],
       "passthrough": null,
       "globalPassthrough": null
-    }
+    },
+    "dotEnv": null
   }
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller
