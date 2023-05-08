@@ -135,7 +135,7 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                                 let discriminant: turbo_tasks::TaskInput = discriminant.into();
                                 #inputs_list_ident.push(discriminant);
                                 #variants_from_expansion
-                                turbo_tasks::TaskInput::List(inputs_list)
+                                turbo_tasks::TaskInput::List(#inputs_list_ident)
                             }
                         )*
                     }
@@ -151,7 +151,7 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                 quote! {
                     match value {
                         turbo_tasks::TaskInput::List(value) => {
-                            let mut inputs_list = value.iter();
+                            let mut #inputs_list_ident = value.iter();
                             #try_from_expansion
                             Ok(#ident #destructuring)
                         },
@@ -159,10 +159,10 @@ pub fn derive_task_input(input: TokenStream) -> TokenStream {
                     }
                 },
                 quote! {
-                    let mut inputs_list = Vec::with_capacity(#fields_len);
+                    let mut #inputs_list_ident = Vec::with_capacity(#fields_len);
                     let #ident #destructuring = value;
                     #from_expansion
-                    turbo_tasks::TaskInput::List(inputs_list)
+                    turbo_tasks::TaskInput::List(#inputs_list_ident)
                 },
             )
         }
