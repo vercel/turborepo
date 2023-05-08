@@ -81,7 +81,7 @@ mod tests {
         //       nested-file
         let (_repo_root_tmp, repo_root) = tmp_dir()?;
         let my_pkg_dir = repo_root.join_literal("my-pkg");
-        my_pkg_dir.create_dir()?;
+        my_pkg_dir.create_dir_all()?;
 
         // create file 1
         let committed_file_path = my_pkg_dir.join_literal("committed-file");

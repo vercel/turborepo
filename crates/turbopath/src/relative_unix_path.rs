@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use bstr::BStr;
 
-use crate::{not_relative_error, PathError, RelativeSystemPathBuf};
+use crate::{PathError, PathValidationError, RelativeSystemPathBuf};
 
 #[repr(transparent)]
 pub struct RelativeUnixPath {
@@ -12,11 +12,11 @@ pub struct RelativeUnixPath {
 impl RelativeUnixPath {
     pub fn new<P: AsRef<BStr>>(value: &P) -> Result<&Self, PathError> {
         let path = value.as_ref();
-        if path[0] == b'/' {
-            return Err(not_relative_error(path).into());
+        if path.first() == Some(&b'/') {
+            return Err(PathValidationError::not_relative_error(path).into());
         }
         // copied from stdlib path.rs: relies on the representation of
-        // RelativeUnixPath being just a Path, the same way Path relies on
+        // RelativeUnixPath being just a BStr, the same way Path relies on
         // just being an OsStr
         Ok(unsafe { &*(path as *const BStr as *const Self) })
     }
@@ -38,9 +38,7 @@ impl RelativeUnixPath {
                 .iter()
                 .map(|byte| if *byte == b'/' { b'\\' } else { *byte })
                 .collect::<Vec<u8>>();
-            // Is this safe to do? We think we have utf8 bytes or bytes that roundtrip
-            // through utf8
-            let system_path_string = unsafe { String::from_utf8_unchecked(system_path_bytes) };
+            let system_path_string = String::from_utf8(system_path_bytes)?;
             let system_path_buf = PathBuf::from(system_path_string);
             Ok(RelativeSystemPathBuf::new_unchecked(system_path_buf))
         }

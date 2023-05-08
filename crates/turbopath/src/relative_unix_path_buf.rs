@@ -2,7 +2,7 @@ use std::{fmt::Debug, io::Write};
 
 use bstr::{BString, ByteSlice};
 
-use crate::{not_relative_error, PathError, PathValidationError};
+use crate::{PathError, PathValidationError};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct RelativeUnixPathBuf(BString);
@@ -10,14 +10,17 @@ pub struct RelativeUnixPathBuf(BString);
 impl RelativeUnixPathBuf {
     pub fn new(path: impl Into<Vec<u8>>) -> Result<Self, PathError> {
         let bytes: Vec<u8> = path.into();
-        if !bytes.is_empty() && bytes[0] == b'/' {
-            return Err(not_relative_error(&bytes).into());
+        if bytes.first() == Some(&b'/') {
+            return Err(PathValidationError::not_relative_error(&bytes).into());
         }
         Ok(Self(BString::new(bytes)))
     }
 
     pub fn as_str(&self) -> Result<&str, PathError> {
-        let s = self.0.to_str()?;
+        let s = self
+            .0
+            .to_str()
+            .or_else(|_| Err(PathError::Utf8Error(self.0.as_bytes().to_owned())))?;
         Ok(s)
     }
 
@@ -26,22 +29,27 @@ impl RelativeUnixPathBuf {
     // characters escaped with '\'.
     pub fn write_escapted_bytes<W: Write>(&self, writer: &mut W) -> Result<(), PathError> {
         writer.write_all(&[b'\"'])?;
+        // i is our pointer into self.0, and to_escape_index is a pointer to the next
+        // byte to be escaped. Each time we find a byte to be escaped, we write
+        // out everything from i to to_escape_index, then the escape byte, '\\',
+        // then the byte-to-be-escaped. Finally we set i to 1 + to_escape_index
+        // to move our pointer past the byte we just escaped.
         let mut i: usize = 0;
         while i < self.0.len() {
-            if let Some(mut index) = self.0[i..]
+            if let Some(mut to_escape_index) = self.0[i..]
                 .iter()
                 .position(|byte| *byte == b'\"' || *byte == b'\n')
             {
                 // renormalize the index into the byte vector
-                index += i;
-                writer.write_all(&self.0[i..index])?;
-                let byte = self.0[index];
+                to_escape_index += i;
+                writer.write_all(&self.0[i..to_escape_index])?;
+                let byte = self.0[to_escape_index];
                 if byte == b'\"' {
                     writer.write_all(&[b'\\', b'\"'])?;
                 } else {
                     writer.write_all(&[b'\\', b'\n'])?;
                 }
-                i = index + 1;
+                i = to_escape_index + 1;
             } else {
                 writer.write_all(&self.0)?;
                 i = self.0.len();

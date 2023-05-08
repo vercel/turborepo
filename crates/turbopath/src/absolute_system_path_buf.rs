@@ -62,10 +62,6 @@ impl AbsoluteSystemPathBuf {
         Ok(AbsoluteSystemPathBuf(system_path))
     }
 
-    pub fn new_unchecked(raw: impl Into<PathBuf>) -> Self {
-        Self(raw.into())
-    }
-
     /// Anchors `path` at `self`.
     ///
     /// # Arguments
@@ -183,7 +179,7 @@ impl AbsoluteSystemPathBuf {
         }
     }
 
-    pub fn create_dir(&self) -> Result<(), io::Error> {
+    pub fn create_dir_all(&self) -> Result<(), io::Error> {
         fs::create_dir_all(self.0.as_path())
     }
 

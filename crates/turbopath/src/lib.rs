@@ -26,8 +26,14 @@ pub enum PathError {
     IO(#[from] io::Error),
     #[error("Path prefix error: {0}")]
     PrefixError(#[from] StripPrefixError),
-    #[error("Invalid UTF8: {0}")]
-    Utf8Error(#[from] bstr::Utf8Error),
+    #[error("Invalid UTF8: {0:?}")]
+    Utf8Error(Vec<u8>),
+}
+
+impl From<std::string::FromUtf8Error> for PathError {
+    fn from(value: std::string::FromUtf8Error) -> Self {
+        PathError::Utf8Error(value.into_bytes())
+    }
 }
 
 impl PathError {
@@ -56,9 +62,11 @@ pub enum PathValidationError {
     PrefixError(String, String),
 }
 
-pub(crate) fn not_relative_error(bytes: &[u8]) -> PathValidationError {
-    let s = String::from_utf8_lossy(bytes).to_string();
-    PathValidationError::NotRelative(s)
+impl PathValidationError {
+    pub(crate) fn not_relative_error(bytes: &[u8]) -> PathValidationError {
+        let s = String::from_utf8_lossy(bytes).to_string();
+        PathValidationError::NotRelative(s)
+    }
 }
 
 trait IntoSystem {
