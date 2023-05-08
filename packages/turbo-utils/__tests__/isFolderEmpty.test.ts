@@ -1,11 +1,14 @@
 import fs from "fs-extra";
 import path from "path";
-import { isFolderEmpty } from "../src/utils/isFolderEmpty";
+import { isFolderEmpty } from "../src/isFolderEmpty";
 import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("isFolderEmpty", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
+    options: {
+      emptyFixture: true,
+    },
   });
 
   it("correctly identifies an empty directory", async () => {

@@ -1,11 +1,12 @@
 import path from "path";
-import { isWriteable } from "../src/utils/isWriteable";
+import { isWriteable } from "../src/isWriteable";
 import { setupTestFixtures } from "@turbo/test-utils";
 import fs from "fs-extra";
 
 describe("isWriteable", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
+    options: { emptyFixture: true },
   });
 
   it("correctly identifies a writeable directory", async () => {

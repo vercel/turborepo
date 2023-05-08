@@ -1,6 +1,6 @@
 import got from "got";
 import * as Got from "got";
-import { isUrlOk, getRepoInfo, hasRepo } from "../src/utils/examples";
+import { isUrlOk, getRepoInfo, hasRepo } from "../src/examples";
 
 jest.mock("got", () => ({
   __esModule: true,
