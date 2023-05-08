@@ -3,7 +3,10 @@ use tonic::{Code, Status};
 use tracing::info;
 
 use self::proto::turbod_client::TurbodClient;
-use super::connector::{DaemonConnector, DaemonConnectorError};
+use super::{
+    connector::{DaemonConnector, DaemonConnectorError},
+    endpoint::SocketOpenError,
+};
 use crate::get_version;
 
 pub mod proto {
@@ -123,6 +126,8 @@ pub enum DaemonError {
     /// The server was connected but is now unavailable.
     #[error("server is unavailable")]
     Unavailable,
+    #[error("error opening socket: {0}")]
+    SocketOpen(#[from] SocketOpenError),
     /// The server is running a different version of turborepo.
     #[error("version mismatch")]
     VersionMismatch,
