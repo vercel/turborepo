@@ -37,6 +37,9 @@ type rawTurboJSON struct {
 	// Global passthrough env
 	GlobalPassthroughEnv []string `json:"globalPassThroughEnv,omitempty"`
 
+	// .env files to consider, in order.
+	GlobalDotEnv turbopath.AnchoredUnixPathArray `json:"globalDotEnv,omitempty"`
+
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
 	Pipeline Pipeline `json:"pipeline"`
@@ -54,13 +57,14 @@ type rawTurboJSON struct {
 // Notably, it includes a PristinePipeline instead of the regular Pipeline. (i.e. TaskDefinition
 // instead of BookkeepingTaskDefinition.)
 type pristineTurboJSON struct {
-	GlobalDependencies   []string           `json:"globalDependencies,omitempty"`
-	GlobalEnv            []string           `json:"globalEnv,omitempty"`
-	GlobalPassthroughEnv []string           `json:"globalPassThroughEnv"`
-	Pipeline             PristinePipeline   `json:"pipeline"`
-	RemoteCacheOptions   RemoteCacheOptions `json:"remoteCache,omitempty"`
-	Extends              []string           `json:"extends,omitempty"`
-	Space                *SpaceConfig       `json:"experimentalSpaces,omitempty"`
+	GlobalDependencies   []string                        `json:"globalDependencies,omitempty"`
+	GlobalEnv            []string                        `json:"globalEnv,omitempty"`
+	GlobalPassthroughEnv []string                        `json:"globalPassThroughEnv"`
+	GlobalDotEnv         turbopath.AnchoredUnixPathArray `json:"globalDotEnv,omitempty"`
+	Pipeline             PristinePipeline                `json:"pipeline"`
+	RemoteCacheOptions   RemoteCacheOptions              `json:"remoteCache,omitempty"`
+	Extends              []string                        `json:"extends,omitempty"`
+	Space                *SpaceConfig                    `json:"experimentalSpaces,omitempty"`
 }
 
 // TurboJSON represents a turbo.json configuration file
@@ -68,6 +72,7 @@ type TurboJSON struct {
 	GlobalDeps           []string
 	GlobalEnv            []string
 	GlobalPassthroughEnv []string
+	GlobalDotEnv         turbopath.AnchoredUnixPathArray
 	Pipeline             Pipeline
 	RemoteCacheOptions   RemoteCacheOptions
 	Extends              []string // A list of Workspace names
@@ -84,14 +89,15 @@ type RemoteCacheOptions struct {
 // We use this for printing ResolvedTaskConfiguration, because we _want_ to show
 // the user the default values for key they have not configured.
 type rawTaskWithDefaults struct {
-	Outputs        []string            `json:"outputs"`
-	Cache          *bool               `json:"cache"`
-	DependsOn      []string            `json:"dependsOn"`
-	Inputs         []string            `json:"inputs"`
-	OutputMode     util.TaskOutputMode `json:"outputMode"`
-	PassthroughEnv []string            `json:"passThroughEnv"`
-	Env            []string            `json:"env"`
-	Persistent     bool                `json:"persistent"`
+	Outputs        []string                        `json:"outputs"`
+	Cache          *bool                           `json:"cache"`
+	DependsOn      []string                        `json:"dependsOn"`
+	Inputs         []string                        `json:"inputs"`
+	OutputMode     util.TaskOutputMode             `json:"outputMode"`
+	PassthroughEnv []string                        `json:"passThroughEnv"`
+	DotEnv         turbopath.AnchoredUnixPathArray `json:"dotEnv,omitempty"`
+	Env            []string                        `json:"env"`
+	Persistent     bool                            `json:"persistent"`
 }
 
 // rawTask exists to Unmarshal from json. When fields are omitted, we _want_
@@ -104,6 +110,7 @@ type rawTask struct {
 	OutputMode     *util.TaskOutputMode `json:"outputMode,omitempty"`
 	Env            []string             `json:"env,omitempty"`
 	PassthroughEnv []string             `json:"passThroughEnv,omitempty"`
+	DotEnv         []string             `json:"dotEnv,omitempty"`
 	Persistent     *bool                `json:"persistent,omitempty"`
 }
 
@@ -114,6 +121,7 @@ type taskDefinitionHashable struct {
 	Outputs                 TaskOutputs
 	ShouldCache             bool
 	EnvVarDependencies      []string
+	DotEnv                  turbopath.AnchoredUnixPathArray
 	TopologicalDependencies []string
 	TaskDependencies        []string
 	Inputs                  []string
@@ -155,6 +163,9 @@ type TaskDefinition struct {
 
 	// rawTask.PassthroughEnv
 	PassthroughEnv []string
+
+	// rawTask.DotEnv
+	DotEnv turbopath.AnchoredUnixPathArray
 
 	// TopologicalDependencies are tasks from package dependencies.
 	// E.g. "build" is a topological dependency in:
@@ -389,6 +400,7 @@ func (btd BookkeepingTaskDefinition) GetTaskDefinition() TaskDefinition {
 		Outputs:                 btd.TaskDefinition.Outputs,
 		ShouldCache:             btd.TaskDefinition.ShouldCache,
 		EnvVarDependencies:      btd.TaskDefinition.EnvVarDependencies,
+		DotEnv:                  btd.TaskDefinition.DotEnv,
 		TopologicalDependencies: btd.TaskDefinition.TopologicalDependencies,
 		TaskDependencies:        btd.TaskDefinition.TaskDependencies,
 		Inputs:                  btd.TaskDefinition.Inputs,

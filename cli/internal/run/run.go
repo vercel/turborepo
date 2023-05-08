@@ -247,6 +247,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		turboJSON.GlobalPassthroughEnv,
 		r.opts.runOpts.EnvMode,
 		r.opts.runOpts.FrameworkInference,
+		turboJSON.GlobalDotEnv,
 		r.base.Logger,
 	)
 
