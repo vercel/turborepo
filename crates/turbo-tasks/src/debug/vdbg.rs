@@ -1,7 +1,11 @@
 // NOTE(alexkirsz) Implementation and comments are based on the `dbg!` macro
 // from the Rust standard library.
-/// This macro supports the same syntax as `dbg!` but will also work for
-/// `turbo_tasks` `Vc` types.
+/// This macro supports the same syntax as `dbg!`, but also supports
+/// pretty-printing `Vc` types.
+///
+/// Beware: this macro should only be used for debugging purposes. Its behavior
+/// around dependency tracking is not well-defined and could lead to unexpected
+/// results.
 #[macro_export]
 macro_rules! vdbg {
     // NOTE: We cannot use `concat!` to make a static string as a format argument
