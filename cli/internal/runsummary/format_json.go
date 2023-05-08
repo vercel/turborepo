@@ -74,4 +74,5 @@ type nonMonorepoRunSummary struct {
 	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
 	Tasks              []*TaskSummary     `json:"tasks"`
 	SCM                *scmState          `json:"scm"`
+	User               string             `json:"originationUser"`
 }
