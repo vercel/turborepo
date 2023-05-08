@@ -117,9 +117,10 @@ describe("git", () => {
   describe("tryGitInit", () => {
     const { useFixture } = setupTestFixtures({
       directory: path.join(__dirname, "../"),
+      options: { emptyFixture: true },
     });
 
-    it("inits a repo succesfully", async () => {
+    it("inits a repo successfully", async () => {
       const { root } = useFixture({ fixture: `git` });
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
@@ -154,7 +155,9 @@ describe("git", () => {
     });
 
     it("skips init if already in a repo", async () => {
-      const { root } = useFixture({ fixture: `git` });
+      const { root } = useFixture({
+        fixture: `git`,
+      });
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
         .mockReturnValueOnce("git version 2.38.1")

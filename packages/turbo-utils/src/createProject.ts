@@ -8,23 +8,25 @@ import {
   downloadAndExtractRepo,
   getRepoInfo,
   existsInRepo,
+  isFolderEmpty,
+  isWriteable,
   hasRepo,
-  RepoInfo,
-} from "../../utils/examples";
-import { isFolderEmpty } from "../../utils/isFolderEmpty";
-import { isWriteable } from "../../utils/isWriteable";
-import { turboLoader, error } from "../../logger";
-import { isDefaultExample } from "../../utils/isDefaultExample";
+  type RepoInfo,
+} from "./";
+
+import { turboLoader, error } from "./logger";
 
 export class DownloadError extends Error {}
 
 export async function createProject({
   appPath,
   example,
+  isDefaultExample,
   examplePath,
 }: {
   appPath: string;
   example: string;
+  isDefaultExample?: boolean;
   examplePath?: string;
 }): Promise<{
   cdPath: string;
@@ -34,7 +36,6 @@ export async function createProject({
 }> {
   let repoInfo: RepoInfo | undefined;
   let repoUrl: URL | undefined;
-  const defaultExample = isDefaultExample(example);
 
   try {
     repoUrl = new URL(example);
@@ -143,7 +144,7 @@ export async function createProject({
     } else {
       console.log(
         `\nDownloading files${
-          !defaultExample ? ` for example ${chalk.cyan(example)}` : ""
+          !isDefaultExample ? ` for example ${chalk.cyan(example)}` : ""
         }. This might take a moment.`
       );
       console.log();
