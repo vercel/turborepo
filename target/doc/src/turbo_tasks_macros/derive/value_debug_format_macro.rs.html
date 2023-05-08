@@ -128,8 +128,8 @@
 
 <span class="kw">use </span><span class="kw">super</span>::FieldAttributes;
 
-<span class="kw">fn </span>ignore_field(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
-    FieldAttributes::from(field.attrs.as_slice()).debug_ignore
+<span class="kw">fn </span>filter_field(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
+    !FieldAttributes::from(field.attrs.as_slice()).debug_ignore
 }
 
 <span class="doccomment">/// This macro generates the implementation of the `ValueDebugFormat` trait for
@@ -190,7 +190,7 @@
 <span class="doccomment">/// Formats a struct or enum variant with named fields (e.g. `struct Foo {
 /// bar: u32 }`, `Foo::Bar { baz: u32 }`).
 </span><span class="kw">fn </span>format_named(ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>FieldsNamed) -&gt; (TokenStream2, TokenStream2) {
-    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.named.iter(), <span class="kw-2">&amp;</span>ignore_field);
+    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.named.iter(), <span class="kw-2">&amp;</span>filter_field);
     <span class="kw">let </span>fields_values = fields_idents.iter().cloned().map(format_field);
     (
         captures,
@@ -211,7 +211,7 @@
 <span class="doccomment">/// Formats a struct or enum variant with unnamed fields (e.g. `struct
 /// Foo(u32)`, `Foo::Bar(u32)`).
 </span><span class="kw">fn </span>format_unnamed(ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>FieldsUnnamed) -&gt; (TokenStream2, TokenStream2) {
-    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), <span class="kw-2">&amp;</span>ignore_field);
+    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), <span class="kw-2">&amp;</span>filter_field);
     <span class="kw">let </span>fields_values = fields_idents.into_iter().map(format_field);
     (
         captures,

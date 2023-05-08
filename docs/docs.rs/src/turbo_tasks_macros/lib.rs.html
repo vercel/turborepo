@@ -80,6 +80,11 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(proc_macro_diagnostic)]
 #![feature(allow_internal_unstable)]
 #![feature(box_patterns)]
@@ -115,6 +120,11 @@
 <span class="attr">#[proc_macro_derive(DeterministicHash, attributes(turbo_tasks))]
 </span><span class="kw">pub fn </span>derive_deterministic_hash(input: TokenStream) -&gt; TokenStream {
     derive::derive_deterministic_hash(input)
+}
+
+<span class="attr">#[proc_macro_derive(TaskInput, attributes(turbo_tasks))]
+</span><span class="kw">pub fn </span>derive_task_input(input: TokenStream) -&gt; TokenStream {
+    derive::derive_task_input(input)
 }
 
 <span class="doccomment">/// Creates a ValueVc struct for a `struct` or `enum` that represent

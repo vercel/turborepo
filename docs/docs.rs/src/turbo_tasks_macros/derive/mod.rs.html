@@ -58,13 +58,17 @@
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>deterministic_hash_macro;
+<span class="kw">mod </span>task_input_macro;
 <span class="kw">mod </span>trace_raw_vcs_macro;
 <span class="kw">mod </span>value_debug_format_macro;
 <span class="kw">mod </span>value_debug_macro;
 
 <span class="kw">pub use </span>deterministic_hash_macro::derive_deterministic_hash;
 <span class="kw">use </span>syn::{spanned::Spanned, Attribute, Meta, MetaList, NestedMeta};
+<span class="kw">pub use </span>task_input_macro::derive_task_input;
 <span class="kw">pub use </span>trace_raw_vcs_macro::derive_trace_raw_vcs;
 <span class="kw">pub use </span>value_debug_format_macro::derive_value_debug_format;
 <span class="kw">pub use </span>value_debug_macro::derive_value_debug;

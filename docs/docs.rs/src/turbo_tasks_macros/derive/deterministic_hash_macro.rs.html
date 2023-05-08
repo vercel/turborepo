@@ -65,19 +65,11 @@
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a>
 <a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
 <span class="kw">use </span>syn::{parse_macro_input, Data, DeriveInput, Field, FieldsNamed, FieldsUnnamed};
-<span class="kw">use </span>turbo_tasks_macros_shared::{generate_destructuring, match_expansion};
-
-<span class="kw">fn </span>ignore_field(_field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
-    <span class="bool-val">false
-</span>}
+<span class="kw">use </span>turbo_tasks_macros_shared::{generate_exhaustive_destructuring, match_expansion};
 
 <span class="doccomment">/// This macro generates the implementation of the `DeterministicHash` trait for
 /// a given type.
@@ -111,7 +103,7 @@
 <span class="doccomment">/// Hashes a struct or enum variant with named fields (e.g. `struct Foo {
 /// bar: u32 }`, `Foo::Bar { baz: u32 }`).
 </span><span class="kw">fn </span>hash_named(_ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>FieldsNamed) -&gt; (TokenStream2, TokenStream2) {
-    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.named.iter(), <span class="kw-2">&amp;</span>ignore_field);
+    <span class="kw">let </span>(captures, fields_idents) = generate_exhaustive_destructuring(fields.named.iter());
     (
         captures,
         <span class="macro">quote! </span>{
@@ -125,7 +117,7 @@
 <span class="doccomment">/// Hashes a struct or enum variant with unnamed fields (e.g. `struct
 /// Foo(u32)`, `Foo::Bar(u32)`).
 </span><span class="kw">fn </span>hash_unnamed(_ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>FieldsUnnamed) -&gt; (TokenStream2, TokenStream2) {
-    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), <span class="kw-2">&amp;</span>ignore_field);
+    <span class="kw">let </span>(captures, fields_idents) = generate_exhaustive_destructuring(fields.unnamed.iter());
     (
         captures,
         <span class="macro">quote! </span>{

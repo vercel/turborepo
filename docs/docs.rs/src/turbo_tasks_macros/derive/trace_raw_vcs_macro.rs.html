@@ -62,8 +62,8 @@
 
 <span class="kw">use </span><span class="kw">super</span>::FieldAttributes;
 
-<span class="kw">fn </span>ignore_field(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
-    FieldAttributes::from(field.attrs.as_slice()).trace_ignore
+<span class="kw">fn </span>filter_field(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
+    !FieldAttributes::from(field.attrs.as_slice()).trace_ignore
 }
 
 <span class="kw">pub fn </span>derive_trace_raw_vcs(input: TokenStream) -&gt; TokenStream {
@@ -84,7 +84,7 @@
 }
 
 <span class="kw">fn </span>trace_named(_ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>FieldsNamed) -&gt; (TokenStream2, TokenStream2) {
-    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.named.iter(), <span class="kw-2">&amp;</span>ignore_field);
+    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.named.iter(), <span class="kw-2">&amp;</span>filter_field);
     (
         captures,
         <span class="macro">quote! </span>{
@@ -96,7 +96,7 @@
 }
 
 <span class="kw">fn </span>trace_unnamed(_ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>FieldsUnnamed) -&gt; (TokenStream2, TokenStream2) {
-    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), <span class="kw-2">&amp;</span>ignore_field);
+    <span class="kw">let </span>(captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), <span class="kw-2">&amp;</span>filter_field);
     (
         captures,
         <span class="macro">quote! </span>{

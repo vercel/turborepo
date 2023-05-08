@@ -127,6 +127,34 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro2::{Ident, TokenStream};
 <span class="kw">use </span>quote::quote;
 <span class="kw">use </span>syn::{
@@ -211,17 +239,20 @@
 }
 
 <span class="doccomment">/// Formats the fields of any structure or enum variant.
-</span><span class="kw">fn </span>expand_fields&lt;
-    EN: Fn(<span class="kw-2">&amp;</span>Ident, <span class="kw-2">&amp;</span>FieldsNamed) -&gt; (TokenStream, TokenStream),
-    EU: Fn(<span class="kw-2">&amp;</span>Ident, <span class="kw-2">&amp;</span>FieldsUnnamed) -&gt; (TokenStream, TokenStream),
-    U: Fn(<span class="kw-2">&amp;</span>Ident) -&gt; (TokenStream, TokenStream),
+</span><span class="kw">pub fn </span>expand_fields&lt;
+    <span class="lifetime">&#39;ident</span>,
+    <span class="lifetime">&#39;fields</span>,
+    EN: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;ident </span>Ident, <span class="kw-2">&amp;</span><span class="lifetime">&#39;fields </span>FieldsNamed) -&gt; R,
+    EU: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;ident </span>Ident, <span class="kw-2">&amp;</span><span class="lifetime">&#39;fields </span>FieldsUnnamed) -&gt; R,
+    U: Fn(<span class="kw-2">&amp;</span><span class="lifetime">&#39;ident </span>Ident) -&gt; R,
+    R,
 &gt;(
-    ident: <span class="kw-2">&amp;</span>Ident,
-    fields: <span class="kw-2">&amp;</span>Fields,
-    expand_named: <span class="kw-2">&amp;</span>EN,
-    expand_unnamed: <span class="kw-2">&amp;</span>EU,
-    expand_unit: <span class="kw-2">&amp;</span>U,
-) -&gt; (TokenStream, TokenStream) {
+    ident: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ident </span>Ident,
+    fields: <span class="kw-2">&amp;</span><span class="lifetime">&#39;fields </span>Fields,
+    expand_named: EN,
+    expand_unnamed: EU,
+    expand_unit: U,
+) -&gt; R {
     <span class="kw">match </span>fields {
         Fields::Named(named) =&gt; expand_named(ident, named),
         Fields::Unnamed(unnamed) =&gt; expand_unnamed(ident, unnamed),
@@ -231,15 +262,22 @@
 
 <span class="doccomment">/// Generates a match arm destructuring pattern for the given fields.
 ///
+/// If no `filter_field` function is provided, all fields are included in the
+/// pattern. If a `filter_field` function is provided, only fields for which
+/// the function returns `true` are included in the pattern. If any field is
+/// ignored, a wildcard pattern is added to the end of the pattern, making it
+/// non-exhaustive.
+///
 /// Returns both the capture pattern token stream and the name of the bound
 /// identifiers corresponding to the input fields.
 </span><span class="kw">pub fn </span>generate_destructuring&lt;<span class="lifetime">&#39;a</span>, I: Fn(<span class="kw-2">&amp;</span>Field) -&gt; bool&gt;(
-    fields: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Field&gt;,
-    ignore_field: <span class="kw-2">&amp;</span>I,
+    fields: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Field&gt; + ExactSizeIterator,
+    filter_field: <span class="kw-2">&amp;</span>I,
 ) -&gt; (TokenStream, Vec&lt;TokenStream&gt;) {
+    <span class="kw">let </span>fields_len = fields.len();
     <span class="kw">let </span>(captures, fields_idents): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = fields
+        .filter(|field| filter_field(field))
         .enumerate()
-        .filter(|(_i, field)| !ignore_field(field))
         .map(|(i, field)| <span class="kw">match </span><span class="kw-2">&amp;</span>field.ident {
             <span class="prelude-val">Some</span>(ident) =&gt; (<span class="macro">quote! </span>{ #ident }, <span class="macro">quote! </span>{ #ident }),
             <span class="prelude-val">None </span>=&gt; {
@@ -249,12 +287,30 @@
             }
         })
         .unzip();
+    <span class="comment">// Only add the wildcard pattern if we&#39;re ignoring some fields.
+    </span><span class="kw">let </span>wildcard = <span class="kw">if </span>fields_idents.len() != fields_len {
+        <span class="macro">quote! </span>{ .. }
+    } <span class="kw">else </span>{
+        <span class="macro">quote! </span>{}
+    };
     (
         <span class="macro">quote! </span>{
-            { #(#captures,)* .. }
+            { #(#captures,)* #wildcard }
         },
         fields_idents,
     )
+}
+
+<span class="doccomment">/// Generates an exhaustive match arm destructuring pattern for the given
+/// fields. This is equivalent to calling [`generate_destructuring`] with a
+/// `filter_field` function that always returns `true`.
+///
+/// Returns both the capture pattern token stream and the name of the bound
+/// identifiers corresponding to the input fields.
+</span><span class="kw">pub fn </span>generate_exhaustive_destructuring&lt;<span class="lifetime">&#39;a</span>&gt;(
+    fields: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Field&gt; + ExactSizeIterator,
+) -&gt; (TokenStream, Vec&lt;TokenStream&gt;) {
+    generate_destructuring(fields, <span class="kw-2">&amp;</span>|<span class="kw">_</span>| <span class="bool-val">true</span>)
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="turbo_tasks_macros_shared" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
