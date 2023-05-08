@@ -500,22 +500,16 @@ jobs:
 
           echo "$clippy_output" > clippy-warnings-raw
 
-      - name: Cache clippy warnings
+      - name: Fetch expected clippy warnings
+        if: github.ref != 'refs/heads/main'
         id: expected-clippy-warnings
-        uses: actions/cache@v3
+        uses: actions/cache/restore@v3
         with:
           path: |
             expected-clippy-warnings
             expected-clippy-warnings-raw
-          key: expected-clippy-warnings-${{ github.sha }}
-          restore-keys: |
-            expected-clippy-warnings
-
-      - name: Update expected Clippy warnings on main
-        if: github.ref == 'refs/heads/main'
-        run: |
-          mv clippy-warnings expected-clippy-warnings
-          mv clippy-warnings-raw expected-clippy-warnings-raw
+          key: expected-clippy-warnings-${{ github.event.pull_request.base.sha }}
+          fail-on-cache-miss: true
 
       - name: Check the number of Clippy warnings is ever decreasing
         if: github.ref != 'refs/heads/main'
@@ -535,6 +529,21 @@ jobs:
               exit 1
             fi
           fi
+
+      - name: Stage Clippy warnings for updating expected warnings on main
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v3
+        run: |
+          mv clippy-warnings expected-clippy-warnings
+          mv clippy-warnings-raw expected-clippy-warnings-raw
+
+      - name: Update expected Clippy warnings on main
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v3
+        paths: |
+          expected-clippy-warnings-raw
+          expected-clippy-warnings
+        key: expected-clippy-warnings-${{ github.sha }}
 
   next_dev_check:
     needs: [determine_jobs]
