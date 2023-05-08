@@ -330,6 +330,9 @@ pub struct RunArgs {
     /// Ignore the existing cache (to force execution)
     #[clap(long, env = "TURBO_FORCE", default_missing_value = "true")]
     pub force: Option<Option<bool>>,
+    /// Specify whether or not to do framework inference for tasks
+    #[clap(long, value_name = "BOOL", action = ArgAction::Set, default_value = "true", default_missing_value = "true", num_args = 0..=1)]
+    pub framework_inference: bool,
     /// Specify glob of global filesystem dependencies to be hashed. Useful
     /// for .env and files
     #[clap(long = "global-deps", action = ArgAction::Append)]
@@ -612,6 +615,7 @@ mod test {
         RunArgs {
             cache_workers: 10,
             output_logs: None,
+            framework_inference: true,
             ..RunArgs::default()
         }
     }
@@ -663,6 +667,60 @@ mod test {
                 }))),
                 ..Args::default()
             }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    framework_inference: true,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "framework_inference: default to true"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--framework-inference"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    framework_inference: true,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "framework_inference: flag only"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--framework-inference", "true"])
+                .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    framework_inference: true,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "framework_inference: flag set to true"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--framework-inference", "false"])
+                .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    framework_inference: false,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "framework_inference: flag set to false"
         );
 
         assert_eq!(

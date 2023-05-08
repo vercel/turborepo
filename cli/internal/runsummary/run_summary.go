@@ -23,8 +23,11 @@ import (
 // the RunSummary will print this, instead of the script (e.g. `next build`).
 const MissingTaskLabel = "<NONEXISTENT>"
 
-// MissingFrameworkLabel is a string to identify when a workspace doesn't detect a framework
-const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
+// NoFrameworkDetected is a string to identify when a workspace doesn't detect a framework
+const NoFrameworkDetected = "<NO FRAMEWORK DETECTED>"
+
+// FrameworkDetectionSkipped is a string to identify when framework detection was skipped
+const FrameworkDetectionSkipped = "<FRAMEWORK DETECTION SKIPPED>"
 
 const runSummarySchemaVersion = "0"
 const runsEndpoint = "/v0/spaces/%s/runs"
@@ -56,15 +59,16 @@ type Meta struct {
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
-	ID                ksuid.KSUID        `json:"id"`
-	Version           string             `json:"version"`
-	TurboVersion      string             `json:"turboVersion"`
-	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
-	Packages          []string           `json:"packages"`
-	EnvMode           util.EnvMode       `json:"envMode"`
-	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
-	Tasks             []*TaskSummary     `json:"tasks"`
-	SCM               *scmState          `json:"scm"`
+	ID                 ksuid.KSUID        `json:"id"`
+	Version            string             `json:"version"`
+	TurboVersion       string             `json:"turboVersion"`
+	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
+	Packages           []string           `json:"packages"`
+	EnvMode            util.EnvMode       `json:"envMode"`
+	FrameworkInference bool               `json:"frameworkInference"`
+	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
+	Tasks              []*TaskSummary     `json:"tasks"`
+	SCM                *scmState          `json:"scm"`
 }
 
 // NewRunSummary returns a RunSummary instance
@@ -98,15 +102,16 @@ func NewRunSummary(
 
 	return Meta{
 		RunSummary: &RunSummary{
-			ID:                ksuid.New(),
-			Version:           runSummarySchemaVersion,
-			ExecutionSummary:  executionSummary,
-			TurboVersion:      turboVersion,
-			Packages:          packages,
-			EnvMode:           globalEnvMode,
-			Tasks:             []*TaskSummary{},
-			GlobalHashSummary: globalHashSummary,
-			SCM:               getSCMState(repoRoot),
+			ID:                 ksuid.New(),
+			Version:            runSummarySchemaVersion,
+			ExecutionSummary:   executionSummary,
+			TurboVersion:       turboVersion,
+			Packages:           packages,
+			EnvMode:            globalEnvMode,
+			FrameworkInference: runOpts.FrameworkInference,
+			Tasks:              []*TaskSummary{},
+			GlobalHashSummary:  globalHashSummary,
+			SCM:                getSCMState(repoRoot),
 		},
 		ui:                 ui,
 		runType:            runType,
