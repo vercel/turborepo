@@ -1322,6 +1322,10 @@ pub fn with_turbo_tasks_for_testing<T>(
     )
 }
 
+/// Spawns the given future within the context of the current task.
+///
+/// Beware: this method is not safe to use in production code. It is only
+/// intended for use in tests and for debugging purposes.
 pub fn spawn_detached(f: impl Future<Output = Result<()>> + Send + 'static) {
     tokio::spawn(turbo_tasks().detached(Box::pin(f)));
 }
