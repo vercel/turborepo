@@ -172,3 +172,69 @@ impl<T> Connected for UdsWindowsStream<T> {
     type ConnectInfo = ();
     fn connect_info(&self) -> Self::ConnectInfo {}
 }
+
+#[cfg(test)]
+mod test {
+    use std::{
+        assert_matches::assert_matches,
+        path::Path,
+        process::Command,
+        sync::{atomic::AtomicBool, Arc},
+    };
+
+    use pidlock::PidlockError;
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::listen_socket;
+    use crate::daemon::endpoint::SocketOpenError;
+
+    fn pid_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(tmp_path.join("turbod.pid")).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_stale_pid() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+        let pid_path = pid_path(&tmp_path);
+        // A pid that will never be running and is guaranteed not to be us
+        pid_path.create_with_contents("100000").unwrap();
+
+        let running = Arc::new(AtomicBool::new(true));
+        let result = listen_socket(pid_path, running).await;
+
+        // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
+        if let Err(err) = result {
+            assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
+        } else {
+            panic!("expected an error")
+        }
+    }
+
+    #[tokio::test]
+    async fn test_existing_process() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+        let pid_path = pid_path(&tmp_path);
+
+        #[cfg(windows)]
+        let node_bin = "node.exe";
+        #[cfg(not(windows))]
+        let node_bin = "node";
+
+        let child = Command::new(node_bin).spawn().unwrap();
+        pid_path
+            .create_with_contents(format!("{}", child.id()).as_ref())
+            .unwrap();
+
+        let running = Arc::new(AtomicBool::new(true));
+        let result = listen_socket(pid_path, running).await;
+
+        // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
+        if let Err(err) = result {
+            assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
+        } else {
+            panic!("expected an error")
+        }
+    }
+}
