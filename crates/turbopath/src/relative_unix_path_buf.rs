@@ -35,21 +35,18 @@ impl RelativeUnixPathBuf {
         // then the byte-to-be-escaped. Finally we set i to 1 + to_escape_index
         // to move our pointer past the byte we just escaped.
         let mut i: usize = 0;
-        while i < self.0.len() {
-            if let Some(mut to_escape_index) = self.0[i..]
-                .iter()
-                .position(|byte| *byte == b'\"' || *byte == b'\n')
-            {
-                // renormalize the index into the byte vector
-                to_escape_index += i;
-                writer.write_all(&self.0[i..to_escape_index])?;
-                let byte = self.0[to_escape_index];
-                writer.write_all(&[b'\\', byte])?;
-                i = to_escape_index + 1;
-            } else {
-                writer.write_all(&self.0)?;
-                i = self.0.len();
-            }
+        for (to_escaped_index, byte) in self
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(_, byte)| **byte == b'\"' || **byte == b'\n')
+        {
+            writer.write_all(&self.0[i..to_escaped_index])?;
+            writer.write_all(&[b'\\', *byte])?;
+            i = to_escaped_index + 1;
+        }
+        if i < self.0.len() {
+            writer.write_all(&self.0[i..])?;
         }
         writer.write_all(&[b'\"'])?;
         Ok(())
