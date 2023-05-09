@@ -55,13 +55,14 @@ func (rsm *Meta) normalize() {
 // This struct exists solely for the purpose of serializing to JSON and should not be
 // used anywhere else.
 type nonMonorepoRunSummary struct {
-	ID                ksuid.KSUID        `json:"id"`
-	Version           string             `json:"version"`
-	TurboVersion      string             `json:"turboVersion"`
-	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
-	Packages          []string           `json:"-"`
-	EnvMode           util.EnvMode       `json:"envMode"`
-	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
-	Tasks             []*TaskSummary     `json:"tasks"`
-	SCM               *scmState          `json:"scm"`
+	ID                 ksuid.KSUID        `json:"id"`
+	Version            string             `json:"version"`
+	TurboVersion       string             `json:"turboVersion"`
+	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
+	Packages           []string           `json:"-"`
+	EnvMode            util.EnvMode       `json:"envMode"`
+	FrameworkInference bool               `json:"frameworkInference"`
+	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
+	Tasks              []*TaskSummary     `json:"tasks"`
+	SCM                *scmState          `json:"scm"`
 }

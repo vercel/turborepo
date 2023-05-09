@@ -8199,6 +8199,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-chrome"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "496b3cd5447f7ff527bbbf19b071ad542a000adf297d4127078b4dfdb931f41a"
+dependencies = [
+ "serde_json",
+ "tracing-core",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-core"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8564,6 +8575,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbo-tasks-macros-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "lazy_static",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-memory",
+ "turbo-tasks-testing",
+]
+
+[[package]]
 name = "turbo-tasks-memory"
 version = "0.1.0"
 dependencies = [
@@ -8885,11 +8909,14 @@ name = "turbopack-ecmascript-plugins"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "serde",
  "swc_core",
  "swc_emotion",
+ "swc_relay",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-fs",
  "turbopack-ecmascript",
 ]
 
@@ -9154,6 +9181,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
+ "time 0.3.20",
  "tiny-gradient",
  "tokio",
  "tokio-stream",
@@ -9164,6 +9192,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-appender",
+ "tracing-chrome",
  "tracing-subscriber",
  "tracing-test",
  "turbo-updater",
