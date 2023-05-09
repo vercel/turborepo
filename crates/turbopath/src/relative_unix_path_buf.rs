@@ -27,7 +27,7 @@ impl RelativeUnixPathBuf {
     // write_escaped_bytes writes this path to the given writer in the form
     // "<escaped path>", where escaped_path is the path with '"' and '\n'
     // characters escaped with '\'.
-    pub fn write_escapted_bytes<W: Write>(&self, writer: &mut W) -> Result<(), PathError> {
+    pub fn write_escaped_bytes<W: Write>(&self, writer: &mut W) -> Result<(), PathError> {
         writer.write_all(&[b'\"'])?;
         // i is our pointer into self.0, and to_escape_index is a pointer to the next
         // byte to be escaped. Each time we find a byte to be escaped, we write
@@ -44,11 +44,7 @@ impl RelativeUnixPathBuf {
                 to_escape_index += i;
                 writer.write_all(&self.0[i..to_escape_index])?;
                 let byte = self.0[to_escape_index];
-                if byte == b'\"' {
-                    writer.write_all(&[b'\\', b'\"'])?;
-                } else {
-                    writer.write_all(&[b'\\', b'\n'])?;
-                }
+                writer.write_all(&[b'\\', byte])?;
                 i = to_escape_index + 1;
             } else {
                 writer.write_all(&self.0)?;
@@ -69,13 +65,22 @@ impl RelativeUnixPathBuf {
                 PathValidationError::NotParent(prefix.0.to_string(), self.0.to_string()),
             ));
         }
+
+        // Handle the case where we are stripping the entire contents of this path
+        if self.0.len() == prefix.0.len() {
+            return Self::new("");
+        }
+
+        // We now know that this path starts with the prefix, and that this path's
+        // length is greater than the prefix's length
         if self.0[prefix_len] != b'/' {
-            let prefix_str = prefix.as_str().unwrap_or("invalid utf8").to_string();
-            let this = self.as_str().unwrap_or("invalid utf8").to_string();
+            let prefix_str = prefix.0.to_str_lossy().into_owned();
+            let this = self.0.to_str_lossy().into_owned();
             return Err(PathError::PathValidationError(
                 PathValidationError::PrefixError(prefix_str, this),
             ));
         }
+
         let tail_slice = &self.0[(prefix_len + 1)..];
         Self::new(tail_slice)
     }
@@ -139,6 +144,15 @@ mod tests {
     }
 
     #[test]
+    fn test_strip_entire_contents() {
+        let combined = RelativeUnixPathBuf::new("some/path").unwrap();
+        let head = combined.clone();
+        let expected = RelativeUnixPathBuf::new("").unwrap();
+        let tail = combined.strip_prefix(&head).unwrap();
+        assert_eq!(tail, expected);
+    }
+
+    #[test]
     fn test_strip_empty_prefix() {
         let combined = RelativeUnixPathBuf::new("some/path").unwrap();
         let tail = combined
@@ -155,7 +169,7 @@ mod tests {
         {
             let mut writer = BufWriter::new(&mut buffer);
             let path = RelativeUnixPathBuf::new(input).unwrap();
-            path.write_escapted_bytes(&mut writer).unwrap();
+            path.write_escaped_bytes(&mut writer).unwrap();
         }
         assert_eq!(buffer.as_slice(), expected);
     }

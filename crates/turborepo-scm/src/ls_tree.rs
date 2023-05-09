@@ -3,13 +3,12 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::{anyhow, Result};
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::package_deps::GitHashes;
+use crate::{package_deps::GitHashes, Error};
 
-pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes> {
+pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
     let mut hashes = GitHashes::new();
     let mut git = Command::new("git")
         .args(["ls-tree", "-r", "-z", "HEAD"])
@@ -21,14 +20,27 @@ pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes> {
         let stdout = git
             .stdout
             .as_mut()
-            .ok_or_else(|| anyhow!("failed to get stdout for git ls-tree"))?;
-        read_ls_tree(stdout, &mut hashes)?;
+            .ok_or_else(|| Error::git_error("failed to get stdout for git ls-tree"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
+        let result = read_ls_tree(stdout, &mut hashes);
+        if result.is_err() {
+            let mut buf = String::new();
+            let bytes_read = stderr.read_to_string(&mut buf)?;
+            if bytes_read > 0 {
+                // something failed with git, report that error
+                return Err(Error::git_error(buf));
+            }
+        }
+        result?;
     }
     git.wait()?;
     Ok(hashes)
 }
 
-fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<()> {
+fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error> {
     let mut reader = BufReader::new(reader);
     let mut buffer = Vec::new();
     loop {
@@ -54,10 +66,13 @@ struct LsTreeEntry<'a> {
     hash: &'a [u8],
 }
 
-fn parse_ls_tree(i: &[u8]) -> Result<LsTreeEntry<'_>> {
+fn parse_ls_tree(i: &[u8]) -> Result<LsTreeEntry<'_>, Error> {
     match nom_parse_ls_tree(i).finish() {
         Ok((_, entry)) => Ok(entry),
-        Err(e) => Err(anyhow!("nom: {:?}: {}", e, std::str::from_utf8(e.input)?)),
+        Err(e) => Err(Error::git_error(format!(
+            "failed to parse git-ls-tree: {}",
+            String::from_utf8_lossy(e.input)
+        ))),
     }
 }
 

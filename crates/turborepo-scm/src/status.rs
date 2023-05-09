@@ -1,10 +1,8 @@
 use std::{
-    backtrace::Backtrace,
     io::{BufRead, BufReader, Read},
     process::{Command, Stdio},
 };
 
-use anyhow::{anyhow, Result};
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
@@ -14,7 +12,7 @@ pub(crate) fn append_git_status(
     root_path: &AbsoluteSystemPathBuf,
     pkg_prefix: &RelativeUnixPathBuf,
     hashes: &mut GitHashes,
-) -> Result<Vec<RelativeUnixPathBuf>> {
+) -> Result<Vec<RelativeUnixPathBuf>, Error> {
     let mut git = Command::new("git")
         .args([
             "status",
@@ -32,18 +30,18 @@ pub(crate) fn append_git_status(
         let stdout = git
             .stdout
             .as_mut()
-            .ok_or_else(|| anyhow!("failed to get stdout for git status"))?;
+            .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
         let mut stderr = git
             .stderr
             .take()
-            .ok_or_else(|| anyhow!("failed to get stderr for git status"))?;
+            .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
         let result = read_status(stdout, pkg_prefix, hashes);
         if result.is_err() {
             let mut buf = String::new();
             let bytes_read = stderr.read_to_string(&mut buf)?;
             if bytes_read > 0 {
                 // something failed with git, report that error
-                return Err(Error::Git(buf, Backtrace::capture()).into());
+                return Err(Error::git_error(buf));
             }
         }
         result?
@@ -56,7 +54,7 @@ fn read_status<R: Read>(
     reader: R,
     pkg_prefix: &RelativeUnixPathBuf,
     hashes: &mut GitHashes,
-) -> Result<Vec<RelativeUnixPathBuf>> {
+) -> Result<Vec<RelativeUnixPathBuf>, Error> {
     let mut to_hash = Vec::new();
     let mut reader = BufReader::new(reader);
     let mut buffer = Vec::new();
@@ -87,10 +85,13 @@ struct StatusEntry<'a> {
     is_delete: bool,
 }
 
-fn parse_status(i: &[u8]) -> Result<StatusEntry<'_>> {
+fn parse_status(i: &[u8]) -> Result<StatusEntry<'_>, Error> {
     match nom_parse_status(i).finish() {
         Ok((_, tup)) => Ok(tup),
-        Err(e) => Err(anyhow!("nom: {:?} {}", e, std::str::from_utf8(e.input)?)),
+        Err(e) => Err(Error::git_error(format!(
+            "failed to parse git-status: {}",
+            String::from_utf8_lossy(e.input)
+        ))),
     }
 }
 

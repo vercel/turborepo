@@ -1,16 +1,15 @@
 use std::{collections::HashMap, process::Command};
 
-use anyhow::Result;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{hash_object::hash_objects, ls_tree::git_ls_tree, status::append_git_status};
+use crate::{hash_object::hash_objects, ls_tree::git_ls_tree, status::append_git_status, Error};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
 pub fn get_package_file_hashes_from_git_index(
     turbo_root: &AbsoluteSystemPathBuf,
     package_path: &AnchoredSystemPathBuf,
-) -> Result<GitHashes> {
+) -> Result<GitHashes, Error> {
     // TODO: memoize git root -> turbo root calculation once we aren't crossing ffi
     let git_root = find_git_root(turbo_root)?;
     let full_pkg_path = turbo_root.resolve(package_path);
@@ -23,7 +22,9 @@ pub fn get_package_file_hashes_from_git_index(
     Ok(hashes)
 }
 
-pub(crate) fn find_git_root(turbo_root: &AbsoluteSystemPathBuf) -> Result<AbsoluteSystemPathBuf> {
+pub(crate) fn find_git_root(
+    turbo_root: &AbsoluteSystemPathBuf,
+) -> Result<AbsoluteSystemPathBuf, Error> {
     let rev_parse = Command::new("git")
         .args(["rev-parse", "--show-cdup"])
         .current_dir(turbo_root)
@@ -38,10 +39,13 @@ mod tests {
 
     use super::*;
 
-    fn tmp_dir() -> Result<(tempfile::TempDir, AbsoluteSystemPathBuf)> {
-        let tmp_dir = tempfile::tempdir()?;
-        let dir = AbsoluteSystemPathBuf::new(tmp_dir.path().to_path_buf())?.to_realpath()?;
-        Ok((tmp_dir, dir))
+    fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let dir = AbsoluteSystemPathBuf::new(tmp_dir.path().to_path_buf())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        (tmp_dir, dir)
     }
 
     fn require_git_cmd(repo_root: &AbsoluteSystemPathBuf, args: &[&str]) {
@@ -69,7 +73,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_package_deps() -> Result<()> {
+    fn test_get_package_deps() -> Result<(), Error> {
         // Directory structure:
         // <root>/
         //   new-root-file <- new file not added to git
@@ -79,7 +83,7 @@ mod tests {
         //     uncommitted-file <- new file not added to git
         //     dir/
         //       nested-file
-        let (_repo_root_tmp, repo_root) = tmp_dir()?;
+        let (_repo_root_tmp, repo_root) = tmp_dir();
         let my_pkg_dir = repo_root.join_literal("my-pkg");
         my_pkg_dir.create_dir_all()?;
 
