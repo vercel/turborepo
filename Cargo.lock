@@ -8548,6 +8548,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbo-tasks-macros-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "lazy_static",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-memory",
+ "turbo-tasks-testing",
+]
+
+[[package]]
 name = "turbo-tasks-memory"
 version = "0.1.0"
 dependencies = [
