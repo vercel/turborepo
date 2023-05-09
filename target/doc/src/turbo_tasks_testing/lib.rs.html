@@ -235,6 +235,13 @@
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
 <a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Testing utilities and macros for turbo-tasks and applications based on it.
 
 </span><span class="kw">mod </span>macros;
@@ -458,6 +465,13 @@
     <span class="kw">fn </span>mark_own_task_as_finished(<span class="kw-2">&amp;</span><span class="self">self</span>, _task: TaskId) {
         <span class="comment">// no-op
     </span>}
+
+    <span class="kw">fn </span>detached(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _f: std::pin::Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt;,
+    ) -&gt; std::pin::Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;static</span>&gt;&gt; {
+        <span class="macro">unimplemented!</span>()
+    }
 }
 
 <span class="kw">impl </span>VcStorage {

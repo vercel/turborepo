@@ -220,7 +220,7 @@
 </span><span class="kw">pub mod </span>macro_helpers {
     <span class="kw">pub use </span>once_cell::sync::{Lazy, OnceCell};
 
-    <span class="kw">pub use </span><span class="kw">super</span>::manager::find_cell_by_type;
+    <span class="kw">pub use </span><span class="kw">super</span>::manager::{find_cell_by_type, spawn_detached};
 }
 
 <span class="kw">pub mod </span>test_helpers {
