@@ -334,5 +334,5 @@ func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[
 		return nil, errors.New(err)
 	}
 	hashes := resp.GetHashes()
-	return hashes.Hashes, nil
+	return hashes.GetHashes(), nil
 }
