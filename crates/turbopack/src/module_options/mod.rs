@@ -7,7 +7,7 @@ pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
 use turbo_tasks::primitives::{OptionStringVc, StringsVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
@@ -429,6 +429,7 @@ impl ModuleOptionsVc {
         }
 
         if let Some(webpack_loaders_options) = enable_webpack_loaders {
+            let webpack_loaders_options = webpack_loaders_options.await?;
             let execution_context = execution_context
                 .context("execution_context is required for webpack_loaders")?
                 .with_layer("webpack_loaders");
@@ -439,10 +440,17 @@ impl ModuleOptionsVc {
             } else {
                 package_import_map_from_context("loader-runner", path)
             };
-            for (ext, loaders) in webpack_loaders_options.extension_to_loaders.iter() {
+            for (glob, rule) in webpack_loaders_options.rules.await?.iter() {
                 rules.push(ModuleRule::new(
                     ModuleRuleCondition::All(vec![
-                        ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                        if !glob.contains("/") {
+                            ModuleRuleCondition::ResourceBasePathGlob(GlobVc::new(glob).await?)
+                        } else {
+                            ModuleRuleCondition::ResourcePathGlob {
+                                base: execution_context.project_path().await?,
+                                glob: GlobVc::new(glob).await?,
+                            }
+                        },
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),
                     vec![
@@ -463,7 +471,8 @@ impl ModuleOptionsVc {
                                     None,
                                 ),
                                 execution_context,
-                                *loaders,
+                                rule.loaders,
+                                rule.rename_as.clone(),
                             )
                             .into(),
                         ])),
