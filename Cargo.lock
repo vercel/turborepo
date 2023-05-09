@@ -1916,7 +1916,16 @@ version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f51c5d4ddabd36886dd3e1438cb358cdcb0d7c499cb99cb4ac2e38e18b5cb210"
 dependencies = [
- "dirs-sys",
+ "dirs-sys 0.3.7",
+]
+
+[[package]]
+name = "directories"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a49173b84e034382284f27f1af4dcbbd231ffa358c0fe316541a7337f376a35"
+dependencies = [
+ "dirs-sys 0.4.1",
 ]
 
 [[package]]
@@ -1925,7 +1934,7 @@ version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3aa72a6f96ea37bbc5aa912f6788242832f75369bdfdadcb0e38423f100059"
 dependencies = [
- "dirs-sys",
+ "dirs-sys 0.3.7",
 ]
 
 [[package]]
@@ -1947,6 +1956,18 @@ dependencies = [
  "libc",
  "redox_users",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -4428,6 +4449,12 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
+
+[[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "ordered-multimap"
@@ -8172,6 +8199,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-chrome"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "496b3cd5447f7ff527bbbf19b071ad542a000adf297d4127078b4dfdb931f41a"
+dependencies = [
+ "serde_json",
+ "tracing-core",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-core"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8537,6 +8575,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbo-tasks-macros-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "lazy_static",
+ "tokio",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-memory",
+ "turbo-tasks-testing",
+]
+
+[[package]]
 name = "turbo-tasks-memory"
 version = "0.1.0"
 dependencies = [
@@ -8858,11 +8909,14 @@ name = "turbopack-ecmascript-plugins"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "serde",
  "swc_core",
  "swc_emotion",
+ "swc_relay",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-fs",
  "turbopack-ecmascript",
 ]
 
@@ -9050,7 +9104,7 @@ name = "turborepo-ffi"
 version = "0.1.0"
 dependencies = [
  "cbindgen",
- "directories",
+ "directories 4.0.1",
  "prost",
  "prost-build",
  "thiserror",
@@ -9090,7 +9144,7 @@ dependencies = [
  "const_format",
  "ctrlc",
  "dialoguer",
- "directories",
+ "directories 4.0.1",
  "dirs-next",
  "dunce",
  "futures",
@@ -9127,6 +9181,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
+ "time 0.3.20",
  "tiny-gradient",
  "tokio",
  "tokio-stream",
@@ -9137,6 +9192,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-appender",
+ "tracing-chrome",
  "tracing-subscriber",
  "tracing-test",
  "turbo-updater",
@@ -9181,8 +9237,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.4.6",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -9342,10 +9398,11 @@ checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
 
 [[package]]
 name = "update-informer"
-version = "0.6.0"
-source = "git+https://github.com/mgrachev/update-informer?rev=b7a415ac2276e857167b9fe8282044f93155878a#b7a415ac2276e857167b9fe8282044f93155878a"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19d952f24d9cd8b7564d22c7b2cde3429c48b50c6f4e72b07b382ae4ee5f21b3"
 dependencies = [
- "directories",
+ "directories 5.0.1",
  "semver 1.0.17",
  "serde",
  "serde_json",
