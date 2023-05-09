@@ -219,11 +219,27 @@
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
-<span class="kw">use </span>turbopack_ecmascript::EcmascriptInputTransform;
+<span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransform, TransformPluginVc};
 <span class="kw">use </span>turbopack_ecmascript_plugins::transform::emotion::EmotionTransformConfigVc;
 <span class="kw">use </span>turbopack_node::{
     execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderConfigItemsVc,
@@ -377,6 +393,18 @@
     }
 }
 
+<span class="doccomment">/// Configuration options for the custom ecma transform to be applied.
+</span><span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Default, Clone)]
+</span><span class="kw">pub struct </span>CustomEcmascriptTransformPlugins {
+    <span class="doccomment">/// List of plugins to be applied before the main transform.
+    /// Transform will be applied in the order of the list.
+    </span><span class="kw">pub </span>source_transforms: Vec&lt;TransformPluginVc&gt;,
+    <span class="doccomment">/// List of plugins to be applied after the main transform.
+    /// Transform will be applied in the order of the list.
+    </span><span class="kw">pub </span>output_transforms: Vec&lt;TransformPluginVc&gt;,
+}
+
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
 </span><span class="kw">pub struct </span>ModuleOptionsContext {
@@ -408,10 +436,14 @@
     </span><span class="kw">pub </span>enable_mdx_rs: bool,
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
-    <span class="attr">#[serde(default)]
+    <span class="attr">#[deprecated(note = <span class="string">&quot;use custom_ecma_transform_plugins instead&quot;</span>)]
+    #[serde(default)]
     </span><span class="kw">pub </span>custom_ecmascript_app_transforms: Vec&lt;EcmascriptInputTransform&gt;,
-    <span class="attr">#[serde(default)]
+    <span class="attr">#[deprecated(note = <span class="string">&quot;use custom_ecma_transform_plugins instead&quot;</span>)]
+    #[serde(default)]
     </span><span class="kw">pub </span>custom_ecmascript_transforms: Vec&lt;EcmascriptInputTransform&gt;,
+    <span class="attr">#[serde(default)]
+    </span><span class="kw">pub </span>custom_ecma_transform_plugins: <span class="prelude-ty">Option</span>&lt;CustomEcmascriptTransformPluginsVc&gt;,
     <span class="attr">#[serde(default)]
     </span><span class="doccomment">/// Custom rules to be applied after all default rules.
     </span><span class="kw">pub </span>custom_rules: Vec&lt;ModuleRule&gt;,

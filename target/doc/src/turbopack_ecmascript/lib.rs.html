@@ -547,6 +547,7 @@
 <a href="#547" id="547">547</a>
 <a href="#548" id="548">548</a>
 <a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(min_specialization)]
 #![feature(iter_intersperse)]
@@ -591,8 +592,9 @@
     },
 };
 <span class="kw">pub use </span>transform::{
-    CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransformsVc, TransformContext,
-    TransformPlugin, TransformPluginVc,
+    CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransformsVc,
+    OptionTransformPlugin, OptionTransformPluginVc, TransformContext, TransformPlugin,
+    TransformPluginVc,
 };
 <span class="kw">use </span>turbo_tasks::{
     primitives::StringVc, trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,
