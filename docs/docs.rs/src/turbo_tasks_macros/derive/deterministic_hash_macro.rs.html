@@ -68,7 +68,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
-<span class="kw">use </span>syn::{parse_macro_input, Data, DeriveInput, Field, FieldsNamed, FieldsUnnamed};
+<span class="kw">use </span>syn::{parse_macro_input, Data, DeriveInput, FieldsNamed, FieldsUnnamed};
 <span class="kw">use </span>turbo_tasks_macros_shared::{generate_exhaustive_destructuring, match_expansion};
 
 <span class="doccomment">/// This macro generates the implementation of the `DeterministicHash` trait for

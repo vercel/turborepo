@@ -155,6 +155,8 @@
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro2::{Ident, TokenStream};
 <span class="kw">use </span>quote::quote;
 <span class="kw">use </span>syn::{
@@ -276,8 +278,10 @@
 ) -&gt; (TokenStream, Vec&lt;TokenStream&gt;) {
     <span class="kw">let </span>fields_len = fields.len();
     <span class="kw">let </span>(captures, fields_idents): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = fields
-        .filter(|field| filter_field(field))
-        .enumerate()
+        <span class="comment">// We need to enumerate first to capture the indexes of the fields before filtering has
+        // changed them.
+        </span>.enumerate()
+        .filter(|(_i, field)| filter_field(field))
         .map(|(i, field)| <span class="kw">match </span><span class="kw-2">&amp;</span>field.ident {
             <span class="prelude-val">Some</span>(ident) =&gt; (<span class="macro">quote! </span>{ #ident }, <span class="macro">quote! </span>{ #ident }),
             <span class="prelude-val">None </span>=&gt; {
