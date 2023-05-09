@@ -990,16 +990,14 @@ impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
         &self,
         f: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>> {
-        Box::pin(
-            TURBO_TASKS.scope(
-                turbo_tasks(),
-                CURRENT_TASK_ID.scope(
-                    CURRENT_TASK_ID.with(|id| *id),
-                    self.backend
-                        .execution_scope(CURRENT_TASK_ID.with(|id| *id), f),
-                ),
+        let current_task_id = CURRENT_TASK_ID.get();
+        Box::pin(TURBO_TASKS.scope(
+            turbo_tasks(),
+            CURRENT_TASK_ID.scope(
+                current_task_id,
+                self.backend.execution_scope(current_task_id, f),
             ),
-        )
+        ))
     }
 }
 
