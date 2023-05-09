@@ -103,7 +103,7 @@ impl ModuleOptionsVc {
                         .source_transforms
                         .iter()
                         .cloned()
-                        .map(|plugin| EcmascriptInputTransform::Plugin(plugin))
+                        .map(EcmascriptInputTransform::Plugin)
                         .collect(),
                     transform_plugins
                         .output_transforms

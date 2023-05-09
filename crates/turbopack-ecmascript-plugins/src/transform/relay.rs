@@ -29,7 +29,7 @@ impl CustomTransformer for RelayTransformer {
         program: &mut Program,
         ctx: &TransformContext<'_>,
     ) -> Result<Option<Program>> {
-        // If user supplied artifactory_directory, it should be resolvable already.
+        // If user supplied artifact_directory, it should be resolvable already.
         // Otherwise, supply default relative path (./__generated__)
         let (root, config) = if self.config.artifact_directory.is_some() {
             (PathBuf::new(), None)
