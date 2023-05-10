@@ -20,8 +20,8 @@ use turbopack_core::{
         handle_resolve_error,
         node::node_cjs_resolve_options,
         options::{
-            ConditionValue, ImportMap, ImportMapVc, ImportMapping, ResolveIntoPackage,
-            ResolveModules, ResolveOptionsVc,
+            ConditionValue, ImportMap, ImportMapVc, ImportMapping, ResolveInPackage,
+            ResolveIntoPackage, ResolveModules, ResolveOptionsVc,
         },
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::{Request, RequestVc},

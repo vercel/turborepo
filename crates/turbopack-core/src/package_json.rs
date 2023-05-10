@@ -1,25 +1,43 @@
-use std::fmt::Write;
+use std::{fmt::Write, ops::Deref};
 
 use anyhow::Result;
-use turbo_tasks::primitives::StringVc;
+use serde_json::Value as JsonValue;
+use turbo_tasks::{debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs};
 use turbo_tasks_fs::{FileContent, FileJsonContent, FileJsonContentReadRef, FileSystemPathVc};
 
 use super::issue::{Issue, IssueVc};
 
+#[derive(PartialEq, Eq, ValueDebugFormat, TraceRawVcs)]
+pub struct PackageJson(FileJsonContentReadRef);
+
+impl Deref for PackageJson {
+    type Target = JsonValue;
+    fn deref(&self) -> &Self::Target {
+        match &*self.0 {
+            FileJsonContent::Content(json) => &json,
+            _ => unreachable!("PackageJson is guaranteed to hold Content"),
+        }
+    }
+}
+
 #[turbo_tasks::value(transparent, serialization = "none")]
-pub struct PackageJsonResult(Result<FileJsonContentReadRef, PackageJsonIssueVc>);
+pub struct OptionPackageJson(Option<PackageJson>);
 
 #[turbo_tasks::function]
-pub async fn read_package_json(path: FileSystemPathVc) -> Result<PackageJsonResultVc> {
+pub async fn read_package_json(path: FileSystemPathVc) -> Result<OptionPackageJsonVc> {
     let read = path.read_json().await?;
     match &*read {
-        FileJsonContent::Content(_) => Ok(PackageJsonResult(Ok(read)).cell()),
-        FileJsonContent::NotFound => Ok(PackageJsonResult(Err(PackageJsonIssue {
-            error_message: "package.json file not found".to_string(),
-            path,
+        FileJsonContent::Content(_) => Ok(OptionPackageJson(Some(PackageJson(read))).cell()),
+        FileJsonContent::NotFound => {
+            PackageJsonIssue {
+                error_message: "package.json file not found".to_string(),
+                path,
+            }
+            .cell()
+            .as_issue()
+            .emit();
+            Ok(OptionPackageJson(None).cell())
         }
-        .cell()))
-        .cell()),
         FileJsonContent::Unparseable(e) => {
             let mut message = "package.json is not parseable: invalid JSON: ".to_string();
             if let FileContent::Content(content) = &*path.read().await? {
@@ -28,12 +46,14 @@ pub async fn read_package_json(path: FileSystemPathVc) -> Result<PackageJsonResu
             } else {
                 write!(message, "{}", e)?;
             }
-            Ok(PackageJsonResult(Err(PackageJsonIssue {
+            PackageJsonIssue {
                 error_message: message,
                 path,
             }
-            .cell()))
-            .cell())
+            .cell()
+            .as_issue()
+            .emit();
+            Ok(OptionPackageJson(None).cell())
         }
     }
 }

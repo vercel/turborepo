@@ -51,7 +51,7 @@ impl From<bool> for ConditionValue {
     }
 }
 
-pub type Conditions = BTreeMap<String, ConditionValue>;
+pub type ResolutionConditions = BTreeMap<String, ConditionValue>;
 
 /// The different ways to resolve a package, as described in package.json.
 #[derive(TraceRawVcs, Hash, PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
@@ -61,7 +61,7 @@ pub enum ResolveIntoPackage {
     /// [exports]: https://nodejs.org/api/packages.html#exports
     ExportsField {
         field: String,
-        conditions: Conditions,
+        conditions: ResolutionConditions,
         unspecified_conditions: ConditionValue,
     },
     /// Using a [main]-like field (e.g. [main], [module], [browser], etc.).
@@ -83,7 +83,7 @@ pub enum ResolveInPackage {
     ///
     /// [exports]: https://nodejs.org/api/packages.html#imports
     ImportsField {
-        conditions: Conditions,
+        conditions: ResolutionConditions,
         unspecified_conditions: ConditionValue,
     },
 }

@@ -5,8 +5,8 @@ use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack_core::resolve::{
     find_context_file,
     options::{
-        ConditionValue, Conditions, ImportMap, ImportMapping, ResolveInPackage, ResolveIntoPackage,
-        ResolveModules, ResolveOptions, ResolveOptionsVc,
+        ConditionValue, ImportMap, ImportMapping, ResolutionConditions, ResolveInPackage,
+        ResolveIntoPackage, ResolveModules, ResolveOptions, ResolveOptionsVc,
     },
     AliasMap, AliasPattern, FindContextFileResult,
 };
@@ -116,7 +116,7 @@ async fn base_resolve_options(
     plugins.push(UnsupportedSassResolvePluginVc::new(root).as_resolve_plugin());
 
     let conditions = {
-        let mut conditions: Conditions = [
+        let mut conditions: ResolutionConditions = [
             ("import".to_string(), ConditionValue::Unknown),
             ("require".to_string(), ConditionValue::Unknown),
         ]

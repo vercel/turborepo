@@ -14,15 +14,10 @@ use super::{
     options::ConditionValue,
 };
 
+#[derive(Copy, Clone)]
 enum ExportImport {
     Export,
     Import,
-}
-
-impl ExportImport {
-    fn is_imports(&self) -> bool {
-        matches!(self, Self::Import)
-    }
 }
 
 impl Display for ExportImport {

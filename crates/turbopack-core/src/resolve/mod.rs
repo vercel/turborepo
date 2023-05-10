@@ -13,7 +13,7 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
-    FileJsonContent, FileSystemEntryType, FileSystemPathVc, RealPathResult,
+    FileSystemEntryType, FileSystemPathVc, RealPathResult,
 };
 
 use self::{
@@ -394,16 +394,10 @@ async fn exports_field(
     package_json_path: FileSystemPathVc,
     field: &str,
 ) -> Result<ExportsFieldResultVc> {
-    let package_json_content = match &*read_package_json(package_json_path).await? {
-        Ok(content_read_ref) => content_read_ref.clone(),
-        Err(e) => {
-            e.as_issue().emit();
-            return Ok(ExportsFieldResult::None.cell());
-        }
-    };
-    let package_json = match &*package_json_content {
-        FileJsonContent::Content(json) => json,
-        _ => unreachable!("Ok package.json read must contain Content"),
+    let read = read_package_json(package_json_path).await?;
+    let package_json = match &*read {
+        Some(json) => json,
+        None => return Ok(ExportsFieldResult::None.cell()),
     };
 
     let Some(exports) = package_json.get(field) else {
@@ -441,16 +435,10 @@ async fn imports_field(context: FileSystemPathVc) -> Result<ImportsFieldResultVc
         return Ok(ImportsFieldResult::None.cell());
     };
 
-    let package_json_content = match &*read_package_json(*package_json_path).await? {
-        Ok(content_read_ref) => content_read_ref.clone(),
-        Err(e) => {
-            e.as_issue().emit();
-            return Ok(ImportsFieldResult::None.cell());
-        }
-    };
-    let package_json = match &*package_json_content {
-        FileJsonContent::Content(json) => json,
-        _ => unreachable!("Ok package.json read must contain Content"),
+    let read = read_package_json(*package_json_path).await?;
+    let package_json = match &*read {
+        Some(json) => json,
+        None => return Ok(ImportsFieldResult::None.cell()),
     };
 
     let Some(imports) = package_json.get("imports") else {
@@ -939,10 +927,7 @@ async fn resolve_into_folder(
                 return Ok(resolve_internal(package_path, request, options));
             }
             ResolveIntoPackage::MainField(name) => {
-                if let Ok(package_json_content) = &*read_package_json(package_json_path).await? {
-                    let FileJsonContent::Content(package_json) = &**package_json_content else {
-                        unreachable!("Ok package.json read must contain Content");
-                    };
+                if let Some(package_json) = &*read_package_json(package_json_path).await? {
                     if let Some(field_value) = package_json[name].as_str() {
                         let request =
                             RequestVc::parse(Value::new(normalize_request(field_value).into()));
@@ -997,13 +982,13 @@ async fn resolve_module_request(
     for in_package in options_value.in_package.iter() {
         match in_package {
             ResolveInPackage::AliasField(field) => {
-                if let FindContextFileResult::Found(package_json, refs) =
+                if let FindContextFileResult::Found(package_json_path, refs) =
                     &*find_context_file(context, package_json()).await?
                 {
-                    // TODO: call read_package_json for consistent error handling
-                    if let FileJsonContent::Content(package) = &*package_json.read_json().await? {
-                        if let Some(field_value) = package[field].as_object() {
-                            let package_path = package_json.parent();
+                    let read = read_package_json(*package_json_path).await?;
+                    if let Some(package_json) = &*read {
+                        if let Some(field_value) = package_json[field].as_object() {
+                            let package_path = package_json_path.parent();
                             let full_pattern =
                                 Pattern::concat([module.to_string().into(), path.clone()]);
                             if let Some(request) = full_pattern.into_string() {
@@ -1013,7 +998,7 @@ async fn resolve_module_request(
                                         refs.clone(),
                                         package_path,
                                         options,
-                                        *package_json,
+                                        *package_json_path,
                                         &request,
                                         field,
                                     )
@@ -1023,6 +1008,11 @@ async fn resolve_module_request(
                         }
                     }
                 }
+            }
+            ResolveInPackage::ImportsField { .. } => {
+                // resolve_module_request is called when importing a node
+                // module, not a PackageInternal one, so the imports field
+                // doesn't apply.
             }
         }
     }
@@ -1209,13 +1199,13 @@ async fn resolved(
     for in_package in in_package.iter() {
         match in_package {
             ResolveInPackage::AliasField(field) => {
-                if let FindContextFileResult::Found(package_json, refs) =
+                if let FindContextFileResult::Found(package_json_path, refs) =
                     &*find_context_file(fs_path.parent(), package_json()).await?
                 {
-                    // TODO: call read_package_json for consistent error handling
-                    if let FileJsonContent::Content(package) = &*package_json.read_json().await? {
-                        if let Some(field_value) = package[field].as_object() {
-                            let package_path = package_json.parent();
+                    let read = read_package_json(*package_json_path).await?;
+                    if let Some(package_json) = &*read {
+                        if let Some(field_value) = package_json[field].as_object() {
+                            let package_path = package_json_path.parent();
                             if let Some(rel_path) =
                                 package_path.await?.get_relative_path_to(&*fs_path.await?)
                             {
@@ -1225,7 +1215,7 @@ async fn resolved(
                                         refs.clone(),
                                         package_path,
                                         options,
-                                        *package_json,
+                                        *package_json_path,
                                         &rel_path,
                                         field,
                                     )
@@ -1235,6 +1225,10 @@ async fn resolved(
                         }
                     }
                 }
+            }
+            ResolveInPackage::ImportsField { .. } => {
+                // resolved is called when importing a relative path, not a
+                // PackageInternal one, so the imports field doesn't apply.
             }
         }
     }

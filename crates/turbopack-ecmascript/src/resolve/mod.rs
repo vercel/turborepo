@@ -1,7 +1,5 @@
 pub mod node_native_binding;
 
-use std::collections::BTreeMap;
-
 use anyhow::Result;
 use turbo_tasks::Value;
 use turbopack_core::{
@@ -14,7 +12,8 @@ use turbopack_core::{
     resolve::{
         handle_resolve_error,
         options::{
-            ConditionValue, ResolveInPackage, ResolveIntoPackage, ResolveOptions, ResolveOptionsVc,
+            ConditionValue, ResolutionConditions, ResolveInPackage, ResolveIntoPackage,
+            ResolveOptions, ResolveOptionsVc,
         },
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
@@ -22,24 +21,19 @@ use turbopack_core::{
     },
 };
 
-fn get_condition_maps(options: &mut ResolveOptions) -> Vec<Conditions> {
-    let condition_maps = Vec::with_capacity(2);
+fn get_condition_maps(options: &mut ResolveOptions) -> Vec<&mut ResolutionConditions> {
+    let mut condition_maps = Vec::with_capacity(2);
     for item in options.into_package.iter_mut() {
-        match item {
-            ResolveIntoPackage::ExportsField { conditions, .. } => {
-                condition_maps.push(conditions);
-            }
-            _ => {}
+        if let ResolveIntoPackage::ExportsField { conditions, .. } = item {
+            condition_maps.push(conditions);
         }
     }
     for item in options.in_package.iter_mut() {
-        match item {
-            ResolveInPackage::ImportsField { conditions, .. } => {
-                condition_maps.push(conditions);
-            }
-            _ => {}
+        if let ResolveInPackage::ImportsField { conditions, .. } = item {
+            condition_maps.push(conditions);
         }
     }
+    condition_maps
 }
 
 #[turbo_tasks::function]
