@@ -14,7 +14,7 @@ impl Deref for PackageJson {
     type Target = JsonValue;
     fn deref(&self) -> &Self::Target {
         match &*self.0 {
-            FileJsonContent::Content(json) => &json,
+            FileJsonContent::Content(json) => json,
             _ => unreachable!("PackageJson is guaranteed to hold Content"),
         }
     }
@@ -28,16 +28,7 @@ pub async fn read_package_json(path: FileSystemPathVc) -> Result<OptionPackageJs
     let read = path.read_json().await?;
     match &*read {
         FileJsonContent::Content(_) => Ok(OptionPackageJson(Some(PackageJson(read))).cell()),
-        FileJsonContent::NotFound => {
-            PackageJsonIssue {
-                error_message: "package.json file not found".to_string(),
-                path,
-            }
-            .cell()
-            .as_issue()
-            .emit();
-            Ok(OptionPackageJson(None).cell())
-        }
+        FileJsonContent::NotFound => Ok(OptionPackageJson(None).cell()),
         FileJsonContent::Unparseable(e) => {
             let mut message = "package.json is not parseable: invalid JSON: ".to_string();
             if let FileContent::Content(content) = &*path.read().await? {
