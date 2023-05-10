@@ -49,7 +49,7 @@ pub(crate) fn hash_objects(
                 // something failed with git, report that error
                 return Err(Error::git_error(buf));
             }
-            return Err(err)
+            return Err(err);
         }
     }
     git.wait()?;
