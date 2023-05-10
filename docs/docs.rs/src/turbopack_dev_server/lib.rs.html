@@ -258,6 +258,10 @@
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
@@ -285,6 +289,7 @@
     Request, Response, Server,
 };
 <span class="kw">use </span>socket2::{Domain, Protocol, Socket, Type};
+<span class="kw">use </span>tracing::{event, span, Instrument, Level};
 <span class="kw">use </span>turbo_tasks::{
     run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
     TransientInstance, TransientValue, TurboTasksApi,
@@ -405,6 +410,8 @@
             <span class="kw">let </span>get_issue_reporter = get_issue_reporter.clone();
             <span class="kw">async move </span>{
                 <span class="kw">let </span>handler = <span class="kw">move </span>|request: Request&lt;hyper::Body&gt;| {
+                    <span class="macro">event!</span>(Level::DEBUG, <span class="string">&quot;request {:?}&quot;</span>, request.uri());
+                    <span class="kw">let </span>request_span = <span class="macro">span!</span>(Level::DEBUG, <span class="string">&quot;request&quot;</span>, uri = <span class="question-mark">?</span>request.uri());
                     <span class="kw">let </span>start = Instant::now();
                     <span class="kw">let </span>tt = tt.clone();
                     <span class="kw">let </span>get_issue_reporter = get_issue_reporter.clone();
@@ -493,6 +500,7 @@
                             }
                         }
                     }
+                    .instrument(request_span)
                 };
                 anyhow::Ok(service_fn(handler))
             }
