@@ -71,6 +71,7 @@ pub enum CloseReason {
 }
 
 impl DaemonServer<notify::RecommendedWatcher> {
+    #[tracing::instrument(skip(base), fields(repo_root = %base.repo_root))]
     pub fn new(
         base: &CommandBase,
         timeout: Duration,
@@ -112,6 +113,7 @@ impl<T: Watcher> Drop for DaemonServer<T> {
 
 impl<T: Watcher + Send + 'static> DaemonServer<T> {
     /// Serve the daemon server, while also watching for filesystem changes.
+    #[tracing::instrument(skip(self))]
     pub async fn serve(mut self) -> CloseReason {
         let stop = StopSource::new();
         let watcher = self.watcher.clone();

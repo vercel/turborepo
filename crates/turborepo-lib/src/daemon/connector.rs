@@ -148,6 +148,7 @@ impl DaemonConnector {
         // this creates a new process group for the given command
         // in a cross platform way, directing all output to /dev/null
         let mut group = tokio::process::Command::new(binary_path)
+            .arg("--skip-infer")
             .arg("daemon")
             .stderr(Stdio::null())
             .stdout(Stdio::null())

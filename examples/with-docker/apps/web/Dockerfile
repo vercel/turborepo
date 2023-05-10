@@ -1,7 +1,9 @@
+FROM node:18-alpine AS base
+
 # This Dockerfile is copy-pasted into our main docs at /docs/handbook/deploying-with-docker.
 # Make sure you update both files!
 
-FROM node:alpine AS builder
+FROM base AS builder
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
 RUN apk update
@@ -12,7 +14,7 @@ COPY . .
 RUN turbo prune --scope=web --docker
 
 # Add lockfile and package.json's of isolated subworkspace
-FROM node:alpine AS installer
+FROM base AS installer
 RUN apk add --no-cache libc6-compat
 RUN apk update
 WORKDIR /app
@@ -36,7 +38,7 @@ COPY turbo.json turbo.json
 
 RUN yarn turbo run build --filter=web...
 
-FROM node:alpine AS runner
+FROM base AS runner
 WORKDIR /app
 
 # Don't run production as root

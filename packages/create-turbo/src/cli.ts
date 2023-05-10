@@ -3,7 +3,7 @@
 import chalk from "chalk";
 import { Command } from "commander";
 import notifyUpdate from "./utils/notifyUpdate";
-import { turboGradient, error } from "./logger";
+import { logger } from "@turbo/utils";
 
 import { create } from "./commands";
 import cliPkg from "../package.json";
@@ -12,7 +12,7 @@ const createTurboCli = new Command();
 
 // create
 createTurboCli
-  .name(chalk.bold(turboGradient("create-turbo")))
+  .name(chalk.bold(logger.turboGradient("create-turbo")))
   .description("Create a new Turborepo")
   .usage(`${chalk.bold("<project-directory> <package-manager>")} [options]`)
   .argument("[project-directory]")
@@ -54,9 +54,9 @@ createTurboCli
   .catch(async (reason) => {
     console.log();
     if (reason.command) {
-      error(`${chalk.bold(reason.command)} has failed.`);
+      logger.error(`${chalk.bold(reason.command)} has failed.`);
     } else {
-      error("Unexpected error. Please report it as a bug:");
+      logger.error("Unexpected error. Please report it as a bug:");
       console.log(reason);
     }
     console.log();
