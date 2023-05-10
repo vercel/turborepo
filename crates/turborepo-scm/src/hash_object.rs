@@ -76,7 +76,6 @@ fn read_object_hashes<R: Read, W: Write + Send>(
             // writer is dropped here, closing stdin
             Ok(())
         });
-        //let mut i: usize = 0;
         // Buffer size is HASH_LEN + 1 to account for the trailing \n
         let mut buffer: [u8; HASH_LEN + 1] = [0; HASH_LEN + 1];
         for (i, filename) in to_hash.iter().enumerate() {
