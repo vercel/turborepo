@@ -439,6 +439,14 @@ async fn apply_typescript_types_options(
     resolve_options
         .into_package
         .push(ResolveIntoPackage::Default("index".to_string()));
+    for item in resolve_options.in_package.iter_mut() {
+        match item {
+            ResolveInPackage::ImportsField { conditions, .. } => {
+                conditions.insert("types".to_string(), ConditionValue::Set);
+            }
+            _ => {}
+        }
+    }
     Ok(resolve_options.into())
 }
 

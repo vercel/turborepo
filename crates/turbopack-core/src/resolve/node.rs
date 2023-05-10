@@ -1,7 +1,8 @@
 use turbo_tasks_fs::FileSystemPathVc;
 
 use super::options::{
-    ConditionValue, ResolveIntoPackage, ResolveModules, ResolveOptions, ResolveOptionsVc,
+    ConditionValue, ResolveInPackage, ResolveIntoPackage, ResolveModules, ResolveOptions,
+    ResolveOptionsVc,
 };
 
 #[turbo_tasks::function]
@@ -25,6 +26,14 @@ pub fn node_cjs_resolve_options(root: FileSystemPathVc) -> ResolveOptionsVc {
             ResolveIntoPackage::MainField("main".to_string()),
             ResolveIntoPackage::Default("index".to_string()),
         ],
+        in_package: vec![ResolveInPackage::ImportsField {
+            conditions: [
+                ("node".to_string(), ConditionValue::Set),
+                ("require".to_string(), ConditionValue::Set),
+            ]
+            .into(),
+            unspecified_conditions: ConditionValue::Unset,
+        }],
         ..Default::default()
     }
     .cell()

@@ -1,5 +1,7 @@
 pub mod node_native_binding;
 
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 use turbo_tasks::Value;
 use turbopack_core::{
@@ -11,24 +13,41 @@ use turbopack_core::{
     },
     resolve::{
         handle_resolve_error,
-        options::{ConditionValue, ResolveIntoPackage, ResolveOptions, ResolveOptionsVc},
+        options::{
+            ConditionValue, ResolveInPackage, ResolveIntoPackage, ResolveOptions, ResolveOptionsVc,
+        },
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
         resolve, ResolveResultVc,
     },
 };
 
-#[turbo_tasks::function]
-pub async fn apply_esm_specific_options(options: ResolveOptionsVc) -> Result<ResolveOptionsVc> {
-    let mut options: ResolveOptions = options.await?.clone_value();
+fn get_condition_maps(options: &mut ResolveOptions) -> Vec<Conditions> {
+    let condition_maps = Vec::with_capacity(2);
     for item in options.into_package.iter_mut() {
         match item {
             ResolveIntoPackage::ExportsField { conditions, .. } => {
-                conditions.insert("import".to_string(), ConditionValue::Set);
-                conditions.insert("require".to_string(), ConditionValue::Unset);
+                condition_maps.push(conditions);
             }
-            ResolveIntoPackage::MainField(_) | ResolveIntoPackage::Default(_) => {}
+            _ => {}
         }
+    }
+    for item in options.in_package.iter_mut() {
+        match item {
+            ResolveInPackage::ImportsField { conditions, .. } => {
+                condition_maps.push(conditions);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[turbo_tasks::function]
+pub async fn apply_esm_specific_options(options: ResolveOptionsVc) -> Result<ResolveOptionsVc> {
+    let mut options: ResolveOptions = options.await?.clone_value();
+    for conditions in get_condition_maps(&mut options) {
+        conditions.insert("import".to_string(), ConditionValue::Set);
+        conditions.insert("require".to_string(), ConditionValue::Unset);
     }
     Ok(options.into())
 }
@@ -36,14 +55,9 @@ pub async fn apply_esm_specific_options(options: ResolveOptionsVc) -> Result<Res
 #[turbo_tasks::function]
 pub async fn apply_cjs_specific_options(options: ResolveOptionsVc) -> Result<ResolveOptionsVc> {
     let mut options: ResolveOptions = options.await?.clone_value();
-    for item in options.into_package.iter_mut() {
-        match item {
-            ResolveIntoPackage::ExportsField { conditions, .. } => {
-                conditions.insert("import".to_string(), ConditionValue::Unset);
-                conditions.insert("require".to_string(), ConditionValue::Set);
-            }
-            ResolveIntoPackage::MainField(_) | ResolveIntoPackage::Default(_) => {}
-        }
+    for conditions in get_condition_maps(&mut options) {
+        conditions.insert("import".to_string(), ConditionValue::Unset);
+        conditions.insert("require".to_string(), ConditionValue::Set);
     }
     Ok(options.into())
 }

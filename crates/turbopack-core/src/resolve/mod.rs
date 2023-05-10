@@ -5,7 +5,7 @@ use std::{
     pin::Pin,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
     primitives::{BoolVc, StringVc, StringsVc},
@@ -13,7 +13,7 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
-    FileJsonContent, FileJsonContentVc, FileSystemEntryType, FileSystemPathVc, RealPathResult,
+    FileJsonContent, FileSystemEntryType, FileSystemPathVc, RealPathResult,
 };
 
 use self::{
@@ -23,7 +23,7 @@ use self::{
     },
     parse::{Request, RequestVc},
     pattern::QueryMapVc,
-    remap::ExportsField,
+    remap::{ExportsField, ImportsField},
 };
 use crate::{
     asset::{Asset, AssetOptionVc, AssetVc, AssetsVc},
@@ -387,32 +387,86 @@ enum ExportsFieldResult {
     None,
 }
 
+/// Extracts the "exports" field out of the nearest package.json, parsing it
+/// into an appropriate [AliasMap] for lookups.
 #[turbo_tasks::function]
 async fn exports_field(
     package_json_path: FileSystemPathVc,
-    package_json: FileJsonContentVc,
     field: &str,
 ) -> Result<ExportsFieldResultVc> {
-    if let FileJsonContent::Content(package_json) = &*package_json.await? {
-        let field_value = &package_json[field];
-        if let serde_json::Value::Null = field_value {
-            return Ok(ExportsFieldResult::None.into());
+    let package_json_content = match &*read_package_json(package_json_path).await? {
+        Ok(content_read_ref) => content_read_ref.clone(),
+        Err(e) => {
+            e.as_issue().emit();
+            return Ok(ExportsFieldResult::None.cell());
         }
-        let exports_field: Result<ExportsField> = field_value.try_into();
-        match exports_field {
-            Ok(exports_field) => Ok(ExportsFieldResult::Some(exports_field).into()),
-            Err(err) => {
-                let issue: PackageJsonIssueVc = PackageJsonIssue {
-                    path: package_json_path,
-                    error_message: err.to_string(),
-                }
-                .into();
-                issue.as_issue().emit();
-                Ok(ExportsFieldResult::None.into())
+    };
+    let package_json = match &*package_json_content {
+        FileJsonContent::Content(json) => json,
+        _ => unreachable!("Ok package.json read must contain Content"),
+    };
+
+    let Some(exports) = package_json.get(field) else {
+        return Ok(ExportsFieldResult::None.cell());
+    };
+    match exports.try_into() {
+        Ok(exports) => Ok(ExportsFieldResult::Some(exports).cell()),
+        Err(err) => {
+            let issue: PackageJsonIssueVc = PackageJsonIssue {
+                path: package_json_path,
+                error_message: err.to_string(),
             }
+            .into();
+            issue.as_issue().emit();
+            Ok(ExportsFieldResult::None.cell())
         }
-    } else {
-        Ok(ExportsFieldResult::None.into())
+    }
+}
+
+#[turbo_tasks::value(shared)]
+enum ImportsFieldResult {
+    Some(
+        #[turbo_tasks(debug_ignore, trace_ignore)] ImportsField,
+        FileSystemPathVc,
+    ),
+    None,
+}
+
+/// Extracts the "imports" field out of the nearest package.json, parsing it
+/// into an appropriate [AliasMap] for lookups.
+#[turbo_tasks::function]
+async fn imports_field(context: FileSystemPathVc) -> Result<ImportsFieldResultVc> {
+    let package_json_context = find_context_file(context, package_json()).await?;
+    let FindContextFileResult::Found(package_json_path, _refs) = &*package_json_context else {
+        return Ok(ImportsFieldResult::None.cell());
+    };
+
+    let package_json_content = match &*read_package_json(*package_json_path).await? {
+        Ok(content_read_ref) => content_read_ref.clone(),
+        Err(e) => {
+            e.as_issue().emit();
+            return Ok(ImportsFieldResult::None.cell());
+        }
+    };
+    let package_json = match &*package_json_content {
+        FileJsonContent::Content(json) => json,
+        _ => unreachable!("Ok package.json read must contain Content"),
+    };
+
+    let Some(imports) = package_json.get("imports") else {
+        return Ok(ImportsFieldResult::None.cell());
+    };
+    match imports.try_into() {
+        Ok(imports) => Ok(ImportsFieldResult::Some(imports, *package_json_path).cell()),
+        Err(err) => {
+            let issue: PackageJsonIssueVc = PackageJsonIssue {
+                path: *package_json_path,
+                error_message: err.to_string(),
+            }
+            .into();
+            issue.as_issue().emit();
+            Ok(ImportsFieldResult::None.cell())
+        }
     }
 }
 
@@ -735,13 +789,7 @@ async fn resolve_internal(
                             .push(resolved(*path, context, request, options_value, options).await?);
                     }
                     PatternMatch::Directory(_, path) => {
-                        let package_json_path = path.join("package.json");
-                        // TODO: call read_package_json for consistent error handling
-                        let package_json = package_json_path.read_json();
-                        results.push(
-                            resolve_into_folder(*path, package_json, package_json_path, options)
-                                .await?,
-                        );
+                        results.push(resolve_into_folder(*path, options).await?);
                     }
                 }
             }
@@ -810,7 +858,27 @@ async fn resolve_internal(
         }
         Request::Empty => ResolveResult::unresolveable().into(),
         Request::PackageInternal { path } => {
-            resolve_package_internal_with_imports_field(context, path).await?
+            let options_value = options.await?;
+            let (conditions, unspecified_conditions) = options_value
+                .in_package
+                .iter()
+                .find_map(|item| match item {
+                    ResolveInPackage::ImportsField {
+                        conditions,
+                        unspecified_conditions,
+                    } => Some((Cow::Borrowed(conditions), *unspecified_conditions)),
+                    _ => None,
+                })
+                .unwrap_or_else(|| (Default::default(), ConditionValue::Unset));
+            resolve_package_internal_with_imports_field(
+                context,
+                request,
+                options,
+                path,
+                &conditions,
+                &unspecified_conditions,
+            )
+            .await?
         }
         Request::Uri {
             protocol,
@@ -853,10 +921,9 @@ async fn resolve_internal(
 
 async fn resolve_into_folder(
     package_path: FileSystemPathVc,
-    package_json: FileJsonContentVc,
-    package_json_path: FileSystemPathVc,
     options: ResolveOptionsVc,
 ) -> Result<ResolveResultVc> {
+    let package_json_path = package_path.join("package.json");
     let options_value = options.await?;
     for resolve_into_package in options_value.into_package.iter() {
         match resolve_into_package {
@@ -872,7 +939,10 @@ async fn resolve_into_folder(
                 return Ok(resolve_internal(package_path, request, options));
             }
             ResolveIntoPackage::MainField(name) => {
-                if let FileJsonContent::Content(package_json) = &*package_json.await? {
+                if let Ok(package_json_content) = &*read_package_json(package_json_path).await? {
+                    let FileJsonContent::Content(package_json) = &**package_json_content else {
+                        unreachable!("Ok package.json read must contain Content");
+                    };
                     if let Some(field_value) = package_json[name].as_str() {
                         let request =
                             RequestVc::parse(Value::new(normalize_request(field_value).into()));
@@ -888,7 +958,7 @@ async fn resolve_into_folder(
                             return Ok(result.into());
                         }
                     }
-                }
+                };
             }
             ResolveIntoPackage::ExportsField {
                 field,
@@ -896,10 +966,10 @@ async fn resolve_into_folder(
                 unspecified_conditions,
             } => {
                 if let ExportsFieldResult::Some(exports_field) =
-                    &*exports_field(package_json_path, package_json, field).await?
+                    &*exports_field(package_json_path, field).await?
                 {
                     // other options do not apply anymore when an exports field exist
-                    return handle_exports_field(
+                    return handle_exports_imports_field(
                         package_path,
                         package_json_path,
                         options,
@@ -978,14 +1048,8 @@ async fn resolve_module_request(
     // "[baseUrl]/foo/bar" or "[baseUrl]/node_modules/foo/bar", and we'll need to
     // try both.
     for package_path in &result.packages {
-        let package_json_path = package_path.join("package.json");
-        // TODO: call read_package_json for consistent error handling
-        let package_json = package_json_path.read_json();
         if is_match {
-            results.push(
-                resolve_into_folder(*package_path, package_json, package_json_path, options)
-                    .await?,
-            );
+            results.push(resolve_into_folder(*package_path, options).await?);
         }
         if could_match_others {
             for resolve_into_package in options_value.into_package.iter() {
@@ -993,15 +1057,7 @@ async fn resolve_module_request(
                     ResolveIntoPackage::Default(_) | ResolveIntoPackage::MainField(_) => {
                         // doesn't affect packages with subpath
                         if path.is_match("/") {
-                            results.push(
-                                resolve_into_folder(
-                                    *package_path,
-                                    package_json,
-                                    package_json_path,
-                                    options,
-                                )
-                                .await?,
-                            );
+                            results.push(resolve_into_folder(*package_path, options).await?);
                         }
                     }
                     ResolveIntoPackage::ExportsField {
@@ -1009,11 +1065,12 @@ async fn resolve_module_request(
                         conditions,
                         unspecified_conditions,
                     } => {
+                        let package_json_path = package_path.join("package.json");
                         if let ExportsFieldResult::Some(exports_field) =
-                            &*exports_field(package_json_path, package_json, field).await?
+                            &*exports_field(package_json_path, field).await?
                         {
                             if let Some(path) = path.clone().into_string() {
-                                results.push(handle_exports_field(
+                                results.push(handle_exports_imports_field(
                                     *package_path,
                                     package_json_path,
                                     options,
@@ -1149,8 +1206,8 @@ async fn resolved(
     options: ResolveOptionsVc,
 ) -> Result<ResolveResultVc> {
     let RealPathResult { path, symlinks } = &*fs_path.realpath_with_links().await?;
-    for resolve_in in in_package.iter() {
-        match resolve_in {
+    for in_package in in_package.iter() {
+        match in_package {
             ResolveInPackage::AliasField(field) => {
                 if let FindContextFileResult::Found(package_json, refs) =
                     &*find_context_file(fs_path.parent(), package_json()).await?
@@ -1209,21 +1266,21 @@ async fn resolved(
     .into())
 }
 
-fn handle_exports_field(
+fn handle_exports_imports_field(
     package_path: FileSystemPathVc,
-    package_json: FileSystemPathVc,
+    package_json_path: FileSystemPathVc,
     options: ResolveOptionsVc,
-    exports_field: &ExportsField,
+    exports_imports_field: &AliasMap<SubpathValue>,
     path: &str,
     conditions: &BTreeMap<String, ConditionValue>,
     unspecified_conditions: &ConditionValue,
 ) -> Result<ResolveResultVc> {
     let mut results = Vec::new();
     let mut conditions_state = HashMap::new();
-    let values = exports_field
+    let values = exports_imports_field
         .lookup(path)
         .map(AliasMatch::try_into_self)
-        .collect::<Result<Vec<Cow<'_, SubpathValue>>>>()?;
+        .collect::<Result<Vec<_>>>()?;
     for value in values.iter() {
         if value.add_results(
             conditions,
@@ -1248,7 +1305,7 @@ fn handle_exports_field(
     // other options do not apply anymore when an exports field exist
     Ok(merge_results_with_references(
         resolved_results,
-        vec![AffectingResolvingAssetReferenceVc::new(package_json).into()],
+        vec![AffectingResolvingAssetReferenceVc::new(package_json_path).into()],
     ))
 }
 
@@ -1256,25 +1313,48 @@ fn handle_exports_field(
 /// field. The dep may be a constant string or a pattern, and the values can be
 /// static strings or conditions like `import` or `require` to handle ESM/CJS
 /// with differently compiled files.
-// https://github.com/nodejs/node/blob/v20.1.0/lib/internal/modules/esm/resolve.js#L614-L672
 async fn resolve_package_internal_with_imports_field(
     context: FileSystemPathVc,
-    specifier: &Pattern,
+    request: RequestVc,
+    resolve_options: ResolveOptionsVc,
+    pattern: &Pattern,
+    conditions: &BTreeMap<String, ConditionValue>,
+    unspecified_conditions: &ConditionValue,
 ) -> Result<ResolveResultVc> {
-    let package_json_context = find_context_file(context, package_json()).await?;
-    let FindContextFileResult::Found(package_json_path, refs) = &*package_json_context else {
-        return Ok(ResolveResult::unresolveable().into());
+    let Pattern::Constant(specifier) = pattern else {
+        bail!("PackageInternal requests can only be Constant strings");
     };
-
-    let package_json = match &*read_package_json(*package_json_path).await? {
-        Ok(json) => json,
-        Err(e) => {
-            e.as_issue().emit();
-            return Ok(ResolveResult::unresolveable().into());
+    // https://github.com/nodejs/node/blob/1b177932/lib/internal/modules/esm/resolve.js#L615-L619
+    if specifier == "#" || specifier.starts_with("#/") || specifier.ends_with('/') {
+        let issue: ResolvingIssueVc = ResolvingIssue {
+            severity: IssueSeverity::Error.cell(),
+            context,
+            request_type: format!("package imports request: `{specifier}`"),
+            request,
+            resolve_options,
+            error_message: None,
+            source: OptionIssueSourceVc::none(),
         }
+        .into();
+        issue.as_issue().emit();
+        return Ok(ResolveResult::unresolveable().into());
+    }
+
+    let imports_result = imports_field(context).await?;
+    let (imports, package_json_path) = match &*imports_result {
+        ImportsFieldResult::Some(i, p) => (i, p),
+        ImportsFieldResult::None => return Ok(ResolveResult::unresolveable().into()),
     };
 
-    todo!("implementing package internal imports");
+    handle_exports_imports_field(
+        context,
+        *package_json_path,
+        resolve_options,
+        imports,
+        &specifier,
+        conditions,
+        unspecified_conditions,
+    )
 }
 
 #[turbo_tasks::value]

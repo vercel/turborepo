@@ -1,14 +1,38 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+    ops::Deref,
+};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{
-    alias_map::{AliasMap, AliasMapIter, AliasMapLookupIterator, AliasPattern, AliasTemplate},
+    alias_map::{AliasMap, AliasMapIter, AliasPattern, AliasTemplate},
     options::ConditionValue,
 };
+
+enum ExportImport {
+    Export,
+    Import,
+}
+
+impl ExportImport {
+    fn is_imports(&self) -> bool {
+        matches!(self, Self::Import)
+    }
+}
+
+impl Display for ExportImport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Export => f.write_str("export"),
+            Self::Import => f.write_str("import"),
+        }
+    }
+}
 
 /// The result an "exports"/"imports" field describes. Can represent multiple
 /// alternatives, conditional result, ignored result (null mapping) and a plain
@@ -136,6 +160,37 @@ impl SubpathValue {
             SubpathValue::Excluded => true,
         }
     }
+
+    fn try_from(value: &Value, ty: ExportImport) -> Result<Self> {
+        match value {
+            Value::Null => Ok(SubpathValue::Excluded),
+            Value::String(s) => Ok(SubpathValue::Result(s.to_string())),
+            Value::Number(_) => bail!("numeric values are invalid in {ty}s field entries"),
+            Value::Bool(_) => bail!("boolean values are invalid in {ty}s field entries"),
+            Value::Object(object) => Ok(SubpathValue::Conditional(
+                object
+                    .iter()
+                    .map(|(key, value)| {
+                        if key.starts_with('.') {
+                            bail!(
+                                "invalid key \"{}\" in an {ty} field conditions object. Did you \
+                                 mean to place this request at a higher level?",
+                                key
+                            );
+                        }
+
+                        Ok((key.to_string(), SubpathValue::try_from(value, ty)?))
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            )),
+            Value::Array(array) => Ok(SubpathValue::Alternatives(
+                array
+                    .iter()
+                    .map(|value| SubpathValue::try_from(value, ty))
+                    .collect::<Result<Vec<_>>>()?,
+            )),
+        }
+    }
 }
 
 struct ResultsIterMut<'a> {
@@ -166,44 +221,6 @@ impl<'a> Iterator for ResultsIterMut<'a> {
     }
 }
 
-impl TryFrom<&Value> for SubpathValue {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &Value) -> Result<Self> {
-        match value {
-            Value::Null => Ok(SubpathValue::Excluded),
-            Value::String(s) => Ok(SubpathValue::Result(s.to_string())),
-            Value::Number(_) => Err(anyhow!(
-                "numeric values are invalid in exports field entries"
-            )),
-            Value::Bool(_) => Err(anyhow!(
-                "boolean values are invalid in exports field entries"
-            )),
-            Value::Object(object) => Ok(SubpathValue::Conditional(
-                object
-                    .iter()
-                    .map(|(key, value)| {
-                        if key.starts_with('.') {
-                            bail!(
-                                "invalid key \"{}\" in an export field conditions object. Did you \
-                                 mean to place this request at a higher level?",
-                                key
-                            );
-                        }
-                        Ok((key.to_string(), value.try_into()?))
-                    })
-                    .collect::<Result<Vec<_>>>()?,
-            )),
-            Value::Array(array) => Ok(SubpathValue::Alternatives(
-                array
-                    .iter()
-                    .map(|value| value.try_into())
-                    .collect::<Result<Vec<_>>>()?,
-            )),
-        }
-    }
-}
-
 /// Content of an "exports" field in a package.json
 #[derive(PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExportsField(AliasMap<SubpathValue>);
@@ -229,7 +246,7 @@ impl TryFrom<&Value> for ExportsField {
                         continue;
                     }
 
-                    let mut value: SubpathValue = value.try_into()?;
+                    let mut value = SubpathValue::try_from(value, ExportImport::Export)?;
 
                     let pattern = if is_folder_shorthand(key) {
                         expand_folder_shorthand(key, &mut value)?
@@ -246,7 +263,12 @@ impl TryFrom<&Value> for ExportsField {
                         SubpathValue::Conditional(
                             conditions
                                 .into_iter()
-                                .map(|(key, value)| Ok((key.to_string(), value.try_into()?)))
+                                .map(|(key, value)| {
+                                    Ok((
+                                        key.to_string(),
+                                        SubpathValue::try_from(value, ExportImport::Export)?,
+                                    ))
+                                })
                                 .collect::<Result<Vec<_>>>()?,
                         ),
                     );
@@ -272,7 +294,7 @@ impl TryFrom<&Value> for ExportsField {
                     SubpathValue::Alternatives(
                         array
                             .iter()
-                            .map(|value| value.try_into())
+                            .map(|value| SubpathValue::try_from(value, ExportImport::Export))
                             .collect::<Result<Vec<_>>>()?,
                     ),
                 );
@@ -283,6 +305,50 @@ impl TryFrom<&Value> for ExportsField {
             }
         };
         Ok(Self(map))
+    }
+}
+
+impl Deref for ExportsField {
+    type Target = AliasMap<SubpathValue>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Content of an "imports" field in a package.json
+#[derive(PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportsField(AliasMap<SubpathValue>);
+
+impl TryFrom<&Value> for ImportsField {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &Value) -> Result<Self> {
+        // The "imports" field must be an object.
+        // https://nodejs.org/api/packages.html#imports
+        let map = match value {
+            Value::Object(object) => {
+                let mut map = AliasMap::new();
+
+                for (key, value) in object.iter() {
+                    if !key.starts_with("#") {
+                        bail!("imports key \"{key}\" must begin with a '#'")
+                    }
+                    let value = SubpathValue::try_from(value, ExportImport::Import)?;
+                    map.insert(AliasPattern::parse(key), value);
+                }
+
+                map
+            }
+            _ => bail!("\"imports\" field must be an object"),
+        };
+        Ok(Self(map))
+    }
+}
+
+impl Deref for ImportsField {
+    type Target = AliasMap<SubpathValue>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -328,15 +394,6 @@ fn expand_folder_shorthand(key: &str, value: &mut SubpathValue) -> Result<AliasP
     Ok(pattern)
 }
 
-impl ExportsField {
-    /// Looks up a request string in the "exports" field. Returns an iterator of
-    /// matching requests. Usually only the first one is relevant, except
-    /// when conditions don't match or only partially match.
-    pub fn lookup<'a>(&'a self, request: &'a str) -> AliasMapLookupIterator<'a, SubpathValue> {
-        self.0.lookup(request)
-    }
-}
-
 /// Content of an "alias" configuration
 #[turbo_tasks::value(shared)]
 #[derive(Default)]
@@ -349,7 +406,7 @@ impl TryFrom<&IndexMap<String, Value>> for ResolveAliasMap {
         let mut map = AliasMap::new();
 
         for (key, value) in object.iter() {
-            let mut value: SubpathValue = value.try_into()?;
+            let mut value = SubpathValue::try_from(value, ExportImport::Export)?;
 
             let pattern = if is_folder_shorthand(key) {
                 expand_folder_shorthand(key, &mut value)?
