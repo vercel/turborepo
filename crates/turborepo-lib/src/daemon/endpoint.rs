@@ -222,7 +222,7 @@ mod test {
         #[cfg(not(windows))]
         let node_bin = "node";
 
-        let child = Command::new(node_bin).spawn().unwrap();
+        let mut child = Command::new(node_bin).spawn().unwrap();
         pid_path
             .create_with_contents(format!("{}", child.id()).as_ref())
             .unwrap();
@@ -236,5 +236,7 @@ mod test {
         } else {
             panic!("expected an error")
         }
+
+        child.kill().unwrap();
     }
 }
