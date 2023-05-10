@@ -311,6 +311,7 @@ impl EcmascriptInputTransform {
                     inject_helpers(unresolved_mark)
                 ));
             }
+            // [TODO]: WEB-940 - use ClientDirectiveTransformer in next-swc
             EcmascriptInputTransform::ClientDirective(transition_name) => {
                 if is_client_module(program) {
                     let transition_name = &*transition_name.await?;
@@ -318,6 +319,7 @@ impl EcmascriptInputTransform {
                     program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
                 }
             }
+            // [TODO]: WEB-940 - use ServerDirectiveTransformer in next-swc
             EcmascriptInputTransform::ServerDirective(_transition_name) => {
                 if is_server_module(program) {
                     let stmt = quote!(
