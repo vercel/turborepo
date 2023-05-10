@@ -539,10 +539,11 @@ jobs:
       - name: Update expected Clippy warnings on main
         if: github.ref == 'refs/heads/main'
         uses: actions/cache/save@v3
-        paths: |
-          expected-clippy-warnings-raw
-          expected-clippy-warnings
-        key: expected-clippy-warnings-${{ github.sha }}
+        with:
+          paths: |
+            expected-clippy-warnings-raw
+            expected-clippy-warnings
+          key: expected-clippy-warnings-${{ github.sha }}
 
   next_dev_check:
     needs: [determine_jobs]
