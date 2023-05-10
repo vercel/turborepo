@@ -402,14 +402,6 @@
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
 <a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
 </pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
 <span class="kw">mod </span>util;
 
@@ -492,11 +484,7 @@
 /// transformer to run over all ECMAScript files imported in the graph.
 </span><span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>CustomTransformer: Debug {
-    <span class="kw">async fn </span>transform(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        program: <span class="kw-2">&amp;mut </span>Program,
-        ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Program&gt;&gt;;
+    <span class="kw">async fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, program: <span class="kw-2">&amp;mut </span>Program, ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 }
 
 <span class="doccomment">/// A wrapper around a TransformPlugin instance, allowing it to operate with
@@ -522,11 +510,7 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>CustomTransformer <span class="kw">for </span>TransformPlugin {
-    <span class="kw">async fn </span>transform(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        program: <span class="kw-2">&amp;mut </span>Program,
-        ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Program&gt;&gt; {
+    <span class="kw">async fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, program: <span class="kw-2">&amp;mut </span>Program, ctx: <span class="kw-2">&amp;</span>TransformContext&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.<span class="number">0</span>.transform(program, ctx).<span class="kw">await
     </span>}
 }
@@ -731,14 +715,16 @@
                     inject_helpers(unresolved_mark)
                 ));
             }
-            EcmascriptInputTransform::ClientDirective(transition_name) =&gt; {
+            <span class="comment">// [TODO]: WEB-940 - use ClientDirectiveTransformer in next-swc
+            </span>EcmascriptInputTransform::ClientDirective(transition_name) =&gt; {
                 <span class="kw">if </span>is_client_module(program) {
                     <span class="kw">let </span>transition_name = <span class="kw-2">&amp;*</span>transition_name.<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw-2">*</span>program = create_proxy_module(transition_name, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;./{file_name_str}&quot;</span>));
                     program.visit_mut_with(<span class="kw-2">&amp;mut </span>resolver(unresolved_mark, top_level_mark, <span class="bool-val">false</span>));
                 }
             }
-            EcmascriptInputTransform::ServerDirective(_transition_name) =&gt; {
+            <span class="comment">// [TODO]: WEB-940 - use ServerDirectiveTransformer in next-swc
+            </span>EcmascriptInputTransform::ServerDirective(_transition_name) =&gt; {
                 <span class="kw">if </span>is_server_module(program) {
                     <span class="kw">let </span>stmt = <span class="macro">quote!</span>(
                         <span class="string">&quot;throw new Error(&#39;Server actions (\&quot;use server\&quot;) are not yet supported in \
@@ -755,10 +741,8 @@
                 }
             }
             EcmascriptInputTransform::Plugin(transform) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(output) = transform.<span class="kw">await</span><span class="question-mark">?</span>.transform(program, ctx).<span class="kw">await</span><span class="question-mark">? </span>{
-                    <span class="kw-2">*</span>program = output;
-                }
-            }
+                transform.<span class="kw">await</span><span class="question-mark">?</span>.transform(program, ctx).<span class="kw">await</span><span class="question-mark">?
+            </span>}
         }
         <span class="prelude-val">Ok</span>(())
     }

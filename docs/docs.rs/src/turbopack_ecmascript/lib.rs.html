@@ -572,7 +572,6 @@
 <span class="kw">pub mod </span>typescript;
 <span class="kw">pub mod </span>utils;
 <span class="kw">pub mod </span>webpack;
-
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemVc, EcmascriptChunkPlaceablesVc, EcmascriptChunkVc,
@@ -584,6 +583,7 @@
 <span class="kw">pub use </span>parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 <span class="kw">use </span>path_visitor::ApplyVisitors;
 <span class="kw">use </span>references::AnalyzeEcmascriptModuleResult;
+<span class="kw">pub use </span>references::TURBOPACK_HELPER;
 <span class="kw">use </span>swc_core::{
     common::GLOBALS,
     ecma::{
@@ -594,7 +594,7 @@
 <span class="kw">pub use </span>transform::{
     CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransformsVc,
     OptionTransformPlugin, OptionTransformPluginVc, TransformContext, TransformPlugin,
-    TransformPluginVc,
+    TransformPluginVc, UnsupportedServerActionIssue,
 };
 <span class="kw">use </span>turbo_tasks::{
     primitives::StringVc, trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString,

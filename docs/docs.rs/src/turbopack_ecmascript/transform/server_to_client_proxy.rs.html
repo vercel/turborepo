@@ -50,6 +50,7 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
 </pre><pre class="rust"><code><span class="kw">use </span>swc_core::{
     common::DUMMY_SP,
     ecma::{
@@ -65,7 +66,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::references::TURBOPACK_HELPER;
 
-<span class="kw">pub fn </span>create_proxy_module(transition_name: <span class="kw-2">&amp;</span>str, target_import: <span class="kw-2">&amp;</span>str) -&gt; Program {
+<span class="attr">#[deprecated(note = <span class="string">&quot;use Client/ServerDirectiveTransformer instead&quot;</span>)]
+</span><span class="kw">pub fn </span>create_proxy_module(transition_name: <span class="kw-2">&amp;</span>str, target_import: <span class="kw-2">&amp;</span>str) -&gt; Program {
     <span class="kw">let </span>ident = <span class="macro">private_ident!</span>(<span class="string">&quot;createProxy&quot;</span>);
     Program::Module(Module {
         body: <span class="macro">vec!</span>[
