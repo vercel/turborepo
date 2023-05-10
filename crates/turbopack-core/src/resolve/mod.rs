@@ -758,13 +758,17 @@ async fn resolve_internal(
                 path.push(ext.clone().into());
                 patterns.push(path);
             }
-            let new_pat = Pattern::alternatives(patterns);
 
-            resolve_internal(
-                context,
-                RequestVc::raw(Value::new(new_pat), *force_in_context),
-                options,
-            )
+            let mut results = Vec::new();
+            for pattern in patterns {
+                results.push(resolve_internal(
+                    context,
+                    RequestVc::raw(Value::new(pattern), *force_in_context),
+                    options,
+                ));
+            }
+
+            merge_results(results)
         }
         Request::Module {
             module,
