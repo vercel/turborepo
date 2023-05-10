@@ -14,6 +14,7 @@ use turbopath::{AbsoluteSystemPath, PathError};
 pub mod git;
 mod hash_object;
 mod ls_tree;
+mod manual;
 pub mod package_deps;
 mod status;
 
@@ -34,6 +35,8 @@ pub enum Error {
         #[from] std::string::FromUtf8Error,
         #[backtrace] backtrace::Backtrace,
     ),
+    #[error("package traversal error: {0}")]
+    Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
 }
 
 impl Error {
