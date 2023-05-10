@@ -75,6 +75,10 @@ impl RelativeUnixPath {
         let tail_slice = &self.0[(prefix_len + 1)..];
         RelativeUnixPathBuf::new(tail_slice.to_vec())
     }
+
+    pub fn ends_with(&self, suffix: impl AsRef<[u8]>) -> bool {
+        self.0.ends_with(suffix.as_ref())
+    }
 }
 
 impl AsRef<RelativeUnixPath> for RelativeUnixPath {

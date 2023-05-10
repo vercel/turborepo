@@ -78,6 +78,10 @@ impl RelativeUnixPathBufTestExt for RelativeUnixPathBuf {
         path.extend_from_slice(&tail.0);
         Self(path)
     }
+
+    pub fn ends_with(&self, suffix: impl AsRef<[u8]>) -> bool {
+        self.0.ends_with(suffix.as_ref())
+    }
 }
 
 impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {

@@ -1,5 +1,6 @@
 use std::{fs::Metadata, io::Read};
 
+use glob_match::glob_match;
 use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
@@ -28,7 +29,27 @@ fn get_package_file_hashes_from_processing_gitignore(
     let full_package_path = turbo_root.resolve(package_path);
     let mut hashes = GitHashes::new();
 
-    let walker = WalkBuilder::new(&full_package_path)
+    let mut walker_builder = WalkBuilder::new(&full_package_path);
+    let mut includes = Vec::new();
+    let mut excludes = Vec::new();
+    for pattern in inputs {
+        if pattern.starts_with("!") {
+            excludes.push(full_package_path.join_literal(&pattern[1..]).to_string());
+        } else {
+            includes.push(full_package_path.join_literal(pattern).to_string());
+        }
+    }
+    let include_pattern = if includes.is_empty() {
+        None
+    } else {
+        Some(format!("{{{}}}", includes.join(",")))
+    };
+    let exclude_pattern = if excludes.is_empty() {
+        None
+    } else {
+        Some(format!("{{{}}}", excludes.join(",")))
+    };
+    let walker = walker_builder
         .follow_links(false)
         .git_ignore(true)
         .require_git(false)
@@ -42,9 +63,19 @@ fn get_package_file_hashes_from_processing_gitignore(
             continue;
         }
         let path = AbsoluteSystemPathBuf::new(dirent.path())?;
-        let hash = git_like_hash_file(&path, &metadata)?;
         let relative_path = full_package_path.anchor(&path)?;
         let relative_path = relative_path.to_unix()?;
+        if let Some(include_pattern) = include_pattern.as_ref() {
+            if !glob_match(include_pattern, &path.to_string()).unwrap_or(false) {
+                continue;
+            }
+        }
+        if let Some(exclude_pattern) = exclude_pattern.as_ref() {
+            if glob_match(exclude_pattern, &path.to_string()).unwrap_or(false) {
+                continue;
+            }
+        }
+        let hash = git_like_hash_file(&path, &metadata)?;
         hashes.insert(relative_path, hash);
     }
     Ok(hashes)
@@ -115,19 +146,43 @@ mod tests {
             .unwrap();
 
         let mut expected = GitHashes::new();
-        for (raw_unix_path, contents, expected_hash) in file_hash {
+        for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
             let unix_path = RelativeUnixPath::new(&raw_unix_path).unwrap();
             let file_path = turbo_root.join_unix_path(unix_path).unwrap();
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();
             if let Some(hash) = expected_hash {
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
-                expected.insert(unix_pkg_file_path, hash.to_owned());
+                expected.insert(unix_pkg_file_path, (*hash).to_owned());
             }
         }
 
         let hashes =
             get_package_file_hashes_from_processing_gitignore(&turbo_root, &pkg_path, &[]).unwrap();
+        assert_eq!(hashes, expected);
+
+        expected = GitHashes::new();
+        for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
+            let unix_path = RelativeUnixPath::new(&raw_unix_path).unwrap();
+            let file_path = turbo_root.join_unix_path(unix_path).unwrap();
+            file_path.ensure_dir().unwrap();
+            file_path.create_with_contents(contents).unwrap();
+            if let Some(hash) = expected_hash {
+                let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
+                if unix_pkg_file_path.ends_with("file")
+                    && !unix_pkg_file_path.ends_with("excluded-file")
+                {
+                    expected.insert(unix_pkg_file_path, (*hash).to_owned());
+                }
+            }
+        }
+
+        let hashes = get_package_file_hashes_from_processing_gitignore(
+            &turbo_root,
+            &pkg_path,
+            &["**/*file", "!some-dir/excluded-file"],
+        )
+        .unwrap();
         assert_eq!(hashes, expected);
     }
 }
