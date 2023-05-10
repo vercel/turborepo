@@ -42,15 +42,15 @@ pub(crate) fn hash_objects(
             .take()
             .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
         let result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes);
-        if result.is_err() {
+        if let Err(err) = result {
             let mut buf = String::new();
             let bytes_read = stderr.read_to_string(&mut buf)?;
             if bytes_read > 0 {
                 // something failed with git, report that error
                 return Err(Error::git_error(buf));
             }
+            return Err(err)
         }
-        result?;
     }
     git.wait()?;
     Ok(())
