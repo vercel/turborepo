@@ -189,7 +189,7 @@ impl PackageManager {
         let version = version.parse()?;
         let manager = match manager {
             "npm" => Some(PackageManager::Npm),
-            "yarn" => Some(YarnDetector::detect_berry_or_yarn(repo_root, &version)?),
+            "yarn" => Some(YarnDetector::detect_berry_or_yarn(&repo_root, &version)?),
             "pnpm" => Some(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
             _ => None,
         };
