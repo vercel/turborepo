@@ -532,7 +532,6 @@ jobs:
 
       - name: Stage Clippy warnings for updating expected warnings on main
         if: github.ref == 'refs/heads/main'
-        uses: actions/cache/save@v3
         run: |
           mv clippy-warnings expected-clippy-warnings
           mv clippy-warnings-raw expected-clippy-warnings-raw
