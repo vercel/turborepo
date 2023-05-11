@@ -14,7 +14,7 @@ use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
-    commands::{bin, daemon, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, generate, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
@@ -264,6 +264,14 @@ pub enum Command {
         #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
         target: LinkTarget,
     },
+    /// Generate a new app / package
+    G {
+        #[clap(long, default_value_t = String::from("latest"), hide = true)]
+        tag: String,
+        #[clap(subcommand)]
+        #[serde(flatten)]
+        command: GenerateCommand,
+    },
     /// Login to your Vercel account
     Login {
         #[clap(long = "sso-team")]
@@ -298,6 +306,66 @@ pub enum Command {
         #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
         target: LinkTarget,
     },
+}
+
+#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+pub struct GenerateArgs {
+    /// The name of the generator to run
+    pub generator_name: Option<String>,
+    /// Generator configuration file
+    #[clap(short = 'c', long)]
+    pub config: Option<String>,
+    /// The root of your repository (default: directory with root turbo.json)
+    #[clap(short = 'r', long)]
+    pub root: Option<String>,
+    /// Answers passed directly to generator
+    #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+    pub args: Vec<String>,
+}
+
+#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+pub struct GenerateAddArgs {
+    /// Name for the new workspace
+    #[clap(short = 'n', long)]
+    pub name: Option<String>,
+    /// Generate an empty workspace
+    #[clap(short = 'b', long, conflicts_with = "copy", default_value_t = true)]
+    pub empty: bool,
+    /// Generate a workspace using an existing workspace as a template
+    #[clap(short = 'c', long, conflicts_with = "empty", default_value_t = false)]
+    pub copy: bool,
+    /// Where the new workspace should be created
+    #[clap(short = 'd', long)]
+    pub destination: Option<String>,
+    /// The type of workspace to create
+    #[clap(short = 'w', long)]
+    pub what: Option<String>,
+    /// The root of your repository (default: directory with root turbo.json)
+    #[clap(short = 'r', long)]
+    pub root: Option<String>,
+    /// An example package to add. You can use a GitHub URL with any branch
+    /// and/or subdirectory.
+    #[clap(short = 'e', long)]
+    pub example: Option<String>,
+    /// In a rare case, your GitHub URL might contain a branch name with a slash
+    /// (e.g. bug/fix-1) and the path to the example (e.g. foo/bar). In this
+    /// case, you must specify the path to the example separately:
+    /// --example-path foo/bar
+    #[clap(short = 'p', long)]
+    pub example_path: Option<String>,
+    /// Do not filter available dependencies by the workspace type
+    #[clap(long, default_value_t = false)]
+    pub show_all_dependencies: bool,
+}
+
+#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+pub enum GenerateCommand {
+    /// Add a new package or app to your project
+    #[clap(name = "add", aliases = &["a"])]
+    Add(GenerateAddArgs),
+    /// Run custom generators
+    #[clap(name = "generate", aliases = &["g", "gen"])]
+    Gen(GenerateArgs),
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -565,6 +633,10 @@ pub async fn run(
 
             unlink::unlink(&mut base, from)?;
 
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::G { command, tag } => {
+            generate::run(command, tag)?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Daemon { command, idle_time } => {
