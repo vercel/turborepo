@@ -78,6 +78,7 @@ Setup
         }
       }
     ],
+    "user": "Turbo Test",
     "scm": {
       "type": "git",
       "sha": "[a-z0-9]+", (re)
