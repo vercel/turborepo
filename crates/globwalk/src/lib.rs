@@ -51,33 +51,56 @@ pub fn globwalk<'a>(
     exclude: &'a [String],
     walk_type: WalkType,
 ) -> impl Iterator<Item = Result<AbsoluteSystemPathBuf, WalkError>> + 'a {
-    let walker = walkdir::WalkDir::new(base_path.as_path()).follow_links(false);
+    // we enable following symlinks but only because without it they are ignored
+    // completely (as opposed to yielded but not followed)
+    let walker = walkdir::WalkDir::new(base_path.as_path()).follow_links(true);
     let mut iter = walker.into_iter();
+
+    let exclude = exclude
+        .iter()
+        .map(|g| {
+            if g.ends_with('/') {
+                format!("{}**", g)
+            } else {
+                g.to_owned()
+            }
+        })
+        .collect::<Vec<_>>();
 
     std::iter::from_fn(move || loop {
         let entry = match iter.next()?.map_err(WalkError::WalkDir) {
             Ok(entry) => entry,
-            Err(err) => return Some(Err(err)),
+            Err(err) => {
+                println!("error: {:?}", err);
+                return Some(Err(err));
+            }
         };
 
         let path = entry.path();
         let relative_path = path.strip_prefix(&base_path).expect("it is a subdir");
         let is_directory = path.is_dir();
+        let is_symlink = entry.path_is_symlink();
 
-        let include = match do_match_directory(relative_path, include, exclude, is_directory) {
+        let include = match do_match_directory(relative_path, include, &exclude, is_directory) {
             Ok(include) => include,
             Err(glob) => return Some(Err(WalkError::BadPattern(glob.to_owned()))),
         };
 
+        if (include == MatchType::None || is_symlink) && is_directory {
+            iter.skip_current_dir();
+        }
+
         match include {
-            MatchType::None if is_directory => {
-                iter.skip_current_dir();
-            }
+            // if it is a perfect match, and our walk_type allows it, then we should yield it
             MatchType::Match if walk_type.should_emit(is_directory) => {
                 return Some(Ok(AbsoluteSystemPathBuf::new(path).expect("absolute")));
             }
-            // if it is not a much but not a directory, or a match but doesn't
-            // match the walk type, then we just move to the next file.
+            // we should yield potential matches if they are symlinks. we don't want to traverse
+            // into them, but simply say 'hey this is a symlink that could match'
+            // MatchType::PotentialMatch if is_symlink && walk_type.should_emit(is_directory) => {
+            // return Some(Ok(AbsoluteSystemPathBuf::new(path).expect("absolute")));
+            // }
+            // just skip and continue on with the loop
             MatchType::None | MatchType::PotentialMatch | MatchType::Match => {}
         }
     })
@@ -126,20 +149,20 @@ fn do_match_directory<'a>(
 
     let first = do_match(&path_unix, include, exclude, is_directory);
 
-    if is_directory && !path_unix.ends_with('/') {
-        let second = do_match(&format!("{}/", path_unix), include, exclude, is_directory);
-        match (first, second) {
-            (Ok(MatchType::Match), _) => Ok(MatchType::Match),
-            (_, Ok(MatchType::Match)) => Ok(MatchType::Match),
-            (Ok(MatchType::PotentialMatch), _) => Ok(MatchType::PotentialMatch),
-            (_, Ok(MatchType::PotentialMatch)) => Ok(MatchType::PotentialMatch),
-            (Ok(MatchType::None), Ok(MatchType::None)) => Ok(MatchType::None),
-            (Err(glob), _) => Err(glob),
-            (_, Err(glob)) => Err(glob),
-        }
-    } else {
-        first
-    }
+    // if is_directory && !path_unix.ends_with('/') {
+    //     let second = do_match(&format!("{}/", path_unix), include, exclude,
+    // is_directory);     match (first, second) {
+    //         (Ok(MatchType::Match), _) => Ok(MatchType::Match),
+    //         (_, Ok(MatchType::Match)) => Ok(MatchType::Match),
+    //         (Ok(MatchType::PotentialMatch), _) => Ok(MatchType::PotentialMatch),
+    //         (_, Ok(MatchType::PotentialMatch)) => Ok(MatchType::PotentialMatch),
+    //         (Ok(MatchType::None), Ok(MatchType::None)) => Ok(MatchType::None),
+    //         (Err(glob), _) => Err(glob),
+    //         (_, Err(glob)) => Err(glob),
+    //     }
+    // } else {
+    first
+    // }
 }
 
 /// Executes a match against a relative path using the given include and exclude
@@ -157,8 +180,6 @@ fn do_match<'a>(
     if include.is_empty() {
         return Ok(MatchType::Match);
     }
-
-    println!("matching: {:?}", path);
 
     let included = include
         .iter()
@@ -184,8 +205,6 @@ fn do_match<'a>(
         })
         .unwrap_or(Ok(false));
 
-    println!("included: {:?}, excluded: {:?}", included, excluded);
-
     match (included, excluded) {
         // a match of the excludes always wins
         (_, Ok(true)) | (Ok(MatchType::None), Ok(false)) => Ok(MatchType::None),
@@ -196,10 +215,6 @@ fn do_match<'a>(
 }
 
 fn match_include(include: &str, path: &str, is_dir: bool) -> Option<MatchType> {
-    println!(
-        "matching include: {:?} against {:?}, is_dir: {}",
-        include, path, is_dir
-    );
     if is_dir {
         potential_match(include, path)
     } else {
@@ -358,30 +373,24 @@ mod test {
     #[test_case("ab{c,d}", None, 1, 1 ; "pattern with curly braces match")]
     #[test_case("ab{c,d,*}", None, 5, 5 ; "pattern with curly braces and wildcard match")]
     #[test_case("ab{c,d}[", Some(WalkError::BadPattern("ab{c,d}[".into())), 0, 0)]
-    // ; "pattern with curly braces and unclosed character class error"
     #[test_case("a{,bc}", None, 2, 2 ; "a followed by comma or b or c")]
     #[test_case("a/{b/c,c/b}", None, 2, 2)]
     #[test_case("{a/{b,c},abc}", None, 3, 3)]
     #[test_case("{a/ab*}", None, 1, 1)]
     #[test_case("a/*", None, 3, 3)]
     #[test_case("{a/*}", None, 3, 3 ; "curly braces with single star match")]
-    // {a/*}
-    // [a/abc a/b a/c]
     #[test_case("{a/abc}", None, 1, 1)]
     #[test_case("{a/b,a/c}", None, 2, 2)]
     #[test_case("abc/**", None, 3, 3 ; "abc then doublestar")]
     #[test_case("**/abc", None, 2, 2)]
     #[test_case("**/*.txt", None, 1, 1)]
     #[test_case("**/【*", None, 1, 1)]
-    // in the original implementation, broken symlinks
-    // were not traversed or yielded, but walkdir
-    // does yield them, so we do too.
+    // in the go implementation, broken-symlink is yielded,
+    // however in symlink mode, walkdir yields broken symlinks as errors
     #[test_case("broken-symlink", None, 1, 1)]
-    // in the original implementation, working symlinks
-    // were not traversed, but were yielded. walkdir
-    // does not yield working symlinks, so we don't either.
-    #[test_case("working-symlink/c/*", None, 0, 0)]
-    // #[test_case("working-sym*/*", None, 0, 0)]
+    // globs that match across a symlink should not follow the symlink
+    #[test_case("working-symlink/c/*", None, 1, 1)]
+    #[test_case("working-sym*/*", None, 0, 0)]
     #[test_case("b/**/f", None, 0, 0)]
     fn glob_walk(
         pattern: &str,
@@ -423,7 +432,6 @@ mod test {
 
     fn glob_walk_inner(pattern: &str, err_expected: Option<WalkError>, result_count: usize) {
         let dir = setup();
-        println!("running in {:?}", dir.path());
 
         let path = AbsoluteSystemPathBuf::new(dir.path()).unwrap();
         let (success, error): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
@@ -442,26 +450,640 @@ mod test {
             assert!(error.len() > 0); // todo: check the error
         }
     }
+
+    #[test_case(
+        &["/test.txt"],
+        "/",
+        &["*.txt"],
+        &[],
+        &["/test.txt"],
+        &["/test.txt"]
+        ; "hello world"
+    )]
+    #[test_case(
+        &["/test.txt", "/subdir/test.txt", "/other/test.txt"],
+        "/",
+        &["subdir/test.txt", "test.txt"],
+        &[],
+        &["/subdir/test.txt", "/test.txt"],
+        &["/subdir/test.txt", "/test.txt"]
+        ; "bullet files"
+    )]
+    #[test_case(&[
+            "/external/file.txt",
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/bower_components/readline/package.json",
+            "/repos/some-app/examples/package.json",
+            "/repos/some-app/node_modules/gulp/bower_components/readline/package.json",
+            "/repos/some-app/node_modules/react/package.json",
+            "/repos/some-app/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/test/mocks/kitchen-sink/package.json",
+            "/repos/some-app/tests/mocks/kitchen-sink/package.json",
+        ],
+        "/repos/some-app/",
+        &["packages/*/package.json", "apps/*/package.json"], &["**/node_modules/", "**/bower_components/", "**/test/", "**/tests/"],
+        &[
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+        ],
+        &[
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+        ]
+        ; "finding workspace package.json files"
+    )]
+    #[test_case(&[
+            "/external/file.txt",
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/bower_components/readline/package.json",
+            "/repos/some-app/examples/package.json",
+            "/repos/some-app/node_modules/gulp/bower_components/readline/package.json",
+            "/repos/some-app/node_modules/react/package.json",
+            "/repos/some-app/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/test/mocks/spanish-inquisition/package.json",
+            "/repos/some-app/tests/mocks/spanish-inquisition/package.json",
+        ],
+        "/repos/some-app/",
+        &["**/package.json"],
+        &["**/node_modules/", "**/bower_components/", "**/test/", "**/tests/"],
+        &[
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/examples/package.json",
+            "/repos/some-app/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+        ],
+        &[
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/examples/package.json",
+            "/repos/some-app/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+        ]
+        ; "excludes unexpected workspace package.json files"
+    )]
+    #[test_case(&[
+            "/external/file.txt",
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/bower_components/readline/package.json",
+            "/repos/some-app/examples/package.json",
+            "/repos/some-app/node_modules/gulp/bower_components/readline/package.json",
+            "/repos/some-app/node_modules/react/package.json",
+            "/repos/some-app/package.json",
+            "/repos/some-app/packages/xzibit/package.json",
+            "/repos/some-app/packages/xzibit/node_modules/street-legal/package.json",
+            "/repos/some-app/packages/xzibit/node_modules/paint-colors/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/node_modules/meme/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/node_modules/yo-dawg/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/test/mocks/spanish-inquisition/package.json",
+            "/repos/some-app/tests/mocks/spanish-inquisition/package.json",
+        ],
+        "/repos/some-app/",
+        &["packages/**/package.json"],
+        &["**/node_modules/", "**/bower_components/", "**/test/", "**/tests/"],
+        &[
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/packages/xzibit/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
+        ],
+        &[
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/packages/xzibit/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
+        ]
+        ; "nested packages work")]
+    #[test_case(&[
+            "/external/file.txt",
+            "/repos/some-app/apps/docs/package.json",
+            "/repos/some-app/apps/web/package.json",
+            "/repos/some-app/bower_components/readline/package.json",
+            "/repos/some-app/examples/package.json",
+            "/repos/some-app/node_modules/gulp/bower_components/readline/package.json",
+            "/repos/some-app/node_modules/react/package.json",
+            "/repos/some-app/package.json",
+            "/repos/some-app/packages/xzibit/package.json",
+            "/repos/some-app/packages/xzibit/node_modules/street-legal/package.json",
+            "/repos/some-app/packages/xzibit/node_modules/paint-colors/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/node_modules/meme/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/node_modules/yo-dawg/package.json",
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/test/mocks/spanish-inquisition/package.json",
+            "/repos/some-app/tests/mocks/spanish-inquisition/package.json",
+        ],
+        "/repos/some-app/",
+        &["packages/**/package.json", "tests/mocks/*/package.json"],
+        &["**/node_modules/", "**/bower_components/", "**/test/", "**/tests/"],
+        &[
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/packages/xzibit/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
+        ],
+        &[
+            "/repos/some-app/packages/colors/package.json",
+            "/repos/some-app/packages/faker/package.json",
+            "/repos/some-app/packages/left-pad/package.json",
+            "/repos/some-app/packages/xzibit/package.json",
+            "/repos/some-app/packages/xzibit/packages/yo-dawg/package.json",
+        ]
+        ; "includes do not override excludes")]
+    #[test_case(&[
+            "/external/file.txt",
+            "/repos/some-app/src/index.js",
+            "/repos/some-app/public/src/css/index.css",
+            "/repos/some-app/.turbo/turbo-build.log",
+            "/repos/some-app/.turbo/somebody-touched-this-file-into-existence.txt",
+            "/repos/some-app/.next/log.txt",
+            "/repos/some-app/.next/cache/db6a76a62043520e7aaadd0bb2104e78.txt",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+            "/repos/some-app/public/dist/css/index.css",
+            "/repos/some-app/public/dist/images/rick_astley.jpg",
+        ],
+        "/repos/some-app/",
+        &[".turbo/turbo-build.log", "dist/**", ".next/**", "public/dist/**"],
+        &[],
+        &[
+            "/repos/some-app/.next",
+            "/repos/some-app/.next/cache",
+            "/repos/some-app/.next/cache/db6a76a62043520e7aaadd0bb2104e78.txt",
+            "/repos/some-app/.next/log.txt",
+            "/repos/some-app/.turbo/turbo-build.log",
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+            "/repos/some-app/public/dist",
+            "/repos/some-app/public/dist/css",
+            "/repos/some-app/public/dist/css/index.css",
+            "/repos/some-app/public/dist/images",
+            "/repos/some-app/public/dist/images/rick_astley.jpg",
+        ],
+        &[
+            "/repos/some-app/.next/cache/db6a76a62043520e7aaadd0bb2104e78.txt",
+            "/repos/some-app/.next/log.txt",
+            "/repos/some-app/.turbo/turbo-build.log",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+            "/repos/some-app/public/dist/css/index.css",
+            "/repos/some-app/public/dist/images/rick_astley.jpg",
+        ]
+        ; "output globbing grabs the desired content"
+    )]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ], "/repos/some-app/",
+        &["dist/**"],
+        &[],
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        &[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ]
+        ; "passing ** captures all children")]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["dist"],
+        &[],
+        &["/repos/some-app/dist"],
+        &[]
+        ; "passing just a directory captures no children")]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ], "/repos/some-app/", &["**/*", "dist/**"], &[ ], &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ], &[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ] ; "redundant includes do not duplicate")]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ], "/repos/some-app/", &["**"], &["**"], &[ ], &[ ] ; "exclude everything, include everything")]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["dist/**"],
+        &["dist/js"],
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+        ],
+        &[
+            "/repos/some-app/dist/index.html",
+        ]
+        ; "passing just a directory to exclude prevents capture of children")]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["dist/**"],
+        &["dist/js/**"],
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+        ],
+        &[
+            "/repos/some-app/dist/index.html",
+        ] ; "passing ** to exclude prevents capture of children")]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["**"],
+        &["./"],
+        &[],
+        &[]
+        ; "exclude everything with folder . applies at base path"
+    )]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["**"],
+        &["./dist"],
+        &[],
+        &[]
+        ; "exclude everything with traversal applies at a non-base path"
+    )]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["**"],
+        &["dist/../"],
+        &[],
+        &[]
+        ; "exclude everything with folder traversal (..) applies at base path"
+    )]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ], "/repos/some-app/", &["**/**/**"], &[], &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ], &[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ]
+        ; "how do globs even work bad glob microformat"
+    )]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js"
+        ],
+        "/repos/some-app/",
+        &["dist/js/../**"],
+        &[],
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js"],
+        &[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ]
+        ; "traversal works within base path"
+    )]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["dist/./././**"],
+        &[],
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        &[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ]
+        ; "self-references (.) work"
+    )]
+    #[test_case(&[
+            "/repos/some-app/package.json",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ], "/repos/some-app/", &["*"], &[ ], &[
+            "/repos/some-app/dist",
+            "/repos/some-app/package.json",
+        ], &["/repos/some-app/package.json"] ; "depth of 1 includes handles folders properly")]
+    #[test_case(&[
+            "/repos/some-app/package.json",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ], "/repos/some-app/", &["**"], &["dist/*"], &[
+            "/repos/some-app/dist",
+            "/repos/some-app/package.json",
+        ], &["/repos/some-app/package.json"] ; "depth of 1 excludes prevents capturing folders")]
+    #[test_case(&[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app",
+        &["dist/**"],
+        &[],
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        &[
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ]
+        ; "No-trailing slash basePath works")]
+    #[test_case(&[
+            "/repos/some-app/included.txt",
+            "/repos/some-app/excluded.txt",
+        ], "/repos/some-app", &["*.txt"], &["excluded.txt"], &[
+            "/repos/some-app/included.txt",
+        ], &[
+            "/repos/some-app/included.txt",
+        ] ; "exclude single file")]
+    #[test_case(&[
+            "/repos/some-app/one/included.txt",
+            "/repos/some-app/one/two/included.txt",
+            "/repos/some-app/one/two/three/included.txt",
+            "/repos/some-app/one/excluded.txt",
+            "/repos/some-app/one/two/excluded.txt",
+            "/repos/some-app/one/two/three/excluded.txt",
+        ], "/repos/some-app", &["**"], &["**/excluded.txt"], &[
+            "/repos/some-app/one/included.txt",
+            "/repos/some-app/one/two/included.txt",
+            "/repos/some-app/one/two/three/included.txt",
+            "/repos/some-app/one",
+            "/repos/some-app/one/two",
+            "/repos/some-app/one/two/three",
+        ], &[
+            "/repos/some-app/one/included.txt",
+            "/repos/some-app/one/two/included.txt",
+            "/repos/some-app/one/two/three/included.txt",
+        ] ; "exclude nested single file")]
+    #[test_case(&[
+            "/repos/some-app/one/included.txt",
+            "/repos/some-app/one/two/included.txt",
+            "/repos/some-app/one/two/three/included.txt",
+            "/repos/some-app/one/excluded.txt",
+            "/repos/some-app/one/two/excluded.txt",
+            "/repos/some-app/one/two/three/excluded.txt",
+        ], "/repos/some-app", &["**"], &["**"], &[], &[] ; "exclude everything")]
+    #[test_case(&[
+            "/repos/some-app/one/included.txt",
+            "/repos/some-app/one/two/included.txt",
+            "/repos/some-app/one/two/three/included.txt",
+            "/repos/some-app/one/excluded.txt",
+            "/repos/some-app/one/two/excluded.txt",
+            "/repos/some-app/one/two/three/excluded.txt",
+        ], "/repos/some-app", &["**"], &["**/"], &[], &[] ; "exclude everything with slash")]
+    #[test_case(&[
+            "/repos/some-app/foo/bar",
+            "/repos/some-app/some-foo/bar",
+            "/repos/some-app/included",
+        ],
+        "/repos/some-app",
+        &["**"],
+        &["**foo"],
+        &[
+            "/repos/some-app/included",
+        ],
+        &[
+            "/repos/some-app/included",
+        ]
+        ; "exclude everything with leading **")]
+    #[test_case(&[
+            "/repos/some-app/foo/bar",
+            "/repos/some-app/foo-file",
+            "/repos/some-app/foo-dir/bar",
+            "/repos/some-app/included",
+        ], "/repos/some-app", &["**"], &["foo**"], &[
+            "/repos/some-app/included",
+        ], &[
+            "/repos/some-app/included",
+        ] ; "exclude everything with trailing **")]
+    fn glob_walk_files(
+        files: &[&str],
+        base_path: &str,
+        include: &[&str],
+        exclude: &[&str],
+        expected: &[&str],
+        expected_files: &[&str],
+    ) {
+        let dir = setup_files(files);
+        let base_path = base_path.trim_start_matches('/');
+        let path = AbsoluteSystemPathBuf::new(dir.path().join(base_path)).unwrap();
+        let include: Vec<_> = include.iter().map(|s| s.to_string()).collect();
+        let exclude: Vec<_> = exclude.iter().map(|s| s.to_string()).collect();
+
+        for (walk_type, expected) in [
+            (crate::WalkType::Files, expected_files),
+            (crate::WalkType::All, expected),
+        ] {
+            let (success, _): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
+                super::globwalk(&path, &include, &exclude, walk_type).partition_result();
+
+            let success = success
+                .iter()
+                .map(|p| {
+                    p.as_path()
+                        .strip_prefix(dir.path())
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                })
+                .sorted()
+                .collect::<Vec<_>>();
+
+            let expected = expected
+                .iter()
+                .map(|p| p.trim_start_matches('/'))
+                .sorted()
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                success, expected,
+                "\n\nexpected \n{:#?} but got \n{:#?}",
+                expected, success
+            );
+        }
+    }
+
+    #[test_case(&[
+            "/repos/spanish-inquisition/index.html",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["../spanish-inquisition/**", "dist/**"],
+        &[],
+        &[],
+        &[]
+        ; "globs and traversal and globs do not cross base path"
+    )]
+    #[test_case(
+        &[
+            "/repos/spanish-inquisition/index.html",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ],
+        "/repos/some-app/",
+        &["**/../../spanish-inquisition/**"],
+        &[],
+        &[],
+        &[]
+        ; "globs and traversal and globs do not cross base path doublestart up"
+    )]
+    fn glob_walk_err(
+        files: &[&str],
+        base_path: &str,
+        include: &[&str],
+        exclude: &[&str],
+        expected: &[&str],
+        expected_files: &[&str],
+    ) {
+        let dir = setup_files(files);
+    }
+
+    fn setup_files(files: &[&str]) -> tempdir::TempDir {
+        let tmp = tempdir::TempDir::new("globwalk").unwrap();
+        for file in files {
+            let file = file.trim_start_matches('/');
+            let path = tmp.path().join(file);
+            let parent = path.parent().unwrap();
+            std::fs::create_dir_all(parent)
+                .expect(format!("failed to create {:?}", parent).as_str());
+            std::fs::File::create(path).unwrap();
+        }
+        tmp
+    }
 }
-
-// func verifyGlobResults(t *testing.T, idx int, fn string, tt MatchTest, fsys
-// fs.FS, matches []string, err error) {
-
-// 	if inSlice(tt.testPath, matches) != tt.shouldMatch {
-// 		if tt.shouldMatch {
-// 			t.Errorf("#%v. %v(%#q) = %#v - doesn't contain %v, but should", idx, fn,
-// tt.pattern, matches, tt.testPath) 		} else {
-// 			t.Errorf("#%v. %v(%#q) = %#v - contains %v, but shouldn't", idx, fn,
-// tt.pattern, matches, tt.testPath) 		}
-// 	}
-// 	if err != tt.expectedErr {
-// 		t.Errorf("#%v. %v(%#q) has error %v, but should be %v", idx, fn, tt.pattern,
-// err, tt.expectedErr) 	}
-
-// 	if tt.isStandard {
-// 		stdMatches, stdErr := fs.Glob(fsys, tt.pattern)
-// 		if !compareSlices(matches, stdMatches) || !compareErrors(err, stdErr) {
-// 			t.Errorf("#%v. %v(%#q) != fs.Glob(...). Got %#v, %v want %#v, %v", idx, fn,
-// tt.pattern, matches, err, stdMatches, stdErr) 		}
-// 	}
-// }
