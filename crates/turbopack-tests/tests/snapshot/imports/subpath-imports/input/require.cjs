@@ -1,1 +1,1 @@
-export default "require";
+module.exports = "require";
