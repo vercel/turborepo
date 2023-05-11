@@ -71,12 +71,9 @@ fn parse_dep_path(i: &str) -> IResult<&str, DepPath> {
     let (i, peer_suffix) = opt(alt((parse_new_peer_suffix, parse_old_peer_suffix)))(i)?;
     Ok((
         i,
-        DepPath {
-            name,
-            version,
-            host,
-            peer_suffix,
-        },
+        DepPath::new(name, version)
+            .with_host(host)
+            .with_peer_suffix(peer_suffix),
     ))
 }
 

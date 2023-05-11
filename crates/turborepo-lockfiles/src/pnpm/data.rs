@@ -394,8 +394,6 @@ pub fn pnpm_global_change(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use pretty_assertions::assert_eq;
     use test_case::test_case;
 
