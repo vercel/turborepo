@@ -537,7 +537,7 @@ jobs:
       - name: Update expected Clippy warnings
         uses: actions/cache/save@v3
         with:
-          paths: |
+          path: |
             expected-clippy-warnings-raw
             expected-clippy-warnings
           key: expected-clippy-warnings-${{ github.sha }}
