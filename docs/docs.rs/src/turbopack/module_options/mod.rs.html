@@ -487,12 +487,6 @@
 <a href="#487" id="487">487</a>
 <a href="#488" id="488">488</a>
 <a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -569,8 +563,6 @@
             <span class="kw-2">ref </span>enable_postcss_transform,
             <span class="kw-2">ref </span>enable_webpack_loaders,
             preset_env_versions,
-            <span class="kw-2">ref </span>custom_ecmascript_app_transforms,
-            <span class="kw-2">ref </span>custom_ecmascript_transforms,
             <span class="kw-2">ref </span>custom_ecma_transform_plugins,
             <span class="kw-2">ref </span>custom_rules,
             execution_context,
@@ -609,8 +601,6 @@
             };
 
         <span class="kw">let </span><span class="kw-2">mut </span>transforms = before_transform_plugins;
-        transforms.extend(custom_ecmascript_app_transforms.iter().cloned());
-        transforms.extend(custom_ecmascript_transforms.iter().cloned());
 
         <span class="comment">// Order of transforms is important. e.g. if the React transform occurs before
         // Styled JSX, there won&#39;t be JSX nodes for Styled JSX to transform.
@@ -678,15 +668,13 @@
             <span class="prelude-val">None
         </span>};
 
-        <span class="kw">let </span>vendor_transforms =
-            EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
+        <span class="kw">let </span>vendor_transforms = EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[]);
         <span class="kw">let </span>ts_app_transforms = <span class="kw">if let </span><span class="prelude-val">Some</span>(transform) = <span class="kw-2">&amp;</span>ts_transform {
-            <span class="kw">let </span><span class="kw-2">mut </span>base_transforms = <span class="kw">if let </span><span class="prelude-val">Some</span>(decorators_transform) = <span class="kw-2">&amp;</span>decorators_transform {
+            <span class="kw">let </span>base_transforms = <span class="kw">if let </span><span class="prelude-val">Some</span>(decorators_transform) = <span class="kw-2">&amp;</span>decorators_transform {
                 <span class="macro">vec!</span>[decorators_transform.clone(), transform.clone()]
             } <span class="kw">else </span>{
                 <span class="macro">vec!</span>[transform.clone()]
             };
-            base_transforms.extend(custom_ecmascript_transforms.iter().cloned());
             EcmascriptInputTransformsVc::cell(
                 base_transforms
                     .iter()

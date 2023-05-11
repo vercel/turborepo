@@ -187,12 +187,6 @@
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -352,12 +346,6 @@
     </span><span class="kw">pub </span>enable_mdx_rs: bool,
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
-    <span class="attr">#[deprecated(note = <span class="string">&quot;use custom_ecma_transform_plugins instead&quot;</span>)]
-    #[serde(default)]
-    </span><span class="kw">pub </span>custom_ecmascript_app_transforms: Vec&lt;EcmascriptInputTransform&gt;,
-    <span class="attr">#[deprecated(note = <span class="string">&quot;use custom_ecma_transform_plugins instead&quot;</span>)]
-    #[serde(default)]
-    </span><span class="kw">pub </span>custom_ecmascript_transforms: Vec&lt;EcmascriptInputTransform&gt;,
     <span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>custom_ecma_transform_plugins: <span class="prelude-ty">Option</span>&lt;CustomEcmascriptTransformPluginsVc&gt;,
     <span class="attr">#[serde(default)]
