@@ -204,7 +204,6 @@ async fn base_resolve_options(
         },
         into_package: {
             let mut resolve_into = vec![ResolveIntoPackage::ExportsField {
-                field: "exports".to_string(),
                 conditions: conditions.clone(),
                 unspecified_conditions: ConditionValue::Unset,
             }];

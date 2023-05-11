@@ -60,7 +60,6 @@ pub enum ResolveIntoPackage {
     ///
     /// [exports]: https://nodejs.org/api/packages.html#exports
     ExportsField {
-        field: String,
         conditions: ResolutionConditions,
         unspecified_conditions: ConditionValue,
     },
@@ -81,7 +80,7 @@ pub enum ResolveInPackage {
     AliasField(String),
     /// Using the [imports] field.
     ///
-    /// [exports]: https://nodejs.org/api/packages.html#imports
+    /// [imports]: https://nodejs.org/api/packages.html#imports
     ImportsField {
         conditions: ResolutionConditions,
         unspecified_conditions: ConditionValue,

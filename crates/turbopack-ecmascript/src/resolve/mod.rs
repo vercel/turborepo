@@ -21,6 +21,10 @@ use turbopack_core::{
     },
 };
 
+/// Retrieves the [ResolutionConditions] of both the "into" package (allowing a
+/// package to control how it can be imported) and the "in" package (controlling
+/// how this package imports others) resolution options, so that they can be
+/// manipulated together.
 fn get_condition_maps(options: &mut ResolveOptions) -> Vec<&mut ResolutionConditions> {
     let mut condition_maps = Vec::with_capacity(2);
     for item in options.into_package.iter_mut() {

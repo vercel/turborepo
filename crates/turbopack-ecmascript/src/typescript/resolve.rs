@@ -417,14 +417,12 @@ async fn apply_typescript_types_options(
         .drain(..)
         .filter_map(|into| {
             if let ResolveIntoPackage::ExportsField {
-                field,
                 mut conditions,
                 unspecified_conditions,
             } = into
             {
                 conditions.insert("types".to_string(), ConditionValue::Set);
                 Some(ResolveIntoPackage::ExportsField {
-                    field,
                     conditions,
                     unspecified_conditions,
                 })

@@ -390,17 +390,14 @@ enum ExportsFieldResult {
 /// Extracts the "exports" field out of the nearest package.json, parsing it
 /// into an appropriate [AliasMap] for lookups.
 #[turbo_tasks::function]
-async fn exports_field(
-    package_json_path: FileSystemPathVc,
-    field: &str,
-) -> Result<ExportsFieldResultVc> {
+async fn exports_field(package_json_path: FileSystemPathVc) -> Result<ExportsFieldResultVc> {
     let read = read_package_json(package_json_path).await?;
     let package_json = match &*read {
         Some(json) => json,
         None => return Ok(ExportsFieldResult::None.cell()),
     };
 
-    let Some(exports) = package_json.get(field) else {
+    let Some(exports) = package_json.get("exports") else {
         return Ok(ExportsFieldResult::None.cell());
     };
     match exports.try_into() {
@@ -953,12 +950,11 @@ async fn resolve_into_folder(
                 };
             }
             ResolveIntoPackage::ExportsField {
-                field,
                 conditions,
                 unspecified_conditions,
             } => {
                 if let ExportsFieldResult::Some(exports_field) =
-                    &*exports_field(package_json_path, field).await?
+                    &*exports_field(package_json_path).await?
                 {
                     // other options do not apply anymore when an exports field exist
                     return handle_exports_imports_field(
@@ -1058,13 +1054,12 @@ async fn resolve_module_request(
                         }
                     }
                     ResolveIntoPackage::ExportsField {
-                        field,
                         conditions,
                         unspecified_conditions,
                     } => {
                         let package_json_path = package_path.join("package.json");
                         if let ExportsFieldResult::Some(exports_field) =
-                            &*exports_field(package_json_path, field).await?
+                            &*exports_field(package_json_path).await?
                         {
                             if let Some(path) = path.clone().into_string() {
                                 results.push(handle_exports_imports_field(

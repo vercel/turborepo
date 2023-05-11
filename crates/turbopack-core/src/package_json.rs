@@ -7,6 +7,9 @@ use turbo_tasks_fs::{FileContent, FileJsonContent, FileJsonContentReadRef, FileS
 
 use super::issue::{Issue, IssueVc};
 
+/// PackageJson wraps the parsed JSON content of a `package.json` file. The
+/// wrapper is necessary so that we can reference the [FileJsonContent]'s inner
+/// [serde_json::Value] without cloning it.
 #[derive(PartialEq, Eq, ValueDebugFormat, TraceRawVcs)]
 pub struct PackageJson(FileJsonContentReadRef);
 
@@ -23,6 +26,8 @@ impl Deref for PackageJson {
 #[turbo_tasks::value(transparent, serialization = "none")]
 pub struct OptionPackageJson(Option<PackageJson>);
 
+/// Reads a package.json file (if it exists). If the file is unparseable, it
+/// emits a useful [Issue] pointing to the invalid location.
 #[turbo_tasks::function]
 pub async fn read_package_json(path: FileSystemPathVc) -> Result<OptionPackageJsonVc> {
     let read = path.read_json().await?;
@@ -49,6 +54,7 @@ pub async fn read_package_json(path: FileSystemPathVc) -> Result<OptionPackageJs
     }
 }
 
+/// Reusable Issue struct representing any problem with a `package.json`
 #[turbo_tasks::value(shared)]
 pub struct PackageJsonIssue {
     pub path: FileSystemPathVc,

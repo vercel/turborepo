@@ -14,6 +14,7 @@ use super::{
     options::ConditionValue,
 };
 
+/// A small helper type to differentiate parsing exports and imports fields.
 #[derive(Copy, Clone)]
 enum ExportImport {
     Export,
