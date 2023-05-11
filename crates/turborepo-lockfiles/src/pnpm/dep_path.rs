@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag},

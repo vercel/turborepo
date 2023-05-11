@@ -2,19 +2,13 @@ use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
 
-use super::{dep_path::DepPath, LockfileVersion};
+use super::{dep_path::DepPath, Error, LockfileVersion};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("yaml: {0}")]
-    Yaml(#[from] serde_yaml::Error),
-}
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct PnpmLockfileData {
+pub struct PnpmLockfile {
     lockfile_version: LockfileVersion,
     never_built_dependencies: Option<Vec<String>>,
     only_built_dependencies: Option<Vec<String>>,
@@ -101,8 +95,8 @@ pub struct PackageResolution {
     commit: Option<String>,
 }
 
-impl PnpmLockfileData {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+impl PnpmLockfile {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
         let this = serde_yaml::from_slice(bytes)?;
         Ok(this)
     }
@@ -146,16 +140,16 @@ impl PnpmLockfileData {
         }
     }
 
-    fn extract_version<'a>(&self, key: &'a str) -> Option<Cow<'a, str>> {
-        let dp = DepPath::try_from(key).ok()?;
+    fn extract_version<'a>(&self, key: &'a str) -> Result<Cow<'a, str>, Error> {
+        let dp = DepPath::try_from(key)?;
         if let Some(suffix) = dp.peer_suffix {
             let sep = match self.is_v6() {
                 true => "",
                 false => "_",
             };
-            Some(format!("{}{}{}", dp.version, sep, suffix).into())
+            Ok(format!("{}{}{}", dp.version, sep, suffix).into())
         } else {
-            Some(dp.version.into())
+            Ok(dp.version.into())
         }
     }
 
@@ -223,9 +217,10 @@ impl PnpmLockfileData {
                         _ => None,
                     })
             {
-                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
-                    panic!("TODO error handling")
-                };
+                let (_, version) = importer
+                    .dependencies
+                    .find_resolution(dependency)
+                    .ok_or_else(|| Error::MissingInjectedPackage(dependency.clone()))?;
 
                 let entry = self
                     .get_packages(version)
@@ -234,20 +229,11 @@ impl PnpmLockfileData {
             }
         }
 
-        let patches = self.patched_dependencies.as_ref().map(|patches| {
-            let mut pruned_patches = Map::new();
-            for dependency in pruned_packages.keys() {
-                let dp = DepPath::try_from(dependency.as_str()).unwrap();
-                let patch_key = format!("{}@{}", dp.name, dp.version);
-                if let Some(patch) = patches
-                    .get(&patch_key)
-                    .filter(|patch| dp.patch_hash() == Some(&patch.hash))
-                {
-                    pruned_patches.insert(patch_key, patch.clone());
-                }
-            }
-            pruned_patches
-        });
+        let patches = self
+            .patched_dependencies
+            .as_ref()
+            .map(|patches| Self::prune_patches(patches, &pruned_packages))
+            .transpose()?;
 
         Ok(Self {
             importers,
@@ -264,9 +250,27 @@ impl PnpmLockfileData {
             time: None,
         })
     }
+
+    fn prune_patches(
+        patches: &Map<String, PatchFile>,
+        pruned_packages: &Map<String, PackageSnapshot>,
+    ) -> Result<Map<String, PatchFile>, Error> {
+        let mut pruned_patches = Map::new();
+        for dependency in pruned_packages.keys() {
+            let dp = DepPath::try_from(dependency.as_str())?;
+            let patch_key = format!("{}@{}", dp.name, dp.version);
+            if let Some(patch) = patches
+                .get(&patch_key)
+                .filter(|patch| dp.patch_hash() == Some(&patch.hash))
+            {
+                pruned_patches.insert(patch_key, patch.clone());
+            }
+        }
+        Ok(pruned_patches)
+    }
 }
 
-impl crate::Lockfile for PnpmLockfileData {
+impl crate::Lockfile for PnpmLockfile {
     fn resolve_package(
         &self,
         workspace_path: &str,
@@ -275,8 +279,7 @@ impl crate::Lockfile for PnpmLockfileData {
     ) -> Result<Option<crate::Package>, crate::Error> {
         // Check if version is a key
         if self.get_packages(version).is_some() {
-            // TODO no unwrap
-            let extracted_version = self.extract_version(version).unwrap();
+            let extracted_version = self.extract_version(version)?;
             return Ok(Some(crate::Package {
                 key: version.into(),
                 version: extracted_version.into(),
@@ -298,13 +301,16 @@ impl crate::Lockfile for PnpmLockfileData {
                     .unwrap_or_else(|| resolved_version.to_string()),
             }))
         } else if let Some(pkg) = self.get_packages(resolved_version) {
+            let version = pkg.version.clone().map_or_else(
+                || {
+                    self.extract_version(resolved_version)
+                        .map(|s| s.to_string())
+                },
+                Ok,
+            )?;
             Ok(Some(crate::Package {
                 key: resolved_version.to_string(),
-                version: pkg
-                    .version
-                    .clone()
-                    // TODO avoid unwrap here?
-                    .unwrap_or_else(|| self.extract_version(resolved_version).unwrap().to_string()),
+                version,
             }))
         } else {
             Ok(None)
@@ -368,6 +374,18 @@ impl Dependency {
     }
 }
 
+pub fn pnpm_global_change(
+    prev_contents: &[u8],
+    curr_contents: &[u8],
+) -> Result<bool, crate::Error> {
+    let prev_data = PnpmLockfile::from_bytes(prev_contents)?;
+    let curr_data = PnpmLockfile::from_bytes(curr_contents)?;
+    Ok(prev_data.lockfile_version != curr_data.lockfile_version
+        || prev_data.package_extensions_checksum != curr_data.package_extensions_checksum
+        || prev_data.overrides != curr_data.overrides
+        || prev_data.patched_dependencies != curr_data.patched_dependencies)
+}
+
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
@@ -392,7 +410,7 @@ mod tests {
     #[test]
     fn test_roundtrip() {
         for fixture in &[PNPM6, PNPM7, PNPM8] {
-            let lockfile = PnpmLockfileData::from_bytes(fixture).unwrap();
+            let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
             let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
             let lockfile_from_serialized =
                 serde_yaml::from_slice(serialized_lockfile.as_bytes()).unwrap();
@@ -403,7 +421,7 @@ mod tests {
     #[test]
     fn test_patches() {
         let lockfile =
-            PnpmLockfileData::from_bytes(include_bytes!("../../fixtures/pnpm-patch.yaml")).unwrap();
+            PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-patch.yaml")).unwrap();
         assert_eq!(
             lockfile.patches(),
             vec![
@@ -517,7 +535,7 @@ mod tests {
         specifier: &str,
         expected: Result<Option<&str>, &str>,
     ) {
-        let lockfile = PnpmLockfileData::from_bytes(lockfile).unwrap();
+        let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
 
         let actual = lockfile.resolve_specifier(workspace_path, package, specifier);
         match (actual, expected) {
@@ -607,7 +625,7 @@ mod tests {
         specifier: &str,
         expected: Result<Option<crate::Package>, &str>,
     ) {
-        let lockfile = PnpmLockfileData::from_bytes(lockfile).unwrap();
+        let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
         let actual = lockfile.resolve_package(workspace_path, package, specifier);
         match (actual, expected) {
             (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
@@ -625,7 +643,7 @@ mod tests {
 
     #[test]
     fn test_prune_patches() {
-        let lockfile = PnpmLockfileData::from_bytes(PNPM_PATCH).unwrap();
+        let lockfile = PnpmLockfile::from_bytes(PNPM_PATCH).unwrap();
         let pruned = lockfile
             .subgraph(
                 &["packages/dependency".into()],
@@ -650,7 +668,7 @@ mod tests {
 
     #[test]
     fn test_prune_patches_v6() {
-        let lockfile = PnpmLockfileData::from_bytes(PNPM_PATCH_V6).unwrap();
+        let lockfile = PnpmLockfile::from_bytes(PNPM_PATCH_V6).unwrap();
         let pruned = lockfile
             .subgraph(
                 &["packages/a".into()],

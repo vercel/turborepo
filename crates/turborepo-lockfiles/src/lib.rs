@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 pub use berry::{Error as BerryError, *};
 pub use error::Error;
 pub use npm::*;
+pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
 use serde::Serialize;
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
