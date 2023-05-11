@@ -12,6 +12,7 @@ Make sure that the internal util package is part of the prune output
 Make sure we prune tasks that reference a pruned workspace
   $ cat out/turbo.json | jq
   {
+    "globalPassThroughEnv": null,
     "pipeline": {
       "build": {
         "outputs": [],
@@ -19,6 +20,7 @@ Make sure we prune tasks that reference a pruned workspace
         "dependsOn": [],
         "inputs": [],
         "outputMode": "full",
+        "passThroughEnv": null,
         "env": [],
         "persistent": false
       }

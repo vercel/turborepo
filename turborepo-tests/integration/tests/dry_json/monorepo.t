@@ -69,6 +69,7 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "passThroughEnv": null,
       "env": [],
       "persistent": false
     },
@@ -118,6 +119,7 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "passThroughEnv": null,
       "env": [
         "NODE_ENV"
       ],

@@ -58,6 +58,7 @@ Validate that we got a full task summary for the failed task with an error in .e
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "passThroughEnv": null,
       "env": [],
       "persistent": false
     },

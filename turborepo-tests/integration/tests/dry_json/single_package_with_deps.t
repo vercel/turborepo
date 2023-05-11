@@ -54,6 +54,7 @@ Setup
           "dependsOn": [],
           "inputs": [],
           "outputMode": "full",
+          "passThroughEnv": null,
           "env": [],
           "persistent": false
         },
@@ -104,6 +105,7 @@ Setup
           ],
           "inputs": [],
           "outputMode": "full",
+          "passThroughEnv": null,
           "env": [],
           "persistent": false
         },
