@@ -130,6 +130,7 @@ impl PnpmLockfile {
     }
 
     fn is_v6(&self) -> bool {
+        // With lockfile v6+ the lockfile version is stored as a string
         matches!(self.lockfile_version.format, super::VersionFormat::String)
     }
 
@@ -140,8 +141,11 @@ impl PnpmLockfile {
         }
     }
 
+    // Extracts the version from a dependency path
     fn extract_version<'a>(&self, key: &'a str) -> Result<Cow<'a, str>, Error> {
         let dp = DepPath::try_from(key)?;
+        // If there's a suffix, the suffix gets included as part of the version
+        // so we can track patch file changes
         if let Some(suffix) = dp.peer_suffix {
             let sep = match self.is_v6() {
                 true => "",
@@ -153,6 +157,7 @@ impl PnpmLockfile {
         }
     }
 
+    // Returns the version override if there's an override for a package
     fn apply_overrides<'a>(&'a self, name: &str, specifier: &'a str) -> &'a str {
         self.overrides
             .as_ref()
@@ -161,6 +166,7 @@ impl PnpmLockfile {
             .unwrap_or(specifier)
     }
 
+    // Given a package and version specifier resolves it to an exact version
     fn resolve_specifier<'a>(
         &'a self,
         workspace_path: &str,
@@ -170,6 +176,7 @@ impl PnpmLockfile {
         let importer = self.get_workspace(workspace_path)?;
 
         let Some((resolved_specifier, resolved_version)) = importer.dependencies.find_resolution(name) else {
+            // Check if the specifier is already an exact version
             return match self.get_packages(&self.format_key(name, specifier)) {
                 Some(_) => Ok(Some(specifier)),
                 None => Err(Error::MissingResolvedVersion{
@@ -213,6 +220,8 @@ impl PnpmLockfile {
             pruned_packages.insert(package.clone(), entry.clone());
         }
         for importer in importers.values() {
+            // Find all injected packages in each workspace and include it in
+            // the pruned lockfile
             for dependency in
                 importer
                     .dependencies_meta
@@ -343,6 +352,8 @@ impl crate::Lockfile for PnpmLockfile {
 }
 
 impl DependencyInfo {
+    // Given a dependency will find the specifier and resolved version that
+    // appear in the importer object
     pub fn find_resolution(&self, dependency: &str) -> Option<(&str, &str)> {
         match self {
             DependencyInfo::PreV6 {

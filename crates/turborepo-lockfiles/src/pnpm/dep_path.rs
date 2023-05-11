@@ -62,6 +62,10 @@ impl<'a> TryFrom<&'a str> for DepPath<'a> {
 }
 
 // See https://github.com/pnpm/pnpm/blob/185ab01adfc927ea23d2db08a14723bf51d0025f/packages/dependency-path/src/index.ts#L96
+// This diverges from the pnpm implementation that only parses <6 and in
+// order to parse 6+ it partially converts to the old format.
+// The conversion only replaces the '@' separator with '/', we avoid this
+// conversion by allowing for a '@' or a '/' to be used as a separator.
 fn parse_dep_path(i: &str) -> IResult<&str, DepPath> {
     let (i, host) = parse_host(i)?;
     let (i, _) = nom::character::complete::char('/')(i)?;
