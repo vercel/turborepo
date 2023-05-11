@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
 
-use super::dep_path::DepPath;
+use super::{dep_path::DepPath, LockfileVersion};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -24,18 +24,6 @@ pub struct PnpmLockfileData {
     importers: Map<String, ProjectSnapshot>,
     packages: Option<Map<String, PackageSnapshot>>,
     time: Option<Map<String, String>>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct LockfileVersion {
-    version: String,
-    format: VersionFormat,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-enum VersionFormat {
-    String,
-    Float,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -148,7 +136,7 @@ impl PnpmLockfileData {
     }
 
     fn is_v6(&self) -> bool {
-        matches!(self.lockfile_version.format, VersionFormat::String)
+        matches!(self.lockfile_version.format, super::VersionFormat::String)
     }
 
     fn format_key(&self, name: &str, version: &str) -> String {
@@ -339,59 +327,6 @@ impl crate::Lockfile for PnpmLockfileData {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
         ))
-    }
-}
-
-impl From<f32> for LockfileVersion {
-    fn from(value: f32) -> Self {
-        Self {
-            version: value.to_string(),
-            format: VersionFormat::Float,
-        }
-    }
-}
-
-impl From<String> for LockfileVersion {
-    fn from(value: String) -> Self {
-        Self {
-            version: value,
-            format: VersionFormat::String,
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for LockfileVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum StringOrNum {
-            Str(String),
-            Num(f32),
-        }
-
-        Ok(match StringOrNum::deserialize(deserializer)? {
-            StringOrNum::Num(x) => LockfileVersion::from(x),
-            StringOrNum::Str(s) => LockfileVersion::from(s),
-        })
-    }
-}
-
-impl Serialize for LockfileVersion {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match self.format {
-            VersionFormat::String => serializer.serialize_str(&self.version),
-            VersionFormat::Float => serializer.serialize_f32(
-                self.version
-                    .parse()
-                    .expect("Expected lockfile version to be valid f32"),
-            ),
-        }
     }
 }
 
