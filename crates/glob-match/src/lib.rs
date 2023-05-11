@@ -5,6 +5,9 @@ struct State {
   // These store character indices into the glob and path strings.
   path_index: usize,
   glob_index: usize,
+  // The index into the glob of the start of the current option in braces, if any
+  // This value should be 0 if we are not inside braces
+  option_start_index: usize,
 
   // The current index into the captures list.
   capture_index: usize,
@@ -92,7 +95,8 @@ fn glob_match_internal<'a>(
             if glob.len() == state.glob_index {
               // A trailing ** segment without a following separator.
               state.globstar = state.wildcard;
-            } else if (state.glob_index < 3 || glob[state.glob_index - 3] == b'/')
+            } else if (state.glob_index - state.option_start_index < 3
+              || glob[state.glob_index - 3] == b'/')
               && glob[state.glob_index] == b'/'
             {
               // Matched a full /**/ segment. If the last character in the path was a separator,
@@ -221,6 +225,8 @@ fn glob_match_internal<'a>(
             brace_stack.longest_brace_match.max(state.path_index as u32);
           state.path_index = brace_stack.last().path_index;
           state.glob_index += 1;
+          brace_stack.last_mut().option_start_index = state.glob_index;
+          state.option_start_index = state.glob_index;
           state.wildcard = Wildcard::default();
           state.globstar = Wildcard::default();
           continue;
@@ -270,6 +276,8 @@ fn glob_match_internal<'a>(
       // If in braces, find next option and reset path to index where we saw the '{'
       if let BraceState::Comma = state.skip_braces(glob, &mut captures, true)? {
         state.path_index = brace_stack.last().path_index;
+        // mark the index into the glob for the start of the current option within braces
+        state.option_start_index = state.glob_index;
         continue;
       }
 
@@ -527,6 +535,7 @@ impl BraceStack {
     State {
       path_index: state.path_index,
       glob_index: state.glob_index + 1,
+      option_start_index: state.glob_index + 1,
       capture_index: state.capture_index + 1,
       ..State::default()
     }
@@ -535,9 +544,15 @@ impl BraceStack {
   #[inline(always)]
   fn pop(&mut self, state: &State, captures: &mut Option<&mut Vec<Capture>>) -> State {
     self.length -= 1;
+    let option_start_index = if self.length > 0 {
+      self.stack[self.length as usize - 1].option_start_index
+    } else {
+      0
+    };
     let mut state = State {
       path_index: self.longest_brace_match as usize,
       glob_index: state.glob_index,
+      option_start_index: option_start_index,
       // But restore star state if needed later.
       wildcard: self.stack[self.length as usize].wildcard,
       globstar: self.stack[self.length as usize].globstar,
@@ -557,6 +572,11 @@ impl BraceStack {
   #[inline(always)]
   fn last(&self) -> &State {
     &self.stack[self.length as usize - 1]
+  }
+
+  #[inline(always)]
+  fn last_mut(&mut self) -> &mut State {
+    &mut (self.stack[self.length as usize - 1])
   }
 }
 
@@ -696,6 +716,14 @@ mod tests {
     "some/**/{a,b,c}/**/needle.txt",
     "some/foo/a/bigger/path/to/the/crazy/needle.txt"
   )]
+  #[test_case("{**/*b}", "b")]
+  #[test_case("{**/*b}", "ab")]
+  #[test_case("{foo,**/*b}", "b")]
+  #[test_case("{foo,**/*b}", "ab")]
+  #[test_case("c/{**/*b}", "c/b")]
+  #[test_case("c/{**/*b}", "c/ab")]
+  #[test_case("c/{foo,**/*b}", "c/b")]
+  #[test_case("c/{foo,**/*b}", "c/ab")]
   fn basic(path: &str, glob: &str) {
     assert_eq!(
       glob_match(path, glob),
@@ -1535,6 +1563,7 @@ mod tests {
     assert_eq!(glob_match(glob, path), Some(false));
   }
 
+  #[test_case("{**/*file}", "some-file")]
   #[test_case("**/*.js", "a/b/c/d.js")]
   #[test_case("**/*.js", "a/b/c.js")]
   #[test_case("**/*.js", "a/b.js")]
