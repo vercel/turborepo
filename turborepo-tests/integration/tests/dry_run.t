@@ -35,8 +35,8 @@ Setup
     Log File                         = apps/my-app/.turbo/turbo-build.log                                                                                                                    
     Dependencies                     =                                                                                                                                                       
     Dependendents                    =                                                                                                                                                       
-    Inputs Files Considered          = 1                                                                                                                                                     
-    .env Files Considered            = 0                                                                                                                                             
+    Inputs Files Considered          = 2                                                                                                                               
+    .env Files Considered            = 1                                                                                                                                             
     Configured Environment Variables =                                                                                                                                                       
     Inferred Environment Variables   =                                                                                                                                                       
     Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                                                                   

@@ -453,6 +453,10 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 			mergedTaskDefinition.Inputs = taskDef.Inputs
 		}
 
+		if bookkeepingTaskDef.hasField("DotEnv") {
+			mergedTaskDefinition.DotEnv = taskDef.DotEnv
+		}
+
 		if bookkeepingTaskDef.hasField("OutputMode") {
 			mergedTaskDefinition.OutputMode = taskDef.OutputMode
 		}
