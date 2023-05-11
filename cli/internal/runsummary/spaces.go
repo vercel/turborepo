@@ -28,7 +28,7 @@ type spacesRunPayload struct {
 	Client         spacesClientSummary `json:"client"`                   // Details about the turbo client
 	GitBranch      string              `json:"gitBranch"`
 	GitSha         string              `json:"gitSha"`
-	User           string              `json:"originationUser"`
+	User           string              `json:"originationUser,omitempty"`
 }
 
 // spacesCacheStatus is the same as TaskCacheSummary so we can convert
