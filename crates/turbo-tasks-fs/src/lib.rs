@@ -51,6 +51,7 @@ use tokio::{
     fs,
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
 };
+use tracing::instrument;
 use turbo_tasks::{
     mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
@@ -505,6 +506,7 @@ impl Debug for DiskFileSystem {
 #[turbo_tasks::value_impl]
 impl FileSystem for DiskFileSystem {
     #[turbo_tasks::function]
+    #[instrument(skip_all)]
     async fn read(&self, fs_path: FileSystemPathVc) -> Result<FileContentVc> {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
@@ -521,6 +523,7 @@ impl FileSystem for DiskFileSystem {
     }
 
     #[turbo_tasks::function]
+    #[instrument(skip_all)]
     async fn read_dir(&self, fs_path: FileSystemPathVc) -> Result<DirectoryContentVc> {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_dir_invalidator(&full_path)?;
@@ -575,6 +578,7 @@ impl FileSystem for DiskFileSystem {
     }
 
     #[turbo_tasks::function]
+    #[instrument(skip_all)]
     async fn read_link(&self, fs_path: FileSystemPathVc) -> Result<LinkContentVc> {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
@@ -664,6 +668,7 @@ impl FileSystem for DiskFileSystem {
     }
 
     #[turbo_tasks::function]
+    #[instrument(skip_all)]
     async fn write(
         &self,
         fs_path: FileSystemPathVc,
@@ -735,6 +740,7 @@ impl FileSystem for DiskFileSystem {
     }
 
     #[turbo_tasks::function]
+    #[instrument(skip_all)]
     async fn write_link(
         &self,
         fs_path: FileSystemPathVc,
@@ -812,6 +818,7 @@ impl FileSystem for DiskFileSystem {
     }
 
     #[turbo_tasks::function]
+    #[instrument(skip_all)]
     async fn metadata(&self, fs_path: FileSystemPathVc) -> Result<FileMetaVc> {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;

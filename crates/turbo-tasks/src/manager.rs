@@ -21,6 +21,7 @@ use futures::FutureExt;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
+use tracing::{info_span, Instrument, Span};
 
 use crate::{
     backend::{Backend, CellContent, PersistentTaskType, TransientTaskType},
@@ -496,10 +497,15 @@ impl<B: Backend + 'static> TurboTasks<B> {
             anyhow::Ok(())
         };
 
-        let future = TURBO_TASKS.scope(
-            self.pin(),
-            CURRENT_TASK_ID.scope(task_id, self.backend.execution_scope(task_id, future)),
-        );
+        // Account time in spawned task towards the current span
+        let span = Span::current();
+
+        let future = TURBO_TASKS
+            .scope(
+                self.pin(),
+                CURRENT_TASK_ID.scope(task_id, self.backend.execution_scope(task_id, future)),
+            )
+            .instrument(span);
 
         #[cfg(feature = "tokio_tracing")]
         tokio::task::Builder::new()
@@ -738,27 +744,32 @@ impl<B: Backend + 'static> TurboTasks<B> {
         let this = self.pin();
         self.currently_scheduled_background_jobs
             .fetch_add(1, Ordering::AcqRel);
-        tokio::spawn(TURBO_TASKS.scope(this.clone(), async move {
-            while this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
-                let listener = this
-                    .event
-                    .listen_with_note(|| "background job waiting for execution".to_string());
-                if this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
-                    listener.await;
-                }
-            }
-            let this2 = this.clone();
-            if !this.stopped.load(Ordering::Acquire) {
-                func(this).await;
-            }
-            if this2
-                .currently_scheduled_background_jobs
-                .fetch_sub(1, Ordering::AcqRel)
-                == 1
-            {
-                this2.event_background.notify(usize::MAX);
-            }
-        }));
+        let span = info_span!("background_job").or_current();
+        tokio::spawn(
+            TURBO_TASKS
+                .scope(this.clone(), async move {
+                    while this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
+                        let listener = this.event.listen_with_note(|| {
+                            "background job waiting for execution".to_string()
+                        });
+                        if this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
+                            listener.await;
+                        }
+                    }
+                    let this2 = this.clone();
+                    if !this.stopped.load(Ordering::Acquire) {
+                        func(this).await;
+                    }
+                    if this2
+                        .currently_scheduled_background_jobs
+                        .fetch_sub(1, Ordering::AcqRel)
+                        == 1
+                    {
+                        this2.event_background.notify(usize::MAX);
+                    }
+                })
+                .instrument(span),
+        );
     }
 
     #[track_caller]
@@ -771,12 +782,17 @@ impl<B: Backend + 'static> TurboTasks<B> {
     ) {
         let this = self.pin();
         this.begin_foreground_job();
-        tokio::spawn(TURBO_TASKS.scope(this.clone(), async move {
-            if !this.stopped.load(Ordering::Acquire) {
-                func(this.clone()).await;
-            }
-            this.finish_foreground_job();
-        }));
+        let span = info_span!("foreground_job").or_current();
+        tokio::spawn(
+            TURBO_TASKS
+                .scope(this.clone(), async move {
+                    if !this.stopped.load(Ordering::Acquire) {
+                        func(this.clone()).await;
+                    }
+                    this.finish_foreground_job();
+                })
+                .instrument(span),
+        );
     }
 
     fn finish_current_task_state(&self) -> bool {
@@ -1328,7 +1344,8 @@ pub fn with_turbo_tasks_for_testing<T>(
 /// Beware: this method is not safe to use in production code. It is only
 /// intended for use in tests and for debugging purposes.
 pub fn spawn_detached(f: impl Future<Output = Result<()>> + Send + 'static) {
-    tokio::spawn(turbo_tasks().detached(Box::pin(f)));
+    let span = Span::current();
+    tokio::spawn(turbo_tasks().detached(Box::pin(f.instrument(span))));
 }
 
 pub fn current_task_for_testing() -> TaskId {
@@ -1368,7 +1385,9 @@ pub fn emit<T: ValueTraitVc>(collectible: T) {
 }
 
 pub async fn spawn_blocking<T: Send + 'static>(func: impl FnOnce() -> T + Send + 'static) -> T {
+    let span = info_span!("blocking operation").or_current();
     let (r, d) = tokio::task::spawn_blocking(|| {
+        let _guard = span.entered();
         let start = Instant::now();
         let r = func();
         (r, start.elapsed())
@@ -1381,10 +1400,13 @@ pub async fn spawn_blocking<T: Send + 'static>(func: impl FnOnce() -> T + Send +
 
 pub fn spawn_thread(func: impl FnOnce() + Send + 'static) {
     let handle = Handle::current();
+    let span = info_span!("thread").or_current();
     thread::spawn(move || {
+        let span = span.entered();
         let guard = handle.enter();
         func();
         drop(guard);
+        drop(span);
     });
 }
 

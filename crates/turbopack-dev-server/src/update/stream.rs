@@ -4,6 +4,7 @@ use anyhow::Result;
 use futures::{prelude::*, Stream};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::{info_span, Instrument, Span};
 use turbo_tasks::{
     primitives::StringVc, CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance,
 };
@@ -211,6 +212,7 @@ pub(super) struct UpdateStream(
 );
 
 impl UpdateStream {
+    #[tracing::instrument(skip(get_content))]
     pub async fn new(
         resource: String,
         get_content: TransientInstance<GetContentFn>,
@@ -238,6 +240,7 @@ impl UpdateStream {
 
         let mut last_had_issues = false;
 
+        let span = info_span!("stream");
         let stream = ReceiverStream::new(rx).filter_map(move |item| {
             let (has_issues, issues_changed) =
                 if let Some(UpdateStreamItem::Found { issues, .. }) = item.as_deref().ok() {
@@ -248,6 +251,8 @@ impl UpdateStream {
                 } else {
                     (false, false)
                 };
+
+            let update_span = info_span!(parent: span.clone(), "update");
 
             async move {
                 match item.as_deref() {
@@ -278,6 +283,7 @@ impl UpdateStream {
                     }
                 }
             }
+            .instrument(update_span)
         });
 
         Ok(UpdateStream(Box::pin(stream)))

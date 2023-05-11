@@ -1,9 +1,11 @@
 #![feature(future_join)]
 #![feature(min_specialization)]
+#![feature(thread_id_value)]
 
 pub mod arguments;
 pub mod dev;
 pub(crate) mod embed_js;
+pub mod raw_trace;
 
 pub fn register() {
     turbopack::register();

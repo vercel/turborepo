@@ -154,9 +154,19 @@ pub fn gen_native_function_code(
         }
     }
     let original_call_code = if async_function {
-        quote! { #original_function(#(#input_arguments),*).await }
+        quote! {
+            turbo_tasks::macro_helpers::tracing::Instrument::instrument(
+                #original_function(#(#input_arguments),*),
+                turbo_tasks::macro_helpers::tracing::info_span!(#name_code)
+            ).await
+        }
     } else {
-        quote! { #original_function(#(#input_arguments),*) }
+        quote! {
+            {
+                let _turbo_tasks_function_guard = turbo_tasks::macro_helpers::tracing::info_span!(#name_code).entered();
+                #original_function(#(#input_arguments),*)
+            }
+        }
     };
     let (raw_output_type, is_result) = unwrap_result_type(output_type);
     let original_call_code = match (is_result, is_empty_type(raw_output_type)) {

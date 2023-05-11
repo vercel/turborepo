@@ -5,6 +5,7 @@
 pub mod issue;
 pub mod runtime_entry;
 pub mod source_context;
+pub mod tracing;
 
 pub fn register() {
     turbo_tasks::register();

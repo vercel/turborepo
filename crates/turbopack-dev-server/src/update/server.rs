@@ -10,6 +10,7 @@ use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 use pin_project_lite::pin_project;
 use tokio::select;
 use tokio_stream::StreamMap;
+use tracing::{info_span, Span};
 use turbo_tasks::{TransientInstance, TurboTasksApi};
 use turbo_tasks_fs::json::parse_json_with_source_context;
 use turbopack_core::{error::PrettyPrintError, issue::IssueReporterVc, version::Update};
@@ -28,6 +29,7 @@ use crate::{
 pub(crate) struct UpdateServer<P: SourceProvider> {
     source_provider: P,
     issue_reporter: IssueReporterVc,
+    span: Span,
 }
 
 impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
@@ -36,6 +38,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
         Self {
             source_provider,
             issue_reporter,
+            span: info_span!("UpdateServer"),
         }
     }
 
