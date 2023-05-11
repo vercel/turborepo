@@ -46,6 +46,7 @@ pub struct GlobSet {
 }
 
 impl HashGlobWatcher<RecommendedWatcher> {
+    #[tracing::instrument]
     pub fn new(
         relative_to: AbsoluteSystemPathBuf,
         flush_folder: PathBuf,
@@ -64,6 +65,7 @@ impl HashGlobWatcher<RecommendedWatcher> {
 impl<T: Watcher> HashGlobWatcher<T> {
     /// Watches a given path, using the flush_folder as temporary storage to
     /// make sure that file events are handled in the appropriate order.
+    #[tracing::instrument(skip(self, token))]
     pub async fn watch(&self, token: StopToken) {
         let start_globs = {
             let lock = self.hash_globs.lock().expect("only fails if poisoned");

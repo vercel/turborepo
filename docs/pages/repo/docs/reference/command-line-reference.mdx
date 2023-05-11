@@ -293,6 +293,16 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
 
 You can also specify these in your `turbo` configuration as `globalDependencies` key.
 
+#### `--framework-inference`
+
+`type: bool`
+
+Specify whether or not to do framework inference for tasks. Defaults to `true`, can be configured to be `false` which skips framework inference for tasks. This disables [automatic environment variable inclusion](../core-concepts/caching#automatic-environment-variable-inclusion).
+
+```sh
+turbo run build --framework-inference=false
+```
+
 #### `--ignore`
 
 `type: string[]`
