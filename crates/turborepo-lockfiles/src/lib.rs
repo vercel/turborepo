@@ -94,3 +94,11 @@ fn transitive_closure_helper<L: Lockfile>(
 
     Ok(())
 }
+
+impl Package {
+    pub fn new(key: impl Into<String>, version: impl Into<String>) -> Self {
+        let key = key.into();
+        let version = version.into();
+        Self { key, version }
+    }
+}

@@ -170,8 +170,14 @@ impl PnpmLockfile {
         let importer = self.get_workspace(workspace_path)?;
 
         let Some((resolved_specifier, resolved_version)) = importer.dependencies.find_resolution(name) else {
-            self.get_packages(&self.format_key(name, specifier));
-            return Ok(None)
+            return match self.get_packages(&self.format_key(name, specifier)) {
+                Some(_) => Ok(Some(specifier)),
+                None => Err(Error::MissingResolvedVersion{
+                    name: name.into(),
+                    specifier: specifier.into(),
+                    workspace: workspace_path.into(),
+                }.into()),
+            }
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
@@ -388,6 +394,8 @@ pub fn pnpm_global_change(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use pretty_assertions::assert_eq;
     use test_case::test_case;
 
@@ -405,7 +413,7 @@ mod tests {
     const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
 
     use super::*;
-    use crate::Lockfile;
+    use crate::{Lockfile, Package};
 
     #[test]
     fn test_roundtrip() {
@@ -517,7 +525,7 @@ mod tests {
         "packages/b",
         "is-odd",
         "^3.0.1",
-        Ok(None)
+        Err("Unable to find resolved version for is-odd@^3.0.1 in packages/b")
         ; "v6 missing"
     )]
     #[test_case(
@@ -690,5 +698,44 @@ mod tests {
             pruned.patches(),
             vec!["patches/@babel__helper-string-parser@7.19.4.patch"]
         )
+    }
+
+    #[test]
+    fn test_pnpm_alias_overlap() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_ABSOLUTE).unwrap();
+        let closures = crate::all_transitive_closures(
+            &lockfile,
+            vec![(
+                "packages/a".to_string(),
+                vec![
+                    ("@scope/parent".to_string(), "^1.0.0".to_string()),
+                    ("another".to_string(), "^1.0.0".to_string()),
+                    ("special".to_string(), "npm:Special@1.2.3".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+            )]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap();
+
+        let mut closure = closures
+            .get("packages/a")
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        closure.sort();
+        assert_eq!(
+            closure,
+            vec![
+                Package::new("/@scope/child/1.0.0", "1.0.0"),
+                Package::new("/@scope/parent/1.0.0", "1.0.0"),
+                Package::new("/Special/1.2.3", "1.2.3"),
+                Package::new("/another/1.0.0", "1.0.0"),
+                Package::new("/foo/1.0.0", "1.0.0"),
+            ],
+        );
     }
 }
