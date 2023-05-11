@@ -568,14 +568,15 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 		// Going to _at least_ be an empty array.
 		btd.TaskDefinition.DotEnv = make(turbopath.AnchoredUnixPathArray, 0, len(task.DotEnv))
 
-		// Port the raw globalDotEnv values in.
+		// Port the raw dotEnv values in.
 		for _, dotEnvPath := range task.DotEnv {
-			if filepath.IsAbs(dotEnvPath) {
-				log.Printf("[WARNING] Using an absolute path in \"dotEnv\" (%v) will not work and will be an error in a future version", dotEnvPath)
+			typeCheckedPath, err := turbopath.CheckedToAnchoredUnixPath(dotEnvPath)
+			if err != nil {
+				return err
 			}
 
 			// These are _explicitly_ not sorted.
-			btd.TaskDefinition.DotEnv = append(btd.TaskDefinition.DotEnv, turbopath.AnchoredUnixPathFromUpstream(dotEnvPath))
+			btd.TaskDefinition.DotEnv = append(btd.TaskDefinition.DotEnv, typeCheckedPath)
 		}
 	}
 
@@ -688,7 +689,11 @@ func (tj *TurboJSON) UnmarshalJSON(data []byte) error {
 		tj.GlobalDotEnv = make(turbopath.AnchoredUnixPathArray, 0, len(raw.GlobalDotEnv))
 
 		for _, dotEnvPath := range raw.GlobalDotEnv {
-			tj.GlobalDotEnv = append(tj.GlobalDotEnv, turbopath.AnchoredUnixPathFromUpstream(dotEnvPath))
+			typeCheckedPath, err := turbopath.CheckedToAnchoredUnixPath(dotEnvPath)
+			if err != nil {
+				return err
+			}
+			tj.GlobalDotEnv = append(tj.GlobalDotEnv, typeCheckedPath)
 		}
 	}
 
