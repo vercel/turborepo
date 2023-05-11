@@ -36,12 +36,12 @@ macro_rules! vdbg {
         }
     };
     ($($val:expr),+ ; depth = $depth:expr) => {
-        ($(vdbg!($val ; depth = $depth)),+,)
+        ($($crate::vdbg!($val ; depth = $depth)),+,)
     };
     ($val:expr $(,)?) => {
-        vdbg!($val ; depth = usize::MAX)
+        $crate::vdbg!($val ; depth = usize::MAX)
     };
     ($($val:expr),+ $(,)?) => {
-        ($(vdbg!($val)),+,)
+        ($($crate::vdbg!($val)),+,)
     };
 }
