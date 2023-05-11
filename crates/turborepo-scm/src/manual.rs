@@ -33,13 +33,6 @@ fn get_package_file_hashes_from_processing_gitignore(
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut includes = Vec::new();
     let mut excludes = Vec::new();
-    // for pattern in inputs {
-    //     if pattern.starts_with("!") {
-    //         excludes.push(full_package_path.join_literal(&pattern[1..]).
-    // to_string());     } else {
-    //         includes.push(full_package_path.join_literal(pattern).to_string());
-    //     }
-    // }
     for pattern in inputs {
         if pattern.starts_with("!") {
             let glob = Path::new(&pattern[1..])
