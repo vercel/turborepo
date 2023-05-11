@@ -413,7 +413,7 @@
     base::SwcComments,
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
     ecma::{
-        ast::{Module, ModuleItem, Program},
+        ast::{Module, ModuleItem, Program, Script},
         atoms::JsWord,
         preset_env::{<span class="self">self</span>, Targets},
         transforms::{
@@ -625,7 +625,22 @@
                     </span>..Default::default()
                 };
 
-                <span class="kw">let </span>module_program = unwrap_module_program(program);
+                <span class="kw">let </span>module_program = std::mem::replace(program, Program::Module(Module::dummy()));
+
+                <span class="kw">let </span>module_program = <span class="kw">if let </span>Program::Script(Script {
+                    span,
+                    <span class="kw-2">mut </span>body,
+                    shebang,
+                }) = module_program
+                {
+                    Program::Module(Module {
+                        span,
+                        body: body.drain(..).map(|stmt| ModuleItem::Stmt(stmt)).collect(),
+                        shebang,
+                    })
+                } <span class="kw">else </span>{
+                    module_program
+                };
 
                 <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span><span class="macro">chain!</span>(
                     preset_env::preset_env(
@@ -756,21 +771,6 @@
         Program::Script(s) =&gt; {
             s.shebang = <span class="prelude-val">None</span>;
         }
-    }
-}
-
-<span class="kw">fn </span>unwrap_module_program(program: <span class="kw-2">&amp;mut </span>Program) -&gt; Program {
-    <span class="kw">match </span>program {
-        Program::Module(module) =&gt; Program::Module(module.take()),
-        Program::Script(s) =&gt; Program::Module(Module {
-            span: s.span,
-            body: s
-                .body
-                .iter()
-                .map(|stmt| ModuleItem::Stmt(stmt.clone()))
-                .collect(),
-            shebang: s.shebang.clone(),
-        }),
     }
 }
 
