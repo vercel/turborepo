@@ -106,6 +106,7 @@ var matchTests = []MatchTest{
 	{"a/**", "a/b/c", true, nil, false, true, 7, 7},
 	// These tests differ since we've disabled walking symlinks
 	{"**/c", "c", true, nil, false, true, 4, 4},
+	{"{**/c}", "c", true, nil, false, true, 4, 4},
 	{"**/c", "b/c", true, nil, false, true, 4, 4},
 	{"**/c", "a/b/c", true, nil, false, true, 4, 4},
 	{"**/c", "a/b", false, nil, false, true, 4, 4},

@@ -1,10 +1,11 @@
-use std::{fs::Metadata, io::Read};
+use std::{fs::Metadata, io::Read, path::Path};
 
 use glob_match::glob_match;
 use hex::ToHex;
 use ignore::WalkBuilder;
+use path_slash::PathExt;
 use sha1::{Digest, Sha1};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
 
 use crate::{package_deps::GitHashes, Error};
 
@@ -32,11 +33,24 @@ fn get_package_file_hashes_from_processing_gitignore(
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut includes = Vec::new();
     let mut excludes = Vec::new();
+    // for pattern in inputs {
+    //     if pattern.starts_with("!") {
+    //         excludes.push(full_package_path.join_literal(&pattern[1..]).
+    // to_string());     } else {
+    //         includes.push(full_package_path.join_literal(pattern).to_string());
+    //     }
+    // }
     for pattern in inputs {
         if pattern.starts_with("!") {
-            excludes.push(full_package_path.join_literal(&pattern[1..]).to_string());
+            let glob = Path::new(&pattern[1..])
+                .to_slash()
+                .ok_or_else(|| PathError::invalid_utf8_error(pattern[1..].as_bytes()))?;
+            excludes.push(glob);
         } else {
-            includes.push(full_package_path.join_literal(pattern).to_string());
+            let glob = Path::new(pattern)
+                .to_slash()
+                .ok_or_else(|| PathError::invalid_utf8_error(pattern.as_bytes()))?;
+            includes.push(glob);
         }
     }
     let include_pattern = if includes.is_empty() {
@@ -66,12 +80,12 @@ fn get_package_file_hashes_from_processing_gitignore(
         let relative_path = full_package_path.anchor(&path)?;
         let relative_path = relative_path.to_unix()?;
         if let Some(include_pattern) = include_pattern.as_ref() {
-            if !glob_match(include_pattern, &path.to_string()).unwrap_or(false) {
+            if !glob_match(include_pattern, relative_path.as_str()?).unwrap_or(false) {
                 continue;
             }
         }
         if let Some(exclude_pattern) = exclude_pattern.as_ref() {
-            if glob_match(exclude_pattern, &path.to_string()).unwrap_or(false) {
+            if glob_match(exclude_pattern, relative_path.as_str()?).unwrap_or(false) {
                 continue;
             }
         }

@@ -64,9 +64,22 @@ pub enum PathError {
     PrefixError(String, String),
 }
 
+impl From<std::string::FromUtf8Error> for PathError {
+    fn from(value: std::string::FromUtf8Error) -> Self {
+        PathError::Utf8Error(value.into_bytes())
+    }
+}
+
 impl PathError {
     pub fn is_io_error(&self, kind: io::ErrorKind) -> bool {
-        matches!(self, PathError::IO(err) if err.kind() == kind)
+        match self {
+            PathError::IO(err) => err.kind() == kind,
+            _ => false,
+        }
+    }
+
+    pub fn invalid_utf8_error(bytes: impl Into<Vec<u8>>) -> Self {
+        Self::Utf8Error(bytes.into())
     }
 
     pub(crate) fn not_relative_error(bytes: &[u8]) -> PathError {
