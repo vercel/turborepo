@@ -265,7 +265,7 @@ pub enum Command {
         target: LinkTarget,
     },
     /// Generate a new app / package
-    G {
+    Generate {
         #[clap(long, default_value_t = String::from("latest"), hide = true)]
         tag: String,
         #[clap(subcommand)]
@@ -309,7 +309,7 @@ pub enum Command {
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
-pub struct GenerateArgs {
+pub struct GenerateCustomArgs {
     /// The name of the generator to run
     pub generator_name: Option<String>,
     /// Generator configuration file
@@ -364,8 +364,8 @@ pub enum GenerateCommand {
     #[clap(name = "add", aliases = &["a"])]
     Add(GenerateAddArgs),
     /// Run custom generators
-    #[clap(name = "generate", aliases = &["g", "gen"])]
-    Gen(GenerateArgs),
+    #[clap(name = "run", aliases = &["r"])]
+    Custom(GenerateCustomArgs),
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -635,7 +635,7 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::G { command, tag } => {
+        Command::Generate { command, tag } => {
             generate::run(command, tag)?;
             Ok(Payload::Rust(Ok(0)))
         }

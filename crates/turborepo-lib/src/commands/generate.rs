@@ -50,7 +50,7 @@ pub fn run(command: &GenerateCommand, tag: &String) -> Result<()> {
             let raw_args = serde_json::to_string(args)?;
             call_turbo_gen("add", tag, &raw_args)?;
         }
-        GenerateCommand::Gen(args) => {
+        GenerateCommand::Custom(args) => {
             let raw_args = serde_json::to_string(args)?;
             call_turbo_gen("generate", tag, &raw_args)?;
         }
