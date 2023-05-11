@@ -72,7 +72,7 @@ type RunSummary struct {
 	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
 	Tasks              []*TaskSummary     `json:"tasks"`
 	SCM                *scmState          `json:"scm"`
-	User               string             `json:"originationUser"`
+	User               string             `json:"user"`
 }
 
 // NewRunSummary returns a RunSummary instance
