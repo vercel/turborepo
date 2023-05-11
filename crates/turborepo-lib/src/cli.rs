@@ -361,10 +361,10 @@ pub struct GenerateAddArgs {
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 pub enum GenerateCommand {
     /// Add a new package or app to your project
-    #[clap(name = "add", aliases = &["a"])]
+    #[clap(name = "add", alias = "a")]
     Add(GenerateAddArgs),
     /// Run custom generators
-    #[clap(name = "run", aliases = &["r"])]
+    #[clap(name = "run", alias = "r")]
     Custom(GenerateCustomArgs),
 }
 
