@@ -313,3 +313,26 @@ func GlobalChange(packageManager string, prevContents []byte, currContents []byt
 
 	return resp.GetGlobalChange()
 }
+
+// GetPackageFileHashesFromGitIndex proxies to rust to use git to hash the files in a package.
+// It does not support additional files, it just hashes the non-ignored files in the package.
+func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesFromGitIndexRequest{
+		TurboRoot:   rootPath,
+		PackagePath: packagePath,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_package_file_hashes_from_git_index(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetPackageFileHashesFromGitIndexResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}

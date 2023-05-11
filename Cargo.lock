@@ -770,9 +770,9 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "1.3.0"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ffdb39cb703212f3c11973452c2861b972f757b021158f3516ba10f2fa8b2c1"
+checksum = "c3d4260bcc2e8fc9df1eac4919a720effeb63a3f0952f5bf4944adfa18897f09"
 dependencies = [
  "memchr",
  "once_cell",
@@ -9149,6 +9149,7 @@ dependencies = [
 name = "turbopath"
 version = "0.1.0"
 dependencies = [
+ "bstr",
  "path-slash",
  "serde",
  "thiserror",
@@ -9290,9 +9291,9 @@ dependencies = [
 name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "dunce",
  "git2 0.16.1",
+ "nom",
  "tempfile",
  "thiserror",
  "turbopath",
