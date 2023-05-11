@@ -153,9 +153,7 @@ To accomplish this, we can set up a pipeline like this:
 {
    "$schema": "https://turbo.build/schema.json",
    "pipeline": {
-     "topo": {
-       "dependsOn": ["^topo"]
-     },
+     "topo": {},
      "test": {
        "dependsOn": ["^topo"]
      }
