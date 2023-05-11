@@ -13,9 +13,6 @@ bench = false
 [features]
 default = ["cli", "custom_allocator"]
 cli = ["dep:clap", "turbo-tasks-malloc"]
-persistent_cache = [
-  # "dep:turbo-tasks-rocksdb"
-]
 tokio_console = [
   "dep:console-subscriber",
   "tokio/tracing",
@@ -36,7 +33,6 @@ turbo-tasks = { workspace = true }
 turbo-tasks-fs = { workspace = true }
 turbo-tasks-malloc = { workspace = true, optional = true, default-features = false }
 turbo-tasks-memory = { workspace = true }
-# turbo-tasks-rocksdb = { path = "../turbo-tasks-rocksdb", optional = true }
 turbopack = { workspace = true }
 turbopack-cli-utils = { workspace = true }
 turbopack-core = { workspace = true }
