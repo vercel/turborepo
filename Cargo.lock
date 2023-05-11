@@ -637,6 +637,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "bindgen"
+version = "0.65.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfdf7b466f9a4903edc73f95d6d2bcd5baf8ae620638762244d3f60143643cc5"
+dependencies = [
+ "bitflags 1.3.2",
+ "cexpr",
+ "clang-sys",
+ "lazy_static",
+ "lazycell",
+ "log",
+ "peeking_take_while",
+ "prettyplease 0.2.4",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex",
+ "syn 2.0.15",
+ "which",
+]
+
+[[package]]
 name = "binding_macros"
 version = "0.49.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -747,9 +770,9 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "1.3.0"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ffdb39cb703212f3c11973452c2861b972f757b021158f3516ba10f2fa8b2c1"
+checksum = "c3d4260bcc2e8fc9df1eac4919a720effeb63a3f0952f5bf4944adfa18897f09"
 dependencies = [
  "memchr",
  "once_cell",
@@ -1843,7 +1866,7 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88e40c4c77d141a3b70113ee45a1502b9c80e24f176958d39a8361abcf30c883"
 dependencies = [
- "bindgen",
+ "bindgen 0.59.2",
  "system-deps",
 ]
 
@@ -4934,6 +4957,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "prettyplease"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ceca8aaf45b5c46ec7ed39fff75f57290368c1846d33d24a122ca81416ab058"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.15",
+]
+
+[[package]]
 name = "priority-queue"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5015,7 +5048,7 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prettyplease",
+ "prettyplease 0.1.24",
  "prost",
  "prost-types",
  "regex",
@@ -6073,6 +6106,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "signposter"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "signposter-sys",
+]
+
+[[package]]
+name = "signposter-sys"
+version = "0.1.0"
+dependencies = [
+ "bindgen 0.65.1",
 ]
 
 [[package]]
@@ -8110,7 +8158,7 @@ version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5bf5e9b9c0f7e0a7c027dcfaba7b2c60816c7049171f679d99ee2ff65d0de8c4"
 dependencies = [
- "prettyplease",
+ "prettyplease 0.1.24",
  "proc-macro2",
  "prost-build",
  "quote",
@@ -8238,6 +8286,16 @@ dependencies = [
  "lazy_static",
  "log",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-signpost"
+version = "0.1.0"
+dependencies = [
+ "dashmap",
+ "signposter",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -8379,6 +8437,7 @@ dependencies = [
  "swc_emotion",
  "swc_relay",
  "testing",
+ "tracing-signpost",
  "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -8716,6 +8775,9 @@ dependencies = [
  "regex",
  "serde",
  "tokio",
+ "tracing",
+ "tracing-signpost",
+ "tracing-subscriber",
  "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -8854,6 +8916,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "tracing",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-bytes",
@@ -8910,7 +8973,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "indexmap",
+ "modularize_imports",
  "serde",
+ "styled_components",
+ "styled_jsx",
  "swc_core",
  "swc_emotion",
  "swc_relay",
@@ -9082,6 +9149,7 @@ dependencies = [
 name = "turbopath"
 version = "0.1.0"
 dependencies = [
+ "bstr",
  "path-slash",
  "serde",
  "thiserror",
@@ -9223,9 +9291,9 @@ dependencies = [
 name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "dunce",
  "git2 0.16.1",
+ "nom",
  "tempfile",
  "thiserror",
  "turbopath",

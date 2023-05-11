@@ -1,0 +1,156 @@
+use std::{
+    io::{BufRead, BufReader, Read},
+    process::{Command, Stdio},
+};
+
+use nom::Finish;
+use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+
+use crate::{package_deps::GitHashes, Error};
+
+pub(crate) fn append_git_status(
+    root_path: &AbsoluteSystemPathBuf,
+    pkg_prefix: &RelativeUnixPathBuf,
+    hashes: &mut GitHashes,
+) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    let mut git = Command::new("git")
+        .args([
+            "status",
+            "--untracked-files",
+            "--no-renames",
+            "-z",
+            "--",
+            ".",
+        ])
+        .current_dir(root_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let to_hash = {
+        let stdout = git
+            .stdout
+            .as_mut()
+            .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
+        let result = read_status(stdout, pkg_prefix, hashes);
+        if result.is_err() {
+            let mut buf = String::new();
+            let bytes_read = stderr.read_to_string(&mut buf)?;
+            if bytes_read > 0 {
+                // something failed with git, report that error
+                return Err(Error::git_error(buf));
+            }
+        }
+        result?
+    };
+    git.wait()?;
+    Ok(to_hash)
+}
+
+fn read_status<R: Read>(
+    reader: R,
+    pkg_prefix: &RelativeUnixPathBuf,
+    hashes: &mut GitHashes,
+) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    let mut to_hash = Vec::new();
+    let mut reader = BufReader::new(reader);
+    let mut buffer = Vec::new();
+    loop {
+        buffer.clear();
+        {
+            let bytes_read = reader.read_until(b'\0', &mut buffer)?;
+            if bytes_read == 0 {
+                break;
+            }
+            {
+                let entry = parse_status(&buffer)?;
+                let path = RelativeUnixPathBuf::new(entry.filename)?;
+                if entry.is_delete {
+                    let path = path.strip_prefix(pkg_prefix)?;
+                    hashes.remove(&path);
+                } else {
+                    to_hash.push(path);
+                }
+            }
+        }
+    }
+    Ok(to_hash)
+}
+
+struct StatusEntry<'a> {
+    filename: &'a [u8],
+    is_delete: bool,
+}
+
+fn parse_status(i: &[u8]) -> Result<StatusEntry<'_>, Error> {
+    match nom_parse_status(i).finish() {
+        Ok((_, tup)) => Ok(tup),
+        Err(e) => Err(Error::git_error(format!(
+            "failed to parse git-status: {}",
+            String::from_utf8_lossy(e.input)
+        ))),
+    }
+}
+
+fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
+    let (i, x) = nom::bytes::complete::take(1usize)(i)?;
+    let (i, y) = nom::bytes::complete::take(1usize)(i)?;
+    let (i, _) = nom::character::complete::space1(i)?;
+    let (i, filename) = nom::bytes::complete::is_not(" \0")(i)?;
+    Ok((
+        i,
+        StatusEntry {
+            filename,
+            is_delete: x[0] == b'D' || y[0] == b'D',
+        },
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use turbopath::RelativeUnixPathBuf;
+
+    use super::read_status;
+    use crate::package_deps::GitHashes;
+
+    #[test]
+    fn test_status() {
+        let tests: &[(&str, &str, (&str, bool))] = &[
+            ("AD my-pkg/package.json\0", "my-pkg", ("package.json", true)),
+            (
+                // no trailing NUL
+                "AD some-pkg/package.json",
+                "some-pkg",
+                ("package.json", true),
+            ),
+            ("M  package.json\0", "", ("package.json", false)),
+            ("A  some-pkg/some-file\0", "some-pkg", ("some-file", false)),
+        ];
+        for (input, prefix, (expected_filename, expect_delete)) in tests {
+            let prefix = RelativeUnixPathBuf::new(prefix.as_bytes()).unwrap();
+            let mut hashes = to_hash_map(&[(expected_filename, "some-hash")]);
+            let to_hash = read_status(input.as_bytes(), &prefix, &mut hashes).unwrap();
+            if *expect_delete {
+                assert_eq!(hashes.len(), 0, "input: {}", input);
+            } else {
+                assert_eq!(to_hash.len(), 1, "input: {}", input);
+                let expected = prefix.join(&RelativeUnixPathBuf::new(*expected_filename).unwrap());
+                assert_eq!(to_hash[0], expected);
+            }
+        }
+    }
+
+    fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
+        HashMap::from_iter(pairs.into_iter().map(|(path, hash)| {
+            (
+                RelativeUnixPathBuf::new(path.as_bytes()).unwrap(),
+                hash.to_string(),
+            )
+        }))
+    }
+}
