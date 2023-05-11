@@ -198,8 +198,8 @@ Controls the available environment variables to your tasks.
 
 ##### `infer`
 
-In infer mode, Turborepo will look for [`experimentalPassThroughEnv`][1] for
-each task config, and [`experimentalGlobalPassThroughEnv`][2] in the root of the
+In infer mode, Turborepo will look for [`passThroughEnv`][1] for
+each task config, and [`globalPassThroughEnv`][2] in the root of the
 `turbo.json` config. If either is defined, "strict" mode is inferred. If
 neither is defined, then `loose` mode is inferred.
 

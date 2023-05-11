@@ -2,7 +2,7 @@
 {
   "pipeline": {
     "build": {
-      "experimentalPassthroughEnv": ["GITHUB_TOKEN"],
+      "passThroughEnv": ["GITHUB_TOKEN"],
       // mocked test comment
       "dependsOn": [
         // mocked test comment
@@ -19,7 +19,9 @@
     },
     "dev": {
       "cache": false,
-      "outputMode": "full"
+      "outputMode": "full",
+      "passThroughEnv": []
+
     },
     /* mocked test comment */
     "publish": {
