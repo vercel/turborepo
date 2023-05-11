@@ -13,6 +13,7 @@ use swc_core::{
 
 use crate::references::TURBOPACK_HELPER;
 
+#[deprecated(note = "use Client/ServerDirectiveTransformer instead")]
 pub fn create_proxy_module(transition_name: &str, target_import: &str) -> Program {
     let ident = private_ident!("createProxy");
     Program::Module(Module {

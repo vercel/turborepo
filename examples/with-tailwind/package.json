@@ -1,10 +1,10 @@
 {
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "clean": "turbo run clean",
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "clean": "turbo clean",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
@@ -12,7 +12,7 @@
     "eslint-config-custom": "workspace:*",
     "prettier": "^2.7.1",
     "prettier-plugin-tailwindcss": "^0.1.11",
-    "turbo": "latest"
+    "turbo": "^1.9.3"
   },
   "packageManager": "pnpm@7.15.0"
 }

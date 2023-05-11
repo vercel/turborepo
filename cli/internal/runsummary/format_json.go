@@ -2,6 +2,7 @@ package runsummary
 
 import (
 	"encoding/json"
+	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/segmentio/ksuid"
@@ -47,7 +48,15 @@ func (rsm *Meta) normalize() {
 			task.cleanForSinglePackage()
 		}
 	}
+
+	sort.Sort(byTaskID(rsm.RunSummary.Tasks))
 }
+
+type byTaskID []*TaskSummary
+
+func (a byTaskID) Len() int           { return len(a) }
+func (a byTaskID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byTaskID) Less(i, j int) bool { return a[i].TaskID < a[j].TaskID }
 
 // nonMonorepoRunSummary is an exact copy of RunSummary, but the JSON tags are structured
 // for rendering a single-package run of turbo. Notably, we want to always omit packages
