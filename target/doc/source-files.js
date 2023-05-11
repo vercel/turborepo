@@ -5,7 +5,6 @@ var sourcesIndex = JSON.parse('{\
 "signposter_sys":["",[],["lib.rs"]],\
 "swc_ast_explorer":["",[],["main.rs"]],\
 "tracing_signpost":["",[],["lib.rs"]],\
-"turbo_malloc":["",[],["counter.rs","lib.rs"]],\
 "turbo_tasks":["",[["debug",[],["internal.rs","mod.rs","vdbg.rs"]],["graph",[],["control_flow.rs","graph_store.rs","graph_traversal.rs","mod.rs","non_deterministic.rs","reverse_topological.rs","visit.rs","with_future.rs"]]],["backend.rs","collectibles.rs","completion.rs","display.rs","event.rs","id.rs","id_factory.rs","invalidation.rs","join_iter_ext.rs","lib.rs","magic_any.rs","manager.rs","native_function.rs","no_move_vec.rs","nothing.rs","once_map.rs","persisted_graph.rs","primitives.rs","raw_vc.rs","read_ref.rs","registry.rs","small_duration.rs","state.rs","task_input.rs","timed_future.rs","trace.rs","trait_ref.rs","util.rs","value.rs","value_type.rs"]],\
 "turbo_tasks_build":["",[],["lib.rs"]],\
 "turbo_tasks_bytes":["",[],["bytes.rs","lib.rs","stream.rs"]],\
@@ -15,6 +14,7 @@ var sourcesIndex = JSON.parse('{\
 "turbo_tasks_hash":["",[],["base16.rs","deterministic_hash.rs","hex.rs","lib.rs","md4.rs","xxh3_hash64.rs"]],\
 "turbo_tasks_macros":["",[["derive",[],["deterministic_hash_macro.rs","mod.rs","task_input_macro.rs","trace_raw_vcs_macro.rs","value_debug_format_macro.rs","value_debug_macro.rs"]]],["func.rs","function_macro.rs","lib.rs","util.rs","value_impl_macro.rs","value_macro.rs","value_trait_macro.rs"]],\
 "turbo_tasks_macros_shared":["",[],["expand.rs","ident.rs","lib.rs","value_trait_arguments.rs"]],\
+"turbo_tasks_malloc":["",[],["counter.rs","lib.rs"]],\
 "turbo_tasks_memory":["",[["task",[],["meta_state.rs","stats.rs"]],["viz",[],["graph.rs","mod.rs","table.rs"]]],["cell.rs","concurrent_priority_queue.rs","count_hash_set.rs","gc.rs","lib.rs","map_guard.rs","memory_backend.rs","memory_backend_with_pg.rs","output.rs","priority_pair.rs","scope.rs","stats.rs","task.rs"]],\
 "turbo_tasks_testing":["",[],["lib.rs","macros.rs","retry.rs"]],\
 "turbopack":["",[["graph",[],["mod.rs"]],["module_options",[],["mod.rs","module_options_context.rs","module_rule.rs","rule_condition.rs"]],["rebase",[],["mod.rs"]],["transition",[],["mod.rs"]]],["condition.rs","evaluate_context.rs","lib.rs","resolve.rs","resolve_options_context.rs","unsupported_sass.rs"]],\

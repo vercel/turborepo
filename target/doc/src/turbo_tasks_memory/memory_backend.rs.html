@@ -1067,7 +1067,7 @@
 
             <span class="kw">let </span>mem_limit = <span class="self">self</span>.memory_limit;
 
-            <span class="kw">let </span>usage = turbo_malloc::TurboMalloc::memory_usage();
+            <span class="kw">let </span>usage = turbo_tasks_malloc::TurboMalloc::memory_usage();
             <span class="kw">let </span>target = <span class="kw">if </span>idle {
                 mem_limit * <span class="number">3 </span>/ <span class="number">4
             </span>} <span class="kw">else </span>{
