@@ -21,13 +21,13 @@ use super::Lockfile;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("unable to parse")]
+    #[error("unable to parse yaml: {0}")]
     Parse(#[from] serde_yaml::Error),
-    #[error("unable to parse")]
+    #[error("unable to parse identifier: {0}")]
     Identifiers(#[from] identifiers::Error),
     #[error("unable to find original package in patch locator {0}")]
     PatchMissingOriginalLocator(Locator<'static>),
-    #[error("unable to parse resolutions field")]
+    #[error("unable to parse resolutions field: {0}")]
     Resolutions(#[from] resolution::Error),
     #[error("unable to find entry for {0}")]
     MissingPackageForLocator(Locator<'static>),

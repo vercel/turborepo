@@ -2,42 +2,12 @@
 resolver = "2"
 
 members = [
-  "crates/auto-hash-map",
+  "crates/globwatch",
+  "crates/pidlock",
   "crates/node-file-trace",
-  "crates/swc-ast-explorer",
-  "crates/turbo-binding",
-  "crates/turbo-malloc",
-  "crates/turbo-tasks",
-  "crates/turbo-tasks-build",
-  "crates/turbo-tasks-bytes",
-  "crates/turbo-tasks-env",
-  "crates/turbo-tasks-fetch",
-  "crates/turbo-tasks-fs",
-  "crates/turbo-tasks-hash",
-  "crates/turbo-tasks-macros",
-  "crates/turbo-tasks-macros-shared",
-  "crates/turbo-tasks-memory",
-  "crates/turbo-tasks-testing",
+  "crates/turbo-tasks*",
+  "crates/turbopack*",
   "crates/turbo-updater",
-  "crates/turbopack",
-  "crates/turbopack-cli",
-  "crates/turbopack-cli-utils",
-  "crates/turbopack-core",
-  "crates/turbopack-create-test-app",
-  "crates/turbopack-css",
-  "crates/turbopack-dev",
-  "crates/turbopack-dev-server",
-  "crates/turbopack-ecmascript",
-  "crates/turbopack-ecmascript-plugins",
-  "crates/turbopack-env",
-  "crates/turbopack-image",
-  "crates/turbopack-json",
-  "crates/turbopack-mdx",
-  "crates/turbopack-node",
-  "crates/turbopack-static",
-  "crates/turbopack-swc-utils",
-  "crates/turbopack-test-utils",
-  "crates/turbopack-tests",
   "crates/turbopath",
   "crates/glob-match",
   "crates/turborepo",
@@ -52,11 +22,9 @@ members = [
 ]
 
 default-members = [
-  "crates/auto-hash-map",
   "crates/node-file-trace",
-  "crates/swc-ast-explorer",
-  "crates/turbo-malloc",
   "crates/turbo-tasks",
+  "crates/turbo-tasks-auto-hash-map",
   "crates/turbo-tasks-build",
   "crates/turbo-tasks-bytes",
   "crates/turbo-tasks-env",
@@ -65,8 +33,13 @@ default-members = [
   "crates/turbo-tasks-hash",
   "crates/turbo-tasks-macros",
   "crates/turbo-tasks-macros-shared",
+  "crates/turbo-tasks-macros-tests",
+  "crates/turbo-tasks-malloc",
   "crates/turbo-tasks-memory",
+  "crates/turbo-tasks-signposter",
+  "crates/turbo-tasks-signposter-sys",
   "crates/turbo-tasks-testing",
+  "crates/turbo-tasks-tracing-signpost",
   "crates/turbopack",
   "crates/turbopack-bench",
   "crates/turbopack-cli-utils",
@@ -81,6 +54,7 @@ default-members = [
   "crates/turbopack-mdx",
   "crates/turbopack-node",
   "crates/turbopack-static",
+  "crates/turbopack-swc-ast-explorer",
   "crates/turbopack-swc-utils",
   "crates/turbopack-test-utils",
   "crates/turbopack-tests",
@@ -108,10 +82,13 @@ swc_emotion = { version = "0.30.7" }
 swc_relay = { version = "0.2.7" }
 testing = { version = "0.33.6" }
 
-auto-hash-map = { path = "crates/auto-hash-map" }
+auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
-swc-ast-explorer = { path = "crates/swc-ast-explorer" }
-turbo-malloc = { path = "crates/turbo-malloc", default-features = false }
+signposter = { path = "crates/turbo-tasks-signposter" }
+signposter-sys = { path = "crates/turbo-tasks-signposter-sys" }
+tracing-signpost = { path = "crates/turbo-tasks-tracing-signpost" }
+swc-ast-explorer = { path = "crates/turbopack-swc-ast-explorer" }
+turbo-tasks-malloc = { path = "crates/turbo-tasks-malloc", default-features = false }
 turbo-tasks = { path = "crates/turbo-tasks" }
 turbo-tasks-build = { path = "crates/turbo-tasks-build" }
 turbo-tasks-bytes = { path = "crates/turbo-tasks-bytes" }
@@ -121,6 +98,7 @@ turbo-tasks-fs = { path = "crates/turbo-tasks-fs" }
 turbo-tasks-hash = { path = "crates/turbo-tasks-hash" }
 turbo-tasks-macros = { path = "crates/turbo-tasks-macros" }
 turbo-tasks-macros-shared = { path = "crates/turbo-tasks-macros-shared" }
+turbo-tasks-macros-tests = { path = "crates/turbo-tasks-macros-tests" }
 turbo-tasks-memory = { path = "crates/turbo-tasks-memory" }
 turbo-tasks-testing = { path = "crates/turbo-tasks-testing" }
 turbo-updater = { path = "crates/turbo-updater" }
@@ -227,6 +205,7 @@ tiny-gradient = "0.1.0"
 tokio = "1.25.0"
 tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
 url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"

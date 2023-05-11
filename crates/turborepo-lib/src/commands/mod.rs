@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
@@ -35,10 +37,11 @@ impl CommandBase {
         args: Args,
         repo_root: AbsoluteSystemPathBuf,
         version: &'static str,
+        ui: UI,
     ) -> Result<Self> {
         Ok(Self {
             repo_root,
-            ui: args.ui(),
+            ui,
             args,
             repo_config: OnceCell::new(),
             user_config: OnceCell::new(),
@@ -48,7 +51,7 @@ impl CommandBase {
     }
 
     fn create_repo_config(&self) -> Result<()> {
-        let repo_config_path = get_repo_config_path(&self.repo_root);
+        let repo_config_path = get_repo_config_path(self.repo_root.borrow());
 
         let repo_config = RepoConfigLoader::new(repo_config_path)
             .with_api(self.args.api.clone())
@@ -66,7 +69,7 @@ impl CommandBase {
     // currently do not have any commands that delete the repo config file
     // and then attempt to read from it.
     pub fn delete_repo_config_file(&mut self) -> Result<()> {
-        let repo_config_path = get_repo_config_path(&self.repo_root);
+        let repo_config_path = get_repo_config_path(self.repo_root.borrow());
         if repo_config_path.exists() {
             std::fs::remove_file(repo_config_path)?;
         }
@@ -167,7 +170,7 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::get_version;
+    use crate::{get_version, ui::UI};
 
     #[cfg(not(target_os = "windows"))]
     #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
@@ -177,7 +180,7 @@ mod test {
 
         let args = Args::default();
         let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version()).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true)).unwrap();
 
         let hash = command_base.repo_hash();
 
@@ -193,7 +196,7 @@ mod test {
 
         let args = Args::default();
         let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version()).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true)).unwrap();
 
         let hash = command_base.repo_hash();
 

@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	gitignore "github.com/sabhiram/go-gitignore"
+	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/encoding/gitoutput"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
@@ -26,145 +28,188 @@ type PackageDepsOptions struct {
 	InputPatterns []string
 }
 
-// GetPackageDeps Builds an object containing git hashes for the files under the specified `packagePath` folder.
-func GetPackageDeps(rootPath turbopath.AbsoluteSystemPath, p *PackageDepsOptions) (map[turbopath.AnchoredUnixPath]string, error) {
-	pkgPath := rootPath.UntypedJoin(p.PackagePath.ToStringDuringMigration())
+func safeCompileIgnoreFile(filepath turbopath.AbsoluteSystemPath) (*gitignore.GitIgnore, error) {
+	if filepath.FileExists() {
+		return gitignore.CompileIgnoreFile(filepath.ToString())
+	}
+	// no op
+	return gitignore.CompileIgnoreLines([]string{}...), nil
+}
+
+func getPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+	result := make(map[turbopath.AnchoredUnixPath]string)
+	absolutePackagePath := packagePath.RestoreAnchor(rootPath)
+
+	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
+	// the directory of a package.
+	ignore, err := safeCompileIgnoreFile(rootPath.UntypedJoin(".gitignore"))
+	if err != nil {
+		return nil, err
+	}
+
+	ignorePkg, err := safeCompileIgnoreFile(absolutePackagePath.UntypedJoin(".gitignore"))
+	if err != nil {
+		return nil, err
+	}
+
+	includePattern := ""
+	excludePattern := ""
+	if len(inputs) > 0 {
+		var includePatterns []string
+		var excludePatterns []string
+		for _, pattern := range inputs {
+			if len(pattern) > 0 && pattern[0] == '!' {
+				excludePatterns = append(excludePatterns, absolutePackagePath.UntypedJoin(pattern[1:]).ToString())
+			} else {
+				includePatterns = append(includePatterns, absolutePackagePath.UntypedJoin(pattern).ToString())
+			}
+		}
+		if len(includePatterns) > 0 {
+			includePattern = "{" + strings.Join(includePatterns, ",") + "}"
+		}
+		if len(excludePatterns) > 0 {
+			excludePattern = "{" + strings.Join(excludePatterns, ",") + "}"
+		}
+	}
+
+	err = fs.Walk(absolutePackagePath.ToStringDuringMigration(), func(name string, isDir bool) error {
+		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
+		rootMatch := ignore.MatchesPath(convertedName.ToString())
+		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
+		if !rootMatch && !otherMatch {
+			if !isDir {
+				if includePattern != "" {
+					val, err := doublestar.PathMatch(includePattern, convertedName.ToString())
+					if err != nil {
+						return err
+					}
+					if !val {
+						return nil
+					}
+				}
+				if excludePattern != "" {
+					val, err := doublestar.PathMatch(excludePattern, convertedName.ToString())
+					if err != nil {
+						return err
+					}
+					if val {
+						return nil
+					}
+				}
+				hash, err := fs.GitLikeHashFile(convertedName)
+				if err != nil {
+					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
+				}
+
+				relativePath, err := convertedName.RelativeTo(absolutePackagePath)
+				if err != nil {
+					return fmt.Errorf("File path cannot be made relative: %w", err)
+				}
+				result[relativePath.ToUnixPath()] = hash
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+	absolutePackagePath := packagePath.RestoreAnchor(rootPath)
 	// Add all the checked in hashes.
-	var result map[turbopath.AnchoredUnixPath]string
 
 	// make a copy of the inputPatterns array, because we may be appending to it later.
-	calculatedInputs := make([]string, len(p.InputPatterns))
-	copy(calculatedInputs, p.InputPatterns)
+	calculatedInputs := make([]string, len(inputs))
+	copy(calculatedInputs, inputs)
 
-	if len(calculatedInputs) == 0 {
-		gitLsTreeOutput, err := gitLsTree(pkgPath)
-		if err != nil {
-			return nil, fmt.Errorf("could not get git hashes for files in package %s: %w", p.PackagePath, err)
-		}
-		result = gitLsTreeOutput
+	// Add in package.json and turbo.json to input patterns. Both file paths are relative to pkgPath
+	//
+	// - package.json is an input because if the `scripts` in
+	// 		the package.json change (i.e. the tasks that turbo executes), we want
+	// 		a cache miss, since any existing cache could be invalid.
+	// - turbo.json because it's the definition of the tasks themselves. The root turbo.json
+	// 		is similarly included in the global hash. This file may not exist in the workspace, but
+	// 		that is ok, because it will get ignored downstream.
+	calculatedInputs = append(calculatedInputs, "package.json")
+	calculatedInputs = append(calculatedInputs, "turbo.json")
 
-		// Update the checked in hashes with the current repo status
-		// The paths returned from this call are anchored at the package directory
-		gitStatusOutput, err := gitStatus(pkgPath, calculatedInputs)
-		if err != nil {
-			return nil, fmt.Errorf("Could not get git hashes from git status: %v", err)
-		}
-
-		var filesToHash []turbopath.AnchoredSystemPath
-		for filePath, status := range gitStatusOutput {
-			if status.isDelete() {
-				delete(result, filePath)
-			} else {
-				filesToHash = append(filesToHash, filePath.ToSystemPath())
-			}
-		}
-
-		hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToString()), filesToHash)
-		if err != nil {
-			return nil, err
-		}
-
-		// Zip up file paths and hashes together
-		for filePath, hash := range hashes {
-			result[filePath] = hash
-		}
-	} else {
-		// Add in package.json and turbo.json to input patterns. Both file paths are relative to pkgPath
-		//
-		// - package.json is an input because if the `scripts` in
-		// 		the package.json change (i.e. the tasks that turbo executes), we want
-		// 		a cache miss, since any existing cache could be invalid.
-		// - turbo.json because it's the definition of the tasks themselves. The root turbo.json
-		// 		is similarly included in the global hash. This file may not exist in the workspace, but
-		// 		that is ok, because it will get ignored downstream.
-		calculatedInputs = append(calculatedInputs, "package.json")
-		calculatedInputs = append(calculatedInputs, "turbo.json")
-
-		// The input patterns are relative to the package.
-		// However, we need to change the globbing to be relative to the repo root.
-		// Prepend the package path to each of the input patterns.
-		prefixedInputPatterns := []string{}
-		prefixedExcludePatterns := []string{}
-		for _, pattern := range calculatedInputs {
-			if len(pattern) > 0 && pattern[0] == '!' {
-				rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern[1:]))
-				if err != nil {
-					return nil, err
-				}
-				prefixedExcludePatterns = append(prefixedExcludePatterns, rerooted)
-			} else {
-				rerooted, err := rootPath.PathTo(pkgPath.UntypedJoin(pattern))
-				if err != nil {
-					return nil, err
-				}
-				prefixedInputPatterns = append(prefixedInputPatterns, rerooted)
-			}
-		}
-		absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns)
-
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
-		}
-
-		filesToHash := make([]turbopath.AnchoredSystemPath, len(absoluteFilesToHash))
-		for i, rawPath := range absoluteFilesToHash {
-			relativePathString, err := pkgPath.RelativePathString(rawPath)
-
+	// The input patterns are relative to the package.
+	// However, we need to change the globbing to be relative to the repo root.
+	// Prepend the package path to each of the input patterns.
+	prefixedInputPatterns := []string{}
+	prefixedExcludePatterns := []string{}
+	for _, pattern := range calculatedInputs {
+		if len(pattern) > 0 && pattern[0] == '!' {
+			rerooted, err := rootPath.PathTo(absolutePackagePath.UntypedJoin(pattern[1:]))
 			if err != nil {
-				return nil, errors.Wrapf(err, "not relative to package: %v", rawPath)
+				return nil, err
 			}
-
-			filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
+			prefixedExcludePatterns = append(prefixedExcludePatterns, rerooted)
+		} else {
+			rerooted, err := rootPath.PathTo(absolutePackagePath.UntypedJoin(pattern))
+			if err != nil {
+				return nil, err
+			}
+			prefixedInputPatterns = append(prefixedInputPatterns, rerooted)
 		}
+	}
+	absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns)
 
-		hashes, err := gitHashObject(turbopath.AbsoluteSystemPathFromUpstream(pkgPath.ToStringDuringMigration()), filesToHash)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
+	}
+
+	filesToHash := make([]turbopath.AnchoredSystemPath, len(absoluteFilesToHash))
+	for i, rawPath := range absoluteFilesToHash {
+		relativePathString, err := absolutePackagePath.RelativePathString(rawPath)
+
 		if err != nil {
-			return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
+			return nil, errors.Wrapf(err, "not relative to package: %v", rawPath)
 		}
-		result = hashes
-		// Note that in this scenario, we don't need to check git status, we're using hash-object directly which
-		// hashes the current state, not state at a commit
+
+		filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
+	}
+
+	// Note that in this scenario, we don't need to check git status.
+	// We're hashing the current state, not state at a commit.
+	result, err := GetHashesForFiles(absolutePackagePath, filesToHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
 	}
 
 	return result, nil
 }
 
-func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	hashObject := make(map[turbopath.AnchoredUnixPath]string)
-	for _, file := range files {
-		hash, err := fs.GitLikeHashFile(file.ToString())
+// GetPackageFileHashes Builds an object containing git hashes for the files under the specified `packagePath` folder.
+func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+	if len(inputs) == 0 {
+		result, err := getPackageFileHashesFromGitIndex(rootPath, packagePath)
 		if err != nil {
-			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
+			return getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, nil)
 		}
-
-		hashObject[file.ToUnixPath()] = hash
+		return result, nil
 	}
-	return hashObject, nil
+
+	result, err := getPackageFileHashesFromInputs(rootPath, packagePath, inputs)
+	if err != nil {
+		return getPackageFileHashesFromProcessingGitIgnore(rootPath, packagePath, inputs)
+	}
+	return result, nil
 }
 
-// GetHashableDeps hashes the list of given files, then returns a map of normalized path to hash
-// this map is suitable for cross-platform caching.
-func GetHashableDeps(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	output := make([]turbopath.AnchoredSystemPath, len(files))
-	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
-
-	for index, file := range files {
-		anchoredSystemPath, err := file.RelativeTo(convertedRootPath)
-		if err != nil {
-			return nil, err
-		}
-		output[index] = anchoredSystemPath
-	}
-	hashObject, err := gitHashObject(convertedRootPath, output)
-	if err != nil {
-		manuallyHashedObject, err := manuallyHashFiles(convertedRootPath, output)
-		if err != nil {
-			return nil, err
-		}
-		hashObject = manuallyHashedObject
+// GetHashesForFiles hashes the list of given files, then returns a map of normalized path to hash.
+// This map is suitable for cross-platform caching.
+func GetHashesForFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	// Try to use `git` first.
+	gitHashedFiles, err := gitHashObject(rootPath, files)
+	if err == nil {
+		return gitHashedFiles, nil
 	}
 
-	return hashObject, nil
+	// Fall back to manual hashing.
+	return manuallyHashFiles(rootPath, files)
 }
 
 // gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths to `git hash-object`.
@@ -284,6 +329,19 @@ func gitHashObject(anchor turbopath.AbsoluteSystemPath, filesToHash []turbopath.
 	return output, nil
 }
 
+func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	hashObject := make(map[turbopath.AnchoredUnixPath]string)
+	for _, file := range files {
+		hash, err := fs.GitLikeHashFile(file.RestoreAnchor(rootPath))
+		if err != nil {
+			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
+		}
+
+		hashObject[file.ToUnixPath()] = hash
+	}
+	return hashObject, nil
+}
+
 // runGitCommand provides boilerplate command handling for `ls-tree`, `ls-files`, and `status`
 // Rather than doing string processing, it does stream processing of `stdout`.
 func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *gitoutput.Reader) ([][]string, error) {
@@ -395,67 +453,4 @@ type statusCode struct {
 
 func (s statusCode) isDelete() bool {
 	return s.x == "D" || s.y == "D"
-}
-
-// gitStatus returns a map of paths to their `git` status code. This can be used to identify what should
-// be done with files that do not currently match what is in the index.
-//
-// Note: `git status -z`'s relative path results are relative to the repository's location.
-// We need to calculate where the repository's location is in order to determine what the full path is
-// before we can return those paths relative to the calling directory, normalizing to the behavior of
-// `ls-files` and `ls-tree`.
-func gitStatus(rootPath turbopath.AbsoluteSystemPath, patterns []string) (map[turbopath.AnchoredUnixPath]statusCode, error) {
-	cmd := exec.Command(
-		"git",               // Using `git` from $PATH,
-		"status",            // tell me about the status of the working tree,
-		"--untracked-files", // including information about untracked files,
-		"--no-renames",      // do not detect renames,
-		"-z",                // with each file path relative to the repository root and \000-terminated,
-		"--",                // and any additional argument you see is a path, promise.
-	)
-	if len(patterns) == 0 {
-		cmd.Args = append(cmd.Args, ".") // Operate in the current directory instead of the root of the working tree.
-	} else {
-		// FIXME: Globbing is using `git`'s globbing rules which are not consistent with `doublestar``.
-		cmd.Args = append(cmd.Args, patterns...) // Pass in input patterns as arguments.
-	}
-	cmd.Dir = rootPath.ToString() // Include files only from this directory.
-
-	entries, err := runGitCommand(cmd, "status", gitoutput.NewStatusReader)
-	if err != nil {
-		return nil, err
-	}
-
-	output := make(map[turbopath.AnchoredUnixPath]statusCode, len(entries))
-	convertedRootPath := turbopath.AbsoluteSystemPathFromUpstream(rootPath.ToString())
-
-	traversePath, err := memoizedGetTraversePath(convertedRootPath)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, entry := range entries {
-		statusEntry := gitoutput.StatusEntry(entry)
-		// Anchored at repository.
-		pathFromStatus := turbopath.AnchoredUnixPathFromUpstream(statusEntry.GetField(gitoutput.Path))
-		var outputPath turbopath.AnchoredUnixPath
-
-		if len(traversePath) > 0 {
-			repositoryPath := convertedRootPath.Join(traversePath.ToSystemPath())
-			fileFullPath := pathFromStatus.ToSystemPath().RestoreAnchor(repositoryPath)
-
-			relativePath, err := fileFullPath.RelativeTo(convertedRootPath)
-			if err != nil {
-				return nil, err
-			}
-
-			outputPath = relativePath.ToUnixPath()
-		} else {
-			outputPath = pathFromStatus
-		}
-
-		output[outputPath] = statusCode{x: statusEntry.GetField(gitoutput.StatusX), y: statusEntry.GetField(gitoutput.StatusY)}
-	}
-
-	return output, nil
 }

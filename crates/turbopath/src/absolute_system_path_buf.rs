@@ -1,14 +1,7 @@
-#[cfg(not(windows))]
-use std::os::unix::fs::symlink as symlink_dir;
-#[cfg(not(windows))]
-use std::os::unix::fs::symlink as symlink_file;
-#[cfg(windows)]
-use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     ffi::OsStr,
-    fmt,
-    fs::{self, Metadata},
+    fmt, fs,
     io::{self, Write},
     path::{Components, Path, PathBuf},
 };
@@ -16,11 +9,25 @@ use std::{
 use serde::Serialize;
 
 use crate::{
-    AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError, RelativeSystemPathBuf,
+    AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
+    RelativeSystemPathBuf,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
-pub struct AbsoluteSystemPathBuf(PathBuf);
+pub struct AbsoluteSystemPathBuf(pub(crate) PathBuf);
+
+impl Borrow<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
+    fn borrow(&self) -> &AbsoluteSystemPath {
+        let path = self.as_path();
+        unsafe { &*(path as *const Path as *const AbsoluteSystemPath) }
+    }
+}
+
+impl AsRef<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
+    fn as_ref(&self) -> &AbsoluteSystemPath {
+        self.borrow()
+    }
+}
 
 impl AbsoluteSystemPathBuf {
     /// Create a new AbsoluteSystemPathBuf from `unchecked_path`.
@@ -51,10 +58,10 @@ impl AbsoluteSystemPathBuf {
     /// #[cfg(not(windows))]
     /// assert_eq!(absolute_path.as_path(), Path::new("/Users/user"));
     /// ```
-    pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathValidationError> {
+    pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathError> {
         let unchecked_path = unchecked_path.into();
         if !unchecked_path.is_absolute() {
-            return Err(PathValidationError::NotAbsolute(unchecked_path));
+            return Err(PathValidationError::NotAbsolute(unchecked_path).into());
         }
 
         let system_path = unchecked_path.into_system()?;
@@ -92,8 +99,8 @@ impl AbsoluteSystemPathBuf {
     /// ```
     pub fn anchor(
         &self,
-        path: &AbsoluteSystemPathBuf,
-    ) -> Result<AnchoredSystemPathBuf, PathValidationError> {
+        path: impl AsRef<AbsoluteSystemPath>,
+    ) -> Result<AnchoredSystemPathBuf, PathError> {
         AnchoredSystemPathBuf::new(self, path)
     }
 
@@ -131,6 +138,10 @@ impl AbsoluteSystemPathBuf {
         self.0.as_path()
     }
 
+    pub fn as_absolute_path(&self) -> &AbsoluteSystemPath {
+        self.borrow()
+    }
+
     pub fn components(&self) -> Components<'_> {
         self.0.components()
     }
@@ -154,7 +165,15 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn join_literal(&self, segment: &str) -> Self {
-        AbsoluteSystemPathBuf(self.0.join(Path::new(segment)))
+        AbsoluteSystemPathBuf(self.0.join(segment))
+    }
+
+    pub fn join_unix_path_literal<S: AsRef<str>>(
+        &self,
+        unix_path: S,
+    ) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let tail = Path::new(unix_path.as_ref()).into_system()?;
+        Ok(AbsoluteSystemPathBuf(self.0.join(tail)))
     }
 
     pub fn ensure_dir(&self) -> Result<(), io::Error> {
@@ -165,37 +184,24 @@ impl AbsoluteSystemPathBuf {
         }
     }
 
+    pub fn create_dir_all(&self) -> Result<(), io::Error> {
+        fs::create_dir_all(self.0.as_path())
+    }
+
     pub fn remove(&self) -> Result<(), io::Error> {
         fs::remove_file(self.0.as_path())
     }
 
     pub fn set_readonly(&self) -> Result<(), PathError> {
-        let mut perms = self.metadata()?.permissions();
+        let metadata = fs::symlink_metadata(self)?;
+        let mut perms = metadata.permissions();
         perms.set_readonly(true);
         fs::set_permissions(self.0.as_path(), perms)?;
         Ok(())
     }
 
     pub fn is_readonly(&self) -> Result<bool, PathError> {
-        Ok(self.metadata()?.permissions().readonly())
-    }
-
-    pub fn symlink_to_file<P: AsRef<Path>>(&self, to: P) -> Result<(), PathError> {
-        let system_path = to.as_ref();
-        let system_path = system_path.into_system()?;
-        symlink_file(&system_path, &self.0.as_path())?;
-        Ok(())
-    }
-
-    pub fn symlink_to_dir<P: AsRef<Path>>(&self, to: P) -> Result<(), PathError> {
-        let system_path = to.as_ref();
-        let system_path = system_path.into_system()?;
-        symlink_dir(&system_path, &self.0.as_path())?;
-        Ok(())
-    }
-
-    pub fn read_symlink(&self) -> Result<PathBuf, io::Error> {
-        fs::read_link(self.0.as_path())
+        Ok(self.0.symlink_metadata()?.permissions().readonly())
     }
 
     pub fn create_with_contents(&self, contents: &str) -> Result<(), io::Error> {
@@ -226,18 +232,21 @@ impl AbsoluteSystemPathBuf {
         self.0.extension()
     }
 
-    pub fn metadata(&self) -> Result<Metadata, PathError> {
-        Ok(fs::symlink_metadata(&self.0)?)
-    }
-
-    // note that this is *not* lstat. If this is a symlink, it
-    // will return metadata for the target.
-    pub fn stat(&self) -> Result<Metadata, PathError> {
-        Ok(fs::metadata(&self.0)?)
-    }
-
     pub fn open(&self) -> Result<fs::File, PathError> {
         Ok(fs::File::open(&self.0)?)
+    }
+
+    pub fn to_realpath(&self) -> Result<Self, PathError> {
+        let realpath = fs::canonicalize(&self.0)?;
+        Ok(Self(realpath))
+    }
+
+    pub fn symlink_to_file(&self, target: impl AsRef<Path>) -> Result<(), PathError> {
+        self.as_absolute_path().symlink_to_file(target)
+    }
+
+    pub fn symlink_to_dir(&self, target: impl AsRef<Path>) -> Result<(), PathError> {
+        self.as_absolute_path().symlink_to_dir(target)
     }
 }
 
@@ -263,7 +272,7 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 mod tests {
     use std::assert_matches::assert_matches;
 
-    use crate::{AbsoluteSystemPathBuf, PathValidationError};
+    use crate::{AbsoluteSystemPathBuf, PathError, PathValidationError};
 
     #[cfg(not(windows))]
     #[test]
@@ -271,12 +280,16 @@ mod tests {
         assert!(AbsoluteSystemPathBuf::new("/Users/user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new("./Users/user/"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         );
 
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         );
     }
 
@@ -286,15 +299,21 @@ mod tests {
         assert!(AbsoluteSystemPathBuf::new("C:\\Users\\user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new(".\\Users\\user\\"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         );
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         );
         assert_matches!(
             AbsoluteSystemPathBuf::new("/Users/home"),
-            Err(PathValidationError::NotAbsolute(_))
+            Err(PathError::PathValidationError(
+                PathValidationError::NotAbsolute(_)
+            ))
         )
     }
 }

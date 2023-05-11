@@ -8,7 +8,7 @@ pub enum Error {
     MissingPackage(String),
     #[error("Missing version from non-workspace package: '{0}'")]
     MissingVersion(String),
-    #[error("Unable to convert from json")]
+    #[error("Unable to convert from json: {0}")]
     JsonError(#[from] serde_json::Error),
     #[error("Unable to convert to yaml: {0}")]
     Yaml(#[from] serde_yaml::Error),

@@ -33,6 +33,7 @@ type GlobalHashableInputs struct {
 	pipeline             fs.PristinePipeline
 	envVarPassthroughs   []string
 	envMode              util.EnvMode
+	frameworkInference   bool
 }
 
 type newGlobalHashable struct {
@@ -43,6 +44,7 @@ type newGlobalHashable struct {
 	pipeline             fs.PristinePipeline
 	envVarPassthroughs   []string
 	envMode              util.EnvMode
+	frameworkInference   bool
 }
 
 // newGlobalHash is a transformation of GlobalHashableInputs.
@@ -57,6 +59,7 @@ func newGlobalHash(full GlobalHashableInputs) (string, error) {
 		pipeline:             full.pipeline,
 		envVarPassthroughs:   full.envVarPassthroughs,
 		envMode:              full.envMode,
+		frameworkInference:   full.frameworkInference,
 	})
 }
 
@@ -94,6 +97,11 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 			return newGlobalHash(full)
 		}
 
+		// If you tell us not to infer framework you get the new hash.
+		if !full.frameworkInference {
+			return newGlobalHash(full)
+		}
+
 		// If we're in infer mode, and there is no global pass through config,
 		// we use the old struct layout. this will be true for everyone not using the strict env
 		// feature, and we don't want to break their cache.
@@ -123,6 +131,7 @@ func getGlobalHashInputs(
 	lockFile lockfile.Lockfile,
 	envVarPassthroughs []string,
 	envMode util.EnvMode,
+	frameworkInference bool,
 	logger hclog.Logger,
 	ui cli.Ui,
 	isStructuredOutput bool,
@@ -172,12 +181,18 @@ func getGlobalHashInputs(
 
 	// No prefix, global deps already have full paths
 	globalDepsArray := globalDeps.UnsafeListOfStrings()
-	globalDepsPaths := make([]turbopath.AbsoluteSystemPath, len(globalDepsArray))
+	globalDepsPaths := make([]turbopath.AnchoredSystemPath, len(globalDepsArray))
 	for i, path := range globalDepsArray {
-		globalDepsPaths[i] = turbopath.AbsoluteSystemPathFromUpstream(path)
+		fullyQualifiedPath := turbopath.AbsoluteSystemPathFromUpstream(path)
+		anchoredPath, err := fullyQualifiedPath.RelativeTo(rootpath)
+		if err != nil {
+			return GlobalHashableInputs{}, err
+		}
+
+		globalDepsPaths[i] = anchoredPath
 	}
 
-	globalFileHashMap, err := hashing.GetHashableDeps(rootpath, globalDepsPaths)
+	globalFileHashMap, err := hashing.GetHashesForFiles(rootpath, globalDepsPaths)
 	if err != nil {
 		return GlobalHashableInputs{}, fmt.Errorf("error hashing files: %w", err)
 	}
@@ -190,5 +205,6 @@ func getGlobalHashInputs(
 		pipeline:             pipeline.Pristine(),
 		envVarPassthroughs:   envVarPassthroughs,
 		envMode:              envMode,
+		frameworkInference:   frameworkInference,
 	}, nil
 }

@@ -1,11 +1,10 @@
 use std::{
-    backtrace::Backtrace,
-    collections::HashSet,
-    path::{Path, PathBuf},
-    process::Command,
+    backtrace::Backtrace, borrow::Borrow, collections::HashSet, path::PathBuf, process::Command,
 };
 
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
+};
 
 use crate::Error;
 
@@ -39,13 +38,17 @@ pub fn changed_files(
 
     let mut files = HashSet::new();
 
-    let output = execute_git_command(&git_root, &["diff", "--name-only", to_commit], pathspec)?;
+    let output = execute_git_command(
+        git_root.borrow(),
+        &["diff", "--name-only", to_commit],
+        pathspec,
+    )?;
 
     add_files_from_stdout(&mut files, &git_root, &turbo_root, output);
 
     if let Some(from_commit) = from_commit {
         let output = execute_git_command(
-            &git_root,
+            git_root.borrow(),
             &[
                 "diff",
                 "--name-only",
@@ -58,7 +61,7 @@ pub fn changed_files(
     }
 
     let output = execute_git_command(
-        &git_root,
+        git_root.borrow(),
         &["ls-files", "--others", "--exclude-standard"],
         pathspec,
     )?;
@@ -69,7 +72,7 @@ pub fn changed_files(
 }
 
 fn execute_git_command(
-    git_root: &AbsoluteSystemPathBuf,
+    git_root: &AbsoluteSystemPath,
     args: &[&str],
     pathspec: &str,
 ) -> Result<Vec<u8>, Error> {
@@ -96,13 +99,15 @@ fn add_pathspec(command: &mut Command, pathspec: &str) {
 
 fn add_files_from_stdout(
     files: &mut HashSet<String>,
-    git_root: &AbsoluteSystemPathBuf,
-    turbo_root: &AbsoluteSystemPathBuf,
+    git_root: impl AsRef<AbsoluteSystemPath>,
+    turbo_root: impl AsRef<AbsoluteSystemPath>,
     stdout: Vec<u8>,
 ) {
+    let git_root = git_root.as_ref();
+    let turbo_root = turbo_root.as_ref();
     let stdout = String::from_utf8(stdout).unwrap();
     for line in stdout.lines() {
-        let path = Path::new(line);
+        let path = RelativeUnixPath::new(&line).unwrap();
         let anchored_to_turbo_root_file_path =
             reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, path).unwrap();
         files.insert(
@@ -115,13 +120,12 @@ fn add_files_from_stdout(
 }
 
 fn reanchor_path_from_git_root_to_turbo_root(
-    git_root: &AbsoluteSystemPathBuf,
-    turbo_root: &AbsoluteSystemPathBuf,
-    path: &Path,
+    git_root: &AbsoluteSystemPath,
+    turbo_root: &AbsoluteSystemPath,
+    path: &RelativeUnixPath,
 ) -> Result<AnchoredSystemPathBuf, Error> {
-    let anchored_to_git_root_file_path: AnchoredSystemPathBuf = path.try_into()?;
-    let absolute_file_path = git_root.resolve(&anchored_to_git_root_file_path);
-    let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
+    let absolute_file_path = git_root.join_unix_path(path)?;
+    let anchored_to_turbo_root_file_path = turbo_root.anchor(absolute_file_path.borrow())?;
     Ok(anchored_to_turbo_root_file_path)
 }
 
@@ -185,7 +189,7 @@ mod tests {
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
-    use turbopath::PathValidationError;
+    use turbopath::{PathError, PathValidationError};
 
     use super::previous_content;
     use crate::{git::changed_files, Error};
@@ -615,7 +619,10 @@ mod tests {
 
         assert_matches!(
             turbo_root_is_not_subdir_of_git_root,
-            Err(Error::Path(PathValidationError::NotParent(_, _), _))
+            Err(Error::Path(
+                PathError::PathValidationError(PathValidationError::NotParent(_, _)),
+                _
+            ))
         );
 
         Ok(())

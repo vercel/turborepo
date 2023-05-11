@@ -72,6 +72,7 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 	opts.runOpts.Summarize = runPayload.Summarize
 	opts.runOpts.ExperimentalSpaceID = runPayload.ExperimentalSpaceID
 	opts.runOpts.EnvMode = runPayload.EnvMode
+	opts.runOpts.FrameworkInference = runPayload.FrameworkInference
 
 	// Runcache flags
 	opts.runcacheOpts.SkipReads = runPayload.Force
@@ -248,6 +249,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		pkgDepGraph.Lockfile,
 		turboJSON.GlobalPassthroughEnv,
 		r.opts.runOpts.EnvMode,
+		r.opts.runOpts.FrameworkInference,
 		r.base.Logger,
 		r.base.UI,
 		isStructuredOutput,

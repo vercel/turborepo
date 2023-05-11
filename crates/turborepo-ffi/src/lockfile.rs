@@ -23,7 +23,7 @@ impl From<Package> for proto::LockfilePackage {
 enum Error {
     #[error("error performing lockfile operation: {0}")]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("error decoding protobuf")]
+    #[error("error decoding protobuf: {0}")]
     Protobuf(#[from] prost::DecodeError),
     #[error(transparent)]
     BerryParse(#[from] turborepo_lockfiles::BerryError),

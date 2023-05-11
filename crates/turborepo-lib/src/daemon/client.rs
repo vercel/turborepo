@@ -3,7 +3,10 @@ use tonic::{Code, Status};
 use tracing::info;
 
 use self::proto::turbod_client::TurbodClient;
-use super::connector::{DaemonConnector, DaemonConnectorError};
+use super::{
+    connector::{DaemonConnector, DaemonConnectorError},
+    endpoint::SocketOpenError,
+};
 use crate::get_version;
 
 pub mod proto {
@@ -123,6 +126,8 @@ pub enum DaemonError {
     /// The server was connected but is now unavailable.
     #[error("server is unavailable")]
     Unavailable,
+    #[error("error opening socket: {0}")]
+    SocketOpen(#[from] SocketOpenError),
     /// The server is running a different version of turborepo.
     #[error("version mismatch")]
     VersionMismatch,
@@ -138,6 +143,18 @@ pub enum DaemonError {
     /// There was an issue connecting to the daemon.
     #[error("unable to connect: {0}")]
     DaemonConnect(#[from] DaemonConnectorError),
+    /// The timeout specified was invalid.
+    #[error("invalid timeout specified ({0})")]
+    InvalidTimeout(String),
+    /// The server is unable to start file watching.
+    #[error("unable to start file watching")]
+    FileWatching(#[from] globwatch::Error),
+
+    #[error("unable to display output: {0}")]
+    DisplayError(#[from] serde_json::Error),
+
+    #[error("unable to construct log file name: {0}")]
+    InvalidLogFile(#[from] time::Error),
 }
 
 impl From<Status> for DaemonError {
