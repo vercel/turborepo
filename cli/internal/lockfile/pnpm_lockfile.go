@@ -55,7 +55,7 @@ func (p *PnpmLockfile) Encode(w io.Writer) error {
 
 // Patches return a list of patches used in the lockfile
 func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
-	rawPatches := ffi.Patches(p.contents, "berry")
+	rawPatches := ffi.Patches(p.contents, "pnpm")
 	if len(rawPatches) == 0 {
 		return nil
 	}
@@ -69,10 +69,10 @@ func (p *PnpmLockfile) Patches() []turbopath.AnchoredUnixPath {
 // GlobalChange checks if there are any differences between lockfiles that would completely invalidate
 // the cache.
 func (p *PnpmLockfile) GlobalChange(other Lockfile) bool {
-	o, ok := other.(*BerryLockfile)
+	o, ok := other.(*PnpmLockfile)
 	if !ok {
 		return true
 	}
 
-	return ffi.GlobalChange("berry", o.contents, p.contents)
+	return ffi.GlobalChange("pnpm", o.contents, p.contents)
 }

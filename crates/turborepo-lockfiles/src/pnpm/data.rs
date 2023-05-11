@@ -10,13 +10,20 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 #[serde(rename_all = "camelCase")]
 pub struct PnpmLockfile {
     lockfile_version: LockfileVersion,
+    #[serde(skip_serializing_if = "Option::is_none")]
     never_built_dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     only_built_dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     overrides: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     package_extensions_checksum: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     patched_dependencies: Option<Map<String, PatchFile>>,
     importers: Map<String, ProjectSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     packages: Option<Map<String, PackageSnapshot>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
 }
 
@@ -31,7 +38,9 @@ pub struct PatchFile {
 pub struct ProjectSnapshot {
     #[serde(flatten)]
     dependencies: DependencyInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dependencies_meta: Option<Map<String, DependenciesMeta>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     publish_directory: Option<String>,
 }
 
@@ -40,15 +49,22 @@ pub struct ProjectSnapshot {
 pub enum DependencyInfo {
     #[serde(rename_all = "camelCase")]
     PreV6 {
+        #[serde(skip_serializing_if = "Option::is_none")]
         specifiers: Option<Map<String, String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         dependencies: Option<Map<String, String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         optional_dependencies: Option<Map<String, String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         dev_dependencies: Option<Map<String, String>>,
     },
     #[serde(rename_all = "camelCase")]
     V6 {
+        #[serde(skip_serializing_if = "Option::is_none")]
         dependencies: Option<Map<String, Dependency>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         optional_dependencies: Option<Map<String, Dependency>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         dev_dependencies: Option<Map<String, Dependency>>,
     },
 }
@@ -64,13 +80,19 @@ pub struct Dependency {
 pub struct PackageSnapshot {
     // can we make this flow?/is it necessary?
     resolution: PackageResolution,
+    #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     optional_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     patched: Option<bool>,
 
     #[serde(flatten)]
@@ -79,19 +101,27 @@ pub struct PackageSnapshot {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct DependenciesMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
     injected: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     node: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     patch: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PackageResolution {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     type_field: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     integrity: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     tarball: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dir: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     repo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     commit: Option<String>,
 }
 

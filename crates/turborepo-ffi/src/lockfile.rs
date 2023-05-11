@@ -173,6 +173,10 @@ fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
                 })
                 .collect::<Vec<_>>())
         }
+        proto::PackageManager::Pnpm => {
+            let lockfile = PnpmLockfile::from_bytes(&request.contents)?;
+            Ok(lockfile.patches())
+        }
         pm => Err(Error::UnsupportedPackageManager(pm)),
     }?;
     Ok(proto::Patches { patches })
