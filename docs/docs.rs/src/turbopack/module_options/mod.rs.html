@@ -493,15 +493,6 @@
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -520,9 +511,7 @@
 <span class="kw">use </span>turbopack_css::{CssInputTransform, CssInputTransformsVc};
 <span class="kw">use </span>turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType,
-    TransformPluginVc,
 };
-<span class="kw">use </span>turbopack_ecmascript_plugins::transform::emotion::build_emotion_transformer;
 <span class="kw">use </span>turbopack_mdx::MdxTransformOptions;
 <span class="kw">use </span>turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
@@ -568,7 +557,6 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsVc&gt; {
         <span class="kw">let </span>ModuleOptionsContext {
             enable_jsx,
-            <span class="kw-2">ref </span>enable_emotion,
             enable_react_refresh,
             enable_styled_jsx,
             <span class="kw-2">ref </span>enable_styled_components,
@@ -628,12 +616,6 @@
         // Styled JSX, there won&#39;t be JSX nodes for Styled JSX to transform.
         </span><span class="kw">if </span>enable_styled_jsx {
             transforms.push(EcmascriptInputTransform::StyledJsx);
-        }
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(transformer) = build_emotion_transformer(enable_emotion).<span class="kw">await</span><span class="question-mark">? </span>{
-            transforms.push(EcmascriptInputTransform::Plugin(TransformPluginVc::cell(
-                transformer,
-            )));
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_styled_components) = enable_styled_components {

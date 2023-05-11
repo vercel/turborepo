@@ -193,54 +193,14 @@
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
 <a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
 <span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransform, TransformPluginVc};
-<span class="kw">use </span>turbopack_ecmascript_plugins::transform::emotion::EmotionTransformConfigVc;
+<span class="kw">use </span>turbopack_ecmascript_plugins::transform::{
+    emotion::EmotionTransformConfigVc, styled_components::StyledComponentsTransformConfigVc,
+};
 <span class="kw">use </span>turbopack_node::{
     execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderConfigItemsVc,
 };
@@ -347,50 +307,6 @@
 </span><span class="kw">pub struct </span>JsxTransformOptions {
     <span class="kw">pub </span>import_source: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>runtime: <span class="prelude-ty">Option</span>&lt;String&gt;,
-}
-
-<span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>OptionStyledComponentsTransformConfig(<span class="prelude-ty">Option</span>&lt;StyledComponentsTransformConfigVc&gt;);
-
-<span class="attr">#[turbo_tasks::value(shared)]
-#[derive(Clone, Debug)]
-#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
-</span><span class="kw">pub struct </span>StyledComponentsTransformConfig {
-    <span class="kw">pub </span>display_name: bool,
-    <span class="kw">pub </span>ssr: bool,
-    <span class="kw">pub </span>file_name: bool,
-    <span class="kw">pub </span>top_level_import_paths: Vec&lt;String&gt;,
-    <span class="kw">pub </span>meaningless_file_names: Vec&lt;String&gt;,
-    <span class="kw">pub </span>css_prop: bool,
-    <span class="kw">pub </span>namespace: <span class="prelude-ty">Option</span>&lt;String&gt;,
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>StyledComponentsTransformConfig {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        StyledComponentsTransformConfig {
-            display_name: <span class="bool-val">true</span>,
-            ssr: <span class="bool-val">true</span>,
-            file_name: <span class="bool-val">true</span>,
-            top_level_import_paths: <span class="macro">vec!</span>[],
-            meaningless_file_names: <span class="macro">vec!</span>[<span class="string">&quot;index&quot;</span>.to_string()],
-            css_prop: <span class="bool-val">true</span>,
-            namespace: <span class="prelude-val">None</span>,
-        }
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>StyledComponentsTransformConfigVc {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(Default::default())
-    }
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>StyledComponentsTransformConfigVc {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::default()
-    }
 }
 
 <span class="doccomment">/// Configuration options for the custom ecma transform to be applied.
