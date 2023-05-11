@@ -77,10 +77,10 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalPassThroughEnv
    *
-   * @default []
+   * @default null
    * @deprecated
    */
-  experimentalGlobalPassThroughEnv?: string[];
+  experimentalGlobalPassThroughEnv?: null | string[];
 
   /**
    * An allowlist of environment variables that should be made to all tasks, but
@@ -88,9 +88,9 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalPassThroughEnv
    *
-   * @default []
+   * @default null
    */
-  globalPassThroughEnv?: string[];
+  globalPassThroughEnv?: null | string[];
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
@@ -142,10 +142,10 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/refernce/configuration#passThroughEnv
    *
-   * @default []
+   * @default null
    * @deprecated
    */
-  experimentalPassThroughEnv?: string[];
+  experimentalPassThroughEnv?: null | string[];
 
   /**
    * An allowlist of environment variables that should be made available in this
@@ -154,9 +154,9 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/refernce/configuration#passThroughEnv
    *
-   * @default []
+   * @default null
    */
-  passThroughEnv?: string[];
+  passThroughEnv?: null | string[];
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.
