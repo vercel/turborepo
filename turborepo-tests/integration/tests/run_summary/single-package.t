@@ -39,6 +39,7 @@ Check
     "scm",
     "tasks",
     "turboVersion",
+    "user",
     "version"
   ]
 
