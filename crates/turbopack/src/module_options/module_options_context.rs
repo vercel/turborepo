@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::trace::TraceRawVcs;
 use turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
 use turbopack_ecmascript::{EcmascriptInputTransform, TransformPluginVc};
-use turbopack_ecmascript_plugins::transform::emotion::EmotionTransformConfigVc;
+use turbopack_ecmascript_plugins::transform::{
+    emotion::EmotionTransformConfigVc, styled_components::StyledComponentsTransformConfigVc,
+};
 use turbopack_node::{
     execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderConfigItemsVc,
 };
@@ -112,50 +114,6 @@ pub struct JsxTransformOptions {
     pub runtime: Option<String>,
 }
 
-#[turbo_tasks::value(transparent)]
-pub struct OptionStyledComponentsTransformConfig(Option<StyledComponentsTransformConfigVc>);
-
-#[turbo_tasks::value(shared)]
-#[derive(Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct StyledComponentsTransformConfig {
-    pub display_name: bool,
-    pub ssr: bool,
-    pub file_name: bool,
-    pub top_level_import_paths: Vec<String>,
-    pub meaningless_file_names: Vec<String>,
-    pub css_prop: bool,
-    pub namespace: Option<String>,
-}
-
-impl Default for StyledComponentsTransformConfig {
-    fn default() -> Self {
-        StyledComponentsTransformConfig {
-            display_name: true,
-            ssr: true,
-            file_name: true,
-            top_level_import_paths: vec![],
-            meaningless_file_names: vec!["index".to_string()],
-            css_prop: true,
-            namespace: None,
-        }
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl StyledComponentsTransformConfigVc {
-    #[turbo_tasks::function]
-    pub fn default() -> Self {
-        Self::cell(Default::default())
-    }
-}
-
-impl Default for StyledComponentsTransformConfigVc {
-    fn default() -> Self {
-        Self::default()
-    }
-}
-
 /// Configuration options for the custom ecma transform to be applied.
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
@@ -199,12 +157,6 @@ pub struct ModuleOptionsContext {
     pub enable_mdx_rs: bool,
     #[serde(default)]
     pub preset_env_versions: Option<EnvironmentVc>,
-    #[deprecated(note = "use custom_ecma_transform_plugins instead")]
-    #[serde(default)]
-    pub custom_ecmascript_app_transforms: Vec<EcmascriptInputTransform>,
-    #[deprecated(note = "use custom_ecma_transform_plugins instead")]
-    #[serde(default)]
-    pub custom_ecmascript_transforms: Vec<EcmascriptInputTransform>,
     #[serde(default)]
     pub custom_ecma_transform_plugins: Option<CustomEcmascriptTransformPluginsVc>,
     #[serde(default)]
