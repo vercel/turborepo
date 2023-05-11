@@ -12,7 +12,7 @@ pub enum Error {
     Yaml(#[from] serde_yaml::Error),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PnpmLockfileData {
     lockfile_version: LockfileVersion,
@@ -26,25 +26,25 @@ pub struct PnpmLockfileData {
     time: Option<Map<String, String>>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 struct LockfileVersion {
     version: String,
     format: VersionFormat,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum VersionFormat {
     String,
     Float,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PatchFile {
     path: String,
     hash: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSnapshot {
     #[serde(flatten)]
@@ -53,7 +53,7 @@ pub struct ProjectSnapshot {
     publish_directory: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum DependencyInfo {
     #[serde(rename_all = "camelCase")]
@@ -71,7 +71,7 @@ pub enum DependencyInfo {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct Dependency {
     specifier: String,
     version: String,
@@ -210,6 +210,13 @@ impl PnpmLockfileData {
         workspace_paths: &[String],
         packages: &[String],
     ) -> Result<Self, crate::Error> {
+        let importers = self
+            .importers
+            .iter()
+            .filter(|(key, _)| key.as_str() == "." || workspace_paths.contains(key))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Map<_, _>>();
+
         let mut pruned_packages = Map::new();
         for package in packages {
             let entry = self
@@ -217,7 +224,57 @@ impl PnpmLockfileData {
                 .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
             pruned_packages.insert(package.clone(), entry.clone());
         }
-        todo!()
+        for importer in importers.values() {
+            for dependency in
+                importer
+                    .dependencies_meta
+                    .iter()
+                    .flatten()
+                    .filter_map(|(dep, meta)| match meta.injected {
+                        Some(true) => Some(dep),
+                        _ => None,
+                    })
+            {
+                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
+                    panic!("TODO error handling")
+                };
+
+                let entry = self
+                    .get_packages(version)
+                    .ok_or_else(|| crate::Error::MissingPackage(version.into()))?;
+                pruned_packages.insert(version.to_string(), entry.clone());
+            }
+        }
+
+        let patches = self.patched_dependencies.as_ref().map(|patches| {
+            let mut pruned_patches = Map::new();
+            for dependency in pruned_packages.keys() {
+                let dp = DepPath::try_from(dependency.as_str()).unwrap();
+                let patch_key = format!("{}@{}", dp.name, dp.version);
+                if let Some(patch) = patches
+                    .get(&patch_key)
+                    .filter(|patch| dp.patch_hash() == Some(&patch.hash))
+                {
+                    pruned_patches.insert(patch_key, patch.clone());
+                }
+            }
+            pruned_patches
+        });
+
+        Ok(Self {
+            importers,
+            packages: match pruned_packages.is_empty() {
+                false => Some(pruned_packages),
+                true => None,
+            },
+            lockfile_version: self.lockfile_version.clone(),
+            never_built_dependencies: self.never_built_dependencies.clone(),
+            only_built_dependencies: self.only_built_dependencies.clone(),
+            overrides: self.overrides.clone(),
+            package_extensions_checksum: self.package_extensions_checksum.clone(),
+            patched_dependencies: patches,
+            time: None,
+        })
     }
 }
 
@@ -391,6 +448,8 @@ mod tests {
     const PNPM_TOP_LEVEL_OVERRIDE: &[u8] =
         include_bytes!("../../fixtures/pnpm-top-level-dupe.yaml").as_slice();
     const PNPM_OVERRIDE: &[u8] = include_bytes!("../../fixtures/pnpm-override.yaml").as_slice();
+    const PNPM_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-patch.yaml").as_slice();
+    const PNPM_PATCH_V6: &[u8] = include_bytes!("../../fixtures/pnpm-patch-v6.yaml").as_slice();
 
     use super::*;
     use crate::Lockfile;
@@ -627,5 +686,56 @@ mod tests {
                 panic!("Mismatched result variants: {:?} {:?}", actual, expected)
             }
         }
+    }
+
+    #[test]
+    fn test_prune_patches() {
+        let lockfile = PnpmLockfileData::from_bytes(PNPM_PATCH).unwrap();
+        let pruned = lockfile
+            .subgraph(
+                &["packages/dependency".into()],
+                &[
+                    "/is-odd/3.0.1_nrrwwz7lemethtlvvm75r5bmhq".into(),
+                    "/is-number/6.0.0".into(),
+                    "/@babel/core/7.20.12_3hyn7hbvzkemudbydlwjmrb65y".into(),
+                    "/moleculer/0.14.28_5pk7ojv7qbqha75ozglk4y4f74_kumip57h7zlinbhp4gz3jrbqry"
+                        .into(),
+                ],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned.patches(),
+            vec![
+                "patches/@babel__core@7.20.12.patch",
+                "patches/is-odd@3.0.1.patch",
+                "patches/moleculer@0.14.28.patch",
+            ]
+        )
+    }
+
+    #[test]
+    fn test_prune_patches_v6() {
+        let lockfile = PnpmLockfileData::from_bytes(PNPM_PATCH_V6).unwrap();
+        let pruned = lockfile
+            .subgraph(
+                &["packages/a".into()],
+                &["/lodash@4.17.21(patch_hash=lgum37zgng4nfkynzh3cs7wdeq)".into()],
+            )
+            .unwrap();
+        assert_eq!(pruned.patches(), vec!["patches/lodash@4.17.21.patch"]);
+
+        let pruned =
+            lockfile
+                .subgraph(
+                    &["packages/b".into()],
+                    &["/@babel/helper-string-parser@7.19.\
+                       4(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0)"
+                        .into()],
+                )
+                .unwrap();
+        assert_eq!(
+            pruned.patches(),
+            vec!["patches/@babel__helper-string-parser@7.19.4.patch"]
+        )
     }
 }
