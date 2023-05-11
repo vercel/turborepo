@@ -11,19 +11,12 @@ fn verify_requirements() -> Result<()> {
         .stderr(Stdio::null())
         .status();
 
-    const ERROR_MSG: &str = "Unable to run generate - missing requirements (npx)";
     match output {
-        Ok(result) => {
-            if result.success() {
-                return Ok(());
-            }
-            return Err(anyhow::anyhow!(ERROR_MSG));
-        }
-        Err(_) => {
-            return Err(anyhow::anyhow!(ERROR_MSG));
+        Ok(result) if result.success() => Ok(()),
+        _ => {
+            Err(anyhow::anyhow!("Unable to run generate - missing requirements (npx)"))
         }
     }
-}
 
 fn call_turbo_gen(command: &str, tag: &String, raw_args: &str) -> Result<i32> {
     let mut npx = Command::new("npx");
