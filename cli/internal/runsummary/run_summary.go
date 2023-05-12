@@ -2,7 +2,6 @@
 package runsummary
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -13,7 +12,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/scm"
-	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
@@ -142,7 +140,7 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspace.Catalog) error {
+func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	if rsm.runType == runTypeDryJSON || rsm.runType == runTypeDryText {
 		return rsm.closeDryRun(workspaceInfos)
 	}
@@ -174,13 +172,11 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 		return nil
 	}
 
-	return rsm.sendToSpace(ctx)
+	return rsm.sendToSpace()
 }
 
-func (rsm *Meta) sendToSpace(ctx context.Context) error {
-	func() {
-		_ = spinner.WaitFor(ctx, rsm.record, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
-	}()
+func (rsm *Meta) sendToSpace() error {
+	rsm.spacesClient.done(rsm)
 
 	// After the spinner is done, print any errors and the url
 	errs := rsm.spacesClient.errors
@@ -241,11 +237,6 @@ func (rsm *Meta) save() error {
 	}
 
 	return summaryPath.WriteFile(json, 0644)
-}
-
-// record sends the summary to the API
-func (rsm *Meta) record() {
-	rsm.spacesClient.done(rsm)
 }
 
 // CloseTask posts the result of the Task to Spaces
