@@ -153,7 +153,7 @@ importers:
       eslint-config-turbo: ^1.9.3
       eslint-plugin-react: 7.28.0
     dependencies:
-      eslint-config-next: 13.4.1_vwh6htx42aidho2qgfca5u5rwm
+      eslint-config-next: 13.4.1_ip5up2nocltd47wbnuyybe5dxu
       eslint-config-prettier: 8.8.0_eslint@8.37.0
       eslint-config-turbo: 1.9.3_eslint@8.37.0
       eslint-plugin-react: 7.28.0_eslint@8.37.0
@@ -3083,7 +3083,7 @@ packages:
     dependencies:
       '@types/yargs-parser': 21.0.0
 
-  /@typescript-eslint/parser/5.57.0_vwh6htx42aidho2qgfca5u5rwm:
+  /@typescript-eslint/parser/5.57.0_ip5up2nocltd47wbnuyybe5dxu:
     resolution: {integrity: sha512-orrduvpWYkgLCyAdNtR1QIWovcNZlEm6yL8nwH/eTxWLd8gsP+25pdLHYzL2QdkqrieaDwLpytHqycncv0woUQ==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     peerDependencies:
@@ -3095,10 +3095,10 @@ packages:
     dependencies:
       '@typescript-eslint/scope-manager': 5.57.0
       '@typescript-eslint/types': 5.57.0
-      '@typescript-eslint/typescript-estree': 5.57.0_typescript@5.0.3
+      '@typescript-eslint/typescript-estree': 5.57.0_typescript@4.9.5
       debug: 4.3.4
       eslint: 8.37.0
-      typescript: 5.0.3
+      typescript: 4.9.5
     transitivePeerDependencies:
       - supports-color
     dev: false
@@ -3116,7 +3116,7 @@ packages:
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     dev: false
 
-  /@typescript-eslint/typescript-estree/5.57.0_typescript@5.0.3:
+  /@typescript-eslint/typescript-estree/5.57.0_typescript@4.9.5:
     resolution: {integrity: sha512-LTzQ23TV82KpO8HPnWuxM2V7ieXW8O142I7hQTxWIHDcCEIjtkat6H96PFkYBQqGFLW/G/eVVOB9Z8rcvdY/Vw==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     peerDependencies:
@@ -3131,8 +3131,8 @@ packages:
       globby: 11.1.0
       is-glob: 4.0.3
       semver: 7.3.8
-      tsutils: 3.21.0_typescript@5.0.3
-      typescript: 5.0.3
+      tsutils: 3.21.0_typescript@4.9.5
+      typescript: 4.9.5
     transitivePeerDependencies:
       - supports-color
     dev: false
@@ -4926,7 +4926,7 @@ packages:
     optionalDependencies:
       source-map: 0.6.1
 
-  /eslint-config-next/13.4.1_vwh6htx42aidho2qgfca5u5rwm:
+  /eslint-config-next/13.4.1_ip5up2nocltd47wbnuyybe5dxu:
     resolution: {integrity: sha512-ajuxjCkW1hvirr0EQZb3/B/bFH52Z7CT89uCtTcICFL9l30i5c8hN4p0LXvTjdOXNPV5fEDcxBgGHgXdzTj1/A==}
     peerDependencies:
       eslint: ^7.23.0 || ^8.0.0
@@ -4937,7 +4937,7 @@ packages:
     dependencies:
       '@next/eslint-plugin-next': 13.4.1
       '@rushstack/eslint-patch': 1.2.0
-      '@typescript-eslint/parser': 5.57.0_vwh6htx42aidho2qgfca5u5rwm
+      '@typescript-eslint/parser': 5.57.0_ip5up2nocltd47wbnuyybe5dxu
       eslint: 8.37.0
       eslint-import-resolver-node: 0.3.7
       eslint-import-resolver-typescript: 3.5.4_rbts4wm34tb3x7owcp777e4f4y
@@ -4945,7 +4945,7 @@ packages:
       eslint-plugin-jsx-a11y: 6.7.1_eslint@8.37.0
       eslint-plugin-react: 7.32.2_eslint@8.37.0
       eslint-plugin-react-hooks: 4.6.0_eslint@8.37.0
-      typescript: 5.0.3
+      typescript: 4.9.5
     transitivePeerDependencies:
       - eslint-import-resolver-webpack
       - supports-color
@@ -10090,14 +10090,14 @@ packages:
       - ts-node
     dev: true
 
-  /tsutils/3.21.0_typescript@5.0.3:
+  /tsutils/3.21.0_typescript@4.9.5:
     resolution: {integrity: sha512-mHKK3iUXL+3UF6xL5k0PEhKRUBKPBCv/+RkEOpjRWxxx27KKRBmmA60A9pgOUvMi8GKhRMPEmjBRPzs2W7O1OA==}
     engines: {node: '>= 6'}
     peerDependencies:
       typescript: '>=2.8.0 || >= 3.2.0-dev || >= 3.3.0-dev || >= 3.4.0-dev || >= 3.5.0-dev || >= 3.6.0-dev || >= 3.6.0-beta || >= 3.7.0-dev || >= 3.7.0-beta'
     dependencies:
       tslib: 1.14.1
-      typescript: 5.0.3
+      typescript: 4.9.5
     dev: false
 
   /turbo-darwin-64/1.9.3:
@@ -10217,12 +10217,6 @@ packages:
     resolution: {integrity: sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==}
     engines: {node: '>=4.2.0'}
     hasBin: true
-
-  /typescript/5.0.3:
-    resolution: {integrity: sha512-xv8mOEDnigb/tN9PSMTwSEqAnUvkoXMQlicOb0IUVDBSQCgBSaAAROUZYy2IcUy5qU6XajK5jjjO7TMWqBTKZA==}
-    engines: {node: '>=12.20'}
-    hasBin: true
-    dev: false
 
   /ufo/1.1.1:
     resolution: {integrity: sha512-MvlCc4GHrmZdAllBc0iUDowff36Q9Ndw/UzqmEKyrfSzokTd9ZCy1i+IIk5hrYKkjoYVQyNbrw7/F8XJ2rEwTg==}
