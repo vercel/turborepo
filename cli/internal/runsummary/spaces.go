@@ -92,6 +92,10 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	// We construc this first in makeRequest, because if makeURL fails, it's likely
 	// because we don't have a runID, which means that the first POST run failed. By checking this
 	// up front, we can avoid duplicate error messages for things like missing spaceID / linking.
+	//
+	// TODO: the purpose of this check up front is just to make sure runID is available for the
+	// requests that need it. Maybe we can leverage the c.run.created channel or another channel for
+	// this so it's more explicit?
 	if req.makeURL != nil {
 		if err := req.makeURL(req, c.run); err != nil {
 			c.errors = append(c.errors, err)
