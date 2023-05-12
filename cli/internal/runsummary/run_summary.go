@@ -120,7 +120,7 @@ func NewRunSummary(
 	}
 
 	rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui)
-	rsm.spacesClient.start()
+	go rsm.spacesClient.start()
 	rsm.spacesClient.createRun(&rsm)
 
 	return rsm

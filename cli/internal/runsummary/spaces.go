@@ -69,36 +69,17 @@ func (c *spacesClient) start() {
 		return
 	}
 
-	mu := sync.Mutex{}
-	firstReqDone := false
-	processors := 8
-	for i := 0; i < processors; i++ {
+	isFirstRequest := false
+	for req := range c.requests {
 		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			for req := range c.requests {
-				// since we have multiple processors, we want to lock firstReqDone so only the first one will mark firstReqDone
-				mu.Lock()
-				if !firstReqDone {
-					firstReqDone = true
-					mu.Unlock()
+		if !isFirstRequest {
+			isFirstRequest = true
+		} else {
+			<-c.run.created
+		}
 
-					// make the first request and then close the run.created channel
-					// as a signal that other requests can proceed.
-					go func(r *spaceRequest) {
-						c.makeRequest(r)
-						close(c.run.created)
-					}(req)
-
-				} else {
-					mu.Unlock()
-
-					// If this is not the first request, wait for the run to be created
-					<-c.run.created
-					go c.makeRequest(req)
-				}
-			}
-		}()
+		// Start the request in a goroutine so it is not blocking
+		go c.makeRequest(req)
 	}
 }
 
@@ -165,6 +146,8 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	if req.onDone != nil {
 		req.onDone(req, resp)
 	}
+
+	c.wg.Done()
 }
 
 func (c *spacesClient) createRun(rsm *Meta) {
@@ -180,6 +163,9 @@ func (c *spacesClient) createRun(rsm *Meta) {
 		// handler for when the request finishes. We set the response into a struct on the client
 		// because we need the run ID and URL from the server later.
 		onDone: func(req *spaceRequest, response []byte) {
+			// close the run.created channel, because all other requests are blocked on it
+			close(c.run.created)
+
 			if response == nil {
 				return
 			}
