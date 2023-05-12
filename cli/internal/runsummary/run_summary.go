@@ -29,9 +29,6 @@ const NoFrameworkDetected = "<NO FRAMEWORK DETECTED>"
 const FrameworkDetectionSkipped = "<FRAMEWORK DETECTION SKIPPED>"
 
 const runSummarySchemaVersion = "0"
-const runsEndpoint = "/v0/spaces/%s/runs"
-const runsPatchEndpoint = "/v0/spaces/%s/runs/%s"
-const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 
 type runType int
 

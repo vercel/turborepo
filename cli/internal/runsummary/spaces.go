@@ -9,6 +9,10 @@ import (
 	"github.com/vercel/turbo/cli/internal/client"
 )
 
+const runsEndpoint = "/v0/spaces/%s/runs"
+const runsPatchEndpoint = "/v0/spaces/%s/runs/%s"
+const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
+
 // spaceRequest contains all the information for a single request to Spaces
 type spaceRequest struct {
 	method   string
