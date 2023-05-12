@@ -73,7 +73,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 }
 
 func (c *spacesClient) start(rsm *Meta) {
-	if !rsm.apiClient.IsLinked() {
+	if !c.api.IsLinked() {
 		c.errors = append(c.errors, fmt.Errorf("Failed to post to space because repo is not linked to a Space. Run `turbo link` first"))
 		return
 	}

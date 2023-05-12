@@ -50,7 +50,6 @@ type Meta struct {
 	repoPath           turbopath.RelativeSystemPath
 	singlePackage      bool
 	shouldSave         bool
-	apiClient          *client.APIClient
 	spaceID            string
 	runType            runType
 	synthesizedCommand string
@@ -121,7 +120,6 @@ func NewRunSummary(
 		repoRoot:           repoRoot,
 		singlePackage:      singlePackage,
 		shouldSave:         shouldSave,
-		apiClient:          apiClient,
 		spaceID:            spaceID,
 		synthesizedCommand: synthesizedCommand,
 		spacesClient:       &spacesClient{api: apiClient, ui: ui},
