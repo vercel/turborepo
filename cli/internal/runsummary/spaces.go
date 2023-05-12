@@ -127,7 +127,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	}
 }
 
-func (c *spacesClient) start(rsm *Meta) {
+func (c *spacesClient) startRun(rsm *Meta) {
 	if rsm.spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post run"))
 		return
@@ -182,7 +182,7 @@ func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
 	})
 }
 
-func (c *spacesClient) done(rsm *Meta) {
+func (c *spacesClient) finishRun(rsm *Meta) {
 	if rsm.spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No spaceID found to send PATCH request"))
 		return
@@ -199,9 +199,12 @@ func (c *spacesClient) done(rsm *Meta) {
 		},
 		body: newSpacesDonePayload(rsm.RunSummary),
 	})
+}
 
-	// Close the channel since we are now down with all requests
-	close(c.requests)
+// Cloe will wait for all requests to finish
+func (c *spacesClient) Close() {
+	close(c.requests) // close out the channel since there should be no more requests
+	c.wg.Wait()       // wait for all requests to finish
 }
 
 type spacesClientSummary struct {

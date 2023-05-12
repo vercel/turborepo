@@ -122,7 +122,7 @@ func NewRunSummary(
 		spacesClient:       newSpacesClient(apiClient, ui),
 	}
 
-	rsm.spacesClient.start(&rsm)
+	rsm.spacesClient.startRun(&rsm)
 	return rsm
 }
 
@@ -165,8 +165,8 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 }
 
 func (rsm *Meta) sendToSpace() error {
-	rsm.spacesClient.done(rsm)
-	rsm.spacesClient.wg.Wait()
+	rsm.spacesClient.finishRun(rsm)
+	rsm.spacesClient.Close()
 
 	// Print any errors
 	if len(rsm.spacesClient.errors) > 0 {
