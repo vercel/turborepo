@@ -65,6 +65,8 @@ func (c *spacesClient) asyncRequest(req *spaceRequest) {
 }
 
 func (c *spacesClient) makeRequest(req *spaceRequest) {
+	defer c.wg.Done() // decrement waitgroup counter
+
 	// closure to make errors so we can consistently get the request details
 	makeError := func(msg string) error {
 		return fmt.Errorf("%s: %s - %s", req.method, req.url, msg)
@@ -74,10 +76,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 		c.errors = append(c.errors, makeError("Repo is not linked to a Space. Run `turbo link` first"))
 		return
 	}
-
-	req.debug("Executing")
-
-	defer c.wg.Done() // decrement waitgroup counter
 
 	// We only care about POST and PATCH right now
 	if req.method != "POST" && req.method != "PATCH" {
@@ -94,6 +92,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	// Make the request
 	var resp []byte
 	var reqErr error
+	req.debug("Executing")
 	if req.method == "POST" {
 		resp, reqErr = c.api.JSONPost(req.url, payload)
 	} else if req.method == "PATCH" {
