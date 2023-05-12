@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-glob-match = { version = "0.2.1", path = "../glob-match", features = ["unic-segment"] }
+globset = "0.4.10"
 itertools.workspace = true
 path-slash = "0.2.1"
 thiserror.workspace = true
