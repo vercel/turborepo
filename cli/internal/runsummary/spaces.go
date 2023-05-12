@@ -161,16 +161,11 @@ func (c *spacesClient) startRun() {
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
-	if c.run.ID == "" {
-		c.errors = append(c.errors, fmt.Errorf("No Run ID found to post task %s", task.TaskID))
-		return
-	}
-
 	c.asyncRequest(&spaceRequest{
 		method: "POST",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
 			if run.ID == "" {
-				return fmt.Errorf("No Run ID found to send PATCH request")
+				return fmt.Errorf("No Run ID found to post task %s", task.TaskID)
 			}
 			self.url = fmt.Sprintf(tasksEndpoint, c.rsm.spaceID, run.ID)
 			return nil
