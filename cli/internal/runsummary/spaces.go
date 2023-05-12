@@ -71,6 +71,7 @@ func (c *spacesClient) start() {
 		go func() {
 			defer c.wg.Done()
 			for req := range c.requests {
+				// since we have multiple processors, we want to lock firstReqDone so only the first one will mark firstReqDone
 				mu.Lock()
 				if !firstReqDone {
 					firstReqDone = true
