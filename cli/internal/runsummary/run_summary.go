@@ -119,7 +119,7 @@ func NewRunSummary(
 		shouldSave:         shouldSave,
 		spaceID:            spaceID,
 		synthesizedCommand: synthesizedCommand,
-		spacesClient:       &spacesClient{api: apiClient, ui: ui},
+		spacesClient:       newSpacesClient(apiClient, ui),
 	}
 
 	rsm.spacesClient.start(&rsm)
@@ -172,6 +172,8 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 
 func (rsm *Meta) sendToSpace() error {
 	rsm.spacesClient.done(rsm)
+
+	rsm.spacesClient.wg.Wait()
 
 	// Print any errors
 	if len(rsm.spacesClient.errors) > 0 {

@@ -3,6 +3,7 @@ package runsummary
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/ci"
@@ -21,12 +22,17 @@ type spaceRequest struct {
 	response []byte
 }
 
+func (req *spaceRequest) debug(msg string) {
+	fmt.Printf("[%s] %s: %s\n", req.method, req.url, msg)
+}
+
 type spacesClient struct {
-	requests []*spaceRequest
+	requests chan *spaceRequest
 	errors   []error
 	api      *client.APIClient
 	ui       cli.Ui
 	run      *spaceRun
+	wg       sync.WaitGroup
 }
 
 type spaceRun struct {
@@ -34,7 +40,34 @@ type spaceRun struct {
 	URL string
 }
 
+func newSpacesClient(api *client.APIClient, ui cli.Ui) *spacesClient {
+	c := &spacesClient{
+		api:      api,
+		ui:       ui,
+		requests: make(chan *spaceRequest), // TODO: give this a size based on tasks
+	}
+
+	// Start receiving requests
+	// TODO: how to make this goroutine block on the very first request?
+	go func() {
+		for req := range c.requests {
+			c.makeRequest(req)
+		}
+	}()
+
+	return c
+}
+
+func (c *spacesClient) asyncRequest(req *spaceRequest) {
+	c.wg.Add(1) // increment waitgroup counter
+	req.debug("Queuing")
+	c.requests <- req
+}
+
 func (c *spacesClient) makeRequest(req *spaceRequest) {
+	req.debug("Executing")
+
+	defer c.wg.Done() // decrement waitgroup counter
 	// closure to make errors so we can consistently get the request details
 	makeError := func(msg string) error {
 		return fmt.Errorf("%s: %s - %s", req.method, req.url, msg)
@@ -69,10 +102,8 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	}
 
 	// If there are no errors, we can assign the response back to the request so we can read it later
+	req.debug("Assigning response")
 	req.response = resp
-
-	// Append into global requests
-	c.requests = append(c.requests, req)
 }
 
 func (c *spacesClient) start(rsm *Meta) {
@@ -88,7 +119,7 @@ func (c *spacesClient) start(rsm *Meta) {
 	}
 
 	// This will assign the response to the request if all is well
-	c.makeRequest(req)
+	c.asyncRequest(req)
 
 	// Set a default, empty one here, so we'll have something downstream and not a segfault
 	c.run = &spaceRun{}
@@ -96,6 +127,8 @@ func (c *spacesClient) start(rsm *Meta) {
 	if req.response == nil {
 		return
 	}
+
+	// TODO: how to make this code run after the asyncRequest here has been fully processed?
 
 	// unmarshal the response into our c.run struct and catch errors
 	if err := json.Unmarshal(req.response, c.run); err != nil {
@@ -119,7 +152,7 @@ func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
 		return
 	}
 
-	c.makeRequest(&spaceRequest{
+	c.asyncRequest(&spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(tasksEndpoint, rsm.spaceID, c.run.ID),
 		body:   newSpacesTaskPayload(task),
@@ -142,11 +175,14 @@ func (c *spacesClient) done(rsm *Meta) {
 		return
 	}
 
-	c.makeRequest(&spaceRequest{
+	c.asyncRequest(&spaceRequest{
 		method: "PATCH",
 		url:    fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, c.run.ID),
 		body:   newSpacesDonePayload(rsm.RunSummary),
 	})
+
+	// Close the channel since we are now down with all requests
+	close(c.requests)
 }
 
 type spacesClientSummary struct {
