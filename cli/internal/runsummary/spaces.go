@@ -36,6 +36,7 @@ type spacesClient struct {
 	run      *spaceRun
 	wg       sync.WaitGroup
 	spaceID  string
+	enabled  bool
 }
 
 type spaceRun struct {
@@ -50,6 +51,7 @@ func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui, rsm *Meta
 		ui:       ui,
 		rsm:      rsm,
 		spaceID:  spaceID,
+		enabled:  spaceID != "",
 		requests: make(chan *spaceRequest), // TODO: give this a size based on tasks
 		// Set a default, empty one here, so we'll have something downstream and not a segfault
 		run: &spaceRun{
@@ -65,6 +67,10 @@ func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui, rsm *Meta
 // the response contains the run ID from the server, which we need to construct the
 // URLs of subsequent requests.
 func (c *spacesClient) start() {
+	if !c.enabled {
+		return
+	}
+
 	mu := sync.Mutex{}
 	firstReqDone := false
 	processors := 8
@@ -96,6 +102,10 @@ func (c *spacesClient) start() {
 }
 
 func (c *spacesClient) makeRequest(req *spaceRequest) {
+	if !c.enabled {
+		return
+	}
+
 	// The runID is required for POST task requests and PATCH run request
 	// so we have to construct it lazily for those requests.
 	// We construc this first in makeRequest, because if makeURL fails, it's likely
@@ -157,6 +167,10 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 }
 
 func (c *spacesClient) createRun() {
+	if !c.enabled {
+		return
+	}
+
 	c.requests <- &spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(runsEndpoint, c.spaceID),
@@ -177,6 +191,10 @@ func (c *spacesClient) createRun() {
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
+	if !c.enabled {
+		return
+	}
+
 	c.requests <- &spaceRequest{
 		method: "POST",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
@@ -191,6 +209,10 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 }
 
 func (c *spacesClient) finishRun() {
+	if !c.enabled {
+		return
+	}
+
 	c.requests <- &spaceRequest{
 		method: "PATCH",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
