@@ -104,7 +104,7 @@ func NewRunSummary(
 	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
 	envVars := env.GetEnvMap()
-	return Meta{
+	rsm := Meta{
 		RunSummary: &RunSummary{
 			ID:                 ksuid.New(),
 			Version:            runSummarySchemaVersion,
@@ -126,7 +126,11 @@ func NewRunSummary(
 		apiClient:          apiClient,
 		spaceID:            spaceID,
 		synthesizedCommand: synthesizedCommand,
+		spacesClient:       &spacesClient{api: apiClient, ui: ui},
 	}
+
+	rsm.spacesClient.start(&rsm)
+	return rsm
 }
 
 // getPath returns a path to where the runSummary is written.
@@ -174,8 +178,6 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 }
 
 func (rsm *Meta) sendToSpace(ctx context.Context) error {
-	rsm.spacesClient = &spacesClient{api: rsm.apiClient, ui: rsm.ui}
-
 	func() {
 		_ = spinner.WaitFor(ctx, rsm.record, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
 	}()
@@ -243,7 +245,6 @@ func (rsm *Meta) save() error {
 
 // record sends the summary to the API
 func (rsm *Meta) record() {
-	rsm.spacesClient.start(rsm)
 	rsm.postTaskSummaries()
 	rsm.spacesClient.done(rsm)
 }
