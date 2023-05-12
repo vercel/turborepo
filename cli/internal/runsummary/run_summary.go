@@ -166,7 +166,6 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 
 func (rsm *Meta) sendToSpace() error {
 	rsm.spacesClient.done(rsm)
-
 	rsm.spacesClient.wg.Wait()
 
 	// Print any errors

@@ -26,6 +26,10 @@ func (req *spaceRequest) debug(msg string) {
 	fmt.Printf("[%s] %s: %s\n", req.method, req.url, msg)
 }
 
+func (req *spaceRequest) error(msg string) error {
+	return fmt.Errorf("%s: %s - %s", req.method, req.url, msg)
+}
+
 type spacesClient struct {
 	requests chan *spaceRequest
 	errors   []error
@@ -67,25 +71,20 @@ func (c *spacesClient) asyncRequest(req *spaceRequest) {
 func (c *spacesClient) makeRequest(req *spaceRequest) {
 	defer c.wg.Done() // decrement waitgroup counter
 
-	// closure to make errors so we can consistently get the request details
-	makeError := func(msg string) error {
-		return fmt.Errorf("%s: %s - %s", req.method, req.url, msg)
-	}
-
 	if !c.api.IsLinked() {
-		c.errors = append(c.errors, makeError("Repo is not linked to a Space. Run `turbo link --target=spaces` first"))
+		c.errors = append(c.errors, req.error("Repo is not linked to a Space. Run `turbo link --target=spaces` first"))
 		return
 	}
 
 	// We only care about POST and PATCH right now
 	if req.method != "POST" && req.method != "PATCH" {
-		c.errors = append(c.errors, makeError(fmt.Sprintf("Unsupported method %s", req.method)))
+		c.errors = append(c.errors, req.error(fmt.Sprintf("Unsupported method %s", req.method)))
 		return
 	}
 
 	payload, err := json.Marshal(req.body)
 	if err != nil {
-		c.errors = append(c.errors, makeError(fmt.Sprintf("Failed to create payload: %s", err)))
+		c.errors = append(c.errors, req.error(fmt.Sprintf("Failed to create payload: %s", err)))
 		return
 	}
 
@@ -98,11 +97,11 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	} else if req.method == "PATCH" {
 		resp, reqErr = c.api.JSONPatch(req.url, payload)
 	} else {
-		c.errors = append(c.errors, makeError("Unsupported request method"))
+		c.errors = append(c.errors, req.error("Unsupported request method"))
 	}
 
 	if reqErr != nil {
-		c.errors = append(c.errors, makeError(fmt.Sprintf("%s", reqErr)))
+		c.errors = append(c.errors, req.error(fmt.Sprintf("%s", reqErr)))
 		return
 	}
 
