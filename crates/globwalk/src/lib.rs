@@ -54,7 +54,7 @@ pub fn globwalk<'a>(
     // we enable following symlinks but only because without it they are ignored
     // completely (as opposed to yielded but not followed)
 
-    let walker = walkdir::WalkDir::new(base_path.as_path()).follow_links(true);
+    let walker = walkdir::WalkDir::new(base_path.as_path()).follow_links(false);
     let mut iter = walker.into_iter();
 
     let include = include
@@ -91,7 +91,7 @@ pub fn globwalk<'a>(
         };
 
         let relative_path = path.strip_prefix(&base_path).expect("it is a subdir");
-        let is_directory = path.is_dir();
+        let is_directory = !path.is_symlink() && path.is_dir();
 
         let include = match do_match_directory(relative_path, &include, &exclude, is_directory) {
             Ok(include) => include,
