@@ -27,7 +27,7 @@ func (req *spaceRequest) debug(msg string) {
 }
 
 func (req *spaceRequest) error(msg string) error {
-	return fmt.Errorf("%s: %s - %s", req.method, req.url, msg)
+	return fmt.Errorf("[%s] %s: %s", req.method, req.url, msg)
 }
 
 type spacesClient struct {
