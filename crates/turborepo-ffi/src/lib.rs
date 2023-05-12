@@ -155,7 +155,7 @@ pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
         }
     };
 
-    let response = match turborepo_fs::recursive_copy(&src, &dst) {
+    let response = match turborepo_fs::recursive_copy(src, dst) {
         Ok(()) => proto::RecursiveCopyResponse { error: None },
         Err(e) => proto::RecursiveCopyResponse {
             error: Some(e.to_string()),

@@ -11,7 +11,10 @@ import (
 
 	"github.com/mitchellh/cli"
 	"github.com/segmentio/ksuid"
+	"github.com/vercel/turbo/cli/internal/ci"
 	"github.com/vercel/turbo/cli/internal/client"
+	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/scm"
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -68,6 +71,7 @@ type RunSummary struct {
 	FrameworkInference bool               `json:"frameworkInference"`
 	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
 	Tasks              []*TaskSummary     `json:"tasks"`
+	User               string             `json:"user"`
 	SCM                *scmState          `json:"scm"`
 }
 
@@ -100,6 +104,7 @@ func NewRunSummary(
 
 	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
+	envVars := env.GetEnvMap()
 	return Meta{
 		RunSummary: &RunSummary{
 			ID:                 ksuid.New(),
@@ -111,7 +116,8 @@ func NewRunSummary(
 			FrameworkInference: runOpts.FrameworkInference,
 			Tasks:              []*TaskSummary{},
 			GlobalHashSummary:  globalHashSummary,
-			SCM:                getSCMState(repoRoot),
+			SCM:                getSCMState(envVars, repoRoot),
+			User:               getUser(envVars, repoRoot),
 		},
 		ui:                 ui,
 		runType:            runType,
@@ -328,4 +334,19 @@ func (rsm *Meta) postTaskSummaries(runID string) []error {
 	}
 
 	return nil
+}
+
+func getUser(envVars env.EnvironmentVariableMap, dir turbopath.AbsoluteSystemPath) string {
+	var username string
+
+	if ci.IsCi() {
+		vendor := ci.Info()
+		username = envVars[vendor.UsernameEnvVar]
+	}
+
+	if username == "" {
+		username = scm.GetCurrentUser(dir)
+	}
+
+	return username
 }
