@@ -47,10 +47,10 @@ type Meta struct {
 	repoPath           turbopath.RelativeSystemPath
 	singlePackage      bool
 	shouldSave         bool
+	spacesClient       *spacesClient
 	spaceID            string
 	runType            runType
 	synthesizedCommand string
-	spacesClient       *spacesClient
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
