@@ -35,6 +35,7 @@ type spacesClient struct {
 	ui       cli.Ui
 	run      *spaceRun
 	wg       sync.WaitGroup
+	spaceID  string
 }
 
 type spaceRun struct {
@@ -43,11 +44,12 @@ type spaceRun struct {
 	created chan struct{} // a signal that the run has completed
 }
 
-func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient {
+func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient {
 	return &spacesClient{
 		api:      api,
 		ui:       ui,
 		rsm:      rsm,
+		spaceID:  spaceID,
 		requests: make(chan *spaceRequest), // TODO: give this a size based on tasks
 		// Set a default, empty one here, so we'll have something downstream and not a segfault
 		run: &spaceRun{
@@ -110,7 +112,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 		}
 	}
 
-	if c.rsm.spaceID == "" {
+	if c.spaceID == "" {
 		c.errors = append(c.errors, req.error("No spaceID found"))
 		return
 	}
@@ -157,7 +159,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 func (c *spacesClient) createRun() {
 	c.requests <- &spaceRequest{
 		method: "POST",
-		url:    fmt.Sprintf(runsEndpoint, c.rsm.spaceID),
+		url:    fmt.Sprintf(runsEndpoint, c.spaceID),
 		body:   newSpacesRunCreatePayload(c.rsm),
 
 		// handler for when the request finishes. We set the response into a struct on the client
@@ -181,7 +183,7 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 			if run.ID == "" {
 				return fmt.Errorf("No Run ID found to post task %s", task.TaskID)
 			}
-			self.url = fmt.Sprintf(tasksEndpoint, c.rsm.spaceID, run.ID)
+			self.url = fmt.Sprintf(tasksEndpoint, c.spaceID, run.ID)
 			return nil
 		},
 		body: newSpacesTaskPayload(task),
@@ -195,7 +197,7 @@ func (c *spacesClient) finishRun() {
 			if run.ID == "" {
 				return fmt.Errorf("No Run ID found to send PATCH request")
 			}
-			self.url = fmt.Sprintf(runsPatchEndpoint, c.rsm.spaceID, run.ID)
+			self.url = fmt.Sprintf(runsPatchEndpoint, c.spaceID, run.ID)
 			return nil
 		},
 		body: newSpacesDonePayload(c.rsm.RunSummary),

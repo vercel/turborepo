@@ -48,7 +48,6 @@ type Meta struct {
 	singlePackage      bool
 	shouldSave         bool
 	spacesClient       *spacesClient
-	spaceID            string
 	runType            runType
 	synthesizedCommand string
 }
@@ -117,13 +116,12 @@ func NewRunSummary(
 		repoRoot:           repoRoot,
 		singlePackage:      singlePackage,
 		shouldSave:         shouldSave,
-		spaceID:            spaceID,
 		synthesizedCommand: synthesizedCommand,
 	}
 
 	// Note: this sets up a bidirectional relationship
 	// rsm has a reference to the spacesClient, and spacesClient has a reference to rsm
-	rsm.spacesClient = newSpacesClient(apiClient, ui, &rsm)
+	rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui, &rsm)
 	rsm.spacesClient.start()
 	rsm.spacesClient.createRun()
 
