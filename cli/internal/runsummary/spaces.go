@@ -76,6 +76,8 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient 
 					c.makeRequest(req)
 					close(c.run.created) // close this channel to signal that other requests can proceed
 				} else {
+					// If this is not the first request, wait for the run to be created
+					<-c.run.created
 					mu.Unlock()
 					c.makeRequest(req)
 				}
@@ -165,9 +167,6 @@ func (c *spacesClient) startRun() {
 			}
 		},
 	}
-
-	// Wait for run to be created
-	<-c.run.created
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
