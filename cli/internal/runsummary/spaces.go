@@ -44,7 +44,7 @@ type spaceRun struct {
 }
 
 func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient {
-	c := &spacesClient{
+	return &spacesClient{
 		api:      api,
 		ui:       ui,
 		rsm:      rsm,
@@ -54,13 +54,15 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient 
 			created: make(chan struct{}, 1),
 		},
 	}
+}
 
-	// Start receiving and processing requests in 8 goroutines
-	// There is an additional marker (protected by a mutex) that indicates
-	// when the first request is done. All other requests are blocked on that one.
-	// This first request is the POST /run request. We need to block on it because
-	// the response contains the run ID from the server, which we need to construct the
-	// URLs of subsequent requests.
+// Start receiving and processing requests in 8 goroutines
+// There is an additional marker (protected by a mutex) that indicates
+// when the first request is done. All other requests are blocked on that one.
+// This first request is the POST /run request. We need to block on it because
+// the response contains the run ID from the server, which we need to construct the
+// URLs of subsequent requests.
+func (c *spacesClient) start() {
 	mu := sync.Mutex{}
 	firstReqDone := false
 	processors := 8
@@ -84,8 +86,6 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient 
 			}
 		}()
 	}
-
-	return c
 }
 
 func (c *spacesClient) makeRequest(req *spaceRequest) {
@@ -149,7 +149,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	}
 }
 
-func (c *spacesClient) startRun() {
+func (c *spacesClient) createRun() {
 	c.requests <- &spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(runsEndpoint, c.rsm.spaceID),

@@ -124,7 +124,8 @@ func NewRunSummary(
 	// Note: this sets up a bidirectional relationship
 	// rsm has a reference to the spacesClient, and spacesClient has a reference to rsm
 	rsm.spacesClient = newSpacesClient(apiClient, ui, &rsm)
-	rsm.spacesClient.startRun()
+	rsm.spacesClient.start()
+	rsm.spacesClient.createRun()
 
 	return rsm
 }
