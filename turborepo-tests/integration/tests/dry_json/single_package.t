@@ -30,6 +30,7 @@ Setup
       }
     },
     "envMode": "infer",
+    "frameworkInference": true,
     "tasks": [
       {
         "taskId": "build",
@@ -83,6 +84,7 @@ Setup
         }
       }
     ],
+    "user": ".*", (re)
     "scm": {
       "type": "git",
       "sha": "[a-z0-9]+", (re)

@@ -1,4 +1,3 @@
-import fs from "fs-extra";
 import { execSync } from "child_process";
 import path from "path";
 import rimraf from "rimraf";

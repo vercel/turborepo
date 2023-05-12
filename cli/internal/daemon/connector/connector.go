@@ -128,6 +128,7 @@ const (
 	_maxAttempts       = 10
 	_shutdownTimeout   = 1 * time.Second
 	_socketPollTimeout = 1 * time.Second
+	_notReadyTimeout   = 3 * time.Millisecond
 )
 
 // killLiveServer tells a running server to shut down. This method is also responsible
@@ -254,8 +255,11 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 			}
 			// Loops back around and tries again.
 		} else if errors.Is(err, errUnavailable) {
-			// close the client, see if we can kill the stale daemon
+			// The rust daemon will open the socket a few ms before it's ready to accept connections.
+			// If we get here, we know that the socket exists, but the server isn't ready yet.
+			// We'll wait a few ms and try again.
 			c.Logger.Debug("server not ready yet")
+			time.Sleep(_notReadyTimeout)
 		} else if err != nil {
 			// Some other error occurred, close the client and
 			// report the error to the user
@@ -371,7 +375,7 @@ func (c *Connector) waitForSocket() error {
 
 // startDaemon starts the daemon and returns the pid for the new process
 func (c *Connector) startDaemon() (int, error) {
-	args := []string{"daemon"}
+	args := []string{"--skip-infer", "daemon"}
 	if c.Opts.ServerTimeout != 0 {
 		args = append(args, fmt.Sprintf("--idle-time=%v", c.Opts.ServerTimeout.String()))
 	}

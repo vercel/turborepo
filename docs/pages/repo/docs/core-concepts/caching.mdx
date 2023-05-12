@@ -261,6 +261,10 @@ To alter the cache for _all_ tasks, you can declare environment variables in the
 
 ### Automatic environment variable inclusion
 
+<Callout type="info">
+  This feature can be disabled by passing [`--framework-inference=false`](../reference/command-line-reference#--framework-inference) to your `turbo` command.
+</Callout>
+
 To help ensure correct caching across environments, Turborepo automatically infers and includes public environment variables when calculating cache keys for apps built with detected frameworks. You can safely omit framework-specific public environment variables from `turbo.json`:
 
 ```diff filename="turbo.json"

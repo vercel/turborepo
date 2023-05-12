@@ -33,11 +33,13 @@ Check
   [
     "envMode",
     "execution",
+    "frameworkInference",
     "globalCacheInputs",
     "id",
     "scm",
     "tasks",
     "turboVersion",
+    "user",
     "version"
   ]
 

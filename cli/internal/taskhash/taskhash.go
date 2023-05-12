@@ -247,24 +247,30 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(packageTask *nodes.PackageTask, dependencySet dag.Set, logger hclog.Logger, args []string, useOldTaskHashable bool) (string, error) {
+func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.PackageTask, dependencySet dag.Set, frameworkInference bool, args []string, useOldTaskHashable bool) (string, error) {
 	hashOfFiles, ok := th.packageInputsHashes[packageTask.TaskID]
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", packageTask.TaskID)
 	}
 
 	var keyMatchers []string
-	framework := inference.InferFramework(packageTask.Pkg)
-	if framework != nil && framework.EnvMatcher != "" {
-		// log auto detected framework and env prefix
-		logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvMatcher)
-		keyMatchers = append(keyMatchers, framework.EnvMatcher)
+	var framework *inference.Framework
+	envVarContainingExcludePrefix := ""
+
+	if frameworkInference {
+		envVarContainingExcludePrefix = "TURBO_CI_VENDOR_ENV_KEY"
+		framework = inference.InferFramework(packageTask.Pkg)
+		if framework != nil && framework.EnvMatcher != "" {
+			// log auto detected framework and env prefix
+			logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvMatcher)
+			keyMatchers = append(keyMatchers, framework.EnvMatcher)
+		}
 	}
 
 	envVars, err := env.GetHashableEnvVars(
 		packageTask.TaskDefinition.EnvVarDependencies,
 		keyMatchers,
-		"TURBO_CI_VENDOR_ENV_KEY",
+		envVarContainingExcludePrefix,
 	)
 	if err != nil {
 		return "", err

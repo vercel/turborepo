@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import getTurboRoot from "./getTurboRoot";
+import { getTurboRoot } from "./getTurboRoot";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
 import { Schema } from "@turbo/types";
@@ -54,7 +54,7 @@ function getWorkspaceGlobs(root: string): Array<string> {
   }
 }
 
-function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
+export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
   const turboRoot = getTurboRoot(cwd, opts);
   const configs: TurboConfigs = [];
 
@@ -114,5 +114,3 @@ function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
 
   return configs;
 }
-
-export default getTurboConfigs;

@@ -1,0 +1,349 @@
+# Turborepo Release Pipeline
+#
+# This release consists of a few steps
+#
+# 1. Create a staging branch
+# 2. Run some smoke tests on that branch
+# 3. Compile the Go binary for macOS and for Windows/Linux
+# 4. Build the Rust binary
+# 5. Publish JS packages npm (including turbo itself)
+# 6. Create a release branch and open a PR.
+
+# You can opt into a dry run, which will skip publishing to npm and opening the release branch
+
+name: Turborepo Release
+
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  RELEASE_TURBO_CLI: true # TODO: do we need this?
+
+on:
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: "SemVer Increment (prerelease = bump canary)"
+        required: true
+        default: "prerelease"
+        type: choice
+        options:
+          - prerelease
+          - prepatch
+          - preminor
+          - premajor
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: "Do a dry run, skipping the final publish step."
+        type: boolean
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+      - name: Version
+        run: |
+          ./scripts/version.js ${{ inputs.increment }}
+          cat version.txt
+      - name: Stage Commit
+        id: stage
+        run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+    outputs:
+      stage-branch: "${{ steps.stage.outputs.STAGE_BRANCH }}"
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    needs: [stage]
+    steps:
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
+      - name: Run Unit Tests
+        run: turbo run test --filter=cli --color
+
+  build-go-darwin:
+    name: "Build Go for macOS"
+    runs-on: macos-latest
+    needs: [stage, smoke-test]
+    steps:
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+      - run: git fetch origin --tags
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - uses: actions-rs/toolchain@v1
+      - run: |
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v3
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          install-only: true
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      - name: Build Artifacts
+        run: cd cli && make build-go-turbo-darwin
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turbo-go-darwin-${{ needs.stage.outputs.stage-branch }}
+          path: cli/dist-darwin
+
+  # compiles linux and windows in a container
+  build-go-cross:
+    name: "Build Go for Windows and Linux"
+    runs-on: ubuntu-latest
+    needs: [stage, smoke-test]
+    container:
+      image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
+    steps:
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+      - uses: actions/checkout@v3
+        with:
+          ref: "${{ needs.stage.outputs.stage-branch }}"
+      - run: git fetch origin --tags
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - run: apt-get install -y build-essential binutils-aarch64-linux-gnu
+        # Yes, I'm aware of the irony of installing Zig to compile our Go + Rust project
+      - run: |
+          mkdir ../zig
+          curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.1908+06b263825.tar.xz | tar -J -xf - -C ../zig --strip-components 1
+          export PATH=$PATH:$(pwd)/../zig
+          echo "$(pwd)/../zig" >> $GITHUB_PATH
+      - uses: actions-rs/toolchain@v1
+      - run: |
+          rustup target add aarch64-unknown-linux-musl
+          rustup target add x86_64-pc-windows-gnu
+          rustup target add x86_64-unknown-linux-musl
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v3
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          install-only: true
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      - name: Build Artifacts
+        run: cd cli && make build-go-turbo-cross
+        env:
+          CC_aarch64_unknown_linux_musl: zig cc -target aarch64-linux-musl
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turbo-go-cross-${{ needs.stage.outputs.stage-branch }}
+          path: cli/dist-cross
+
+  build-rust:
+    name: "Build Rust"
+    needs: [stage, smoke-test]
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: "x86_64-apple-darwin"
+            container-options: "--rm"
+          - host: macos-latest
+            target: "aarch64-apple-darwin"
+            container-options: "--rm"
+          - host: ubuntu-latest
+            container: ubuntu:xenial
+            container-options: "--platform=linux/amd64 --rm"
+            container-setup: "apt-get update && apt-get install -y curl musl-tools"
+            target: "x86_64-unknown-linux-musl"
+            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
+          - host: ubuntu-latest
+            container-options: "--rm"
+            target: "aarch64-unknown-linux-musl"
+            rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+            setup: "sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+          - host: windows-latest
+            target: x86_64-pc-windows-gnu
+            setup: "rustup set default-host x86_64-pc-windows-gnu"
+            container-options: "--rm"
+    runs-on: ${{ matrix.settings.host }}
+    container:
+      image: ${{ matrix.settings.container }}
+      options: ${{ matrix.settings.container-options }}
+    steps:
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          ref: "${{ needs.stage.outputs.stage-branch }}"
+
+      - name: Setup Container
+        if: ${{ matrix.settings.container-setup }}
+        run: ${{ matrix.settings.container-setup }}
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rust Setup
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+          target: ${{ matrix.settings.target }}
+
+      - name: Build Setup
+        shell: bash
+        if: ${{ matrix.settings.setup }}
+        run: ${{ matrix.settings.setup }}
+
+      - name: Build
+        run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turbo-${{ matrix.settings.target }}
+          path: target/${{ matrix.settings.target }}/release/turbo*
+
+  npm-publish:
+    name: "Publish To NPM"
+    runs-on: ubuntu-latest
+    needs: [stage, build-go-darwin, build-go-cross, build-rust]
+    steps:
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+      - uses: actions/checkout@v3
+        with:
+          ref: "${{ needs.stage.outputs.stage-branch }}"
+      - run: git fetch origin --tags
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v3
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          install-only: true
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+
+      - name: Download Rust artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: rust-artifacts
+
+      - name: Move Rust artifacts into place
+        run: |
+          mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
+          mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
+          cp -r rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-arm64
+          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-amd64
+          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-amd64
+          mv rust-artifacts/turbo-x86_64-pc-windows-gnu cli/dist-windows-amd64
+
+      # TODO: This is a duplicate download of artifacts, but since the download path is different,
+      # we will leave this for a future optimization.
+      - name: Download Go artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: go-artifacts
+
+      - name: Move Go artifacts into place
+        run: |
+          ls go-artifacts
+          mv go-artifacts/turbo-go-cross-${{ needs.stage.outputs.stage-branch }}/turbo_linux_amd64_v1/bin/* cli/dist-linux-amd64
+          chmod a+x cli/dist-linux-amd64/turbo
+          chmod a+x cli/dist-linux-amd64/go-turbo
+          mv go-artifacts/turbo-go-cross-${{ needs.stage.outputs.stage-branch }}/turbo_linux_arm64/bin/* cli/dist-linux-arm64
+          chmod a+x cli/dist-linux-arm64/turbo
+          chmod a+x cli/dist-linux-arm64/go-turbo
+
+          # rust doesn't have a toolchain for arm + windows + gnu, so we just use the exe from the amd64 build
+          # and rely on windows' arm JITer to do the work for us. this is because the go exe cannot be build w/ msvc
+          cp -r go-artifacts/turbo-go-cross-${{ needs.stage.outputs.stage-branch }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-arm64
+          chmod a+x cli/dist-windows-arm64/turbo.exe
+          chmod a+x cli/dist-windows-arm64/go-turbo.exe
+
+          mv go-artifacts/turbo-go-cross-${{ needs.stage.outputs.stage-branch }}/turbo_windows_amd64_v1/bin/* cli/dist-windows-amd64
+          chmod a+x cli/dist-windows-amd64/turbo.exe
+          chmod a+x cli/dist-windows-amd64/go-turbo.exe
+
+          mv go-artifacts/turbo-go-darwin-${{ needs.stage.outputs.stage-branch }}/turbo_darwin_amd64_v1/bin/* cli/dist-darwin-amd64
+          chmod a+x cli/dist-darwin-amd64/turbo
+          chmod a+x cli/dist-darwin-amd64/go-turbo
+          mv go-artifacts/turbo-go-darwin-${{ needs.stage.outputs.stage-branch }}/turbo_darwin_arm64/bin/* cli/dist-darwin-arm64
+          chmod a+x cli/dist-darwin-arm64/turbo
+          chmod a+x cli/dist-darwin-arm64/go-turbo
+
+      - name: Perform Release
+        run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
+        env:
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Upload published artifacts in case they are needed for debugging later
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turbo-combined
+          path: cli/dist
+
+  create-release-pr:
+    name: "Open Release Branch PR"
+    needs: [stage, npm-publish]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+      - uses: actions/checkout@1.0.0
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+      - name: Get version
+        id: getVersion
+        run: echo ::set-output name=version::$(head -n 1 version.txt)
+      - name: Create pull request
+        uses: thomaseizinger/create-pull-request@master
+        if: ${{ !inputs.dry_run }}
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          head: ${{ needs.stage.outputs.stage-branch }}
+          base: main
+          title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
