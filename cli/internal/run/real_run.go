@@ -113,6 +113,8 @@ func RealRun(
 			taskSummaries = append(taskSummaries, taskSummary)
 			// not using defer, just release the lock
 			mu.Unlock()
+
+			runSummary.CloseTask(taskSummary)
 		}
 
 		// Return the error when there is one

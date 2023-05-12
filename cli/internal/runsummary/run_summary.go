@@ -245,14 +245,7 @@ func (rsm *Meta) save() error {
 
 // record sends the summary to the API
 func (rsm *Meta) record() {
-	rsm.postTaskSummaries()
 	rsm.spacesClient.done(rsm)
-}
-
-func (rsm *Meta) postTaskSummaries() {
-	for _, task := range rsm.RunSummary.Tasks {
-		rsm.CloseTask(task)
-	}
 }
 
 // CloseTask posts the result of the Task to Spaces
