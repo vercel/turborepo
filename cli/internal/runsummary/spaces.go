@@ -16,10 +16,11 @@ const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 
 // spaceRequest contains all the information for a single request to Spaces
 type spaceRequest struct {
-	method   string
-	url      string
-	body     interface{}
-	response []byte
+	method  string
+	url     string
+	makeURL func(self *spaceRequest, r *spaceRun) error // Should set url on self
+	body    interface{}
+	onDone  func(req *spaceRequest, response []byte)
 }
 
 func (req *spaceRequest) debug(msg string) {
@@ -91,6 +92,15 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	// Make the request
 	var resp []byte
 	var reqErr error
+
+	// Lazily make the url with the run object since we need the run.ID
+	if req.makeURL != nil {
+		if err := req.makeURL(req, c.run); err != nil {
+			c.errors = append(c.errors, err)
+			return
+		}
+	}
+
 	req.debug("Executing")
 	if req.method == "POST" {
 		resp, reqErr = c.api.JSONPost(req.url, payload)
@@ -105,9 +115,10 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 		return
 	}
 
-	// If there are no errors, we can assign the response back to the request so we can read it later
-	req.debug("Assigning response")
-	req.response = resp
+	// Call the onDone handler if there is one
+	if req.onDone != nil {
+		req.onDone(req, resp)
+	}
 }
 
 func (c *spacesClient) start(rsm *Meta) {
@@ -116,28 +127,26 @@ func (c *spacesClient) start(rsm *Meta) {
 		return
 	}
 
-	req := &spaceRequest{
-		method: "POST",
-		url:    fmt.Sprintf(runsEndpoint, rsm.spaceID),
-		body:   newSpacesRunCreatePayload(rsm),
-	}
-
-	// This will assign the response to the request if all is well
-	c.asyncRequest(req)
-
 	// Set a default, empty one here, so we'll have something downstream and not a segfault
 	c.run = &spaceRun{}
 
-	if req.response == nil {
-		return
-	}
+	c.asyncRequest(&spaceRequest{
+		method: "POST",
+		url:    fmt.Sprintf(runsEndpoint, rsm.spaceID),
+		body:   newSpacesRunCreatePayload(rsm),
 
-	// TODO: how to make this code run after the asyncRequest here has been fully processed?
+		// handler for when the request finishes. We set the response into a struct on the client
+		// because we need the run ID and URL from the server later.
+		onDone: func(req *spaceRequest, response []byte) {
+			if response == nil {
+				return
+			}
 
-	// unmarshal the response into our c.run struct and catch errors
-	if err := json.Unmarshal(req.response, c.run); err != nil {
-		c.errors = append(c.errors, fmt.Errorf("Error unmarshaling response: %w", err))
-	}
+			if err := json.Unmarshal(response, c.run); err != nil {
+				c.errors = append(c.errors, fmt.Errorf("Error unmarshaling response: %w", err))
+			}
+		},
+	})
 }
 
 func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
@@ -153,8 +162,14 @@ func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
 
 	c.asyncRequest(&spaceRequest{
 		method: "POST",
-		url:    fmt.Sprintf(tasksEndpoint, rsm.spaceID, c.run.ID),
-		body:   newSpacesTaskPayload(task),
+		makeURL: func(self *spaceRequest, run *spaceRun) error {
+			if run.ID == "" {
+				return fmt.Errorf("No Run ID found to send PATCH request")
+			}
+			self.url = fmt.Sprintf(tasksEndpoint, rsm.spaceID, run.ID)
+			return nil
+		},
+		body: newSpacesTaskPayload(task),
 	})
 }
 
@@ -164,15 +179,16 @@ func (c *spacesClient) done(rsm *Meta) {
 		return
 	}
 
-	if c.run.ID == "" {
-		c.errors = append(c.errors, fmt.Errorf("No Run ID found to send PATCH request"))
-		return
-	}
-
 	c.asyncRequest(&spaceRequest{
 		method: "PATCH",
-		url:    fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, c.run.ID),
-		body:   newSpacesDonePayload(rsm.RunSummary),
+		makeURL: func(self *spaceRequest, run *spaceRun) error {
+			if run.ID == "" {
+				return fmt.Errorf("No Run ID found to send PATCH request")
+			}
+			self.url = fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, run.ID)
+			return nil
+		},
+		body: newSpacesDonePayload(rsm.RunSummary),
 	})
 
 	// Close the channel since we are now down with all requests
