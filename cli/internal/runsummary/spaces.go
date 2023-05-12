@@ -28,28 +28,31 @@ func (req *spaceRequest) error(msg string) error {
 }
 
 type spacesClient struct {
-	rsm        *Meta
-	requests   chan *spaceRequest
-	errors     []error
-	api        *client.APIClient
-	ui         cli.Ui
-	run        *spaceRun
-	runCreated chan struct{}
-	wg         sync.WaitGroup
+	rsm      *Meta
+	requests chan *spaceRequest
+	errors   []error
+	api      *client.APIClient
+	ui       cli.Ui
+	run      *spaceRun
+	wg       sync.WaitGroup
 }
 
 type spaceRun struct {
-	ID  string
-	URL string
+	ID      string
+	URL     string
+	created chan struct{} // a signal that the run has completed
 }
 
 func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient {
 	c := &spacesClient{
-		api:        api,
-		ui:         ui,
-		rsm:        rsm,
-		requests:   make(chan *spaceRequest), // TODO: give this a size based on tasks
-		runCreated: make(chan struct{}, 1),   // Use this to signal when the run is created and other requests can proceed
+		api:      api,
+		ui:       ui,
+		rsm:      rsm,
+		requests: make(chan *spaceRequest), // TODO: give this a size based on tasks
+		// Set a default, empty one here, so we'll have something downstream and not a segfault
+		run: &spaceRun{
+			created: make(chan struct{}, 1),
+		},
 	}
 
 	// Start receiving and processing requests in 8 goroutines
@@ -71,7 +74,7 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient 
 					firstReqDone = true
 					mu.Unlock()
 					c.makeRequest(req)
-					close(c.runCreated) // close this channel to signal that other requests can proceed
+					close(c.run.created) // close this channel to signal that other requests can proceed
 				} else {
 					mu.Unlock()
 					c.makeRequest(req)
@@ -141,9 +144,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 }
 
 func (c *spacesClient) startRun() {
-	// Set a default, empty one here, so we'll have something downstream and not a segfault
-	c.run = &spaceRun{}
-
 	c.requests <- &spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(runsEndpoint, c.rsm.spaceID),
@@ -163,7 +163,7 @@ func (c *spacesClient) startRun() {
 	}
 
 	// Wait for run to be created
-	<-c.runCreated
+	<-c.run.created
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
