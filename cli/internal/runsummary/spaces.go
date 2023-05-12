@@ -52,23 +52,34 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient 
 		runCreated: make(chan struct{}, 1),   // Use this to signal when the run is created and other requests can proceed
 	}
 
-	// Start receiving and processing requests
+	// Start receiving and processing requests in 8 goroutines
+	// There is an additional marker (protected by a mutex) that indicates
+	// when the first request is done. All other requests are blocked on that one.
+	// This first request is the POST /run request. We need to block on it because
+	// the response contains the run ID from the server, which we need to construct the
+	// URLs of subsequent requests.
 	mu := sync.Mutex{}
 	firstReqDone := false
-	go func() {
-		for req := range c.requests {
-			mu.Lock()
-			if !firstReqDone {
-				firstReqDone = true
-				mu.Unlock()
-				c.makeRequest(req)
-				close(c.runCreated) // close this channel to signal that other requests can proceed
-			} else {
-				mu.Unlock()
-				c.makeRequest(req)
+	processors := 8
+	wg := &sync.WaitGroup{}
+	for i := 0; i < processors; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for req := range c.requests {
+				mu.Lock()
+				if !firstReqDone {
+					firstReqDone = true
+					mu.Unlock()
+					c.makeRequest(req)
+					close(c.runCreated) // close this channel to signal that other requests can proceed
+				} else {
+					mu.Unlock()
+					c.makeRequest(req)
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	return c
 }
