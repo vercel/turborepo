@@ -146,6 +146,91 @@ func fromMatching(all EnvironmentVariableMap, keyMatchers []string, shouldExclud
 	return output, nil
 }
 
+const wildcard = '*'
+const wildcardEscape = '\\'
+const regexWildcardSegment = ".*"
+
+func wildcardToRegexPattern(pattern string) string {
+	var segments []string
+
+	var previousIndex int
+	var previousRune rune
+
+	for i, char := range pattern {
+		if char == wildcard {
+			if previousRune == wildcardEscape {
+				// Found a literal *
+
+				// Replace the trailing "\*" with just "*" before adding the segment.
+				segments = append(segments, regexp.QuoteMeta(pattern[previousIndex:i-1]+"*"))
+			} else {
+				// Found a wildcard
+
+				// Add in the static segment since the last wildcard. Can be zero length.
+				segments = append(segments, regexp.QuoteMeta(pattern[previousIndex:i]))
+
+				// Add a dynamic segment if it isn't adjacent to another dynamic segment.
+				if segments[len(segments)-1] != regexWildcardSegment {
+					segments = append(segments, regexWildcardSegment)
+				}
+			}
+
+			// Advance the pointer.
+			previousIndex = i + 1
+		}
+		previousRune = char
+	}
+
+	// Add the last static segment. Can be zero length.
+	segments = append(segments, regexp.QuoteMeta(pattern[previousIndex:]))
+
+	return strings.Join(segments, "")
+}
+
+// FromWildcards returns an EnvironmentVariableMap after processing wildcards against it.
+func (evm EnvironmentVariableMap) FromWildcards(wildcardPatterns []string) (EnvironmentVariableMap, error) {
+	includePatterns := make([]string, 0)
+	excludePatterns := make([]string, 0)
+
+	for _, wildcardPattern := range wildcardPatterns {
+		isExclude := strings.HasPrefix(wildcardPattern, "!")
+		isLiteralLeadingExclamation := strings.HasPrefix(wildcardPattern, "\\!")
+
+		if isExclude {
+			excludePatterns = append(excludePatterns, wildcardToRegexPattern(wildcardPattern[1:]))
+		} else if isLiteralLeadingExclamation {
+			includePatterns = append(includePatterns, wildcardToRegexPattern(wildcardPattern[1:]))
+		} else {
+			includePatterns = append(includePatterns, wildcardToRegexPattern(wildcardPattern[0:]))
+		}
+	}
+
+	includeRegexString := "^(" + strings.Join(includePatterns, "|") + ")$"
+	excludeRegexString := "^(" + strings.Join(excludePatterns, "|") + ")$"
+
+	includeRegex, err := regexp.Compile(includeRegexString)
+	if err != nil {
+		return nil, err
+	}
+
+	excludeRegex, err := regexp.Compile(excludeRegexString)
+	if err != nil {
+		return nil, err
+	}
+
+	output := EnvironmentVariableMap{}
+	for envVar, envValue := range evm {
+		if len(includePatterns) > 0 && includeRegex.MatchString(envVar) {
+			output[envVar] = envValue
+		}
+		if len(excludePatterns) > 0 && excludeRegex.MatchString(envVar) {
+			delete(output, envVar)
+		}
+	}
+
+	return output, nil
+}
+
 // GetHashableEnvVars returns all sorted key=value env var pairs for both frameworks and from envKeys
 func GetHashableEnvVars(keys []string, matchers []string, envVarContainingExcludePrefix string) (DetailedMap, error) {
 	all := GetEnvMap()
