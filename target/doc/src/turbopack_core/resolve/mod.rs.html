@@ -1365,6 +1365,13 @@
 <a href="#1365" id="1365">1365</a>
 <a href="#1366" id="1366">1366</a>
 <a href="#1367" id="1367">1367</a>
+<a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -2125,13 +2132,20 @@
                 path.push(ext.clone().into());
                 patterns.push(path);
             }
-            <span class="kw">let </span>new_pat = Pattern::alternatives(patterns);
 
-            resolve_internal(
-                context,
-                RequestVc::raw(Value::new(new_pat), <span class="kw-2">*</span>force_in_context),
-                options,
-            )
+            <span class="comment">// This ensures the order of the patterns (extensions) is
+            // preserved, `Pattern::Alternatives` inside a `Request::Raw` does not preserve
+            // the order
+            </span><span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
+            <span class="kw">for </span>pattern <span class="kw">in </span>patterns {
+                results.push(resolve_internal(
+                    context,
+                    RequestVc::raw(Value::new(pattern), <span class="kw-2">*</span>force_in_context),
+                    options,
+                ));
+            }
+
+            merge_results(results)
         }
         Request::Module {
             module,
