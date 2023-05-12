@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{io::ErrorKind, path::Path};
 
 use glob_match::glob_match;
 use itertools::{
@@ -68,18 +68,23 @@ pub fn globwalk<'a>(
         .collect::<Vec<_>>();
 
     std::iter::from_fn(move || loop {
-        let entry = match iter.next()?.map_err(WalkError::WalkDir) {
-            Ok(entry) => entry,
-            Err(err) => {
-                println!("error: {:?}", err);
-                return Some(Err(err));
-            }
+        let entry = iter.next()?;
+
+        let (is_symlink, path) = match entry {
+            Ok(entry) => (entry.path_is_symlink(), entry.into_path()),
+            Err(err) => match (err.io_error(), err.path()) {
+                // make sure to yield broken symlinks
+                (Some(io_err), Some(path))
+                    if io_err.kind() == ErrorKind::NotFound && path.is_symlink() =>
+                {
+                    (true, path.to_owned())
+                }
+                _ => return Some(Err(WalkError::WalkDir(err))),
+            },
         };
 
-        let path = entry.path();
         let relative_path = path.strip_prefix(&base_path).expect("it is a subdir");
         let is_directory = path.is_dir();
-        let is_symlink = entry.path_is_symlink();
 
         let include = match do_match_directory(relative_path, include, &exclude, is_directory) {
             Ok(include) => include,
@@ -387,7 +392,7 @@ mod test {
     #[test_case("**/【*", None, 1, 1)]
     // in the go implementation, broken-symlink is yielded,
     // however in symlink mode, walkdir yields broken symlinks as errors
-    #[test_case("broken-symlink", None, 1, 1)]
+    #[test_case("broken-symlink", None, 1, 1 ; "broken symlinks should be yielded")]
     // globs that match across a symlink should not follow the symlink
     #[test_case("working-symlink/c/*", None, 1, 1)]
     #[test_case("working-sym*/*", None, 0, 0)]
