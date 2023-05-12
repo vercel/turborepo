@@ -73,7 +73,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	}
 
 	if !c.api.IsLinked() {
-		c.errors = append(c.errors, makeError("Repo is not linked to a Space. Run `turbo link` first"))
+		c.errors = append(c.errors, makeError("Repo is not linked to a Space. Run `turbo link --target=spaces` first"))
 		return
 	}
 
