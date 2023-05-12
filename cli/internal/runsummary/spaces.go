@@ -163,7 +163,7 @@ func (c *spacesClient) startRun() {
 			}
 
 			if err := json.Unmarshal(response, c.run); err != nil {
-				c.errors = append(c.errors, fmt.Errorf("Error unmarshaling response: %w", err))
+				c.errors = append(c.errors, req.error(fmt.Sprintf("Error unmarshaling response: %s", err)))
 			}
 		},
 	}
