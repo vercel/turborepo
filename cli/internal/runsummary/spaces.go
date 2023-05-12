@@ -82,7 +82,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	defer c.wg.Done() // decrement waitgroup counter
 
 	if c.rsm.spaceID == "" {
-		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post run"))
+		c.errors = append(c.errors, req.error("No spaceID found"))
 		return
 	}
 
