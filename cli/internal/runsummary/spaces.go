@@ -81,6 +81,18 @@ func (c *spacesClient) asyncRequest(req *spaceRequest) {
 func (c *spacesClient) makeRequest(req *spaceRequest) {
 	defer c.wg.Done() // decrement waitgroup counter
 
+	// The runID is required for POST task requests and PATCH run request
+	// so we have to construct it lazily for those requests.
+	// We construc this first in makeRequest, because if makeURL fails, it's likely
+	// because we don't have a runID, which means that the first POST run failed. By checking this
+	// up front, we can avoid duplicate error messages for things like missing spaceID / linking.
+	if req.makeURL != nil {
+		if err := req.makeURL(req, c.run); err != nil {
+			c.errors = append(c.errors, err)
+			return
+		}
+	}
+
 	if c.rsm.spaceID == "" {
 		c.errors = append(c.errors, req.error("No spaceID found"))
 		return
@@ -101,15 +113,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	if err != nil {
 		c.errors = append(c.errors, req.error(fmt.Sprintf("Failed to create payload: %s", err)))
 		return
-	}
-
-	// The runID is required for POST task requests and PATCH run request
-	// so we have to construct it lazily for those requests.
-	if req.makeURL != nil {
-		if err := req.makeURL(req, c.run); err != nil {
-			c.errors = append(c.errors, err)
-			return
-		}
 	}
 
 	// Make the request
