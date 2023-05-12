@@ -81,6 +81,11 @@ func (c *spacesClient) asyncRequest(req *spaceRequest) {
 func (c *spacesClient) makeRequest(req *spaceRequest) {
 	defer c.wg.Done() // decrement waitgroup counter
 
+	if c.rsm.spaceID == "" {
+		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post run"))
+		return
+	}
+
 	if !c.api.IsLinked() {
 		c.errors = append(c.errors, req.error("Repo is not linked to a Space. Run `turbo link --target=spaces` first"))
 		return
@@ -130,11 +135,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 }
 
 func (c *spacesClient) startRun() {
-	if c.rsm.spaceID == "" {
-		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post run"))
-		return
-	}
-
 	// Set a default, empty one here, so we'll have something downstream and not a segfault
 	c.run = &spaceRun{}
 
@@ -161,11 +161,6 @@ func (c *spacesClient) startRun() {
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
-	if c.rsm.spaceID == "" {
-		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post %s", task.TaskID))
-		return
-	}
-
 	if c.run.ID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No Run ID found to post task %s", task.TaskID))
 		return
@@ -185,11 +180,6 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 }
 
 func (c *spacesClient) finishRun() {
-	if c.rsm.spaceID == "" {
-		c.errors = append(c.errors, fmt.Errorf("No spaceID found to send PATCH request"))
-		return
-	}
-
 	c.asyncRequest(&spaceRequest{
 		method: "PATCH",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
