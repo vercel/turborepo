@@ -17,8 +17,7 @@ func (rsm *Meta) printExecutionSummary() {
 	attempted := summary.ExecutionSummary.attempted
 	successful := summary.ExecutionSummary.cached + summary.ExecutionSummary.success
 	cached := summary.ExecutionSummary.cached
-	// TODO: can we use a method on ExecutionSummary here?
-	duration := time.Since(summary.ExecutionSummary.startedAt).Truncate(time.Millisecond)
+	duration := summary.ExecutionSummary.Duration().Truncate(time.Millisecond)
 
 	if cached == attempted && attempted > 0 {
 		terminalProgram := os.Getenv("TERM_PROGRAM")
