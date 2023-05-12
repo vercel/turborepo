@@ -83,10 +83,6 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient 
 	return c
 }
 
-func (c *spacesClient) asyncRequest(req *spaceRequest) {
-	c.requests <- req
-}
-
 func (c *spacesClient) makeRequest(req *spaceRequest) {
 	// The runID is required for POST task requests and PATCH run request
 	// so we have to construct it lazily for those requests.
@@ -148,7 +144,7 @@ func (c *spacesClient) startRun() {
 	// Set a default, empty one here, so we'll have something downstream and not a segfault
 	c.run = &spaceRun{}
 
-	c.asyncRequest(&spaceRequest{
+	c.requests <- &spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(runsEndpoint, c.rsm.spaceID),
 		body:   newSpacesRunCreatePayload(c.rsm),
@@ -164,14 +160,14 @@ func (c *spacesClient) startRun() {
 				c.errors = append(c.errors, fmt.Errorf("Error unmarshaling response: %w", err))
 			}
 		},
-	})
+	}
 
 	// Wait for run to be created
 	<-c.runCreated
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
-	c.asyncRequest(&spaceRequest{
+	c.requests <- &spaceRequest{
 		method: "POST",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
 			if run.ID == "" {
@@ -181,11 +177,11 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 			return nil
 		},
 		body: newSpacesTaskPayload(task),
-	})
+	}
 }
 
 func (c *spacesClient) finishRun() {
-	c.asyncRequest(&spaceRequest{
+	c.requests <- &spaceRequest{
 		method: "PATCH",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
 			if run.ID == "" {
@@ -195,7 +191,7 @@ func (c *spacesClient) finishRun() {
 			return nil
 		},
 		body: newSpacesDonePayload(c.rsm.RunSummary),
-	})
+	}
 }
 
 // Cloe will wait for all requests to finish
