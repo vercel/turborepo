@@ -380,11 +380,11 @@ func gitHashObject(anchor turbopath.AbsoluteSystemPath, filesToHash []turbopath.
 	return output, nil
 }
 
-func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath, existing bool) (map[turbopath.AnchoredUnixPath]string, error) {
+func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath, allowMissing bool) (map[turbopath.AnchoredUnixPath]string, error) {
 	hashObject := make(map[turbopath.AnchoredUnixPath]string, len(files))
 	for _, file := range files {
 		hash, err := fs.GitLikeHashFile(file.RestoreAnchor(rootPath))
-		if errors.Is(err, &os.PathError{}) {
+		if allowMissing && errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
