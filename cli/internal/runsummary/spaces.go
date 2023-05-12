@@ -18,9 +18,9 @@ const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 type spaceRequest struct {
 	method  string
 	url     string
-	makeURL func(self *spaceRequest, r *spaceRun) error // Should set url on self
 	body    interface{}
-	onDone  func(req *spaceRequest, response []byte)
+	makeURL func(self *spaceRequest, r *spaceRun) error // Should set url on self
+	onDone  func(self *spaceRequest, response []byte)   // Handler for when request completes
 }
 
 func (req *spaceRequest) error(msg string) error {
