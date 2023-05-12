@@ -40,8 +40,15 @@ pub fn run(command: &GenerateCommand, tag: &String) -> Result<()> {
 
     match command {
         GenerateCommand::Add(args) => {
+            let mut add_args = args.clone();
+            // example implies copy
+            if add_args.example.is_some() {
+                add_args.copy = true;
+                add_args.empty = false;
+            }
+
             // convert args to json
-            let raw_args = serde_json::to_string(args)?;
+            let raw_args = serde_json::to_string(&add_args)?;
             call_turbo_gen("add", tag, &raw_args)?;
         }
         GenerateCommand::Custom(args) => {
