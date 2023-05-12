@@ -119,11 +119,9 @@ func NewRunSummary(
 		synthesizedCommand: synthesizedCommand,
 	}
 
-	// Note: this sets up a bidirectional relationship
-	// rsm has a reference to the spacesClient, and spacesClient has a reference to rsm
-	rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui, &rsm)
+	rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui)
 	rsm.spacesClient.start()
-	rsm.spacesClient.createRun()
+	rsm.spacesClient.createRun(&rsm)
 
 	return rsm
 }
@@ -169,7 +167,7 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 }
 
 func (rsm *Meta) sendToSpace() {
-	rsm.spacesClient.finishRun()
+	rsm.spacesClient.finishRun(rsm)
 	rsm.spacesClient.Close()
 
 	// Print any errors

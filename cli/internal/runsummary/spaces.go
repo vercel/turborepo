@@ -28,7 +28,6 @@ func (req *spaceRequest) error(msg string) error {
 }
 
 type spacesClient struct {
-	rsm      *Meta
 	requests chan *spaceRequest
 	errors   []error
 	api      *client.APIClient
@@ -45,11 +44,10 @@ type spaceRun struct {
 	created chan struct{} // a signal that the run has completed
 }
 
-func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient {
+func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesClient {
 	return &spacesClient{
 		api:      api,
 		ui:       ui,
-		rsm:      rsm,
 		spaceID:  spaceID,
 		enabled:  spaceID != "",
 		requests: make(chan *spaceRequest), // TODO: give this a size based on tasks
@@ -166,7 +164,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	}
 }
 
-func (c *spacesClient) createRun() {
+func (c *spacesClient) createRun(rsm *Meta) {
 	if !c.enabled {
 		return
 	}
@@ -174,7 +172,7 @@ func (c *spacesClient) createRun() {
 	c.requests <- &spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(runsEndpoint, c.spaceID),
-		body:   newSpacesRunCreatePayload(c.rsm),
+		body:   newSpacesRunCreatePayload(rsm),
 
 		// handler for when the request finishes. We set the response into a struct on the client
 		// because we need the run ID and URL from the server later.
@@ -208,7 +206,7 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 	}
 }
 
-func (c *spacesClient) finishRun() {
+func (c *spacesClient) finishRun(rsm *Meta) {
 	if !c.enabled {
 		return
 	}
@@ -222,7 +220,7 @@ func (c *spacesClient) finishRun() {
 			self.url = fmt.Sprintf(runsPatchEndpoint, c.spaceID, run.ID)
 			return nil
 		},
-		body: newSpacesDonePayload(c.rsm.RunSummary),
+		body: newSpacesDonePayload(rsm.RunSummary),
 	}
 }
 
