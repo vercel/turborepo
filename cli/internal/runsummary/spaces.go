@@ -65,13 +65,19 @@ func (c *spacesClient) asyncRequest(req *spaceRequest) {
 }
 
 func (c *spacesClient) makeRequest(req *spaceRequest) {
-	req.debug("Executing")
-
-	defer c.wg.Done() // decrement waitgroup counter
 	// closure to make errors so we can consistently get the request details
 	makeError := func(msg string) error {
 		return fmt.Errorf("%s: %s - %s", req.method, req.url, msg)
 	}
+
+	if !c.api.IsLinked() {
+		c.errors = append(c.errors, makeError("Repo is not linked to a Space. Run `turbo link` first"))
+		return
+	}
+
+	req.debug("Executing")
+
+	defer c.wg.Done() // decrement waitgroup counter
 
 	// We only care about POST and PATCH right now
 	if req.method != "POST" && req.method != "PATCH" {
@@ -107,11 +113,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 }
 
 func (c *spacesClient) start(rsm *Meta) {
-	if !c.api.IsLinked() {
-		c.errors = append(c.errors, fmt.Errorf("Failed to post to space because repo is not linked to a Space. Run `turbo link` first"))
-		return
-	}
-
 	if rsm.spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post run"))
 		return
@@ -142,11 +143,6 @@ func (c *spacesClient) start(rsm *Meta) {
 }
 
 func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
-	if !c.api.IsLinked() {
-		c.errors = append(c.errors, fmt.Errorf("Failed to post %s, because repo is not linked to a Space. Run `turbo link` first", task.TaskID))
-		return
-	}
-
 	if rsm.spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post %s", task.TaskID))
 		return
@@ -165,11 +161,6 @@ func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
 }
 
 func (c *spacesClient) done(rsm *Meta) {
-	if !c.api.IsLinked() {
-		c.errors = append(c.errors, fmt.Errorf("Failed to post to space because repo is not linked to a Space. Run `turbo link` first"))
-		return
-	}
-
 	if rsm.spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No spaceID found to send PATCH request"))
 		return
