@@ -173,12 +173,9 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 func (rsm *Meta) sendToSpace() error {
 	rsm.spacesClient.done(rsm)
 
-	// After the spinner is done, print any errors and the url
-	errs := rsm.spacesClient.errors
-	// TODO: add errors from each request also
-
-	if len(errs) > 0 {
-		for _, err := range errs {
+	// Print any errors
+	if len(rsm.spacesClient.errors) > 0 {
+		for _, err := range rsm.spacesClient.errors {
 			rsm.ui.Warn(fmt.Sprintf("%s", err))
 		}
 	}

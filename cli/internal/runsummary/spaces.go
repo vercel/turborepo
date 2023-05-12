@@ -19,7 +19,6 @@ type spaceRequest struct {
 	url      string
 	body     interface{}
 	response []byte
-	err      error
 }
 
 type spacesClient struct {
@@ -65,7 +64,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	}
 
 	if reqErr != nil {
-		req.err = makeError(fmt.Sprintf("%s", reqErr))
+		c.errors = append(c.errors, makeError(fmt.Sprintf("%s", reqErr)))
 		return
 	}
 
