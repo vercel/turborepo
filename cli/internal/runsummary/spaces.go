@@ -61,11 +61,10 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient 
 	mu := sync.Mutex{}
 	firstReqDone := false
 	processors := 8
-	wg := &sync.WaitGroup{}
 	for i := 0; i < processors; i++ {
-		wg.Add(1)
+		c.wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer c.wg.Done()
 			for req := range c.requests {
 				mu.Lock()
 				if !firstReqDone {
@@ -85,13 +84,10 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient 
 }
 
 func (c *spacesClient) asyncRequest(req *spaceRequest) {
-	c.wg.Add(1) // increment waitgroup counter
 	c.requests <- req
 }
 
 func (c *spacesClient) makeRequest(req *spaceRequest) {
-	defer c.wg.Done() // decrement waitgroup counter
-
 	// The runID is required for POST task requests and PATCH run request
 	// so we have to construct it lazily for those requests.
 	// We construc this first in makeRequest, because if makeURL fails, it's likely
