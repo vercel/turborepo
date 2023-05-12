@@ -3,7 +3,7 @@ import { generate, type CustomGeneratorOptions } from "../generate";
 import { convertCase } from "@turbo/utils";
 
 interface MinimalOptions {
-  generator?: string;
+  generatorName?: string;
   [arg: string]: any;
 }
 
@@ -25,8 +25,8 @@ export async function raw(command: string, options: { json: string }) {
       await add(incomingOptions as TurboGeneratorOptions);
       break;
     case "generate":
-      const { generator } = incomingOptions;
-      await generate(generator, incomingOptions as CustomGeneratorOptions);
+      const { generatorName } = incomingOptions;
+      await generate(generatorName, incomingOptions as CustomGeneratorOptions);
       break;
     default:
       console.error(

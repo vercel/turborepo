@@ -36,7 +36,12 @@ func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 // Wires all the writers end-to-end:
 // tar.Writer -> zstd.Writer -> fileBuffer -> file
 func (ci *CacheItem) init() {
-	fileBuffer := bufio.NewWriterSize(ci.handle, 2^20) // Flush to disk in 1mb chunks.
+	writer, isWriter := ci.handle.(io.Writer)
+	if !isWriter {
+		panic("can't write to this cache item")
+	}
+
+	fileBuffer := bufio.NewWriterSize(writer, 2^20) // Flush to disk in 1mb chunks.
 
 	var tw *tar.Writer
 	if ci.compressed {
