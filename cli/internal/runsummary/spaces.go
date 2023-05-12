@@ -112,6 +112,11 @@ func (c *spacesClient) start(rsm *Meta) {
 		return
 	}
 
+	if rsm.spaceID == "" {
+		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post run"))
+		return
+	}
+
 	req := &spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(runsEndpoint, rsm.spaceID),
