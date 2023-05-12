@@ -28,6 +28,7 @@ func (req *spaceRequest) error(msg string) error {
 }
 
 type spacesClient struct {
+	rsm        *Meta
 	requests   chan *spaceRequest
 	errors     []error
 	api        *client.APIClient
@@ -42,10 +43,11 @@ type spaceRun struct {
 	URL string
 }
 
-func newSpacesClient(api *client.APIClient, ui cli.Ui) *spacesClient {
+func newSpacesClient(api *client.APIClient, ui cli.Ui, rsm *Meta) *spacesClient {
 	c := &spacesClient{
 		api:        api,
 		ui:         ui,
+		rsm:        rsm,
 		requests:   make(chan *spaceRequest), // TODO: give this a size based on tasks
 		runCreated: make(chan struct{}, 1),   // Use this to signal when the run is created and other requests can proceed
 	}
@@ -127,8 +129,8 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	}
 }
 
-func (c *spacesClient) startRun(rsm *Meta) {
-	if rsm.spaceID == "" {
+func (c *spacesClient) startRun() {
+	if c.rsm.spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post run"))
 		return
 	}
@@ -138,8 +140,8 @@ func (c *spacesClient) startRun(rsm *Meta) {
 
 	c.asyncRequest(&spaceRequest{
 		method: "POST",
-		url:    fmt.Sprintf(runsEndpoint, rsm.spaceID),
-		body:   newSpacesRunCreatePayload(rsm),
+		url:    fmt.Sprintf(runsEndpoint, c.rsm.spaceID),
+		body:   newSpacesRunCreatePayload(c.rsm),
 
 		// handler for when the request finishes. We set the response into a struct on the client
 		// because we need the run ID and URL from the server later.
@@ -158,8 +160,8 @@ func (c *spacesClient) startRun(rsm *Meta) {
 	<-c.runCreated
 }
 
-func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
-	if rsm.spaceID == "" {
+func (c *spacesClient) postTask(task *TaskSummary) {
+	if c.rsm.spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No spaceID found to post %s", task.TaskID))
 		return
 	}
@@ -175,15 +177,15 @@ func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
 			if run.ID == "" {
 				return fmt.Errorf("No Run ID found to send PATCH request")
 			}
-			self.url = fmt.Sprintf(tasksEndpoint, rsm.spaceID, run.ID)
+			self.url = fmt.Sprintf(tasksEndpoint, c.rsm.spaceID, run.ID)
 			return nil
 		},
 		body: newSpacesTaskPayload(task),
 	})
 }
 
-func (c *spacesClient) finishRun(rsm *Meta) {
-	if rsm.spaceID == "" {
+func (c *spacesClient) finishRun() {
+	if c.rsm.spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("No spaceID found to send PATCH request"))
 		return
 	}
@@ -194,10 +196,10 @@ func (c *spacesClient) finishRun(rsm *Meta) {
 			if run.ID == "" {
 				return fmt.Errorf("No Run ID found to send PATCH request")
 			}
-			self.url = fmt.Sprintf(runsPatchEndpoint, rsm.spaceID, run.ID)
+			self.url = fmt.Sprintf(runsPatchEndpoint, c.rsm.spaceID, run.ID)
 			return nil
 		},
-		body: newSpacesDonePayload(rsm.RunSummary),
+		body: newSpacesDonePayload(c.rsm.RunSummary),
 	})
 }
 

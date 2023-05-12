@@ -119,10 +119,13 @@ func NewRunSummary(
 		shouldSave:         shouldSave,
 		spaceID:            spaceID,
 		synthesizedCommand: synthesizedCommand,
-		spacesClient:       newSpacesClient(apiClient, ui),
 	}
 
-	rsm.spacesClient.startRun(&rsm)
+	// Note: this sets up a bidirectional relationship
+	// rsm has a reference to the spacesClient, and spacesClient has a reference to rsm
+	rsm.spacesClient = newSpacesClient(apiClient, ui, &rsm)
+	rsm.spacesClient.startRun()
+
 	return rsm
 }
 
@@ -165,7 +168,7 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 }
 
 func (rsm *Meta) sendToSpace() error {
-	rsm.spacesClient.finishRun(rsm)
+	rsm.spacesClient.finishRun()
 	rsm.spacesClient.Close()
 
 	// Print any errors
@@ -228,7 +231,7 @@ func (rsm *Meta) save() error {
 
 // CloseTask posts the result of the Task to Spaces
 func (rsm *Meta) CloseTask(task *TaskSummary) {
-	rsm.spacesClient.postTask(rsm, task)
+	rsm.spacesClient.postTask(task)
 }
 
 func getUser(envVars env.EnvironmentVariableMap, dir turbopath.AbsoluteSystemPath) string {
