@@ -161,12 +161,6 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	}
 
 	rsm.printExecutionSummary()
-
-	// If we don't have a spaceID, we can exit now
-	if rsm.spaceID == "" {
-		return nil
-	}
-
 	return rsm.sendToSpace()
 }
 
