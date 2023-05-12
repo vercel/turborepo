@@ -23,21 +23,18 @@ type spaceRequest struct {
 	onDone  func(req *spaceRequest, response []byte)
 }
 
-func (req *spaceRequest) debug(msg string) {
-	fmt.Printf("[%s] %s: %s\n", req.method, req.url, msg)
-}
-
 func (req *spaceRequest) error(msg string) error {
 	return fmt.Errorf("[%s] %s: %s", req.method, req.url, msg)
 }
 
 type spacesClient struct {
-	requests chan *spaceRequest
-	errors   []error
-	api      *client.APIClient
-	ui       cli.Ui
-	run      *spaceRun
-	wg       sync.WaitGroup
+	requests   chan *spaceRequest
+	errors     []error
+	api        *client.APIClient
+	ui         cli.Ui
+	run        *spaceRun
+	runCreated chan struct{}
+	wg         sync.WaitGroup
 }
 
 type spaceRun struct {
@@ -47,16 +44,27 @@ type spaceRun struct {
 
 func newSpacesClient(api *client.APIClient, ui cli.Ui) *spacesClient {
 	c := &spacesClient{
-		api:      api,
-		ui:       ui,
-		requests: make(chan *spaceRequest), // TODO: give this a size based on tasks
+		api:        api,
+		ui:         ui,
+		requests:   make(chan *spaceRequest), // TODO: give this a size based on tasks
+		runCreated: make(chan struct{}, 1),   // Use this to signal when the run is created and other requests can proceed
 	}
 
-	// Start receiving requests
-	// TODO: how to make this goroutine block on the very first request?
+	// Start receiving and processing requests
+	mu := sync.Mutex{}
+	firstReqDone := false
 	go func() {
 		for req := range c.requests {
-			c.makeRequest(req)
+			mu.Lock()
+			if !firstReqDone {
+				firstReqDone = true
+				mu.Unlock()
+				c.makeRequest(req)
+				close(c.runCreated) // close this channel to signal that other requests can proceed
+			} else {
+				mu.Unlock()
+				c.makeRequest(req)
+			}
 		}
 	}()
 
@@ -65,7 +73,6 @@ func newSpacesClient(api *client.APIClient, ui cli.Ui) *spacesClient {
 
 func (c *spacesClient) asyncRequest(req *spaceRequest) {
 	c.wg.Add(1) // increment waitgroup counter
-	req.debug("Queuing")
 	c.requests <- req
 }
 
@@ -101,7 +108,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 		}
 	}
 
-	req.debug("Executing")
 	if req.method == "POST" {
 		resp, reqErr = c.api.JSONPost(req.url, payload)
 	} else if req.method == "PATCH" {
@@ -147,6 +153,9 @@ func (c *spacesClient) start(rsm *Meta) {
 			}
 		},
 	})
+
+	// Wait for run to be created
+	<-c.runCreated
 }
 
 func (c *spacesClient) postTask(rsm *Meta, task *TaskSummary) {
