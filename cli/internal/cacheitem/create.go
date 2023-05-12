@@ -32,6 +32,17 @@ func Create(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 	return cacheItem, nil
 }
 
+// CreateWriter makes a new CacheItem using the specified writer.
+func CreateWriter(writer io.WriteCloser) *CacheItem {
+	cacheItem := &CacheItem{
+		handle:     writer,
+		compressed: true,
+	}
+
+	cacheItem.init()
+	return cacheItem
+}
+
 // init prepares the CacheItem for writing.
 // Wires all the writers end-to-end:
 // tar.Writer -> zstd.Writer -> fileBuffer -> file
