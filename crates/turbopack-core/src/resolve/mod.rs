@@ -759,15 +759,19 @@ async fn resolve_internal(
                 patterns.push(path);
             }
 
-            // We use `RequestVc::parse` to turn `Pattern::Alternatives` into a
-            // `Request::Alternatives`. This ensures the order of the patterns is
+            // This ensures the order of the patterns (extensions) is
             // preserved, `Pattern::Alternatives` inside a `Request::Raw` does not preserve
             // the order
-            resolve_internal(
-                context,
-                RequestVc::parse(Value::new(Pattern::alternatives(patterns))),
-                options,
-            )
+            let mut results = Vec::new();
+            for pattern in patterns {
+                results.push(resolve_internal(
+                    context,
+                    RequestVc::raw(Value::new(pattern), *force_in_context),
+                    options,
+                ));
+            }
+
+            merge_results(results)
         }
         Request::Module {
             module,
