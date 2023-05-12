@@ -98,7 +98,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	} else if req.method == "PATCH" {
 		resp, reqErr = c.api.JSONPatch(req.url, payload)
 	} else {
-		c.errors = append(c.errors, makeError("Spaces client: Unsupported method"))
+		c.errors = append(c.errors, makeError("Unsupported request method"))
 	}
 
 	if reqErr != nil {
