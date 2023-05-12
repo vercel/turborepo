@@ -164,10 +164,12 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	}
 
 	rsm.printExecutionSummary()
-	return rsm.sendToSpace()
+	rsm.sendToSpace()
+
+	return nil
 }
 
-func (rsm *Meta) sendToSpace() error {
+func (rsm *Meta) sendToSpace() {
 	rsm.spacesClient.finishRun()
 	rsm.spacesClient.Close()
 
@@ -184,8 +186,6 @@ func (rsm *Meta) sendToSpace() error {
 		rsm.ui.Output(fmt.Sprintf("Run: %s", url))
 		rsm.ui.Output("")
 	}
-
-	return nil
 }
 
 // closeDryRun wraps up the Run Summary at the end of `turbo run --dry`.
