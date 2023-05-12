@@ -82,9 +82,12 @@ func (c *spacesClient) start() {
 				if !firstReqDone {
 					firstReqDone = true
 					mu.Unlock()
+
+					// make the first request and then close the run.created channel
+					// as a signal that other requests can proceed.
 					go func(r *spaceRequest) {
 						c.makeRequest(r)
-						close(c.run.created) // close this channel to signal that other requests can proceed
+						close(c.run.created)
 					}(req)
 
 				} else {
