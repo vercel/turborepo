@@ -53,16 +53,23 @@ pub fn globwalk<'a>(
 ) -> impl Iterator<Item = Result<AbsoluteSystemPathBuf, WalkError>> + 'a {
     // we enable following symlinks but only because without it they are ignored
     // completely (as opposed to yielded but not followed)
+
     let walker = walkdir::WalkDir::new(base_path.as_path()).follow_links(true);
     let mut iter = walker.into_iter();
 
+    let include = include
+        .into_iter()
+        .filter_map(|s| collapse_path(s))
+        .collect::<Vec<_>>();
+
     let exclude = exclude
-        .iter()
-        .map(|g| {
-            if g.ends_with('/') {
-                format!("{}**", g)
+        .into_iter()
+        .filter_map(|g| {
+            let split = collapse_path(g)?;
+            if split.ends_with('/') {
+                Some(Cow::Owned(format!("{}**", split)))
             } else {
-                g.to_owned()
+                Some(split)
             }
         })
         .collect::<Vec<_>>();
@@ -86,9 +93,9 @@ pub fn globwalk<'a>(
         let relative_path = path.strip_prefix(&base_path).expect("it is a subdir");
         let is_directory = path.is_dir();
 
-        let include = match do_match_directory(relative_path, include, &exclude, is_directory) {
+        let include = match do_match_directory(relative_path, &include, &exclude, is_directory) {
             Ok(include) => include,
-            Err(glob) => return Some(Err(WalkError::BadPattern(glob.to_owned()))),
+            Err(glob) => return Some(Err(WalkError::BadPattern(glob.to_string()))),
         };
 
         if (include == MatchType::None || is_symlink) && is_directory {
@@ -141,12 +148,12 @@ fn potential_match_inner(glob: &str, path: &str, top_level: bool) -> Option<Matc
     }
 }
 
-fn do_match_directory<'a>(
+fn do_match_directory<'a, S: AsRef<str>>(
     path: &Path,
-    include: &'a [String],
-    exclude: &'a [String],
+    include: &'a [S],
+    exclude: &'a [S],
     is_directory: bool,
-) -> Result<MatchType, &'a String> {
+) -> Result<MatchType, &'a S> {
     let path_unix = match path.to_slash() {
         Some(path) => path,
         None => return Ok(MatchType::None), // you can't match a path that isn't valid unicode
@@ -154,20 +161,7 @@ fn do_match_directory<'a>(
 
     let first = do_match(&path_unix, include, exclude, is_directory);
 
-    // if is_directory && !path_unix.ends_with('/') {
-    //     let second = do_match(&format!("{}/", path_unix), include, exclude,
-    // is_directory);     match (first, second) {
-    //         (Ok(MatchType::Match), _) => Ok(MatchType::Match),
-    //         (_, Ok(MatchType::Match)) => Ok(MatchType::Match),
-    //         (Ok(MatchType::PotentialMatch), _) => Ok(MatchType::PotentialMatch),
-    //         (_, Ok(MatchType::PotentialMatch)) => Ok(MatchType::PotentialMatch),
-    //         (Ok(MatchType::None), Ok(MatchType::None)) => Ok(MatchType::None),
-    //         (Err(glob), _) => Err(glob),
-    //         (_, Err(glob)) => Err(glob),
-    //     }
-    // } else {
     first
-    // }
 }
 
 /// Executes a match against a relative path using the given include and exclude
@@ -176,19 +170,19 @@ fn do_match_directory<'a>(
 ///
 /// If an evaluated glob is invalid, then this function returns an error with
 /// the glob that failed.
-fn do_match<'a>(
+fn do_match<'a, S: AsRef<str>>(
     path: &str,
-    include: &'a [String],
-    exclude: &'a [String],
+    include: &'a [S],
+    exclude: &'a [S],
     is_directory: bool,
-) -> Result<MatchType, &'a String> {
+) -> Result<MatchType, &'a S> {
     if include.is_empty() {
         return Ok(MatchType::Match);
     }
 
     let included = include
         .iter()
-        .map(|glob| match_include(glob, path, is_directory).ok_or(glob))
+        .map(|glob| match_include(glob.as_ref(), path, is_directory).ok_or(glob))
         // we want to stop searching if we find an exact match, but keep searching
         // if we find a potential match or an invalid glob
         .fold_while(Ok(MatchType::None), |acc, res| match (acc, res) {
@@ -202,7 +196,7 @@ fn do_match<'a>(
 
     let excluded = exclude
         .iter()
-        .map(|glob| glob_match(glob, path).ok_or(glob))
+        .map(|glob| glob_match(glob.as_ref(), path).ok_or(glob))
         .find_map(|res| match res {
             Ok(false) => None,            // no match, keep searching
             Ok(true) => Some(Ok(true)),   // match, stop searching
@@ -234,6 +228,41 @@ fn match_include(include: &str, path: &str, is_dir: bool) -> Option<MatchType> {
     }
 }
 
+use std::borrow::Cow;
+
+fn collapse_path(path: &str) -> Option<Cow<str>> {
+    let mut stack: Vec<&str> = vec![];
+    let mut changed = false;
+    let is_root = path.starts_with("/");
+
+    for segment in path.trim_start_matches('/').split('/') {
+        match segment {
+            ".." => {
+                if let None = stack.pop() {
+                    return None;
+                }
+                changed = true;
+            }
+            "." => {
+                changed = true;
+            }
+            _ => stack.push(segment),
+        }
+    }
+
+    if !changed {
+        Some(Cow::Borrowed(path))
+    } else {
+        let string = if is_root {
+            std::iter::once("").chain(stack.into_iter()).join("/")
+        } else {
+            stack.join("/")
+        };
+
+        Some(Cow::Owned(string))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::path::Path;
@@ -242,7 +271,31 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{MatchType, WalkError};
+    use crate::{collapse_path, MatchType, WalkError};
+
+    #[test_case("a/./././b", "a/b" ; "test path with dot segments")]
+    #[test_case("a/../b", "b" ; "test path with dotdot segments")]
+    #[test_case("a/./../b", "b" ; "test path with mixed dot and dotdot segments")]
+    #[test_case("./a/b", "a/b" ; "test path starting with dot segment")]
+    #[test_case("a/b/..", "a" ; "test path ending with dotdot segment")]
+    #[test_case("a/b/.", "a/b" ; "test path ending with dot segment")]
+    #[test_case("a/.././b", "b" ; "test path with mixed and consecutive ./ and ../ segments")]
+    #[test_case("/a/./././b", "/a/b" ; "test path with leading / and ./ segments")]
+    #[test_case("/a/../b", "/b" ; "test path with leading / and dotdot segments")]
+    #[test_case("/a/./../b", "/b" ; "test path with leading / and mixed dot and dotdot segments")]
+    #[test_case("/./a/b", "/a/b" ; "test path with leading / and starting with dot segment")]
+    #[test_case("/a/b/..", "/a" ; "test path with leading / and ending with dotdot segment")]
+    #[test_case("/a/b/.", "/a/b" ; "test path with leading / and ending with dot segment")]
+    #[test_case("/a/.././b", "/b" ; "test path with leading / and mixed and consecutive dot and dotdot segments")]
+    fn test_collapse_path(glob: &str, expected: &str) {
+        assert_eq!(collapse_path(glob).unwrap(), expected);
+    }
+
+    #[test_case("../a/b" ; "test path starting with ../ segment should return None")]
+    #[test_case("/../a" ; "test path with leading dotdotdot segment should return None")]
+    fn test_collapse_path_not(glob: &str) {
+        assert_eq!(collapse_path(glob), None);
+    }
 
     #[test_case("/a/b/c/d", "/a/b/c/d", MatchType::Match; "exact match")]
     #[test_case("/a", "/a/b/c", MatchType::PotentialMatch; "minimal match")]
@@ -272,7 +325,7 @@ mod test {
     #[test]
     fn do_match_empty_include() {
         assert_eq!(
-            super::do_match_directory(Path::new("/a/b/c/d"), &[], &[], false).unwrap(),
+            super::do_match_directory::<&str>(Path::new("/a/b/c/d"), &[], &[], false).unwrap(),
             MatchType::Match
         )
     }
@@ -394,8 +447,8 @@ mod test {
     // however in symlink mode, walkdir yields broken symlinks as errors
     #[test_case("broken-symlink", None, 1, 1 ; "broken symlinks should be yielded")]
     // globs that match across a symlink should not follow the symlink
-    #[test_case("working-symlink/c/*", None, 1, 1)]
-    #[test_case("working-sym*/*", None, 0, 0)]
+    #[test_case("working-symlink/c/*", None, 1, 1 ; "working symlink should not be followed")]
+    #[test_case("working-sym*/*", None, 0, 0 ; "working symlink should not be followed 2")]
     #[test_case("b/**/f", None, 0, 0)]
     fn glob_walk(
         pattern: &str,
@@ -877,7 +930,7 @@ mod test {
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
         ]
-        ; "self-references (.) work"
+        ; "self references work (.)"
     )]
     #[test_case(&[
             "/repos/some-app/package.json",
