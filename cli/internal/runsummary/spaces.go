@@ -103,11 +103,8 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 		return
 	}
 
-	// Make the request
-	var resp []byte
-	var reqErr error
-
-	// Lazily make the url with the run object since we need the run.ID
+	// The runID is required for POST task requests and PATCH run request
+	// so we have to construct it lazily for those requests.
 	if req.makeURL != nil {
 		if err := req.makeURL(req, c.run); err != nil {
 			c.errors = append(c.errors, err)
@@ -115,6 +112,9 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 		}
 	}
 
+	// Make the request
+	var resp []byte
+	var reqErr error
 	if req.method == "POST" {
 		resp, reqErr = c.api.JSONPost(req.url, payload)
 	} else if req.method == "PATCH" {
