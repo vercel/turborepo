@@ -2,6 +2,7 @@
 package runsummary
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/scm"
+	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
@@ -135,7 +137,7 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
+func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspace.Catalog) error {
 	if rsm.runType == runTypeDryJSON || rsm.runType == runTypeDryText {
 		return rsm.closeDryRun(workspaceInfos)
 	}
@@ -161,14 +163,16 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	}
 
 	rsm.printExecutionSummary()
-	rsm.sendToSpace()
+	rsm.sendToSpace(ctx)
 
 	return nil
 }
 
-func (rsm *Meta) sendToSpace() {
+func (rsm *Meta) sendToSpace(ctx context.Context) {
 	rsm.spacesClient.finishRun(rsm)
-	rsm.spacesClient.Close()
+	func() {
+		_ = spinner.WaitFor(ctx, rsm.spacesClient.Close, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
+	}()
 
 	// Print any errors
 	if len(rsm.spacesClient.errors) > 0 {
