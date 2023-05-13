@@ -313,7 +313,6 @@ jobs:
     needs: determine_jobs
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 30
-
     strategy:
       fail-fast: false
       matrix:
@@ -322,39 +321,6 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
-        manager: [yarn, npm]
-        example: [with-yarn, with-npm, non-monorepo]
-        include:
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: basic
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: basic
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: kitchen-sink
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: kitchen-sink
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: with-svelte
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: with-svelte
 
     runs-on: ${{ matrix.os.runner }}
     steps:
@@ -404,7 +370,7 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
-        run: turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: turbo run test --filter="turborepo-tests-examples"
 
   rust_prepare:
     name: Check rust crates
