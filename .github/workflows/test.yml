@@ -171,6 +171,13 @@ jobs:
             !**.md
             !**.mdx
 
+      - name: Turborepo JS Package related changes
+        id: turborepo_js
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            packages/**
+
       - name: Formatting related changes
         id: format
         uses: technote-space/get-diff-action@v6
@@ -189,6 +196,7 @@ jobs:
       go_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
       go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
+      turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
@@ -405,6 +413,48 @@ jobs:
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
         run: turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
+
+  js_packages:
+    timeout-minutes: 30
+    if: needs.determine_jobs.outputs.turborepo_js == 'true'
+    needs: determine_jobs
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
+
+    steps:
+      # on main -> current + prev commit
+      # pr -> pr commits + base commit
+      - name: Determine fetch depth
+        id: fetch-depth
+        run: |
+          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
+
+      - name: Run tests
+        run: |
+          turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter=!cli --filter=!turborepo-tests* --color
 
   rust_prepare:
     name: Check rust crates
@@ -1135,6 +1185,7 @@ jobs:
       - go_examples
       - go_e2e
       - go_integration
+      - js_packages
       - rust_prepare
       - rust_lint
       - rust_check
@@ -1171,6 +1222,7 @@ jobs:
           subjob ${{needs.go_examples.result}} "Go examples"
           subjob ${{needs.go_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
+          subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_prepare.result}} "Rust prepare"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.rust_check.result}} "Rust checks"
