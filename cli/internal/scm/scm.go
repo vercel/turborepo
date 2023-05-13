@@ -78,17 +78,3 @@ func GetCurrentSha(dir turbopath.AbsoluteSystemPath) string {
 	}
 	return strings.TrimRight(string(out), "\n")
 }
-
-// GetCurrentUser returns the local user.name
-// We do not specify a --local or --global flag so it should
-// resolve the value the same way git does when creating a commit.
-func GetCurrentUser(dir turbopath.AbsoluteSystemPath) string {
-	cmd := exec.Command("git", []string{"config", "user.name"}...)
-	cmd.Dir = dir.ToString()
-
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimRight(string(out), "\n")
-}
