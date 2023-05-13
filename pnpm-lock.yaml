@@ -218,6 +218,109 @@ importers:
   examples:
     specifiers: {}
 
+  examples-tests/helpers:
+    specifiers: {}
+
+  examples-tests/npm-non-monorepo:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/npm-with-npm:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/npm-with-yarn:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/pnpm-basic:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/pnpm-gatsby:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/pnpm-kitchen-sink:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/pnpm-with-svelte:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/yarn-non-monorepo:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/yarn-with-npm:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
+  examples-tests/yarn-with-yarn:
+    specifiers:
+      '@turborepo-examples-tests/helpers': workspace:*
+      turborepo-examples: workspace:*
+      turborepo-tests-helpers: workspace:*
+    dependencies:
+      '@turborepo-examples-tests/helpers': link:../helpers
+      turborepo-examples: link:../../examples
+      turborepo-tests-helpers: link:../../turborepo-tests/helpers
+
   packages/create-turbo:
     specifiers:
       '@turbo/test-utils': workspace:*
@@ -690,14 +793,6 @@ importers:
       tar: 6.1.13
       uvu: 0.5.6
       zstd-codec: 0.1.4
-
-  turborepo-tests/examples:
-    specifiers:
-      turborepo-examples: workspace:*
-      turborepo-tests-helpers: workspace:*
-    dependencies:
-      turborepo-examples: link:../../examples
-      turborepo-tests-helpers: link:../helpers
 
   turborepo-tests/helpers:
     specifiers: {}
