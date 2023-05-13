@@ -191,10 +191,6 @@ func (c *spacesClient) createRun(rsm *Meta) {
 		// handler for when the request finishes. We set the response into a struct on the client
 		// because we need the run ID and URL from the server later.
 		onDone: func(req *spaceRequest, response []byte) {
-			if response == nil {
-				return
-			}
-
 			if err := json.Unmarshal(response, c.run); err != nil {
 				c.errors = append(c.errors, req.error(fmt.Sprintf("Error unmarshaling response: %s", err)))
 			}
