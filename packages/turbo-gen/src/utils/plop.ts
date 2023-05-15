@@ -1,9 +1,10 @@
 import fs from "fs-extra";
 import { Project } from "@turbo/workspaces";
-import nodePlop, { NodePlopAPI, PlopCfg, PlopGenerator } from "node-plop";
+import nodePlop, { NodePlopAPI, PlopGenerator } from "node-plop";
 import path from "path";
 import inquirer from "inquirer";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
+import { GeneratorError } from "./error";
 
 // TODO: Support a TS config file
 const TURBO_GENERATOR_CONFIG = path.join("turbo", "generators", "config.js");
@@ -136,10 +137,6 @@ export function getCustomGenerators({
     gensWithSeparators.push(...gensByWorkspace[group]);
   });
 
-  if (!gensWithSeparators.length) {
-    throw new Error("No generators found");
-  }
-
   return gensWithSeparators;
 }
 
@@ -225,13 +222,17 @@ export async function runCustomGenerator({
 }): Promise<void> {
   const plop = getPlop({ project, configPath });
   if (!plop) {
-    throw new Error("Unable to load generators");
+    throw new GeneratorError("Unable to load generators", {
+      type: "plop_unable_to_load_config",
+    });
   }
   const gen: PlopGenerator & { basePath?: string } =
     plop.getGenerator(generator);
 
   if (!gen) {
-    throw new Error(`Generator ${generator} not found`);
+    throw new GeneratorError(`Generator ${generator} not found`, {
+      type: "plop_generator_not_found",
+    });
   }
 
   const answers = await gen.runPrompts(bypassArgs);
@@ -253,7 +254,9 @@ export async function runCustomGenerator({
         logger.error(`Error - ${f.error}. Unable to ${f.type} to "${f.path}"`);
       }
     });
-    throw new Error(`Failed to run "${generator}" generator`);
+    throw new GeneratorError(`Failed to run "${generator}" generator`, {
+      type: "plop_error_running_generator",
+    });
   }
 
   if (results.changes && results.changes.length > 0) {

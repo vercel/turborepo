@@ -7,6 +7,7 @@ import { logger } from "@turbo/utils";
 
 import { add, generate, raw } from "./commands";
 import cliPkg from "../package.json";
+import { GeneratorError } from "./utils/error";
 
 const turboGenCli = new Command();
 
@@ -113,13 +114,13 @@ turboGenCli
 turboGenCli
   .parseAsync()
   .then(notifyUpdate)
-  .catch(async (reason) => {
+  .catch(async (error) => {
     console.log();
-    if (reason.command) {
-      logger.error(`${chalk.bold(reason.command)} has failed.`);
+    if (error instanceof GeneratorError) {
+      logger.error(error.message);
     } else {
       logger.error("Unexpected error. Please report it as a bug:");
-      console.log(reason);
+      console.log(error.message);
     }
     console.log();
     await notifyUpdate();

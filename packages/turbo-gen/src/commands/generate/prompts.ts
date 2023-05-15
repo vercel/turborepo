@@ -1,5 +1,6 @@
 import inquirer from "inquirer";
 import type { Generator } from "../../utils/plop";
+import { logger } from "@turbo/utils";
 
 export async function customGenerators({
   generators,
@@ -8,15 +9,19 @@ export async function customGenerators({
   generators: Array<Generator | inquirer.Separator>;
   generator?: string;
 }) {
-  if (
-    generator &&
-    generators.find(
-      (g) => !(g instanceof inquirer.Separator) && g.name === generator
-    )
-  ) {
-    return {
-      selectedGenerator: generator,
-    };
+  if (generator) {
+    if (
+      generators.find(
+        (g) => !(g instanceof inquirer.Separator) && g.name === generator
+      )
+    ) {
+      return {
+        selectedGenerator: generator,
+      };
+    }
+
+    logger.warn(`Generator "${generator}" not found`);
+    console.log();
   }
 
   const generatorAnswer = await inquirer.prompt<{
@@ -24,8 +29,6 @@ export async function customGenerators({
   }>({
     type: "list",
     name: "selectedGenerator",
-    default: generator,
-    when: !generator,
     message: `Select generator to run`,
     choices: generators.map((gen) => {
       if (gen instanceof inquirer.Separator) {
