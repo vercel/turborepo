@@ -365,47 +365,7 @@
 <a href="#365" id="365">365</a>
 <a href="#366" id="366">366</a>
 <a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-</pre><pre class="rust"><code><span class="kw">mod </span>server_to_client_proxy;
-<span class="kw">mod </span>util;
-
-<span class="kw">use </span>std::{fmt::Debug, hash::Hash, path::PathBuf, sync::Arc};
+</pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, hash::Hash, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
@@ -417,12 +377,11 @@
         atoms::JsWord,
         preset_env::{<span class="self">self</span>, Targets},
         transforms::{
-            base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
+            base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
             react::react,
         },
         visit::{FoldWith, VisitMutWith},
     },
-    quote,
 };
 <span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, StringVc, StringsVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -431,16 +390,9 @@
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
 };
 
-<span class="kw">use </span><span class="self">self</span>::{
-    server_to_client_proxy::create_proxy_module,
-    util::{is_client_module, is_server_module},
-};
-
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 </span><span class="kw">pub enum </span>EcmascriptInputTransform {
-    ClientDirective(StringVc),
-    ServerDirective(StringVc),
     CommonJs,
     Plugin(TransformPluginVc),
     PresetEnv(EnvironmentVc),
@@ -552,7 +504,6 @@
             source_map,
             top_level_mark,
             unresolved_mark,
-            file_name_str,
             file_name_hash,
             file_path,
             ..
@@ -729,31 +680,6 @@
                     decorators(config),
                     inject_helpers(unresolved_mark)
                 ));
-            }
-            <span class="comment">// [TODO]: WEB-940 - use ClientDirectiveTransformer in next-swc
-            </span>EcmascriptInputTransform::ClientDirective(transition_name) =&gt; {
-                <span class="kw">if </span>is_client_module(program) {
-                    <span class="kw">let </span>transition_name = <span class="kw-2">&amp;*</span>transition_name.<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw-2">*</span>program = create_proxy_module(transition_name, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;./{file_name_str}&quot;</span>));
-                    program.visit_mut_with(<span class="kw-2">&amp;mut </span>resolver(unresolved_mark, top_level_mark, <span class="bool-val">false</span>));
-                }
-            }
-            <span class="comment">// [TODO]: WEB-940 - use ServerDirectiveTransformer in next-swc
-            </span>EcmascriptInputTransform::ServerDirective(_transition_name) =&gt; {
-                <span class="kw">if </span>is_server_module(program) {
-                    <span class="kw">let </span>stmt = <span class="macro">quote!</span>(
-                        <span class="string">&quot;throw new Error(&#39;Server actions (\&quot;use server\&quot;) are not yet supported in \
-                         Turbopack&#39;);&quot; </span><span class="kw">as </span>Stmt
-                    );
-                    <span class="kw">match </span>program {
-                        Program::Module(m) =&gt; m.body = <span class="macro">vec!</span>[ModuleItem::Stmt(stmt)],
-                        Program::Script(s) =&gt; s.body = <span class="macro">vec!</span>[stmt],
-                    }
-                    UnsupportedServerActionIssue { context: file_path }
-                        .cell()
-                        .as_issue()
-                        .emit();
-                }
             }
             EcmascriptInputTransform::Plugin(transform) =&gt; {
                 transform.<span class="kw">await</span><span class="question-mark">?</span>.transform(program, ctx).<span class="kw">await</span><span class="question-mark">?
