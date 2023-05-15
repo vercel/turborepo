@@ -6,6 +6,8 @@ interface Answers extends Object {
   turboYearsSaved: string;
 }
 
+const MINUTES_IN_YEAR = 60 * 24 * 365;
+
 const PUBLIC_TB_TOKEN =
   "p.eyJ1IjogIjAzYzA0Y2MyLTM1YTAtNDhhNC05ZTZjLThhMWE0NGNhNjhkZiIsICJpZCI6ICJmOWIzMTU5Yi0wOTVjLTQyM2UtOWIwNS04ZDZlNzIyNjEwNzIifQ.A3TOPdm3Lhmn-1x5m6jNvulCQbbgUeQfAIO3IaaAt5k";
 
@@ -37,7 +39,9 @@ export async function releasePostStats(answers: Answers): Promise<string> {
   const totalMinutesSaved: number =
     timeSavedData.data[0].remote_cache_minutes_saved +
     timeSavedData.data[0].local_cache_minutes_saved;
-  const totalYearsSaved: number = Math.floor(totalMinutesSaved / 60 / 24 / 365);
+  const totalYearsSaved: number = Math.floor(
+    totalMinutesSaved / MINUTES_IN_YEAR
+  );
   const weeklyDownloads: number = Object.keys(downloadsData.downloads).reduce(
     (sum, version) => sum + downloadsData.downloads[version],
     0
