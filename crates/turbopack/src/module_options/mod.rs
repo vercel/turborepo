@@ -70,7 +70,6 @@ impl ModuleOptionsVc {
             ref decorators,
             enable_mdx,
             enable_mdx_rs,
-            ref mdx_provider_import_source,
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
             preset_env_versions,
@@ -415,7 +414,7 @@ impl ModuleOptionsVc {
             ),
         ];
 
-        if enable_mdx || enable_mdx_rs {
+        if enable_mdx || enable_mdx_rs.is_some() {
             let (jsx_runtime, jsx_import_source) = if let Some(enable_jsx) = enable_jsx {
                 let jsx = enable_jsx.await?;
                 (jsx.runtime.clone(), jsx.import_source.clone())
@@ -423,12 +422,16 @@ impl ModuleOptionsVc {
                 (None, None)
             };
 
+            let mdx_options = enable_mdx_rs
+                .unwrap_or(MdxTransformModuleOptionsVc::default())
+                .await?;
+
             let mdx_transform_options = (MdxTransformOptions {
                 development: true,
                 preserve_jsx: false,
                 jsx_runtime,
                 jsx_import_source,
-                provider_import_source: mdx_provider_import_source.clone(),
+                provider_import_source: mdx_options.provider_import_source.clone(),
             })
             .cell();
 
