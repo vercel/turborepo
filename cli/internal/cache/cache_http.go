@@ -4,24 +4,16 @@
 package cache
 
 import (
-	"archive/tar"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	log "log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
-	"time"
-
-	"github.com/DataDog/zstd"
 
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/cacheitem"
-	"github.com/vercel/turbo/cli/internal/tarpatch"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -51,19 +43,15 @@ func (l limiter) release() {
 	<-l
 }
 
-// mtime is the time we attach for the modification time of all files.
-var mtime = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
-
-// nobody is the usual uid / gid of the 'nobody' user.
-const nobody = 65534
-
-func (cache *httpCache) Put(_ turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
+func (cache *httpCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	// if cache.writable {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 
 	r, w := io.Pipe()
-	go cache.write(w, hash, files)
+
+	cacheErrorChan := make(chan error, 1)
+	go cache.write(w, anchor, files, cacheErrorChan)
 
 	// Read the entire artifact tar into memory so we can easily compute the signature.
 	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
@@ -79,69 +67,28 @@ func (cache *httpCache) Put(_ turbopath.AbsoluteSystemPath, hash string, duratio
 			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 		}
 	}
+
+	cacheCreateError := <-cacheErrorChan
+	if cacheCreateError != nil {
+		return cacheCreateError
+	}
+
 	return cache.client.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
-func (cache *httpCache) write(w io.WriteCloser, hash string, files []turbopath.AnchoredSystemPath) {
-	defer w.Close()
-	defer func() { _ = w.Close() }()
-	zw := zstd.NewWriter(w)
-	defer func() { _ = zw.Close() }()
-	tw := tar.NewWriter(zw)
-	defer func() { _ = tw.Close() }()
-	for _, file := range files {
-		// log.Printf("caching file %v", file)
-		if err := cache.storeFile(tw, file); err != nil {
-			log.Printf("[ERROR] Error uploading artifact %s to HTTP cache due to: %s", file, err)
-			// TODO(jaredpalmer): How can we cancel the request at this point?
-		}
-	}
-}
+func (cache *httpCache) write(w io.WriteCloser, anchor turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath, cacheErrorChan chan error) {
+	cacheItem := cacheitem.CreateWriter(w)
 
-func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath turbopath.AnchoredSystemPath) error {
-	absoluteFilePath := repoRelativePath.RestoreAnchor(cache.repoRoot)
-	info, err := absoluteFilePath.Lstat()
-	if err != nil {
-		return err
-	}
-	target := ""
-	if info.Mode()&os.ModeSymlink != 0 {
-		target, err = absoluteFilePath.Readlink()
+	for _, file := range files {
+		err := cacheItem.AddFile(anchor, file)
 		if err != nil {
-			return err
+			_ = cacheItem.Close()
+			cacheErrorChan <- err
 		}
 	}
-	hdr, err := tarpatch.FileInfoHeader(repoRelativePath.ToUnixPath(), info, filepath.ToSlash(target))
-	if err != nil {
-		return err
-	}
-	// Ensure posix path for filename written in header.
-	hdr.Name = repoRelativePath.ToUnixPath().ToString()
-	// Zero out all timestamps.
-	hdr.ModTime = mtime
-	hdr.AccessTime = mtime
-	hdr.ChangeTime = mtime
-	// Strip user/group ids.
-	hdr.Uid = nobody
-	hdr.Gid = nobody
-	hdr.Uname = "nobody"
-	hdr.Gname = "nobody"
-	if err := tw.WriteHeader(hdr); err != nil {
-		return err
-	} else if info.IsDir() || target != "" {
-		return nil // nothing to write
-	}
-	f, err := absoluteFilePath.Open()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-	_, err = io.Copy(tw, f)
-	if errors.Is(err, tar.ErrWriteTooLong) {
-		log.Printf("Error writing %v to tar file, info: %v, mode: %v, is regular: %v", repoRelativePath, info, info.Mode(), info.Mode().IsRegular())
-	}
-	return err
+
+	cacheErrorChan <- cacheItem.Close()
 }
 
 func (cache *httpCache) Fetch(_ turbopath.AbsoluteSystemPath, key string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {

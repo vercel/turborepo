@@ -1,0 +1,35 @@
+name: Turborepo Compare Cache Item
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Turborepo release to test.
+        type: string
+        default: "canary"
+
+jobs:
+  generate_cache_artifact:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: npm
+
+      - name: create-turbo
+        run: |
+          npm install -g turbo
+          npx create-turbo@${inputs.version} my-turborepo pnpm
+          cd my-turborepo
+          turbo run build
+
+      - name: Grab Turborepo artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: cache-item-${matrix.os}-${inputs.version}
+          path: my-turborepo/node_modules/.cache/turbo
+          retention-days: 1
