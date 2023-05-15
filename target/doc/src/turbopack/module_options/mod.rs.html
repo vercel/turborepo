@@ -486,7 +486,6 @@
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
 <a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -551,7 +550,6 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsVc&gt; {
         <span class="kw">let </span>ModuleOptionsContext {
             enable_jsx,
-            enable_react_refresh,
             enable_styled_jsx,
             <span class="kw-2">ref </span>enable_styled_components,
             enable_types,
@@ -628,7 +626,7 @@
             <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;
 
             transforms.push(EcmascriptInputTransform::React {
-                refresh: enable_react_refresh || jsx.react_refresh,
+                refresh: jsx.react_refresh,
                 import_source: OptionStringVc::cell(jsx.import_source.clone()),
                 runtime: OptionStringVc::cell(jsx.runtime.clone()),
             });
