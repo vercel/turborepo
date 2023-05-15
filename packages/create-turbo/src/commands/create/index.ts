@@ -52,7 +52,7 @@ export async function create(
   opts: CreateCommandOptions
 ) {
   const { skipInstall, skipTransforms } = opts;
-  console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
+  console.log(chalk.bold(turboGradient(`\n>>> TURBOBOOPO\n`)));
   info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
   console.log();
 
