@@ -1,9 +1,9 @@
 use std::{cell::RefCell, io::Write, marker::PhantomData, thread, time::Instant};
 
-use serde::Serialize;
 use tracing::{span, Subscriber};
 use tracing_subscriber::{fmt::MakeWriter, registry::LookupSpan, Layer};
-use turbopack_cli_utils::tracing::{FullTraceRow, TraceRow};
+
+use crate::tracing::{FullTraceRow, TraceRow};
 
 pub struct RawTraceLayer<
     W: for<'span> MakeWriter<'span> + 'static,

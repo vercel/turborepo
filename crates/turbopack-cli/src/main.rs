@@ -9,7 +9,8 @@ use std::{
 use anyhow::{Context, Result};
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
-use turbopack_cli::{arguments::Arguments, raw_trace::RawTraceLayer, register};
+use turbopack_cli::{arguments::Arguments, register};
+use turbopack_cli_utils::raw_trace::RawTraceLayer;
 
 #[global_allocator]
 static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;

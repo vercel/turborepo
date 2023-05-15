@@ -5,7 +5,6 @@
 pub mod arguments;
 pub mod dev;
 pub(crate) mod embed_js;
-pub mod raw_trace;
 
 pub fn register() {
     turbopack::register();
