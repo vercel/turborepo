@@ -12,7 +12,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/ci"
 	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/env"
-	"github.com/vercel/turbo/cli/internal/scm"
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -241,10 +240,6 @@ func getUser(envVars env.EnvironmentVariableMap, dir turbopath.AbsoluteSystemPat
 	if ci.IsCi() {
 		vendor := ci.Info()
 		username = envVars[vendor.UsernameEnvVar]
-	}
-
-	if username == "" {
-		username = scm.GetCurrentUser(dir)
 	}
 
 	return username
