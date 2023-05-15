@@ -69,36 +69,47 @@ func (c *spacesClient) start() {
 		return
 	}
 
-	mu := sync.Mutex{}
-	firstReqDone := false
-	processors := 8
-	for i := 0; i < processors; i++ {
-		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			for req := range c.requests {
-				// since we have multiple processors, we want to lock firstReqDone so only the first one will mark firstReqDone
-				mu.Lock()
-				if !firstReqDone {
-					firstReqDone = true
-					mu.Unlock()
+	// Start an immediately invoked go routine that listens for requests coming in from a channel
+	pending := []*spaceRequest{}
+	firstRequestStarted := false
 
-					// make the first request and then close the run.created channel
-					// as a signal that other requests can proceed.
-					go func(r *spaceRequest) {
-						c.makeRequest(r)
-						close(c.run.created)
-					}(req)
+	// Create a labeled statement so we can break out of the for loop more easily
 
-				} else {
-					mu.Unlock()
-
-					// If this is not the first request, wait for the run to be created
-					<-c.run.created
-					go c.makeRequest(req)
-				}
+	// Setup a for loop that goes infinitely until we break out of it
+FirstRequest:
+	for {
+		// A select statement that can listen for messages from multiple channels
+		select {
+		// listen for new requests coming in
+		case req := <-c.requests:
+			if req == nil {
+				continue
 			}
-		}()
+
+			// Make the first request right away in a goroutine,
+			// queue all other requests. When the first request is done,
+			// we'll get a message on the other channel and break out of this loop
+			if !firstRequestStarted {
+				firstRequestStarted = true
+				go c.dequeueRequest(req)
+			} else {
+				pending = append(pending, req)
+			}
+			// Wait for c.run.created channel to be closed and:
+		case <-c.run.created:
+			// 1. flush pending requests
+			for _, req := range pending {
+				go c.dequeueRequest(req)
+			}
+
+			// 2. break out of the forever loop.
+			break FirstRequest
+		}
+	}
+
+	// and then continue listening for more requests as they come in until the channel is closed
+	for req := range c.requests {
+		go c.dequeueRequest(req)
 	}
 }
 
@@ -172,7 +183,7 @@ func (c *spacesClient) createRun(rsm *Meta) {
 		return
 	}
 
-	c.requests <- &spaceRequest{
+	c.queueRequest(&spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(runsEndpoint, c.spaceID),
 		body:   newSpacesRunCreatePayload(rsm),
@@ -180,15 +191,14 @@ func (c *spacesClient) createRun(rsm *Meta) {
 		// handler for when the request finishes. We set the response into a struct on the client
 		// because we need the run ID and URL from the server later.
 		onDone: func(req *spaceRequest, response []byte) {
-			if response == nil {
-				return
-			}
-
 			if err := json.Unmarshal(response, c.run); err != nil {
 				c.errors = append(c.errors, req.error(fmt.Sprintf("Error unmarshaling response: %s", err)))
 			}
+
+			// close the run.created channel, because all other requests are blocked on it
+			close(c.run.created)
 		},
-	}
+	})
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
@@ -196,7 +206,7 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 		return
 	}
 
-	c.requests <- &spaceRequest{
+	c.queueRequest(&spaceRequest{
 		method: "POST",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
 			if run.ID == "" {
@@ -206,7 +216,7 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 			return nil
 		},
 		body: newSpacesTaskPayload(task),
-	}
+	})
 }
 
 func (c *spacesClient) finishRun(rsm *Meta) {
@@ -214,7 +224,7 @@ func (c *spacesClient) finishRun(rsm *Meta) {
 		return
 	}
 
-	c.requests <- &spaceRequest{
+	c.queueRequest(&spaceRequest{
 		method: "PATCH",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
 			if run.ID == "" {
@@ -224,7 +234,19 @@ func (c *spacesClient) finishRun(rsm *Meta) {
 			return nil
 		},
 		body: newSpacesDonePayload(rsm.RunSummary),
-	}
+	})
+}
+
+// queueRequest adds the given request to the requests channel and increments the waitGroup counter
+func (c *spacesClient) queueRequest(req *spaceRequest) {
+	c.wg.Add(1)
+	c.requests <- req
+}
+
+// dequeueRequest makes the request in a go routine and decrements the waitGroup counter
+func (c *spacesClient) dequeueRequest(req *spaceRequest) {
+	defer c.wg.Done()
+	c.makeRequest(req)
 }
 
 // Cloe will wait for all requests to finish
