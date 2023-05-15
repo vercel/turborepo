@@ -140,8 +140,7 @@ describe("git", () => {
       const calls = [
         "git init",
         "git checkout -b main",
-        "git add -A",
-        'git commit -m "test commit"',
+        'git commit --author="Turbobot <turbobot@vercel.com>" -am "test commit"',
       ];
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length + 2);
       calls.forEach((call) => {
@@ -195,11 +194,7 @@ describe("git", () => {
       const result = tryGitInit(root, "test commit");
       expect(result).toBe(false);
 
-      const calls: string[] = [
-        GIT_REPO_COMMAND,
-        HG_REPO_COMMAND,
-        "git init"
-      ];
+      const calls: string[] = [GIT_REPO_COMMAND, HG_REPO_COMMAND, "git init"];
 
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length);
       calls.forEach((call) => {
@@ -234,7 +229,7 @@ describe("git", () => {
       const calls = [
         "git init",
         "git checkout -b main",
-        "git add -A",
+        'git commit --author="Turbobot <turbobot@vercel.com>" -am "test commit"',
       ];
 
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length + 2);
