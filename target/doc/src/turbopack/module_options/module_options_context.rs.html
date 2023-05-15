@@ -185,6 +185,7 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -315,48 +316,49 @@
 
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone)]
+#[serde(default)]
+</span><span class="kw">pub struct </span>MdxTransformModuleOptions {
+    <span class="doccomment">/// The path to a module providing Components to mdx modules.
+    /// The provider must export a useMDXComponents, which is called to access
+    /// an object of components.
+    </span><span class="kw">pub </span>provider_import_source: <span class="prelude-ty">Option</span>&lt;String&gt;,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>MdxTransformModuleOptionsVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(Default::default())
+    }
+}
+
+<span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Default, Clone)]
+#[serde(default)]
 </span><span class="kw">pub struct </span>ModuleOptionsContext {
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_jsx: <span class="prelude-ty">Option</span>&lt;JsxTransformOptionsVc&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_emotion: <span class="prelude-ty">Option</span>&lt;EmotionTransformConfigVc&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_styled_components: <span class="prelude-ty">Option</span>&lt;StyledComponentsTransformConfigVc&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_styled_jsx: bool,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_postcss_transform: <span class="prelude-ty">Option</span>&lt;PostCssTransformOptions&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_webpack_loaders: <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_types: bool,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_typescript_transform: <span class="prelude-ty">Option</span>&lt;TypescriptTransformOptionsVc&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>decorators: <span class="prelude-ty">Option</span>&lt;DecoratorsOptionsVc&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_mdx: bool,
+    <span class="kw">pub </span>enable_jsx: <span class="prelude-ty">Option</span>&lt;JsxTransformOptionsVc&gt;,
+    <span class="kw">pub </span>enable_emotion: <span class="prelude-ty">Option</span>&lt;EmotionTransformConfigVc&gt;,
+    <span class="kw">pub </span>enable_styled_components: <span class="prelude-ty">Option</span>&lt;StyledComponentsTransformConfigVc&gt;,
+    <span class="kw">pub </span>enable_styled_jsx: bool,
+    <span class="kw">pub </span>enable_postcss_transform: <span class="prelude-ty">Option</span>&lt;PostCssTransformOptions&gt;,
+    <span class="kw">pub </span>enable_webpack_loaders: <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt;,
+    <span class="kw">pub </span>enable_types: bool,
+    <span class="kw">pub </span>enable_typescript_transform: <span class="prelude-ty">Option</span>&lt;TypescriptTransformOptionsVc&gt;,
+    <span class="kw">pub </span>decorators: <span class="prelude-ty">Option</span>&lt;DecoratorsOptionsVc&gt;,
+    <span class="kw">pub </span>enable_mdx: bool,
     <span class="comment">// [Note]: currently mdx, and mdx_rs have different configuration entrypoint from next.config.js,
     // however we might want to unify them in the future.
-    </span><span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_mdx_rs: bool,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>custom_ecma_transform_plugins: <span class="prelude-ty">Option</span>&lt;CustomEcmascriptTransformPluginsVc&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="doccomment">/// Custom rules to be applied after all default rules.
+    </span><span class="kw">pub </span>enable_mdx_rs: <span class="prelude-ty">Option</span>&lt;MdxTransformModuleOptionsVc&gt;,
+    <span class="kw">pub </span>preset_env_versions: <span class="prelude-ty">Option</span>&lt;EnvironmentVc&gt;,
+    <span class="kw">pub </span>custom_ecma_transform_plugins: <span class="prelude-ty">Option</span>&lt;CustomEcmascriptTransformPluginsVc&gt;,
+    <span class="doccomment">/// Custom rules to be applied after all default rules.
     </span><span class="kw">pub </span>custom_rules: Vec&lt;ModuleRule&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>execution_context: <span class="prelude-ty">Option</span>&lt;ExecutionContextVc&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="doccomment">/// A list of rules to use a different module option context for certain
+    <span class="kw">pub </span>execution_context: <span class="prelude-ty">Option</span>&lt;ExecutionContextVc&gt;,
+    <span class="doccomment">/// A list of rules to use a different module option context for certain
     /// context paths. The first matching is used.
     </span><span class="kw">pub </span>rules: Vec&lt;(ContextCondition, ModuleOptionsContextVc)&gt;,
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>placeholder_for_future_extensions: (),
-    <span class="attr">#[serde(default)]
-    </span><span class="kw">pub </span>enable_tree_shaking: bool,
+    <span class="kw">pub </span>placeholder_for_future_extensions: (),
+    <span class="kw">pub </span>enable_tree_shaking: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

@@ -486,6 +486,11 @@
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
 <a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -902,7 +907,7 @@
             ),
         ];
 
-        <span class="kw">if </span>enable_mdx || enable_mdx_rs {
+        <span class="kw">if </span>enable_mdx || enable_mdx_rs.is_some() {
             <span class="kw">let </span>(jsx_runtime, jsx_import_source) = <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_jsx) = enable_jsx {
                 <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;
                 (jsx.runtime.clone(), jsx.import_source.clone())
@@ -910,11 +915,16 @@
                 (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
             };
 
+            <span class="kw">let </span>mdx_options = enable_mdx_rs
+                .unwrap_or(MdxTransformModuleOptionsVc::default())
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
             <span class="kw">let </span>mdx_transform_options = (MdxTransformOptions {
                 development: <span class="bool-val">true</span>,
                 preserve_jsx: <span class="bool-val">false</span>,
                 jsx_runtime,
                 jsx_import_source,
+                provider_import_source: mdx_options.provider_import_source.clone(),
             })
             .cell();
 

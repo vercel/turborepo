@@ -272,6 +272,9 @@
 <a href="#272" id="272">272</a>
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -314,6 +317,7 @@
     <span class="kw">pub </span>preserve_jsx: bool,
     <span class="kw">pub </span>jsx_runtime: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>jsx_import_source: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>provider_import_source: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>MdxTransformOptions {
@@ -323,6 +327,7 @@
             preserve_jsx: <span class="bool-val">false</span>,
             jsx_runtime: <span class="prelude-val">None</span>,
             jsx_import_source: <span class="prelude-val">None</span>,
+            provider_import_source: <span class="prelude-val">None</span>,
         }
     }
 }
@@ -382,6 +387,7 @@
 
     <span class="kw">let </span>options = Options {
         development: transform_options.development,
+        provider_import_source: transform_options.provider_import_source.clone(),
         jsx: transform_options.preserve_jsx, <span class="comment">// true means &#39;preserve&#39; jsx syntax.
         </span>jsx_runtime,
         jsx_import_source: transform_options
