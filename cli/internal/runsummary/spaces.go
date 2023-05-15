@@ -113,15 +113,17 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 		return
 	}
 
-	// The runID is required for POST task requests and PATCH run request
-	// so we have to construct it lazily for those requests.
-	// We construc this first in makeRequest, because if makeURL fails, it's likely
-	// because we don't have a runID, which means that the first POST run failed. By checking this
-	// up front, we can avoid duplicate error messages for things like missing spaceID / linking.
+	// The runID is required for POST task requests and PATCH run request URLS,
+	// so we have to construct these URLs lazily with a `makeURL` affordance.
 	//
-	// TODO: the purpose of this check up front is just to make sure runID is available for the
-	// requests that need it. Maybe we can leverage the c.runCreated channel or another channel for
-	// this so it's more explicit?
+	// We are assuming that if makeURL is defined, this is NOT the first request.
+	// This is not a great assumption, and will fail if our endpoint URLs change later.
+	//
+	// Secondly, if makeURL _is_ defined, we call it, and if there are any errors, we exit early.
+	// We are doing this check before any of the other basic checks (e.g. the existence of a spaceID)
+	// becaus in the case the repo is not linked to a space, we don't want to print those errors
+	// for every request that fails. On the other hand, if that POST /run request fails, and N
+	// requests fail after that as a consequence, it is ok to print all of those errors.
 	if req.makeURL != nil {
 		if err := req.makeURL(req, c.run); err != nil {
 			c.errors = append(c.errors, err)
