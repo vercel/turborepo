@@ -122,7 +122,7 @@ fn main() {
     eprintln!(" done ({} spans)", spans.len());
 
     println!("[");
-    pjson!(r#"{{"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{{"name":"Single CPU"}}}}"#);
+    print!(r#"{{"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{{"name":"Single CPU"}}}}"#);
     pjson!(r#"{{"ph":"M","pid":2,"name":"thread_name","tid":0,"args":{{"name":"Scaling CPU"}}}}"#);
 
     let busy = all_self_times.into_iter().collect::<IntervalTree<_, _>>();
