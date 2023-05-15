@@ -73,5 +73,6 @@ type nonMonorepoRunSummary struct {
 	FrameworkInference bool               `json:"frameworkInference"`
 	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
 	Tasks              []*TaskSummary     `json:"tasks"`
+	User               string             `json:"user"`
 	SCM                *scmState          `json:"scm"`
 }

@@ -84,6 +84,7 @@ Setup
         }
       }
     ],
+    "user": ".*", (re)
     "scm": {
       "type": "git",
       "sha": "[a-z0-9]+", (re)

@@ -4179,10 +4179,10 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbo-tasks-malloc",
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-cli-utils",
@@ -8423,63 +8423,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "turbo-binding"
-version = "0.1.0"
-dependencies = [
- "auto-hash-map",
- "mdxjs",
- "modularize_imports",
- "node-file-trace",
- "styled_components",
- "styled_jsx",
- "swc-ast-explorer",
- "swc_core",
- "swc_emotion",
- "swc_relay",
- "testing",
- "tracing-signpost",
- "turbo-malloc",
- "turbo-tasks",
- "turbo-tasks-build",
- "turbo-tasks-bytes",
- "turbo-tasks-env",
- "turbo-tasks-fetch",
- "turbo-tasks-fs",
- "turbo-tasks-hash",
- "turbo-tasks-macros",
- "turbo-tasks-macros-shared",
- "turbo-tasks-memory",
- "turbo-tasks-testing",
- "turbo-updater",
- "turbopack",
- "turbopack-bench",
- "turbopack-cli-utils",
- "turbopack-core",
- "turbopack-create-test-app",
- "turbopack-css",
- "turbopack-dev",
- "turbopack-dev-server",
- "turbopack-ecmascript",
- "turbopack-ecmascript-plugins",
- "turbopack-env",
- "turbopack-image",
- "turbopack-json",
- "turbopack-mdx",
- "turbopack-node",
- "turbopack-static",
- "turbopack-swc-utils",
- "turbopack-test-utils",
- "turbopack-tests",
-]
-
-[[package]]
-name = "turbo-malloc"
-version = "0.1.0"
-dependencies = [
- "mimalloc",
-]
-
-[[package]]
 name = "turbo-tasks"
 version = "0.1.0"
 dependencies = [
@@ -8647,6 +8590,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbo-tasks-malloc"
+version = "0.1.0"
+dependencies = [
+ "mimalloc",
+]
+
+[[package]]
 name = "turbo-tasks-memory"
 version = "0.1.0"
 dependencies = [
@@ -8664,10 +8614,10 @@ dependencies = [
  "rustc-hash",
  "serde",
  "tokio",
- "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-hash",
+ "turbo-tasks-malloc",
  "turbo-tasks-testing",
 ]
 
@@ -8712,10 +8662,10 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbo-tasks-malloc",
  "turbo-tasks-memory",
  "turbopack-core",
  "turbopack-css",
@@ -8761,6 +8711,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "turbopack-binding"
+version = "0.1.0"
+dependencies = [
+ "auto-hash-map",
+ "mdxjs",
+ "modularize_imports",
+ "node-file-trace",
+ "styled_components",
+ "styled_jsx",
+ "swc-ast-explorer",
+ "swc_core",
+ "swc_emotion",
+ "swc_relay",
+ "testing",
+ "tracing-signpost",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-bytes",
+ "turbo-tasks-env",
+ "turbo-tasks-fetch",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbo-tasks-macros",
+ "turbo-tasks-macros-shared",
+ "turbo-tasks-malloc",
+ "turbo-tasks-memory",
+ "turbo-tasks-testing",
+ "turbo-updater",
+ "turbopack",
+ "turbopack-bench",
+ "turbopack-cli-utils",
+ "turbopack-core",
+ "turbopack-create-test-app",
+ "turbopack-css",
+ "turbopack-dev",
+ "turbopack-dev-server",
+ "turbopack-ecmascript",
+ "turbopack-ecmascript-plugins",
+ "turbopack-env",
+ "turbopack-image",
+ "turbopack-json",
+ "turbopack-mdx",
+ "turbopack-node",
+ "turbopack-static",
+ "turbopack-swc-utils",
+ "turbopack-test-utils",
+ "turbopack-tests",
+]
+
+[[package]]
 name = "turbopack-cli"
 version = "0.1.0"
 dependencies = [
@@ -8778,12 +8778,12 @@ dependencies = [
  "tracing",
  "tracing-signpost",
  "tracing-subscriber",
- "turbo-malloc",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-env",
  "turbo-tasks-fetch",
  "turbo-tasks-fs",
+ "turbo-tasks-malloc",
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-bench",
@@ -9149,6 +9149,7 @@ dependencies = [
 name = "turbopath"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bstr",
  "path-slash",
  "serde",
@@ -9291,9 +9292,9 @@ dependencies = [
 name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "dunce",
  "git2 0.16.1",
- "nom",
  "tempfile",
  "thiserror",
  "turbopath",
