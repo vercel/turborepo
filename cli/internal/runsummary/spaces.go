@@ -82,10 +82,6 @@ FirstRequest:
 		select {
 		// listen for new requests coming in
 		case req := <-c.requests:
-			if req == nil {
-				continue
-			}
-
 			// Make the first request right away in a goroutine,
 			// queue all other requests. When the first request is done,
 			// we'll get a message on the other channel and break out of this loop
@@ -249,10 +245,13 @@ func (c *spacesClient) dequeueRequest(req *spaceRequest) {
 	c.makeRequest(req)
 }
 
-// Cloe will wait for all requests to finish
+// Cloe will wait for all requests to finish and then close the channel listening for them
 func (c *spacesClient) Close() {
-	close(c.requests) // close out the channel since there should be no more requests
-	c.wg.Wait()       // wait for all requests to finish
+	// wait for all requests to finish.
+	c.wg.Wait()
+
+	// close out the channel, since there should be no more requests.
+	close(c.requests)
 }
 
 type spacesClientSummary struct {
