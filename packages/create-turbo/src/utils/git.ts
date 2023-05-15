@@ -51,7 +51,6 @@ export function isInMercurialRepository(): boolean {
 export function tryGitInit(root: string, message: string): boolean {
   let didInit = false;
   try {
-    execSync("git --version", { stdio: "ignore" });
     if (isInGitRepository() || isInMercurialRepository()) {
       return false;
     }
