@@ -269,7 +269,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// for the task, so that even if there's an error, we have those values for the taskSummary.
 	ec.taskHashTracker.SetCacheStatus(
 		packageTask.TaskID,
-		runsummary.NewTaskCacheSummary(cacheStatus, &cacheStatus.TimeSaved),
+		runsummary.NewTaskCacheSummary(cacheStatus),
 	)
 
 	if err != nil {

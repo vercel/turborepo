@@ -23,7 +23,7 @@ type TaskCacheSummary struct {
 // Importantly, it adds the derived keys of `source` and `status` based on
 // the local/remote booleans. It would be nice if these were just included
 // from upstream, but that is a more invasive change.
-func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheSummary {
+func NewTaskCacheSummary(itemStatus cache.ItemStatus) TaskCacheSummary {
 	status := cache.CacheEventMiss
 	if itemStatus.Hit {
 		status = cache.CacheEventHit
@@ -32,17 +32,15 @@ func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheS
 	if itemStatus.Hit {
 		source = itemStatus.Source
 	}
+
 	cs := TaskCacheSummary{
-		// copy these over
-		Local:  itemStatus.Hit && itemStatus.Source == cache.CacheSourceFS,
-		Remote: itemStatus.Hit && itemStatus.Source == cache.CacheSourceRemote,
-		Status: status,
-		Source: source,
+		Local:     itemStatus.Hit && itemStatus.Source == cache.CacheSourceFS,
+		Remote:    itemStatus.Hit && itemStatus.Source == cache.CacheSourceRemote,
+		Status:    status,
+		Source:    source,
+		TimeSaved: itemStatus.TimeSaved,
 	}
-	// add in a dereferences timeSaved, should be 0 if nil
-	if timeSaved != nil {
-		cs.TimeSaved = *timeSaved
-	}
+
 	return cs
 }
 

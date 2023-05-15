@@ -74,15 +74,25 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _ []st
 	return NewFSTaskCacheStatus(true, meta.Duration), restoredFiles, nil
 }
 
+// Exists returns the ItemStatus and the timeSaved
 func (f *fsCache) Exists(hash string) ItemStatus {
 	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
 	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
-	// TODO: include timeSaved metric here
+	status := NewFSTaskCacheStatus(false, 0)
 	if compressedCachePath.FileExists() || uncompressedCachePath.FileExists() {
-		return NewFSTaskCacheStatus(true, 0)
+		status.Hit = true
 	}
-	return NewFSTaskCacheStatus(false, 0)
+
+	// Swallow the error
+	if meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json")); err != nil {
+		status.TimeSaved = 0
+	} else {
+		status.TimeSaved = meta.Duration
+	}
+
+	return status
+
 }
 
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {
