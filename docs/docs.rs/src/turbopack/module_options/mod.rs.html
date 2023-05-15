@@ -628,7 +628,7 @@
             <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;
 
             transforms.push(EcmascriptInputTransform::React {
-                refresh: enable_react_refresh,
+                refresh: enable_react_refresh || jsx.react_refresh,
                 import_source: OptionStringVc::cell(jsx.import_source.clone()),
                 runtime: OptionStringVc::cell(jsx.runtime.clone()),
             });

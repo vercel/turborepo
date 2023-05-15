@@ -295,10 +295,10 @@
     }
 }
 
-<span class="comment">// [TODO]: should enabled_react_refresh belong to this options?
-</span><span class="attr">#[turbo_tasks::value(shared)]
+<span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>JsxTransformOptions {
+    <span class="kw">pub </span>react_refresh: bool,
     <span class="kw">pub </span>import_source: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>runtime: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
