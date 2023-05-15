@@ -28,14 +28,15 @@ func (req *spaceRequest) error(msg string) error {
 }
 
 type spacesClient struct {
-	requests chan *spaceRequest
-	errors   []error
-	api      *client.APIClient
-	ui       cli.Ui
-	run      *spaceRun
-	wg       sync.WaitGroup
-	spaceID  string
-	enabled  bool
+	requests   chan *spaceRequest
+	errors     []error
+	api        *client.APIClient
+	ui         cli.Ui
+	run        *spaceRun
+	runCreated chan struct{}
+	wg         sync.WaitGroup
+	spaceID    string
+	enabled    bool
 }
 
 type spaceRun struct {
@@ -46,15 +47,13 @@ type spaceRun struct {
 
 func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesClient {
 	return &spacesClient{
-		api:      api,
-		ui:       ui,
-		spaceID:  spaceID,
-		enabled:  spaceID != "",
-		requests: make(chan *spaceRequest), // TODO: give this a size based on tasks
-		// Set a default, empty one here, so we'll have something downstream and not a segfault
-		run: &spaceRun{
-			created: make(chan struct{}, 1),
-		},
+		api:        api,
+		ui:         ui,
+		spaceID:    spaceID,
+		enabled:    spaceID != "",
+		requests:   make(chan *spaceRequest), // TODO: give this a size based on tasks
+		runCreated: make(chan struct{}, 1),
+		run:        &spaceRun{},
 	}
 }
 
@@ -91,8 +90,8 @@ FirstRequest:
 			} else {
 				pending = append(pending, req)
 			}
-			// Wait for c.run.created channel to be closed and:
-		case <-c.run.created:
+			// Wait for c.runCreated channel to be closed and:
+		case <-c.runCreated:
 			// 1. flush pending requests
 			for _, req := range pending {
 				go c.dequeueRequest(req)
@@ -121,7 +120,7 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	// up front, we can avoid duplicate error messages for things like missing spaceID / linking.
 	//
 	// TODO: the purpose of this check up front is just to make sure runID is available for the
-	// requests that need it. Maybe we can leverage the c.run.created channel or another channel for
+	// requests that need it. Maybe we can leverage the c.runCreated channel or another channel for
 	// this so it's more explicit?
 	if req.makeURL != nil {
 		if err := req.makeURL(req, c.run); err != nil {
@@ -192,7 +191,7 @@ func (c *spacesClient) createRun(rsm *Meta) {
 			}
 
 			// close the run.created channel, because all other requests are blocked on it
-			close(c.run.created)
+			close(c.runCreated)
 		},
 	})
 }
