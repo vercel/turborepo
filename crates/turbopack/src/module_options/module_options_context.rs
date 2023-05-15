@@ -154,6 +154,8 @@ pub struct ModuleOptionsContext {
     #[serde(default)]
     pub enable_mdx_rs: bool,
     #[serde(default)]
+    pub mdx_provider_import_source: Option<String>,
+    #[serde(default)]
     pub preset_env_versions: Option<EnvironmentVc>,
     #[serde(default)]
     pub custom_ecma_transform_plugins: Option<CustomEcmascriptTransformPluginsVc>,

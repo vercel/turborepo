@@ -70,6 +70,7 @@ impl ModuleOptionsVc {
             ref decorators,
             enable_mdx,
             enable_mdx_rs,
+            ref mdx_provider_import_source,
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
             preset_env_versions,
@@ -427,6 +428,7 @@ impl ModuleOptionsVc {
                 preserve_jsx: false,
                 jsx_runtime,
                 jsx_import_source,
+                provider_import_source: mdx_provider_import_source.clone(),
             })
             .cell();
 
