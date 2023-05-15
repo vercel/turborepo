@@ -51,7 +51,6 @@ export function isInMercurialRepository(): boolean {
 export function tryGitInit(root: string, message: string): boolean {
   let didInit = false;
   try {
-    execSync("git --version", { stdio: "ignore" });
     if (isInGitRepository() || isInMercurialRepository()) {
       return false;
     }
@@ -61,10 +60,7 @@ export function tryGitInit(root: string, message: string): boolean {
 
     execSync("git checkout -b main", { stdio: "ignore" });
 
-    execSync("git add -A", { stdio: "ignore" });
-    execSync(`git commit -m "${message}"`, {
-      stdio: "ignore",
-    });
+    gitCommit(message);
     return true;
   } catch (err) {
     if (didInit) {
@@ -78,12 +74,18 @@ export function tryGitInit(root: string, message: string): boolean {
 
 export function tryGitCommit(message: string): boolean {
   try {
-    execSync("git add -A", { stdio: "ignore" });
-    execSync(`git commit -m "${message}"`, {
-      stdio: "ignore",
-    });
+    gitCommit(message);
     return true;
   } catch (err) {
     return false;
   }
+}
+
+function gitCommit(message: string) {
+  execSync(
+    `git commit --author="Turbobot <turbobot@vercel.com>" -am "${message}"`,
+    {
+      stdio: "ignore",
+    }
+  );
 }
