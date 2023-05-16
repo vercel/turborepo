@@ -3,6 +3,7 @@ package runsummary
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -51,6 +52,7 @@ func (rsm *Meta) printExecutionSummary() {
 		for _, t := range failed {
 			formatted = append(formatted, util.Sprintf("${BOLD_RED}%s${RESET}", t.TaskID))
 		}
+		sort.Strings(formatted) // To make the order deterministic
 		l := summaryLine{header: "Failed", trailer: strings.Join(formatted, ", ")}
 		lineData = append(lineData, l)
 	}

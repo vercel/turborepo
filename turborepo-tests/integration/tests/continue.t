@@ -82,7 +82,7 @@ Run with --continue
    Tasks:    1 successful, 3 total
   Cached:    0 cached, 3 total
     Time:\s*[\.0-9]+m?s  (re)
-  Failed:    some-lib#build, other-app#build
+  Failed:    other-app#build, some-lib#build
   
    ERROR  run failed: command  exited (1)
   [1]
