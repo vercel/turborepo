@@ -10,7 +10,7 @@ use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 use pin_project_lite::pin_project;
 use tokio::select;
 use tokio_stream::StreamMap;
-use tracing::{info_span, instrument, Span};
+use tracing::instrument;
 use turbo_tasks::{TransientInstance, TurboTasksApi};
 use turbo_tasks_fs::json::parse_json_with_source_context;
 use turbopack_core::{error::PrettyPrintError, issue::IssueReporterVc, version::Update};
