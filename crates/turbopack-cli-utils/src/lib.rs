@@ -3,6 +3,7 @@
 #![feature(round_char_boundary)]
 #![feature(thread_id_value)]
 
+pub mod exit;
 pub mod issue;
 pub mod raw_trace;
 pub mod runtime_entry;
