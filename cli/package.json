@@ -8,7 +8,7 @@
     "test": "make test-go",
     "format": "make fmt-go",
     "lint": "make lint-go",
-    "lint:prettier": "prettier -c . --ignore-path=../.prettierignore"
+    "lint:prettier": "prettier -c . --cache --ignore-path=../.prettierignore"
   },
   "devDependencies": {
     "copy-template-dir": "^1.4.0",

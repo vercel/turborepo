@@ -19,7 +19,7 @@
   "scripts": {
     "lint": "eslint src/**/*.ts",
     "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --ignore-path=../../.prettier-ignore"
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettier-ignore"
   },
   "devDependencies": {
     "@types/fs-extra": "^9.0.13",

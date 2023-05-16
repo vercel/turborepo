@@ -23,7 +23,7 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --ignore-path=../../.prettierignore"
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "devDependencies": {
     "@manypkg/find-root": "^1.1.0",

@@ -10,7 +10,7 @@
     "lint": "next lint",
     "rss": "node scripts/generate-rss.js",
     "schema": "turbo-types-generate ./public/schema.json",
-    "lint:prettier": "prettier -c . --ignore-path=../.prettierignore"
+    "lint:prettier": "prettier -c . --cache --ignore-path=../.prettierignore"
   },
   "author": "Jared Palmer",
   "license": "MPL-2.0",
