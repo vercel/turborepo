@@ -40,9 +40,8 @@ type spacesClient struct {
 }
 
 type spaceRun struct {
-	ID      string
-	URL     string
-	created chan struct{} // a signal that the run has completed
+	ID  string
+	URL string
 }
 
 func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesClient {
