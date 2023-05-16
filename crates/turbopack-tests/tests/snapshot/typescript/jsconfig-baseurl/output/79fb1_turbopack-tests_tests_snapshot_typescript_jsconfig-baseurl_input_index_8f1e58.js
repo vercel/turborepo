@@ -491,8 +491,9 @@ function instantiateModule(id, source) {
       break;
   }
 
-  runModuleExecutionHooks(module, (refresh) => {
-    try {
+  // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
+  try {
+    runModuleExecutionHooks(module, (refresh) => {
       moduleFactory.call(module.exports, {
         e: module.exports,
         r: commonJsRequire.bind(null, module),
@@ -510,11 +511,11 @@ function instantiateModule(id, source) {
         k: refresh,
         __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
       });
-    } catch (error) {
-      module.error = error;
-      throw error;
-    }
-  });
+    });
+  } catch (error) {
+    module.error = error;
+    throw error;
+  }
 
   module.loaded = true;
   if (module.namespaceObject && module.exports !== module.namespaceObject) {
@@ -539,21 +540,26 @@ function runModuleExecutionHooks(module, executeModule) {
       ? globalThis.$RefreshInterceptModuleExecution$(module.id)
       : () => {};
 
-  executeModule({
-    register: globalThis.$RefreshReg$,
-    signature: globalThis.$RefreshSig$,
-  });
+  try {
+    executeModule({
+      register: globalThis.$RefreshReg$,
+      signature: globalThis.$RefreshSig$,
+    });
 
-  if ("$RefreshHelpers$" in globalThis) {
-    // This pattern can also be used to register the exports of
-    // a module with the React Refresh runtime.
-    registerExportsAndSetupBoundaryForReactRefresh(
-      module,
-      globalThis.$RefreshHelpers$
-    );
+    if ("$RefreshHelpers$" in globalThis) {
+      // This pattern can also be used to register the exports of
+      // a module with the React Refresh runtime.
+      registerExportsAndSetupBoundaryForReactRefresh(
+        module,
+        globalThis.$RefreshHelpers$
+      );
+    }
+  } catch (e) {
+    throw e;
+  } finally {
+    // Always cleanup the intercept, even if module execution failed.
+    cleanupReactRefreshIntercept();
   }
-
-  cleanupReactRefreshIntercept();
 }
 
 /**
@@ -1427,6 +1433,9 @@ function instantiateRuntimeModule(moduleId, chunkPath) {
 function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
   const module = moduleCache[moduleId];
   if (module) {
+    if (module.error) {
+      throw module.error;
+    }
     return module;
   }
 
@@ -1532,15 +1541,8 @@ let BACKEND;
 
       for (const otherChunkData of params.otherChunks) {
         const otherChunkPath = getChunkPath(otherChunkData);
-        if (otherChunkPath.endsWith(".css")) {
-          // Mark all CSS chunks within the same chunk group as this chunk as loaded.
-          // They are just injected as <link> tag and have to way to communicate completion.
-          const cssResolver = getOrCreateResolver(otherChunkPath);
-          cssResolver.resolve();
-        } else if (otherChunkPath.endsWith(".js")) {
-          // Chunk might have started loading, so we want to avoid triggering another load.
-          getOrCreateResolver(otherChunkPath);
-        }
+        // Chunk might have started loading, so we want to avoid triggering another load.
+        getOrCreateResolver(otherChunkPath);
       }
 
       // This waits for chunks to be loaded, but also marks included items as available.
@@ -1683,12 +1685,20 @@ let BACKEND;
       return resolver.promise;
     }
 
-    // We don't need to load chunks references from runtime code, as they're already
-    // present in the DOM.
-    // However, we need to wait for them to register themselves within `registerChunk`
-    // before we can start instantiating runtime modules, hence the absense of
-    // `resolver.resolve()` in this branch.
     if (source.type === SourceTypeRuntime) {
+      // We don't need to load chunks references from runtime code, as they're already
+      // present in the DOM.
+
+      if (chunkPath.endsWith(".css")) {
+        // CSS chunks do not register themselves, and as such must be marked as
+        // loaded instantly.
+        resolver.resolve();
+      }
+
+      // We need to wait for JS chunks to register themselves within `registerChunk`
+      // before we can start instantiating runtime modules, hence the absence of
+      // `resolver.resolve()` in this branch.
+
       return resolver.promise;
     }
 

@@ -3,13 +3,26 @@
 
 use anyhow::Result;
 use clap::Parser;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use turbopack_cli::{arguments::Arguments, register};
 
 #[global_allocator]
-static ALLOC: turbo_malloc::TurboMalloc = turbo_malloc::TurboMalloc;
+static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 
 fn main() {
-    use turbo_malloc::TurboMalloc;
+    use turbo_tasks_malloc::TurboMalloc;
+
+    let subscriber = Registry::default();
+
+    #[cfg(target_os = "macos")]
+    let subscriber = subscriber.with(tracing_signpost::SignpostLayer::new());
+
+    let stdout_log = tracing_subscriber::fmt::layer().pretty();
+    let subscriber = subscriber.with(stdout_log);
+
+    let subscriber = subscriber.with(EnvFilter::from_default_env());
+
+    subscriber.init();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()

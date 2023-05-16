@@ -1,0 +1,189 @@
+---
+title: Task Dependencies
+description: Turborepo helps you specify task dependencies declaratively.
+---
+
+import Callout from "../../../../../components/Callout";
+import HeartIcon from "@heroicons/react/solid/HeartIcon";
+import { Tabs, Tab } from '../../../../../components/Tabs'
+
+# Task Dependencies
+
+Turborepo is most powerful when you express how your tasks relate to each other.
+We refer to these relationships as "dependencies", but they are not the same as
+package dependencies that you install from your `package.json` files. While Turborepo
+does understand your workspaces, it does not automatically draw any
+relationships between their tasks, unless you express them in `turbo.json` via
+the `dependsOn` configuration.
+
+Let's walk through some common patterns on how to make a task depend on other tasks.
+
+## From the same workspace
+
+There might be tasks that need to run _before_ other tasks. For instance,
+`build` might need to be run before `deploy`.
+
+If both tasks are in the same workspace, you can specify the relationship like
+this:
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {},
+    "deploy": {
+      // A workspace's `deploy` task depends on the `build` task of the same workspace.
+      "dependsOn": ["build"]
+    }
+  }
+}
+```
+
+This means that whenever `turbo deploy` is run, `build` will also be run
+inside the same workspace.
+
+## From dependent workspaces
+
+A common pattern in monorepos is to declare that a workspace's `build` task
+should only run once the `build` tasks of all _the workspaces it depends on_ are
+complete.
+
+<Callout type="info">
+This can be confusing as it refers to both _workspace_ dependencies
+and _task_ dependencies, which are different concepts. Workspace dependencies are `dependencies`
+and `devDependencies` in `package.json`, whereas, task dependencies are `dependsOn` key in `turbo.json`.
+</Callout>
+
+The `^` symbol (called a "caret") explicitly declares that the task depends on the task in a
+workspace it depends on.
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      // A workspace's `build` command depends on its dependencies'
+      // and devDependencies' `build` commands being completed first
+      "dependsOn": ["^build"],
+    }
+  }
+}
+```
+
+With the configuration above, if an app installs a package from another workspace, the package's
+`build` script will always run before the app's `build` script.
+
+## From arbitrary workspaces
+
+Sometimes, you may want a workspace-task to depend on another
+workspace-task. This can be especially helpful for repos migrating from `lerna`
+or `rush`, where tasks are run in separate phases by default. Sometimes these
+configurations make assumptions that cannot be expressed in a simple `pipeline`
+configuration, as seen above. Or you may just want to express sequences of tasks
+between applications or microservices when using `turbo` in CI/CD.
+
+For these cases, you can express these relationships in your `pipeline`
+configuration using the `<workspace>#<task>` syntax. The example below describes
+the `deploy` script of a `frontend` application that depends on the `deploy` and
+`health-check` scripts of `backend`, as well as the `test` script of a `ui`
+workspace:
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    // Explicit workspace-task to workspace-task dependency
+    "frontend#deploy": {
+      "dependsOn": ["ui#test", "backend#deploy", "backend#health-check"]
+    }
+  }
+}
+```
+
+This explicit configuration for `frontend#deploy` may seem to conflict with the
+`test` and `deploy` task configurations, but it does not. Since `test` and
+`deploy` do not have dependencies on other workspaces (e.g. `^<task>`), they can
+execute any time after their workspace's `build` and `test` scripts have
+finished.
+
+<Callout>
+  Notes:
+
+1. Although this `<workspace>#<task>` syntax is a useful escape hatch, we
+   generally recommend using it for deployment orchestration tasks such as
+   health checks, rather than build-time dependencies, so that Turborepo can
+   optimize these tasks more efficiently
+1. Workspace-tasks do not inherit cache configuration. You must redeclare
+   [`outputs`](/repo/docs/reference/configuration#outputs) at the moment.
+1. `<workspace>` must match the `name` key in the workspace's `package.json` or
+   the task will be ignored.
+
+</Callout>
+
+## Dependencies outside of a task
+
+When your task has topological dependencies that are outside of that given task,
+you'll still want to enjoy the parallelism of Turborepo and ensure that your
+caching behavior is reflects code changes.
+
+To demonstrate how to do this, let's say you have a set of packages (modeled as
+workspaces in your codebase) to define some math functions: `add`, `subtract`, and
+`multiply`. `subtract` is implemented by calling `add` with a negative number
+and your `multiply` works by calling `add` in a loop. So, `add` is a dependency
+of both `subtract` and `multiply`.
+
+```bash
+packages/
+  add/package.json      # does not depend on anything
+  multiply/package.json # depends on add
+  subtract/package.json # depends on add
+turbo.json
+package.json
+```
+
+You've written tests in all three of these workspaces and it's time to run them.
+There are two requirements here:
+
+1. All tests run in parallel to keep things speedy
+2. A change in a dependency should result in a cache miss
+
+To accomplish this, we can set up a pipeline like this:
+
+```jsonc filename="turbo.json"
+{
+   "$schema": "https://turbo.build/schema.json",
+   "pipeline": {
+     "topo": {
+       "dependsOn": ["^topo"]
+     },
+     "test": {
+       "dependsOn": ["^topo"]
+     }
+   }
+ }
+```
+
+![](/images/docs/task-graph-with-placeholder-task.png)
+
+In this pipeline, we declare a "synthetic" task called `topo`. Since we don't
+have a `topo` script in any of our `package.json` files, on `turbo test` the
+pipeline will go straight to running `test` scripts in parallel, meeting our first requirement.
+
+But this `topo` task also creates a "synthetic" workspace-task dependency from `multiple` -> `add`,
+and from `subtract` -> `add`. This means that when you change code in `add`, you will also get
+a cache miss for the workspaces in `multiply` and `subtract`, meeting the second requirement.
+
+## No dependencies
+
+An empty dependency list (`dependsOn` is either undefined or `[]`) means that
+nothing needs to run before this task! After all, it has no dependencies.
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    // A workspace's `lint` command has no dependencies and can be run any time.
+    "lint": {}
+  }
+}
+```

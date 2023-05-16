@@ -7,17 +7,14 @@ use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack::{
     condition::ContextCondition,
     ecmascript::EcmascriptModuleAssetVc,
-    module_options::{
-        JsxTransformOptions, ModuleOptionsContext, ModuleOptionsContextVc,
-        StyledComponentsTransformConfigVc,
-    },
+    module_options::{JsxTransformOptions, ModuleOptionsContext, ModuleOptionsContextVc},
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
 use turbopack_cli_utils::runtime_entry::{RuntimeEntriesVc, RuntimeEntry};
 use turbopack_core::{
-    chunk::{ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc},
+    chunk::{ChunkableAssetVc, ChunkingContextVc},
     compile_time_defines,
     compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     context::AssetContextVc,
@@ -35,7 +32,9 @@ use turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc},
 };
-use turbopack_ecmascript_plugins::transform::emotion::EmotionTransformConfigVc;
+use turbopack_ecmascript_plugins::transform::{
+    emotion::EmotionTransformConfigVc, styled_components::StyledComponentsTransformConfigVc,
+};
 use turbopack_node::execution_context::ExecutionContextVc;
 
 use crate::embed_js::embed_file_path;
@@ -109,10 +108,17 @@ async fn get_client_module_options_context(
             .await?
             .is_found();
 
+    let enable_jsx = Some(
+        JsxTransformOptions {
+            react_refresh: enable_react_refresh,
+            ..Default::default()
+        }
+        .cell(),
+    );
+
     let module_options_context = ModuleOptionsContext {
-        enable_jsx: Some(JsxTransformOptions::default().cell()),
+        enable_jsx,
         enable_emotion: Some(EmotionTransformConfigVc::default()),
-        enable_react_refresh,
         enable_styled_components: Some(StyledComponentsTransformConfigVc::default()),
         enable_styled_jsx: true,
         enable_postcss_transform: Some(Default::default()),
