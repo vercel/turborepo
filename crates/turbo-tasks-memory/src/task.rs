@@ -1300,10 +1300,6 @@ impl Task {
         }
     }
 
-    #[instrument(
-        skip(self, id, backend, turbo_tasks),
-        name = "Task::add_to_scope_internal"
-    )]
     pub(crate) fn add_to_scope_internal(
         &self,
         id: TaskScopeId,
