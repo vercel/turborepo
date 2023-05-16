@@ -29,13 +29,20 @@ pub(crate) fn find_git_root(
         .args(["rev-parse", "--show-cdup"])
         .current_dir(turbo_root)
         .output()?;
+    if !rev_parse.status.success() {
+        let stderr = String::from_utf8_lossy(&rev_parse.stderr);
+        return Err(Error::git_error(format!(
+            "git rev-parse --show-cdup error: {}",
+            stderr
+        )));
+    }
     let root = String::from_utf8(rev_parse.stdout)?;
     Ok(turbo_root.join_literal(root.trim_end()).clean())
 }
 
 #[cfg(test)]
 mod tests {
-    use std::process::Command;
+    use std::{assert_matches::assert_matches, process::Command};
 
     use super::*;
 
@@ -84,6 +91,14 @@ mod tests {
         let turbo_root = link.join_literal("inside");
         let result = find_git_root(&turbo_root).unwrap();
         assert_eq!(result, link);
+    }
+
+    #[test]
+    fn test_no_git_root() {
+        let (_, tmp_root) = tmp_dir();
+        tmp_root.create_dir_all().unwrap();
+        let result = find_git_root(&tmp_root);
+        assert_matches!(result, Err(Error::Git(_, _)));
     }
 
     #[test]
