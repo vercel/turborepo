@@ -20,6 +20,7 @@ import (
 	"github.com/DataDog/zstd"
 
 	"github.com/vercel/turbo/cli/internal/analytics"
+	"github.com/vercel/turbo/cli/internal/cacheitem"
 	"github.com/vercel/turbo/cli/internal/tarpatch"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -251,102 +252,9 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 	return true, files, duration, nil
 }
 
-// restoreTar returns posix-style repo-relative paths of the files it
-// restored. In the future, these should likely be repo-relative system paths
-// so that they are suitable for being fed into cache.Put for other caches.
-// For now, I think this is working because windows also accepts /-delimited paths.
 func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
-	files := []turbopath.AnchoredSystemPath{}
-	missingLinks := []*tar.Header{}
-	zr := zstd.NewReader(reader)
-	var closeError error
-	defer func() { closeError = zr.Close() }()
-	tr := tar.NewReader(zr)
-	for {
-		hdr, err := tr.Next()
-		if err != nil {
-			if err == io.EOF {
-				for _, link := range missingLinks {
-					err := restoreSymlink(root, link, true)
-					if err != nil {
-						return nil, err
-					}
-				}
-
-				return files, closeError
-			}
-			return nil, err
-		}
-		// hdr.Name is always a posix-style path
-		// FIXME: THIS IS A BUG.
-		restoredName := turbopath.AnchoredUnixPath(hdr.Name)
-		files = append(files, restoredName.ToSystemPath())
-		filename := restoredName.ToSystemPath().RestoreAnchor(root)
-		if isChild, err := root.ContainsPath(filename); err != nil {
-			return nil, err
-		} else if !isChild {
-			return nil, fmt.Errorf("cannot untar file to %v", filename)
-		}
-		switch hdr.Typeflag {
-		case tar.TypeDir:
-			if err := filename.MkdirAll(0775); err != nil {
-				return nil, err
-			}
-		case tar.TypeReg:
-			if dir := filename.Dir(); dir != "." {
-				if err := dir.MkdirAll(0775); err != nil {
-					return nil, err
-				}
-			}
-			if f, err := filename.OpenFile(os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
-				return nil, err
-			} else if _, err := io.Copy(f, tr); err != nil {
-				return nil, err
-			} else if err := f.Close(); err != nil {
-				return nil, err
-			}
-		case tar.TypeSymlink:
-			if err := restoreSymlink(root, hdr, false); errors.Is(err, errNonexistentLinkTarget) {
-				missingLinks = append(missingLinks, hdr)
-			} else if err != nil {
-				return nil, err
-			}
-		default:
-			log.Printf("Unhandled file type %d for %s", hdr.Typeflag, hdr.Name)
-		}
-	}
-}
-
-var errNonexistentLinkTarget = errors.New("the link target does not exist")
-
-func restoreSymlink(root turbopath.AbsoluteSystemPath, hdr *tar.Header, allowNonexistentTargets bool) error {
-	// Note that hdr.Linkname is really the link target
-	relativeLinkTarget := filepath.FromSlash(hdr.Linkname)
-	linkFilename := root.UntypedJoin(hdr.Name)
-	if err := linkFilename.EnsureDir(); err != nil {
-		return err
-	}
-
-	// TODO: check if this is an absolute path, or if we even care
-	linkTarget := linkFilename.Dir().UntypedJoin(relativeLinkTarget)
-	if _, err := linkTarget.Lstat(); err != nil {
-		if os.IsNotExist(err) {
-			if !allowNonexistentTargets {
-				return errNonexistentLinkTarget
-			}
-			// if we're allowing nonexistent link targets, proceed to creating the link
-		} else {
-			return err
-		}
-	}
-	// Ensure that the link we're about to create doesn't already exist
-	if err := linkFilename.Remove(); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := linkFilename.Symlink(relativeLinkTarget); err != nil {
-		return err
-	}
-	return nil
+	cache := cacheitem.FromReader(reader, true)
+	return cache.Restore(root)
 }
 
 func (cache *httpCache) Clean(_ turbopath.AbsoluteSystemPath) {
@@ -359,12 +267,13 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, client client, recorder analytics.Recorder) *httpCache {
+func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoot turbopath.AbsoluteSystemPath) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
+		repoRoot:       repoRoot,
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.

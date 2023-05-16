@@ -7,15 +7,20 @@ import {
   getPackageManagerMeta,
   ConvertError,
 } from "@turbo/workspaces";
-import { getAvailablePackageManagers } from "@turbo/utils";
+import {
+  getAvailablePackageManagers,
+  createProject,
+  logger,
+} from "@turbo/utils";
 import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 import * as prompts from "./prompts";
-import { createProject } from "./createProject";
 import { tryGitCommit, tryGitInit } from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
 import { transforms } from "../../transforms";
-import { turboGradient, turboLoader, info, error, warn } from "../../logger";
 import { TransformError } from "../../transforms/errors";
+import { isDefaultExample } from "../../utils/isDefaultExample";
+
+const { turboGradient, turboLoader, info, error, warn } = logger;
 
 function handleErrors(err: unknown) {
   // handle errors from ../../transforms
@@ -83,6 +88,7 @@ export async function create(
   const { hasPackageJson, availableScripts, repoInfo } = await createProject({
     appPath: root,
     example: exampleName,
+    isDefaultExample: isDefaultExample(exampleName),
     examplePath,
   });
 

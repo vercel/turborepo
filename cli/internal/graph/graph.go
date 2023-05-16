@@ -51,6 +51,7 @@ type CompleteGraph struct {
 func (g *CompleteGraph) GetPackageTaskVisitor(
 	ctx gocontext.Context,
 	taskGraph *dag.AcyclicGraph,
+	frameworkInference bool,
 	globalEnvMode util.EnvMode,
 	getArgs func(taskID string) []string,
 	logger hclog.Logger,
@@ -109,9 +110,10 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 
 		passThruArgs := getArgs(taskName)
 		hash, err := g.TaskHashTracker.CalculateTaskHash(
+			logger,
 			packageTask,
 			taskGraph.DownEdges(taskID),
-			logger,
+			frameworkInference,
 			passThruArgs,
 			useOldTaskHashable,
 		)

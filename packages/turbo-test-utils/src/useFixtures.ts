@@ -4,13 +4,19 @@ import fs from "fs-extra";
 import yaml from "js-yaml";
 import JSON5 from "json5";
 
+interface SetupTextFixtures {
+  directory: string;
+  test?: string;
+  options?: {
+    emptyFixture?: boolean;
+  };
+}
+
 export default function setupTestFixtures({
   directory,
   test = "",
-}: {
-  directory: string;
-  test?: string;
-}) {
+  options = {},
+}: SetupTextFixtures) {
   const fixtures: Array<string> = [];
   const parentDirectory = path.join(directory, test ? test : "test-runs");
 
@@ -34,10 +40,12 @@ export default function setupTestFixtures({
     fixtures.push(testDirectory);
 
     // copy fixture to test directory
-    const fixturePath = path.join(directory, "__fixtures__", test, fixture);
-    fs.copySync(fixturePath, testDirectory, {
-      recursive: true,
-    });
+    if (!options.emptyFixture) {
+      const fixturePath = path.join(directory, "__fixtures__", test, fixture);
+      fs.copySync(fixturePath, testDirectory, {
+        recursive: true,
+      });
+    }
 
     const getFilePath = (filename: string) => {
       return path.isAbsolute(filename)

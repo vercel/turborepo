@@ -5,7 +5,7 @@ use owo_colors::{
     colors::{Black, Default, Red, Yellow},
     Color, OwoColorize,
 };
-use tracing::{field::Visit, metadata::LevelFilter, Event, Level, Subscriber};
+use tracing::{field::Visit, metadata::LevelFilter, trace, Event, Level, Subscriber};
 use tracing_appender::{
     non_blocking::{NonBlocking, WorkerGuard},
     rolling::RollingFileAppender,
@@ -46,6 +46,9 @@ pub struct TurboSubscriber {
     /// The non-blocking file logger only continues to log while this guard is
     /// held. We keep it here so that it doesn't get dropped.
     guard: Mutex<Option<WorkerGuard>>,
+
+    #[cfg(feature = "tracing-chrome")]
+    chrome_guard: tracing_chrome::FlushGuard,
 }
 
 impl TurboSubscriber {
@@ -90,19 +93,33 @@ impl TurboSubscriber {
         // we set this layer to None to start with, effectively disabling it
         let (logrotate, update) = reload::Layer::new(Option::<DaemonLog>::None);
 
-        Registry::default().with(stdout).with(logrotate).init();
+        let registry = Registry::default().with(stdout).with(logrotate);
+
+        #[cfg(feature = "tracing-chrome")]
+        let (registry, chrome_guard) = {
+            let (chrome_layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
+                .file("./tracing.json")
+                .build();
+            (registry.with(chrome_layer), guard)
+        };
+
+        registry.init();
 
         Self {
             update,
             guard: Mutex::new(None),
+            #[cfg(feature = "tracing-chrome")]
+            chrome_guard,
         }
     }
 
     /// Enables daemon logging with the specified rotation settings.
     ///
     /// Daemon logging uses the standard tracing formatter.
+    #[tracing::instrument(skip(self))]
     pub fn set_daemon_logger(&self, appender: RollingFileAppender) -> Result<(), Error> {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
+        trace!("created non-blocking file writer");
 
         let layer = tracing_subscriber::fmt::layer().with_writer(file_writer);
 

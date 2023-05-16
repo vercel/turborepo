@@ -93,7 +93,7 @@ pub use read_ref::ReadRef;
 pub use state::State;
 pub use task_input::{FromTaskInput, SharedReference, SharedValue, TaskInput};
 pub use trait_ref::{IntoTraitRef, TraitRef};
-pub use turbo_tasks_macros::{function, value, value_impl, value_trait};
+pub use turbo_tasks_macros::{function, value, value_impl, value_trait, TaskInput};
 pub use value::{TransientInstance, TransientValue, Value};
 pub use value_type::{
     FromSubTrait, IntoSuperTrait, TraitMethod, TraitType, Typed, TypedForInput, ValueTraitVc,
@@ -104,7 +104,7 @@ pub use value_type::{
 pub mod macro_helpers {
     pub use once_cell::sync::{Lazy, OnceCell};
 
-    pub use super::manager::find_cell_by_type;
+    pub use super::manager::{find_cell_by_type, spawn_detached};
 }
 
 pub mod test_helpers {

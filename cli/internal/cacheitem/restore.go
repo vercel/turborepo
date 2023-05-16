@@ -14,6 +14,14 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+// FromReader returns an existing CacheItem at the specified path.
+func FromReader(reader io.Reader, compressed bool) *CacheItem {
+	return &CacheItem{
+		handle:     reader,
+		compressed: compressed,
+	}
+}
+
 // Open returns an existing CacheItem at the specified path.
 func Open(path turbopath.AbsoluteSystemPath) (*CacheItem, error) {
 	handle, err := sequential.OpenFile(path.ToString(), os.O_RDONLY, 0777)
