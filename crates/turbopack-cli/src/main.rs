@@ -26,7 +26,7 @@ fn main() {
                 |_| {
                     Cow::Borrowed(
                         "turbopack=info,turbopack_core=info,turbopack_ecmascript=info,\
-                         turbopack_css=info,turbopack_dev=info,turbopack_iamge=info,\
+                         turbopack_css=info,turbopack_dev=info,turbopack_image=info,\
                          turbopack_json=info,turbopack_mdx=info,turbopack_node=info,\
                          turbopack_static=info,turbopack_dev_server=info,turbopack_cli_utils=info,\
                          turbopack_cli=info,turbopack_ecmascript=info,turbo_tasks=info,\
