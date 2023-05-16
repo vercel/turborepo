@@ -52,6 +52,7 @@ fn main() {
         end: 0,
         self_start: None,
         items: Vec::new(),
+        values: serde_json::Map::new(),
     });
 
     let mut active_ids = HashMap::new();
@@ -60,7 +61,12 @@ fn main() {
 
     for FullTraceRow { ts, data } in trace_rows {
         match data {
-            TraceRow::Start { id, parent, name } => {
+            TraceRow::Start {
+                id,
+                parent,
+                name,
+                values,
+            } => {
                 let internal_id = spans.len();
                 active_ids.insert(id, internal_id);
                 let internal_parent = parent
@@ -73,6 +79,7 @@ fn main() {
                     end: ts,
                     self_start: None,
                     items: Vec::new(),
+                    values,
                 };
                 spans.push(span);
                 let parent = &mut spans[internal_parent];
@@ -113,7 +120,11 @@ fn main() {
                     }
                 }
             }
-            TraceRow::Event { parent, name } => {
+            TraceRow::Event {
+                parent,
+                name,
+                values,
+            } => {
                 // TODO
             }
         }
@@ -254,13 +265,13 @@ fn main() {
         let target_concurrency = 200;
         let warn_concurrency = 400;
 
-        enum Task<'a> {
+        enum Task {
             Enter {
                 id: usize,
                 root: bool,
             },
             Exit {
-                name: &'a str,
+                name_json: String,
                 start: u64,
                 start_scaled: u64,
             },
@@ -307,20 +318,24 @@ fn main() {
                             merged_tts = span.start;
                         }
                     }
+                    let name_json = if let Some(name_value) = span.values.get("name") {
+                        serde_json::to_string(&format!("{} {}", span.name, name_value)).unwrap()
+                    } else {
+                        serde_json::to_string(&span.name).unwrap()
+                    };
+                    let args_json = serde_json::to_string(&span.values).unwrap();
                     if single {
                         pjson!(
-                            r#"{{"ph":"B","pid":1,"ts":{ts},"tts":{tts},"name":{},"cat":"TODO","tid":0}}"#,
-                            serde_json::to_string(&span.name).unwrap(),
+                            r#"{{"ph":"B","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"TODO","tid":0,"args":{args_json}}}"#,
                         );
                     }
                     if merged {
                         pjson!(
-                            r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{},"cat":"TODO","tid":0}}"#,
-                            serde_json::to_string(&span.name).unwrap(),
+                            r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"TODO","tid":0,"args":{args_json}}}"#,
                         );
                     }
                     stack.push(Task::Exit {
-                        name: span.name,
+                        name_json,
                         start: ts,
                         start_scaled: tts,
                     });
@@ -358,38 +373,33 @@ fn main() {
                     }
                 }
                 Task::Exit {
-                    name,
+                    name_json,
                     start,
                     start_scaled,
                 } => {
-                    let name_str = serde_json::to_string(name).unwrap();
                     if ts > start && tts > start_scaled {
                         let concurrency = (ts - start) * target_concurrency / (tts - start_scaled);
                         if single {
                             pjson!(
-                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{},"cat":"TODO","tid":0,"args":{{"concurrency":{}}}}}"#,
-                                name_str,
+                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"TODO","tid":0,"args":{{"concurrency":{}}}}}"#,
                                 concurrency as f64 / 100.0,
                             );
                         }
                         if merged {
                             pjson!(
-                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{},"cat":"TODO","tid":0,"args":{{"concurrency":{}}}}}"#,
-                                name_str,
+                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"TODO","tid":0,"args":{{"concurrency":{}}}}}"#,
                                 concurrency as f64 / 100.0,
                             );
                         }
                     } else {
                         if single {
                             pjson!(
-                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{},"cat":"TODO","tid":0}}"#,
-                                name_str,
+                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"TODO","tid":0}}"#,
                             );
                         }
                         if merged {
                             pjson!(
-                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{},"cat":"TODO","tid":0}}"#,
-                                name_str,
+                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"TODO","tid":0}}"#,
                             );
                         }
                     }
@@ -459,6 +469,7 @@ struct Span<'a> {
     end: u64,
     self_start: Option<SelfTimeStarted>,
     items: Vec<SpanItem>,
+    values: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug)]

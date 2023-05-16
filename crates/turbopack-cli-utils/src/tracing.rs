@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Map;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FullTraceRow<'a> {
@@ -17,6 +18,8 @@ pub enum TraceRow<'a> {
         parent: Option<u64>,
         #[serde(rename = "n")]
         name: &'a str,
+        #[serde(rename = "v")]
+        values: Map<String, serde_json::Value>,
     },
     #[serde(rename = "E")]
     End { id: u64 },
@@ -34,5 +37,7 @@ pub enum TraceRow<'a> {
         parent: Option<u64>,
         #[serde(rename = "n")]
         name: &'a str,
+        #[serde(rename = "v", skip_serializing_if = "Map::is_empty")]
+        values: Map<String, serde_json::Value>,
     },
 }

@@ -1,6 +1,10 @@
-use std::{cell::RefCell, io::Write, marker::PhantomData, thread, time::Instant};
+use std::{cell::RefCell, fmt::Write, io::Write as _, marker::PhantomData, thread, time::Instant};
 
-use tracing::{span, Subscriber};
+use serde_json::Value;
+use tracing::{
+    field::{display, Visit},
+    span, Subscriber,
+};
 use tracing_subscriber::{fmt::MakeWriter, registry::LookupSpan, Layer};
 
 use crate::tracing::{FullTraceRow, TraceRow};
@@ -66,6 +70,8 @@ impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> La
         id: &span::Id,
         ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
+        let mut values = ValuesVisitor::new();
+        attrs.values().record(&mut values);
         self.write(TraceRow::Start {
             id: id.into_u64(),
             parent: if attrs.is_contextual() {
@@ -74,7 +80,7 @@ impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> La
                 attrs.parent().map(|p| p.into_u64())
             },
             name: attrs.metadata().name(),
-            // TODO handle values
+            values: values.values,
         });
     }
 
@@ -95,6 +101,8 @@ impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> La
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        let mut values = ValuesVisitor::new();
+        event.record(&mut values);
         self.write(TraceRow::Event {
             parent: if event.is_contextual() {
                 ctx.current_span().id().map(|p| p.into_u64())
@@ -102,6 +110,64 @@ impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> La
                 event.parent().map(|p| p.into_u64())
             },
             name: event.metadata().name(),
+            values: values.values,
         });
+    }
+}
+
+struct ValuesVisitor {
+    values: serde_json::Map<String, serde_json::Value>,
+}
+
+impl ValuesVisitor {
+    fn new() -> Self {
+        Self {
+            values: serde_json::Map::new(),
+        }
+    }
+}
+
+impl Visit for ValuesVisitor {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        let mut str = String::new();
+        let _ = write!(str, "{:?}", value);
+        self.values
+            .insert(field.name().to_string(), Value::String(str));
+    }
+
+    fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
+        self.values.insert(field.name().to_string(), value.into());
+    }
+
+    fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
+        self.values.insert(field.name().to_string(), value.into());
+    }
+
+    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+        self.values.insert(field.name().to_string(), value.into());
+    }
+
+    fn record_i128(&mut self, field: &tracing::field::Field, value: i128) {
+        self.record_debug(field, &value)
+    }
+
+    fn record_u128(&mut self, field: &tracing::field::Field, value: u128) {
+        self.record_debug(field, &value)
+    }
+
+    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
+        self.values.insert(field.name().to_string(), value.into());
+    }
+
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        self.values.insert(field.name().to_string(), value.into());
+    }
+
+    fn record_error(
+        &mut self,
+        field: &tracing::field::Field,
+        value: &(dyn std::error::Error + 'static),
+    ) {
+        self.record_debug(field, &display(value))
     }
 }
