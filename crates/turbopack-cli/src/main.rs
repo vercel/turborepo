@@ -30,8 +30,8 @@ fn main() {
                          turbopack_json=info,turbopack_mdx=info,turbopack_node=info,\
                          turbopack_static=info,turbopack_dev_server=info,turbopack_cli_utils=info,\
                          turbopack_cli=info,turbopack_ecmascript=info,turbo_tasks=info,\
-                         turbo_tasks_fs=info,turbo_tasks_bytes=info,turbo_tasks_env=info,\
-                         turbo_tasks_fetch=info,turbo_tasks_hash=info",
+                         turbo_tasks_memory=info,turbo_tasks_fs=info,turbo_tasks_bytes=info,\
+                         turbo_tasks_env=info,turbo_tasks_fetch=info,turbo_tasks_hash=info",
                     )
                 },
                 |s| Cow::Owned(s),
