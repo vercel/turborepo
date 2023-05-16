@@ -68,7 +68,7 @@ pub async fn node_evaluate_asset_context(
         .cell(),
         ResolveOptionsContext {
             enable_typescript: true,
-            enable_node_modules: Some(project_path.root().resolve().await?),
+            enable_node_modules: Some(execution_context.project_path().root().resolve().await?),
             enable_node_externals: true,
             enable_node_native_modules: true,
             custom_conditions: vec![node_env, "node".to_string()],
