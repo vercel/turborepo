@@ -803,6 +803,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
             } = &mut *cell.borrow_mut();
             let tasks = take(tasks_to_notify);
             if !tasks.is_empty() {
+                let _guard = info_span!("finish_current_task_state").entered();
                 self.backend.invalidate_tasks(tasks, self);
             }
             *stateful
@@ -874,15 +875,17 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
 
 impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
     fn invalidate(&self, task: TaskId) {
+        let _guard = info_span!("invalidate").entered();
         self.backend.invalidate_task(task, self);
     }
 
     fn invalidate_with_reason(&self, task: TaskId, reason: StaticOrArc<dyn InvalidationReason>) {
+        let _guard = info_span!("invalidate", reason = display(&reason)).entered();
         {
             let (_, reason_set) = &mut *self.aggregated_update.lock().unwrap();
             reason_set.insert(reason);
         }
-        self.invalidate(task);
+        self.backend.invalidate_task(task, self);
     }
 
     fn notify_scheduled_tasks(&self) {
@@ -1086,6 +1089,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
             tasks_to_notify.extend(tasks.iter());
         });
         if result.is_err() {
+            let _guard = info_span!("schedule_notify_tasks").entered();
             self.backend.invalidate_tasks(tasks.to_vec(), self);
         }
     }
@@ -1100,6 +1104,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
             tasks_to_notify.extend(tasks.iter());
         });
         if result.is_err() {
+            let _guard = info_span!("schedule_notify_tasks_set").entered();
             self.backend
                 .invalidate_tasks(tasks.iter().copied().collect(), self);
         };
