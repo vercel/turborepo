@@ -120,8 +120,8 @@ func NewRunSummary(
 		synthesizedCommand: synthesizedCommand,
 	}
 
-	if spaceID != "" {
-		rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui)
+	rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui)
+	if rsm.spacesClient.enabled {
 		go rsm.spacesClient.start()
 		rsm.spacesClient.createRun(&rsm)
 	}
