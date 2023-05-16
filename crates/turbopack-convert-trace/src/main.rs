@@ -335,12 +335,15 @@ fn main() {
                             merged_tts = span.start;
                         }
                     }
-                    let id = &span.id;
                     let name_json = if let Some(name_value) = span.values.get("name") {
-                        serde_json::to_string(&format!("{id} {} {}", span.name, name_value))
-                            .unwrap()
+                        serde_json::to_string(&if let serde_json::Value::String(s) = name_value {
+                            format!("{} {s}", span.name)
+                        } else {
+                            format!("{} {name_value}", span.name)
+                        })
+                        .unwrap()
                     } else {
-                        serde_json::to_string(&format!("{id} {}", span.name)).unwrap()
+                        serde_json::to_string(&span.name).unwrap()
                     };
                     let args_json = serde_json::to_string(&span.values).unwrap();
                     if single {
