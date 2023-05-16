@@ -37,60 +37,69 @@ export async function createProject({
   let repoInfo: RepoInfo | undefined;
   let repoUrl: URL | undefined;
 
-  try {
-    repoUrl = new URL(example);
-  } catch (err: any) {
-    if (err.code !== "ERR_INVALID_URL") {
-      error(err);
-      process.exit(1);
-    }
-  }
-
-  if (repoUrl) {
-    if (repoUrl.origin !== "https://github.com") {
-      error(
-        `Invalid URL: ${chalk.red(
-          `"${example}"`
-        )}. Only GitHub repositories are supported. Please use a GitHub URL and try again.`
-      );
-      process.exit(1);
-    }
-
-    repoInfo = await getRepoInfo(repoUrl, examplePath);
-
-    if (!repoInfo) {
-      error(
-        `Unable to fetch repository information from: ${chalk.red(
-          `"${example}"`
-        )}. Please fix the URL and try again.`
-      );
-      process.exit(1);
-    }
-
-    const found = await hasRepo(repoInfo);
-
-    if (!found) {
-      error(
-        `Could not locate the repository for ${chalk.red(
-          `"${example}"`
-        )}. Please check that the repository exists and try again.`
-      );
-      process.exit(1);
-    }
+  if (isDefaultExample) {
+    repoInfo = {
+      username: "vercel",
+      name: "turbo",
+      branch: "main",
+      filePath: "examples/basic",
+    };
   } else {
-    const found = await existsInRepo(example);
+    try {
+      repoUrl = new URL(example);
+    } catch (err: any) {
+      if (err.code !== "ERR_INVALID_URL") {
+        error(err);
+        process.exit(1);
+      }
+    }
 
-    if (!found) {
-      error(
-        `Could not locate an example named ${chalk.red(
-          `"${example}"`
-        )}. It could be due to the following:\n`,
-        `1. Your spelling of example ${chalk.red(
-          `"${example}"`
-        )} might be incorrect.\n`,
-        `2. You might not be connected to the internet or you are behind a proxy.`
-      );
-      process.exit(1);
+    if (repoUrl) {
+      if (repoUrl.origin !== "https://github.com") {
+        error(
+          `Invalid URL: ${chalk.red(
+            `"${example}"`
+          )}. Only GitHub repositories are supported. Please use a GitHub URL and try again.`
+        );
+        process.exit(1);
+      }
+
+      repoInfo = await getRepoInfo(repoUrl, examplePath);
+
+      if (!repoInfo) {
+        error(
+          `Unable to fetch repository information from: ${chalk.red(
+            `"${example}"`
+          )}. Please fix the URL and try again.`
+        );
+        process.exit(1);
+      }
+
+      const found = await hasRepo(repoInfo);
+
+      if (!found) {
+        error(
+          `Could not locate the repository for ${chalk.red(
+            `"${example}"`
+          )}. Please check that the repository exists and try again.`
+        );
+        process.exit(1);
+      }
+    } else {
+      const found = await existsInRepo(example);
+
+      if (!found) {
+        error(
+          `Could not locate an example named ${chalk.red(
+            `"${example}"`
+          )}. It could be due to the following:\n`,
+          `1. Your spelling of example ${chalk.red(
+            `"${example}"`
+          )} might be incorrect.\n`,
+          `2. You might not be connected to the internet or you are behind a proxy.`
+        );
+        process.exit(1);
+      }
     }
   }
 
