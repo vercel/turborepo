@@ -346,6 +346,16 @@ mod test {
                     "node_modules/turbo-windows-arm64",
                 ],
             ),
+            (
+                "node_modules/@babel/helper-compilation-targets",
+                vec![
+                    "node_modules/@babel/compat-data",
+                    "node_modules/@babel/core",
+                    "node_modules/@babel/helper-validator-option",
+                    "node_modules/browserslist",
+                    "node_modules/semver",
+                ],
+            ),
         ];
 
         for (key, expected) in &tests {
