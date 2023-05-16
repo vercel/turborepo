@@ -30,7 +30,7 @@ pub(crate) fn find_git_root(
         .current_dir(turbo_root)
         .output()?;
     let root = String::from_utf8(rev_parse.stdout)?;
-    Ok(turbo_root.join_literal(root.trim_end()).to_realpath()?)
+    Ok(turbo_root.join_literal(root.trim_end()).clean())
 }
 
 #[cfg(test)]
@@ -70,6 +70,20 @@ mod tests {
         for cmd in cmds {
             require_git_cmd(repo_root, cmd);
         }
+    }
+
+    #[test]
+    fn test_symlinked_git_root() {
+        let (_, tmp_root) = tmp_dir();
+        let git_root = tmp_root.join_literal("actual_repo");
+        git_root.create_dir_all().unwrap();
+        setup_repository(&git_root);
+        git_root.join_literal("inside").create_dir_all().unwrap();
+        let link = tmp_root.join_literal("link");
+        link.symlink_to_dir("actual_repo").unwrap();
+        let turbo_root = link.join_literal("inside");
+        let result = find_git_root(&turbo_root).unwrap();
+        assert_eq!(result, link);
     }
 
     #[test]
