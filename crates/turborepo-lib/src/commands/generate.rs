@@ -2,7 +2,10 @@ use std::process::{Command, Stdio};
 
 use anyhow::Result;
 
-use crate::{child::spawn_child, cli::GenerateCommand};
+use crate::{
+    child::spawn_child,
+    cli::{GenerateCommand, GeneratorCustomArgs},
+};
 
 fn verify_requirements() -> Result<()> {
     let output = Command::new("npx")
@@ -34,25 +37,28 @@ fn call_turbo_gen(command: &str, tag: &String, raw_args: &str) -> Result<i32> {
     Ok(exit_code)
 }
 
-pub fn run(command: &GenerateCommand, tag: &String) -> Result<()> {
+pub fn run(
+    tag: &String,
+    command: &Option<GenerateCommand>,
+    args: &GeneratorCustomArgs,
+) -> Result<()> {
     // ensure npx is available
     verify_requirements()?;
 
     match command {
-        GenerateCommand::Add(args) => {
-            let mut add_args = args.clone();
-            // example implies copy
-            if add_args.example.is_some() {
-                add_args.copy = true;
-                add_args.empty = false;
+        // check if a subcommand was passed
+        Some(command) => {
+            if let GenerateCommand::Workspace(workspace_args) = command {
+                let raw_args = serde_json::to_string(&workspace_args)?;
+                call_turbo_gen("add", tag, &raw_args)?;
+            } else {
+                let raw_args = serde_json::to_string(&args)?;
+                call_turbo_gen("generate", tag, &raw_args)?;
             }
-
-            // convert args to json
-            let raw_args = serde_json::to_string(&add_args)?;
-            call_turbo_gen("add", tag, &raw_args)?;
         }
-        GenerateCommand::Custom(args) => {
-            let raw_args = serde_json::to_string(args)?;
+        // if no subcommand was passed, run the generate command as default
+        None => {
+            let raw_args = serde_json::to_string(&args)?;
             call_turbo_gen("generate", tag, &raw_args)?;
         }
     };
