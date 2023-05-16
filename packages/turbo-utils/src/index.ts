@@ -22,3 +22,4 @@ export * as logger from "./logger";
 // types
 export type { PackageManagerAvailable } from "./managers";
 export type { RepoInfo } from "./examples";
+export type { TurboConfigs } from "./getTurboConfigs";

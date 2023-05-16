@@ -1,7 +1,11 @@
-const fs = require("fs-extra");
-const path = require("path");
+import path from "path";
+import fs from "fs-extra";
+import type { PlopTypes } from "@turbo/gen";
 
-module.exports = function (plop, config) {
+export default function generator(
+  plop: PlopTypes.NodePlopAPI,
+  config: PlopTypes.PlopCfg
+): void {
   plop.setGenerator("transformer", {
     description: "Add a new transformer",
     prompts: [
@@ -34,8 +38,11 @@ module.exports = function (plop, config) {
         path: "__tests__/{{name}}.test.ts",
         templateFile: "templates/transformer.test.hbs",
       },
-      function createFixturesDirectory(answers) {
-        process.chdir(plop.getPlopfilePath());
+      function createFixturesDirectory(answers: { name?: string }) {
+        if (!answers.name) {
+          return "no name provided, skipping fixture directory creation";
+        }
+
         const directory = path.join(
           config.destBasePath,
           "__tests__",
@@ -48,4 +55,4 @@ module.exports = function (plop, config) {
       },
     ],
   });
-};
+}
