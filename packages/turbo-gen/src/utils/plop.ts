@@ -1,25 +1,35 @@
 import fs from "fs-extra";
 import { Project } from "@turbo/workspaces";
-import nodePlop, { NodePlopAPI, PlopCfg, PlopGenerator } from "node-plop";
+import nodePlop, { NodePlopAPI, PlopGenerator } from "node-plop";
+import { register } from "ts-node";
 import path from "path";
 import inquirer from "inquirer";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
+import { GeneratorError } from "./error";
 
-// TODO: Support a TS config file
-const TURBO_GENERATOR_CONFIG = path.join("turbo", "generators", "config.js");
+const SUPPORTED_CONFIG_EXTENSIONS = ["ts", "js", "cjs"];
+const TURBO_GENERATOR_DIRECTORY = path.join("turbo", "generators");
 
-// support root plopfile so that users with existing configurations can use them immediately
-const DEFAULT_ROOT_CONFIG_LOCATIONS = [
-  TURBO_GENERATOR_CONFIG,
-  "plopfile.js",
-  "plopfile.cjs",
-  "plopfile.mjs",
+// config formats that will be automatically loaded from within workspaces
+const SUPPORTED_WORKSPACE_GENERATOR_CONFIGS = SUPPORTED_CONFIG_EXTENSIONS.map(
+  (ext) => path.join(TURBO_GENERATOR_DIRECTORY, `config.${ext}`)
+);
+
+// config formats that will be automatically loaded from the root (support plopfiles so that users with existing configurations can use them immediately)
+const SUPPORTED_ROOT_GENERATOR_CONFIGS = [
+  ...SUPPORTED_WORKSPACE_GENERATOR_CONFIGS,
+  ...SUPPORTED_CONFIG_EXTENSIONS.map((ext) => path.join(`plopfile.${ext}`)),
 ];
 
 export type Generator = PlopGenerator & {
   basePath: string;
   name: string;
 };
+
+// init ts-node for plop to support ts configs
+register({
+  transpileOnly: true,
+});
 
 export function getPlop({
   project,
@@ -43,8 +53,8 @@ export function getPlop({
     }
   } else {
     // look for a root config
-    for (const defaultConfigPath of DEFAULT_ROOT_CONFIG_LOCATIONS) {
-      const plopFile = path.join(project.paths.root, defaultConfigPath);
+    for (const configPath of SUPPORTED_ROOT_GENERATOR_CONFIGS) {
+      const plopFile = path.join(project.paths.root, configPath);
       try {
         plop = nodePlop(plopFile, {
           destBasePath: project.paths.root,
@@ -69,10 +79,14 @@ export function getPlop({
   if (plop) {
     // add in all the workspace configs
     workspaceConfigs.forEach((c) => {
-      plop?.load(c.config, {
-        destBasePath: c.root,
-        force: false,
-      });
+      try {
+        plop?.load(c.config, {
+          destBasePath: c.root,
+          force: false,
+        });
+      } catch (e) {
+        console.error(e);
+      }
     });
   }
 
@@ -136,10 +150,6 @@ export function getCustomGenerators({
     gensWithSeparators.push(...gensByWorkspace[group]);
   });
 
-  if (!gensWithSeparators.length) {
-    throw new Error("No generators found");
-  }
-
   return gensWithSeparators;
 }
 
@@ -202,11 +212,13 @@ function getWorkspaceGeneratorConfigs({ project }: { project: Project }) {
     root: string;
   }> = [];
   project.workspaceData.workspaces.forEach((w) => {
-    if (fs.existsSync(path.join(w.paths.root, TURBO_GENERATOR_CONFIG))) {
-      workspaceGeneratorConfigs.push({
-        config: path.join(w.paths.root, TURBO_GENERATOR_CONFIG),
-        root: w.paths.root,
-      });
+    for (const configPath of SUPPORTED_WORKSPACE_GENERATOR_CONFIGS) {
+      if (fs.existsSync(path.join(w.paths.root, configPath))) {
+        workspaceGeneratorConfigs.push({
+          config: path.join(w.paths.root, configPath),
+          root: w.paths.root,
+        });
+      }
     }
   });
   return workspaceGeneratorConfigs;
@@ -225,13 +237,17 @@ export async function runCustomGenerator({
 }): Promise<void> {
   const plop = getPlop({ project, configPath });
   if (!plop) {
-    throw new Error("Unable to load generators");
+    throw new GeneratorError("Unable to load generators", {
+      type: "plop_unable_to_load_config",
+    });
   }
   const gen: PlopGenerator & { basePath?: string } =
     plop.getGenerator(generator);
 
   if (!gen) {
-    throw new Error(`Generator ${generator} not found`);
+    throw new GeneratorError(`Generator ${generator} not found`, {
+      type: "plop_generator_not_found",
+    });
   }
 
   const answers = await gen.runPrompts(bypassArgs);
@@ -253,7 +269,9 @@ export async function runCustomGenerator({
         logger.error(`Error - ${f.error}. Unable to ${f.type} to "${f.path}"`);
       }
     });
-    throw new Error(`Failed to run "${generator}" generator`);
+    throw new GeneratorError(`Failed to run "${generator}" generator`, {
+      type: "plop_error_running_generator",
+    });
   }
 
   if (results.changes && results.changes.length > 0) {

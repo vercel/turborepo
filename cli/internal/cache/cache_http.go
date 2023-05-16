@@ -267,12 +267,13 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, client client, recorder analytics.Recorder) *httpCache {
+func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoot turbopath.AbsoluteSystemPath) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
+		repoRoot:       repoRoot,
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
