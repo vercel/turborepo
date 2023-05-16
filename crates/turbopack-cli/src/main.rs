@@ -5,6 +5,7 @@ use std::{borrow::Cow, path::Path};
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use tracing_appender::non_blocking::DEFAULT_BUFFERED_LINES_LIMIT;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use turbopack_cli::{arguments::Arguments, register};
 use turbopack_cli_utils::{exit::exit_guard, raw_trace::RawTraceLayer};
@@ -46,8 +47,10 @@ fn main() {
         .context("Unable to create .turbopack directory")
         .unwrap();
     let trace_file = internal_dir.join("trace.log");
-    let (writer, guard) =
-        tracing_appender::non_blocking(std::fs::File::create(trace_file).unwrap());
+    let (writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
+        .lossy(false)
+        .buffered_lines_limit(DEFAULT_BUFFERED_LINES_LIMIT * 8)
+        .finish(std::fs::File::create(trace_file).unwrap());
     let subscriber = subscriber.with(RawTraceLayer::new(writer));
 
     let guard = exit_guard(guard).unwrap();
