@@ -6,7 +6,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, Error};
+use crate::{package_deps::GitHashes, read_git_error, wait_for_success, Error};
 
 pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
     let mut hashes = GitHashes::new();
@@ -16,27 +16,20 @@ pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    {
-        let stdout = git
-            .stdout
-            .as_mut()
-            .ok_or_else(|| Error::git_error("failed to get stdout for git ls-tree"))?;
-        let mut stderr = git
-            .stderr
-            .take()
-            .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
-        let result = read_ls_tree(stdout, &mut hashes);
-        if result.is_err() {
-            let mut buf = String::new();
-            let bytes_read = stderr.read_to_string(&mut buf)?;
-            if bytes_read > 0 {
-                // something failed with git, report that error
-                return Err(Error::git_error(buf));
-            }
-        }
-        result?;
+
+    let stdout = git
+        .stdout
+        .as_mut()
+        .ok_or_else(|| Error::git_error("failed to get stdout for git ls-tree"))?;
+    let mut stderr = git
+        .stderr
+        .take()
+        .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
+    let result = read_ls_tree(stdout, &mut hashes);
+    if let Err(err) = result {
+        return Err(read_git_error(&mut stderr).unwrap_or(err));
     }
-    git.wait()?;
+    wait_for_success(git, &mut stderr, "git ls-tree", root_path)?;
     Ok(hashes)
 }
 
