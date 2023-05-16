@@ -1,5 +1,5 @@
 use std::{
-    cmp::{max, min},
+    cmp::{max, min, Reverse},
     collections::{hash_map::Entry, HashMap, HashSet},
     eprintln,
     ops::Range,
@@ -87,6 +87,7 @@ fn main() {
     }
 
     let mut all_self_times = Vec::new();
+    let mut name_counts: HashMap<&str, usize> = HashMap::new();
 
     for FullTraceRow { ts, data } in trace_rows {
         match data {
@@ -106,6 +107,7 @@ fn main() {
                 spans[internal_id].parent = internal_parent;
                 let parent = &mut spans[internal_parent];
                 parent.items.push(SpanItem::Child(internal_id));
+                *name_counts.entry(name).or_default() += 1;
             }
             TraceRow::End { id } => {
                 // id might be reused
@@ -151,6 +153,14 @@ fn main() {
     }
 
     eprintln!(" done ({} spans)", spans.len());
+
+    let mut name_counts: Vec<(&str, usize)> = name_counts.into_iter().collect();
+    name_counts.sort_by_key(|(_, count)| Reverse(*count));
+
+    eprintln!("Top 10 span names:");
+    for (name, count) in name_counts.into_iter().take(10) {
+        eprintln!("{}x {}", count, name);
+    }
 
     println!("[");
     print!(r#"{{"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{{"name":"Single CPU"}}}}"#);
