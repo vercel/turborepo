@@ -1,6 +1,7 @@
 #![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(round_char_boundary)]
+#![feature(thread_id_value)]
 
 pub mod issue;
 pub mod raw_trace;

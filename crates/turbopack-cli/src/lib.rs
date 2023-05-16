@@ -1,6 +1,5 @@
 #![feature(future_join)]
 #![feature(min_specialization)]
-#![feature(thread_id_value)]
 
 pub mod arguments;
 pub mod dev;
