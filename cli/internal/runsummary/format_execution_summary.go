@@ -21,8 +21,7 @@ func (rsm *Meta) printExecutionSummary() {
 	successful := summary.ExecutionSummary.cached + summary.ExecutionSummary.success
 	failed := rsm.RunSummary.getFailedTasks() // Note: ExecutionSummary.failure exists, but we need the task names
 	cached := summary.ExecutionSummary.cached
-	// TODO: can we use a method on ExecutionSummary here?
-	duration := time.Since(summary.ExecutionSummary.startedAt).Truncate(time.Millisecond)
+	duration := summary.ExecutionSummary.Duration().Truncate(time.Millisecond)
 
 	if cached == attempted && attempted > 0 {
 		terminalProgram := os.Getenv("TERM_PROGRAM")
