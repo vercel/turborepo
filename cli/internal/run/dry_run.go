@@ -44,7 +44,11 @@ func DryRun(
 		}
 
 		if taskSummary.Framework == "" {
-			taskSummary.Framework = runsummary.MissingFrameworkLabel
+			if rs.Opts.runOpts.FrameworkInference {
+				taskSummary.Framework = runsummary.NoFrameworkDetected
+			} else {
+				taskSummary.Framework = runsummary.FrameworkDetectionSkipped
+			}
 		}
 
 		// This mutex is not _really_ required, since we are using Concurrency: 1 as an execution
@@ -63,7 +67,7 @@ func DryRun(
 		return rs.ArgsForTask(taskID)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, globalEnvMode, getArgs, base.Logger, execFunc)
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, rs.Opts.runOpts.FrameworkInference, globalEnvMode, getArgs, base.Logger, execFunc)
 	execOpts := core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,

@@ -31,7 +31,7 @@ export const DEFAULT_BARS: BenchmarkBar[] = [
   {
     key: "next13",
     label: "Next.js 13",
-    version: "13.3.1",
+    version: "13.4",
     turbo: true,
   },
   {
@@ -55,7 +55,7 @@ export const HMR_BARS: BenchmarkBar[] = [
   {
     key: "next13",
     label: "Next.js 13",
-    version: "13.3.1",
+    version: "13.4",
     turbo: true,
   },
   {

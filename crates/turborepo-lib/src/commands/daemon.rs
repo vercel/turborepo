@@ -1,11 +1,14 @@
 use std::{path::PathBuf, time::Duration};
 
+use pidlock::PidlockError::AlreadyOwned;
+use time::{format_description, OffsetDateTime};
+use tracing::{trace, warn};
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 
 use super::CommandBase;
 use crate::{
     cli::DaemonCommand,
-    daemon::{DaemonConnector, DaemonError},
+    daemon::{endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonError},
     tracing::TurboSubscriber,
 };
 
@@ -42,9 +45,10 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         }
         DaemonCommand::Status { json } => {
             let status = client.status().await?;
+            let log_file = log_filename(&status.log_file)?;
             let status = DaemonStatus {
                 uptime_ms: status.uptime_msec,
-                log_file: status.log_file.into(),
+                log_file: log_file.into(),
                 pid_file: client.pid_file().to_owned(),
                 sock_file: client.sock_file().to_owned(),
             };
@@ -65,6 +69,17 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
     Ok(())
 }
 
+// log_filename matches the algorithm used by tracing_appender::Rotation::DAILY
+// to generate the log filename. This is kind of a hack, but there didn't appear
+// to be a simple way to grab the generated filename.
+fn log_filename(base_filename: &str) -> Result<String, time::Error> {
+    let now = OffsetDateTime::now_utc();
+    let format = format_description::parse("[year]-[month]-[day]")?;
+    let date = now.format(&format)?;
+    Ok(format!("{}.{}", base_filename, date))
+}
+
+#[tracing::instrument(skip(base, logging), fields(repo_root = %base.repo_root))]
 pub async fn daemon_server(
     base: &CommandBase,
     idle_time: &String,
@@ -101,7 +116,22 @@ pub async fn daemon_server(
         .map(|d| Duration::from_nanos(d as u64))?;
 
     let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
-    server.serve().await;
+    let reason = server.serve().await;
+
+    match reason {
+        CloseReason::SocketOpenError(SocketOpenError::LockError(AlreadyOwned)) => {
+            warn!("daemon already running");
+        }
+        CloseReason::SocketOpenError(e) => return Err(e.into()),
+        CloseReason::Interrupt
+        | CloseReason::ServerClosed
+        | CloseReason::WatcherClosed
+        | CloseReason::Timeout
+        | CloseReason::Shutdown => {
+            // these are all ok, just exit
+            trace!("shutting down daemon: {:?}", reason);
+        }
+    };
 
     Ok(())
 }

@@ -73,12 +73,14 @@ Setup
   $ cat tmpjson.log | jq 'keys'
   [
     "envMode",
+    "frameworkInference",
     "globalCacheInputs",
     "id",
     "packages",
     "scm",
     "tasks",
     "turboVersion",
+    "user",
     "version"
   ]
 

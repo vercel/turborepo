@@ -33,12 +33,14 @@ Setup
   [
     "envMode",
     "execution",
+    "frameworkInference",
     "globalCacheInputs",
     "id",
     "packages",
     "scm",
     "tasks",
     "turboVersion",
+    "user",
     "version"
   ]
 

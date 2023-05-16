@@ -10,7 +10,7 @@
 /benchmark @vercel/turbo-oss
 /buildcontainer @vercel/turbo-oss
 /examples @vercel/turbo-oss
-/docs/pages/repo @vercel/turbo-oss
+/docs/pages/repo @vercel/turbo-oss @anthonyshew
 .github/workflows/pr-go-*.yml @vercel/turbo-oss
 .github/workflows/pr-js-tests-*.yml @vercel/turbo-oss
 /version.txt @vercel/turbo-oss
@@ -31,8 +31,9 @@ pnpm-lock.yaml
 .github/workflows/setup-nextjs-build.yml @vercel/web-tooling
 .github/workflows/daily-nextjs-integration-test.yml @vercel/web-tooling
 
-# crates in alphabetical order
-/crates @vercel/web-tooling
+# Nobody owns crates by default
+/crates
+
 # overrides for crates that are owned by turbo-oss
 /crates/globwatch @vercel/turbo-oss
 /crates/pidlock @vercel/turbo-oss
@@ -45,6 +46,11 @@ pnpm-lock.yaml
 /crates/turborepo-scm @vercel/turbo-oss
 /crates/turborepo-vercel-api-mock @vercel/turbo-oss
 /crates/turbo-updater @vercel/turbo-oss
+
+# overrides for crates that are owned by web-tooling
+/crates/turbo-tasks* @vercel/web-tooling
+/crates/turbopack* @vercel/web-tooling
+/crates/node-file-trace @vercel/web-tooling
 
 # packages in alphabetical order, to match view github https://github.com/vercel/turbo/tree/main/packages
 # Separate section in this file, so we can add new entries more easily.
