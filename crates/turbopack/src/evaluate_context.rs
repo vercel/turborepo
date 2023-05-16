@@ -1,6 +1,7 @@
 use anyhow::Result;
 use turbo_tasks::Value;
-use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
+use turbo_tasks_env::ProcessEnv;
+use turbo_tasks_fs::FileSystem;
 use turbopack_core::{
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
