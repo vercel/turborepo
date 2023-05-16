@@ -8,8 +8,8 @@ license = "MPL-2.0"
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
 default = ["rustls-tls"]
-native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
-rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
+native-tls = ["turborepo-api-client/native-tls"]
+rustls-tls = ["turborepo-api-client/rustls-tls"]
 
 # serve the daemon over a port (useful for testing)
 http = ["tonic-reflection"]
@@ -93,6 +93,7 @@ turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }
 webbrowser = { workspace = true }
+which = { workspace = true }
 
 
 [target.'cfg(target_os = "windows")'.dependencies]

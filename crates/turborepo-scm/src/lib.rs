@@ -19,4 +19,6 @@ pub enum Error {
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error("path error: {0}")]
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
+    #[error("could not find git binary")]
+    GitBinaryNotFound(#[from] which::Error),
 }

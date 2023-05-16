@@ -4,6 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use node_semver::{Range, Version};
 use serde::Deserialize;
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use which::which;
 
 use crate::package_manager::PackageManager;
 
@@ -42,7 +43,8 @@ impl<'a> YarnDetector<'a> {
             return Ok(version.clone());
         }
 
-        let output = Command::new("yarn")
+        let yarn_binary = which("yarn")?;
+        let output = Command::new(yarn_binary)
             .arg("--version")
             .current_dir(&self.repo_root)
             .output()?;
