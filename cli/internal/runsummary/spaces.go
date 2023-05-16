@@ -28,9 +28,7 @@ type spacesRunPayload struct {
 	Client         spacesClientSummary `json:"client"`                   // Details about the turbo client
 	GitBranch      string              `json:"gitBranch"`
 	GitSha         string              `json:"gitSha"`
-
-	// TODO: we need to add these in
-	// originationUser string
+	User           string              `json:"originationUser,omitempty"`
 }
 
 // spacesCacheStatus is the same as TaskCacheSummary so we can convert
@@ -74,6 +72,7 @@ func (rsm *Meta) newSpacesRunCreatePayload() *spacesRunPayload {
 		Context:        context,
 		GitBranch:      rsm.RunSummary.SCM.Branch,
 		GitSha:         rsm.RunSummary.SCM.Sha,
+		User:           rsm.RunSummary.User,
 		Client: spacesClientSummary{
 			ID:      "turbo",
 			Name:    "Turbo",

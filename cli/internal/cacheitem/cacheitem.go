@@ -7,7 +7,6 @@ import (
 	"crypto/sha512"
 	"errors"
 	"io"
-	"os"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -32,7 +31,7 @@ type CacheItem struct {
 	tw         *tar.Writer
 	zw         io.WriteCloser
 	fileBuffer *bufio.Writer
-	handle     *os.File
+	handle     io.Reader
 	compressed bool
 }
 
@@ -57,9 +56,14 @@ func (ci *CacheItem) Close() error {
 	}
 
 	if ci.handle != nil {
-		if err := ci.handle.Close(); err != nil {
-			return err
+		closer, isCloser := ci.handle.(io.Closer)
+
+		if isCloser {
+			if err := closer.Close(); err != nil {
+				return err
+			}
 		}
+
 	}
 
 	return nil

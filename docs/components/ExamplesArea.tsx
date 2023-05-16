@@ -1,6 +1,5 @@
 import { useSSG } from "nextra/ssg";
-import { DetailedFeatureLink } from "./Feature";
-import { GitHubIcon } from "./Icons";
+import { ExampleCard } from "./ExamplesCard";
 
 export const ExamplesArea = ({
   filter = "featured",
@@ -10,19 +9,18 @@ export const ExamplesArea = ({
   const { examples } = useSSG();
 
   return (
-    <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:mt-16 mt-12 gap-x-6 gap-y-12  lg:gap-x-8 lg:gap-y-12">
       {examples
         .filter(({ featured }) => (filter === "featured" ? featured : true))
-        .map(({ name, description, slug }) => (
-          <DetailedFeatureLink
+        // sort templates to the top
+        .sort((a) => (a.template ? -1 : 1))
+        .map(({ name, description, slug, featured, template }) => (
+          <ExampleCard
             key={name}
-            feature={{
-              Icon: GitHubIcon,
-              description,
-              name,
-            }}
-            target="_blank"
-            href={`https://github.com/vercel/turbo/tree/main/examples/${slug}`}
+            name={name}
+            description={description}
+            slug={slug}
+            template={template}
           />
         ))}
     </div>

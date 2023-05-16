@@ -80,6 +80,7 @@ Setup
     "scm",
     "tasks",
     "turboVersion",
+    "user",
     "version"
   ]
 

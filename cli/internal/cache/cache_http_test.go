@@ -81,7 +81,7 @@ func makeValidTar(t *testing.T) *bytes.Buffer {
 	// my-pkg
 	h := &tar.Header{
 		Name:     "my-pkg/",
-		Mode:     int64(0644),
+		Mode:     int64(0755),
 		Typeflag: tar.TypeDir,
 	}
 	if err := tw.WriteHeader(h); err != nil {
@@ -182,7 +182,7 @@ func TestRestoreTar(t *testing.T) {
 
 	expectedFiles := []turbopath.AnchoredSystemPath{
 		turbopath.AnchoredUnixPath("extra-file").ToSystemPath(),
-		turbopath.AnchoredUnixPath("my-pkg/").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg").ToSystemPath(),
 		turbopath.AnchoredUnixPath("my-pkg/some-file").ToSystemPath(),
 		turbopath.AnchoredUnixPath("my-pkg/link-to-extra-file").ToSystemPath(),
 		turbopath.AnchoredUnixPath("my-pkg/broken-link").ToSystemPath(),

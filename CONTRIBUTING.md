@@ -15,6 +15,7 @@ Thanks for your interest in contributing to Turbo!
   - [Updating `turbo`](#updating-turbo)
   - [Manually testing `turbo`](#manually-testing-turbo)
   - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
+  - [Creating a new release blog post](#creating-a-new-release-blog-post)
   - [Adding A New Crate](#adding-a-new-crate)
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
@@ -159,6 +160,24 @@ These lists are by no means exhaustive. Feel free to add to them with other stra
 ## Publishing `turbo` to the npm registry
 
 See [the publishing guide](./release.md#release-turborepo).
+
+## Creating a new release blog post
+
+Creating a new release post can be done via a turborepo generator. Run the following command from anywhere within the repo:
+
+```bash
+turbo generate run "blog - release post"
+```
+
+This will walk you through creating a new blog post from start to finish.
+
+NOTE: If you would like to update the stats (github stars / npm downloads / time saved) for an existing blog post that has yet to be published (useful if time has passed since the blog post was created, and up to date stats are required before publishing) - run:
+
+```bash
+turbo generate run "blog - "blog - update release post stats"
+```
+
+and choose the blog post you would like to update.
 
 ## Adding A New Crate
 

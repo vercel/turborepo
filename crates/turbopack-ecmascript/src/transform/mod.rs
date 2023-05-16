@@ -1,6 +1,3 @@
-mod server_to_client_proxy;
-mod util;
-
 use std::{fmt::Debug, hash::Hash, path::PathBuf, sync::Arc};
 
 use anyhow::Result;
@@ -9,16 +6,15 @@ use swc_core::{
     base::SwcComments,
     common::{chain, util::take::Take, FileName, Mark, SourceMap},
     ecma::{
-        ast::{Module, ModuleItem, Program},
+        ast::{Module, ModuleItem, Program, Script},
         atoms::JsWord,
         preset_env::{self, Targets},
         transforms::{
-            base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
+            base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
             react::react,
         },
         visit::{FoldWith, VisitMutWith},
     },
-    quote,
 };
 use turbo_tasks::primitives::{OptionStringVc, StringVc, StringsVc};
 use turbo_tasks_fs::FileSystemPathVc;
@@ -27,16 +23,9 @@ use turbopack_core::{
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
 };
 
-use self::{
-    server_to_client_proxy::create_proxy_module,
-    util::{is_client_module, is_server_module},
-};
-
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmascriptInputTransform {
-    ClientDirective(StringVc),
-    ServerDirective(StringVc),
     CommonJs,
     Plugin(TransformPluginVc),
     PresetEnv(EnvironmentVc),
@@ -148,7 +137,6 @@ impl EcmascriptInputTransform {
             source_map,
             top_level_mark,
             unresolved_mark,
-            file_name_str,
             file_name_hash,
             file_path,
             ..
@@ -221,7 +209,22 @@ impl EcmascriptInputTransform {
                     ..Default::default()
                 };
 
-                let module_program = unwrap_module_program(program);
+                let module_program = std::mem::replace(program, Program::Module(Module::dummy()));
+
+                let module_program = if let Program::Script(Script {
+                    span,
+                    mut body,
+                    shebang,
+                }) = module_program
+                {
+                    Program::Module(Module {
+                        span,
+                        body: body.drain(..).map(|stmt| ModuleItem::Stmt(stmt)).collect(),
+                        shebang,
+                    })
+                } else {
+                    module_program
+                };
 
                 *program = module_program.fold_with(&mut chain!(
                     preset_env::preset_env(
@@ -311,31 +314,6 @@ impl EcmascriptInputTransform {
                     inject_helpers(unresolved_mark)
                 ));
             }
-            // [TODO]: WEB-940 - use ClientDirectiveTransformer in next-swc
-            EcmascriptInputTransform::ClientDirective(transition_name) => {
-                if is_client_module(program) {
-                    let transition_name = &*transition_name.await?;
-                    *program = create_proxy_module(transition_name, &format!("./{file_name_str}"));
-                    program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
-                }
-            }
-            // [TODO]: WEB-940 - use ServerDirectiveTransformer in next-swc
-            EcmascriptInputTransform::ServerDirective(_transition_name) => {
-                if is_server_module(program) {
-                    let stmt = quote!(
-                        "throw new Error('Server actions (\"use server\") are not yet supported in \
-                         Turbopack');" as Stmt
-                    );
-                    match program {
-                        Program::Module(m) => m.body = vec![ModuleItem::Stmt(stmt)],
-                        Program::Script(s) => s.body = vec![stmt],
-                    }
-                    UnsupportedServerActionIssue { context: file_path }
-                        .cell()
-                        .as_issue()
-                        .emit();
-                }
-            }
             EcmascriptInputTransform::Plugin(transform) => {
                 transform.await?.transform(program, ctx).await?
             }
@@ -352,21 +330,6 @@ pub fn remove_shebang(program: &mut Program) {
         Program::Script(s) => {
             s.shebang = None;
         }
-    }
-}
-
-fn unwrap_module_program(program: &mut Program) -> Program {
-    match program {
-        Program::Module(module) => Program::Module(module.take()),
-        Program::Script(s) => Program::Module(Module {
-            span: s.span,
-            body: s
-                .body
-                .iter()
-                .map(|stmt| ModuleItem::Stmt(stmt.clone()))
-                .collect(),
-            shebang: s.shebang.clone(),
-        }),
     }
 }
 

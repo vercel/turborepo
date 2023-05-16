@@ -16,9 +16,7 @@ use turbopack_core::{
 use turbopack_css::{CssInputTransform, CssInputTransformsVc};
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType,
-    TransformPluginVc,
 };
-use turbopack_ecmascript_plugins::transform::emotion::build_emotion_transformer;
 use turbopack_mdx::MdxTransformOptions;
 use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
 
@@ -64,8 +62,6 @@ impl ModuleOptionsVc {
     ) -> Result<ModuleOptionsVc> {
         let ModuleOptionsContext {
             enable_jsx,
-            ref enable_emotion,
-            enable_react_refresh,
             enable_styled_jsx,
             ref enable_styled_components,
             enable_types,
@@ -77,8 +73,6 @@ impl ModuleOptionsVc {
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
             preset_env_versions,
-            ref custom_ecmascript_app_transforms,
-            ref custom_ecmascript_transforms,
             ref custom_ecma_transform_plugins,
             ref custom_rules,
             execution_context,
@@ -117,19 +111,11 @@ impl ModuleOptionsVc {
             };
 
         let mut transforms = before_transform_plugins;
-        transforms.extend(custom_ecmascript_app_transforms.iter().cloned());
-        transforms.extend(custom_ecmascript_transforms.iter().cloned());
 
         // Order of transforms is important. e.g. if the React transform occurs before
         // Styled JSX, there won't be JSX nodes for Styled JSX to transform.
         if enable_styled_jsx {
             transforms.push(EcmascriptInputTransform::StyledJsx);
-        }
-
-        if let Some(transformer) = build_emotion_transformer(enable_emotion).await? {
-            transforms.push(EcmascriptInputTransform::Plugin(TransformPluginVc::cell(
-                transformer,
-            )));
         }
 
         if let Some(enable_styled_components) = enable_styled_components {
@@ -152,7 +138,7 @@ impl ModuleOptionsVc {
             let jsx = enable_jsx.await?;
 
             transforms.push(EcmascriptInputTransform::React {
-                refresh: enable_react_refresh,
+                refresh: jsx.react_refresh,
                 import_source: OptionStringVc::cell(jsx.import_source.clone()),
                 runtime: OptionStringVc::cell(jsx.runtime.clone()),
             });
@@ -192,15 +178,13 @@ impl ModuleOptionsVc {
             None
         };
 
-        let vendor_transforms =
-            EcmascriptInputTransformsVc::cell(custom_ecmascript_transforms.clone());
+        let vendor_transforms = EcmascriptInputTransformsVc::cell(vec![]);
         let ts_app_transforms = if let Some(transform) = &ts_transform {
-            let mut base_transforms = if let Some(decorators_transform) = &decorators_transform {
+            let base_transforms = if let Some(decorators_transform) = &decorators_transform {
                 vec![decorators_transform.clone(), transform.clone()]
             } else {
                 vec![transform.clone()]
             };
-            base_transforms.extend(custom_ecmascript_transforms.iter().cloned());
             EcmascriptInputTransformsVc::cell(
                 base_transforms
                     .iter()
@@ -430,7 +414,7 @@ impl ModuleOptionsVc {
             ),
         ];
 
-        if enable_mdx || enable_mdx_rs {
+        if enable_mdx || enable_mdx_rs.is_some() {
             let (jsx_runtime, jsx_import_source) = if let Some(enable_jsx) = enable_jsx {
                 let jsx = enable_jsx.await?;
                 (jsx.runtime.clone(), jsx.import_source.clone())
@@ -438,11 +422,16 @@ impl ModuleOptionsVc {
                 (None, None)
             };
 
+            let mdx_options = enable_mdx_rs
+                .unwrap_or(MdxTransformModuleOptionsVc::default())
+                .await?;
+
             let mdx_transform_options = (MdxTransformOptions {
                 development: true,
                 preserve_jsx: false,
                 jsx_runtime,
                 jsx_import_source,
+                provider_import_source: mdx_options.provider_import_source.clone(),
             })
             .cell();
 
