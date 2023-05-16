@@ -2671,6 +2671,12 @@
 <a href="#2671" id="2671">2671</a>
 <a href="#2672" id="2672">2672</a>
 <a href="#2673" id="2673">2673</a>
+<a href="#2674" id="2674">2674</a>
+<a href="#2675" id="2675">2675</a>
+<a href="#2676" id="2676">2676</a>
+<a href="#2677" id="2677">2677</a>
+<a href="#2678" id="2678">2678</a>
+<a href="#2679" id="2679">2679</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -4967,6 +4973,12 @@
         }
         Decl::Var(var_decl) =&gt; {
             <span class="kw">let </span>decls = <span class="kw-2">&amp;*</span>var_decl.decls;
+            decls
+                .iter()
+                .for_each(|VarDeclarator { name, .. }| for_each_ident_in_pat(name, f));
+        }
+        Decl::Using(using_decl) =&gt; {
+            <span class="kw">let </span>decls = <span class="kw-2">&amp;*</span>using_decl.decls;
             decls
                 .iter()
                 .for_each(|VarDeclarator { name, .. }| for_each_ident_in_pat(name, f));
