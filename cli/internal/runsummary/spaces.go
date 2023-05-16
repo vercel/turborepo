@@ -222,6 +222,15 @@ func (c *spacesClient) dequeueRequest(req *spaceRequest) {
 	c.makeRequest(req)
 }
 
+func (c *spacesClient) printErrors() {
+	// Print any errors
+	if len(c.errors) > 0 {
+		for _, err := range c.errors {
+			c.ui.Warn(fmt.Sprintf("%s", err))
+		}
+	}
+}
+
 // Cloe will wait for all requests to finish and then close the channel listening for them
 func (c *spacesClient) Close() {
 	// wait for all requests to finish.

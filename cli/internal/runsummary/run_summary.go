@@ -166,6 +166,10 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 	rsm.printExecutionSummary()
 	if rsm.spacesClient.enabled {
 		rsm.sendToSpace(ctx)
+	} else {
+		// Print any errors if the client is not enabled, since it could have
+		// been disabled at runtime due to an issue.
+		rsm.spacesClient.printErrors()
 	}
 
 	return nil
@@ -177,13 +181,7 @@ func (rsm *Meta) sendToSpace(ctx context.Context) {
 		_ = spinner.WaitFor(ctx, rsm.spacesClient.Close, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
 	}()
 
-	// Print any errors
-	if len(rsm.spacesClient.errors) > 0 {
-		for _, err := range rsm.spacesClient.errors {
-			rsm.ui.Warn(fmt.Sprintf("%s", err))
-		}
-	}
-
+	rsm.spacesClient.printErrors()
 	url := rsm.spacesClient.run.URL
 
 	if url != "" {
