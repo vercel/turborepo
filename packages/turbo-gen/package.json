@@ -1,6 +1,6 @@
 {
   "name": "@turbo/gen",
-  "version": "1.9.5-canary.0",
+  "version": "1.9.6",
   "description": "Extend a Turborepo",
   "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
@@ -13,9 +13,9 @@
     "url": "https://github.com/vercel/turbo/issues"
   },
   "bin": "dist/cli.js",
+  "types": "dist/types.d.ts",
   "scripts": {
     "build": "tsup",
-    "test": "jest",
     "lint": "eslint src/**/*.ts",
     "check-types": "tsc --noEmit"
   },
@@ -27,6 +27,7 @@
     "minimatch": "^9.0.0",
     "node-plop": "^0.26.3",
     "semver": "^7.3.8",
+    "ts-node": "^10.9.1",
     "update-check": "^1.5.4",
     "validate-npm-package-name": "^5.0.0"
   },

@@ -1,10 +1,11 @@
-const fs = require("fs");
-const { releasePostStats, dateToday, majorMinor } = require("./utils");
+import fs from "fs";
+import { releasePostStats } from "./utils";
+import * as helpers from "./helpers";
+import type { PlopTypes } from "@turbo/gen";
 
-module.exports = function (plop) {
+export default function generator(plop: PlopTypes.NodePlopAPI): void {
   // add helpers for use in templates
-  plop.setHelper("dateToday", dateToday);
-  plop.setHelper("majorMinor", majorMinor);
+  helpers.init(plop);
 
   // create generators
   plop.setGenerator("blog - release post", {
@@ -97,7 +98,6 @@ module.exports = function (plop) {
       {
         type: "list",
         name: "post",
-        loop: false,
         pageSize: 20,
         message: "Which release post should the stats be updated?",
         choices: () => {
@@ -143,4 +143,4 @@ module.exports = function (plop) {
       },
     ],
   });
-};
+}

@@ -62,7 +62,6 @@ impl ModuleOptionsVc {
     ) -> Result<ModuleOptionsVc> {
         let ModuleOptionsContext {
             enable_jsx,
-            enable_react_refresh,
             enable_styled_jsx,
             ref enable_styled_components,
             enable_types,
@@ -139,7 +138,7 @@ impl ModuleOptionsVc {
             let jsx = enable_jsx.await?;
 
             transforms.push(EcmascriptInputTransform::React {
-                refresh: enable_react_refresh,
+                refresh: jsx.react_refresh,
                 import_source: OptionStringVc::cell(jsx.import_source.clone()),
                 runtime: OptionStringVc::cell(jsx.runtime.clone()),
             });
@@ -415,7 +414,7 @@ impl ModuleOptionsVc {
             ),
         ];
 
-        if enable_mdx || enable_mdx_rs {
+        if enable_mdx || enable_mdx_rs.is_some() {
             let (jsx_runtime, jsx_import_source) = if let Some(enable_jsx) = enable_jsx {
                 let jsx = enable_jsx.await?;
                 (jsx.runtime.clone(), jsx.import_source.clone())
@@ -423,11 +422,16 @@ impl ModuleOptionsVc {
                 (None, None)
             };
 
+            let mdx_options = enable_mdx_rs
+                .unwrap_or(MdxTransformModuleOptionsVc::default())
+                .await?;
+
             let mdx_transform_options = (MdxTransformOptions {
                 development: true,
                 preserve_jsx: false,
                 jsx_runtime,
                 jsx_import_source,
+                provider_import_source: mdx_options.provider_import_source.clone(),
             })
             .cell();
 

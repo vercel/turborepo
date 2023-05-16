@@ -27,12 +27,14 @@ impl<'de> Deserialize<'de> for SemverString {
         #[serde(untagged)]
         enum StringOrNum {
             String(String),
-            Num(u64),
+            Int(u64),
+            Float(f32),
         }
 
         match StringOrNum::deserialize(deserializer)? {
             StringOrNum::String(s) => Ok(SemverString(s)),
-            StringOrNum::Num(x) => Ok(SemverString(x.to_string())),
+            StringOrNum::Int(x) => Ok(SemverString(x.to_string())),
+            StringOrNum::Float(f) => Ok(SemverString(f.to_string())),
         }
     }
 }
@@ -48,6 +50,7 @@ mod test {
         let input = "foo: 1.2.3
 bar: 2
 baz: latest
+oop: 1.3
 ";
 
         let result: HashMap<String, SemverString> = serde_yaml::from_str(input).unwrap();
@@ -55,5 +58,6 @@ baz: latest
         assert_eq!(result["foo"].as_ref(), "1.2.3");
         assert_eq!(result["bar"].as_ref(), "2");
         assert_eq!(result["baz"].as_ref(), "latest");
+        assert_eq!(result["oop"].as_ref(), "1.3")
     }
 }
