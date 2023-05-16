@@ -54,6 +54,7 @@ Setup
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
+  Failed:    app-a#builderror
   
    ERROR  run failed: command  exited (1)
   [1]
@@ -83,6 +84,7 @@ Setup
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
+  Failed:    app-a#builderror2
   
    ERROR  run failed: command  exited (1)
   [1]
