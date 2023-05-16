@@ -182,8 +182,8 @@ func (rsm *Meta) sendToSpace(ctx context.Context) {
 	}()
 
 	rsm.spacesClient.printErrors()
-	url := rsm.spacesClient.run.URL
 
+	url := rsm.spacesClient.run.URL
 	if url != "" {
 		rsm.ui.Output(fmt.Sprintf("Run: %s", url))
 		rsm.ui.Output("")
