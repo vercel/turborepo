@@ -82,7 +82,14 @@ FirstRequest:
 		// A select statement that can listen for messages from multiple channels
 		select {
 		// listen for new requests coming in
-		case req := <-c.requests:
+		case req, isOpen := <-c.requests:
+			// If we read from the channel and its already closed, it means
+			// something went wrong and we are done with the run, but the first
+			// request either never happened or didn't write to the c.runCreated channel
+			// to signal that its done. In this case, we need to break out of the forever loop.
+			if !isOpen {
+				break FirstRequest
+			}
 			// Make the first request right away in a goroutine,
 			// queue all other requests. When the first request is done,
 			// we'll get a message on the other channel and break out of this loop
