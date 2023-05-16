@@ -25,6 +25,7 @@ use turbo_tasks::{
         TransientTaskType,
     },
     event::EventListener,
+    macro_helpers::tracing::{info_span, Instrument},
     primitives::RawVcSetVc,
     util::{IdFactory, NoMoveVec},
     CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused,
@@ -767,6 +768,7 @@ impl Job {
     ) {
         match self {
             Job::RemoveFromScopes(tasks, scopes) => {
+                let _guard = info_span!("Job::RemoveFromScopes").entered();
                 for task in tasks {
                     backend.with_task(task, |task| {
                         task.remove_from_scopes(scopes.iter().copied(), backend, turbo_tasks)
@@ -775,6 +777,7 @@ impl Job {
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::RemoveFromScope(tasks, scope) => {
+                let _guard = info_span!("Job::RemoveFromScope").entered();
                 for task in tasks {
                     backend.with_task(task, |task| {
                         task.remove_from_scope(scope, backend, turbo_tasks)
@@ -783,6 +786,7 @@ impl Job {
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::ScheduleWhenDirtyFromScope(tasks) => {
+                let _guard = info_span!("Job::ScheduleWhenDirtyFromScope").entered();
                 for task in tasks.into_iter() {
                     backend.with_task(task, |task| {
                         task.schedule_when_dirty_from_scope(backend, turbo_tasks);
@@ -794,21 +798,26 @@ impl Job {
                 scope,
                 merging_scopes,
             } => {
+                let span = info_span!("Job::AddToScopeQueue");
                 backend
                     .scope_add_remove_priority
                     .run_low(async {
+                        let _guard = span.entered();
                         run_add_to_scope_queue(queue, scope, merging_scopes, backend, turbo_tasks);
                     })
                     .await;
             }
             Job::RemoveFromScopeQueue(queue, id) => {
+                let _guard = info_span!("RemoveFromScopeQueue::AddToScopeQueue").entered();
                 run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::UnloadRootScope(id) => {
+                let span = info_span!("RemoveFromScopeQueue::UnloadRootScope");
                 if let Some(future) = turbo_tasks.wait_foreground_done_excluding_own() {
-                    future.await;
+                    future.instrument(span.clone()).await;
                 }
+                let _guard = span.entered();
                 backend.with_scope(id, |scope| {
                     scope.assert_unused();
                 });
@@ -817,6 +826,7 @@ impl Job {
                 }
             }
             Job::GarbageCollection => {
+                let _guard = info_span!("RemoveFromScopeQueue::GarbageCollection").entered();
                 backend.run_gc(true, turbo_tasks);
             }
         }

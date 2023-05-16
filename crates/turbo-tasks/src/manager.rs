@@ -497,15 +497,12 @@ impl<B: Backend + 'static> TurboTasks<B> {
             anyhow::Ok(())
         };
 
-        // Account time in spawned task towards the current span
-        let span = Span::current();
-
         let future = TURBO_TASKS
             .scope(
                 self.pin(),
                 CURRENT_TASK_ID.scope(task_id, self.backend.execution_scope(task_id, future)),
             )
-            .instrument(span);
+            .in_current_span();
 
         #[cfg(feature = "tokio_tracing")]
         tokio::task::Builder::new()
@@ -584,7 +581,9 @@ impl<B: Backend + 'static> TurboTasks<B> {
         {
             return;
         }
-        listener.await;
+        listener
+            .instrument(info_span!("wait_foreground_done"))
+            .await;
     }
 
     pub fn get_in_progress_count(&self) -> usize {
@@ -744,7 +743,6 @@ impl<B: Backend + 'static> TurboTasks<B> {
         let this = self.pin();
         self.currently_scheduled_background_jobs
             .fetch_add(1, Ordering::AcqRel);
-        let span = info_span!("background_job").or_current();
         tokio::spawn(
             TURBO_TASKS
                 .scope(this.clone(), async move {
@@ -768,7 +766,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
                         this2.event_background.notify(usize::MAX);
                     }
                 })
-                .instrument(span),
+                .in_current_span(),
         );
     }
 
@@ -782,7 +780,6 @@ impl<B: Backend + 'static> TurboTasks<B> {
     ) {
         let this = self.pin();
         this.begin_foreground_job();
-        let span = info_span!("foreground_job").or_current();
         tokio::spawn(
             TURBO_TASKS
                 .scope(this.clone(), async move {
@@ -791,7 +788,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
                     }
                     this.finish_foreground_job();
                 })
-                .instrument(span),
+                .in_current_span(),
         );
     }
 
@@ -1349,8 +1346,7 @@ pub fn with_turbo_tasks_for_testing<T>(
 /// Beware: this method is not safe to use in production code. It is only
 /// intended for use in tests and for debugging purposes.
 pub fn spawn_detached(f: impl Future<Output = Result<()>> + Send + 'static) {
-    let span = Span::current();
-    tokio::spawn(turbo_tasks().detached(Box::pin(f.instrument(span))));
+    tokio::spawn(turbo_tasks().detached(Box::pin(f.in_current_span())));
 }
 
 pub fn current_task_for_testing() -> TaskId {
