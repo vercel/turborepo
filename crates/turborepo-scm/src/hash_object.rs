@@ -8,7 +8,7 @@ use std::{
 use nom::{Finish, IResult};
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, Error};
+use crate::{package_deps::GitHashes, read_git_error, wait_for_success, Error};
 
 pub(crate) fn hash_objects(
     pkg_path: &AbsoluteSystemPathBuf,
@@ -26,33 +26,26 @@ pub(crate) fn hash_objects(
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
         .spawn()?;
-    {
-        let stdout = git
-            .stdout
-            .as_mut()
-            .ok_or_else(|| Error::git_error("failed to get stdout for git hash-object"))?;
-        // We take, rather than borrow, stdin so that we can drop it and force the
-        // underlying file descriptor to close, signalling the end of input.
-        let stdin: std::process::ChildStdin = git
-            .stdin
-            .take()
-            .ok_or_else(|| Error::git_error("failed to get stdin for git hash-object"))?;
-        let mut stderr = git
-            .stderr
-            .take()
-            .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
-        let result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes);
-        if let Err(err) = result {
-            let mut buf = String::new();
-            let bytes_read = stderr.read_to_string(&mut buf)?;
-            if bytes_read > 0 {
-                // something failed with git, report that error
-                return Err(Error::git_error(buf));
-            }
-            return Err(err);
-        }
+
+    let stdout = git
+        .stdout
+        .as_mut()
+        .ok_or_else(|| Error::git_error("failed to get stdout for git hash-object"))?;
+    // We take, rather than borrow, stdin so that we can drop it and force the
+    // underlying file descriptor to close, signalling the end of input.
+    let stdin: std::process::ChildStdin = git
+        .stdin
+        .take()
+        .ok_or_else(|| Error::git_error("failed to get stdin for git hash-object"))?;
+    let mut stderr = git
+        .stderr
+        .take()
+        .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
+    let result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes);
+    if let Err(err) = result {
+        return Err(read_git_error(&mut stderr).unwrap_or(err));
     }
-    git.wait()?;
+    wait_for_success(git, &mut stderr, "git hash-object", pkg_path)?;
     Ok(())
 }
 

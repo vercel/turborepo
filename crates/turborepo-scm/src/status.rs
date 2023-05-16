@@ -6,7 +6,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, Error};
+use crate::{package_deps::GitHashes, read_git_error, wait_for_success, Error};
 
 pub(crate) fn append_git_status(
     root_path: &AbsoluteSystemPathBuf,
@@ -26,27 +26,21 @@ pub(crate) fn append_git_status(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    let to_hash = {
-        let stdout = git
-            .stdout
-            .as_mut()
-            .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
-        let mut stderr = git
-            .stderr
-            .take()
-            .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
-        let result = read_status(stdout, pkg_prefix, hashes);
-        if result.is_err() {
-            let mut buf = String::new();
-            let bytes_read = stderr.read_to_string(&mut buf)?;
-            if bytes_read > 0 {
-                // something failed with git, report that error
-                return Err(Error::git_error(buf));
-            }
-        }
-        result?
+
+    let stdout = git
+        .stdout
+        .as_mut()
+        .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
+    let mut stderr = git
+        .stderr
+        .take()
+        .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
+    let result = read_status(stdout, pkg_prefix, hashes);
+    let to_hash = match result {
+        Err(err) => return Err(read_git_error(&mut stderr).unwrap_or(err)),
+        Ok(to_hash) => to_hash,
     };
-    git.wait()?;
+    wait_for_success(git, &mut stderr, "git status", &root_path)?;
     Ok(to_hash)
 }
 
