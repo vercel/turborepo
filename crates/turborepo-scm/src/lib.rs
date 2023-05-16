@@ -2,12 +2,16 @@
 #![feature(provide_any)]
 #![feature(assert_matches)]
 
-use std::backtrace;
+use std::backtrace::{self, Backtrace};
 
 use thiserror::Error;
 use turbopath::PathError;
 
 pub mod git;
+mod hash_object;
+mod ls_tree;
+pub mod package_deps;
+mod status;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -21,4 +25,15 @@ pub enum Error {
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
     #[error("could not find git binary")]
     GitBinaryNotFound(#[from] which::Error),
+    #[error("encoding error: {0}")]
+    Encoding(
+        #[from] std::string::FromUtf8Error,
+        #[backtrace] backtrace::Backtrace,
+    ),
+}
+
+impl Error {
+    pub(crate) fn git_error(s: impl Into<String>) -> Self {
+        Error::Git(s.into(), Backtrace::capture())
+    }
 }
