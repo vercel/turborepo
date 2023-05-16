@@ -1385,6 +1385,11 @@ pub fn mark_stateful() {
     })
 }
 
+/// Notifies scheduled tasks for execution.
+pub fn notify_scheduled_tasks() {
+    with_turbo_tasks(|tt| tt.notify_scheduled_tasks())
+}
+
 pub fn emit<T: ValueTraitVc>(collectible: T) {
     with_turbo_tasks(|tt| tt.emit_collectible(T::get_trait_type_id(), collectible.into()))
 }

@@ -105,7 +105,7 @@ pub mod macro_helpers {
     pub use once_cell::sync::{Lazy, OnceCell};
     pub use tracing;
 
-    pub use super::manager::{find_cell_by_type, spawn_detached};
+    pub use super::manager::{find_cell_by_type, notify_scheduled_tasks, spawn_detached};
 }
 
 pub mod test_helpers {

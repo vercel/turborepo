@@ -156,7 +156,11 @@ pub fn gen_native_function_code(
     let original_call_code = if async_function {
         quote! {
             turbo_tasks::macro_helpers::tracing::Instrument::instrument(
-                #original_function(#(#input_arguments),*),
+                async {
+                    let turbo_tasks_result = #original_function(#(#input_arguments),*).await;
+                    turbo_tasks::macro_helpers::notify_scheduled_tasks();
+                    turbo_tasks_result
+                },
                 turbo_tasks::macro_helpers::tracing::info_span!(#name_code)
             ).await
         }
@@ -164,7 +168,9 @@ pub fn gen_native_function_code(
         quote! {
             {
                 let _turbo_tasks_function_guard = turbo_tasks::macro_helpers::tracing::info_span!(#name_code).entered();
-                #original_function(#(#input_arguments),*)
+                let turbo_tasks_result = #original_function(#(#input_arguments),*);
+                turbo_tasks::macro_helpers::notify_scheduled_tasks();
+                turbo_tasks_result
             }
         }
     };
