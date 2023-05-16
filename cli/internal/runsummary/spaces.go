@@ -45,7 +45,7 @@ type spaceRun struct {
 }
 
 func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesClient {
-	return &spacesClient{
+	c := &spacesClient{
 		api:        api,
 		ui:         ui,
 		spaceID:    spaceID,
@@ -54,6 +54,13 @@ func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesCl
 		runCreated: make(chan struct{}, 1),
 		run:        &spaceRun{},
 	}
+
+	if !c.api.IsLinked() {
+		c.errors = append(c.errors, fmt.Errorf("Repo is not linked to a Space. Run `turbo link --target=spaces` first"))
+		c.enabled = false
+	}
+
+	return c
 }
 
 // Start receiving and processing requests in 8 goroutines
@@ -120,11 +127,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 			c.errors = append(c.errors, err)
 			return
 		}
-	}
-
-	if !c.api.IsLinked() {
-		c.errors = append(c.errors, req.error("Repo is not linked to a Space. Run `turbo link --target=spaces` first"))
-		return
 	}
 
 	// We only care about POST and PATCH right now
