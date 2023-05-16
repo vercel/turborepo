@@ -122,11 +122,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 		}
 	}
 
-	if c.spaceID == "" {
-		c.errors = append(c.errors, req.error("No spaceID found"))
-		return
-	}
-
 	if !c.api.IsLinked() {
 		c.errors = append(c.errors, req.error("Repo is not linked to a Space. Run `turbo link --target=spaces` first"))
 		return
