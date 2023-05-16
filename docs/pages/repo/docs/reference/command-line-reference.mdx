@@ -706,5 +706,71 @@ Unlink the current directory from the Remote Cache.
 
 Get the path to the `turbo` binary.
 
+## `turbo generate`
+
+Extend your Turborepo with new apps, and packages. Create new empty workspaces, copy existing workspaces, add workspaces from remote sources or run custom generators defined using Plop configurations.
+
+### `add`
+
+Add a new package or app to your monorepo.
+
+#### Options
+
+##### `--name`
+
+The name for the new workspace
+
+##### `--empty`
+
+Generate an empty workspace
+
+##### `--copy`
+
+Generate a workspace using an existing workspace as a template
+
+##### `--detination`
+
+Where the new workspace should be created
+
+##### `--what`
+
+The type of workspace to create ("app" or "package")
+
+##### `--root`
+
+The root of your repository (default: directory with _root_ turbo.json)
+
+##### `--example / -e`
+
+An example package to add. You can use a GitHub URL with any branch and/or subdirectory
+
+##### `--example-path`
+
+In a rare case, your GitHub URL might contain a branch name with a slash (e.g. bug/fix-1) and the path to the example (e.g. foo/bar).
+In this case, you must specify the path to
+the example separately: `--example-path foo/bar`
+
+##### `--show-all-dependencies`
+
+When selecting dependencies to add to your new workspace, do not filter available dependencies by the selected workspace type ("app" or "package")
+
+### `run [generator-name]`
+
+Run custom generators within your monorepo. Optionally specify a generator name to directly run a specific generator.
+
+#### Options
+
+##### `--config`
+
+Generator configuration file (default: turbo/generators/config.js)
+
+##### `--root`
+
+The root of your repository (default: directory with _root_ turbo.json)
+
+##### `--args`
+
+Prompt answers passed directly to generator
+
 [1]: /repo/docs/refernce/configuration#experimentalPassThroughEnv
 [2]: /repo/docs/refernce/configuration#experimentalGlobalPassThroughEnv

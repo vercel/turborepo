@@ -1,0 +1,224 @@
+---
+title: Code Generation
+description: Extend your Turborepo with new apps, and packages. Create new empty workspaces, copy existing workspaces, add workspaces from remote sources (just like `create-turbo`!) or run custom generators defined using Plop configurations.
+---
+
+import Callout from "../../../../../components/Callout";
+
+# Code Generation
+
+Splitting up your repository into a monorepo using Turborepo with individual packages and apps comes with many benefits.
+However, you may find yourself constantly repeating the same tasks when adding new workspaces or other common
+boilerplate.
+
+Turborepo provides a few ways to generate new code in your repo.
+
+## Add an Empty Workspace
+
+Add a new, empty app or package to your monorepo.
+
+![Extend your Turborepo by adding a new package or application](/images/docs/turborepo-generators-empty.png)
+
+### Examples
+
+```sh
+turbo generate add
+```
+
+View all available [options](/repo/docs/reference/command-line-reference#add) for `add`.
+
+## Copy an Existing Workspace
+
+A new app or package can also be added using an existing workspace as a template. This works for both workspaces within your existing monorepo,
+and remote workspaces from other repositories (specified via github URL).
+
+![Extend your Turborepo by copying an existing package or application](/images/docs/turborepo-generators-copy.png)
+
+### Examples
+
+Extend your monorepo by copying from an existing workspace within your repo.
+
+```sh
+turbo generate add --copy
+```
+
+Extend your monorepo by copying from a remote workspace.
+
+```sh
+turbo generate -e https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
+```
+
+<Callout>
+  **Note**: When adding from a remote source, Turborepo is unable to verify that your repo has all of the required dependencies, and is using the correct package manager.
+
+In this case, some manual modifications may be required to get the new workspace working as expected within your repository.
+
+</Callout>
+
+View all available [options](/repo/docs/reference/command-line-reference#add) for `add --copy`.
+
+## Custom Generators
+
+If a built-in generator does not fit your needs, you can create your own custom generator using [Plop](https://plopjs.com/) configurations.
+Turborepo will automatically detect any generator configurations within your repo, and make them available to run from the command line.
+
+While Turborepo understands all Plop configuration options and features, it provides a few additional features to improve the experience of writing
+generators within a Turborepo.
+
+1. Generators are automatically discoverd, loaded, and organized per workspace (no need to manually `load` them within a single configuration file)
+2. Generators are automatically run from the root of the workspace where they are defined
+3. Typescript generator configs are supported with zero configuration
+4. `plop` is not required to be installed as a depenendency of your repo
+
+### Getting Started
+
+To quickly get started, run the following command from anywhere within your monorepo using Turborepo.
+
+```sh
+turbo generate run
+```
+
+This will automatically prompt you to create your first generator configuration file if one does not already exist, or prompt you
+to select a generator to run from your existing configuration files.
+
+You can also create your configuration manually at `turbo/generators/config.ts` (or `config.js`)
+at the root of your repo - or within _any_ workspace.
+
+<Callout type="info">
+  **Note**: If you are using Typescript, you will need to install the `@turbo/gen` package as a `devDependency` to access the required TS types:
+</Callout>
+
+For example, the following illustrates a monorepo with three generator configurations -
+
+- root
+- apps/web
+- packages/ui.
+
+```bash
+├── package.json
+├── turbo.json
+├── README.md
+├── apps
+│   └── web
+│       ├── package.json
+│       └── turbo
+│           └── generators
+│               ├── config.ts
+│               └── templates
+├── packages
+│   └── ui
+│       ├── package.json
+│       └── turbo
+│           └── generators
+│               ├── config.ts
+│               └── templates
+├── turbo
+│   └── generators
+│       ├── config.ts
+│       └── templates
+├── pnpm-lock.yaml
+└── pnpm-workspace.yaml
+```
+
+<Callout type="info">
+  **Note**: Generators created within workspaces are automatically anchored to the workspace _root_, **not** the repo root, or the location of the generator config.
+
+This is done to make generators as simple to write as possible. Although the generator config is located within `[workspace-root]/turbo/generators`, creating a file at
+`[workspace-root]` does _not_ need to be specified as `../../<file>`, but rather simply `<file>`.
+
+</Callout>
+
+Learn more about [creating custom generators using Plop](https://plopjs.com/documentation/#creating-a-generator).
+
+### Writing Generators
+
+A generator configuration file is simply a function that returns a [Plop](https://plopjs.com/) configuration object. The configuration object is
+used to define the generator's prompts, and actions.
+
+At its simplest form a generator configuration file looks like:
+
+```ts filename="turbo/generators/config.ts"
+import type { PlopTypes } from "@turbo/gen";
+
+export default function generator(plop: PlopTypes.NodePlopAPI): void {
+  // create a generator
+  plop.setGenerator("Generator name", {
+    description: "Generator description",
+    // gather information from the user
+    prompts: [
+      ...
+    ],
+    // perform actions based on the prompts
+    actions: [
+      ...
+    ],
+  });
+}
+```
+
+#### Prompts
+
+Promps are written using [Plop prompts](https://plopjs.com/documentation/#using-prompts) and are used to gather information from the user.
+
+#### Actions
+
+Actions can use [built-in Plop actions](https://plopjs.com/documentation/#built-in-actions), or [custom action functions](https://plopjs.com/documentation/#functionsignature-custom-action) that you define yourself:
+
+```ts filename="turbo/generators/config.ts"
+import type { PlopTypes } from "@turbo/gen";
+
+const customAction: PlopTypes.CustomActionFunction = async (answers) => {
+  // fetch data from a remote API
+  const results = await fetchRemoteData();
+  // add the response to the answers, making this data available to actions
+  answers.results = results;
+  // return a status string
+  return 'Finished data fetching!';
+}
+
+export default function generator(plop: PlopTypes.NodePlopAPI): void {
+  // create a generator
+  plop.setGenerator("Generator name", {
+    description: "Generator description",
+    prompts: [
+      ...
+    ],
+    actions: [
+      customAction
+      {/* actions now have access to `answers.results` */}
+      ...
+    ],
+  });
+}
+```
+
+### Running Generators
+
+Once you have created your generator configuration file, you can skip the selection prompt and directly run a specified generator with:
+
+```sh
+turbo generate run [generator-name]
+```
+
+<Callout type="info">
+  **Note**: While Turborepo Generators are built on top of Plop, they _do not_ require `plop` to be installed as a dependency in your repo.
+</Callout>
+
+Arguments can also be passed ditorectly to the generator prompts using `--args`
+
+```sh
+turbo generate run [generator-name] --args answer1 answer2 ...
+```
+
+See [bypassing prompts](https://plopjs.com/documentation/#bypassing-prompts) for more information.
+
+View all available [options](/repo/docs/reference/command-line-reference#run-generator-name) for `run`.
+
+## Examples
+
+The [vercel/turbo](https://github.com/vercel/turbo) monorepo contains several custom Turborepo generators that are used for our own development.
+
+- [Create a new blog post](https://github.com/vercel/turbo/blob/main/docs/turbo/generators/config.ts) - Creates a new release [blog post](/blog) with
+  live stats fetched from the NPM and Github API's.
+- [Create a new code transform](https://github.com/vercel/turbo/blob/main/packages/turbo-codemod/turbo/generators/config.ts) - Creates a new code transform
+  for [`@turbo/codemod`](https://github.com/vercel/turbo/tree/main/packages/turbo-codemod) complete with all boilerplate and tests.
