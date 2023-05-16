@@ -15,7 +15,10 @@ struct YarnRC {
 
 pub const LOCKFILE: &str = "yarn.lock";
 pub const YARN_RC: &str = ".yarnrc.yml";
-
+#[cfg(not(windows))]
+const YARN_BIN: &str = "yarn";
+#[cfg(windows)]
+const YARN_BIN: &str = "yarn.cmd";
 pub struct YarnDetector<'a> {
     repo_root: &'a AbsoluteSystemPathBuf,
     // For testing purposes
@@ -42,7 +45,7 @@ impl<'a> YarnDetector<'a> {
             return Ok(version.clone());
         }
 
-        let output = Command::new("yarn")
+        let output = Command::new(YARN_BIN)
             .arg("--version")
             .current_dir(&self.repo_root)
             .output()?;
@@ -122,6 +125,14 @@ mod tests {
         ui::UI,
         Args,
     };
+
+    #[test]
+    fn test_get_yarn_version() {
+        let repo_root = tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path()).unwrap();
+        let detector = YarnDetector::new(&repo_root_path);
+        detector.get_yarn_version().unwrap();
+    }
 
     #[test]
     fn test_detect_yarn() -> Result<()> {
