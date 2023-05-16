@@ -25,7 +25,7 @@ use hyper::{
     Request, Response, Server,
 };
 use socket2::{Domain, Protocol, Socket, Type};
-use tracing::{debug, event, info_span, span, warn, Instrument, Level, Span};
+use tracing::{event, info_span, Instrument, Level, Span};
 use turbo_tasks::{
     run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
     TransientInstance, TransientValue, TurboTasksApi,

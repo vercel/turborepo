@@ -4,7 +4,7 @@ use anyhow::Result;
 use futures::{prelude::*, Stream};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{info_span, Instrument, Span};
+use tracing::{info_span, Instrument};
 use turbo_tasks::{
     primitives::StringVc, CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance,
 };
@@ -212,7 +212,7 @@ pub(super) struct UpdateStream(
 );
 
 impl UpdateStream {
-    #[tracing::instrument(skip(get_content))]
+    #[tracing::instrument(skip(get_content), name = "UpdateStream::new")]
     pub async fn new(
         resource: String,
         get_content: TransientInstance<GetContentFn>,
