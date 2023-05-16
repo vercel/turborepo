@@ -21,6 +21,7 @@ use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, RwLock};
 use stats::TaskStats;
 use tokio::task_local;
+use tracing::instrument;
 use turbo_tasks::{
     backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},
@@ -1299,6 +1300,10 @@ impl Task {
         }
     }
 
+    #[instrument(
+        skip(self, id, backend, turbo_tasks),
+        name = "Task::add_to_scope_internal"
+    )]
     pub(crate) fn add_to_scope_internal(
         &self,
         id: TaskScopeId,

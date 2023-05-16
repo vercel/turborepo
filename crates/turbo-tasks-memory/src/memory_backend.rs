@@ -19,13 +19,13 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use nohash_hasher::BuildNoHashHasher;
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
+use tracing::{info_span, Instrument};
 use turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
         TransientTaskType,
     },
     event::EventListener,
-    macro_helpers::tracing::{info_span, Instrument},
     primitives::RawVcSetVc,
     util::{IdFactory, NoMoveVec},
     CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused,
@@ -798,11 +798,9 @@ impl Job {
                 scope,
                 merging_scopes,
             } => {
-                let span = info_span!("Job::AddToScopeQueue");
                 backend
                     .scope_add_remove_priority
                     .run_low(async {
-                        let _guard = span.entered();
                         run_add_to_scope_queue(queue, scope, merging_scopes, backend, turbo_tasks);
                     })
                     .await;
