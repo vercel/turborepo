@@ -87,12 +87,12 @@ impl Lockfile for NpmLockfile {
                         Self::possible_npm_deps(key, name)
                             .into_iter()
                             .find_map(|possible_key| {
-                                self.packages.get(&possible_key).map(|entry| {
-                                    let version = entry.version.as_deref().ok_or_else(|| {
-                                        Error::MissingVersion(possible_key.clone())
-                                    })?;
-                                    Ok((possible_key, version.to_string()))
-                                })
+                                let entry = self.packages.get(&possible_key)?;
+                                match entry.version.as_deref() {
+                                    Some(version) => Some(Ok((possible_key, version.to_string()))),
+                                    None if entry.resolved.is_some() => None,
+                                    None => Some(Err(Error::MissingVersion(possible_key.clone()))),
+                                }
                             })
                     })
                     .collect()
@@ -189,6 +189,7 @@ impl NpmPackage {
             .keys()
             .chain(self.dev_dependencies.keys())
             .chain(self.optional_dependencies.keys())
+            .chain(self.peer_dependencies.keys())
     }
 }
 
