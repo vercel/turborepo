@@ -15,10 +15,11 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use tracing::{info_span, Span};
 use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{GraphTraversal, GraphTraversalResult, ReverseTopological, Visit, VisitControlFlow},
-    primitives::StringVc,
+    primitives::{StringReadRef, StringVc},
     trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
@@ -281,7 +282,7 @@ where
 #[derive(Eq, PartialEq, Clone, Hash)]
 enum ChunkContentGraphNode<I> {
     // Chunk items that are placed into the current chunk
-    ChunkItem(I),
+    ChunkItem(I, StringReadRef),
     // Asset that is already available and doesn't need to be included
     AvailableAsset(AssetVc),
     // Chunks that are loaded in parallel to the current chunk
@@ -354,7 +355,10 @@ where
                 if let Some(chunk_item) = I::from_asset(context.chunking_context, asset).await? {
                     graph_nodes.push((
                         Some((asset, chunking_type)),
-                        ChunkContentGraphNode::ChunkItem(chunk_item),
+                        ChunkContentGraphNode::ChunkItem(
+                            chunk_item,
+                            asset.ident().to_string().await?,
+                        ),
                     ));
                 } else {
                     return Err(anyhow!(
@@ -392,7 +396,10 @@ where
                     {
                         graph_nodes.push((
                             Some((asset, chunking_type)),
-                            ChunkContentGraphNode::ChunkItem(chunk_item),
+                            ChunkContentGraphNode::ChunkItem(
+                                chunk_item,
+                                asset.ident().to_string().await?,
+                            ),
                         ));
                         continue;
                     }
@@ -424,7 +431,10 @@ where
                 {
                     graph_nodes.push((
                         Some((asset, chunking_type)),
-                        ChunkContentGraphNode::ChunkItem(manifest_loader_item),
+                        ChunkContentGraphNode::ChunkItem(
+                            manifest_loader_item,
+                            asset.ident().to_string().await?,
+                        ),
                     ));
                 } else {
                     return Ok(vec![(
@@ -469,14 +479,19 @@ where
         (option_key, node): (Option<(AssetVc, ChunkingType)>, ChunkContentGraphNode<I>),
     ) -> VisitControlFlow<ChunkContentGraphNode<I>, ()> {
         let Some((asset, chunking_type)) = option_key else {
-            return VisitControlFlow::Continue(node);
+            let span = if let ChunkContentGraphNode::ChunkItem(_, name) = &node {
+                info_span!("module", name = display(name))
+            } else {
+                Span::current()
+            };
+            return VisitControlFlow::Continue(node, span);
         };
 
         if !self.processed_assets.insert((chunking_type, asset)) {
             return VisitControlFlow::Skip(node);
         }
 
-        if let ChunkContentGraphNode::ChunkItem(_) = &node {
+        let span = if let ChunkContentGraphNode::ChunkItem(_, name) = &node {
             self.chunk_items_count += 1;
 
             // Make sure the chunk doesn't become too large.
@@ -486,13 +501,16 @@ where
                 // start.
                 return VisitControlFlow::Abort(());
             }
-        }
+            info_span!("module", name = display(name))
+        } else {
+            Span::current()
+        };
 
-        VisitControlFlow::Continue(node)
+        VisitControlFlow::Continue(node, span)
     }
 
     fn edges(&mut self, node: &ChunkContentGraphNode<I>) -> Self::EdgesFuture {
-        let chunk_item = if let ChunkContentGraphNode::ChunkItem(chunk_item) = node {
+        let chunk_item = if let ChunkContentGraphNode::ChunkItem(chunk_item, _) = node {
             Some(chunk_item.clone())
         } else {
             None
@@ -542,6 +560,7 @@ where
                 Some((entry, ChunkingType::Placed)),
                 ChunkContentGraphNode::ChunkItem(
                     I::from_asset(chunking_context, entry).await?.unwrap(),
+                    entry.ident().to_string().await?,
                 ),
             ))
         })
@@ -576,7 +595,7 @@ where
     for graph_node in graph_nodes {
         match graph_node {
             ChunkContentGraphNode::AvailableAsset(_asset) => {}
-            ChunkContentGraphNode::ChunkItem(chunk_item) => {
+            ChunkContentGraphNode::ChunkItem(chunk_item, _) => {
                 chunk_items.push(chunk_item);
             }
             ChunkContentGraphNode::Chunk(chunk) => {

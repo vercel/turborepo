@@ -44,9 +44,9 @@ where
         let futures = FuturesUnordered::new();
         for edge in root_edges {
             match visit.visit(edge) {
-                VisitControlFlow::Continue(node) => {
+                VisitControlFlow::Continue(node, span) => {
                     if let Some((parent_handle, node_ref)) = self.insert(None, GraphNode(node)) {
-                        futures.push(With::new(visit.edges(node_ref), parent_handle));
+                        futures.push(With::new(visit.edges(node_ref), span, parent_handle));
                     }
                 }
                 VisitControlFlow::Skip(node) => {
@@ -146,16 +146,18 @@ where
             GraphTraversalState::Running(mut running) => 'outer: loop {
                 let futures_pin = unsafe { Pin::new_unchecked(&mut running.futures) };
                 match futures_pin.poll_next(cx) {
-                    std::task::Poll::Ready(Some((parent_handle, Ok(edges)))) => {
+                    std::task::Poll::Ready(Some((parent_handle, span, Ok(edges)))) => {
+                        let _guard = span.enter();
                         for edge in edges {
                             match running.visit.visit(edge) {
-                                VisitControlFlow::Continue(node) => {
+                                VisitControlFlow::Continue(node, span) => {
                                     if let Some((node_handle, node_ref)) = running
                                         .store
                                         .insert(Some(parent_handle.clone()), GraphNode(node))
                                     {
                                         running.futures.push(With::new(
                                             running.visit.edges(node_ref),
+                                            span,
                                             node_handle,
                                         ));
                                     }
@@ -176,7 +178,7 @@ where
                             }
                         }
                     }
-                    std::task::Poll::Ready(Some((_, Err(err)))) => {
+                    std::task::Poll::Ready(Some((_, _, Err(err)))) => {
                         break (
                             GraphTraversalState::Completed,
                             std::task::Poll::Ready(GraphTraversalResult::Completed(Err(err))),

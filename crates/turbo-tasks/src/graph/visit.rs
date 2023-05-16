@@ -1,6 +1,7 @@
 use std::future::Future;
 
 use anyhow::Result;
+use tracing::Span;
 
 use super::VisitControlFlow;
 
@@ -41,7 +42,7 @@ where
     type EdgesFuture = NeighFut;
 
     fn visit(&mut self, edge: Self::Edge) -> VisitControlFlow<Node> {
-        VisitControlFlow::Continue(edge)
+        VisitControlFlow::Continue(edge, Span::current())
     }
 
     fn edges(&mut self, node: &Node) -> Self::EdgesFuture {
@@ -63,10 +64,60 @@ where
     type EdgesFuture = NeighFut;
 
     fn visit(&mut self, edge: Self::Edge) -> VisitControlFlow<Node> {
-        VisitControlFlow::Continue(edge)
+        VisitControlFlow::Continue(edge, Span::current())
     }
 
     fn edges(&mut self, node: &Node) -> Self::EdgesFuture {
         (self)(node.clone())
+    }
+}
+
+pub struct WithSpan<Node, Abort, Impl, VisitImpl, F>
+where
+    VisitImpl: Visit<Node, Abort, Impl>,
+    F: FnMut(&Node) -> Span,
+{
+    visit: VisitImpl,
+    func: F,
+    phantom: std::marker::PhantomData<(Node, Abort, Impl)>,
+}
+
+impl<Node, Abort, Impl, VisitImpl, F> WithSpan<Node, Abort, Impl, VisitImpl, F>
+where
+    VisitImpl: Visit<Node, Abort, Impl>,
+    F: FnMut(&Node) -> Span,
+{
+    pub fn new(visit: VisitImpl, func: F) -> Self {
+        Self {
+            visit,
+            func,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<Node, Abort, Impl, VisitImpl, F> Visit<Node, Abort, Impl>
+    for WithSpan<Node, Abort, Impl, VisitImpl, F>
+where
+    VisitImpl: Visit<Node, Abort, Impl>,
+    F: FnMut(&Node) -> Span,
+{
+    type Edge = VisitImpl::Edge;
+    type EdgesIntoIter = VisitImpl::EdgesIntoIter;
+    type EdgesFuture = VisitImpl::EdgesFuture;
+
+    fn visit(&mut self, edge: Self::Edge) -> VisitControlFlow<Node, Abort> {
+        match self.visit.visit(edge) {
+            VisitControlFlow::Continue(node, _) => {
+                let span = (self.func)(&node);
+                VisitControlFlow::Continue(node, span)
+            }
+            VisitControlFlow::Skip(node) => VisitControlFlow::Skip(node),
+            VisitControlFlow::Abort(abort) => VisitControlFlow::Abort(abort),
+        }
+    }
+
+    fn edges(&mut self, node: &Node) -> Self::EdgesFuture {
+        self.visit.edges(node)
     }
 }
