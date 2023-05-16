@@ -63,10 +63,6 @@ func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesCl
 // the response contains the run ID from the server, which we need to construct the
 // URLs of subsequent requests.
 func (c *spacesClient) start() {
-	if !c.enabled {
-		return
-	}
-
 	// Start an immediately invoked go routine that listens for requests coming in from a channel
 	pending := []*spaceRequest{}
 	firstRequestStarted := false
@@ -108,10 +104,6 @@ FirstRequest:
 }
 
 func (c *spacesClient) makeRequest(req *spaceRequest) {
-	if !c.enabled {
-		return
-	}
-
 	// The runID is required for POST task requests and PATCH run request URLS,
 	// so we have to construct these URLs lazily with a `makeURL` affordance.
 	//
@@ -175,10 +167,6 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 }
 
 func (c *spacesClient) createRun(rsm *Meta) {
-	if !c.enabled {
-		return
-	}
-
 	c.queueRequest(&spaceRequest{
 		method: "POST",
 		url:    fmt.Sprintf(runsEndpoint, c.spaceID),
@@ -198,10 +186,6 @@ func (c *spacesClient) createRun(rsm *Meta) {
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
-	if !c.enabled {
-		return
-	}
-
 	c.queueRequest(&spaceRequest{
 		method: "POST",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
@@ -216,10 +200,6 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 }
 
 func (c *spacesClient) finishRun(rsm *Meta) {
-	if !c.enabled {
-		return
-	}
-
 	c.queueRequest(&spaceRequest{
 		method: "PATCH",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {

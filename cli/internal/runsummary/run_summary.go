@@ -120,9 +120,11 @@ func NewRunSummary(
 		synthesizedCommand: synthesizedCommand,
 	}
 
-	rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui)
-	go rsm.spacesClient.start()
-	rsm.spacesClient.createRun(&rsm)
+	if spaceID != "" {
+		rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui)
+		go rsm.spacesClient.start()
+		rsm.spacesClient.createRun(&rsm)
+	}
 
 	return rsm
 }
@@ -162,7 +164,9 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 	}
 
 	rsm.printExecutionSummary()
-	rsm.sendToSpace(ctx)
+	if rsm.spacesClient.enabled {
+		rsm.sendToSpace(ctx)
+	}
 
 	return nil
 }
@@ -231,7 +235,9 @@ func (rsm *Meta) save() error {
 
 // CloseTask posts the result of the Task to Spaces
 func (rsm *Meta) CloseTask(task *TaskSummary) {
-	rsm.spacesClient.postTask(task)
+	if rsm.spacesClient.enabled {
+		rsm.spacesClient.postTask(task)
+	}
 }
 
 func getUser(envVars env.EnvironmentVariableMap, dir turbopath.AbsoluteSystemPath) string {
