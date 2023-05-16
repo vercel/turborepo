@@ -1,6 +1,6 @@
-import { defineConfig } from "tsup";
+import { defineConfig, Options } from "tsup";
 
-export default defineConfig({
+export default defineConfig((options: Options) => ({
   entry: {
     ".": "src/index.tsx",
   },
@@ -10,4 +10,5 @@ export default defineConfig({
   format: ["cjs", "esm"],
   external: ["react"],
   dts: true,
-});
+  ...options,
+}));
