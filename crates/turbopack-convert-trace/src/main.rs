@@ -40,9 +40,15 @@ fn main() {
     eprint!("Analysing trace into span tree...");
 
     // Parse trace rows
-    let trace_rows = file
-        .lines()
-        .filter_map(|line| serde_json::from_str::<FullTraceRow<'_>>(&line).ok());
+    let trace_rows = file.lines().enumerate().filter_map(|(i, line)| {
+        match serde_json::from_str::<FullTraceRow<'_>>(&line) {
+            Ok(row) => Some(row),
+            Err(err) => {
+                eprintln!("Error parsing trace line {}:\n> {}\n{}", i, line, err);
+                None
+            }
+        }
+    });
 
     let mut spans = Vec::new();
     spans.push(Span {
