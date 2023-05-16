@@ -230,6 +230,17 @@ func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEvent
 	return summary.ExecutionSummary.run(taskID)
 }
 
+func (summary *RunSummary) getFailedTasks() []*TaskSummary {
+	failed := []*TaskSummary{}
+
+	for _, t := range summary.Tasks {
+		if *t.Execution.exitCode != 0 {
+			failed = append(failed, t)
+		}
+	}
+	return failed
+}
+
 // Save saves the run summary to a file
 func (rsm *Meta) save() error {
 	json, err := rsm.FormatJSON()

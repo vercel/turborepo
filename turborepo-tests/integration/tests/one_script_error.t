@@ -29,6 +29,7 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
    Tasks:    1 successful, 2 total
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
+  Failed:    my-app#error
   
    ERROR  run failed: command  exited (1)
   [1]
@@ -59,6 +60,7 @@ Make sure error isn't cached
    Tasks:    1 successful, 2 total
   Cached:    1 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
+  Failed:    my-app#error
   
    ERROR  run failed: command  exited (1)
   [1]
@@ -95,6 +97,7 @@ Make sure error code isn't swallowed with continue
    Tasks:    2 successful, 3 total
   Cached:    1 cached, 3 total
     Time:\s*[\.0-9]+m?s  (re)
+  Failed:    my-app#error
   
    ERROR  run failed: command  exited (1)
   [1]
