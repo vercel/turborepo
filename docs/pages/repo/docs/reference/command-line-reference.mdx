@@ -706,11 +706,13 @@ Unlink the current directory from the Remote Cache.
 
 Get the path to the `turbo` binary.
 
-## `turbo generate`
+## `turbo gen`
 
 Extend your Turborepo with new apps, and packages. Create new empty workspaces, copy existing workspaces, add workspaces from remote sources or run custom generators defined using Plop configurations.
 
-### `add`
+**Note:** The default command for generate is [run](#run-generator-name).
+
+### `workspace`
 
 Add a new package or app to your monorepo.
 
@@ -728,11 +730,11 @@ Generate an empty workspace
 
 Generate a workspace using an existing workspace as a template
 
-##### `--detination`
+##### `--destination`
 
 Where the new workspace should be created
 
-##### `--what`
+##### `--type`
 
 The type of workspace to create ("app" or "package")
 

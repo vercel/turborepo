@@ -7,11 +7,9 @@ import Callout from "../../../../../components/Callout";
 
 # Code Generation
 
-Splitting up your repository into a monorepo using Turborepo with individual packages and apps comes with many benefits.
-However, you may find yourself constantly repeating the same tasks when adding new workspaces or other common
-boilerplate.
-
-Turborepo provides a few ways to generate new code in your repo.
+Splitting your monorepo into individual workspaces is a great way to organize your code, speed up tasks, and improve the local development
+experience. One of the benefits of this approach is that it's easy to generate new source code for packages, modules,
+and even individual UI components. Turborepo generators makes extending your monorepo even easier.
 
 ## Add an Empty Workspace
 
@@ -22,10 +20,10 @@ Add a new, empty app or package to your monorepo.
 ### Examples
 
 ```sh
-turbo generate add
+turbo gen workspace
 ```
 
-View all available [options](/repo/docs/reference/command-line-reference#add) for `add`.
+View all available [options](/repo/docs/reference/command-line-reference#add) for `gen workspace`.
 
 ## Copy an Existing Workspace
 
@@ -39,23 +37,21 @@ and remote workspaces from other repositories (specified via github URL).
 Extend your monorepo by copying from an existing workspace within your repo.
 
 ```sh
-turbo generate add --copy
+turbo gen workspace --copy
 ```
 
 Extend your monorepo by copying from a remote workspace.
 
 ```sh
-turbo generate -e https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
+turbo gen workspace -e https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
 ```
 
 <Callout>
-  **Note**: When adding from a remote source, Turborepo is unable to verify that your repo has all of the required dependencies, and is using the correct package manager.
-
-In this case, some manual modifications may be required to get the new workspace working as expected within your repository.
+  **Note**: When adding from a remote source, Turborepo is unable to verify that your repo has all of the required dependencies, and is using the correct package manager. In this case, some manual modifications may be required to get the new workspace working as expected within your repository.
 
 </Callout>
 
-View all available [options](/repo/docs/reference/command-line-reference#add) for `add --copy`.
+View all available [options](/repo/docs/reference/command-line-reference#add) for `gen workspace --copy`.
 
 ## Custom Generators
 
@@ -63,36 +59,40 @@ If a built-in generator does not fit your needs, you can create your own custom 
 Turborepo will automatically detect any generator configurations within your repo, and make them available to run from the command line.
 
 While Turborepo understands all Plop configuration options and features, it provides a few additional features to improve the experience of writing
-generators within a Turborepo.
+generators within a repo configured with Turborepo.
 
 1. Generators are automatically discoverd, loaded, and organized per workspace (no need to manually `load` them within a single configuration file)
 2. Generators are automatically run from the root of the workspace where they are defined
-3. Typescript generator configs are supported with zero configuration
-4. `plop` is not required to be installed as a depenendency of your repo
+3. Generators can be invoked from anywhere within your repo (or outside out it via the [`--root`](/repo/docs/reference/command-line-reference#--root-1) flag)
+4. Typescript generators are supported with zero configuration
+5. `plop` is not required to be installed as a depenendency of your repo
+
+<Callout>
+  **Note:** ESM dependencies are not currently supported within custom generators
+</Callout>
 
 ### Getting Started
 
-To quickly get started, run the following command from anywhere within your monorepo using Turborepo.
+To build and run a custom generator, run the following command from anywhere within your monorepo using Turborepo.
 
 ```sh
-turbo generate run
+turbo gen
 ```
 
-This will automatically prompt you to create your first generator configuration file if one does not already exist, or prompt you
-to select a generator to run from your existing configuration files.
-
-You can also create your configuration manually at `turbo/generators/config.ts` (or `config.js`)
-at the root of your repo - or within _any_ workspace.
+You'll be prompted to select an existing generator or to create one if you don't have any yet. You can also create your configuration
+manually at `turbo/generators/config.ts` (or `config.js`) at the root of your repo - or within _any_ workspace.
 
 <Callout type="info">
-  **Note**: If you are using Typescript, you will need to install the `@turbo/gen` package as a `devDependency` to access the required TS types:
+  **Note**: If you are using Typescript, you will need to install the [`@turbo/gen`](https://github.com/vercel/turbo/tree/main/packages/turbo-gen) package as a `devDependency` to access the required TS types.
 </Callout>
 
 For example, the following illustrates a monorepo with three generator configurations -
 
+```
 - root
 - apps/web
-- packages/ui.
+- packages/ui
+```
 
 ```bash
 ├── package.json
@@ -120,22 +120,19 @@ For example, the following illustrates a monorepo with three generator configura
 └── pnpm-workspace.yaml
 ```
 
-<Callout type="info">
-  **Note**: Generators created within workspaces are automatically anchored to the workspace _root_, **not** the repo root, or the location of the generator config.
+Generators created within workspaces are automatically run from the workspace _root_, **not** the repo root, or the location of the generator config.
 
 This is done to make generators as simple to write as possible. Although the generator config is located within `[workspace-root]/turbo/generators`, creating a file at
 `[workspace-root]` does _not_ need to be specified as `../../<file>`, but rather simply `<file>`.
-
-</Callout>
 
 Learn more about [creating custom generators using Plop](https://plopjs.com/documentation/#creating-a-generator).
 
 ### Writing Generators
 
-A generator configuration file is simply a function that returns a [Plop](https://plopjs.com/) configuration object. The configuration object is
+A generator configuration file is a function that returns a [Plop](https://plopjs.com/) configuration object. The configuration object is
 used to define the generator's prompts, and actions.
 
-At its simplest form a generator configuration file looks like:
+In its simplest form, a generator configuration file looks like:
 
 ```ts filename="turbo/generators/config.ts"
 import type { PlopTypes } from "@turbo/gen";
@@ -197,7 +194,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
 Once you have created your generator configuration file, you can skip the selection prompt and directly run a specified generator with:
 
 ```sh
-turbo generate run [generator-name]
+turbo gen [generator-name]
 ```
 
 <Callout type="info">
@@ -207,12 +204,12 @@ turbo generate run [generator-name]
 Arguments can also be passed ditorectly to the generator prompts using `--args`
 
 ```sh
-turbo generate run [generator-name] --args answer1 answer2 ...
+turbo gen [generator-name] --args answer1 answer2 ...
 ```
 
 See [bypassing prompts](https://plopjs.com/documentation/#bypassing-prompts) for more information.
 
-View all available [options](/repo/docs/reference/command-line-reference#run-generator-name) for `run`.
+View all available [options](/repo/docs/reference/command-line-reference#run-generator-name) for `gen`.
 
 ## Examples
 
