@@ -87,7 +87,7 @@ fn main() {
     }
 
     let mut all_self_times = Vec::new();
-    let mut name_counts: HashMap<&str, usize> = HashMap::new();
+    let mut name_counts: HashMap<Cow<'_, str>, usize> = HashMap::new();
 
     for FullTraceRow { ts, data } in trace_rows {
         match data {
@@ -109,7 +109,7 @@ fn main() {
                 spans[internal_id].parent = internal_parent;
                 let parent = &mut spans[internal_parent];
                 parent.items.push(SpanItem::Child(internal_id));
-                *name_counts.entry(name).or_default() += 1;
+                *name_counts.entry(Cow::Borrowed(name)).or_default() += 1;
             }
             TraceRow::End { id } => {
                 // id might be reused
@@ -135,7 +135,7 @@ fn main() {
                     if end > start {
                         span.items.push(SpanItem::SelfTime {
                             start,
-                            duration: end.saturating_sub(start),
+                            duration: end - start,
                         });
                         all_self_times.push(Element {
                             range: start..end,
@@ -153,19 +153,22 @@ fn main() {
                 let internal_parent =
                     parent.map_or(0, |id| ensure_span(&mut active_ids, &mut spans, id));
                 if duration > 0 {
+                    *name_counts.entry(name.clone()).or_default() += 1;
                     let internal_id = spans.len();
+                    let start = ts - duration;
                     spans.push(Span {
                         parent: internal_parent,
                         name,
                         target: "".into(),
-                        start: ts,
-                        end: ts + duration,
+                        start,
+                        end: ts,
                         self_start: None,
-                        items: vec![SpanItem::SelfTime {
-                            start: ts - duration,
-                            duration,
-                        }],
+                        items: vec![SpanItem::SelfTime { start, duration }],
                         values,
+                    });
+                    all_self_times.push(Element {
+                        range: start..ts,
+                        value: (internal_id, 0),
                     });
                     let parent = &mut spans[internal_parent];
                     parent.items.push(SpanItem::Child(internal_id));
@@ -176,7 +179,7 @@ fn main() {
 
     eprintln!(" done ({} spans)", spans.len());
 
-    let mut name_counts: Vec<(&str, usize)> = name_counts.into_iter().collect();
+    let mut name_counts: Vec<(Cow<'_, str>, usize)> = name_counts.into_iter().collect();
     name_counts.sort_by_key(|(_, count)| Reverse(*count));
 
     eprintln!("Top 10 span names:");
@@ -188,6 +191,7 @@ fn main() {
     print!(r#"{{"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{{"name":"Single CPU"}}}}"#);
     pjson!(r#"{{"ph":"M","pid":2,"name":"thread_name","tid":0,"args":{{"name":"Scaling CPU"}}}}"#);
 
+    let busy_len = all_self_times.len();
     let busy = all_self_times.into_iter().collect::<IntervalTree<_, _>>();
 
     if threads {
@@ -234,15 +238,17 @@ fn main() {
             stack
         };
 
-        for &Element {
-            range: Range { start, .. },
-            value: (id, index),
-        } in busy.iter_sorted()
+        for (
+            i,
+            &Element {
+                range: Range { start, end },
+                value: (id, _),
+            },
+        ) in busy.iter_sorted().enumerate()
         {
-            let span = &spans[id];
-            let SpanItem::SelfTime { start: _, duration } = &span.items[index] else {
-                panic!("Expected index to self time");
-            };
+            if i % 1000 == 0 {
+                eprint!("\rDistributing time into virtual threads... {i} / {busy_len}",);
+            }
             let stack = get_stack(id);
             let thread = find_thread(&mut virtual_threads, &stack, start);
 
@@ -250,21 +256,24 @@ fn main() {
             let ts = virtual_thread.ts;
             let thread_stack = &mut virtual_thread.stack;
 
+            let long_idle = virtual_thread.ts + 10000 < start;
+
             // Leave old spans on that thread
             while !thread_stack.is_empty()
-                && thread_stack.last() != stack.get(thread_stack.len() - 1)
+                && (long_idle || thread_stack.last() != stack.get(thread_stack.len() - 1))
             {
                 let id = thread_stack.pop().unwrap();
                 let span = &spans[id];
                 pjson!(
-                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":{},"tid":{thread}}}"#,
+                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":{},"tid":{thread},"_id":{id},"_stack":"{:?}"}}"#,
                     serde_json::to_string(&span.name).unwrap(),
                     serde_json::to_string(&span.target).unwrap(),
+                    stack.get(thread_stack.len())
                 );
             }
 
             // Advance thread time to start
-            if virtual_thread.ts < start {
+            if virtual_thread.ts + 100 < start {
                 if !thread_stack.is_empty() {
                     pjson!(
                         r#"{{"ph":"B","pid":3,"ts":{ts},"name":"idle","cat":"idle","tid":{thread}}}"#,
@@ -281,13 +290,13 @@ fn main() {
                 thread_stack.push(*id);
                 let span = &spans[*id];
                 pjson!(
-                    r#"{{"ph":"B","pid":3,"ts":{start},"name":{},"cat":{},"tid":{thread}}}"#,
+                    r#"{{"ph":"B","pid":3,"ts":{start},"name":{},"cat":{},"tid":{thread},"_id":{id}}}"#,
                     serde_json::to_string(&span.name).unwrap(),
                     serde_json::to_string(&span.target).unwrap(),
                 );
             }
 
-            virtual_thread.ts += duration;
+            virtual_thread.ts = end;
         }
 
         // Leave all threads
