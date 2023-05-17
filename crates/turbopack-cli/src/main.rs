@@ -24,22 +24,20 @@ fn main() {
         // Trace presets
         match trace.as_str() {
             "turbopack" => {
-                trace = "root=info,next_dev=info,next_core=info,next_font=info,turbopack=info,\
-                         turbopack_core=info,turbopack_ecmascript=info,turbopack_css=info,\
-                         turbopack_dev=info,turbopack_image=info,turbopack_dev_server=info,\
-                         turbopack_json=info,turbopack_mdx=info,turbopack_node=info,\
-                         turbopack_static=info,turbopack_cli_utils=info,turbopack_cli=info,\
-                         turbopack_ecmascript=info"
+                trace = "root=info,turbopack=info,turbopack_core=info,turbopack_ecmascript=info,\
+                         turbopack_css=info,turbopack_dev=info,turbopack_image=info,\
+                         turbopack_dev_server=info,turbopack_json=info,turbopack_mdx=info,\
+                         turbopack_node=info,turbopack_static=info,turbopack_cli_utils=info,\
+                         turbopack_cli=info,turbopack_ecmascript=info"
                     .to_string();
             }
             "turbo-tasks" => {
-                trace = "root=info,next_dev=info,next_core=info,next_font=info,turbopack=info,\
-                         turbopack_core=info,turbopack_ecmascript=info,turbopack_css=info,\
-                         turbopack_dev=info,turbopack_image=info,turbopack_dev_server=info,\
-                         turbopack_json=info,turbopack_mdx=info,turbopack_node=info,\
-                         turbopack_static=info,turbopack_cli_utils=info,turbopack_cli=info,\
-                         turbopack_ecmascript=info,turbo_tasks=info,turbo_tasks_viz=info,\
-                         turbo_tasks_memory=info,turbo_tasks_fs=info"
+                trace = "root=info,turbopack=info,turbopack_core=info,turbopack_ecmascript=info,\
+                         turbopack_css=info,turbopack_dev=info,turbopack_image=info,\
+                         turbopack_dev_server=info,turbopack_json=info,turbopack_mdx=info,\
+                         turbopack_node=info,turbopack_static=info,turbopack_cli_utils=info,\
+                         turbopack_cli=info,turbopack_ecmascript=info,turbo_tasks=info,\
+                         turbo_tasks_viz=info,turbo_tasks_memory=info,turbo_tasks_fs=info"
                     .to_string();
             }
             _ => {}
