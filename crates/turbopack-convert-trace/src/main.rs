@@ -139,7 +139,7 @@ fn main() {
                         });
                         all_self_times.push(Element {
                             range: start..end,
-                            value: (internal_id, span.items.len() - 1),
+                            value: internal_id,
                         });
                     }
                 }
@@ -168,7 +168,7 @@ fn main() {
                     });
                     all_self_times.push(Element {
                         range: start..ts,
-                        value: (internal_id, 0),
+                        value: internal_id,
                     });
                     let parent = &mut spans[internal_parent];
                     parent.items.push(SpanItem::Child(internal_id));
@@ -192,7 +192,7 @@ fn main() {
     pjson!(r#"{{"ph":"M","pid":2,"name":"thread_name","tid":0,"args":{{"name":"Scaling CPU"}}}}"#);
 
     let busy_len = all_self_times.len();
-    let busy = all_self_times.into_iter().collect::<IntervalTree<_, _>>();
+    let busy: IntervalTree<u64, usize> = all_self_times.into_iter().collect::<IntervalTree<_, _>>();
 
     if threads {
         eprint!("Distributing time into virtual threads...");
@@ -242,7 +242,7 @@ fn main() {
             i,
             &Element {
                 range: Range { start, end },
-                value: (id, _),
+                value: id,
             },
         ) in busy.iter_sorted().enumerate()
         {
