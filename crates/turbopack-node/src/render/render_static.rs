@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use anyhow::{anyhow, bail, Context, Result};
 use async_stream::try_stream as generator;
 use futures::{
@@ -7,8 +5,9 @@ use futures::{
     pin_mut, SinkExt, StreamExt, TryStreamExt,
 };
 use parking_lot::Mutex;
-use tracing::info;
-use turbo_tasks::{mark_finished, primitives::StringVc, util::SharedError, RawVc, ValueToString};
+use turbo_tasks::{
+    duration_span, mark_finished, primitives::StringVc, util::SharedError, RawVc, ValueToString,
+};
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
@@ -300,16 +299,12 @@ async fn render_stream_internal(
             .context("sending headers to node.js process")?;
 
         let entry = module.ident().to_string().await?;
-        let node_execution_start = Instant::now();
-        let end_execution = || {
-            let duration = node_execution_start.elapsed().as_micros() as u64;
-            info!(name = "node.js rendering", entry = display(entry), duration);
-        };
+        let guard = duration_span!("Node.js rendering", entry = display(entry));
 
         match operation.recv().await? {
             RenderStaticIncomingMessage::Headers { data } => yield RenderItem::Headers(data),
             RenderStaticIncomingMessage::Rewrite { path } => {
-                end_execution();
+                drop(guard);
                 yield RenderItem::Response(StaticResultVc::rewrite(RewriteBuilder::new(path).build()));
                 return;
             }
@@ -318,7 +313,7 @@ async fn render_stream_internal(
                 headers,
                 body,
             } => {
-                end_execution();
+                drop(guard);
                 yield RenderItem::Response(StaticResultVc::content(
                     FileContent::Content(File::from(body)).into(),
                     status_code,
@@ -327,7 +322,7 @@ async fn render_stream_internal(
                 return;
             }
             RenderStaticIncomingMessage::Error(error) => {
-                end_execution();
+                drop(guard);
                 // If we don't get headers, then something is very wrong. Instead, we send down a
                 // 500 proxy error as if it were the proper result.
                 let trace = trace_stack(
@@ -347,7 +342,7 @@ async fn render_stream_internal(
                 return;
             }
             v => {
-                end_execution();
+                drop(guard);
                 Err(anyhow!("unexpected message during rendering: {:#?}", v))?;
                 return;
             },
@@ -367,18 +362,18 @@ async fn render_stream_internal(
                     operation.disallow_reuse();
                     let trace =
                         trace_stack(error, intermediate_asset, intermediate_output_path, project_dir).await?;
-                        end_execution();
+                        drop(guard);
                     Err(anyhow!("error during streaming render: {}", trace))?;
                     return;
                 }
                 v => {
-                    end_execution();
+                    drop(guard);
                     Err(anyhow!("unexpected message during rendering: {:#?}", v))?;
                     return;
                 },
             }
         }
-        end_execution();
+        drop(guard);
     };
 
     let mut sender = (sender.get)();

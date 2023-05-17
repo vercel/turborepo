@@ -9,6 +9,8 @@ use tracing_subscriber::{fmt::MakeWriter, registry::LookupSpan, Layer};
 
 use crate::tracing::{FullTraceRow, TraceRow};
 
+/// A tracing layer that writes raw trace data to a writer. The data format is
+/// defined by [FullTraceRow].
 pub struct RawTraceLayer<
     W: for<'span> MakeWriter<'span> + 'static,
     S: Subscriber + for<'a> LookupSpan<'a>,

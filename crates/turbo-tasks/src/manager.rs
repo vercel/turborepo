@@ -21,7 +21,7 @@ use futures::FutureExt;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
-use tracing::{info_span, Instrument};
+use tracing::{instrument, trace_span, Instrument, Level};
 
 use crate::{
     backend::{Backend, CellContent, PersistentTaskType, TransientTaskType},
@@ -582,7 +582,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
             return;
         }
         listener
-            .instrument(info_span!("wait_foreground_done"))
+            .instrument(trace_span!("wait_foreground_done"))
             .await;
     }
 
@@ -800,7 +800,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
             } = &mut *cell.borrow_mut();
             let tasks = take(tasks_to_notify);
             if !tasks.is_empty() {
-                let _guard = info_span!("finish_current_task_state").entered();
+                let _guard = trace_span!("finish_current_task_state").entered();
                 self.backend.invalidate_tasks(tasks, self);
             }
             *stateful
@@ -871,19 +871,13 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
 }
 
 impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
+    #[instrument(level = Level::INFO, skip_all, name = "invalidate")]
     fn invalidate(&self, task: TaskId) {
-        let _guard = info_span!(target: "root", "invalidate").entered();
         self.backend.invalidate_task(task, self);
     }
 
+    #[instrument(level = Level::INFO, skip_all, name = "invalidate", fields(name = display(&reason)))]
     fn invalidate_with_reason(&self, task: TaskId, reason: StaticOrArc<dyn InvalidationReason>) {
-        let _guard = info_span!(
-            target: "root",
-            parent: None,
-            "invalidate",
-            name = display(&reason)
-        )
-        .entered();
         {
             let (_, reason_set) = &mut *self.aggregated_update.lock().unwrap();
             reason_set.insert(reason);
@@ -1092,7 +1086,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
             tasks_to_notify.extend(tasks.iter());
         });
         if result.is_err() {
-            let _guard = info_span!("schedule_notify_tasks", count = tasks.len()).entered();
+            let _guard = trace_span!("schedule_notify_tasks", count = tasks.len()).entered();
             self.backend.invalidate_tasks(tasks.to_vec(), self);
         }
     }
@@ -1107,7 +1101,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
             tasks_to_notify.extend(tasks.iter());
         });
         if result.is_err() {
-            let _guard = info_span!("schedule_notify_tasks_set", count = tasks.len()).entered();
+            let _guard = trace_span!("schedule_notify_tasks_set", count = tasks.len()).entered();
             self.backend
                 .invalidate_tasks(tasks.iter().copied().collect(), self);
         };
@@ -1397,7 +1391,7 @@ pub fn emit<T: ValueTraitVc>(collectible: T) {
 }
 
 pub async fn spawn_blocking<T: Send + 'static>(func: impl FnOnce() -> T + Send + 'static) -> T {
-    let span = info_span!("blocking operation").or_current();
+    let span = trace_span!("blocking operation").or_current();
     let (r, d) = tokio::task::spawn_blocking(|| {
         let _guard = span.entered();
         let start = Instant::now();
@@ -1412,7 +1406,7 @@ pub async fn spawn_blocking<T: Send + 'static>(func: impl FnOnce() -> T + Send +
 
 pub fn spawn_thread(func: impl FnOnce() + Send + 'static) {
     let handle = Handle::current();
-    let span = info_span!("thread").or_current();
+    let span = trace_span!("thread").or_current();
     thread::spawn(move || {
         let span = span.entered();
         let guard = handle.enter();

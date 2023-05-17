@@ -226,6 +226,7 @@ impl<T: ?Sized + Debug + 'static> Debug for StaticOrArc<T> {
 }
 
 pin_project! {
+    /// A future that wraps another future and applies a function on every poll call.
     pub struct WrapFuture<F, W> {
         wrapper: W,
         #[pin]

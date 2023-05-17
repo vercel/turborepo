@@ -154,25 +154,9 @@ pub fn gen_native_function_code(
         }
     }
     let original_call_code = if async_function {
-        quote! {
-            turbo_tasks::macro_helpers::tracing::Instrument::instrument(
-                async {
-                    let turbo_tasks_result = #original_function(#(#input_arguments),*).await;
-                    turbo_tasks::macro_helpers::notify_scheduled_tasks();
-                    turbo_tasks_result
-                },
-                turbo_tasks::macro_helpers::tracing::info_span!(#name_code)
-            ).await
-        }
+        quote! { #original_function(#(#input_arguments),*).await }
     } else {
-        quote! {
-            {
-                let _turbo_tasks_function_guard = turbo_tasks::macro_helpers::tracing::info_span!(#name_code).entered();
-                let turbo_tasks_result = #original_function(#(#input_arguments),*);
-                turbo_tasks::macro_helpers::notify_scheduled_tasks();
-                turbo_tasks_result
-            }
-        }
+        quote! { #original_function(#(#input_arguments),*) }
     };
     let (raw_output_type, is_result) = unwrap_result_type(output_type);
     let original_call_code = match (is_result, is_empty_type(raw_output_type)) {
@@ -181,8 +165,10 @@ pub fn gen_native_function_code(
         },
         (true, false) => quote! { #original_call_code.map(|v| v.into()) },
         (false, true) => quote! {
-            #original_call_code;
-            Ok(turbo_tasks::NothingVc::new().into())
+            {
+                #original_call_code;
+                Ok(turbo_tasks::NothingVc::new().into())
+            }
         },
         (false, false) => quote! { Ok(#original_call_code.into()) },
     };
@@ -200,10 +186,12 @@ pub fn gen_native_function_code(
                         #(#input_convert)*
                         Ok(Box::new(move || {
                             #(#input_clone)*
-                            Box::pin(async move {
+                            Box::pin(turbo_tasks::macro_helpers::tracing::Instrument::instrument(async move {
                                 #(#input_final)*
-                                #original_call_code
-                            })
+                                let turbo_tasks_result = #original_call_code;
+                                turbo_tasks::macro_helpers::notify_scheduled_tasks();
+                                turbo_tasks_result
+                            }, turbo_tasks::macro_helpers::tracing::trace_span!(#name_code)))
                         }))
                     }))
                 });

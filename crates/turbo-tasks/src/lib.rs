@@ -38,6 +38,7 @@ mod collectibles;
 mod completion;
 pub mod debug;
 mod display;
+pub mod duration_span;
 pub mod event;
 pub mod graph;
 mod id;

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
 
+/// A raw trace line.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FullTraceRow<'a> {
     pub ts: u64,
@@ -8,6 +9,7 @@ pub struct FullTraceRow<'a> {
     pub data: TraceRow<'a>,
 }
 
+/// The inner raw trace line
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "ty")]
 pub enum TraceRow<'a> {

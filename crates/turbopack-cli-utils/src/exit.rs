@@ -2,15 +2,18 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 
-pub struct CloseGuard<T>(Arc<Mutex<Option<T>>>);
+/// A guard for the exit handler. When dropped, the exit guard will be dropped.
+/// It might also be dropped on Ctrl-C.
+pub struct ExitGuard<T>(Arc<Mutex<Option<T>>>);
 
-impl<T> Drop for CloseGuard<T> {
+impl<T> Drop for ExitGuard<T> {
     fn drop(&mut self) {
         drop(self.0.lock().unwrap().take())
     }
 }
 
-pub fn exit_guard<T: Send + 'static>(guard: T) -> Result<CloseGuard<T>> {
+/// Drop a guard when Ctrl-C is pressed or the [ExitGuard] is dropped.
+pub fn exit_guard<T: Send + 'static>(guard: T) -> Result<ExitGuard<T>> {
     let guard = Arc::new(Mutex::new(Some(guard)));
     {
         let guard = guard.clone();
@@ -20,5 +23,5 @@ pub fn exit_guard<T: Send + 'static>(guard: T) -> Result<CloseGuard<T>> {
         })
         .context("Unable to set ctrl-c handler")?;
     }
-    Ok(CloseGuard(guard))
+    Ok(ExitGuard(guard))
 }

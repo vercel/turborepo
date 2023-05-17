@@ -1,3 +1,24 @@
+//! Parses a raw trace file and outputs a new-line separated JSON file
+//! compatible with the chrome tracing format.
+//!
+//! https://ui.perfetto.dev/ can be used to visualize the output file.
+//!
+//! ## Usage:
+//!
+//! ```sh
+//! turbopack-convert-trace [/path/to/trace.log]
+//! ```
+//!
+//! ## Options:
+//!
+//! - `--single`: Shows all cpu time as it would look like when a single cpu
+//!   would execute the workload.
+//! - `--merged`: Shows all cpu time scaled by the concurrency.
+//! - `--threads`: Shows cpu time distributed on infinite virtual cpus/threads.
+//! - `--idle`: Adds extra info spans when cpus are idle.
+//!
+//! Default is `--merged`.
+
 use std::{
     borrow::Cow,
     cmp::{max, min, Reverse},

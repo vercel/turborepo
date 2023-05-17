@@ -4,7 +4,7 @@ use anyhow::Result;
 use futures::{prelude::*, Stream};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{info_span, Instrument};
+use tracing::Instrument;
 use turbo_tasks::{
     primitives::StringVc, CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance,
 };
@@ -240,50 +240,50 @@ impl UpdateStream {
 
         let mut last_had_issues = false;
 
-        let span = info_span!("stream");
         let stream = ReceiverStream::new(rx).filter_map(move |item| {
-            let (has_issues, issues_changed) =
-                if let Some(UpdateStreamItem::Found { issues, .. }) = item.as_deref().ok() {
-                    let has_issues = !issues.is_empty();
-                    let issues_changed = has_issues != last_had_issues;
-                    last_had_issues = has_issues;
-                    (has_issues, issues_changed)
-                } else {
-                    (false, false)
-                };
+            {
+                let (has_issues, issues_changed) =
+                    if let Some(UpdateStreamItem::Found { issues, .. }) = item.as_deref().ok() {
+                        let has_issues = !issues.is_empty();
+                        let issues_changed = has_issues != last_had_issues;
+                        last_had_issues = has_issues;
+                        (has_issues, issues_changed)
+                    } else {
+                        (false, false)
+                    };
 
-            let update_span = info_span!(parent: span.clone(), "update");
+                async move {
+                    match item.as_deref() {
+                        Ok(UpdateStreamItem::Found { update, .. }) => {
+                            match &**update {
+                                Update::Partial(PartialUpdate { to, .. })
+                                | Update::Total(TotalUpdate { to }) => {
+                                    version_state
+                                        .set(to.clone())
+                                        .await
+                                        .expect("failed to update version");
 
-            async move {
-                match item.as_deref() {
-                    Ok(UpdateStreamItem::Found { update, .. }) => {
-                        match &**update {
-                            Update::Partial(PartialUpdate { to, .. })
-                            | Update::Total(TotalUpdate { to }) => {
-                                version_state
-                                    .set(to.clone())
-                                    .await
-                                    .expect("failed to update version");
-
-                                Some(item)
-                            }
-                            // Do not propagate empty updates.
-                            Update::None => {
-                                if has_issues || issues_changed {
                                     Some(item)
-                                } else {
-                                    None
+                                }
+                                // Do not propagate empty updates.
+                                Update::None => {
+                                    if has_issues || issues_changed {
+                                        Some(item)
+                                    } else {
+                                        None
+                                    }
                                 }
                             }
                         }
-                    }
-                    _ => {
-                        // Propagate other updates
-                        Some(item)
+                        _ => {
+                            // Propagate other updates
+                            Some(item)
+                        }
                     }
                 }
+                .in_current_span()
             }
-            .instrument(update_span)
+            .in_current_span()
         });
 
         Ok(UpdateStream(Box::pin(stream)))
