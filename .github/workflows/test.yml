@@ -455,7 +455,7 @@ jobs:
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter="./packages/*" --filter="\!@vercel/*" --color
+          turbo check-types test -F=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] -F="./packages/*" -F="\!@vercel/*" -F="\!turborepo-tests*" --color
 
   rust_prepare:
     name: Check rust crates
