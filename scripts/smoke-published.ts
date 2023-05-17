@@ -127,7 +127,7 @@ function installExample({
 }) {
   exec({
     title: "Install example",
-    command: `npx create-turbo@${version} --use-${packageManager} .`,
+    command: `npx create-turbo@${version} . ${packageManager}`,
     conditions: [
       {
         expected: "Success! Your new Turborepo is ready.",
