@@ -69,11 +69,11 @@ runs:
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
 
     - name: "Install cargo-sweep"
-      if: ${{ inputs.install-cargo-sweep }} == "true"
+      if: ${{ inputs.install-cargo-sweep == 'true' }}
       uses: baptiste0928/cargo-install@v1
       with:
         crate: cargo-sweep
 
     - name: "Run cargo-sweep"
-      if: ${{ inputs.install-cargo-sweep }} == "true"
+      if: ${{ inputs.install-cargo-sweep == "true" }}
       uses: ./.github/actions/cargo-sweep
