@@ -338,8 +338,8 @@ pub struct GenerateWorkspaceArgs {
     #[clap(short = 'd', long)]
     pub destination: Option<String>,
     /// The type of workspace to create
-    #[clap(short = 'w', long)]
-    pub what: Option<String>,
+    #[clap(short = 't', long)]
+    pub r#type: Option<String>,
     /// The root of your repository (default: directory with root turbo.json)
     #[clap(short = 'r', long)]
     pub root: Option<String>,
