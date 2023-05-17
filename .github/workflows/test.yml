@@ -410,7 +410,7 @@ jobs:
         env:
           FORCE_COLOR: true
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
           TURBO_REMOTE_ONLY: true
         run: turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
 
@@ -430,7 +430,7 @@ jobs:
             runner: macos-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_REMOTE_ONLY: true
 
     steps:
