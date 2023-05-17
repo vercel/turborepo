@@ -8,16 +8,12 @@ import Callout from "../../../../../components/Callout";
 # Code Generation
 
 Splitting your monorepo into individual workspaces is a great way to organize your code, speed up tasks, and improve the local development
-experience. One of the benefits of this approach is that it's easy to generate new source code for packages, modules,
-and even individual UI components. Turborepo generators makes extending your monorepo even easier.
+experience. With Turborepo's code generation, it's easy to generate new source code for packages, modules,
+and even individual UI components in a structured way that integrates with the rest of your repository.
 
 ## Add an Empty Workspace
 
 Add a new, empty app or package to your monorepo.
-
-![Extend your Turborepo by adding a new package or application](/images/docs/turborepo-generators-empty.png)
-
-### Examples
 
 ```sh
 turbo gen workspace
@@ -25,22 +21,22 @@ turbo gen workspace
 
 View all available [options](/repo/docs/reference/command-line-reference#add) for `gen workspace`.
 
+![Extend your Turborepo by adding a new package or application](/images/docs/turborepo-generators-empty.png)
+
 ## Copy an Existing Workspace
 
-A new app or package can also be added using an existing workspace as a template. This works for both workspaces within your existing monorepo,
-and remote workspaces from other repositories (specified via github URL).
-
-![Extend your Turborepo by copying an existing package or application](/images/docs/turborepo-generators-copy.png)
+You can use an existing workspace as a template for your new app or package. This works for both workspaces within your existing monorepo,
+and remote workspaces from other repositories (specified via GitHub URL).
 
 ### Examples
 
-Extend your monorepo by copying from an existing workspace within your repo.
+Create a new workspace in your monorepo by copying from an existing workspace in your repo.
 
 ```sh
 turbo gen workspace --copy
 ```
 
-Extend your monorepo by copying from a remote workspace.
+Create a new workspace in your monorepo by copying from a remote workspace.
 
 ```sh
 turbo gen workspace -e https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
@@ -53,15 +49,21 @@ turbo gen workspace -e https://github.com/vercel/turbo/tree/main/examples/with-t
 
 View all available [options](/repo/docs/reference/command-line-reference#add) for `gen workspace --copy`.
 
+![Extend your Turborepo by copying an existing package or application](/images/docs/turborepo-generators-copy.png)
+
 ## Custom Generators
 
 If a built-in generator does not fit your needs, you can create your own custom generator using [Plop](https://plopjs.com/) configurations.
 Turborepo will automatically detect any generator configurations within your repo, and make them available to run from the command line.
 
+<Callout type="info">
+  **Note**: While Turborepo Generators are built on top of Plop, they _do not_ require `plop` to be installed as a dependency in your repo.
+</Callout>
+
 While Turborepo understands all Plop configuration options and features, it provides a few additional features to improve the experience of writing
 generators within a repo configured with Turborepo.
 
-1. Generators are automatically discoverd, loaded, and organized per workspace (no need to manually `load` them within a single configuration file)
+1. Generators are automatically discovered, loaded, and organized per workspace (no need to manually `load` them within a single configuration file)
 2. Generators are automatically run from the root of the workspace where they are defined
 3. Generators can be invoked from anywhere within your repo (or outside out it via the [`--root`](/repo/docs/reference/command-line-reference#--root-1) flag)
 4. Typescript generators are supported with zero configuration
@@ -86,7 +88,7 @@ manually at `turbo/generators/config.ts` (or `config.js`) at the root of your re
   **Note**: If you are using Typescript, you will need to install the [`@turbo/gen`](https://github.com/vercel/turbo/tree/main/packages/turbo-gen) package as a `devDependency` to access the required TS types.
 </Callout>
 
-For example, the following illustrates a monorepo with three generator configurations -
+For example, the following illustrates a monorepo with three generator configurations:
 
 ```
 - root
@@ -120,10 +122,9 @@ For example, the following illustrates a monorepo with three generator configura
 └── pnpm-workspace.yaml
 ```
 
-Generators created within workspaces are automatically run from the workspace _root_, **not** the repo root, or the location of the generator config.
+Generators created within workspaces are automatically run from the workspace root, **not** the repo root, nor the location of the generator configuration.
 
-This is done to make generators as simple to write as possible. Although the generator config is located within `[workspace-root]/turbo/generators`, creating a file at
-`[workspace-root]` does _not_ need to be specified as `../../<file>`, but rather simply `<file>`.
+This makes your generators more simple to write. Creating a file at `[workspace-root]` only needs to be specified as `<file>` rather than `../../<file>`.
 
 Learn more about [creating custom generators using Plop](https://plopjs.com/documentation/#creating-a-generator).
 
@@ -197,17 +198,13 @@ Once you have created your generator configuration file, you can skip the select
 turbo gen [generator-name]
 ```
 
-<Callout type="info">
-  **Note**: While Turborepo Generators are built on top of Plop, they _do not_ require `plop` to be installed as a dependency in your repo.
-</Callout>
-
-Arguments can also be passed ditorectly to the generator prompts using `--args`
+Arguments can also be passed directly to the generator prompts using `--args`
 
 ```sh
 turbo gen [generator-name] --args answer1 answer2 ...
 ```
 
-See [bypassing prompts](https://plopjs.com/documentation/#bypassing-prompts) for more information.
+See [bypassing prompts](https://plopjs.com/documentation/#bypassing-prompts) in the Plop documentation for more information.
 
 View all available [options](/repo/docs/reference/command-line-reference#run-generator-name) for `gen`.
 
