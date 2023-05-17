@@ -45,3 +45,30 @@ export async function customGenerators({
 
   return generatorAnswer;
 }
+
+export async function chooseGeneratorTemplate() {
+  return await inquirer.prompt<{ answer: "ts" | "js" }>({
+    type: "list",
+    name: "answer",
+    message: "Should the generator config be created with TS or JS?",
+    default: "ts",
+    choices: [
+      {
+        name: "js",
+        value: "js",
+      },
+      {
+        name: "ts",
+        value: "ts",
+      },
+    ],
+  });
+}
+
+export async function confirm({ message }: { message: string }) {
+  return await inquirer.prompt<{ answer: boolean }>({
+    type: "confirm",
+    name: "answer",
+    message,
+  });
+}
