@@ -20,7 +20,7 @@ pub enum TraceRow<'a> {
         name: &'a str,
         #[serde(rename = "t")]
         target: &'a str,
-        #[serde(rename = "v")]
+        #[serde(rename = "v", default, skip_serializing_if = "Map::is_empty")]
         values: Map<String, serde_json::Value>,
     },
     #[serde(rename = "E")]
@@ -37,7 +37,7 @@ pub enum TraceRow<'a> {
     Event {
         #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
         parent: Option<u64>,
-        #[serde(rename = "v", skip_serializing_if = "Map::is_empty")]
+        #[serde(rename = "v", default, skip_serializing_if = "Map::is_empty")]
         values: Map<String, serde_json::Value>,
     },
 }

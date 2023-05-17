@@ -21,7 +21,7 @@ use futures::FutureExt;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
-use tracing::{info_span, Instrument, Span};
+use tracing::{info_span, Instrument};
 
 use crate::{
     backend::{Backend, CellContent, PersistentTaskType, TransientTaskType},
@@ -872,12 +872,18 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
 
 impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
     fn invalidate(&self, task: TaskId) {
-        let _guard = info_span!("invalidate").entered();
+        let _guard = info_span!(target: "root", "invalidate").entered();
         self.backend.invalidate_task(task, self);
     }
 
     fn invalidate_with_reason(&self, task: TaskId, reason: StaticOrArc<dyn InvalidationReason>) {
-        let _guard = info_span!("invalidate", reason = display(&reason)).entered();
+        let _guard = info_span!(
+            target: "root",
+            parent: None,
+            "invalidate",
+            reason = display(&reason)
+        )
+        .entered();
         {
             let (_, reason_set) = &mut *self.aggregated_update.lock().unwrap();
             reason_set.insert(reason);

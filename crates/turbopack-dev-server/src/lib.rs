@@ -146,7 +146,8 @@ impl DevServerBuilder {
             let get_issue_reporter = get_issue_reporter.clone();
             async move {
                 let handler = move |request: Request<hyper::Body>| {
-                    let request_span = info_span!("request", name = ?request.uri());
+                    let request_span =
+                        info_span!(target: "root", parent: None, "request", name = ?request.uri());
                     let start = Instant::now();
                     let tt = tt.clone();
                     let get_issue_reporter = get_issue_reporter.clone();

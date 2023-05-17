@@ -22,10 +22,9 @@ fn main() {
     let mut single = args.remove("--single");
     let mut merged = args.remove("--merged");
     let mut threads = args.remove("--threads");
+    let mut idle = args.remove("--idle");
     if !single && !merged && !threads {
-        single = true;
         merged = true;
-        threads = true;
     }
     let arg = args
         .iter()
@@ -141,7 +140,7 @@ fn main() {
                         all_self_times.push(Element {
                             range: start..end,
                             value: (internal_id, span.items.len() - 1),
-                        })
+                        });
                     }
                 }
             }
@@ -259,7 +258,7 @@ fn main() {
                 let id = thread_stack.pop().unwrap();
                 let span = &spans[id];
                 pjson!(
-                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":"{}","tid":{thread}}}"#,
+                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":{},"tid":{thread}}}"#,
                     serde_json::to_string(&span.name).unwrap(),
                     serde_json::to_string(&span.target).unwrap(),
                 );
@@ -283,7 +282,7 @@ fn main() {
                 thread_stack.push(*id);
                 let span = &spans[*id];
                 pjson!(
-                    r#"{{"ph":"B","pid":3,"ts":{start},"name":{},"cat":"{}","tid":{thread}}}"#,
+                    r#"{{"ph":"B","pid":3,"ts":{start},"name":{},"cat":{},"tid":{thread}}}"#,
                     serde_json::to_string(&span.name).unwrap(),
                     serde_json::to_string(&span.target).unwrap(),
                 );
@@ -297,7 +296,7 @@ fn main() {
             while let Some(id) = stack.pop() {
                 let span = &spans[id];
                 pjson!(
-                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":"{}","tid":{i}}}"#,
+                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":{},"tid":{i}}}"#,
                     serde_json::to_string(&span.name).unwrap(),
                     serde_json::to_string(&span.target).unwrap(),
                 );
@@ -310,13 +309,17 @@ fn main() {
         eprint!("Emitting span tree...");
 
         let get_concurrency = |range: Range<u64>| {
-            let mut sum = 0;
-            for interval in busy.query(range.clone()) {
-                let start = max(interval.range.start, range.start);
-                let end = min(interval.range.end, range.end);
-                sum += end - start;
+            if concurrency {
+                let mut sum = 0;
+                for interval in busy.query(range.clone()) {
+                    let start = max(interval.range.start, range.start);
+                    let end = min(interval.range.end, range.end);
+                    sum += end - start;
+                }
+                100 * sum / (range.end - range.start)
+            } else {
+                100
             }
-            100 * sum / (range.end - range.start)
         };
 
         let target_concurrency = 200;
@@ -387,12 +390,12 @@ fn main() {
                     let args_json = serde_json::to_string(&span.values).unwrap();
                     if single {
                         pjson!(
-                            r#"{{"ph":"B","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"{target_json}","tid":0,"args":{args_json}}}"#,
+                            r#"{{"ph":"B","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
                         );
                     }
                     if merged {
                         pjson!(
-                            r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"{target_json}","tid":0,"args":{args_json}}}"#,
+                            r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
                         );
                     }
                     stack.push(Task::Exit {
@@ -444,25 +447,25 @@ fn main() {
                         let concurrency = (ts - start) * target_concurrency / (tts - start_scaled);
                         if single {
                             pjson!(
-                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"{target_json}","tid":0,"args":{{"concurrency":{}}}}}"#,
+                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{{"concurrency":{}}}}}"#,
                                 concurrency as f64 / 100.0,
                             );
                         }
                         if merged {
                             pjson!(
-                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"{target_json}","tid":0,"args":{{"concurrency":{}}}}}"#,
+                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{{"concurrency":{}}}}}"#,
                                 concurrency as f64 / 100.0,
                             );
                         }
                     } else {
                         if single {
                             pjson!(
-                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"{target_json}","tid":0}}"#,
+                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":{target_json},"tid":0}}"#,
                             );
                         }
                         if merged {
                             pjson!(
-                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"{target_json}","tid":0}}"#,
+                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0}}"#,
                             );
                         }
                     }
@@ -478,7 +481,7 @@ fn main() {
                         (merged_duration * target_concurrency + concurrency - 1) / concurrency;
                     let target_duration = duration * concurrency / warn_concurrency;
                     let merged_target_duration = merged_duration * concurrency / warn_concurrency;
-                    if concurrency <= warn_concurrency {
+                    if idle && concurrency <= warn_concurrency {
                         let target = ts + target_duration;
                         let merged_target = merged_ts + merged_target_duration;
                         if single {
@@ -498,7 +501,7 @@ fn main() {
                     tts += scaled_duration;
                     merged_ts += merged_duration;
                     merged_tts += merged_scaled_duration;
-                    if concurrency <= warn_concurrency {
+                    if idle && concurrency <= warn_concurrency {
                         if single {
                             pjson!(
                                 r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":"idle cpus","cat":"low concurrency","tid":0}}"#,
