@@ -21,7 +21,6 @@ use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, RwLock};
 use stats::TaskStats;
 use tokio::task_local;
-use tracing::instrument;
 use turbo_tasks::{
     backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},

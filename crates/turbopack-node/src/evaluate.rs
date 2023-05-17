@@ -1,4 +1,9 @@
-use std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
+use std::{
+    borrow::Cow,
+    ops::ControlFlow,
+    thread::available_parallelism,
+    time::{Duration, Instant},
+};
 
 use anyhow::{anyhow, Result};
 use async_stream::try_stream as generator;
@@ -11,6 +16,7 @@ use indexmap::indexmap;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use tracing::info;
 use turbo_tasks::{
     mark_finished,
     primitives::{JsonValueVc, StringVc},
@@ -415,6 +421,12 @@ async fn pull_operation(
     let mut file_dependencies = Vec::new();
     let mut dir_dependencies = Vec::new();
 
+    let node_execution_start = Instant::now();
+    let end_execution = || {
+        let duration = node_execution_start.elapsed().as_micros() as u64;
+        info!(name = "node.js evaluation", duration);
+    };
+
     let output = loop {
         match operation.recv().await? {
             EvalJavaScriptIncomingMessage::Error(error) => {
@@ -470,6 +482,7 @@ async fn pull_operation(
             }
         }
     };
+    end_execution();
 
     // Read dependencies to make them a dependencies of this task. This task will
     // execute again when they change.

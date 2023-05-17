@@ -80,6 +80,7 @@ impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> La
                 attrs.parent().map(|p| p.into_u64())
             },
             name: attrs.metadata().name(),
+            target: attrs.metadata().target(),
             values: values.values,
         });
     }
@@ -109,7 +110,6 @@ impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> La
             } else {
                 event.parent().map(|p| p.into_u64())
             },
-            name: event.metadata().name(),
             values: values.values,
         });
     }

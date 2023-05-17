@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     cmp::{max, min, Reverse},
     collections::{hash_map::Entry, HashMap, HashSet},
     eprintln,
@@ -52,9 +53,9 @@ fn main() {
 
     let mut spans = Vec::new();
     spans.push(Span {
-        id: 0,
         parent: 0,
-        name: "",
+        name: "".into(),
+        target: "".into(),
         start: 0,
         end: 0,
         self_start: None,
@@ -71,9 +72,9 @@ fn main() {
                 let internal_id = spans.len();
                 entry.insert(internal_id);
                 let span = Span {
-                    id,
                     parent: 0,
-                    name: "",
+                    name: "".into(),
+                    target: "".into(),
                     start: 0,
                     end: 0,
                     self_start: None,
@@ -95,10 +96,12 @@ fn main() {
                 id,
                 parent,
                 name,
+                target,
                 values,
             } => {
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
-                spans[internal_id].name = name;
+                spans[internal_id].name = name.into();
+                spans[internal_id].target = target.into();
                 spans[internal_id].start = ts;
                 spans[internal_id].end = ts;
                 spans[internal_id].values = values;
@@ -142,12 +145,33 @@ fn main() {
                     }
                 }
             }
-            TraceRow::Event {
-                parent,
-                name,
-                values,
-            } => {
-                // TODO
+            TraceRow::Event { parent, values } => {
+                let duration = values.get("duration").and_then(|v| v.as_u64()).unwrap_or(0);
+                let name: Cow<'_, str> = values
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string().into())
+                    .unwrap_or("".into());
+                let internal_parent =
+                    parent.map_or(0, |id| ensure_span(&mut active_ids, &mut spans, id));
+                if duration > 0 {
+                    let internal_id = spans.len();
+                    spans.push(Span {
+                        parent: internal_parent,
+                        name,
+                        target: "".into(),
+                        start: ts,
+                        end: ts + duration,
+                        self_start: None,
+                        items: vec![SpanItem::SelfTime {
+                            start: ts - duration,
+                            duration,
+                        }],
+                        values,
+                    });
+                    let parent = &mut spans[internal_parent];
+                    parent.items.push(SpanItem::Child(internal_id));
+                }
             }
         }
     }
@@ -235,8 +259,9 @@ fn main() {
                 let id = thread_stack.pop().unwrap();
                 let span = &spans[id];
                 pjson!(
-                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":"TODO","tid":{thread}}}"#,
-                    serde_json::to_string(&span.name).unwrap()
+                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":"{}","tid":{thread}}}"#,
+                    serde_json::to_string(&span.name).unwrap(),
+                    serde_json::to_string(&span.target).unwrap(),
                 );
             }
 
@@ -244,10 +269,10 @@ fn main() {
             if virtual_thread.ts < start {
                 if !thread_stack.is_empty() {
                     pjson!(
-                        r#"{{"ph":"B","pid":3,"ts":{ts},"name":"idle","cat":"TODO","tid":{thread}}}"#,
+                        r#"{{"ph":"B","pid":3,"ts":{ts},"name":"idle","cat":"idle","tid":{thread}}}"#,
                     );
                     pjson!(
-                        r#"{{"ph":"E","pid":3,"ts":{start},"name":"idle","cat":"TODO","tid":{thread}}}"#,
+                        r#"{{"ph":"E","pid":3,"ts":{start},"name":"idle","cat":"idle","tid":{thread}}}"#,
                     );
                 }
                 virtual_thread.ts = start;
@@ -258,8 +283,9 @@ fn main() {
                 thread_stack.push(*id);
                 let span = &spans[*id];
                 pjson!(
-                    r#"{{"ph":"B","pid":3,"ts":{start},"name":{},"cat":"TODO","tid":{thread}}}"#,
+                    r#"{{"ph":"B","pid":3,"ts":{start},"name":{},"cat":"{}","tid":{thread}}}"#,
                     serde_json::to_string(&span.name).unwrap(),
+                    serde_json::to_string(&span.target).unwrap(),
                 );
             }
 
@@ -271,8 +297,9 @@ fn main() {
             while let Some(id) = stack.pop() {
                 let span = &spans[id];
                 pjson!(
-                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":"TODO","tid":{i}}}"#,
-                    serde_json::to_string(&span.name).unwrap()
+                    r#"{{"ph":"E","pid":3,"ts":{ts},"name":{},"cat":"{}","tid":{i}}}"#,
+                    serde_json::to_string(&span.name).unwrap(),
+                    serde_json::to_string(&span.target).unwrap(),
                 );
             }
         }
@@ -302,6 +329,7 @@ fn main() {
             },
             Exit {
                 name_json: String,
+                target_json: String,
                 start: u64,
                 start_scaled: u64,
             },
@@ -355,19 +383,21 @@ fn main() {
                     } else {
                         serde_json::to_string(&span.name).unwrap()
                     };
+                    let target_json = serde_json::to_string(&span.target).unwrap();
                     let args_json = serde_json::to_string(&span.values).unwrap();
                     if single {
                         pjson!(
-                            r#"{{"ph":"B","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"TODO","tid":0,"args":{args_json}}}"#,
+                            r#"{{"ph":"B","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"{target_json}","tid":0,"args":{args_json}}}"#,
                         );
                     }
                     if merged {
                         pjson!(
-                            r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"TODO","tid":0,"args":{args_json}}}"#,
+                            r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"{target_json}","tid":0,"args":{args_json}}}"#,
                         );
                     }
                     stack.push(Task::Exit {
                         name_json,
+                        target_json,
                         start: ts,
                         start_scaled: tts,
                     });
@@ -391,7 +421,7 @@ fn main() {
                                 } else {
                                     stack.push(Task::SelfTime {
                                         duration: new_duration,
-                                        concurrency: new_concurrency,
+                                        concurrency: max(100, new_concurrency),
                                     });
                                 }
                             }
@@ -406,6 +436,7 @@ fn main() {
                 }
                 Task::Exit {
                     name_json,
+                    target_json,
                     start,
                     start_scaled,
                 } => {
@@ -413,25 +444,25 @@ fn main() {
                         let concurrency = (ts - start) * target_concurrency / (tts - start_scaled);
                         if single {
                             pjson!(
-                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"TODO","tid":0,"args":{{"concurrency":{}}}}}"#,
+                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"{target_json}","tid":0,"args":{{"concurrency":{}}}}}"#,
                                 concurrency as f64 / 100.0,
                             );
                         }
                         if merged {
                             pjson!(
-                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"TODO","tid":0,"args":{{"concurrency":{}}}}}"#,
+                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"{target_json}","tid":0,"args":{{"concurrency":{}}}}}"#,
                                 concurrency as f64 / 100.0,
                             );
                         }
                     } else {
                         if single {
                             pjson!(
-                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"TODO","tid":0}}"#,
+                                r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":"{target_json}","tid":0}}"#,
                             );
                         }
                         if merged {
                             pjson!(
-                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"TODO","tid":0}}"#,
+                                r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":"{target_json}","tid":0}}"#,
                             );
                         }
                     }
@@ -495,9 +526,9 @@ struct SelfTimeStarted {
 
 #[derive(Debug, Default)]
 struct Span<'a> {
-    id: u64,
     parent: usize,
-    name: &'a str,
+    name: Cow<'a, str>,
+    target: Cow<'a, str>,
     start: u64,
     end: u64,
     self_start: Option<SelfTimeStarted>,
