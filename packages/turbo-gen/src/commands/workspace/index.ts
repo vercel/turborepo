@@ -9,7 +9,7 @@ export interface TurboGeneratorOptions {
   empty: boolean;
   copy?: boolean;
   destination?: string;
-  what?: WorkspaceType;
+  type?: WorkspaceType;
   root?: string;
   example?: string;
   examplePath?: string;
@@ -17,7 +17,10 @@ export interface TurboGeneratorOptions {
   showAllDependencies: boolean;
 }
 
-export async function add(opts: TurboGeneratorOptions) {
+/**
+ * Adds a new (blank, or copied) workspace to the project
+ */
+export async function workspace(opts: TurboGeneratorOptions) {
   const project = await getProject(opts);
 
   console.log();

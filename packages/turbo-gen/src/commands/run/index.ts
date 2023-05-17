@@ -8,7 +8,10 @@ export interface CustomGeneratorOptions {
   args?: Array<string>;
 }
 
-export async function generate(
+/**
+ * Runs a custom generator (optionally specified by "generator")
+ */
+export async function run(
   generator: string | undefined,
   opts: CustomGeneratorOptions
 ) {

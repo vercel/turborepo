@@ -1,3 +1,3 @@
-export { add } from "./add";
-export { generate } from "./generate";
+export { workspace } from "./workspace";
+export { run } from "./run";
 export { raw } from "./raw";
