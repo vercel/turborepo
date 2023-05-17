@@ -13,11 +13,11 @@ import type { DependencyGroups, PackageJson } from "../../types";
 export async function name({
   override,
   suggestion,
-  what,
+  type,
 }: {
   override?: string;
   suggestion?: string;
-  what: WorkspaceType;
+  type: WorkspaceType;
 }): Promise<{ answer: string }> {
   const { validForNewPackages } = validName(override || "");
   if (override && validForNewPackages) {
@@ -29,13 +29,13 @@ export async function name({
     default: suggestion,
     validate: (input: string) => {
       const { validForNewPackages } = validName(input);
-      return validForNewPackages || `Invalid ${what} name`;
+      return validForNewPackages || `Invalid ${type} name`;
     },
-    message: `What is the name of the ${what}?`,
+    message: `What is the name of the ${type}?`,
   });
 }
 
-export async function what({
+export async function type({
   override,
 }: {
   override?: WorkspaceType;
@@ -62,12 +62,12 @@ export async function what({
 }
 
 export async function location({
-  what,
+  type,
   name,
   destination,
   project,
 }: {
-  what: "app" | "package";
+  type: "app" | "package";
   name: string;
   destination?: string;
   project: Project;
@@ -90,9 +90,9 @@ export async function location({
   let newWorkspaceLocation: string | undefined = undefined;
   const workspaceStructure = getWorkspaceStructure({ project });
 
-  if (what === "app" && workspaceStructure.hasRootApps) {
+  if (type === "app" && workspaceStructure.hasRootApps) {
     newWorkspaceLocation = `${project.paths.root}/apps/${nameAsPath}`;
-  } else if (what === "package" && workspaceStructure.hasRootPackages) {
+  } else if (type === "package" && workspaceStructure.hasRootPackages) {
     newWorkspaceLocation = `${project.paths.root}/packages/${nameAsPath}`;
   }
 
@@ -201,7 +201,7 @@ export async function dependencies({
   // supported workspace dependencies (apps can never be dependencies)
   let depChoices = getWorkspaceList({
     project,
-    what: "package",
+    type: "package",
     showAllDependencies,
   });
 

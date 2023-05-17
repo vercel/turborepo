@@ -5,7 +5,7 @@ import { Argument, Command, Option } from "commander";
 import notifyUpdate from "./utils/notifyUpdate";
 import { logger } from "@turbo/utils";
 
-import { add, generate, raw } from "./commands";
+import { workspace, run, raw } from "./commands";
 import cliPkg from "../package.json";
 import { GeneratorError } from "./utils/error";
 
@@ -19,14 +19,35 @@ turboGenCli
   .showHelpAfterError(false);
 
 turboGenCli
-  .command("raw", { hidden: true })
-  .argument("<type>", "The type of generator to run")
-  .addOption(new Option("--json <arguments>", "Arguments as raw JSON"))
-  .action(raw);
+  .command("run", { isDefault: true })
+  .alias("r")
+  .description("Run custom generators")
+  .addArgument(
+    new Argument("[generator-name]", "The name of the generator to run")
+  )
+  .addOption(
+    new Option(
+      "-c, --config <config>",
+      "Generator configuration file (default: turbo/generators/config.js"
+    )
+  )
+  .addOption(
+    new Option(
+      "-r, --root <dir>",
+      "The root of your repository (default: directory with root turbo.json)"
+    )
+  )
+  .addOption(
+    new Option(
+      "-a, --args <args...>",
+      "Arguments passed directly to generator"
+    ).default([])
+  )
+  .action(run);
 
 turboGenCli
-  .command("add")
-  .aliases(["a"])
+  .command("workspace")
+  .aliases(["w"])
   .description("Add a new package or app to your project")
   .addOption(
     new Option("-n, --name <workspace-name>", "Name for the new workspace")
@@ -49,7 +70,7 @@ turboGenCli
     )
   )
   .addOption(
-    new Option("-w, --what <type>", "The type of workspace to create").choices([
+    new Option("-t, --type <type>", "The type of workspace to create").choices([
       "app",
       "package",
     ])
@@ -82,34 +103,13 @@ In this case, you must specify the path to the example separately:
       "Do not filter available dependencies by the workspace type"
     ).default(false)
   )
-  .action(add);
+  .action(workspace);
 
 turboGenCli
-  .command("generate")
-  .aliases(["g", "gen"])
-  .description("Run custom generators")
-  .addArgument(
-    new Argument("[generator-name]", "The name of the generator to run")
-  )
-  .addOption(
-    new Option(
-      "-c, --config <config>",
-      "Generator configuration file (default: turbo/generators/config.js"
-    )
-  )
-  .addOption(
-    new Option(
-      "-r, --root <dir>",
-      "The root of your repository (default: directory with root turbo.json)"
-    )
-  )
-  .addOption(
-    new Option(
-      "-a, --args <args...>",
-      "Arguments passed directly to generator"
-    ).default([])
-  )
-  .action(generate);
+  .command("raw", { hidden: true })
+  .argument("<type>", "The type of generator to run")
+  .addOption(new Option("--json <arguments>", "Arguments as raw JSON"))
+  .action(raw);
 
 turboGenCli
   .parseAsync()
