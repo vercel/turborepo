@@ -19,10 +19,10 @@ macro_rules! pjson {
 fn main() {
     // Read first argument from argv
     let mut args: HashSet<String> = std::env::args().skip(1).collect();
-    let mut single = args.remove("--single");
+    let single = args.remove("--single");
     let mut merged = args.remove("--merged");
-    let mut threads = args.remove("--threads");
-    let mut idle = args.remove("--idle");
+    let threads = args.remove("--threads");
+    let idle = args.remove("--idle");
     if !single && !merged && !threads {
         merged = true;
     }
@@ -144,12 +144,11 @@ fn main() {
                     }
                 }
             }
-            TraceRow::Event { parent, values } => {
+            TraceRow::Event { parent, mut values } => {
                 let duration = values.get("duration").and_then(|v| v.as_u64()).unwrap_or(0);
                 let name: Cow<'_, str> = values
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string().into())
+                    .remove("name")
+                    .and_then(|v| v.as_str().map(|s| s.to_string().into()))
                     .unwrap_or("".into());
                 let internal_parent =
                     parent.map_or(0, |id| ensure_span(&mut active_ids, &mut spans, id));
@@ -309,17 +308,13 @@ fn main() {
         eprint!("Emitting span tree...");
 
         let get_concurrency = |range: Range<u64>| {
-            if concurrency {
-                let mut sum = 0;
-                for interval in busy.query(range.clone()) {
-                    let start = max(interval.range.start, range.start);
-                    let end = min(interval.range.end, range.end);
-                    sum += end - start;
-                }
-                100 * sum / (range.end - range.start)
-            } else {
-                100
+            let mut sum = 0;
+            for interval in busy.query(range.clone()) {
+                let start = max(interval.range.start, range.start);
+                let end = min(interval.range.end, range.end);
+                sum += end - start;
             }
+            100 * sum / (range.end - range.start)
         };
 
         let target_concurrency = 200;

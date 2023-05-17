@@ -881,7 +881,7 @@ impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
             target: "root",
             parent: None,
             "invalidate",
-            reason = display(&reason)
+            name = display(&reason)
         )
         .entered();
         {

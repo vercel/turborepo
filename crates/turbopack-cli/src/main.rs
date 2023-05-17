@@ -18,44 +18,59 @@ fn main() {
 
     let args = Arguments::parse();
 
-    let subscriber = Registry::default();
+    let trace = std::env::var("TURBOPACK_TRACING").ok();
 
-    let subscriber = subscriber.with(
-        EnvFilter::builder()
-            .parse(std::env::var("TURBOPACK_TRACE").map_or_else(
-                |_| {
-                    Cow::Borrowed(
-                        "turbopack=info,turbopack_core=info,turbopack_ecmascript=info,\
-                         turbopack_css=info,turbopack_dev=info,turbopack_image=info,\
+    let _guard = if let Some(mut trace) = trace {
+        // Trace presets
+        match trace.as_str() {
+            "turbopack" => {
+                trace = "root=info,next_dev=info,next_core=info,next_font=info,turbopack=info,\
+                         turbopack_core=info,turbopack_ecmascript=info,turbopack_css=info,\
+                         turbopack_dev=info,turbopack_image=info,turbopack_dev_server=info,\
                          turbopack_json=info,turbopack_mdx=info,turbopack_node=info,\
-                         turbopack_static=info,turbopack_dev_server=info,turbopack_cli_utils=info,\
-                         turbopack_cli=info,turbopack_ecmascript=info,turbo_tasks=info,\
-                         turbo_tasks_memory=info,turbo_tasks_fs=info,turbo_tasks_bytes=info,\
-                         turbo_tasks_env=info,turbo_tasks_fetch=info,turbo_tasks_hash=info",
-                    )
-                },
-                |s| Cow::Owned(s),
-            ))
-            .unwrap(),
-    );
+                         turbopack_static=info,turbopack_cli_utils=info,turbopack_cli=info,\
+                         turbopack_ecmascript=info"
+                    .to_string();
+            }
+            "turbo-tasks" => {
+                trace = "root=info,next_dev=info,next_core=info,next_font=info,turbopack=info,\
+                         turbopack_core=info,turbopack_ecmascript=info,turbopack_css=info,\
+                         turbopack_dev=info,turbopack_image=info,turbopack_dev_server=info,\
+                         turbopack_json=info,turbopack_mdx=info,turbopack_node=info,\
+                         turbopack_static=info,turbopack_cli_utils=info,turbopack_cli=info,\
+                         turbopack_ecmascript=info,turbo_tasks=info,turbo_tasks_viz=info,\
+                         turbo_tasks_memory=info,turbo_tasks_fs=info"
+                    .to_string();
+            }
+            _ => {}
+        }
 
-    let internal_dir = args
-        .dir()
-        .unwrap_or_else(|| Path::new("."))
-        .join(".turbopack");
-    std::fs::create_dir_all(&internal_dir)
-        .context("Unable to create .turbopack directory")
-        .unwrap();
-    let trace_file = internal_dir.join("trace.log");
-    let (writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
-        .lossy(false)
-        .buffered_lines_limit(DEFAULT_BUFFERED_LINES_LIMIT * 8)
-        .finish(std::fs::File::create(trace_file).unwrap());
-    let subscriber = subscriber.with(RawTraceLayer::new(writer));
+        let subscriber = Registry::default();
 
-    let guard = exit_guard(guard).unwrap();
+        let subscriber = subscriber.with(EnvFilter::builder().parse(trace).unwrap());
 
-    subscriber.init();
+        let internal_dir = args
+            .dir()
+            .unwrap_or_else(|| Path::new("."))
+            .join(".turbopack");
+        std::fs::create_dir_all(&internal_dir)
+            .context("Unable to create .turbopack directory")
+            .unwrap();
+        let trace_file = internal_dir.join("trace.log");
+        let (writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
+            .lossy(false)
+            .buffered_lines_limit(DEFAULT_BUFFERED_LINES_LIMIT * 8)
+            .finish(std::fs::File::create(trace_file).unwrap());
+        let subscriber = subscriber.with(RawTraceLayer::new(writer));
+
+        let guard = exit_guard(guard).unwrap();
+
+        subscriber.init();
+
+        Some(guard)
+    } else {
+        None
+    };
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -66,8 +81,6 @@ fn main() {
         .unwrap()
         .block_on(main_inner(args))
         .unwrap();
-
-    drop(guard);
 }
 
 async fn main_inner(args: Arguments) -> Result<()> {
