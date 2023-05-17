@@ -35,6 +35,13 @@ func (evm EnvironmentVariableMap) Merge(another EnvironmentVariableMap) {
 	}
 }
 
+// Remove takes another EnvironmentVariableMap and removes matching keys from the receiver
+func (evm EnvironmentVariableMap) Remove(another EnvironmentVariableMap) {
+	for k := range another {
+		delete(evm, k)
+	}
+}
+
 // Add creates one new environment variable.
 func (evm EnvironmentVariableMap) Add(key string, value string) {
 	evm[key] = value
@@ -187,8 +194,25 @@ func wildcardToRegexPattern(pattern string) string {
 	return strings.Join(segments, "")
 }
 
+type wildcardSet struct {
+	Inclusions EnvironmentVariableMap
+	Exclusions EnvironmentVariableMap
+}
+
+func (ws wildcardSet) Resolved() EnvironmentVariableMap {
+	output := EnvironmentVariableMap{}
+	output.Merge(ws.Inclusions)
+	output.Remove(ws.Exclusions)
+	return output
+}
+
 // FromWildcards returns an EnvironmentVariableMap after processing wildcards against it.
-func (evm EnvironmentVariableMap) FromWildcards(wildcardPatterns []string) (EnvironmentVariableMap, error) {
+func (evm EnvironmentVariableMap) fromWildcards(wildcardPatterns []string) (wildcardSet, error) {
+	output := wildcardSet{
+		Inclusions: EnvironmentVariableMap{},
+		Exclusions: EnvironmentVariableMap{},
+	}
+
 	includePatterns := make([]string, 0)
 	excludePatterns := make([]string, 0)
 
@@ -210,25 +234,51 @@ func (evm EnvironmentVariableMap) FromWildcards(wildcardPatterns []string) (Envi
 
 	includeRegex, err := regexp.Compile(includeRegexString)
 	if err != nil {
-		return nil, err
+		return output, err
 	}
 
 	excludeRegex, err := regexp.Compile(excludeRegexString)
 	if err != nil {
-		return nil, err
+		return output, err
 	}
 
-	output := EnvironmentVariableMap{}
 	for envVar, envValue := range evm {
 		if len(includePatterns) > 0 && includeRegex.MatchString(envVar) {
-			output[envVar] = envValue
+			output.Inclusions[envVar] = envValue
 		}
 		if len(excludePatterns) > 0 && excludeRegex.MatchString(envVar) {
-			delete(output, envVar)
+			output.Exclusions[envVar] = envValue
 		}
 	}
 
 	return output, nil
+}
+
+func (evm EnvironmentVariableMap) FromWildcards(wildcardPatterns []string) (EnvironmentVariableMap, error) {
+	resolvedSet, err := evm.fromWildcards(wildcardPatterns)
+	if err != nil {
+		return nil, err
+	}
+
+	return resolvedSet.Resolved(), nil
+}
+
+func (evm EnvironmentVariableMap) FromWildcardsInclusionsOnly(wildcardPatterns []string) (EnvironmentVariableMap, error) {
+	resolvedSet, err := evm.fromWildcards(wildcardPatterns)
+	if err != nil {
+		return nil, err
+	}
+
+	return resolvedSet.Inclusions, nil
+}
+
+func (evm EnvironmentVariableMap) FromWildcardsExclusionsOnly(wildcardPatterns []string) (EnvironmentVariableMap, error) {
+	resolvedSet, err := evm.fromWildcards(wildcardPatterns)
+	if err != nil {
+		return nil, err
+	}
+
+	return resolvedSet.Exclusions, nil
 }
 
 // GetHashableEnvVars returns all sorted key=value env var pairs for both frameworks and from envKeys

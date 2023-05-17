@@ -27,9 +27,10 @@ import (
 // package-task hashing is threadsafe, provided topographical order is
 // respected.
 type Tracker struct {
-	rootNode   string
-	globalHash string
-	pipeline   fs.Pipeline
+	rootNode            string
+	globalHash          string
+	EnvAtExecutionStart env.EnvironmentVariableMap
+	pipeline            fs.Pipeline
 
 	packageInputsHashes map[string]string
 
@@ -49,10 +50,11 @@ type Tracker struct {
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
-func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Tracker {
+func NewTracker(rootNode string, globalHash string, envAtExecutionStart env.EnvironmentVariableMap, pipeline fs.Pipeline) *Tracker {
 	return &Tracker{
 		rootNode:               rootNode,
 		globalHash:             globalHash,
+		EnvAtExecutionStart:    envAtExecutionStart,
 		pipeline:               pipeline,
 		packageTaskHashes:      make(map[string]string),
 		packageTaskFramework:   make(map[string]string),
@@ -242,28 +244,78 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 		return "", fmt.Errorf("cannot find package-file hash for %v", packageTask.TaskID)
 	}
 
-	var keyMatchers []string
+	allEnvVarMap := env.EnvironmentVariableMap{}
+	explicitEnvVarMap := env.EnvironmentVariableMap{}
+	matchingEnvVarMap := env.EnvironmentVariableMap{}
+
 	var framework *inference.Framework
-	envVarContainingExcludePrefix := ""
-
 	if frameworkInference {
-		envVarContainingExcludePrefix = "TURBO_CI_VENDOR_ENV_KEY"
-		framework = inference.InferFramework(packageTask.Pkg)
-		if framework != nil && framework.EnvMatcher != "" {
-			// log auto detected framework and env prefix
-			logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvMatcher)
-			keyMatchers = append(keyMatchers, framework.EnvMatcher)
+		var err error
+		userInclusions, err := th.EnvAtExecutionStart.FromWildcardsInclusionsOnly(packageTask.TaskDefinition.EnvVarDependencies)
+		if err != nil {
+			return "", err
 		}
+
+		// See if we infer a framework.
+		var inferenceEnvVarMap env.EnvironmentVariableMap
+		framework = inference.InferFramework(packageTask.Pkg)
+		if framework != nil {
+			logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvWildcards)
+
+			// Vendor excludes are only applied against inferred includes.
+			excludePrefix := th.EnvAtExecutionStart["TURBO_CI_VENDOR_ENV_KEY"]
+			if excludePrefix != "" {
+				computedExclude := excludePrefix + "*"
+				logger.Debug(fmt.Sprintf("excluding environment variables matching wildcard %s", computedExclude))
+
+				computedWildcards := []string{}
+				copy(computedWildcards, framework.EnvWildcards)
+				computedWildcards = append(computedWildcards, computedExclude)
+
+				inferenceEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(computedWildcards)
+				if err != nil {
+					return "", err
+				}
+			} else {
+				inferenceEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(framework.EnvWildcards)
+				if err != nil {
+					return "", err
+				}
+			}
+		}
+
+		userExclusions, err := th.EnvAtExecutionStart.FromWildcardsExclusionsOnly(packageTask.TaskDefinition.EnvVarDependencies)
+		if err != nil {
+			return "", err
+		}
+
+		allEnvVarMap.Merge(userInclusions)
+		allEnvVarMap.Merge(inferenceEnvVarMap)
+		allEnvVarMap.Remove(userExclusions)
+
+		explicitEnvVarMap.Merge(userInclusions)
+		explicitEnvVarMap.Remove(userExclusions)
+
+		matchingEnvVarMap.Merge(inferenceEnvVarMap)
+		matchingEnvVarMap.Remove(userExclusions)
+	} else {
+		var err error
+		allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.EnvVarDependencies)
+		if err != nil {
+			return "", err
+		}
+
+		explicitEnvVarMap = allEnvVarMap
 	}
 
-	envVars, err := env.GetHashableEnvVars(
-		packageTask.TaskDefinition.EnvVarDependencies,
-		keyMatchers,
-		envVarContainingExcludePrefix,
-	)
-	if err != nil {
-		return "", err
+	envVars := env.DetailedMap{
+		All: allEnvVarMap,
+		BySource: env.BySource{
+			Explicit: explicitEnvVarMap,
+			Matching: matchingEnvVarMap,
+		},
 	}
+
 	hashableEnvPairs := envVars.All.ToHashable()
 	outputs := packageTask.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
