@@ -36,7 +36,7 @@ serde_yaml = { workspace = true }
 tiny-gradient = { workspace = true }
 tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = { workspace = true }
-turborepo-lib = { workspace = true, default-features = false }
+turborepo-lib = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.9"
