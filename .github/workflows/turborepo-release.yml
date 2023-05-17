@@ -113,7 +113,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
       - name: Run JS Package Tests
-        run: turbo check-types test --filter="./packages/*" --filter="\!@vercel/*" --filter="\!turborepo-tests*" --color
+        run: turbo run check-types test --filter="./packages/*" --filter="\!@vercel/*" --filter="\!turborepo-tests*" --color
 
   build-go-darwin:
     name: "Build Go for macOS"
