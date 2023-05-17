@@ -491,6 +491,7 @@
 <a href="#491" id="491">491</a>
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -631,6 +632,7 @@
             <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;
 
             transforms.push(EcmascriptInputTransform::React {
+                development: jsx.development,
                 refresh: jsx.react_refresh,
                 import_source: OptionStringVc::cell(jsx.import_source.clone()),
                 runtime: OptionStringVc::cell(jsx.runtime.clone()),
@@ -750,7 +752,7 @@
                         <span class="prelude-val">Some</span>(ModuleRuleEffect::SourceTransforms(
                             SourceTransformsVc::cell(<span class="macro">vec!</span>[PostCssTransformVc::new(
                                 node_evaluate_asset_context(
-                                    execution_context.project_path(),
+                                    execution_context,
                                     <span class="prelude-val">Some</span>(import_map),
                                     <span class="prelude-val">None</span>,
                                 ),
@@ -965,7 +967,7 @@
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(<span class="macro">vec!</span>[
                             WebpackLoadersVc::new(
                                 node_evaluate_asset_context(
-                                    execution_context.project_path(),
+                                    execution_context,
                                     <span class="prelude-val">Some</span>(import_map),
                                     <span class="prelude-val">None</span>,
                                 ),

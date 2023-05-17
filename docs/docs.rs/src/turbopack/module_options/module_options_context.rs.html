@@ -186,6 +186,7 @@
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
 <a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -297,6 +298,7 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>JsxTransformOptions {
+    <span class="kw">pub </span>development: bool,
     <span class="kw">pub </span>react_refresh: bool,
     <span class="kw">pub </span>import_source: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>runtime: <span class="prelude-ty">Option</span>&lt;String&gt;,

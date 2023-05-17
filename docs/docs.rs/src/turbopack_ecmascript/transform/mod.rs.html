@@ -365,6 +365,9 @@
 <a href="#365" id="365">365</a>
 <a href="#366" id="366">366</a>
 <a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, hash::Hash, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -397,6 +400,8 @@
     Plugin(TransformPluginVc),
     PresetEnv(EnvironmentVc),
     React {
+        <span class="attr">#[serde(default)]
+        </span>development: bool,
         <span class="attr">#[serde(default)]
         </span>refresh: bool,
         <span class="comment">// swc.jsc.transform.react.importSource
@@ -510,6 +515,7 @@
         } = ctx;
         <span class="kw">match </span><span class="self">self </span>{
             EcmascriptInputTransform::React {
+                development,
                 refresh,
                 import_source,
                 runtime,
@@ -532,7 +538,7 @@
 
                 <span class="kw">let </span>config = Options {
                     runtime: <span class="prelude-val">Some</span>(runtime),
-                    development: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
+                    development: <span class="prelude-val">Some</span>(<span class="kw-2">*</span>development),
                     import_source: import_source.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
                     refresh: <span class="kw">if </span><span class="kw-2">*</span>refresh {
                         <span class="prelude-val">Some</span>(swc_core::ecma::transforms::react::RefreshOptions {
