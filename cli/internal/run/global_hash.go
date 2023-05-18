@@ -3,10 +3,8 @@ package run
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
@@ -133,24 +131,14 @@ func getGlobalHashInputs(
 	envMode util.EnvMode,
 	frameworkInference bool,
 	logger hclog.Logger,
-	ui cli.Ui,
-	isStructuredOutput bool,
 ) (GlobalHashableInputs, error) {
 	// Calculate env var dependencies
 	envVars := []string{}
 	envVars = append(envVars, envVarDependencies...)
 	envVars = append(envVars, _defaultEnvVars...)
-	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, []string{".*THASH.*"}, "")
+	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, nil, "")
 	if err != nil {
 		return GlobalHashableInputs{}, err
-	}
-
-	// The only way we can add env vars into the hash via matching is via THASH,
-	// so we only do a simple check here for entries in `BySource.Matching`.
-	// If we enable globalEnv to accept wildcard characters, we'll need to update this
-	// check.
-	if !isStructuredOutput && len(globalHashableEnvVars.BySource.Matching) > 0 {
-		ui.Warn(fmt.Sprintf("[DEPRECATED] Using .*THASH.* to specify an environment variable for inclusion into the hash is deprecated. You specified: %s.", strings.Join(globalHashableEnvVars.BySource.Matching.Names(), ", ")))
 	}
 
 	logger.Debug("global hash env vars", "vars", globalHashableEnvVars.All.Names())
