@@ -87,10 +87,7 @@ class DummySpan {
   }
 
   traceFn<T>(fn: (span: DummySpan) => T): T {
-    try {
-      return fn(this);
-    } finally {
-    }
+    return fn(this);
   }
 
   async traceAsyncFn<T>(fn: (span: DummySpan) => T | Promise<T>): Promise<T> {
