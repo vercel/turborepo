@@ -178,7 +178,7 @@ Task details include:
 - `dependencies`: Tasks that must run before this task
 - `dependents`: Tasks that must be run after this task
 
-#### `--experimental-env-mode`
+#### `--env-mode`
 
 `type: string`
 
@@ -198,30 +198,29 @@ Controls the available environment variables to your tasks.
 
 ##### `infer`
 
-In infer mode, Turborepo will look for [`experimentalPassThroughEnv`][1] for
-each task config, and [`experimentalGlobalPassThroughEnv`][2] in the root of the
+In infer mode, Turborepo will look for [`passThroughEnv`][1] for
+each task config, and [`globalPassThroughEnv`][2] in the root of the
 `turbo.json` config. If either is defined, "strict" mode is inferred. If
 neither is defined, then `loose` mode is inferred.
 
-In this mode, the value of `experimentalGlobalPassThroughEnv` and the flag's
+In this mode, the value of `globalPassThroughEnv` and the flag's
 value ("infer") will only be incorporated into the global hash if
-`experimentalGlobalPassThroughEnv` is set.
+`globalPassThroughEnv` is set.
 
 ##### `loose`
 
 In loose mode, all environment variables are made available to the task.
-The value of `experimentalGlobalPassThroughEnv` and the flag's value ("loose")
-itself will be incorporated into the global hash.
+The flag's value ("loose") itself will be incorporated into the global hash.
 
 ##### `strict`
 
 In strict mode, only environment variables specified in the following keys are
 available to the task:
 
-- `env` and `experimentalPassThroughEnv` in each task configuration
-- `globalEnv` and `experimentalGlobalPassThroughEnv` in the root of your config
+- `env` and `passThroughEnv` in each task configuration
+- `globalEnv` and `globalPassThroughEnv` in the root of your config
 
-The value of `experimentalGlobalPassThroughEnv` and the flag's value ("strict")
+The value of `globalPassThroughEnv` and the flag's value ("strict")
 itself will be incorporated into the global hash.
 
 If strict mode is specified or inferred, _all_ tasks are run in strict mode,
@@ -774,5 +773,5 @@ The root of your repository (default: directory with _root_ turbo.json)
 
 Prompt answers passed directly to generator
 
-[1]: /repo/docs/refernce/configuration#experimentalPassThroughEnv
-[2]: /repo/docs/refernce/configuration#experimentalGlobalPassThroughEnv
+[1]: /repo/docs/refernce/configuration#passThroughEnv
+[2]: /repo/docs/refernce/configuration#globalPassThroughEnv

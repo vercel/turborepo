@@ -33,7 +33,7 @@ type GlobalHashableInputs struct {
 	frameworkInference   bool
 }
 
-type newGlobalHashable struct {
+type globalHashable struct {
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
 	envVars              env.EnvironmentVariablePairs
@@ -43,11 +43,11 @@ type newGlobalHashable struct {
 	frameworkInference   bool
 }
 
-// newGlobalHash is a transformation of GlobalHashableInputs.
+// calculateGlobalHash is a transformation of GlobalHashableInputs.
 // It's used for the situations where we have an `EnvMode` specified
 // as that is not compatible with existing global hashes.
-func newGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashObject(newGlobalHashable{
+func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
+	return fs.HashObject(globalHashable{
 		globalFileHashMap:    full.globalFileHashMap,
 		rootExternalDepsHash: full.rootExternalDepsHash,
 		envVars:              full.envVars.All.ToHashable(),
@@ -55,26 +55,6 @@ func newGlobalHash(full GlobalHashableInputs) (string, error) {
 		envVarPassthroughs:   full.envVarPassthroughs,
 		envMode:              full.envMode,
 		frameworkInference:   full.frameworkInference,
-	})
-}
-
-type oldGlobalHashable struct {
-	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	rootExternalDepsHash string
-	envVars              env.EnvironmentVariablePairs
-	globalCacheKey       string
-}
-
-// oldGlobalHash is a transformation of GlobalHashableInputs.
-// This exists because the existing global hashes are still usable
-// in some configurations that do not include a specified `EnvMode`.
-// We can remove this whenever we want to migrate users.
-func oldGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashObject(oldGlobalHashable{
-		globalFileHashMap:    full.globalFileHashMap,
-		rootExternalDepsHash: full.rootExternalDepsHash,
-		envVars:              full.envVars.All.ToHashable(),
-		globalCacheKey:       full.globalCacheKey,
 	})
 }
 
@@ -87,28 +67,19 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 			// we'll hash the whole object, so we can detect changes to that config
 			// Further, resolve the envMode to the concrete value.
 			full.envMode = util.Strict
-			return newGlobalHash(full)
 		}
 
-		// If you tell us not to infer framework you get the new hash.
-		if !full.frameworkInference {
-			return newGlobalHash(full)
-		}
-
-		// If we're in infer mode, and there is no global pass through config,
-		// we use the old struct layout. this will be true for everyone not using the strict env
-		// feature, and we don't want to break their cache.
-		return oldGlobalHash(full)
+		return calculateGlobalHash(full)
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
 		full.envVarPassthroughs = nil
-		return newGlobalHash(full)
+		return calculateGlobalHash(full)
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
 		if full.envVarPassthroughs == nil {
 			full.envVarPassthroughs = make([]string, 0)
 		}
-		return newGlobalHash(full)
+		return calculateGlobalHash(full)
 	default:
 		panic("unimplemented environment mode")
 	}

@@ -81,16 +81,12 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 
 		// Task env mode is only independent when global env mode is `infer`.
 		taskEnvMode := globalEnvMode
-		useOldTaskHashable := false
 		if taskEnvMode == util.Infer {
 			if taskDefinition.PassthroughEnv != nil {
 				taskEnvMode = util.Strict
 			} else {
 				// If we're in infer mode we have just detected non-usage of strict env vars.
-				// Since we haven't stabilized this we don't want to break their cache.
-				useOldTaskHashable = true
-
-				// But our old behavior's actual meaning of this state is `loose`.
+				// But our behavior's actual meaning of this state is `loose`.
 				taskEnvMode = util.Loose
 			}
 		}
@@ -115,7 +111,6 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			taskGraph.DownEdges(taskID),
 			frameworkInference,
 			passThruArgs,
-			useOldTaskHashable,
 		)
 
 		// Not being able to construct the task hash is a hard error

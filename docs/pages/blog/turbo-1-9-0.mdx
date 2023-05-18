@@ -75,17 +75,17 @@ npx create-turbo -e https://github.com/your-org/turbo-starter
 
 ## Strict Environments <Badge>Experimental</Badge>
 
-You can now use the `--experimental-env-mode=strict` flag to restrict the environment variables your tasks have access to. Your tasks will only be aware of the variables you explicitly state, creating a safer caching environment.
+You can now use the `--env-mode=strict` flag to restrict the environment variables your tasks have access to. Your tasks will only be aware of the variables you explicitly state, creating a safer caching environment.
 
 In `strict` mode, Turborepo will pass environment variables declared in:
 
-- `globalEnv` and `experimentalGlobalPassThroughEnv` to all tasks
-- `env` and `experimentalPassThroughEnv` for each task
+- `globalEnv` and `globalPassThroughEnv` to all tasks
+- `env` and `passThroughEnv` for each task
 
 ```json
 {
   // Available to all tasks
-  "experimentalGlobalPassThroughEnv": ["GLOBAL_VAR_1"],
+  "globalPassThroughEnv": ["GLOBAL_VAR_1"],
 
   // Available to all tasks and invalidates caches
   "globalEnv": ["GLOBAL_VAR_2"],
@@ -93,7 +93,7 @@ In `strict` mode, Turborepo will pass environment variables declared in:
   "pipeline": {
     "build": {
       // Only available to `build` tasks
-      "experimentalPassThroughEnv": ["VAR_1"],
+      "passThroughEnv": ["VAR_1"],
 
       // Available to `build` task and invalidates caches
       "env": ["VAR_2"]
@@ -104,9 +104,9 @@ In `strict` mode, Turborepo will pass environment variables declared in:
 
 In `strict` mode, this configuration will only expose four environment variables to your `build` tasks, helping you catch missing variables earlier in the development process.
 
-`--experimental-env-mode` also supports `loose` and `infer`.
+`--env-mode` also supports `loose` and `infer`.
 
-Learn more in the [docs](/repo/docs/reference/command-line-reference#--experimental-env-mode).
+Learn more in the [docs](/repo/docs/reference/command-line-reference#--env-mode).
 
 ## Community
 

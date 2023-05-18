@@ -2,7 +2,7 @@
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["foo.txt"],
   "globalEnv": ["SOME_ENV_VAR"],
-  "experimentalGlobalPassThroughEnv": ["PASSTHROUGH"],
+  "globalPassThroughEnv": ["PASSTHROUGH"],
   "pipeline": {
     "build": {
       "env": ["NODE_ENV"],

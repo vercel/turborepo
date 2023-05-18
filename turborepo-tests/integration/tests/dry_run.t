@@ -24,42 +24,42 @@ Setup
 # Part 3 are Tasks to Run, and we have to validate each task separately
   $ cat tmp-3.txt | grep "my-app#build" -A 15
   my-app#build
-    Task                             = build                                                                                                                           
-    Package                          = my-app                                                                                                                          
-    Hash                             = bcfea334449257fe                                                                                                                
-    Cached (Local)                   = false                                                                                                                           
-    Cached (Remote)                  = false                                                                                                                           
-    Directory                        = apps/my-app                                                                                                                     
-    Command                          = echo 'building'                                                                                                                 
-    Outputs                          = apple.json, banana.txt                                                                                                          
-    Log File                         = apps/my-app/.turbo/turbo-build.log                                                                                              
-    Dependencies                     =                                                                                                                                 
-    Dependendents                    =                                                                                                                                 
-    Inputs Files Considered          = 1                                                                                                                               
-    Configured Environment Variables =                                                                                                                                 
-    Inferred Environment Variables   =                                                                                                                                 
-    Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                                             
+    Task                             = build                                                                                                                                                 
+    Package                          = my-app                                                                                                                                                
+    Hash                             = c0aa511cf2721438                                                                                                                                      
+    Cached (Local)                   = false                                                                                                                                                 
+    Cached (Remote)                  = false                                                                                                                                                 
+    Directory                        = apps/my-app                                                                                                                                           
+    Command                          = echo 'building'                                                                                                                                       
+    Outputs                          = apple.json, banana.txt                                                                                                                                
+    Log File                         = apps/my-app/.turbo/turbo-build.log                                                                                                                    
+    Dependencies                     =                                                                                                                                                       
+    Dependendents                    =                                                                                                                                                       
+    Inputs Files Considered          = 1                                                                                                                                                     
+    Configured Environment Variables =                                                                                                                                                       
+    Inferred Environment Variables   =                                                                                                                                                       
+    Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                                                                   
 
   $ cat tmp-3.txt | grep "util#build" -A 15
   util#build
-    Task                             = build                                                                                                            
-    Package                          = util                                                                                                             
-    Hash                             = e64dab76e045fbb4                                                                                                 
-    Cached (Local)                   = false                                                                                                            
-    Cached (Remote)                  = false                                                                                                            
-    Directory                        = packages/util                                                                                                    
-    Command                          = echo 'building'                                                                                                  
-    Outputs                          =                                                                                                                  
-    Log File                         = packages/util/.turbo/turbo-build.log                                                                             
-    Dependencies                     =                                                                                                                  
-    Dependendents                    =                                                                                                                  
-    Inputs Files Considered          = 1                                                                                                                
-    Configured Environment Variables = NODE_ENV=                                                                                                        
-    Inferred Environment Variables   =                                                                                                                  
-    Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                              
+    Task                             = build                                                                                                                                  
+    Package                          = util                                                                                                                                   
+    Hash                             = ac6ceb0714bda4f3                                                                                                                       
+    Cached (Local)                   = false                                                                                                                                  
+    Cached (Remote)                  = false                                                                                                                                  
+    Directory                        = packages/util                                                                                                                          
+    Command                          = echo 'building'                                                                                                                        
+    Outputs                          =                                                                                                                                        
+    Log File                         = packages/util/.turbo/turbo-build.log                                                                                                   
+    Dependencies                     =                                                                                                                                        
+    Dependendents                    =                                                                                                                                        
+    Inputs Files Considered          = 1                                                                                                                                      
+    Configured Environment Variables = NODE_ENV=                                                                                                                              
+    Inferred Environment Variables   =                                                                                                                                        
+    Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                                                    
 
 # Run the task with NODE_ENV set and see it in summary. Use util package so it's just one package
   $ NODE_ENV=banana ${TURBO} run build --dry --filter=util | grep "Environment Variables"
-    Configured Environment Variables = NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e                                        
-    Inferred Environment Variables   =                                                                                                                  
-    Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                              
+    Configured Environment Variables = NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e                                                              
+    Inferred Environment Variables   =                                                                                                                                        
+    Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                                                    
