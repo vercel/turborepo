@@ -273,15 +273,14 @@
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
-</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-
-<span class="kw">use </span>anyhow::Result;
+<a href="#276" id="276">276</a>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::resolve::{
     find_context_file,
     options::{
-        ConditionValue, ImportMap, ImportMapping, ResolveInPackage, ResolveIntoPackage,
-        ResolveModules, ResolveOptions, ResolveOptionsVc,
+        ConditionValue, ImportMap, ImportMapping, ResolutionConditions, ResolveInPackage,
+        ResolveIntoPackage, ResolveModules, ResolveOptions, ResolveOptionsVc,
     },
     AliasMap, AliasPattern, FindContextFileResult,
 };
@@ -386,6 +385,53 @@
 
     <span class="kw">let </span>plugins = opt.plugins.clone();
 
+    <span class="kw">let </span>conditions = {
+        <span class="kw">let </span><span class="kw-2">mut </span>conditions: ResolutionConditions = [
+            (<span class="string">&quot;import&quot;</span>.to_string(), ConditionValue::Unknown),
+            (<span class="string">&quot;require&quot;</span>.to_string(), ConditionValue::Unknown),
+        ]
+        .into_iter()
+        .collect();
+        <span class="kw">if </span>opt.browser {
+            conditions.insert(<span class="string">&quot;browser&quot;</span>.to_string(), ConditionValue::Set);
+        }
+        <span class="kw">if </span>opt.module {
+            conditions.insert(<span class="string">&quot;module&quot;</span>.to_string(), ConditionValue::Set);
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(environment) = emulating {
+            <span class="kw">for </span>condition <span class="kw">in </span>environment.resolve_conditions().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+                conditions.insert(condition.to_string(), ConditionValue::Set);
+            }
+        }
+        <span class="kw">for </span>condition <span class="kw">in </span>opt.custom_conditions.iter() {
+            conditions.insert(condition.to_string(), ConditionValue::Set);
+        }
+        <span class="comment">// Infer some well-known conditions
+        </span><span class="kw">let </span>dev = conditions.get(<span class="string">&quot;development&quot;</span>).cloned();
+        <span class="kw">let </span>prod = conditions.get(<span class="string">&quot;production&quot;</span>).cloned();
+        <span class="kw">if </span>prod.is_none() {
+            conditions.insert(
+                <span class="string">&quot;production&quot;</span>.to_string(),
+                <span class="kw">if </span><span class="macro">matches!</span>(dev, <span class="prelude-val">Some</span>(ConditionValue::Set)) {
+                    ConditionValue::Unset
+                } <span class="kw">else </span>{
+                    ConditionValue::Unknown
+                },
+            );
+        }
+        <span class="kw">if </span>dev.is_none() {
+            conditions.insert(
+                <span class="string">&quot;development&quot;</span>.to_string(),
+                <span class="kw">if </span><span class="macro">matches!</span>(prod, <span class="prelude-val">Some</span>(ConditionValue::Set)) {
+                    ConditionValue::Unset
+                } <span class="kw">else </span>{
+                    ConditionValue::Unknown
+                },
+            );
+        }
+        conditions
+    };
+
     <span class="prelude-val">Ok</span>(ResolveOptions {
         extensions: <span class="kw">if let </span><span class="prelude-val">Some</span>(environment) = emulating {
             environment.resolve_extensions().<span class="kw">await</span><span class="question-mark">?</span>.clone_value()
@@ -427,57 +473,10 @@
             mods
         },
         into_package: {
-            <span class="kw">let </span><span class="kw-2">mut </span>resolve_into = Vec::new();
-            resolve_into.push(ResolveIntoPackage::ExportsField {
-                field: <span class="string">&quot;exports&quot;</span>.to_string(),
-                conditions: {
-                    <span class="kw">let </span><span class="kw-2">mut </span>conditions: BTreeMap&lt;String, ConditionValue&gt; = [
-                        (<span class="string">&quot;import&quot;</span>.to_string(), ConditionValue::Unknown),
-                        (<span class="string">&quot;require&quot;</span>.to_string(), ConditionValue::Unknown),
-                    ]
-                    .into_iter()
-                    .collect();
-                    <span class="kw">if </span>opt.browser {
-                        conditions.insert(<span class="string">&quot;browser&quot;</span>.to_string(), ConditionValue::Set);
-                    }
-                    <span class="kw">if </span>opt.module {
-                        conditions.insert(<span class="string">&quot;module&quot;</span>.to_string(), ConditionValue::Set);
-                    }
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(environment) = emulating {
-                        <span class="kw">for </span>condition <span class="kw">in </span>environment.resolve_conditions().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                            conditions.insert(condition.to_string(), ConditionValue::Set);
-                        }
-                    }
-                    <span class="kw">for </span>condition <span class="kw">in </span>opt.custom_conditions.iter() {
-                        conditions.insert(condition.to_string(), ConditionValue::Set);
-                    }
-                    <span class="comment">// Infer some well-known conditions
-                    </span><span class="kw">let </span>dev = conditions.get(<span class="string">&quot;development&quot;</span>).cloned();
-                    <span class="kw">let </span>prod = conditions.get(<span class="string">&quot;production&quot;</span>).cloned();
-                    <span class="kw">if </span>prod.is_none() {
-                        conditions.insert(
-                            <span class="string">&quot;production&quot;</span>.to_string(),
-                            <span class="kw">if </span><span class="macro">matches!</span>(dev, <span class="prelude-val">Some</span>(ConditionValue::Set)) {
-                                ConditionValue::Unset
-                            } <span class="kw">else </span>{
-                                ConditionValue::Unknown
-                            },
-                        );
-                    }
-                    <span class="kw">if </span>dev.is_none() {
-                        conditions.insert(
-                            <span class="string">&quot;development&quot;</span>.to_string(),
-                            <span class="kw">if </span><span class="macro">matches!</span>(prod, <span class="prelude-val">Some</span>(ConditionValue::Set)) {
-                                ConditionValue::Unset
-                            } <span class="kw">else </span>{
-                                ConditionValue::Unknown
-                            },
-                        );
-                    }
-                    conditions
-                },
+            <span class="kw">let </span><span class="kw-2">mut </span>resolve_into = <span class="macro">vec!</span>[ResolveIntoPackage::ExportsField {
+                conditions: conditions.clone(),
                 unspecified_conditions: ConditionValue::Unset,
-            });
+            }];
             <span class="kw">if </span>opt.browser {
                 resolve_into.push(ResolveIntoPackage::MainField(<span class="string">&quot;browser&quot;</span>.to_string()));
             }
@@ -489,7 +488,10 @@
             resolve_into
         },
         in_package: {
-            <span class="kw">let </span><span class="kw-2">mut </span>resolve_in = Vec::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>resolve_in = <span class="macro">vec!</span>[ResolveInPackage::ImportsField {
+                conditions,
+                unspecified_conditions: ConditionValue::Unset,
+            }];
             <span class="kw">if </span>opt.browser {
                 resolve_in.push(ResolveInPackage::AliasField(<span class="string">&quot;browser&quot;</span>.to_string()));
             }

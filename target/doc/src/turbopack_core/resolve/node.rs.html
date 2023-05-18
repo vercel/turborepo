@@ -29,14 +29,25 @@
 <a href="#29" id="29">29</a>
 <a href="#30" id="30">30</a>
 <a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
 </pre><pre class="rust"><code><span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use </span><span class="kw">super</span>::options::{
-    ConditionValue, ResolveIntoPackage, ResolveModules, ResolveOptions, ResolveOptionsVc,
+    ConditionValue, ResolutionConditions, ResolveInPackage, ResolveIntoPackage, ResolveModules,
+    ResolveOptions, ResolveOptionsVc,
 };
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>node_cjs_resolve_options(root: FileSystemPathVc) -&gt; ResolveOptionsVc {
+    <span class="kw">let </span>conditions: ResolutionConditions = [
+        (<span class="string">&quot;node&quot;</span>.to_string(), ConditionValue::Set),
+        (<span class="string">&quot;require&quot;</span>.to_string(), ConditionValue::Set),
+    ]
+    .into();
     ResolveOptions {
         extensions: <span class="macro">vec!</span>[<span class="string">&quot;.js&quot;</span>.to_string(), <span class="string">&quot;.json&quot;</span>.to_string(), <span class="string">&quot;.node&quot;</span>.to_string()],
         modules: <span class="macro">vec!</span>[ResolveModules::Nested(
@@ -45,17 +56,16 @@
         )],
         into_package: <span class="macro">vec!</span>[
             ResolveIntoPackage::ExportsField {
-                field: <span class="string">&quot;exports&quot;</span>.to_string(),
-                conditions: [
-                    (<span class="string">&quot;node&quot;</span>.to_string(), ConditionValue::Set),
-                    (<span class="string">&quot;require&quot;</span>.to_string(), ConditionValue::Set),
-                ]
-                .into(),
+                conditions: conditions.clone(),
                 unspecified_conditions: ConditionValue::Unset,
             },
             ResolveIntoPackage::MainField(<span class="string">&quot;main&quot;</span>.to_string()),
             ResolveIntoPackage::Default(<span class="string">&quot;index&quot;</span>.to_string()),
         ],
+        in_package: <span class="macro">vec!</span>[ResolveInPackage::ImportsField {
+            conditions,
+            unspecified_conditions: ConditionValue::Unset,
+        }],
         ..Default::default()
     }
     .cell()

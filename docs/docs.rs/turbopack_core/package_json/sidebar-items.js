@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["read_package_json","read_package_json_inline"],"struct":["OptionPackageJson","OptionPackageJsonVc","PackageJson","PackageJsonIssue","PackageJsonIssueVc"],"type":["OptionPackageJsonReadRef","PackageJsonIssueReadRef"]};

@@ -468,6 +468,14 @@
 <a href="#468" id="468">468</a>
 <a href="#469" id="469">469</a>
 <a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
@@ -504,7 +512,7 @@
     </span>Registry(FileSystemPathVc, LockedVersionsVc),
 }
 
-<span class="attr">#[derive(TraceRawVcs, Hash, PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(TraceRawVcs, Hash, PartialEq, Eq, Clone, Copy, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>ConditionValue {
     Set,
     Unset,
@@ -521,6 +529,8 @@
     }
 }
 
+<span class="kw">pub type </span>ResolutionConditions = BTreeMap&lt;String, ConditionValue&gt;;
+
 <span class="doccomment">/// The different ways to resolve a package, as described in package.json.
 </span><span class="attr">#[derive(TraceRawVcs, Hash, PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>ResolveIntoPackage {
@@ -528,8 +538,7 @@
     ///
     /// [exports]: https://nodejs.org/api/packages.html#exports
     </span>ExportsField {
-        field: String,
-        conditions: BTreeMap&lt;String, ConditionValue&gt;,
+        conditions: ResolutionConditions,
         unspecified_conditions: ConditionValue,
     },
     <span class="doccomment">/// Using a [main]-like field (e.g. [main], [module], [browser], etc.).
@@ -547,6 +556,13 @@
 </span><span class="kw">pub enum </span>ResolveInPackage {
     <span class="doccomment">/// Using a alias field which allows to map requests
     </span>AliasField(String),
+    <span class="doccomment">/// Using the [imports] field.
+    ///
+    /// [imports]: https://nodejs.org/api/packages.html#imports
+    </span>ImportsField {
+        conditions: ResolutionConditions,
+        unspecified_conditions: ConditionValue,
+    },
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]

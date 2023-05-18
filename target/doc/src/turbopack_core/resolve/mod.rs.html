@@ -1372,6 +1372,91 @@
 <a href="#1372" id="1372">1372</a>
 <a href="#1373" id="1373">1373</a>
 <a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
+<a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -1379,7 +1464,7 @@
     pin::Pin,
 };
 
-<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{
     primitives::{BoolVc, StringVc, StringsVc},
@@ -1387,24 +1472,22 @@
 };
 <span class="kw">use </span>turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
-    FileJsonContent, FileJsonContentVc, FileSystemEntryType, FileSystemPathVc, RealPathResult,
+    FileSystemEntryType, FileSystemPathVc, RealPathResult,
 };
 
 <span class="kw">use </span><span class="self">self</span>::{
-    exports::ExportsField,
     options::{
         resolve_modules_options, ImportMapResult, ResolveInPackage, ResolveIntoPackage,
         ResolveModules, ResolveModulesOptionsVc, ResolveOptionsVc,
     },
     parse::{Request, RequestVc},
     pattern::QueryMapVc,
+    remap::{ExportsField, ImportsField},
 };
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetOptionVc, AssetVc, AssetsVc},
-    issue::{
-        package_json::{PackageJsonIssue, PackageJsonIssueVc},
-        resolve::{ResolvingIssue, ResolvingIssueVc},
-    },
+    issue::resolve::{ResolvingIssue, ResolvingIssueVc},
+    package_json::{read_package_json, PackageJsonIssue, PackageJsonIssueVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::ReferenceType,
     resolve::{
@@ -1416,18 +1499,18 @@
 };
 
 <span class="kw">mod </span>alias_map;
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>exports;
 <span class="kw">pub mod </span>node;
 <span class="kw">pub mod </span>options;
 <span class="kw">pub mod </span>origin;
 <span class="kw">pub mod </span>parse;
 <span class="kw">pub mod </span>pattern;
 <span class="kw">pub mod </span>plugin;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>remap;
 
 <span class="kw">pub use </span>alias_map::{
     AliasMap, AliasMapIntoIter, AliasMapLookupIterator, AliasMatch, AliasPattern, AliasTemplate,
 };
-<span class="kw">pub use </span>exports::{ExportsValue, ResolveAliasMap, ResolveAliasMapVc};
+<span class="kw">pub use </span>remap::{ResolveAliasMap, ResolveAliasMapVc, SubpathValue};
 
 <span class="kw">use </span><span class="kw">crate</span>::issue::{IssueSeverity, IssueSeverityVc, OptionIssueSourceVc};
 
@@ -1763,32 +1846,71 @@
     <span class="prelude-val">None</span>,
 }
 
-<span class="attr">#[turbo_tasks::function]
-</span><span class="kw">async fn </span>exports_field(
-    package_json_path: FileSystemPathVc,
-    package_json: FileJsonContentVc,
-    field: <span class="kw-2">&amp;</span>str,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ExportsFieldResultVc&gt; {
-    <span class="kw">if let </span>FileJsonContent::Content(package_json) = <span class="kw-2">&amp;*</span>package_json.<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="kw">let </span>field_value = <span class="kw-2">&amp;</span>package_json[field];
-        <span class="kw">if let </span>serde_json::Value::Null = field_value {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ExportsFieldResult::None.into());
-        }
-        <span class="kw">let </span>exports_field: <span class="prelude-ty">Result</span>&lt;ExportsField&gt; = field_value.try_into();
-        <span class="kw">match </span>exports_field {
-            <span class="prelude-val">Ok</span>(exports_field) =&gt; <span class="prelude-val">Ok</span>(ExportsFieldResult::Some(exports_field).into()),
-            <span class="prelude-val">Err</span>(err) =&gt; {
-                <span class="kw">let </span>issue: PackageJsonIssueVc = PackageJsonIssue {
-                    path: package_json_path,
-                    error_message: err.to_string(),
-                }
-                .into();
-                issue.as_issue().emit();
-                <span class="prelude-val">Ok</span>(ExportsFieldResult::None.into())
+<span class="doccomment">/// Extracts the &quot;exports&quot; field out of the nearest package.json, parsing it
+/// into an appropriate [AliasMap] for lookups.
+</span><span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>exports_field(package_json_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;ExportsFieldResultVc&gt; {
+    <span class="kw">let </span>read = read_package_json(package_json_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>package_json = <span class="kw">match </span><span class="kw-2">&amp;*</span>read {
+        <span class="prelude-val">Some</span>(json) =&gt; json,
+        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ExportsFieldResult::None.cell()),
+    };
+
+    <span class="kw">let </span><span class="prelude-val">Some</span>(exports) = package_json.get(<span class="string">&quot;exports&quot;</span>) <span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(ExportsFieldResult::None.cell());
+    };
+    <span class="kw">match </span>exports.try_into() {
+        <span class="prelude-val">Ok</span>(exports) =&gt; <span class="prelude-val">Ok</span>(ExportsFieldResult::Some(exports).cell()),
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="kw">let </span>issue: PackageJsonIssueVc = PackageJsonIssue {
+                path: package_json_path,
+                error_message: err.to_string(),
             }
+            .into();
+            issue.as_issue().emit();
+            <span class="prelude-val">Ok</span>(ExportsFieldResult::None.cell())
         }
-    } <span class="kw">else </span>{
-        <span class="prelude-val">Ok</span>(ExportsFieldResult::None.into())
+    }
+}
+
+<span class="attr">#[turbo_tasks::value(shared)]
+</span><span class="kw">enum </span>ImportsFieldResult {
+    <span class="prelude-val">Some</span>(
+        <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)] </span>ImportsField,
+        FileSystemPathVc,
+    ),
+    <span class="prelude-val">None</span>,
+}
+
+<span class="doccomment">/// Extracts the &quot;imports&quot; field out of the nearest package.json, parsing it
+/// into an appropriate [AliasMap] for lookups.
+</span><span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>imports_field(context: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;ImportsFieldResultVc&gt; {
+    <span class="kw">let </span>package_json_context = find_context_file(context, package_json()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>FindContextFileResult::Found(package_json_path, _refs) = <span class="kw-2">&amp;*</span>package_json_context <span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(ImportsFieldResult::None.cell());
+    };
+
+    <span class="kw">let </span>read = read_package_json(<span class="kw-2">*</span>package_json_path).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>package_json = <span class="kw">match </span><span class="kw-2">&amp;*</span>read {
+        <span class="prelude-val">Some</span>(json) =&gt; json,
+        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ImportsFieldResult::None.cell()),
+    };
+
+    <span class="kw">let </span><span class="prelude-val">Some</span>(imports) = package_json.get(<span class="string">&quot;imports&quot;</span>) <span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(ImportsFieldResult::None.cell());
+    };
+    <span class="kw">match </span>imports.try_into() {
+        <span class="prelude-val">Ok</span>(imports) =&gt; <span class="prelude-val">Ok</span>(ImportsFieldResult::Some(imports, <span class="kw-2">*</span>package_json_path).cell()),
+        <span class="prelude-val">Err</span>(err) =&gt; {
+            <span class="kw">let </span>issue: PackageJsonIssueVc = PackageJsonIssue {
+                path: <span class="kw-2">*</span>package_json_path,
+                error_message: err.to_string(),
+            }
+            .into();
+            issue.as_issue().emit();
+            <span class="prelude-val">Ok</span>(ImportsFieldResult::None.cell())
+        }
     }
 }
 
@@ -2111,12 +2233,7 @@
                             .push(resolved(<span class="kw-2">*</span>path, context, request, options_value, options).<span class="kw">await</span><span class="question-mark">?</span>);
                     }
                     PatternMatch::Directory(<span class="kw">_</span>, path) =&gt; {
-                        <span class="kw">let </span>package_json_path = path.join(<span class="string">&quot;package.json&quot;</span>);
-                        <span class="kw">let </span>package_json = package_json_path.read_json();
-                        results.push(
-                            resolve_into_folder(<span class="kw-2">*</span>path, package_json, package_json_path, options)
-                                .<span class="kw">await</span><span class="question-mark">?</span>,
-                        );
+                        results.push(resolve_into_folder(<span class="kw-2">*</span>path, options).<span class="kw">await</span><span class="question-mark">?</span>);
                     }
                 }
             }
@@ -2191,20 +2308,29 @@
             ResolveResult::unresolveable().into()
         }
         Request::Empty =&gt; ResolveResult::unresolveable().into(),
-        Request::PackageInternal { path: <span class="kw">_ </span>} =&gt; {
-            <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
-                severity: IssueSeverity::Error.cell(),
-                request_type: <span class="string">&quot;package internal import: not implemented yet&quot;</span>.to_string(),
-                request,
+        Request::PackageInternal { path } =&gt; {
+            <span class="kw">let </span>options_value = options.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>(conditions, unspecified_conditions) = options_value
+                .in_package
+                .iter()
+                .find_map(|item| <span class="kw">match </span>item {
+                    ResolveInPackage::ImportsField {
+                        conditions,
+                        unspecified_conditions,
+                    } =&gt; <span class="prelude-val">Some</span>((Cow::Borrowed(conditions), <span class="kw-2">*</span>unspecified_conditions)),
+                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+                })
+                .unwrap_or_else(|| (Default::default(), ConditionValue::Unset));
+            resolve_package_internal_with_imports_field(
                 context,
-                resolve_options: options,
-                error_message: <span class="prelude-val">Some</span>(<span class="string">&quot;package internal imports are not implemented yet&quot;</span>.to_string()),
-                source: OptionIssueSourceVc::none(),
-            }
-            .into();
-            issue.as_issue().emit();
-            ResolveResult::unresolveable().into()
-        }
+                request,
+                options,
+                path,
+                <span class="kw-2">&amp;</span>conditions,
+                <span class="kw-2">&amp;</span>unspecified_conditions,
+            )
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>}
         Request::Uri {
             protocol,
             remainder,
@@ -2246,10 +2372,9 @@
 
 <span class="kw">async fn </span>resolve_into_folder(
     package_path: FileSystemPathVc,
-    package_json: FileJsonContentVc,
-    package_json_path: FileSystemPathVc,
     options: ResolveOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+    <span class="kw">let </span>package_json_path = package_path.join(<span class="string">&quot;package.json&quot;</span>);
     <span class="kw">let </span>options_value = options.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">for </span>resolve_into_package <span class="kw">in </span>options_value.into_package.iter() {
         <span class="kw">match </span>resolve_into_package {
@@ -2265,7 +2390,7 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve_internal(package_path, request, options));
             }
             ResolveIntoPackage::MainField(name) =&gt; {
-                <span class="kw">if let </span>FileJsonContent::Content(package_json) = <span class="kw-2">&amp;*</span>package_json.<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(package_json) = <span class="kw-2">&amp;*</span>read_package_json(package_json_path).<span class="kw">await</span><span class="question-mark">? </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(field_value) = package_json[name].as_str() {
                         <span class="kw">let </span>request =
                             RequestVc::parse(Value::new(normalize_request(field_value).into()));
@@ -2281,18 +2406,17 @@
                             <span class="kw">return </span><span class="prelude-val">Ok</span>(result.into());
                         }
                     }
-                }
+                };
             }
             ResolveIntoPackage::ExportsField {
-                field,
                 conditions,
                 unspecified_conditions,
             } =&gt; {
                 <span class="kw">if let </span>ExportsFieldResult::Some(exports_field) =
-                    <span class="kw-2">&amp;*</span>exports_field(package_json_path, package_json, field).<span class="kw">await</span><span class="question-mark">?
+                    <span class="kw-2">&amp;*</span>exports_field(package_json_path).<span class="kw">await</span><span class="question-mark">?
                 </span>{
                     <span class="comment">// other options do not apply anymore when an exports field exist
-                    </span><span class="kw">return </span>handle_exports_field(
+                    </span><span class="kw">return </span>handle_exports_imports_field(
                         package_path,
                         package_json_path,
                         options,
@@ -2320,12 +2444,13 @@
     </span><span class="kw">for </span>in_package <span class="kw">in </span>options_value.in_package.iter() {
         <span class="kw">match </span>in_package {
             ResolveInPackage::AliasField(field) =&gt; {
-                <span class="kw">if let </span>FindContextFileResult::Found(package_json, refs) =
+                <span class="kw">if let </span>FindContextFileResult::Found(package_json_path, refs) =
                     <span class="kw-2">&amp;*</span>find_context_file(context, package_json()).<span class="kw">await</span><span class="question-mark">?
                 </span>{
-                    <span class="kw">if let </span>FileJsonContent::Content(package) = <span class="kw-2">&amp;*</span>package_json.read_json().<span class="kw">await</span><span class="question-mark">? </span>{
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(field_value) = package[field].as_object() {
-                            <span class="kw">let </span>package_path = package_json.parent();
+                    <span class="kw">let </span>read = read_package_json(<span class="kw-2">*</span>package_json_path).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(package_json) = <span class="kw-2">&amp;*</span>read {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(field_value) = package_json[field].as_object() {
+                            <span class="kw">let </span>package_path = package_json_path.parent();
                             <span class="kw">let </span>full_pattern =
                                 Pattern::concat([module.to_string().into(), path.clone()]);
                             <span class="kw">if let </span><span class="prelude-val">Some</span>(request) = full_pattern.into_string() {
@@ -2335,7 +2460,7 @@
                                         refs.clone(),
                                         package_path,
                                         options,
-                                        <span class="kw-2">*</span>package_json,
+                                        <span class="kw-2">*</span>package_json_path,
                                         <span class="kw-2">&amp;</span>request,
                                         field,
                                     )
@@ -2346,6 +2471,11 @@
                     }
                 }
             }
+            ResolveInPackage::ImportsField { .. } =&gt; {
+                <span class="comment">// resolve_module_request is called when importing a node
+                // module, not a PackageInternal one, so the imports field
+                // doesn&#39;t apply.
+            </span>}
         }
     }
 
@@ -2370,13 +2500,8 @@
     // &quot;[baseUrl]/foo/bar&quot; or &quot;[baseUrl]/node_modules/foo/bar&quot;, and we&#39;ll need to
     // try both.
     </span><span class="kw">for </span>package_path <span class="kw">in </span><span class="kw-2">&amp;</span>result.packages {
-        <span class="kw">let </span>package_json_path = package_path.join(<span class="string">&quot;package.json&quot;</span>);
-        <span class="kw">let </span>package_json = package_json_path.read_json();
         <span class="kw">if </span>is_match {
-            results.push(
-                resolve_into_folder(<span class="kw-2">*</span>package_path, package_json, package_json_path, options)
-                    .<span class="kw">await</span><span class="question-mark">?</span>,
-            );
+            results.push(resolve_into_folder(<span class="kw-2">*</span>package_path, options).<span class="kw">await</span><span class="question-mark">?</span>);
         }
         <span class="kw">if </span>could_match_others {
             <span class="kw">for </span>resolve_into_package <span class="kw">in </span>options_value.into_package.iter() {
@@ -2384,27 +2509,19 @@
                     ResolveIntoPackage::Default(<span class="kw">_</span>) | ResolveIntoPackage::MainField(<span class="kw">_</span>) =&gt; {
                         <span class="comment">// doesn&#39;t affect packages with subpath
                         </span><span class="kw">if </span>path.is_match(<span class="string">&quot;/&quot;</span>) {
-                            results.push(
-                                resolve_into_folder(
-                                    <span class="kw-2">*</span>package_path,
-                                    package_json,
-                                    package_json_path,
-                                    options,
-                                )
-                                .<span class="kw">await</span><span class="question-mark">?</span>,
-                            );
+                            results.push(resolve_into_folder(<span class="kw-2">*</span>package_path, options).<span class="kw">await</span><span class="question-mark">?</span>);
                         }
                     }
                     ResolveIntoPackage::ExportsField {
-                        field,
                         conditions,
                         unspecified_conditions,
                     } =&gt; {
+                        <span class="kw">let </span>package_json_path = package_path.join(<span class="string">&quot;package.json&quot;</span>);
                         <span class="kw">if let </span>ExportsFieldResult::Some(exports_field) =
-                            <span class="kw-2">&amp;*</span>exports_field(package_json_path, package_json, field).<span class="kw">await</span><span class="question-mark">?
+                            <span class="kw-2">&amp;*</span>exports_field(package_json_path).<span class="kw">await</span><span class="question-mark">?
                         </span>{
                             <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = path.clone().into_string() {
-                                results.push(handle_exports_field(
+                                results.push(handle_exports_imports_field(
                                     <span class="kw-2">*</span>package_path,
                                     package_json_path,
                                     options,
@@ -2540,15 +2657,16 @@
     options: ResolveOptionsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">let </span>RealPathResult { path, symlinks } = <span class="kw-2">&amp;*</span>fs_path.realpath_with_links().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">for </span>resolve_in <span class="kw">in </span>in_package.iter() {
-        <span class="kw">match </span>resolve_in {
+    <span class="kw">for </span>in_package <span class="kw">in </span>in_package.iter() {
+        <span class="kw">match </span>in_package {
             ResolveInPackage::AliasField(field) =&gt; {
-                <span class="kw">if let </span>FindContextFileResult::Found(package_json, refs) =
+                <span class="kw">if let </span>FindContextFileResult::Found(package_json_path, refs) =
                     <span class="kw-2">&amp;*</span>find_context_file(fs_path.parent(), package_json()).<span class="kw">await</span><span class="question-mark">?
                 </span>{
-                    <span class="kw">if let </span>FileJsonContent::Content(package) = <span class="kw-2">&amp;*</span>package_json.read_json().<span class="kw">await</span><span class="question-mark">? </span>{
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(field_value) = package[field].as_object() {
-                            <span class="kw">let </span>package_path = package_json.parent();
+                    <span class="kw">let </span>read = read_package_json(<span class="kw-2">*</span>package_json_path).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(package_json) = <span class="kw-2">&amp;*</span>read {
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(field_value) = package_json[field].as_object() {
+                            <span class="kw">let </span>package_path = package_json_path.parent();
                             <span class="kw">if let </span><span class="prelude-val">Some</span>(rel_path) =
                                 package_path.<span class="kw">await</span><span class="question-mark">?</span>.get_relative_path_to(<span class="kw-2">&amp;*</span>fs_path.<span class="kw">await</span><span class="question-mark">?</span>)
                             {
@@ -2558,7 +2676,7 @@
                                         refs.clone(),
                                         package_path,
                                         options,
-                                        <span class="kw-2">*</span>package_json,
+                                        <span class="kw-2">*</span>package_json_path,
                                         <span class="kw-2">&amp;</span>rel_path,
                                         field,
                                     )
@@ -2569,6 +2687,10 @@
                     }
                 }
             }
+            ResolveInPackage::ImportsField { .. } =&gt; {
+                <span class="comment">// resolved is called when importing a relative path, not a
+                // PackageInternal one, so the imports field doesn&#39;t apply.
+            </span>}
         }
     }
 
@@ -2599,21 +2721,21 @@
     .into())
 }
 
-<span class="kw">fn </span>handle_exports_field(
+<span class="kw">fn </span>handle_exports_imports_field(
     package_path: FileSystemPathVc,
-    package_json: FileSystemPathVc,
+    package_json_path: FileSystemPathVc,
     options: ResolveOptionsVc,
-    exports_field: <span class="kw-2">&amp;</span>ExportsField,
+    exports_imports_field: <span class="kw-2">&amp;</span>AliasMap&lt;SubpathValue&gt;,
     path: <span class="kw-2">&amp;</span>str,
     conditions: <span class="kw-2">&amp;</span>BTreeMap&lt;String, ConditionValue&gt;,
     unspecified_conditions: <span class="kw-2">&amp;</span>ConditionValue,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>conditions_state = HashMap::new();
-    <span class="kw">let </span>values = exports_field
+    <span class="kw">let </span>values = exports_imports_field
         .lookup(path)
         .map(AliasMatch::try_into_self)
-        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;Cow&lt;<span class="lifetime">&#39;_</span>, ExportsValue&gt;&gt;&gt;&gt;()<span class="question-mark">?</span>;
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
     <span class="kw">for </span>value <span class="kw">in </span>values.iter() {
         <span class="kw">if </span>value.add_results(
             conditions,
@@ -2638,8 +2760,56 @@
     <span class="comment">// other options do not apply anymore when an exports field exist
     </span><span class="prelude-val">Ok</span>(merge_results_with_references(
         resolved_results,
-        <span class="macro">vec!</span>[AffectingResolvingAssetReferenceVc::new(package_json).into()],
+        <span class="macro">vec!</span>[AffectingResolvingAssetReferenceVc::new(package_json_path).into()],
     ))
+}
+
+<span class="doccomment">/// Resolves a `#dep` import using the containing package.json&#39;s `imports`
+/// field. The dep may be a constant string or a pattern, and the values can be
+/// static strings or conditions like `import` or `require` to handle ESM/CJS
+/// with differently compiled files.
+</span><span class="kw">async fn </span>resolve_package_internal_with_imports_field(
+    context: FileSystemPathVc,
+    request: RequestVc,
+    resolve_options: ResolveOptionsVc,
+    pattern: <span class="kw-2">&amp;</span>Pattern,
+    conditions: <span class="kw-2">&amp;</span>BTreeMap&lt;String, ConditionValue&gt;,
+    unspecified_conditions: <span class="kw-2">&amp;</span>ConditionValue,
+) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
+    <span class="kw">let </span>Pattern::Constant(specifier) = pattern <span class="kw">else </span>{
+        <span class="macro">bail!</span>(<span class="string">&quot;PackageInternal requests can only be Constant strings&quot;</span>);
+    };
+    <span class="comment">// https://github.com/nodejs/node/blob/1b177932/lib/internal/modules/esm/resolve.js#L615-L619
+    </span><span class="kw">if </span>specifier == <span class="string">&quot;#&quot; </span>|| specifier.starts_with(<span class="string">&quot;#/&quot;</span>) || specifier.ends_with(<span class="string">&#39;/&#39;</span>) {
+        <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
+            severity: IssueSeverity::Error.cell(),
+            context,
+            request_type: <span class="macro">format!</span>(<span class="string">&quot;package imports request: `{specifier}`&quot;</span>),
+            request,
+            resolve_options,
+            error_message: <span class="prelude-val">None</span>,
+            source: OptionIssueSourceVc::none(),
+        }
+        .into();
+        issue.as_issue().emit();
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::unresolveable().into());
+    }
+
+    <span class="kw">let </span>imports_result = imports_field(context).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(imports, package_json_path) = <span class="kw">match </span><span class="kw-2">&amp;*</span>imports_result {
+        ImportsFieldResult::Some(i, p) =&gt; (i, p),
+        ImportsFieldResult::None =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveResult::unresolveable().into()),
+    };
+
+    handle_exports_imports_field(
+        context,
+        <span class="kw-2">*</span>package_json_path,
+        resolve_options,
+        imports,
+        <span class="kw-2">&amp;</span>specifier,
+        conditions,
+        unspecified_conditions,
+    )
 }
 
 <span class="attr">#[turbo_tasks::value]

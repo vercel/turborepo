@@ -471,6 +471,12 @@
 <a href="#471" id="471">471</a>
 <a href="#472" id="472">472</a>
 <a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, fmt::Write};
 
 <span class="kw">use </span>anyhow::Result;
@@ -493,8 +499,8 @@
         handle_resolve_error,
         node::node_cjs_resolve_options,
         options::{
-            ConditionValue, ImportMap, ImportMapVc, ImportMapping, ResolveIntoPackage,
-            ResolveModules, ResolveOptionsVc,
+            ConditionValue, ImportMap, ImportMapVc, ImportMapping, ResolveInPackage,
+            ResolveIntoPackage, ResolveModules, ResolveOptionsVc,
         },
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::{Request, RequestVc},
@@ -890,14 +896,12 @@
         .drain(..)
         .filter_map(|into| {
             <span class="kw">if let </span>ResolveIntoPackage::ExportsField {
-                field,
                 <span class="kw-2">mut </span>conditions,
                 unspecified_conditions,
             } = into
             {
                 conditions.insert(<span class="string">&quot;types&quot;</span>.to_string(), ConditionValue::Set);
                 <span class="prelude-val">Some</span>(ResolveIntoPackage::ExportsField {
-                    field,
                     conditions,
                     unspecified_conditions,
                 })
@@ -912,6 +916,14 @@
     resolve_options
         .into_package
         .push(ResolveIntoPackage::Default(<span class="string">&quot;index&quot;</span>.to_string()));
+    <span class="kw">for </span>item <span class="kw">in </span>resolve_options.in_package.iter_mut() {
+        <span class="kw">match </span>item {
+            ResolveInPackage::ImportsField { conditions, .. } =&gt; {
+                conditions.insert(<span class="string">&quot;types&quot;</span>.to_string(), ConditionValue::Set);
+            }
+            <span class="kw">_ </span>=&gt; {}
+        }
+    }
     <span class="prelude-val">Ok</span>(resolve_options.into())
 }
 
