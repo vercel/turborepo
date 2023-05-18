@@ -14,21 +14,21 @@ Check
   
   Tasks to Run
   build
-    Task                             = build                                                                                                   
-    Hash                             = fd2d83473c0700ad                                                                                        
-    Cached (Local)                   = false                                                                                                   
-    Cached (Remote)                  = false                                                                                                   
-    Command                          = echo 'building' > foo                                                                                   
-    Outputs                          =                                                                                                         
-    Log File                         = .turbo/turbo-build.log                                                                                  
-    Dependencies                     =                                                                                                         
-    Dependendents                    =                                                                                                         
-    Inputs Files Considered          = 4                                                                                                       
-    Configured Environment Variables =                                                                                                         
-    Inferred Environment Variables   =                                                                                                         
-    Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                    
+    Task                             = build                                                                                                                         
+    Hash                             = 5f778d0e6d30b59f                                                                                                              
+    Cached (Local)                   = false                                                                                                                         
+    Cached (Remote)                  = false                                                                                                                         
+    Command                          = echo 'building' > foo                                                                                                         
+    Outputs                          =                                                                                                                               
+    Log File                         = .turbo/turbo-build.log                                                                                                        
+    Dependencies                     =                                                                                                                               
+    Dependendents                    =                                                                                                                               
+    Inputs Files Considered          = 4                                                                                                                             
+    Configured Environment Variables =                                                                                                                               
+    Inferred Environment Variables   =                                                                                                                               
+    Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                          
     ResolvedTaskDefinition           = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"env":[],"persistent":false} 
-    Framework                        = <NO FRAMEWORK DETECTED>                                                                                 
+    Framework                        = <NO FRAMEWORK DETECTED>                                                                                                       
 
   $ ${TURBO} run build --graph
   
@@ -44,7 +44,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing fd2d83473c0700ad
+  build: cache bypass, force executing 5f778d0e6d30b59f
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -58,7 +58,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing fd2d83473c0700ad
+  build: cache bypass, force executing 5f778d0e6d30b59f
   build: 
   build: > build
   build: > echo 'building' > foo

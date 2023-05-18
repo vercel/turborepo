@@ -38,7 +38,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "bcfea334449257fe",
+    "hash": "c0aa511cf2721438",
     "inputs": {
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
@@ -94,7 +94,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "e64dab76e045fbb4",
+    "hash": "ac6ceb0714bda4f3",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },

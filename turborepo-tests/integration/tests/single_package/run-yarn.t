@@ -9,8 +9,8 @@ Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing 5ec8b6fcacea7176
-  build: yarn run v1.22.17
+  build: cache miss, executing 0ce93ffb17593b5e
+  build: yarn run v1.22.19
   build: warning package.json: No license field
   build: $ echo 'building' > foo
   build: Done in \s*[\.0-9]+m?s\. (re)
@@ -23,8 +23,8 @@ Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying output 5ec8b6fcacea7176
-  build: yarn run v1.22.17
+  build: cache hit, replaying output 0ce93ffb17593b5e
+  build: yarn run v1.22.19
   build: warning package.json: No license field
   build: $ echo 'building' > foo
   build: Done in \s*[\.0-9]+m?s\. (re)

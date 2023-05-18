@@ -18,7 +18,7 @@
   \xe2\x80\xa2 Packages in scope: app-a, pkg-a (esc)
   \xe2\x80\xa2 Running dev in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:dev: cache miss, executing 056d3e4d1ff9579e
+  app-a:dev: cache miss, executing fa8dfc5dbe08663d
   app-a:dev: 
   app-a:dev: > dev
   app-a:dev: > echo 'dev app-a'
