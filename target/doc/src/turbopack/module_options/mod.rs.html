@@ -492,6 +492,11 @@
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -960,10 +965,15 @@
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),
                     <span class="macro">vec!</span>[
-                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                            transforms: app_transforms,
-                            options: ecmascript_options.clone(),
-                        }),
+                        <span class="comment">// [TODO]: should accept rules as an option
+                        </span><span class="kw">if </span>ext == <span class="string">&quot;.scss&quot; </span>|| ext == <span class="string">&quot;.sass&quot; </span>{
+                            ModuleRuleEffect::ModuleType(ModuleType::Css(css_transforms))
+                        } <span class="kw">else </span>{
+                            ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                                transforms: app_transforms,
+                                options: ecmascript_options.clone(),
+                            })
+                        },
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(<span class="macro">vec!</span>[
                             WebpackLoadersVc::new(
                                 node_evaluate_asset_context(
