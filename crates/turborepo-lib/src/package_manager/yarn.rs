@@ -1,21 +1,13 @@
-use std::{fs::File, process::Command};
+use std::process::Command;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use node_semver::{Range, Version};
-use serde::Deserialize;
 use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
 use which::which;
 
 use crate::package_manager::PackageManager;
 
-#[derive(Debug, Deserialize)]
-struct YarnRC {
-    #[serde(rename = "nodeLinker")]
-    node_linker: Option<String>,
-}
-
 pub const LOCKFILE: &str = "yarn.lock";
-pub const YARN_RC: &str = ".yarnrc.yml";
 
 pub struct YarnDetector<'a> {
     repo_root: &'a AbsoluteSystemPathBuf,
@@ -46,34 +38,15 @@ impl<'a> YarnDetector<'a> {
         let yarn_binary = which("yarn")?;
         let output = Command::new(yarn_binary)
             .arg("--version")
-            .current_dir(&self.repo_root)
+            .current_dir(self.repo_root)
             .output()?;
         let yarn_version_output = String::from_utf8(output.stdout)?;
         Ok(yarn_version_output.trim().parse()?)
     }
 
-    fn is_nm_linker(repo_root: &AbsoluteSystemPathBuf) -> Result<bool> {
-        let yarnrc_path = repo_root.join_relative(RelativeSystemPathBuf::new(YARN_RC)?);
-        let yarnrc = File::open(yarnrc_path)?;
-        let yarnrc: YarnRC = serde_yaml::from_reader(&yarnrc)?;
-        Ok(yarnrc.node_linker.as_deref() == Some("node-modules"))
-    }
-
-    pub fn detect_berry_or_yarn(
-        repo_root: &AbsoluteSystemPathBuf,
-        version: &Version,
-    ) -> Result<PackageManager> {
+    pub fn detect_berry_or_yarn(version: &Version) -> Result<PackageManager> {
         let berry_constraint: Range = ">=2.0.0-0".parse()?;
         if berry_constraint.satisfies(version) {
-            let is_nm_linker = Self::is_nm_linker(repo_root)
-                .context("could not determine if yarn is using `nodeLinker: node-modules`")?;
-
-            if !is_nm_linker {
-                return Err(anyhow!(
-                    "only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time"
-                ));
-            }
-
             Ok(PackageManager::Berry)
         } else {
             Ok(PackageManager::Yarn)
@@ -97,7 +70,7 @@ impl<'a> Iterator for YarnDetector<'a> {
         if yarn_lockfile.exists() {
             Some(
                 self.get_yarn_version()
-                    .and_then(|version| Self::detect_berry_or_yarn(self.repo_root, &version)),
+                    .and_then(|version| Self::detect_berry_or_yarn(&version)),
             )
         } else {
             None
@@ -107,7 +80,7 @@ impl<'a> Iterator for YarnDetector<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, fs::File};
+    use std::fs::File;
 
     use anyhow::Result;
     use tempfile::tempdir;
@@ -117,10 +90,7 @@ mod tests {
     use crate::{
         commands::CommandBase,
         get_version,
-        package_manager::{
-            yarn::{YarnDetector, YARN_RC},
-            PackageManager,
-        },
+        package_manager::{yarn::YarnDetector, PackageManager},
         ui::UI,
         Args,
     };
@@ -138,9 +108,6 @@ mod tests {
 
         let yarn_lock_path = repo_root.path().join(LOCKFILE);
         File::create(&yarn_lock_path)?;
-
-        let yarn_rc_path = repo_root.path().join(YARN_RC);
-        fs::write(&yarn_rc_path, "nodeLinker: node-modules")?;
 
         let absolute_repo_root = AbsoluteSystemPathBuf::new(base.repo_root)?;
         let mut detector = YarnDetector::new(&absolute_repo_root);
