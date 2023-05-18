@@ -8,7 +8,7 @@ linker = "rust-lld"
 xtask = "run --package xtask --"
 tr-build = "build -p turbo"
 tr-run = "run -p turbo"
-tr-test = "test -p turborepo-* -p turbopath -p vercel-api-mock -p turborepo-cache --features rustls-tls"
+tr-test = "test -p turborepo-* -p turbopath -p vercel-api-mock --features rustls-tls"
 tr-check = "check -p turbo -p vercel-api-mock -p turborepo-ffi"
 # Builds all test code to check for compiler errors before running
 tp-pre-test = "nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock"
