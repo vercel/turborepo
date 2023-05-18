@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use path_clean::PathClean;
 use path_slash::CowExt;
 
 use crate::{
@@ -110,7 +111,7 @@ impl AbsoluteSystemPath {
     // intended for joining literals or obviously single-token strings
     pub fn join_literal(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
-        AbsoluteSystemPathBuf(self.0.join(segment))
+        AbsoluteSystemPathBuf(self.0.join(segment).clean())
     }
 
     // intended for joining a path composed of literals
@@ -118,7 +119,11 @@ impl AbsoluteSystemPath {
         debug_assert!(!segments
             .iter()
             .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
-        AbsoluteSystemPathBuf(self.0.join(segments.join(std::path::MAIN_SEPARATOR_STR)))
+        AbsoluteSystemPathBuf(
+            self.0
+                .join(segments.join(std::path::MAIN_SEPARATOR_STR))
+                .clean(),
+        )
     }
 
     pub fn join_unix_path(
@@ -126,7 +131,7 @@ impl AbsoluteSystemPath {
         unix_path: &RelativeUnixPath,
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
         let tail = unix_path.to_system_path_buf()?;
-        Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path())))
+        Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path()).clean()))
     }
 
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {

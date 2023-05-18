@@ -160,15 +160,7 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn join_literal(&self, segment: &str) -> Self {
-        AbsoluteSystemPathBuf(self.0.join(segment))
-    }
-
-    pub fn join_unix_path_literal<S: AsRef<str>>(
-        &self,
-        unix_path: S,
-    ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let tail = Path::new(unix_path.as_ref()).into_system()?;
-        Ok(AbsoluteSystemPathBuf(self.0.join(tail)))
+        self.as_absolute_path().join_literal(segment)
     }
 
     pub fn ensure_dir(&self) -> Result<(), io::Error> {
