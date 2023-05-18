@@ -10,7 +10,6 @@ use serde::Serialize;
 
 use crate::{
     AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
-    RelativeSystemPathBuf,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
@@ -158,10 +157,6 @@ impl AbsoluteSystemPathBuf {
 
     pub fn ends_with<P: AsRef<Path>>(&self, child: P) -> bool {
         self.0.ends_with(child.as_ref())
-    }
-
-    pub fn join_relative(&self, path: RelativeSystemPathBuf) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(self.0.join(path.as_path()))
     }
 
     pub fn join_literal(&self, segment: &str) -> Self {

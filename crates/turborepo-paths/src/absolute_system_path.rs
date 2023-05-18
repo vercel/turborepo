@@ -16,7 +16,7 @@ use path_slash::CowExt;
 
 use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
-    RelativeSystemPathBuf, RelativeUnixPath,
+    RelativeUnixPath,
 };
 
 pub struct AbsoluteSystemPath(Path);
@@ -125,7 +125,7 @@ impl AbsoluteSystemPath {
         &self,
         unix_path: &RelativeUnixPath,
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let tail = unix_path.to_system_path()?;
+        let tail = unix_path.to_system_path_buf()?;
         Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path())))
     }
 
