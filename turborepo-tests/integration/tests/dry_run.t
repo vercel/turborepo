@@ -19,14 +19,14 @@ Setup
   Global Hash Inputs
     Global Files               = 1
     External Dependencies Hash = ccab0b28617f1f56
-    Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
+    Global Cache Key           = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
 
 # Part 3 are Tasks to Run, and we have to validate each task separately
   $ cat tmp-3.txt | grep "my-app#build" -A 15
   my-app#build
     Task                             = build                                                                                                                                                 
     Package                          = my-app                                                                                                                                                
-    Hash                             = c0aa511cf2721438                                                                                                                                      
+    Hash                             = 122bd9fc20f4511c                                                                                                                                      
     Cached (Local)                   = false                                                                                                                                                 
     Cached (Remote)                  = false                                                                                                                                                 
     Directory                        = apps/my-app                                                                                                                                           
@@ -44,7 +44,7 @@ Setup
   util#build
     Task                             = build                                                                                                                                  
     Package                          = util                                                                                                                                   
-    Hash                             = ac6ceb0714bda4f3                                                                                                                       
+    Hash                             = 82bc93ff27e552d6                                                                                                                       
     Cached (Local)                   = false                                                                                                                                  
     Cached (Remote)                  = false                                                                                                                                  
     Directory                        = packages/util                                                                                                                          

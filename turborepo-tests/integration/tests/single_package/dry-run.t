@@ -8,12 +8,12 @@ Check
   Global Hash Inputs
     Global Files               = 3
     External Dependencies Hash = 
-    Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
+    Global Cache Key           = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
   
   Tasks to Run
   build
     Task                             = build                                                                                                                             
-    Hash                             = 928bb7e844fdf2ce                                                                                                                  
+    Hash                             = 6a0444fb584769ac                                                                                                                  
     Cached (Local)                   = false                                                                                                                             
     Cached (Remote)                  = false                                                                                                                             
     Command                          = echo 'building' > foo                                                                                                             
