@@ -128,9 +128,9 @@ impl AbsoluteSystemPath {
 
     pub fn join_unix_path(
         &self,
-        unix_path: &RelativeUnixPath,
+        unix_path: impl AsRef<RelativeUnixPath>,
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let tail = unix_path.to_system_path_buf()?;
+        let tail = unix_path.as_ref().to_system_path_buf()?;
         Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path()).clean()))
     }
 
