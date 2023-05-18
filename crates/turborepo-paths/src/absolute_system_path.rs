@@ -107,13 +107,18 @@ impl AbsoluteSystemPath {
         &self.0
     }
 
-    pub fn join_relative(&self, path: &RelativeSystemPathBuf) -> AbsoluteSystemPathBuf {
-        let path = self.0.join(path.as_path());
-        AbsoluteSystemPathBuf(path)
+    // intended for joining literals or obviously single-token strings
+    pub fn join_literal(&self, segment: &str) -> AbsoluteSystemPathBuf {
+        debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
+        AbsoluteSystemPathBuf(self.0.join(segment))
     }
 
-    pub fn join_literal(&self, segment: &str) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(self.0.join(segment))
+    // intended for joining a path composed of literals
+    pub fn join_literals(&self, segments: &[&str]) -> AbsoluteSystemPathBuf {
+        debug_assert!(!segments
+            .iter()
+            .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
+        AbsoluteSystemPathBuf(self.0.join(segments.join(std::path::MAIN_SEPARATOR_STR)))
     }
 
     pub fn join_unix_path(
