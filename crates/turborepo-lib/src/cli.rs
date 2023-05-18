@@ -265,12 +265,27 @@ pub enum Command {
         target: LinkTarget,
     },
     /// Generate a new app / package
+    #[clap(aliases = ["g", "gen"])]
     Generate {
+        #[serde(skip)]
         #[clap(long, default_value_t = String::from("latest"), hide = true)]
         tag: String,
+        /// The name of the generator to run
+        generator_name: Option<String>,
+        /// Generator configuration file
+        #[clap(short = 'c', long)]
+        config: Option<String>,
+        /// The root of your repository (default: directory with root
+        /// turbo.json)
+        #[clap(short = 'r', long)]
+        root: Option<String>,
+        /// Answers passed directly to generator
+        #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+        args: Vec<String>,
+
         #[clap(subcommand)]
-        #[serde(flatten)]
-        command: GenerateCommand,
+        #[serde(skip)]
+        command: Option<GenerateCommand>,
     },
     /// Login to your Vercel account
     Login {
@@ -309,22 +324,7 @@ pub enum Command {
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
-pub struct GenerateCustomArgs {
-    /// The name of the generator to run
-    pub generator_name: Option<String>,
-    /// Generator configuration file
-    #[clap(short = 'c', long)]
-    pub config: Option<String>,
-    /// The root of your repository (default: directory with root turbo.json)
-    #[clap(short = 'r', long)]
-    pub root: Option<String>,
-    /// Answers passed directly to generator
-    #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
-    pub args: Vec<String>,
-}
-
-#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
-pub struct GenerateAddArgs {
+pub struct GenerateWorkspaceArgs {
     /// Name for the new workspace
     #[clap(short = 'n', long)]
     pub name: Option<String>,
@@ -338,8 +338,8 @@ pub struct GenerateAddArgs {
     #[clap(short = 'd', long)]
     pub destination: Option<String>,
     /// The type of workspace to create
-    #[clap(short = 'w', long)]
-    pub what: Option<String>,
+    #[clap(short = 't', long)]
+    pub r#type: Option<String>,
     /// The root of your repository (default: directory with root turbo.json)
     #[clap(short = 'r', long)]
     pub root: Option<String>,
@@ -358,14 +358,29 @@ pub struct GenerateAddArgs {
     pub show_all_dependencies: bool,
 }
 
+#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+pub struct GeneratorCustomArgs {
+    /// The name of the generator to run
+    generator_name: Option<String>,
+    /// Generator configuration file
+    #[clap(short = 'c', long)]
+    config: Option<String>,
+    /// The root of your repository (default: directory with root
+    /// turbo.json)
+    #[clap(short = 'r', long)]
+    root: Option<String>,
+    /// Answers passed directly to generator
+    #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+    args: Vec<String>,
+}
+
 #[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
 pub enum GenerateCommand {
     /// Add a new package or app to your project
-    #[clap(name = "add", alias = "a")]
-    Add(GenerateAddArgs),
-    /// Run custom generators
+    #[clap(name = "workspace", alias = "w")]
+    Workspace(GenerateWorkspaceArgs),
     #[clap(name = "run", alias = "r")]
-    Custom(GenerateCustomArgs),
+    Run(GeneratorCustomArgs),
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -635,8 +650,23 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Generate { command, tag } => {
-            generate::run(command, tag)?;
+        Command::Generate {
+            tag,
+            generator_name,
+            config,
+            root,
+            args,
+            command,
+        } => {
+            // build GeneratorCustomArgs struct
+            let args = GeneratorCustomArgs {
+                generator_name: generator_name.clone(),
+                config: config.clone(),
+                root: root.clone(),
+                args: args.clone(),
+            };
+
+            generate::run(tag, command, &args)?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Daemon { command, idle_time } => {

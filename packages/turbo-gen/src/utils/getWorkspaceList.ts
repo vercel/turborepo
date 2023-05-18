@@ -8,11 +8,11 @@ import { WorkspaceType } from "../generators/types";
 
 export function getWorkspaceList({
   project,
-  what,
+  type,
   showAllDependencies,
 }: {
   project: Project;
-  what: WorkspaceType;
+  type: WorkspaceType;
   showAllDependencies?: boolean;
 }): Array<Workspace | inquirer.Separator> {
   const structure = getWorkspaceStructure({ project });
@@ -20,9 +20,9 @@ export function getWorkspaceList({
 
   let workspacesForDisplay: Array<Workspace> = project.workspaceData.workspaces;
   if (!showAllDependencies) {
-    if (what === "app" && structure.hasRootApps) {
+    if (type === "app" && structure.hasRootApps) {
       workspacesForDisplay = structure.workspacesByGroup.apps;
-    } else if (what === "package" && structure.nonAppWorkspaces.length > 0) {
+    } else if (type === "package" && structure.nonAppWorkspaces.length > 0) {
       workspacesForDisplay = structure.nonAppWorkspaces;
     }
   }

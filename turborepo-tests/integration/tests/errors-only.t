@@ -38,7 +38,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:builderror: cache miss, executing e66674cd52f90ec9
+  app-a:builderror: cache miss, executing ff2e6f6b0277d9a2
   app-a:builderror: 
   app-a:builderror: > builderror
   app-a:builderror: > echo "error builderror app-a!" && exit 1
@@ -54,6 +54,7 @@ Setup
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
+  Failed:    app-a#builderror
   
    ERROR  run failed: command  exited (1)
   [1]
@@ -67,7 +68,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:builderror2: cache miss, executing de9a4f19fc30bada
+  app-a:builderror2: cache miss, executing 1c171a6910099738
   app-a:builderror2: 
   app-a:builderror2: > builderror2
   app-a:builderror2: > echo "error builderror2 app-a!" && exit 1
@@ -83,6 +84,7 @@ Setup
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
+  Failed:    app-a#builderror2
   
    ERROR  run failed: command  exited (1)
   [1]

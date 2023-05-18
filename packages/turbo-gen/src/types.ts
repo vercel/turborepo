@@ -1,11 +1,13 @@
-export interface DependencyGroups {
+import type * as PlopTypes from "node-plop";
+
+interface DependencyGroups {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
 }
 
-export interface PackageJson extends DependencyGroups {
+interface PackageJson extends DependencyGroups {
   name: string;
   version: string;
   private?: boolean;
@@ -16,3 +18,5 @@ export interface PackageJson extends DependencyGroups {
   exports?: object;
   scripts?: Record<string, string>;
 }
+
+export type { PlopTypes, DependencyGroups, PackageJson };

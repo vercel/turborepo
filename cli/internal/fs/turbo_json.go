@@ -286,14 +286,9 @@ type TaskOutputs struct {
 }
 
 // Sort contents of task outputs
-func (to TaskOutputs) Sort() TaskOutputs {
-	var inclusions []string
-	var exclusions []string
-	copy(inclusions, to.Inclusions)
-	copy(exclusions, to.Exclusions)
-	sort.Strings(inclusions)
-	sort.Strings(exclusions)
-	return TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
+func (to *TaskOutputs) Sort() {
+	sort.Strings(to.Inclusions)
+	sort.Strings(to.Exclusions)
 }
 
 // readTurboConfig reads turbo.json from a provided path

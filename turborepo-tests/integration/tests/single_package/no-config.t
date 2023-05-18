@@ -11,12 +11,11 @@ Check
     Global Files               = 2
     External Dependencies Hash = 
     Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
-    Root pipeline              = {"//#build":{"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false}}
   
   Tasks to Run
   build
     Task                             = build                                                                                                   
-    Hash                             = 5b5ae44052e3d624                                                                                        
+    Hash                             = fd2d83473c0700ad                                                                                        
     Cached (Local)                   = false                                                                                                   
     Cached (Remote)                  = false                                                                                                   
     Command                          = echo 'building' > foo                                                                                   
@@ -45,7 +44,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 5b5ae44052e3d624
+  build: cache bypass, force executing fd2d83473c0700ad
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -59,7 +58,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 5b5ae44052e3d624
+  build: cache bypass, force executing fd2d83473c0700ad
   build: 
   build: > build
   build: > echo 'building' > foo
