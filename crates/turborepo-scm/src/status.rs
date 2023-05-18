@@ -107,7 +107,7 @@ fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
 mod tests {
     use std::collections::HashMap;
 
-    use turbopath::RelativeUnixPathBuf;
+    use turbopath::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::read_status;
     use crate::package_deps::GitHashes;

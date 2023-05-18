@@ -1,5 +1,6 @@
 use std::{collections::HashMap, process::Command};
 
+use bstr::io::BufReadExt;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{hash_object::hash_objects, ls_tree::git_ls_tree, status::append_git_status, Error};
@@ -36,8 +37,19 @@ pub(crate) fn find_git_root(
             stderr
         )));
     }
-    let root = String::from_utf8(rev_parse.stdout)?;
-    Ok(turbo_root.join_literal(root.trim_end()).clean())
+    let cursor = std::io::Cursor::new(rev_parse.stdout);
+    let mut lines = cursor.byte_lines();
+    if let Some(line) = lines.next() {
+        let line = line?;
+        let tail = RelativeUnixPathBuf::new(line)?;
+        turbo_root.join_unix_path(tail).map_err(|e| e.into())
+    } else {
+        let stderr = String::from_utf8_lossy(&rev_parse.stderr);
+        Err(Error::git_error(format!(
+            "git rev-parse --show-cdup error: no values on stdout. stderr: {}",
+            stderr
+        )))
+    }
 }
 
 #[cfg(test)]
@@ -125,7 +137,7 @@ mod tests {
         deleted_file_path.create_with_contents("delete-me")?;
 
         // create file 3
-        let nested_file_path = my_pkg_dir.join_literal("dir/nested-file");
+        let nested_file_path = my_pkg_dir.join_literals(&["dir", "nested-file"]);
         nested_file_path.ensure_dir()?;
         nested_file_path.create_with_contents("nested")?;
 

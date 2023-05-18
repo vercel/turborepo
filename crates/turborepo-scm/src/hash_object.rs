@@ -111,7 +111,7 @@ fn nom_parse_hash_object(i: &[u8]) -> IResult<&[u8], &[u8]> {
 
 #[cfg(test)]
 mod test {
-    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::hash_objects;
     use crate::package_deps::{find_git_root, GitHashes};
@@ -123,9 +123,8 @@ mod test {
         let cwd = std::env::current_dir().unwrap();
         let cwd = AbsoluteSystemPathBuf::new(cwd).unwrap();
         let git_root = find_git_root(&cwd).unwrap();
-        let fixture_path = git_root
-            .join_unix_path_literal("crates/turborepo-scm/fixtures/01-git-hash-object")
-            .unwrap();
+        let fixture_path =
+            git_root.join_literals(&["crates", "turborepo-scm", "fixtures", "01-git-hash-object"]);
 
         let fixture_child_path = fixture_path.join_literal("child");
         let git_root = find_git_root(&fixture_path).unwrap();

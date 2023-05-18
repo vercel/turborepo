@@ -6,10 +6,12 @@ use std::{
     path::{Components, Path, PathBuf},
 };
 
-use path_clean::PathClean;
 use serde::Serialize;
 
-use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError};
+use crate::{
+    AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError,
+    RelativeUnixPath,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub struct AbsoluteSystemPathBuf(pub(crate) PathBuf);
@@ -162,6 +164,17 @@ impl AbsoluteSystemPathBuf {
         self.as_absolute_path().join_component(segment)
     }
 
+    pub fn join_literals(&self, segments: &[&str]) -> Self {
+        self.as_absolute_path().join_literals(segments)
+    }
+
+    pub fn join_unix_path(
+        &self,
+        unix_path: impl AsRef<RelativeUnixPath>,
+    ) -> Result<AbsoluteSystemPathBuf, PathError> {
+        self.as_absolute_path().join_unix_path(unix_path)
+    }
+
     pub fn ensure_dir(&self) -> Result<(), io::Error> {
         if let Some(parent) = self.0.parent() {
             fs::create_dir_all(parent)
@@ -227,10 +240,6 @@ impl AbsoluteSystemPathBuf {
         Ok(Self(realpath))
     }
 
-    pub fn clean(&self) -> Self {
-        Self(self.0.clean())
-    }
-
     pub fn symlink_to_file(&self, target: impl AsRef<Path>) -> Result<(), PathError> {
         self.as_absolute_path().symlink_to_file(target)
     }
@@ -262,7 +271,7 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 mod tests {
     use std::assert_matches::assert_matches;
 
-    use crate::{AbsoluteSystemPathBuf, PathError};
+    use crate::{AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
     #[cfg(not(windows))]
     #[test]
@@ -278,10 +287,14 @@ mod tests {
             Err(PathError::NotAbsolute(_))
         );
 
+        let tail = RelativeUnixPathBuf::new("../other").unwrap();
+
         assert_eq!(
-            AbsoluteSystemPathBuf::new("/some/dir/../other")
+            AbsoluteSystemPathBuf::new("/some/dir")
                 .unwrap()
-                .clean(),
+                .as_absolute_path()
+                .join_unix_path(&tail)
+                .unwrap(),
             AbsoluteSystemPathBuf::new("/some/other").unwrap(),
         );
     }
@@ -303,10 +316,14 @@ mod tests {
             Err(PathError::NotAbsolute(_))
         );
 
+        let tail = RelativeUnixPathBuf::new("../other").unwrap();
+
         assert_eq!(
-            AbsoluteSystemPathBuf::new("C:\\some\\dir\\..\\other")
+            AbsoluteSystemPathBuf::new("C:\\some\\dir")
                 .unwrap()
-                .clean(),
+                .as_absolute_path()
+                .join_unix_path(&tail)
+                .unwrap(),
             AbsoluteSystemPathBuf::new("C:\\some\\other").unwrap(),
         );
     }
