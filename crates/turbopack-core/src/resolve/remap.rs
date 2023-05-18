@@ -157,7 +157,7 @@ impl SubpathValue {
         }
     }
 
-    fn try_from(value: &Value, ty: ExportImport) -> Result<Self> {
+    fn try_new(value: &Value, ty: ExportImport) -> Result<Self> {
         match value {
             Value::Null => Ok(SubpathValue::Excluded),
             Value::String(s) => Ok(SubpathValue::Result(s.to_string())),
@@ -175,14 +175,14 @@ impl SubpathValue {
                             );
                         }
 
-                        Ok((key.to_string(), SubpathValue::try_from(value, ty)?))
+                        Ok((key.to_string(), SubpathValue::try_new(value, ty)?))
                     })
                     .collect::<Result<Vec<_>>>()?,
             )),
             Value::Array(array) => Ok(SubpathValue::Alternatives(
                 array
                     .iter()
-                    .map(|value| SubpathValue::try_from(value, ty))
+                    .map(|value| SubpathValue::try_new(value, ty))
                     .collect::<Result<Vec<_>>>()?,
             )),
         }
@@ -242,7 +242,7 @@ impl TryFrom<&Value> for ExportsField {
                         continue;
                     }
 
-                    let mut value = SubpathValue::try_from(value, ExportImport::Export)?;
+                    let mut value = SubpathValue::try_new(value, ExportImport::Export)?;
 
                     let pattern = if is_folder_shorthand(key) {
                         expand_folder_shorthand(key, &mut value)?
@@ -262,7 +262,7 @@ impl TryFrom<&Value> for ExportsField {
                                 .map(|(key, value)| {
                                     Ok((
                                         key.to_string(),
-                                        SubpathValue::try_from(value, ExportImport::Export)?,
+                                        SubpathValue::try_new(value, ExportImport::Export)?,
                                     ))
                                 })
                                 .collect::<Result<Vec<_>>>()?,
@@ -290,7 +290,7 @@ impl TryFrom<&Value> for ExportsField {
                     SubpathValue::Alternatives(
                         array
                             .iter()
-                            .map(|value| SubpathValue::try_from(value, ExportImport::Export))
+                            .map(|value| SubpathValue::try_new(value, ExportImport::Export))
                             .collect::<Result<Vec<_>>>()?,
                     ),
                 );
@@ -326,10 +326,10 @@ impl TryFrom<&Value> for ImportsField {
                 let mut map = AliasMap::new();
 
                 for (key, value) in object.iter() {
-                    if !key.starts_with("#") {
+                    if !key.starts_with('#') {
                         bail!("imports key \"{key}\" must begin with a '#'")
                     }
-                    let value = SubpathValue::try_from(value, ExportImport::Import)?;
+                    let value = SubpathValue::try_new(value, ExportImport::Import)?;
                     map.insert(AliasPattern::parse(key), value);
                 }
 
@@ -402,7 +402,7 @@ impl TryFrom<&IndexMap<String, Value>> for ResolveAliasMap {
         let mut map = AliasMap::new();
 
         for (key, value) in object.iter() {
-            let mut value = SubpathValue::try_from(value, ExportImport::Export)?;
+            let mut value = SubpathValue::try_new(value, ExportImport::Export)?;
 
             let pattern = if is_folder_shorthand(key) {
                 expand_folder_shorthand(key, &mut value)?
