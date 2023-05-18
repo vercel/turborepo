@@ -31,7 +31,7 @@ type CacheItem struct {
 	tw         *tar.Writer
 	zw         io.WriteCloser
 	fileBuffer *bufio.Writer
-	handle     io.Reader
+	handle     interface{}
 	compressed bool
 }
 
@@ -72,7 +72,13 @@ func (ci *CacheItem) Close() error {
 // GetSha returns the SHA-512 hash for the CacheItem.
 func (ci *CacheItem) GetSha() ([]byte, error) {
 	sha := sha512.New()
-	if _, err := io.Copy(sha, ci.handle); err != nil {
+
+	reader, isReader := ci.handle.(io.Reader)
+	if !isReader {
+		panic("can't read from this cache item")
+	}
+
+	if _, err := io.Copy(sha, reader); err != nil {
 		return nil, err
 	}
 

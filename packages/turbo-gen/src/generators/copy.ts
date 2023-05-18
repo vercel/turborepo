@@ -8,7 +8,7 @@ import type { TurboGeneratorArguments } from "./types";
 import { DependencyGroups, PackageJson } from "../types";
 
 export async function generate({ project, opts }: TurboGeneratorArguments) {
-  const { name, what, location, source, dependencies } =
+  const { name, type, location, source, dependencies } =
     await gatherAddRequirements({
       project,
       opts,
@@ -21,7 +21,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     console.log();
     logger.warn("Some manual modifications may be required.");
     logger.dimmed(
-      `This ${what} may require local dependencies or a different package manager than what is available in this repo`
+      `This ${type} may require local dependencies or a different package manager than what is available in this repo`
     );
     await createProject({
       appPath: location.absolute,

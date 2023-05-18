@@ -3,10 +3,8 @@ package run
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
@@ -30,58 +28,33 @@ type GlobalHashableInputs struct {
 	rootExternalDepsHash string
 	envVars              env.DetailedMap
 	globalCacheKey       string
-	pipeline             fs.PristinePipeline
 	envVarPassthroughs   []string
 	envMode              util.EnvMode
 	frameworkInference   bool
 }
 
-type newGlobalHashable struct {
+type globalHashable struct {
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
 	envVars              env.EnvironmentVariablePairs
 	globalCacheKey       string
-	pipeline             fs.PristinePipeline
 	envVarPassthroughs   []string
 	envMode              util.EnvMode
 	frameworkInference   bool
 }
 
-// newGlobalHash is a transformation of GlobalHashableInputs.
+// calculateGlobalHash is a transformation of GlobalHashableInputs.
 // It's used for the situations where we have an `EnvMode` specified
 // as that is not compatible with existing global hashes.
-func newGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashObject(newGlobalHashable{
+func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
+	return fs.HashObject(globalHashable{
 		globalFileHashMap:    full.globalFileHashMap,
 		rootExternalDepsHash: full.rootExternalDepsHash,
 		envVars:              full.envVars.All.ToHashable(),
 		globalCacheKey:       full.globalCacheKey,
-		pipeline:             full.pipeline,
 		envVarPassthroughs:   full.envVarPassthroughs,
 		envMode:              full.envMode,
 		frameworkInference:   full.frameworkInference,
-	})
-}
-
-type oldGlobalHashable struct {
-	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	rootExternalDepsHash string
-	envVars              env.EnvironmentVariablePairs
-	globalCacheKey       string
-	pipeline             fs.PristinePipeline
-}
-
-// oldGlobalHash is a transformation of GlobalHashableInputs.
-// This exists because the existing global hashes are still usable
-// in some configurations that do not include a specified `EnvMode`.
-// We can remove this whenever we want to migrate users.
-func oldGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashObject(oldGlobalHashable{
-		globalFileHashMap:    full.globalFileHashMap,
-		rootExternalDepsHash: full.rootExternalDepsHash,
-		envVars:              full.envVars.All.ToHashable(),
-		globalCacheKey:       full.globalCacheKey,
-		pipeline:             full.pipeline,
 	})
 }
 
@@ -94,28 +67,19 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 			// we'll hash the whole object, so we can detect changes to that config
 			// Further, resolve the envMode to the concrete value.
 			full.envMode = util.Strict
-			return newGlobalHash(full)
 		}
 
-		// If you tell us not to infer framework you get the new hash.
-		if !full.frameworkInference {
-			return newGlobalHash(full)
-		}
-
-		// If we're in infer mode, and there is no global pass through config,
-		// we use the old struct layout. this will be true for everyone not using the strict env
-		// feature, and we don't want to break their cache.
-		return oldGlobalHash(full)
+		return calculateGlobalHash(full)
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
 		full.envVarPassthroughs = nil
-		return newGlobalHash(full)
+		return calculateGlobalHash(full)
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
 		if full.envVarPassthroughs == nil {
 			full.envVarPassthroughs = make([]string, 0)
 		}
-		return newGlobalHash(full)
+		return calculateGlobalHash(full)
 	default:
 		panic("unimplemented environment mode")
 	}
@@ -124,7 +88,6 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 func getGlobalHashInputs(
 	rootpath turbopath.AbsoluteSystemPath,
 	rootPackageJSON *fs.PackageJSON,
-	pipeline fs.Pipeline,
 	envVarDependencies []string,
 	globalFileDependencies []string,
 	packageManager *packagemanager.PackageManager,
@@ -133,24 +96,14 @@ func getGlobalHashInputs(
 	envMode util.EnvMode,
 	frameworkInference bool,
 	logger hclog.Logger,
-	ui cli.Ui,
-	isStructuredOutput bool,
 ) (GlobalHashableInputs, error) {
 	// Calculate env var dependencies
 	envVars := []string{}
 	envVars = append(envVars, envVarDependencies...)
 	envVars = append(envVars, _defaultEnvVars...)
-	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, []string{".*THASH.*"}, "")
+	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, nil, "")
 	if err != nil {
 		return GlobalHashableInputs{}, err
-	}
-
-	// The only way we can add env vars into the hash via matching is via THASH,
-	// so we only do a simple check here for entries in `BySource.Matching`.
-	// If we enable globalEnv to accept wildcard characters, we'll need to update this
-	// check.
-	if !isStructuredOutput && len(globalHashableEnvVars.BySource.Matching) > 0 {
-		ui.Warn(fmt.Sprintf("[DEPRECATED] Using .*THASH.* to specify an environment variable for inclusion into the hash is deprecated. You specified: %s.", strings.Join(globalHashableEnvVars.BySource.Matching.Names(), ", ")))
 	}
 
 	logger.Debug("global hash env vars", "vars", globalHashableEnvVars.All.Names())
@@ -204,7 +157,6 @@ func getGlobalHashInputs(
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
 		envVars:              globalHashableEnvVars,
 		globalCacheKey:       _globalCacheKey,
-		pipeline:             pipeline.Pristine(),
 		envVarPassthroughs:   envVarPassthroughs,
 		envMode:              envMode,
 		frameworkInference:   frameworkInference,

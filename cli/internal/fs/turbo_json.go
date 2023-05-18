@@ -35,7 +35,7 @@ type rawTurboJSON struct {
 	GlobalEnv []string `json:"globalEnv,omitempty"`
 
 	// Global passthrough env
-	GlobalPassthroughEnv []string `json:"experimentalGlobalPassThroughEnv,omitempty"`
+	GlobalPassthroughEnv []string `json:"globalPassThroughEnv,omitempty"`
 
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
@@ -56,7 +56,7 @@ type rawTurboJSON struct {
 type pristineTurboJSON struct {
 	GlobalDependencies   []string           `json:"globalDependencies,omitempty"`
 	GlobalEnv            []string           `json:"globalEnv,omitempty"`
-	GlobalPassthroughEnv []string           `json:"experimentalGlobalPassThroughEnv,omitempty"`
+	GlobalPassthroughEnv []string           `json:"globalPassThroughEnv"`
 	Pipeline             PristinePipeline   `json:"pipeline"`
 	RemoteCacheOptions   RemoteCacheOptions `json:"remoteCache,omitempty"`
 	Extends              []string           `json:"extends,omitempty"`
@@ -89,7 +89,7 @@ type rawTaskWithDefaults struct {
 	DependsOn      []string            `json:"dependsOn"`
 	Inputs         []string            `json:"inputs"`
 	OutputMode     util.TaskOutputMode `json:"outputMode"`
-	PassthroughEnv []string            `json:"experimentalPassThroughEnv,omitempty"`
+	PassthroughEnv []string            `json:"passThroughEnv"`
 	Env            []string            `json:"env"`
 	Persistent     bool                `json:"persistent"`
 }
@@ -103,7 +103,7 @@ type rawTask struct {
 	Inputs         []string             `json:"inputs,omitempty"`
 	OutputMode     *util.TaskOutputMode `json:"outputMode,omitempty"`
 	Env            []string             `json:"env,omitempty"`
-	PassthroughEnv []string             `json:"experimentalPassthroughEnv,omitempty"`
+	PassthroughEnv []string             `json:"passThroughEnv,omitempty"`
 	Persistent     *bool                `json:"persistent,omitempty"`
 }
 
@@ -119,12 +119,12 @@ type taskDefinitionHashable struct {
 	Inputs                  []string
 	OutputMode              util.TaskOutputMode
 	Persistent              bool
+	PassthroughEnv          []string
 }
 
 // taskDefinitionExperiments is a list of config fields in a task definition that are considered
 // experimental. We keep these separated so we can compute a global hash without these.
 type taskDefinitionExperiments struct {
-	PassthroughEnv []string
 }
 
 // PristinePipeline is a map of task names to TaskDefinition or taskDefinitionHashable.
@@ -286,14 +286,9 @@ type TaskOutputs struct {
 }
 
 // Sort contents of task outputs
-func (to TaskOutputs) Sort() TaskOutputs {
-	var inclusions []string
-	var exclusions []string
-	copy(inclusions, to.Inclusions)
-	copy(exclusions, to.Exclusions)
-	sort.Strings(inclusions)
-	sort.Strings(exclusions)
-	return TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
+func (to *TaskOutputs) Sort() {
+	sort.Strings(to.Inclusions)
+	sort.Strings(to.Exclusions)
 }
 
 // readTurboConfig reads turbo.json from a provided path
@@ -399,8 +394,7 @@ func (btd BookkeepingTaskDefinition) GetTaskDefinition() TaskDefinition {
 		Inputs:                  btd.TaskDefinition.Inputs,
 		OutputMode:              btd.TaskDefinition.OutputMode,
 		Persistent:              btd.TaskDefinition.Persistent,
-		// From experimental fields
-		PassthroughEnv: btd.experimental.PassthroughEnv,
+		PassthroughEnv:          btd.TaskDefinition.PassthroughEnv,
 	}
 }
 
@@ -547,14 +541,14 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	sort.Strings(btd.TaskDefinition.EnvVarDependencies)
 
 	if task.PassthroughEnv != nil {
-		btd.experimentalFields.Add("PassthroughEnv")
-		if err := gatherEnvVars(task.PassthroughEnv, "passthrougEnv", &envVarPassthroughs); err != nil {
+		btd.definedFields.Add("PassthroughEnv")
+		if err := gatherEnvVars(task.PassthroughEnv, "passThroughEnv", &envVarPassthroughs); err != nil {
 			return err
 		}
-	}
 
-	btd.experimental.PassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
-	sort.Strings(btd.experimental.PassthroughEnv)
+		btd.TaskDefinition.PassthroughEnv = envVarPassthroughs.UnsafeListOfStrings()
+		sort.Strings(btd.TaskDefinition.PassthroughEnv)
+	}
 
 	if task.Inputs != nil {
 		// Note that we don't require Inputs to be sorted, we're going to
@@ -592,6 +586,7 @@ func (c taskDefinitionHashable) MarshalJSON() ([]byte, error) {
 		c.Inputs,
 		c.Outputs,
 		c.EnvVarDependencies,
+		c.PassthroughEnv,
 		c.TaskDependencies,
 		c.TopologicalDependencies,
 	)
@@ -607,15 +602,10 @@ func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 		c.Inputs,
 		c.Outputs,
 		c.EnvVarDependencies,
+		c.PassthroughEnv,
 		c.TaskDependencies,
 		c.TopologicalDependencies,
 	)
-
-	if len(c.PassthroughEnv) > 0 {
-		task.PassthroughEnv = append(task.PassthroughEnv, c.PassthroughEnv...)
-	}
-	sort.Strings(task.PassthroughEnv)
-
 	return json.Marshal(task)
 }
 
@@ -633,7 +623,7 @@ func (tj *TurboJSON) UnmarshalJSON(data []byte) error {
 	if err := gatherEnvVars(raw.GlobalEnv, "globalEnv", &envVarDependencies); err != nil {
 		return err
 	}
-	if err := gatherEnvVars(raw.GlobalPassthroughEnv, "experimentalGlobalPassThroughEnv", &envVarPassthroughs); err != nil {
+	if err := gatherEnvVars(raw.GlobalPassthroughEnv, "globalPassThroughEnv", &envVarPassthroughs); err != nil {
 		return err
 	}
 
@@ -694,14 +684,13 @@ func (tj *TurboJSON) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&raw)
 }
 
-func makeRawTask(persistent bool, shouldCache bool, outputMode util.TaskOutputMode, inputs []string, outputs TaskOutputs, envVarDependencies []string, taskDependencies []string, topologicalDependencies []string) *rawTaskWithDefaults {
+func makeRawTask(persistent bool, shouldCache bool, outputMode util.TaskOutputMode, inputs []string, outputs TaskOutputs, envVarDependencies []string, passthroughEnv []string, taskDependencies []string, topologicalDependencies []string) *rawTaskWithDefaults {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
 	task := &rawTaskWithDefaults{
-		Outputs:        []string{},
-		Inputs:         []string{},
-		Env:            []string{},
-		PassthroughEnv: []string{},
-		DependsOn:      []string{},
+		Outputs:   []string{},
+		Inputs:    []string{},
+		Env:       []string{},
+		DependsOn: []string{},
 	}
 
 	task.Persistent = persistent
@@ -730,6 +719,11 @@ func makeRawTask(persistent bool, shouldCache bool, outputMode util.TaskOutputMo
 
 	for _, i := range topologicalDependencies {
 		task.DependsOn = append(task.DependsOn, "^"+i)
+	}
+
+	if passthroughEnv != nil {
+		task.PassthroughEnv = passthroughEnv
+		sort.Strings(task.PassthroughEnv)
 	}
 
 	// These _should_ already be sorted when the TaskDefinition struct was unmarshaled,

@@ -41,9 +41,14 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 	var tr *tar.Reader
 	var closeError error
 
+	reader, isReader := ci.handle.(io.Reader)
+	if !isReader {
+		panic("can't read from this cache item")
+	}
+
 	// We're reading a tar, possibly wrapped in zstd.
 	if ci.compressed {
-		zr := zstd.NewReader(ci.handle)
+		zr := zstd.NewReader(reader)
 
 		// The `Close` function for compression effectively just returns the singular
 		// error field on the decompressor instance. This is extremely unlikely to be
@@ -52,7 +57,7 @@ func (ci *CacheItem) Restore(anchor turbopath.AbsoluteSystemPath) ([]turbopath.A
 		defer func() { closeError = zr.Close() }()
 		tr = tar.NewReader(zr)
 	} else {
-		tr = tar.NewReader(ci.handle)
+		tr = tar.NewReader(reader)
 	}
 
 	// On first attempt to restore it's possible that a link target doesn't exist.

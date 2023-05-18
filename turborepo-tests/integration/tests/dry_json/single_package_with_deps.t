@@ -13,31 +13,7 @@ Setup
         "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
         "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0"
       },
-      "hashOfExternalDependencies": "",
-      "rootPipeline": {
-        "//#build": {
-          "outputs": [
-            "foo"
-          ],
-          "cache": true,
-          "dependsOn": [],
-          "inputs": [],
-          "outputMode": "full",
-          "env": [],
-          "persistent": false
-        },
-        "//#test": {
-          "outputs": [],
-          "cache": true,
-          "dependsOn": [
-            "build"
-          ],
-          "inputs": [],
-          "outputMode": "full",
-          "env": [],
-          "persistent": false
-        }
-      }
+      "hashOfExternalDependencies": ""
     },
     "envMode": "infer",
     "frameworkInference": true,
@@ -45,7 +21,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "8fc80cfff3b64237",
+        "hash": "1ef465607dcd4131",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
@@ -78,6 +54,7 @@ Setup
           "dependsOn": [],
           "inputs": [],
           "outputMode": "full",
+          "passThroughEnv": null,
           "env": [],
           "persistent": false
         },
@@ -97,7 +74,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "c71366ccd6a86465",
+        "hash": "c661131fb01cd243",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
@@ -128,6 +105,7 @@ Setup
           ],
           "inputs": [],
           "outputMode": "full",
+          "passThroughEnv": null,
           "env": [],
           "persistent": false
         },

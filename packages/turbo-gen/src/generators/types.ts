@@ -1,6 +1,6 @@
 import type { Project } from "@turbo/workspaces";
-import type { TurboGeneratorOptions } from "../commands/add";
-import type { CustomGeneratorOptions } from "../commands/generate";
+import type { TurboGeneratorOptions } from "../commands/workspace";
+import type { CustomGeneratorOptions } from "../commands/run";
 
 export type WorkspaceType = "app" | "package";
 
