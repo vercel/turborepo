@@ -2683,12 +2683,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glob-match"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9985c9503b412198aa4197559e9a318524ebc4519c229bfa05a535828c950b9d"
-
-[[package]]
 name = "globset"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2705,7 +2699,6 @@ dependencies = [
 name = "globwalk"
 version = "0.1.0"
 dependencies = [
- "glob-match 0.2.1",
  "itertools",
  "path-slash",
  "tempdir",
@@ -2713,6 +2706,7 @@ dependencies = [
  "thiserror",
  "turbopath",
  "walkdir",
+ "wax",
 ]
 
 [[package]]
@@ -2720,7 +2714,6 @@ name = "globwatch"
 version = "0.1.0"
 dependencies = [
  "futures",
- "glob-match 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools",
  "merge-streams",
  "notify 5.1.0",
@@ -4878,6 +4871,15 @@ dependencies = [
  "log",
  "pin-project-lite",
  "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "pori"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a63d338dec139f56dacc692ca63ad35a6be6a797442479b55acd611d79e906"
+dependencies = [
+ "nom",
 ]
 
 [[package]]
@@ -9281,7 +9283,6 @@ dependencies = [
  "dirs-next",
  "dunce",
  "futures",
- "glob-match 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "globwatch",
  "go-parse-duration",
  "hex",
@@ -9372,8 +9373,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.4.6",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -10206,6 +10207,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56681922808216ab86d96bb750f70d500b5a7800e41564290fd46bb773581299"
 dependencies = [
  "wast",
+]
+
+[[package]]
+name = "wax"
+version = "0.5.0"
+dependencies = [
+ "const_format",
+ "itertools",
+ "nom",
+ "pori",
+ "regex",
+ "thiserror",
+ "walkdir",
 ]
 
 [[package]]

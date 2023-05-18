@@ -9,9 +9,9 @@ edition = "2021"
 itertools.workspace = true
 path-slash = "0.2.1"
 thiserror.workspace = true
-turbopath = { path = "../turbopath" }
+turbopath.workspace = true
 walkdir = "2.3.3"
-wax = "0.5.0"
+wax = { path = "../../../wax" }
 
 [dev-dependencies]
 tempdir = "0.3.7"
