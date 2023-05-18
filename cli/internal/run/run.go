@@ -240,7 +240,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	globalHashInputs, err := getGlobalHashInputs(
 		r.base.RepoRoot,
 		rootPackageJSON,
-		pipeline,
 		turboJSON.GlobalEnv,
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
@@ -372,7 +371,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			globalHashInputs.envVars,
 			envVarPassthroughMap,
 			globalHashInputs.globalCacheKey,
-			globalHashInputs.pipeline,
 		),
 		rs.Opts.SynthesizeCommand(rs.Targets),
 	)
