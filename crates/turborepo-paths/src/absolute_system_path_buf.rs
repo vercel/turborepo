@@ -85,7 +85,7 @@ impl AbsoluteSystemPathBuf {
     ///   let base = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
     ///   let anchored_path = AbsoluteSystemPathBuf::new("/Users/user/Documents").unwrap();
     ///   let anchored_path = base.anchor(&anchored_path).unwrap();
-    ///   assert_eq!(anchored_path.as_path(), Path::new("Documents"));
+    ///   assert_eq!(anchored_path.to_str().unwrap(), "Documents");
     /// }
     ///
     /// #[cfg(windows)]
@@ -93,7 +93,7 @@ impl AbsoluteSystemPathBuf {
     ///   let base = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
     ///   let anchored_path = AbsoluteSystemPathBuf::new("C:\\Users\\user\\Documents").unwrap();
     ///   let anchored_path = base.anchor(&anchored_path).unwrap();
-    ///  assert_eq!(anchored_path.as_path(), Path::new("Documents"));
+    ///  assert_eq!(anchored_path.to_str().unwrap(), "Documents");
     /// }
     /// ```
     pub fn anchor(
