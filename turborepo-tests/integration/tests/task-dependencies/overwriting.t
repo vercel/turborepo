@@ -12,7 +12,7 @@ Test
 
 # workspace-a#generate ran
   $ cat tmp.log | grep "workspace-a:generate"
-  workspace-a:generate: cache miss, executing 33cb31b9a1feefdc
+  workspace-a:generate: cache miss, executing 68c07f637d214fd3
   workspace-a:generate: 
   workspace-a:generate: > generate
   workspace-a:generate: > echo 'generate workspace-a'
@@ -20,7 +20,7 @@ Test
   workspace-a:generate: generate workspace-a
 workspace-a#build ran
   $ cat tmp.log | grep "workspace-a:build"
-  workspace-a:build: cache miss, executing 6ef94e61ac123f30
+  workspace-a:build: cache miss, executing 4d79e873a767c5d0
   workspace-a:build: 
   workspace-a:build: > build
   workspace-a:build: > echo 'build workspace-a'
@@ -33,7 +33,7 @@ workspace-b#generate DID NOT run
 
 workspace-b#build ran
   $ cat tmp.log | grep "workspace-b:build"
-  workspace-b:build: cache miss, executing 000276a016e6bd0c
+  workspace-b:build: cache miss, executing 1019b7ecf6a5b48f
   workspace-b:build: 
   workspace-b:build: > build
   workspace-b:build: > echo 'build workspace-b'

@@ -15,59 +15,7 @@ Setup
     "files": {
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
-    "hashOfExternalDependencies": "ccab0b28617f1f56",
-    "rootPipeline": {
-      "//#something": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "build": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [
-          "NODE_ENV"
-        ],
-        "persistent": false
-      },
-      "maybefails": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "my-app#build": {
-        "outputs": [
-          "apple.json",
-          "banana.txt"
-        ],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "something": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      }
-    }
+    "hashOfExternalDependencies": "ccab0b28617f1f56"
   }
 
   $ cat tmpjson.log | jq 'keys'
@@ -90,7 +38,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "5ac267a908f805a8",
+    "hash": "122bd9fc20f4511c",
     "inputs": {
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
@@ -121,6 +69,7 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "passThroughEnv": null,
       "env": [],
       "persistent": false
     },
@@ -145,7 +94,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "f99b445d4ff29bd0",
+    "hash": "82bc93ff27e552d6",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },
@@ -170,6 +119,7 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "passThroughEnv": null,
       "env": [
         "NODE_ENV"
       ],

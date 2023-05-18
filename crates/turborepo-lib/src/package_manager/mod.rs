@@ -11,7 +11,6 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
     commands::CommandBase,
@@ -166,9 +165,7 @@ impl PackageManager {
         // We don't surface errors for `read_package_manager` as we can fall back to
         // `detect_package_manager`
         if let Some(package_json) = pkg {
-            if let Ok(Some(package_manager)) =
-                Self::read_package_manager(&base.repo_root, package_json)
-            {
+            if let Ok(Some(package_manager)) = Self::read_package_manager(package_json) {
                 return Ok(package_manager);
             }
         }
@@ -177,10 +174,7 @@ impl PackageManager {
     }
 
     // Attempts to read the package manager from the package.json
-    fn read_package_manager(
-        repo_root: &AbsoluteSystemPathBuf,
-        pkg: &PackageJson,
-    ) -> Result<Option<Self>> {
+    fn read_package_manager(pkg: &PackageJson) -> Result<Option<Self>> {
         let Some(package_manager) = &pkg.package_manager else {
             return Ok(None)
         };
@@ -189,7 +183,7 @@ impl PackageManager {
         let version = version.parse()?;
         let manager = match manager {
             "npm" => Some(PackageManager::Npm),
-            "yarn" => Some(YarnDetector::detect_berry_or_yarn(repo_root, &version)?),
+            "yarn" => Some(YarnDetector::detect_berry_or_yarn(&version)?),
             "pnpm" => Some(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
             _ => None,
         };
@@ -246,9 +240,10 @@ mod tests {
     use std::{fs::File, path::Path};
 
     use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::{get_version, package_manager::yarn::YARN_RC, ui::UI, Args};
+    use crate::{get_version, ui::UI, Args};
 
     struct TestCase {
         name: String,
@@ -340,32 +335,26 @@ mod tests {
 
     #[test]
     fn test_read_package_manager() -> Result<()> {
-        let repo_root = tempdir()?;
-        let mut package_json = PackageJson::default();
-        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
-
-        // Set up .yarnrc.yml file
-        let yarn_rc_path = repo_root.path().join(YARN_RC);
-        fs::write(&yarn_rc_path, "nodeLinker: node-modules")?;
-
-        package_json.package_manager = Some("npm@8.19.4".to_string());
-        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
+        let mut package_json = PackageJson {
+            package_manager: Some("npm@8.19.4".to_string()),
+        };
+        let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Npm));
 
         package_json.package_manager = Some("yarn@2.0.0".to_string());
-        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
+        let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Berry));
 
         package_json.package_manager = Some("yarn@1.9.0".to_string());
-        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
+        let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Yarn));
 
         package_json.package_manager = Some("pnpm@6.0.0".to_string());
-        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
+        let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Pnpm6));
 
         package_json.package_manager = Some("pnpm@7.2.0".to_string());
-        let package_manager = PackageManager::read_package_manager(&repo_root_path, &package_json)?;
+        let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Pnpm));
 
         Ok(())
@@ -385,7 +374,7 @@ mod tests {
         let package_lock_json_path = repo_root.path().join(npm::LOCKFILE);
         File::create(&package_lock_json_path)?;
         let pnpm_lock_path = repo_root.path().join(pnpm::LOCKFILE);
-        File::create(&pnpm_lock_path)?;
+        File::create(pnpm_lock_path)?;
 
         let error = PackageManager::detect_package_manager(&base).unwrap_err();
         assert_eq!(

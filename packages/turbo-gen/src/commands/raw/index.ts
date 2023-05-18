@@ -1,5 +1,5 @@
-import { add, type TurboGeneratorOptions } from "../add";
-import { generate, type CustomGeneratorOptions } from "../generate";
+import { workspace, type TurboGeneratorOptions } from "../workspace";
+import { run, type CustomGeneratorOptions } from "../run";
 import { convertCase } from "@turbo/utils";
 
 interface MinimalOptions {
@@ -7,6 +7,11 @@ interface MinimalOptions {
   [arg: string]: any;
 }
 
+/**
+ * Given a command and a JSON string of options, attempt to deserialize the JSON and run the command
+ *
+ * Used by the turbo Rust cli to handoff commands to the @turbo/gen binary
+ */
 export async function raw(command: string, options: { json: string }) {
   let incomingOptions: MinimalOptions = {};
   try {
@@ -21,12 +26,12 @@ export async function raw(command: string, options: { json: string }) {
   }
 
   switch (command) {
-    case "add":
-      await add(incomingOptions as TurboGeneratorOptions);
+    case "workspace":
+      await workspace(incomingOptions as TurboGeneratorOptions);
       break;
-    case "generate":
-      const { generatorName } = incomingOptions;
-      await generate(generatorName, incomingOptions as CustomGeneratorOptions);
+    case "run":
+      const { generatorName, ...options } = incomingOptions;
+      await run(generatorName, options as CustomGeneratorOptions);
       break;
     default:
       console.error(

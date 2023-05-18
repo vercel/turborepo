@@ -2,23 +2,10 @@
 resolver = "2"
 
 members = [
-  "crates/globwatch",
-  "crates/pidlock",
   "crates/node-file-trace",
   "crates/turbo-tasks*",
   "crates/turbopack*",
-  "crates/turbo-updater",
-  "crates/turbopath",
-  "crates/glob-match",
-  "crates/turborepo",
-  "crates/turborepo-api-client",
-  "crates/turborepo-cache",
-  "crates/turborepo-ffi",
-  "crates/turborepo-fs",
-  "crates/turborepo-lib",
-  "crates/turborepo-lockfiles",
-  "crates/turborepo-scm",
-  "crates/turborepo-vercel-api-mock",
+  "crates/turborepo*",
   "xtask",
 ]
 
@@ -102,7 +89,7 @@ turbo-tasks-macros-shared = { path = "crates/turbo-tasks-macros-shared" }
 turbo-tasks-macros-tests = { path = "crates/turbo-tasks-macros-tests" }
 turbo-tasks-memory = { path = "crates/turbo-tasks-memory" }
 turbo-tasks-testing = { path = "crates/turbo-tasks-testing" }
-turbo-updater = { path = "crates/turbo-updater" }
+turbo-updater = { path = "crates/turborepo-updater" }
 turbopack = { path = "crates/turbopack" }
 turbopack-bench = { path = "crates/turbopack-bench" }
 turbopack-cli = { path = "crates/turbopack-cli" }
@@ -123,7 +110,7 @@ turbopack-static = { path = "crates/turbopack-static" }
 turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
 turbopack-test-utils = { path = "crates/turbopack-test-utils" }
 turbopack-tests = { path = "crates/turbopack-tests" }
-turbopath = { path = "crates/turbopath" }
+turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-cache = { path = "crates/turborepo-cache" }
@@ -211,3 +198,4 @@ tracing-subscriber = "0.3.16"
 url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"
+which = "4.4.0"

@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import { logger } from "@turbo/utils";
 import { getCustomGenerators, runCustomGenerator } from "../utils/plop";
-import * as prompts from "../commands/generate/prompts";
+import * as prompts from "../commands/run/prompts";
 import type { CustomGeneratorArguments } from "./types";
 import { GeneratorError } from "../utils/error";
 import { setupFromTemplate } from "../utils/setupFromTemplate";
