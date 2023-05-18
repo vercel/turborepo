@@ -4,7 +4,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use os_str_bytes::OsStringBytes;
 use ring::{
     hmac,
-    hmac::{Tag, HMAC_SHA256},
+    hmac::{Algorithm, Tag, HMAC_SHA256},
 };
 use thiserror::Error;
 
@@ -21,6 +21,8 @@ pub enum SignatureError {
     Base64EncodingError(#[from] base64::DecodeError),
 }
 
+static TURBO_HMAC_ALGORITHM: Algorithm = HMAC_SHA256;
+
 #[derive(Debug)]
 pub struct ArtifactSignatureAuthenticator {
     team_id: Vec<u8>,
@@ -36,6 +38,10 @@ impl ArtifactSignatureAuthenticator {
         }
     }
 
+    // Gets secret key from either secret key override or environment variable.
+    // HMAC_SHA256 has no key length limit, although it's generally recommended
+    // to keep key length under 64 bytes since anything longer is hashed using
+    // SHA-256.
     fn secret_key(&self) -> Result<Vec<u8>, SignatureError> {
         if let Some(secret_key) = &self.secret_key_override {
             return Ok(secret_key.to_vec());
@@ -54,7 +60,7 @@ impl ArtifactSignatureAuthenticator {
     }
 
     fn get_tag_generator(&self, hash: &[u8]) -> Result<hmac::Context, SignatureError> {
-        let secret_key = hmac::Key::new(HMAC_SHA256, &self.secret_key()?);
+        let secret_key = hmac::Key::new(TURBO_HMAC_ALGORITHM, &self.secret_key()?);
         let metadata = self.construct_metadata(hash)?;
 
         let mut hmac_ctx = hmac::Context::with_key(&secret_key);
@@ -93,7 +99,7 @@ impl ArtifactSignatureAuthenticator {
         artifact_body: &[u8],
         expected_tag: &str,
     ) -> Result<bool, SignatureError> {
-        let secret_key = hmac::Key::new(HMAC_SHA256, &self.secret_key()?);
+        let secret_key = hmac::Key::new(TURBO_HMAC_ALGORITHM, &self.secret_key()?);
         let mut message = self.construct_metadata(hash)?;
         message.extend(artifact_body);
         let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
@@ -103,8 +109,6 @@ impl ArtifactSignatureAuthenticator {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsStr;
-
     use anyhow::Result;
     use os_str_bytes::OsStrBytes;
 
@@ -117,7 +121,7 @@ mod tests {
             artifact_body: &[u8],
             expected_tag: &[u8],
         ) -> Result<bool, SignatureError> {
-            let secret_key = hmac::Key::new(HMAC_SHA256, &self.secret_key()?);
+            let secret_key = hmac::Key::new(TURBO_HMAC_ALGORITHM, &self.secret_key()?);
             let mut message = self.construct_metadata(hash)?;
             message.extend(artifact_body);
             Ok(hmac::verify(&secret_key, &message, expected_tag).is_ok())

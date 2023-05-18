@@ -164,6 +164,7 @@ pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
     response.into()
 }
 
+#[no_mangle]
 pub extern "C" fn verify_signature(buffer: Buffer) -> Buffer {
     let req: proto::VerifySignatureRequest = match buffer.into_proto() {
         Ok(req) => req,
