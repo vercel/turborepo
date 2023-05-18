@@ -182,7 +182,7 @@ Task details include:
 
 `type: string`
 
-<Callout type="info">
+<Callout>
   **Warning**: This is an experimental flag, so its name and behavior can change.
 </Callout>
 
@@ -707,9 +707,13 @@ Get the path to the `turbo` binary.
 
 ## `turbo gen`
 
+<Callout>
+  **Warning**: This is an experimental command, so its name and behavior can change.
+</Callout>
+
 Extend your Turborepo with new apps, and packages. Create new empty workspaces, copy existing workspaces, add workspaces from remote sources or run custom generators defined using Plop configurations.
 
-**Note:** The default command for generate is [run](#run-generator-name).
+**Note:** The default command for `generate` is [run](#run-generator-name).
 
 ### `workspace`
 
@@ -723,7 +727,7 @@ The name for the new workspace
 
 ##### `--empty`
 
-Generate an empty workspace
+Generate an empty workspace (default: `true`)
 
 ##### `--copy`
 
@@ -735,25 +739,24 @@ Where the new workspace should be created
 
 ##### `--type`
 
-The type of workspace to create ("app" or "package")
+The type of workspace to create (`app` or `package`)
 
 ##### `--root`
 
-The root of your repository (default: directory with _root_ turbo.json)
+The root of your repository (default: directory with _root_ `turbo.json`)
 
 ##### `--example / -e`
 
 An example package to add. You can use a GitHub URL with any branch and/or subdirectory
 
-##### `--example-path`
+##### `--example-path / -p`
 
-In a rare case, your GitHub URL might contain a branch name with a slash (e.g. bug/fix-1) and the path to the example (e.g. foo/bar).
-In this case, you must specify the path to
-the example separately: `--example-path foo/bar`
+In a rare case, your GitHub URL might contain a branch name with a slash (e.g. `bug/fix-1`) and the path to the example (e.g. `foo/bar`).
+In this case, you must specify the path to the example separately: `--example-path foo/bar`
 
 ##### `--show-all-dependencies`
 
-When selecting dependencies to add to your new workspace, do not filter available dependencies by the selected workspace type ("app" or "package")
+When selecting dependencies to add to your new workspace, do not filter available dependencies by the selected workspace type (`app` or `package`)
 
 ### `run [generator-name]`
 
@@ -763,11 +766,11 @@ Run custom generators within your monorepo. Optionally specify a generator name 
 
 ##### `--config`
 
-Generator configuration file (default: turbo/generators/config.js)
+Generator configuration file (default: `turbo/generators/config.js`)
 
 ##### `--root`
 
-The root of your repository (default: directory with _root_ turbo.json)
+The root of your repository (default: directory with _root_ `turbo.json`)
 
 ##### `--args`
 
