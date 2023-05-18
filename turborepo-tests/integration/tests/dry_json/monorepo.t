@@ -25,7 +25,6 @@ Setup
     "globalCacheInputs",
     "id",
     "packages",
-    "pipeline",
     "scm",
     "tasks",
     "turboVersion",
@@ -39,7 +38,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "9431e2a02286769a",
+    "hash": "bcfea334449257fe",
     "inputs": {
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
@@ -94,7 +93,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "e6ceb7aa9a6948f8",
+    "hash": "e64dab76e045fbb4",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },

@@ -9,12 +9,11 @@ Check
     Global Files               = 3
     External Dependencies Hash = 
     Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
-    Root pipeline              = {"//#build":{"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false}}
   
   Tasks to Run
   build
     Task                             = build                                                                                                       
-    Hash                             = 0f657a869b7bc7fa                                                                                            
+    Hash                             = 6d6f6826cfa281cf                                                                                            
     Cached (Local)                   = false                                                                                                       
     Cached (Remote)                  = false                                                                                                       
     Command                          = echo 'building' > foo                                                                                       

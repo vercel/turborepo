@@ -9,12 +9,11 @@ Check
     Global Files               = 2
     External Dependencies Hash = 
     Global Cache Key           = Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo
-    Root pipeline              = {"//#build":{"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","env":[],"persistent":false},"//#test":{"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","env":[],"persistent":false}}
   
   Tasks to Run
   build
     Task                             = build                                                                                                       
-    Hash                             = d2d26542b87b5554                                                                                            
+    Hash                             = 9103ff5d43f221c4                                                                                            
     Cached (Local)                   = false                                                                                                       
     Cached (Remote)                  = false                                                                                                       
     Command                          = echo 'building' > foo                                                                                       
@@ -30,7 +29,7 @@ Check
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                     
   test
     Task                             = test                                                                                                          
-    Hash                             = c53806e1057eca23                                                                                              
+    Hash                             = a404ed8a88a62f81                                                                                              
     Cached (Local)                   = false                                                                                                         
     Cached (Remote)                  = false                                                                                                         
     Command                          = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                  
