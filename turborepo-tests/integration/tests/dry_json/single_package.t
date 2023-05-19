@@ -23,7 +23,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "6a0444fb584769ac",
+        "hash": "dba2114627bfc5c1",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
