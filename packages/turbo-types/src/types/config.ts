@@ -75,7 +75,7 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalPassThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
    *
    * @default null
    * @deprecated
@@ -86,7 +86,7 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalPassThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
    *
    * @default null
    */
@@ -96,11 +96,11 @@ export interface RootSchema extends BaseSchema {
    * An enumarated list of `.env` files to include in the task hash.
    * This field is ordered.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalDotEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
    *
    * @default null
    */
-  globalDotEnv?: null | string[];
+  globalDotEnv?: null | AnchoredUnixPath[];
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
@@ -150,7 +150,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#passThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
    *
    * @default null
    * @deprecated
@@ -162,7 +162,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#passThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
    *
    * @default null
    */
@@ -172,7 +172,7 @@ export interface Pipeline {
    * An enumarated list of `.env` files to include in the task hash.
    * This field is ordered.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#dotEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#dotEnv
    *
    * @default null
    */
