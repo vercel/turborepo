@@ -83,25 +83,54 @@ impl fmt::Display for PackageManager {
 pub struct Globs {
     inclusions: Any<'static>,
     exclusions: Any<'static>,
+    raw_inclusions: Vec<String>,
+    raw_exclusions: Vec<String>,
 }
 
-impl Globs {
-    pub fn new<'a>(
-        inclusions: Vec<&'a str>,
-        exclusions: Vec<&'a str>,
-    ) -> Result<Self, wax::BuildError<'a>> {
-        let inclusions = inclusions
-            .iter()
-            .map(|s| Glob::new(s).map(|g| g.into_owned()))
-            .collect::<Result<Vec<_>, _>>()?;
-        let exclusions = exclusions
-            .iter()
-            .map(|s| Glob::new(s).map(|g| g.into_owned()))
-            .collect::<Result<Vec<_>, _>>()?;
+impl PartialEq for Globs {
+    fn eq(&self, other: &Self) -> bool {
+        // Use the literals for comparison, not the compiled globs
+        self.raw_inclusions == other.raw_inclusions && self.raw_exclusions == other.raw_exclusions
+    }
+}
 
+impl Eq for Globs {}
+
+impl Globs {
+    pub fn new<S: Into<String>>(
+        inclusions: Vec<S>,
+        exclusions: Vec<S>,
+    ) -> Result<Self, wax::BuildError<'static>> {
+        // take ownership of the inputs
+        let raw_inclusions: Vec<String> = inclusions
+            .into_iter()
+            .map(|s| s.into())
+            .collect::<Vec<String>>();
+        let raw_exclusions: Vec<String> = exclusions
+            .into_iter()
+            .map(|s| s.into())
+            .collect::<Vec<String>>();
+        let inclusion_globs = raw_inclusions
+            .iter()
+            .map(|s| {
+                Glob::new(s.as_ref())
+                    .map(|g| g.into_owned())
+                    .map_err(|e| e.into_owned())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let exclusion_globs = raw_exclusions
+            .iter()
+            .map(|s| {
+                Glob::new(s.as_ref())
+                    .map(|g| g.into_owned())
+                    .map_err(|e| e.into_owned())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            inclusions: wax::any::<Glob<'static>, _>(inclusions)?,
-            exclusions: wax::any::<Glob<'static>, _>(exclusions)?,
+            inclusions: wax::any::<Glob<'static>, _>(inclusion_globs)?,
+            exclusions: wax::any::<Glob<'static>, _>(exclusion_globs)?,
+            raw_inclusions,
+            raw_exclusions,
         })
     }
 
@@ -157,11 +186,11 @@ impl PackageManager {
             }
         };
 
-        let (inclusions, exclusions) = globs.iter().partition_map(|glob| {
+        let (inclusions, exclusions) = globs.into_iter().partition_map(|glob| {
             if glob.starts_with('!') {
-                Either::Right(&glob[1..])
+                Either::Right(glob[1..].to_string())
             } else {
-                Either::Left(glob.as_str())
+                Either::Left(glob)
             }
         });
 
@@ -409,7 +438,8 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(globs.inclusions, vec!["apps/*", "packages/*"]);
+        let expected = Globs::new(vec!["apps/*", "packages/*"], vec![]).unwrap();
+        assert_eq!(globs, expected);
     }
 
     #[test]
@@ -422,10 +452,7 @@ mod tests {
         }
 
         let tests = [TestCase {
-            globs: Globs {
-                inclusions: vec!["d/**".to_string()],
-                exclusions: vec![],
-            },
+            globs: Globs::new(vec!["d/**".to_string()], vec![]).unwrap(),
             root: PathBuf::from("/a/b/c"),
             target: PathBuf::from("/a/b/c/d/e/f"),
             output: Ok(true),

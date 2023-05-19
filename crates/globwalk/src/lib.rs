@@ -44,6 +44,8 @@ pub enum WalkError {
     BadPattern(String),
     #[error("invalid path")]
     InvalidPath,
+    #[error("walk error: {0}")]
+    WalkError(#[from] walkdir::Error),
 }
 
 /// Performs a glob walk, yielding paths that _are_ included in the include list
@@ -61,7 +63,7 @@ pub fn globwalk(
     include: &[String],
     exclude: &[String],
     walk_type: WalkType,
-) -> Result<impl Iterator<Item = Result<AbsoluteSystemPathBuf, walkdir::Error>>, WalkError> {
+) -> Result<impl Iterator<Item = Result<AbsoluteSystemPathBuf, WalkError>>, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
 
@@ -86,7 +88,7 @@ pub fn globwalk(
                 {
                     (true, path.to_owned())
                 }
-                _ => return Some(Err(err)),
+                _ => return Some(Err(err.into())),
             },
         };
 

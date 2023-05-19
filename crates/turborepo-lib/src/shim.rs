@@ -795,10 +795,7 @@ mod test {
                     path: PathBuf::from("/path/to/root"),
                     has_package_json: true,
                     has_turbo_json: true,
-                    workspace_globs: Some(Globs {
-                        inclusions: vec!["packages/*".to_string()],
-                        exclusions: vec![],
-                    }),
+                    workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                 }],
                 output: Ok(PathBuf::from("/path/to/root")),
             },
@@ -818,10 +815,7 @@ mod test {
                     path: PathBuf::from("/path/to/root"),
                     has_package_json: true,
                     has_turbo_json: false,
-                    workspace_globs: Some(Globs {
-                        inclusions: vec!["packages/*".to_string()],
-                        exclusions: vec![],
-                    }),
+                    workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                 }],
                 output: Ok(PathBuf::from("/path/to/root")),
             },
@@ -849,10 +843,7 @@ mod test {
                         path: PathBuf::from("/path/to/root"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                 ],
                 output: Ok(PathBuf::from("/path/to/root")),
@@ -876,11 +867,14 @@ mod test {
                         path: PathBuf::from("/path/to/root"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            // This `**` is important:
-                            inclusions: vec!["packages/**".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(
+                                // This `**` is important:
+                                vec!["packages/**"],
+                                vec![],
+                            )
+                            .unwrap(),
+                        ),
                     },
                 ],
                 output: Ok(PathBuf::from("/path/to/root")),
@@ -892,19 +886,13 @@ mod test {
                         path: PathBuf::from("/path/to/root-one/root-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                 ],
                 output: Ok(PathBuf::from("/path/to/root-one/root-two")),
@@ -925,19 +913,17 @@ mod test {
                         path: PathBuf::from("/path/to/root-one/root-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two/root-one-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(vec!["root-two/root-one-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                 ],
                 output: Ok(PathBuf::from("/path/to/root-one/root-two")),
@@ -958,19 +944,17 @@ mod test {
                         path: PathBuf::from("/path/to/root-one/root-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two/root-one-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(vec!["root-two/root-one-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                 ],
                 output: Ok(PathBuf::from("/path/to/root-one")),
@@ -988,10 +972,7 @@ mod test {
                         path: PathBuf::from("/path/to/root"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                 ],
                 output: Ok(PathBuf::from("/path/to/root/some-other-project")),
@@ -1004,19 +985,13 @@ mod test {
                         path: PathBuf::from("/path/to/root-one/root-two"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                     InferInfo {
                         path: PathBuf::from("/path/to/root-one"),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["root-two"], vec![]).unwrap()),
                     },
                 ],
                 output: Ok(PathBuf::from("/path/to/root-one/root-two")),
