@@ -12,6 +12,7 @@ use notify::RecommendedWatcher;
 use tokio::time::timeout;
 use tracing::{trace, warn};
 use turbopath::AbsoluteSystemPathBuf;
+use wax::{Glob as WaxGlob, Pattern};
 
 // these aliases are for readability, but they're just strings. it may make
 // sense to use a newtype wrapper for these types in the future.
@@ -260,24 +261,25 @@ fn populate_hash_globs<'a>(
     let mut clear_glob_status = vec![];
     let mut exclude_globs = vec![];
 
+    // for every path, check to see if it matches any of the globs
+    // if it does, then we need to stop watching that glob
     for ((glob, hash_status), path) in glob_statuses
         .iter()
         .cartesian_product(repo_relative_paths)
         .filter(|((glob, _), path)| {
-            // ignore paths that don't match the glob, or are not valid utf8
-            path.to_str()
-                .map(|s| glob_match::glob_match(glob, s))
-                .unwrap_or(false)
+            let glob = WaxGlob::new(glob).expect("only watch valid globs");
+            glob.is_match(*path)
         })
     {
         let mut stop_watching = true;
 
+        // for every hash that includes this glob, check to see if the glob
+        // has changed for that hash. if it has, then we need to stop watching
         for hash in hash_status.iter() {
             let globs = match hash_globs.get_mut(hash).filter(|globs| {
-                !globs.exclude.iter().any(|f| {
-                    path.to_str()
-                        .map(|s| glob_match::glob_match(f, s))
-                        .unwrap_or(false) // invalid utf8 cannot be matched
+                !globs.exclude.iter().any(|glob| {
+                    let glob = WaxGlob::new(glob).expect("only watch valid globs");
+                    glob.is_match(path)
                 })
             }) {
                 Some(globs) => globs,

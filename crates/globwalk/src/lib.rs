@@ -39,8 +39,9 @@ impl WalkType {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError {
+    // note: wax 0.5 has a lifetime in the BuildError, so we can't use it here
     #[error("bad pattern: {0}")]
-    BadPattern(#[from] wax::BuildError),
+    BadPattern(String),
     #[error("invalid path")]
     InvalidPath,
 }
@@ -55,19 +56,16 @@ pub enum WalkError {
 ///       - collapse the path, and calculate the new base_path, which defined as
 ///         the longest common prefix of all the includes
 ///       - traversing above the root of the base_path is not allowed
-pub fn globwalk<'a>(
-    base_path: &'a AbsoluteSystemPathBuf,
-    include: &'a [String],
-    exclude: &'a [String],
+pub fn globwalk(
+    base_path: &AbsoluteSystemPathBuf,
+    include: &[String],
+    exclude: &[String],
     walk_type: WalkType,
-) -> Result<Vec<Result<AbsoluteSystemPathBuf, walkdir::Error>>, WalkError> {
+) -> Result<impl Iterator<Item = Result<AbsoluteSystemPathBuf, walkdir::Error>>, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
 
-    let inc_patterns = include_paths.iter().map(|g| g.as_ref());
-    let include = InclusiveEmptyAny::new(inc_patterns)?;
-    let ex_patterns = exclude_paths.iter().map(|g| g.as_ref());
-    let exclude = wax::any(ex_patterns)?;
+    let (include, exclude) = build_glob_matchers(include_paths, exclude_paths)?;
 
     // we enable following symlinks but only because without it they are ignored
     // completely (as opposed to yielded but not followed)
@@ -115,8 +113,36 @@ pub fn globwalk<'a>(
             MatchType::None | MatchType::PotentialMatch | MatchType::Match | MatchType::Exclude => {
             }
         }
-    })
-    .collect())
+    }))
+}
+
+/// Builds the include and exclude glob matchers
+///
+/// note: we could probably reduce the number of allocations here
+///       with a tasteful PR to wax, rather than having us convert
+///       to globs, calling into_owned, then collecting and erroring.
+///       really, `Any` should have an `into_owned` method
+///       additionally, `BuildError` currently has a lifetime, which
+///       prevents us from using ? here, since we must convert to str
+fn build_glob_matchers(
+    include_paths: Vec<String>,
+    exclude_paths: Vec<String>,
+) -> Result<(InclusiveEmptyAny<'static>, Any<'static>), WalkError> {
+    let inc_patterns = include_paths
+        .iter()
+        .map(|g| Glob::new(g.as_str()).map(|g| g.into_owned()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| WalkError::BadPattern(e.to_string()))?;
+    let include = InclusiveEmptyAny::new::<Glob<'static>, _>(inc_patterns)
+        .map_err(|e| WalkError::BadPattern(e.to_string()))?;
+    let ex_patterns = exclude_paths
+        .iter()
+        .map(|g| Glob::new(g.as_str()).map(|g| g.into_owned()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| WalkError::BadPattern(e.to_string()))?;
+    let exclude = wax::any::<Glob<'static>, _>(ex_patterns)
+        .map_err(|e| WalkError::BadPattern(e.to_string()))?;
+    Ok((include, exclude))
 }
 
 fn join_unix_like_paths(a: &str, b: &str) -> String {
@@ -298,8 +324,9 @@ mod test {
         let (_, include, exclude) =
             super::preprocess_paths_and_globs(&base_path, &include, &exclude).unwrap();
 
-        let include_glob = InclusiveEmptyAny::new(include.iter().map(|s| s.as_ref())).unwrap();
-        let exclude_glob = wax::any(exclude.iter().map(|s| s.as_ref())).unwrap();
+        let include_glob =
+            InclusiveEmptyAny::new::<Glob, _>(include.iter().map(|s| s.as_ref())).unwrap();
+        let exclude_glob = wax::any::<Glob, _>(exclude.iter().map(|s| s.as_ref())).unwrap();
 
         assert_eq!(
             super::do_match(
@@ -314,8 +341,8 @@ mod test {
     #[test]
     fn do_match_empty_include() {
         let patterns: [&str; 0] = [];
-        let any = wax::any(patterns).unwrap();
-        let any_empty = InclusiveEmptyAny::new(patterns).unwrap();
+        let any = wax::any::<Glob, _>(patterns).unwrap();
+        let any_empty = InclusiveEmptyAny::new::<Glob, _>(patterns).unwrap();
         assert_eq!(
             super::do_match(Path::new("/a/b/c/d"), &any_empty, &any),
             MatchType::Match

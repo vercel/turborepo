@@ -8,9 +8,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use wax::{Any, Glob, Pattern};
 
 use crate::{
     commands::CommandBase,
@@ -80,28 +81,40 @@ impl fmt::Display for PackageManager {
 
 #[derive(Debug)]
 pub struct Globs {
-    pub inclusions: Vec<String>,
-    pub exclusions: Vec<String>,
+    inclusions: Any<'static>,
+    exclusions: Any<'static>,
 }
 
 impl Globs {
+    pub fn new<'a>(
+        inclusions: Vec<&'a str>,
+        exclusions: Vec<&'a str>,
+    ) -> Result<Self, wax::BuildError<'a>> {
+        let inclusions = inclusions
+            .iter()
+            .map(|s| Glob::new(s).map(|g| g.into_owned()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let exclusions = exclusions
+            .iter()
+            .map(|s| Glob::new(s).map(|g| g.into_owned()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Self {
+            inclusions: wax::any::<Glob<'static>, _>(inclusions)?,
+            exclusions: wax::any::<Glob<'static>, _>(exclusions)?,
+        })
+    }
+
     pub fn test(&self, root: PathBuf, target: PathBuf) -> Result<bool> {
         let search_value = target
             .strip_prefix(root)?
             .to_str()
             .ok_or_else(|| anyhow!("The relative path is not UTF8."))?;
 
-        let includes = &self
-            .inclusions
-            .iter()
-            .any(|inclusion| glob_match::glob_match(inclusion, search_value));
+        let includes = self.inclusions.is_match(search_value);
+        let excludes = self.exclusions.is_match(search_value);
 
-        let excludes = &self
-            .exclusions
-            .iter()
-            .any(|exclusion| glob_match::glob_match(exclusion, search_value));
-
-        Ok(*includes && !*excludes)
+        Ok(includes && !excludes)
     }
 }
 
@@ -144,21 +157,18 @@ impl PackageManager {
             }
         };
 
-        let mut inclusions = Vec::new();
-        let mut exclusions = Vec::new();
-
-        for glob in globs {
-            if let Some(exclusion) = glob.strip_prefix('!') {
-                exclusions.push(exclusion.to_string());
+        let (inclusions, exclusions) = globs.iter().partition_map(|glob| {
+            if glob.starts_with('!') {
+                Either::Right(&glob[1..])
             } else {
-                inclusions.push(glob);
+                Either::Left(glob.as_str())
             }
-        }
+        });
 
-        Ok(Some(Globs {
-            inclusions,
-            exclusions,
-        }))
+        match Globs::new(inclusions, exclusions) {
+            Ok(globs) => Ok(Some(globs)),
+            Err(err) => Err(anyhow!("Error building globs: {}", err)),
+        }
     }
 
     pub fn get_package_manager(base: &CommandBase, pkg: Option<&PackageJson>) -> Result<Self> {
