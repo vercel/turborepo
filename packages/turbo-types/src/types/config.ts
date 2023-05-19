@@ -75,7 +75,7 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalPassThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
    *
    * @default null
    * @deprecated
@@ -86,11 +86,21 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#globalPassThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
    *
    * @default null
    */
   globalPassThroughEnv?: null | string[];
+
+  /**
+   * A priority-ordered (most-significant to least-significant) array of project-anchored
+   * Unix-style paths to `.env` files to include in the global hash.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
+   *
+   * @default null
+   */
+  globalDotEnv?: null | AnchoredUnixPath[];
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
@@ -140,7 +150,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#passThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
    *
    * @default null
    * @deprecated
@@ -152,11 +162,21 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/refernce/configuration#passThroughEnv
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
    *
    * @default null
    */
   passThroughEnv?: null | string[];
+
+  /**
+   * A priority-ordered (most-significant to least-significant) array of workspace-anchored
+   * Unix-style paths to `.env` files to include in the task hash.
+   *
+   * Documentation: https://turbo.build/repo/docs/reference/configuration#dotEnv
+   *
+   * @default null
+   */
+  dotEnv?: null | AnchoredUnixPath[];
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.
@@ -248,3 +268,5 @@ export type OutputMode =
   | "new-only"
   | "errors-only"
   | "none";
+
+export type AnchoredUnixPath = string;

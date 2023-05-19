@@ -31,6 +31,7 @@ type GlobalHashableInputs struct {
 	envVarPassthroughs   []string
 	envMode              util.EnvMode
 	frameworkInference   bool
+	dotEnv               turbopath.AnchoredUnixPathArray
 }
 
 type globalHashable struct {
@@ -41,6 +42,9 @@ type globalHashable struct {
 	envVarPassthroughs   []string
 	envMode              util.EnvMode
 	frameworkInference   bool
+
+	// NOTE! This field is _explicitly_ ordered and should not be sorted.
+	dotEnv turbopath.AnchoredUnixPathArray
 }
 
 // calculateGlobalHash is a transformation of GlobalHashableInputs.
@@ -55,6 +59,7 @@ func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
 		envVarPassthroughs:   full.envVarPassthroughs,
 		envMode:              full.envMode,
 		frameworkInference:   full.frameworkInference,
+		dotEnv:               full.dotEnv,
 	})
 }
 
@@ -95,6 +100,7 @@ func getGlobalHashInputs(
 	envVarPassthroughs []string,
 	envMode util.EnvMode,
 	frameworkInference bool,
+	dotEnv turbopath.AnchoredUnixPathArray,
 	logger hclog.Logger,
 ) (GlobalHashableInputs, error) {
 	// Calculate env var dependencies
@@ -152,6 +158,20 @@ func getGlobalHashInputs(
 		return GlobalHashableInputs{}, fmt.Errorf("error hashing files: %w", err)
 	}
 
+	// Make sure we include specified .env files in the file hash.
+	// Handled separately because these are not globs!
+	if len(dotEnv) > 0 {
+		dotEnvObject, err := hashing.GetHashesForExistingFiles(rootpath, dotEnv.ToSystemPathArray())
+		if err != nil {
+			return GlobalHashableInputs{}, fmt.Errorf("error hashing files: %w", err)
+		}
+
+		// Add the dotEnv files into the file hash object.
+		for key, value := range dotEnvObject {
+			globalFileHashMap[key] = value
+		}
+	}
+
 	return GlobalHashableInputs{
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
@@ -160,5 +180,6 @@ func getGlobalHashInputs(
 		envVarPassthroughs:   envVarPassthroughs,
 		envMode:              envMode,
 		frameworkInference:   frameworkInference,
+		dotEnv:               dotEnv,
 	}, nil
 }

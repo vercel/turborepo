@@ -85,6 +85,27 @@ variable will not.
 }
 ```
 
+## `globalDotEnv`
+
+`type: null | string[]`
+`default: null`
+
+The ordered list of `.env` files to include into the global hash key's file hash.
+
+Note: this does _not_ load the files into the environment.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDotEnv": [".env.local", ".env"],
+  "pipeline": {
+    "build": {}
+  }
+}
+```
+
 ## `extends`
 
 `type: string[]`
@@ -158,6 +179,28 @@ Items in `dependsOn` without `^` prefix, express the relationships between tasks
     },
     // A workspace's `lint` command has no dependencies
     "lint": {}
+  }
+}
+```
+
+### `dotEnv`
+
+`type: null | string[]`
+`default: null`
+
+The ordered list of `.env` files to include into the task's file hash. These files will be included into the hash regardless of whether or not they are included in the `git` index.
+
+Note: this does _not_ load the files into the environment.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dotEnv": [".env.local", ".env"],
+    }
   }
 }
 ```

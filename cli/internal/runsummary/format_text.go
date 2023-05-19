@@ -77,6 +77,7 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}.env Files Considered\t=\t%d\t${RESET}", len(task.DotEnv)))
 
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Configured Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Configured, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inferred Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Inferred, ", ")))

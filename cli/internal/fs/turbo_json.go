@@ -37,6 +37,9 @@ type rawTurboJSON struct {
 	// Global passthrough env
 	GlobalPassthroughEnv []string `json:"globalPassThroughEnv,omitempty"`
 
+	// .env files to consider, in order.
+	GlobalDotEnv []string `json:"globalDotEnv,omitempty"`
+
 	// Pipeline is a map of Turbo pipeline entries which define the task graph
 	// and cache behavior on a per task or per package-task basis.
 	Pipeline Pipeline `json:"pipeline"`
@@ -54,13 +57,14 @@ type rawTurboJSON struct {
 // Notably, it includes a PristinePipeline instead of the regular Pipeline. (i.e. TaskDefinition
 // instead of BookkeepingTaskDefinition.)
 type pristineTurboJSON struct {
-	GlobalDependencies   []string           `json:"globalDependencies,omitempty"`
-	GlobalEnv            []string           `json:"globalEnv,omitempty"`
-	GlobalPassthroughEnv []string           `json:"globalPassThroughEnv"`
-	Pipeline             PristinePipeline   `json:"pipeline"`
-	RemoteCacheOptions   RemoteCacheOptions `json:"remoteCache,omitempty"`
-	Extends              []string           `json:"extends,omitempty"`
-	Space                *SpaceConfig       `json:"experimentalSpaces,omitempty"`
+	GlobalDependencies   []string                        `json:"globalDependencies,omitempty"`
+	GlobalEnv            []string                        `json:"globalEnv,omitempty"`
+	GlobalPassthroughEnv []string                        `json:"globalPassThroughEnv"`
+	GlobalDotEnv         turbopath.AnchoredUnixPathArray `json:"globalDotEnv"`
+	Pipeline             PristinePipeline                `json:"pipeline"`
+	RemoteCacheOptions   RemoteCacheOptions              `json:"remoteCache,omitempty"`
+	Extends              []string                        `json:"extends,omitempty"`
+	Space                *SpaceConfig                    `json:"experimentalSpaces,omitempty"`
 }
 
 // TurboJSON represents a turbo.json configuration file
@@ -68,6 +72,7 @@ type TurboJSON struct {
 	GlobalDeps           []string
 	GlobalEnv            []string
 	GlobalPassthroughEnv []string
+	GlobalDotEnv         turbopath.AnchoredUnixPathArray
 	Pipeline             Pipeline
 	RemoteCacheOptions   RemoteCacheOptions
 	Extends              []string // A list of Workspace names
@@ -84,14 +89,15 @@ type RemoteCacheOptions struct {
 // We use this for printing ResolvedTaskConfiguration, because we _want_ to show
 // the user the default values for key they have not configured.
 type rawTaskWithDefaults struct {
-	Outputs        []string            `json:"outputs"`
-	Cache          *bool               `json:"cache"`
-	DependsOn      []string            `json:"dependsOn"`
-	Inputs         []string            `json:"inputs"`
-	OutputMode     util.TaskOutputMode `json:"outputMode"`
-	PassthroughEnv []string            `json:"passThroughEnv"`
-	Env            []string            `json:"env"`
-	Persistent     bool                `json:"persistent"`
+	Outputs        []string                        `json:"outputs"`
+	Cache          *bool                           `json:"cache"`
+	DependsOn      []string                        `json:"dependsOn"`
+	Inputs         []string                        `json:"inputs"`
+	OutputMode     util.TaskOutputMode             `json:"outputMode"`
+	PassthroughEnv []string                        `json:"passThroughEnv"`
+	DotEnv         turbopath.AnchoredUnixPathArray `json:"dotEnv"`
+	Env            []string                        `json:"env"`
+	Persistent     bool                            `json:"persistent"`
 }
 
 // rawTask exists to Unmarshal from json. When fields are omitted, we _want_
@@ -104,6 +110,7 @@ type rawTask struct {
 	OutputMode     *util.TaskOutputMode `json:"outputMode,omitempty"`
 	Env            []string             `json:"env,omitempty"`
 	PassthroughEnv []string             `json:"passThroughEnv,omitempty"`
+	DotEnv         []string             `json:"dotEnv,omitempty"`
 	Persistent     *bool                `json:"persistent,omitempty"`
 }
 
@@ -114,6 +121,7 @@ type taskDefinitionHashable struct {
 	Outputs                 TaskOutputs
 	ShouldCache             bool
 	EnvVarDependencies      []string
+	DotEnv                  turbopath.AnchoredUnixPathArray
 	TopologicalDependencies []string
 	TaskDependencies        []string
 	Inputs                  []string
@@ -155,6 +163,9 @@ type TaskDefinition struct {
 
 	// rawTask.PassthroughEnv
 	PassthroughEnv []string
+
+	// rawTask.DotEnv
+	DotEnv turbopath.AnchoredUnixPathArray
 
 	// TopologicalDependencies are tasks from package dependencies.
 	// E.g. "build" is a topological dependency in:
@@ -389,6 +400,7 @@ func (btd BookkeepingTaskDefinition) GetTaskDefinition() TaskDefinition {
 		Outputs:                 btd.TaskDefinition.Outputs,
 		ShouldCache:             btd.TaskDefinition.ShouldCache,
 		EnvVarDependencies:      btd.TaskDefinition.EnvVarDependencies,
+		DotEnv:                  btd.TaskDefinition.DotEnv,
 		TopologicalDependencies: btd.TaskDefinition.TopologicalDependencies,
 		TaskDependencies:        btd.TaskDefinition.TaskDependencies,
 		Inputs:                  btd.TaskDefinition.Inputs,
@@ -439,6 +451,10 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 
 		if bookkeepingTaskDef.hasField("Inputs") {
 			mergedTaskDefinition.Inputs = taskDef.Inputs
+		}
+
+		if bookkeepingTaskDef.hasField("DotEnv") {
+			mergedTaskDefinition.DotEnv = taskDef.DotEnv
 		}
 
 		if bookkeepingTaskDef.hasField("OutputMode") {
@@ -550,6 +566,24 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 		sort.Strings(btd.TaskDefinition.PassthroughEnv)
 	}
 
+	if task.DotEnv != nil {
+		btd.definedFields.Add("DotEnv")
+
+		// Going to _at least_ be an empty array.
+		btd.TaskDefinition.DotEnv = make(turbopath.AnchoredUnixPathArray, 0, len(task.DotEnv))
+
+		// Port the raw dotEnv values in.
+		for _, dotEnvPath := range task.DotEnv {
+			typeCheckedPath, err := turbopath.CheckedToAnchoredUnixPath(dotEnvPath)
+			if err != nil {
+				return err
+			}
+
+			// These are _explicitly_ not sorted.
+			btd.TaskDefinition.DotEnv = append(btd.TaskDefinition.DotEnv, typeCheckedPath)
+		}
+	}
+
 	if task.Inputs != nil {
 		// Note that we don't require Inputs to be sorted, we're going to
 		// hash the resulting files and sort that instead
@@ -587,6 +621,7 @@ func (c taskDefinitionHashable) MarshalJSON() ([]byte, error) {
 		c.Outputs,
 		c.EnvVarDependencies,
 		c.PassthroughEnv,
+		c.DotEnv,
 		c.TaskDependencies,
 		c.TopologicalDependencies,
 	)
@@ -603,6 +638,7 @@ func (c TaskDefinition) MarshalJSON() ([]byte, error) {
 		c.Outputs,
 		c.EnvVarDependencies,
 		c.PassthroughEnv,
+		c.DotEnv,
 		c.TaskDependencies,
 		c.TopologicalDependencies,
 	)
@@ -652,6 +688,19 @@ func (tj *TurboJSON) UnmarshalJSON(data []byte) error {
 	tj.GlobalDeps = globalFileDependencies.UnsafeListOfStrings()
 	sort.Strings(tj.GlobalDeps)
 
+	// Port the raw globalDotEnv values in.
+	if raw.GlobalDotEnv != nil {
+		tj.GlobalDotEnv = make(turbopath.AnchoredUnixPathArray, 0, len(raw.GlobalDotEnv))
+
+		for _, dotEnvPath := range raw.GlobalDotEnv {
+			typeCheckedPath, err := turbopath.CheckedToAnchoredUnixPath(dotEnvPath)
+			if err != nil {
+				return err
+			}
+			tj.GlobalDotEnv = append(tj.GlobalDotEnv, typeCheckedPath)
+		}
+	}
+
 	// copy these over, we don't need any changes here.
 	tj.Pipeline = raw.Pipeline
 	tj.RemoteCacheOptions = raw.RemoteCacheOptions
@@ -673,6 +722,7 @@ func (tj *TurboJSON) MarshalJSON() ([]byte, error) {
 	raw := pristineTurboJSON{}
 	raw.GlobalDependencies = tj.GlobalDeps
 	raw.GlobalEnv = tj.GlobalEnv
+	raw.GlobalDotEnv = tj.GlobalDotEnv
 	raw.GlobalPassthroughEnv = tj.GlobalPassthroughEnv
 	raw.Pipeline = tj.Pipeline.Pristine()
 	raw.RemoteCacheOptions = tj.RemoteCacheOptions
@@ -684,7 +734,7 @@ func (tj *TurboJSON) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&raw)
 }
 
-func makeRawTask(persistent bool, shouldCache bool, outputMode util.TaskOutputMode, inputs []string, outputs TaskOutputs, envVarDependencies []string, passthroughEnv []string, taskDependencies []string, topologicalDependencies []string) *rawTaskWithDefaults {
+func makeRawTask(persistent bool, shouldCache bool, outputMode util.TaskOutputMode, inputs []string, outputs TaskOutputs, envVarDependencies []string, passthroughEnv []string, dotEnv turbopath.AnchoredUnixPathArray, taskDependencies []string, topologicalDependencies []string) *rawTaskWithDefaults {
 	// Initialize with empty arrays, so we get empty arrays serialized into JSON
 	task := &rawTaskWithDefaults{
 		Outputs:   []string{},
@@ -696,6 +746,9 @@ func makeRawTask(persistent bool, shouldCache bool, outputMode util.TaskOutputMo
 	task.Persistent = persistent
 	task.Cache = &shouldCache
 	task.OutputMode = outputMode
+
+	// This should _not_ be sorted.
+	task.DotEnv = dotEnv
 
 	if len(inputs) > 0 {
 		task.Inputs = inputs

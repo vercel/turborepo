@@ -127,6 +127,21 @@ func (th *Tracker) CalculateFileHashes(
 					return err
 				}
 
+				// Make sure we include specified .env files in the file hash.
+				// Handled separately because these are not globs!
+				if len(packageFileHashInputs.taskDefinition.DotEnv) > 0 {
+					packagePath := pkg.Dir.RestoreAnchor(repoRoot)
+					dotEnvObject, err := hashing.GetHashesForExistingFiles(packagePath, packageFileHashInputs.taskDefinition.DotEnv.ToSystemPathArray())
+					if err != nil {
+						return err
+					}
+
+					// Add the dotEnv files into the file hash object.
+					for key, value := range dotEnvObject {
+						hashObject[key] = value
+					}
+				}
+
 				// Get the combined hash of all the files.
 				hash, err := fs.HashObject(hashObject)
 				if err != nil {
@@ -165,6 +180,7 @@ type taskHashable struct {
 	envMode              util.EnvMode
 	passthroughEnv       []string
 	hashableEnvPairs     []string
+	dotEnv               turbopath.AnchoredUnixPathArray
 	globalHash           string
 	taskDependencyHashes []string
 }
@@ -267,6 +283,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 		envMode:              packageTask.EnvMode,
 		passthroughEnv:       packageTask.TaskDefinition.PassthroughEnv,
 		hashableEnvPairs:     hashableEnvPairs,
+		dotEnv:               packageTask.TaskDefinition.DotEnv,
 		globalHash:           th.globalHash,
 		taskDependencyHashes: taskDependencyHashes,
 	})

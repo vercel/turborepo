@@ -156,6 +156,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 				Inferred:    envVars.BySource.Matching.ToSecretHashable(),
 				Passthrough: envVarPassthroughMap.ToSecretHashable(),
 			},
+			DotEnv:           taskDefinition.DotEnv,
 			ExternalDepsHash: pkg.ExternalDepsHash,
 		}
 

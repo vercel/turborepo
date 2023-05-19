@@ -13,6 +13,7 @@ Make sure we prune tasks that reference a pruned workspace
   $ cat out/turbo.json | jq
   {
     "globalPassThroughEnv": null,
+    "globalDotEnv": null,
     "pipeline": {
       "build": {
         "outputs": [],
@@ -21,6 +22,7 @@ Make sure we prune tasks that reference a pruned workspace
         "inputs": [],
         "outputMode": "full",
         "passThroughEnv": null,
+        "dotEnv": null,
         "env": [],
         "persistent": false
       }
