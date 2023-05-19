@@ -295,7 +295,7 @@ impl<T: Watcher> WatchConfig<T> {
         self.watcher
             .lock()
             .expect("watcher lock poisoned")
-            .watch(path, notify::RecursiveMode::Recursive)
+            .watch(path, notify::RecursiveMode::NonRecursive)
             .map_err(|e| ConfigError::WatchError(vec![e]))
     }
 
