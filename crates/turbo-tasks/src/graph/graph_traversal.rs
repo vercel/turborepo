@@ -44,7 +44,8 @@ where
         let futures = FuturesUnordered::new();
         for edge in root_edges {
             match visit.visit(edge) {
-                VisitControlFlow::Continue(node, span) => {
+                VisitControlFlow::Continue(node) => {
+                    let span = visit.span(&node);
                     if let Some((parent_handle, node_ref)) = self.insert(None, GraphNode(node)) {
                         futures.push(With::new(visit.edges(node_ref), span, parent_handle));
                     }
@@ -150,7 +151,8 @@ where
                         let _guard = span.enter();
                         for edge in edges {
                             match running.visit.visit(edge) {
-                                VisitControlFlow::Continue(node, span) => {
+                                VisitControlFlow::Continue(node) => {
+                                    let span = running.visit.span(&node);
                                     if let Some((node_handle, node_ref)) = running
                                         .store
                                         .insert(Some(parent_handle.clone()), GraphNode(node))

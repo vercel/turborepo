@@ -479,19 +479,14 @@ where
         (option_key, node): (Option<(AssetVc, ChunkingType)>, ChunkContentGraphNode<I>),
     ) -> VisitControlFlow<ChunkContentGraphNode<I>, ()> {
         let Some((asset, chunking_type)) = option_key else {
-            let span = if let ChunkContentGraphNode::ChunkItem(_, name) = &node {
-                info_span!("module", name = display(name))
-            } else {
-                Span::current()
-            };
-            return VisitControlFlow::Continue(node, span);
+            return VisitControlFlow::Continue(node);
         };
 
         if !self.processed_assets.insert((chunking_type, asset)) {
             return VisitControlFlow::Skip(node);
         }
 
-        let span = if let ChunkContentGraphNode::ChunkItem(_, name) = &node {
+        if let ChunkContentGraphNode::ChunkItem(_, _) = &node {
             self.chunk_items_count += 1;
 
             // Make sure the chunk doesn't become too large.
@@ -501,12 +496,9 @@ where
                 // start.
                 return VisitControlFlow::Abort(());
             }
-            info_span!("module", name = display(name))
-        } else {
-            Span::current()
-        };
+        }
 
-        VisitControlFlow::Continue(node, span)
+        VisitControlFlow::Continue(node)
     }
 
     fn edges(&mut self, node: &ChunkContentGraphNode<I>) -> Self::EdgesFuture {
@@ -532,6 +524,14 @@ where
                 .await?
                 .into_iter()
                 .flatten())
+        }
+    }
+
+    fn span(&mut self, node: &ChunkContentGraphNode<I>) -> Span {
+        if let ChunkContentGraphNode::ChunkItem(_, name) = node {
+            info_span!("module", name = display(name))
+        } else {
+            Span::current()
         }
     }
 }

@@ -22,6 +22,11 @@ pub trait Visit<Node, Abort = !, Impl = ()> {
     /// Returns a future that resolves to the outgoing edges of the given
     /// `node`.
     fn edges(&mut self, node: &Node) -> Self::EdgesFuture;
+
+    fn span(&mut self, node: &Node) -> Span {
+        let _ = node;
+        Span::current()
+    }
 }
 
 // The different `Impl*` here are necessary in order to avoid the `Conflicting
@@ -42,7 +47,7 @@ where
     type EdgesFuture = NeighFut;
 
     fn visit(&mut self, edge: Self::Edge) -> VisitControlFlow<Node> {
-        VisitControlFlow::Continue(edge, Span::current())
+        VisitControlFlow::Continue(edge)
     }
 
     fn edges(&mut self, node: &Node) -> Self::EdgesFuture {
@@ -64,7 +69,7 @@ where
     type EdgesFuture = NeighFut;
 
     fn visit(&mut self, edge: Self::Edge) -> VisitControlFlow<Node> {
-        VisitControlFlow::Continue(edge, Span::current())
+        VisitControlFlow::Continue(edge)
     }
 
     fn edges(&mut self, node: &Node) -> Self::EdgesFuture {

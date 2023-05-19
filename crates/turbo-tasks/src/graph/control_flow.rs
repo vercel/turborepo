@@ -1,9 +1,7 @@
-use tracing::Span;
-
 /// The control flow of visiting an edge during a graph traversal.
 pub enum VisitControlFlow<Node, Abort = !> {
     /// The traversal should continue on the outgoing edges of the given node.
-    Continue(Node, Span),
+    Continue(Node),
     /// The traversal should skip visiting the edges the given node.
     Skip(Node),
     /// The traversal should abort and return immediately.
@@ -17,7 +15,7 @@ impl<Node, Abort> VisitControlFlow<Node, Abort> {
         Map: FnMut(Node) -> Mapped,
     {
         match self {
-            VisitControlFlow::Continue(node, span) => VisitControlFlow::Continue(map(node), span),
+            VisitControlFlow::Continue(node) => VisitControlFlow::Continue(map(node)),
             VisitControlFlow::Skip(node) => VisitControlFlow::Skip(map(node)),
             VisitControlFlow::Abort(abort) => VisitControlFlow::Abort(abort),
         }
@@ -29,7 +27,7 @@ impl<Node, Abort> VisitControlFlow<Node, Abort> {
         Map: FnMut(Abort) -> Mapped,
     {
         match self {
-            VisitControlFlow::Continue(node, span) => VisitControlFlow::Continue(node, span),
+            VisitControlFlow::Continue(node) => VisitControlFlow::Continue(node),
             VisitControlFlow::Skip(node) => VisitControlFlow::Skip(node),
             VisitControlFlow::Abort(abort) => VisitControlFlow::Abort(map(abort)),
         }
