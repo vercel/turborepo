@@ -6,10 +6,9 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use clap::Parser;
 use once_cell::sync::Lazy;
-use tracing_appender::non_blocking::DEFAULT_BUFFERED_LINES_LIMIT;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use turbopack_cli::{arguments::Arguments, register};
-use turbopack_cli_utils::{exit::exit_guard, raw_trace::RawTraceLayer};
+use turbopack_cli_utils::{exit::exit_guard, raw_trace::RawTraceLayer, trace_writer::TraceWriter};
 
 #[global_allocator]
 static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
@@ -85,11 +84,9 @@ fn main() {
             .context("Unable to create .turbopack directory")
             .unwrap();
         let trace_file = internal_dir.join("trace.log");
-        let (writer, guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
-            .lossy(false)
-            .buffered_lines_limit(DEFAULT_BUFFERED_LINES_LIMIT * 8)
-            .finish(std::fs::File::create(trace_file).unwrap());
-        let subscriber = subscriber.with(RawTraceLayer::new(writer));
+        let trace_writer = std::fs::File::create(trace_file).unwrap();
+        let (trace_writer, guard) = TraceWriter::new(trace_writer);
+        let subscriber = subscriber.with(RawTraceLayer::new(trace_writer));
 
         let guard = exit_guard(guard).unwrap();
 
