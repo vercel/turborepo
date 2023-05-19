@@ -1,20 +1,14 @@
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
-use serde_json::Map;
 
 /// A raw trace line.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FullTraceRow<'a> {
-    pub ts: u64,
-    #[serde(flatten, borrow)]
-    pub data: TraceRow<'a>,
-}
-
-/// The inner raw trace line
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "ty")]
 pub enum TraceRow<'a> {
     #[serde(rename = "B")]
     Start {
+        ts: u64,
         id: u64,
         #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
         parent: Option<u64>,
@@ -22,24 +16,36 @@ pub enum TraceRow<'a> {
         name: &'a str,
         #[serde(rename = "t")]
         target: &'a str,
-        #[serde(rename = "v", default, skip_serializing_if = "Map::is_empty")]
-        values: Map<String, serde_json::Value>,
+        #[serde(rename = "v", default, skip_serializing_if = "Vec::is_empty")]
+        values: Vec<(String, TraceValue<'a>)>,
     },
     #[serde(rename = "E")]
-    End { id: u64 },
+    End { ts: u64, id: u64 },
     #[serde(rename = "b")]
     Enter {
+        ts: u64,
         id: u64,
         #[serde(rename = "t")]
         thread_id: u64,
     },
     #[serde(rename = "e")]
-    Exit { id: u64 },
+    Exit { ts: u64, id: u64 },
     #[serde(rename = "i")]
     Event {
+        ts: u64,
         #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
         parent: Option<u64>,
-        #[serde(rename = "v", default, skip_serializing_if = "Map::is_empty")]
-        values: Map<String, serde_json::Value>,
+        #[serde(rename = "v", default, skip_serializing_if = "Vec::is_empty")]
+        values: Vec<(String, TraceValue<'a>)>,
     },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TraceValue<'a> {
+    String(#[serde(borrow)] Cow<'a, str>),
+    Bool(bool),
+    UInt(u64),
+    Int(i64),
+    Float(f64),
 }

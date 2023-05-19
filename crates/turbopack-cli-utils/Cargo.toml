@@ -17,6 +17,7 @@ clap = { workspace = true, features = ["derive"] }
 crossterm = "0.26.0"
 ctrlc = "3.2.5"
 owo-colors = { workspace = true }
+postcard = { workspace = true, features = ["alloc", "use-std"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tracing = { workspace = true }
