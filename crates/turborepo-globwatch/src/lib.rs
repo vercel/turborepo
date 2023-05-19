@@ -292,10 +292,18 @@ impl<T: Watcher> WatchConfig<T> {
     /// Register a single path to be included by the watcher.
     pub async fn include_path(&self, path: &Path) -> Result<(), ConfigError> {
         trace!("watching {:?}", path);
+        // Windows doesn't create an event when a watched directory itself is deleted
+        // we watch the parent directory instead.
+        // More information at https://github.com/notify-rs/notify/issues/403
+        #[cfg(windows)]
+        let watched_path = path.parent().expect("turbo is unusable at filesytem root");
+        #[cfg(not(windows))]
+        let watched_path = path;
+
         self.watcher
             .lock()
             .expect("watcher lock poisoned")
-            .watch(path, notify::RecursiveMode::NonRecursive)
+            .watch(watched_path, notify::RecursiveMode::NonRecursive)
             .map_err(|e| ConfigError::WatchError(vec![e]))
     }
 
