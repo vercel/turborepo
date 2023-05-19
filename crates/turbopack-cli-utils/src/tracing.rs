@@ -1,51 +1,77 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fmt::{Display, Formatter},
+};
 
 use serde::{Deserialize, Serialize};
 
 /// A raw trace line.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "ty")]
 pub enum TraceRow<'a> {
-    #[serde(rename = "B")]
     Start {
         ts: u64,
         id: u64,
-        #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
         parent: Option<u64>,
-        #[serde(rename = "n")]
+        #[serde()]
         name: &'a str,
-        #[serde(rename = "t")]
+        #[serde()]
         target: &'a str,
-        #[serde(rename = "v", default, skip_serializing_if = "Vec::is_empty")]
-        values: Vec<(String, TraceValue<'a>)>,
+        #[serde(borrow)]
+        values: Vec<(Cow<'a, str>, TraceValue<'a>)>,
     },
-    #[serde(rename = "E")]
-    End { ts: u64, id: u64 },
-    #[serde(rename = "b")]
+    End {
+        ts: u64,
+        id: u64,
+    },
     Enter {
         ts: u64,
         id: u64,
-        #[serde(rename = "t")]
         thread_id: u64,
     },
-    #[serde(rename = "e")]
-    Exit { ts: u64, id: u64 },
-    #[serde(rename = "i")]
+    Exit {
+        ts: u64,
+        id: u64,
+    },
     Event {
         ts: u64,
-        #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
         parent: Option<u64>,
-        #[serde(rename = "v", default, skip_serializing_if = "Vec::is_empty")]
-        values: Vec<(String, TraceValue<'a>)>,
+        values: Vec<(Cow<'a, str>, TraceValue<'a>)>,
     },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
 pub enum TraceValue<'a> {
     String(#[serde(borrow)] Cow<'a, str>),
     Bool(bool),
     UInt(u64),
     Int(i64),
     Float(f64),
+}
+
+impl Display for TraceValue<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TraceValue::String(s) => write!(f, "{}", s),
+            TraceValue::Bool(b) => write!(f, "{}", b),
+            TraceValue::UInt(u) => write!(f, "{}", u),
+            TraceValue::Int(i) => write!(f, "{}", i),
+            TraceValue::Float(fl) => write!(f, "{}", fl),
+        }
+    }
+}
+
+impl<'a> TraceValue<'a> {
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            TraceValue::UInt(u) => Some(*u),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            TraceValue::String(s) => Some(s),
+            _ => None,
+        }
+    }
 }

@@ -27,8 +27,9 @@ use std::{
     ops::Range,
 };
 
+use indexmap::IndexMap;
 use intervaltree::{Element, IntervalTree};
-use turbopack_cli_utils::tracing::{FullTraceRow, TraceRow};
+use turbopack_cli_utils::tracing::{TraceRow, TraceValue};
 
 macro_rules! pjson {
     ($($tt:tt)*) => {
@@ -52,24 +53,34 @@ fn main() {
         .next()
         .map_or(".turbopack/trace.log", String::as_str);
 
-    eprint!("Reading trace from {}...", arg);
+    eprint!("Reading content from {}...", arg);
 
     // Read file to string
-    let file = std::fs::read_to_string(arg).unwrap();
+    let file = std::fs::read(arg).unwrap();
     eprintln!(" done ({} MiB)", file.len() / 1024 / 1024);
 
-    eprint!("Analysing trace into span tree...");
+    eprint!("Parsing trace from content...");
 
-    // Parse trace rows
-    let trace_rows = file.lines().enumerate().filter_map(|(i, line)| {
-        match serde_json::from_str::<FullTraceRow<'_>>(&line) {
-            Ok(row) => Some(row),
+    let mut trace_rows = Vec::new();
+    let mut current = &file[..];
+    while !current.is_empty() {
+        match postcard::take_from_bytes(current) {
+            Ok((row, remaining)) => {
+                trace_rows.push(row);
+                current = remaining;
+            }
             Err(err) => {
-                eprintln!("Error parsing trace line {}:\n> {}\n{}", i, line, err);
-                None
+                eprintln!(
+                    "Error parsing trace data at {} bytes: {err}",
+                    file.len() - current.len()
+                );
+                break;
             }
         }
-    });
+    }
+    eprintln!(" done ({} items)", trace_rows.len());
+
+    eprint!("Analysing trace into span tree...");
 
     let mut spans = Vec::new();
     spans.push(Span {
@@ -80,7 +91,7 @@ fn main() {
         end: 0,
         self_start: None,
         items: Vec::new(),
-        values: serde_json::Map::new(),
+        values: IndexMap::new(),
     });
 
     let mut active_ids = HashMap::new();
@@ -99,7 +110,7 @@ fn main() {
                     end: 0,
                     self_start: None,
                     items: Vec::new(),
-                    values: serde_json::Map::new(),
+                    values: IndexMap::new(),
                 };
                 spans.push(span);
                 internal_id
@@ -110,9 +121,10 @@ fn main() {
     let mut all_self_times = Vec::new();
     let mut name_counts: HashMap<Cow<'_, str>, usize> = HashMap::new();
 
-    for FullTraceRow { ts, data } in trace_rows {
+    for data in trace_rows {
         match data {
             TraceRow::Start {
+                ts,
                 id,
                 parent,
                 name,
@@ -124,7 +136,7 @@ fn main() {
                 spans[internal_id].target = target.into();
                 spans[internal_id].start = ts;
                 spans[internal_id].end = ts;
-                spans[internal_id].values = values;
+                spans[internal_id].values = values.into_iter().collect();
                 let internal_parent =
                     parent.map_or(0, |id| ensure_span(&mut active_ids, &mut spans, id));
                 spans[internal_id].parent = internal_parent;
@@ -132,19 +144,23 @@ fn main() {
                 parent.items.push(SpanItem::Child(internal_id));
                 *name_counts.entry(Cow::Borrowed(name)).or_default() += 1;
             }
-            TraceRow::End { id } => {
+            TraceRow::End { ts, id } => {
                 // id might be reused
                 if let Some(internal_id) = active_ids.remove(&id) {
                     let span = &mut spans[internal_id];
                     span.end = ts;
                 }
             }
-            TraceRow::Enter { id, thread_id: _ } => {
+            TraceRow::Enter {
+                ts,
+                id,
+                thread_id: _,
+            } => {
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 let span = &mut spans[internal_id];
                 span.self_start = Some(SelfTimeStarted { ts });
             }
-            TraceRow::Exit { id } => {
+            TraceRow::Exit { ts, id } => {
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 let span = &mut spans[internal_id];
                 if let Some(SelfTimeStarted { ts: ts_start }) = span.self_start {
@@ -165,7 +181,8 @@ fn main() {
                     }
                 }
             }
-            TraceRow::Event { parent, mut values } => {
+            TraceRow::Event { ts, parent, values } => {
+                let mut values = values.into_iter().collect::<IndexMap<_, _>>();
                 let duration = values.get("duration").and_then(|v| v.as_u64()).unwrap_or(0);
                 let name: Cow<'_, str> = values
                     .remove("name")
@@ -402,12 +419,7 @@ fn main() {
                         }
                     }
                     let name_json = if let Some(name_value) = span.values.get("name") {
-                        serde_json::to_string(&if let serde_json::Value::String(s) = name_value {
-                            format!("{} {s}", span.name)
-                        } else {
-                            format!("{} {name_value}", span.name)
-                        })
-                        .unwrap()
+                        serde_json::to_string(&format!("{} {name_value}", span.name)).unwrap()
                     } else {
                         serde_json::to_string(&span.name).unwrap()
                     };
@@ -561,7 +573,7 @@ struct Span<'a> {
     end: u64,
     self_start: Option<SelfTimeStarted>,
     items: Vec<SpanItem>,
-    values: serde_json::Map<String, serde_json::Value>,
+    values: IndexMap<Cow<'a, str>, TraceValue<'a>>,
 }
 
 #[derive(Debug)]

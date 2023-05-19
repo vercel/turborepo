@@ -1,4 +1,4 @@
-use std::{fmt::Write, marker::PhantomData, thread, time::Instant};
+use std::{borrow::Cow, fmt::Write, marker::PhantomData, thread, time::Instant};
 
 use tracing::{
     field::{display, Visit},
@@ -102,7 +102,7 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for RawTraceLayer<S> {
 }
 
 struct ValuesVisitor {
-    values: Vec<(String, TraceValue<'static>)>,
+    values: Vec<(Cow<'static, str>, TraceValue<'static>)>,
 }
 
 impl ValuesVisitor {
@@ -116,22 +116,22 @@ impl Visit for ValuesVisitor {
         let mut str = String::new();
         let _ = write!(str, "{:?}", value);
         self.values
-            .push((field.name().to_string(), TraceValue::String(str.into())));
+            .push((field.name().into(), TraceValue::String(str.into())));
     }
 
     fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
         self.values
-            .push((field.name().to_string(), TraceValue::Float(value)));
+            .push((field.name().into(), TraceValue::Float(value)));
     }
 
     fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
         self.values
-            .push((field.name().to_string(), TraceValue::Int(value)));
+            .push((field.name().into(), TraceValue::Int(value)));
     }
 
     fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
         self.values
-            .push((field.name().to_string(), TraceValue::UInt(value)));
+            .push((field.name().into(), TraceValue::UInt(value)));
     }
 
     fn record_i128(&mut self, field: &tracing::field::Field, value: i128) {
@@ -144,12 +144,12 @@ impl Visit for ValuesVisitor {
 
     fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
         self.values
-            .push((field.name().to_string(), TraceValue::Bool(value)));
+            .push((field.name().into(), TraceValue::Bool(value)));
     }
 
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         self.values.push((
-            field.name().to_string(),
+            field.name().into(),
             TraceValue::String(value.to_string().into()),
         ));
     }
