@@ -1,10 +1,11 @@
 #![feature(future_join)]
 #![feature(min_specialization)]
 
-use std::{borrow::Cow, path::Path};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use once_cell::sync::Lazy;
 use tracing_appender::non_blocking::DEFAULT_BUFFERED_LINES_LIMIT;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use turbopack_cli::{arguments::Arguments, register};
@@ -12,6 +13,43 @@ use turbopack_cli_utils::{exit::exit_guard, raw_trace::RawTraceLayer};
 
 #[global_allocator]
 static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
+
+static TRACING_OVERVIEW_TARGETS: Lazy<Vec<&str>> =
+    Lazy::new(|| vec!["turbo_tasks_fs=info", "turbopack_dev_server=info"]);
+static TRACING_TURBOPACK_TARGETS: Lazy<Vec<&str>> = Lazy::new(|| {
+    [
+        &TRACING_OVERVIEW_TARGETS[..],
+        &[
+            "turbopack=trace",
+            "turbopack_core=trace",
+            "turbopack_ecmascript=trace",
+            "turbopack_css=trace",
+            "turbopack_dev=trace",
+            "turbopack_image=trace",
+            "turbopack_dev_server=trace",
+            "turbopack_json=trace",
+            "turbopack_mdx=trace",
+            "turbopack_node=trace",
+            "turbopack_static=trace",
+            "turbopack_cli_utils=trace",
+            "turbopack_cli=trace",
+            "turbopack_ecmascript=trace",
+        ],
+    ]
+    .concat()
+});
+static TRACING_TURBO_TASKS_TARGETS: Lazy<Vec<&str>> = Lazy::new(|| {
+    [
+        &TRACING_TURBOPACK_TARGETS[..],
+        &[
+            "turbo_tasks=trace",
+            "turbo_tasks_viz=trace",
+            "turbo_tasks_memory=trace",
+            "turbo_tasks_fs=trace",
+        ],
+    ]
+    .concat()
+});
 
 fn main() {
     use turbo_tasks_malloc::TurboMalloc;
@@ -24,24 +62,13 @@ fn main() {
         // Trace presets
         match trace.as_str() {
             "overview" => {
-                trace = "turbo_tasks_fs=info,turbopack_dev_server=info".to_string();
+                trace = TRACING_OVERVIEW_TARGETS.join(",");
             }
             "turbopack" => {
-                trace = "turbo_tasks_fs=info,turbopack=trace,turbopack_core=trace,\
-                         turbopack_ecmascript=trace,turbopack_css=trace,turbopack_dev=trace,\
-                         turbopack_image=trace,turbopack_dev_server=trace,turbopack_json=trace,\
-                         turbopack_mdx=trace,turbopack_node=trace,turbopack_static=trace,\
-                         turbopack_cli_utils=trace,turbopack_cli=trace,turbopack_ecmascript=trace"
-                    .to_string();
+                trace = TRACING_TURBOPACK_TARGETS.join(",");
             }
             "turbo-tasks" => {
-                trace = "turbopack=trace,turbopack_core=trace,turbopack_ecmascript=trace,\
-                         turbopack_css=trace,turbopack_dev=trace,turbopack_image=trace,\
-                         turbopack_dev_server=trace,turbopack_json=trace,turbopack_mdx=trace,\
-                         turbopack_node=trace,turbopack_static=trace,turbopack_cli_utils=trace,\
-                         turbopack_cli=trace,turbopack_ecmascript=trace,turbo_tasks=trace,\
-                         turbo_tasks_viz=trace,turbo_tasks_memory=trace,turbo_tasks_fs=trace"
-                    .to_string();
+                trace = TRACING_TURBO_TASKS_TARGETS.join(",");
             }
             _ => {}
         }
