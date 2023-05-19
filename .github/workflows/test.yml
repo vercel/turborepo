@@ -366,7 +366,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 18
           cache: ${{ matrix.manager }}
           cache-dependency-path: package.json
 
@@ -848,8 +848,6 @@ jobs:
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
-        with:
-          node-version: 16
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
@@ -914,8 +912,6 @@ jobs:
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
-        with:
-          node-version: 16
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
