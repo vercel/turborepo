@@ -57,7 +57,7 @@ impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> Ra
             )
             .unwrap();
             buf.push(b'\n');
-            writer.write_all(&buf).unwrap();
+            let _ = writer.write_all(&buf);
             buf.clear();
         });
     }
