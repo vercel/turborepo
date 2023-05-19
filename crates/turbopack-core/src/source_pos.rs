@@ -117,7 +117,8 @@ impl SourcePos {
                 _ => {
                     // eat this byte and the next 3.
                     i += 4;
-                    column += 1;
+                    // 4 octets always decode into 2 UTF-16 chars.
+                    column += 2;
                 }
             }
         }

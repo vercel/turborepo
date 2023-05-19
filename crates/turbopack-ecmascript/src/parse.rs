@@ -125,15 +125,13 @@ struct InlineSourcesContentConfig {}
 impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
         match f {
-            FileName::Custom(s) => {
-                format!("/{SOURCE_MAP_ROOT_NAME}/{s}")
-            }
+            FileName::Custom(s) => format!("/{SOURCE_MAP_ROOT_NAME}/{s}"),
             _ => f.to_string(),
         }
     }
 
     fn inline_sources_content(&self, _f: &FileName) -> bool {
-        true
+        false
     }
 }
 

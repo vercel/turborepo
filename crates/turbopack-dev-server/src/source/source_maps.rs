@@ -38,7 +38,7 @@ pub struct SourceMapContentSource {
 #[turbo_tasks::value_impl]
 impl SourceMapContentSourceVc {
     #[turbo_tasks::function]
-    pub fn new(asset_source: ContentSourceVc) -> SourceMapContentSourceVc {
+    pub fn new(asset_source: ContentSourceVc) -> Self {
         SourceMapContentSource { asset_source }.cell()
     }
 }

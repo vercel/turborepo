@@ -1,6 +1,7 @@
 pub mod asset_graph;
 pub mod combined;
 pub mod conditional;
+pub mod files;
 pub mod headers;
 pub mod issue_context;
 pub mod lazy_instantiated;

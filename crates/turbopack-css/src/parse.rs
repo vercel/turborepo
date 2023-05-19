@@ -112,7 +112,7 @@ impl SourceMapGenConfig for InlineSourcesContentConfig {
     }
 
     fn inline_sources_content(&self, _f: &FileName) -> bool {
-        true
+        false
     }
 }
 

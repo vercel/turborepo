@@ -316,7 +316,7 @@ async fn source(
         routes: vec![
             ("__turbopack__/".to_string(), introspect),
             ("__turbo_tasks__/".to_string(), viz),
-            ("__turbopack_sourcemap__/".to_string(), source_maps),
+            ("turbopack/[sourcemap]/".to_string(), source_maps),
         ],
         fallback: main_source,
     }
