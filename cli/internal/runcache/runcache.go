@@ -110,12 +110,12 @@ type TaskCache struct {
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
 // Returns the cacheStatus, the timeSaved, and error values, so the consumer can understand
 // what happened in here.
-func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (cache.ItemStatus, int, error) {
+func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (cache.ItemStatus, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
-		return cache.ItemStatus{Local: false, Remote: false}, 0, nil
+		return cache.NewCacheMiss(), nil
 	}
 
 	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
@@ -127,26 +127,23 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 
 	hasChangedOutputs := len(changedOutputGlobs) > 0
 	var cacheStatus cache.ItemStatus
-	var timeSaved int
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O. We also need to pass along the exclusion
 		// globs as well.
-		itemStatus, restoredFiles, duration, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
-		hit := itemStatus.Local || itemStatus.Remote
-		timeSaved = duration
-		tc.ExpandedOutputs = restoredFiles
+		itemStatus, restoredFiles, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
 		// Assign to this variable outside this closure so we can return at the end of the function
 		cacheStatus = itemStatus
+		tc.ExpandedOutputs = restoredFiles
 		if err != nil {
 			// If there was an error fetching from cache, we'll say there was no cache hit
-			return cache.ItemStatus{Local: false, Remote: false}, 0, err
-		} else if !hit {
+			return cache.NewCacheMiss(), err
+		} else if !itemStatus.Hit {
 			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			// If there was no hit, we can also say there was no hit
-			return cache.ItemStatus{Local: false, Remote: false}, 0, nil
+			return cache.NewCacheMiss(), nil
 		}
 
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
@@ -155,7 +152,8 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		}
 	} else {
 		// If no outputs have changed, that means we have a local cache hit.
-		cacheStatus.Local = true
+		// TODO: add timeSaved metric here
+		cacheStatus = cache.NewFSTaskCacheStatus(true, 0)
 		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
@@ -174,9 +172,8 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	default:
 		// NoLogs, do not output anything
 	}
-	// TODO: timeSaved could be part of cacheStatus, so we don't have to make a new struct
-	// downstream, but this would be a more invasive change right now.
-	return cacheStatus, timeSaved, nil
+
+	return cacheStatus, nil
 }
 
 // ReplayLogFile writes out the stored logfile to the terminal

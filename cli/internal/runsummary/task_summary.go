@@ -25,21 +25,17 @@ type TaskCacheSummary struct {
 // from upstream, but that is a more invasive change.
 func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheSummary {
 	status := cache.CacheEventMiss
-	if itemStatus.Local || itemStatus.Remote {
+	if itemStatus.Hit {
 		status = cache.CacheEventHit
 	}
-
 	var source string
-	if itemStatus.Local {
-		source = cache.CacheSourceFS
-	} else if itemStatus.Remote {
-		source = cache.CacheSourceRemote
+	if itemStatus.Hit {
+		source = itemStatus.Source
 	}
-
 	cs := TaskCacheSummary{
 		// copy these over
-		Local:  itemStatus.Local,
-		Remote: itemStatus.Remote,
+		Local:  itemStatus.Hit && itemStatus.Source == cache.CacheSourceFS,
+		Remote: itemStatus.Hit && itemStatus.Source == cache.CacheSourceRemote,
 		Status: status,
 		Source: source,
 	}
