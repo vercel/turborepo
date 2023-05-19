@@ -26,4 +26,4 @@ Check
     Inferred Environment Variables   =                                                                                                                                   
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                              
     ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
-    Framework                        = <NO FRAMEWORK DETECTED>                                                                                                           
+    Framework                        = <NO FRAMEWORK DETECTED>                                                                                                                         

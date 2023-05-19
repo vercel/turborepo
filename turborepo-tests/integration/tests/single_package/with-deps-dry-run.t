@@ -27,7 +27,7 @@ Check
     Inferred Environment Variables   =                                                                                                                                   
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                              
     ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
-    Framework                        = <NO FRAMEWORK DETECTED>                                                                                                           
+    Framework                        = <NO FRAMEWORK DETECTED>                                                                                                                         
   test
     Task                             = test                                                                                                                                
     Hash                             = d204b0e91f222208                                                                                                                    
@@ -44,4 +44,4 @@ Check
     Inferred Environment Variables   =                                                                                                                                     
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                                
     ResolvedTaskDefinition           = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
-    Framework                        = <NO FRAMEWORK DETECTED>                                                                                                             
+    Framework                        = <NO FRAMEWORK DETECTED>                                                                                                                           

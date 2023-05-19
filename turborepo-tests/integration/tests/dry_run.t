@@ -62,6 +62,6 @@ Setup
 
 # Run the task with NODE_ENV set and see it in summary. Use util package so it's just one package
   $ NODE_ENV=banana ${TURBO} run build --dry --filter=util | grep "Environment Variables"
-    Configured Environment Variables = NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e                                                              
-    Inferred Environment Variables   =                                                                                                                                        
-    Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                                                    
+    Configured Environment Variables = NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e                                                                            
+    Inferred Environment Variables   =                                                                                                                                                      
+    Global Environment Variables     = SOME_ENV_VAR=, VERCEL_ANALYTICS_ID=                                                                                                                  
