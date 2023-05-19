@@ -2,7 +2,7 @@
 // Vec<u8> instead of a reference, and uses a unbounded channel to avoid slowing
 // down the application.
 
-use std::{debug_assert, f32::consts::E, io::Write, thread::JoinHandle};
+use std::{debug_assert, io::Write, thread::JoinHandle};
 
 use crossbeam_channel::{unbounded, Sender, TryRecvError};
 
