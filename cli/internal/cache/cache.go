@@ -318,21 +318,16 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 	return NewCacheMiss(), nil, nil
 }
 
+// Exists check each cache sequentially and return the first one that has a cache hit
 func (mplex *cacheMultiplexer) Exists(target string) ItemStatus {
-	// Start with a cache miss
-	syncCacheState := NewCacheMiss()
 	for _, cache := range mplex.caches {
 		itemStatus := cache.Exists(target)
-		// if there wa sa hit on any of the caches, we'll assign its properties
-		// Note: if both caches have a hit, the last one to return wins
 		if itemStatus.Hit {
-			syncCacheState.Hit = itemStatus.Hit
-			syncCacheState.Source = itemStatus.Source
-			syncCacheState.TimeSaved = itemStatus.TimeSaved
+			return itemStatus
 		}
 	}
 
-	return syncCacheState
+	return NewCacheMiss()
 }
 
 func (mplex *cacheMultiplexer) Clean(anchor turbopath.AbsoluteSystemPath) {
