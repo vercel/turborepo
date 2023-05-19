@@ -235,6 +235,8 @@ pub enum ConfigError {
     ServerStopped,
     /// Watch error
     WatchError(Vec<notify::Error>),
+    /// The server has already been consumed.
+    WatchingAlready,
 }
 
 impl<T: Watcher> WatchConfig<T> {
@@ -285,6 +287,16 @@ impl<T: Watcher> WatchConfig<T> {
                 }
             })
             .map_err(ConfigError::WatchError)
+    }
+
+    /// Register a single path to be included by the watcher.
+    pub async fn include_path(&self, path: &Path) -> Result<(), ConfigError> {
+        trace!("watching {:?}", path);
+        self.watcher
+            .lock()
+            .expect("only fails if poisoned")
+            .watch(path, notify::RecursiveMode::Recursive)
+            .map_err(|e| ConfigError::WatchError(vec![e]))
     }
 
     /// Register a glob to be excluded by the watcher.
