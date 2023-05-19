@@ -93,8 +93,8 @@ export interface RootSchema extends BaseSchema {
   globalPassThroughEnv?: null | string[];
 
   /**
-   * An enumarated list of `.env` files to include in the task hash.
-   * This field is ordered.
+   * A priority-ordered (most-significant to least-significant) array of project-anchored
+   * Unix-style paths to `.env` files to include in the global hash.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
    *
@@ -169,14 +169,14 @@ export interface Pipeline {
   passThroughEnv?: null | string[];
 
   /**
-   * An enumarated list of `.env` files to include in the task hash.
-   * This field is ordered.
+   * A priority-ordered (most-significant to least-significant) array of workspace-anchored
+   * Unix-style paths to `.env` files to include in the task hash.
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#dotEnv
    *
    * @default null
    */
-  dotEnv?: null | string[];
+  dotEnv?: null | AnchoredUnixPath[];
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.
@@ -268,3 +268,5 @@ export type OutputMode =
   | "new-only"
   | "errors-only"
   | "none";
+
+export type AnchoredUnixPath = string;
