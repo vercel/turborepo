@@ -294,7 +294,7 @@ impl<T: Watcher> WatchConfig<T> {
         trace!("watching {:?}", path);
         self.watcher
             .lock()
-            .expect("only fails if poisoned")
+            .expect("watcher lock poisoned")
             .watch(path, notify::RecursiveMode::Recursive)
             .map_err(|e| ConfigError::WatchError(vec![e]))
     }

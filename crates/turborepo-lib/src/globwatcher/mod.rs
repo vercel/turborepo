@@ -95,6 +95,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
             if event.paths.contains(&self.relative_to) && matches!(event.kind, EventKind::Remove(_))
             {
                 // if the root of the repo is deleted, we shut down
+                trace!("repo root was removed, shutting down");
                 break;
             }
 
