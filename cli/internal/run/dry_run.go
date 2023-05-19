@@ -10,6 +10,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -29,6 +30,8 @@ func DryRun(
 	turboCache cache.Cache,
 	_ *fs.TurboJSON, // unused, but keep here for parity with RealRun method signature
 	globalEnvMode util.EnvMode,
+	globalEnv env.EnvironmentVariableMap,
+	globalPassthroughEnv env.EnvironmentVariableMap,
 	base *cmdutil.CmdBase,
 	summary runsummary.Meta,
 ) error {

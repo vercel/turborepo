@@ -7,27 +7,27 @@ import (
 	"testing"
 )
 
-func setEnvs(envVars []string) {
+func setEnvs(envVars []string) EnvironmentVariableMap {
+	output := EnvironmentVariableMap{}
 	for _, envVar := range envVars {
 		parts := strings.SplitN(envVar, "=", 2)
-		err := os.Setenv(parts[0], strings.Join(parts[1:], ""))
-		if err != nil {
-			panic(err)
-		}
+		output.Add(parts[0], strings.Join(parts[1:], ""))
 	}
+
+	return output
 }
 
 // Prefixes for common framework variables that we always include
 var _envVarPrefixes = []string{
-	"GATSBY_",
-	"NEXT_PUBLIC_",
-	"NUXT_ENV_",
-	"PUBLIC_",
-	"REACT_APP_",
-	"REDWOOD_ENV_",
-	"SANITY_STUDIO_",
-	"VITE_",
-	"VUE_APP_",
+	"GATSBY_*",
+	"NEXT_PUBLIC_*",
+	"NUXT_ENV_*",
+	"PUBLIC_*",
+	"REACT_APP_*",
+	"REDWOOD_ENV_*",
+	"SANITY_STUDIO_*",
+	"VITE_*",
+	"VUE_APP_*",
 }
 
 func TestGetHashableEnvVars(t *testing.T) {
@@ -208,7 +208,7 @@ func TestGetHashableEnvVars(t *testing.T) {
 			name: "Framework detected, has framework env vars",
 			args: args{
 				envKeys:     []string{},
-				envPrefixes: []string{"NEXT_PUBLIC_"},
+				envPrefixes: []string{"NEXT_PUBLIC_*"},
 			},
 			want: EnvironmentVariablePairs{"NEXT_PUBLIC_MY_COOL_VAR=cool"},
 		},
@@ -217,7 +217,7 @@ func TestGetHashableEnvVars(t *testing.T) {
 			name: "Framework detected, has framework env vars, and manually specified key",
 			args: args{
 				envKeys:     []string{"MANUAL"},
-				envPrefixes: []string{"NEXT_PUBLIC_"},
+				envPrefixes: []string{"NEXT_PUBLIC_*"},
 			},
 			want: EnvironmentVariablePairs{"MANUAL=true", "NEXT_PUBLIC_MY_COOL_VAR=cool"},
 		},
@@ -235,7 +235,7 @@ func TestGetHashableEnvVars(t *testing.T) {
 			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
 			args: args{
 				envKeys:     []string{"MANUAL"},
-				envPrefixes: []string{"NEXT_PUBLIC_"},
+				envPrefixes: []string{"NEXT_PUBLIC_*"},
 			},
 			want: EnvironmentVariablePairs{"MANUAL=true"},
 		},
@@ -244,7 +244,7 @@ func TestGetHashableEnvVars(t *testing.T) {
 			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
 			args: args{
 				envKeys:     []string{},
-				envPrefixes: []string{"TURBO"},
+				envPrefixes: []string{"TURBO*"},
 			},
 			want: EnvironmentVariablePairs{"TURBOREPO=true"},
 		},
@@ -253,7 +253,7 @@ func TestGetHashableEnvVars(t *testing.T) {
 			name: "$TURBO_CI_VENDOR_ENV_KEY excludes automatically added env vars",
 			args: args{
 				envKeys:     []string{"TURBOREPO"},
-				envPrefixes: []string{"NEXT_PUBLIC"},
+				envPrefixes: []string{"NEXT_PUBLIC*"},
 			},
 			want: EnvironmentVariablePairs{"NEXT_PUBLIC_MY_VERCEL_URL=me.vercel.com", "TURBOREPO=true"},
 		},
@@ -262,7 +262,7 @@ func TestGetHashableEnvVars(t *testing.T) {
 			name: "$TURBO_CI_VENDOR_ENV_KEY should not exclude itself",
 			args: args{
 				envKeys:     []string{},
-				envPrefixes: []string{"TURBO_"},
+				envPrefixes: []string{"TURBO_*"},
 			},
 			want: EnvironmentVariablePairs{},
 		},
@@ -271,7 +271,7 @@ func TestGetHashableEnvVars(t *testing.T) {
 			name: "blocked env var is allowed if manually specified",
 			args: args{
 				envKeys:     []string{"NEXT_PUBLIC_VERCEL_ENV", "MANUAL"},
-				envPrefixes: []string{"NEXT_PUBLIC_"},
+				envPrefixes: []string{"NEXT_PUBLIC_*"},
 			},
 			want: EnvironmentVariablePairs{"MANUAL=true", "NEXT_PUBLIC_VERCEL_ENV=true"},
 		},
@@ -280,9 +280,9 @@ func TestGetHashableEnvVars(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// set the env vars
-			setEnvs(tt.env)
+			envMap := setEnvs(tt.env)
 			// test
-			res, err := GetHashableEnvVars(tt.args.envKeys, tt.args.envPrefixes, "TURBO_CI_VENDOR_ENV_KEY")
+			res, err := envMap.GetHashableEnvVars(tt.args.envKeys, tt.args.envPrefixes, "TURBO_CI_VENDOR_ENV_KEY")
 			if err != nil {
 				t.Errorf("error setup failure: %s", err)
 			}
@@ -308,7 +308,7 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 			name:             "nil wildcard patterns",
 			self:             EnvironmentVariableMap{},
 			wildcardPatterns: nil,
-			want:             EnvironmentVariableMap{},
+			want:             nil,
 			wantErr:          false,
 		},
 		{

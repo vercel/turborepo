@@ -43,6 +43,8 @@ func RealRun(
 	turboCache cache.Cache,
 	turboJSON *fs.TurboJSON,
 	globalEnvMode util.EnvMode,
+	globalEnv env.EnvironmentVariableMap,
+	globalPassthroughEnv env.EnvironmentVariableMap,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	runSummary runsummary.Meta,
@@ -79,8 +81,8 @@ func RealRun(
 		rs:              rs,
 		ui:              &cli.ConcurrentUi{Ui: base.UI},
 		runCache:        runCache,
-		env:             turboJSON.GlobalEnv,
-		passthroughEnv:  turboJSON.GlobalPassthroughEnv,
+		env:             globalEnv,
+		passthroughEnv:  globalPassthroughEnv,
 		logger:          base.Logger,
 		packageManager:  packageManager,
 		processes:       processes,
@@ -194,8 +196,8 @@ type execContext struct {
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
-	env             []string
-	passthroughEnv  []string
+	env             env.EnvironmentVariableMap
+	passthroughEnv  env.EnvironmentVariableMap
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
 	processes       *process.Manager
@@ -292,23 +294,30 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	cmd := exec.Command(ec.packageManager.Command, argsactual...)
 	cmd.Dir = packageTask.Pkg.Dir.ToSystemPath().RestoreAnchor(ec.repoRoot).ToString()
 
-	currentState := env.GetEnvMap()
 	passthroughEnv := env.EnvironmentVariableMap{}
 
 	if packageTask.EnvMode == util.Strict {
-		defaultPassthrough := []string{
+		defaultPassthroughEnvVarMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards([]string{
 			"PATH",
 			"SHELL",
 			"SYSTEMROOT", // Go will always include this on Windows, but we're being explicit here
+		})
+		if err != nil {
+			return nil, err
 		}
 
-		passthroughEnv.Merge(env.FromKeys(currentState, defaultPassthrough))
-		passthroughEnv.Merge(env.FromKeys(currentState, ec.env))
-		passthroughEnv.Merge(env.FromKeys(currentState, ec.passthroughEnv))
-		passthroughEnv.Merge(env.FromKeys(currentState, packageTask.TaskDefinition.EnvVarDependencies))
-		passthroughEnv.Merge(env.FromKeys(currentState, packageTask.TaskDefinition.PassthroughEnv))
+		envVarPassthroughMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.PassthroughEnv)
+		if err != nil {
+			return nil, err
+		}
+
+		passthroughEnv.Merge(defaultPassthroughEnvVarMap)
+		passthroughEnv.Merge(ec.env)
+		passthroughEnv.Merge(ec.passthroughEnv)
+		passthroughEnv.Merge(ec.taskHashTracker.GetEnvVars(packageTask.TaskID).All)
+		passthroughEnv.Merge(envVarPassthroughMap)
 	} else {
-		passthroughEnv.Merge(currentState)
+		passthroughEnv.Merge(ec.taskHashTracker.EnvAtExecutionStart)
 	}
 
 	// Always last to make sure it clobbers.

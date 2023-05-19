@@ -368,6 +368,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,
+		envAtExecutionStart,
 		runsummary.NewGlobalHashSummary(
 			globalHashInputs.globalFileHashMap,
 			globalHashInputs.rootExternalDepsHash,
@@ -390,6 +391,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			turboCache,
 			turboJSON,
 			globalEnvMode,
+			globalHashInputs.envVars.All,
+			envVarPassthroughMap,
 			r.base,
 			summary,
 		)
@@ -405,6 +408,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		turboCache,
 		turboJSON,
 		globalEnvMode,
+		globalHashInputs.envVars.All,
+		envVarPassthroughMap,
 		packagesInScope,
 		r.base,
 		summary,

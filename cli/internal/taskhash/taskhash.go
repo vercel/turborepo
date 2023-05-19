@@ -265,17 +265,12 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 			// Vendor excludes are only applied against inferred includes.
 			excludePrefix := th.EnvAtExecutionStart["TURBO_CI_VENDOR_ENV_KEY"]
 			if excludePrefix != "" {
-				computedExclude := excludePrefix + "*"
-				logger.Debug(fmt.Sprintf("excluding environment variables matching wildcard %s", computedExclude))
-
-				computedWildcards := []string{}
-				copy(computedWildcards, framework.EnvWildcards)
-				computedWildcards = append(computedWildcards, computedExclude)
-
-				inferenceEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(computedWildcards)
+				inferenceDetailedMap, err := th.EnvAtExecutionStart.GetHashableEnvVars(nil, framework.EnvWildcards, "TURBO_CI_VENDOR_ENV_KEY")
 				if err != nil {
 					return "", err
 				}
+
+				inferenceEnvVarMap = inferenceDetailedMap.All
 			} else {
 				inferenceEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(framework.EnvWildcards)
 				if err != nil {
