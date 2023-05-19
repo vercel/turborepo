@@ -1,52 +1,41 @@
-use std::{fmt::Write, io::Write as _, marker::PhantomData, thread, time::Instant};
+use std::{fmt::Write, marker::PhantomData, thread, time::Instant};
 
 use tracing::{
     field::{display, Visit},
     span, Subscriber,
 };
-use tracing_subscriber::{fmt::MakeWriter, registry::LookupSpan, Layer};
+use tracing_subscriber::{registry::LookupSpan, Layer};
 
-use crate::tracing::{TraceRow, TraceValue};
+use crate::{
+    trace_writer::TraceWriter,
+    tracing::{TraceRow, TraceValue},
+};
 
 /// A tracing layer that writes raw trace data to a writer. The data format is
 /// defined by [FullTraceRow].
-pub struct RawTraceLayer<
-    W: for<'span> MakeWriter<'span> + 'static,
-    S: Subscriber + for<'a> LookupSpan<'a>,
-> {
-    make_writer: W,
+pub struct RawTraceLayer<S: Subscriber + for<'a> LookupSpan<'a>> {
+    trace_writer: TraceWriter,
     start: Instant,
     _phantom: PhantomData<fn(S)>,
 }
 
-impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> RawTraceLayer<W, S> {
-    pub fn new(make_writer: W) -> Self {
+impl<S: Subscriber + for<'a> LookupSpan<'a>> RawTraceLayer<S> {
+    pub fn new(trace_writer: TraceWriter) -> Self {
         Self {
-            make_writer,
+            trace_writer,
             start: Instant::now(),
             _phantom: PhantomData,
         }
     }
 
     fn write(&self, data: TraceRow<'_>) {
-        let mut writer = self.make_writer.make_writer();
-        // Small rows can be serialized on stack
-        match postcard::to_vec::<_, 4096>(&data) {
-            Ok(buf) => {
-                let _ = writer.write_all(&buf);
-            }
-            Err(_) => {
-                // Fallback to heap allocated buffer
-                let buf = postcard::to_allocvec(&data).unwrap();
-                let _ = writer.write_all(&buf);
-            }
-        }
+        // Always use allocated buffer to allow sending it to another thread.
+        let buf = postcard::to_allocvec(&data).unwrap();
+        self.trace_writer.write(buf);
     }
 }
 
-impl<W: for<'span> MakeWriter<'span>, S: Subscriber + for<'a> LookupSpan<'a>> Layer<S>
-    for RawTraceLayer<W, S>
-{
+impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for RawTraceLayer<S> {
     fn on_new_span(
         &self,
         attrs: &span::Attributes<'_>,
