@@ -331,9 +331,11 @@ pub struct GenerateWorkspaceArgs {
     /// Generate an empty workspace
     #[clap(short = 'b', long, conflicts_with = "copy", default_value_t = true)]
     pub empty: bool,
-    /// Generate a workspace using an existing workspace as a template
-    #[clap(short = 'c', long, conflicts_with = "empty", default_value_t = false)]
-    pub copy: bool,
+    /// Generate a workspace using an existing workspace as a template. Can be
+    /// the name of a local workspace within your monorepo, or a fully
+    /// qualified GitHub URL with any branch and/or subdirectory
+    #[clap(short = 'c', long, conflicts_with = "empty", num_args = 0..=1, default_missing_value = "")]
+    pub copy: Option<String>,
     /// Where the new workspace should be created
     #[clap(short = 'd', long)]
     pub destination: Option<String>,
@@ -343,10 +345,6 @@ pub struct GenerateWorkspaceArgs {
     /// The root of your repository (default: directory with root turbo.json)
     #[clap(short = 'r', long)]
     pub root: Option<String>,
-    /// An example package to add. You can use a GitHub URL with any branch
-    /// and/or subdirectory.
-    #[clap(short = 'e', long)]
-    pub example: Option<String>,
     /// In a rare case, your GitHub URL might contain a branch name with a slash
     /// (e.g. bug/fix-1) and the path to the example (e.g. foo/bar). In this
     /// case, you must specify the path to the example separately:
