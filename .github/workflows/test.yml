@@ -441,8 +441,6 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
-          setup-go: false
-          setup-rust: false
 
       - name: Run tests
         run: |
