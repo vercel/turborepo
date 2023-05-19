@@ -2,7 +2,7 @@
 // Vec<u8> instead of a reference, and uses a unbounded channel to avoid slowing
 // down the application.
 
-use std::{debug_assert, io::Write, thread::JoinHandle};
+use std::{debug_assert, f32::consts::E, io::Write, thread::JoinHandle};
 
 use crossbeam_channel::{unbounded, Sender, TryRecvError};
 
@@ -16,18 +16,41 @@ impl TraceWriter {
         let (tx, rx) = unbounded::<Vec<u8>>();
 
         let handle: std::thread::JoinHandle<()> = std::thread::spawn(move || {
+            let mut buf = Vec::with_capacity(1024 * 1024);
             'outer: loop {
+                if !buf.is_empty() {
+                    let _ = writer.write_all(&buf);
+                    let _ = writer.flush();
+                    buf.clear();
+                }
                 let Ok(data) = rx.recv() else {
                     break 'outer;
                 };
-                let _ = writer.write_all(&data);
+                if data.is_empty() {
+                    break 'outer;
+                }
+                if data.len() > buf.capacity() {
+                    let _ = writer.write_all(&data);
+                } else {
+                    buf.extend_from_slice(&data);
+                }
                 loop {
                     match rx.try_recv() {
                         Ok(data) => {
                             if data.is_empty() {
                                 break 'outer;
                             }
-                            let _ = writer.write_all(&data);
+                            if buf.len() + data.len() > buf.capacity() {
+                                let _ = writer.write_all(&buf);
+                                buf.clear();
+                                if data.len() > buf.capacity() {
+                                    let _ = writer.write_all(&data);
+                                } else {
+                                    buf.extend_from_slice(&data);
+                                }
+                            } else {
+                                buf.extend_from_slice(&data);
+                            }
                         }
                         Err(TryRecvError::Disconnected) => {
                             break 'outer;
@@ -37,6 +60,9 @@ impl TraceWriter {
                         }
                     }
                 }
+            }
+            if !buf.is_empty() {
+                let _ = writer.write_all(&buf);
             }
             let _ = writer.flush();
             drop(writer);
