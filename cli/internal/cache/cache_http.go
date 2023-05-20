@@ -17,8 +17,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
-const durationHeaderName = "x-artifact-duration"
-
 type client interface {
 	PutArtifact(hash string, body []byte, duration int, tag string) error
 	FetchArtifact(hash string) (*http.Response, error)
@@ -146,15 +144,7 @@ func (cache *httpCache) exists(hash string) (bool, int, error) {
 		return false, 0, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
 	}
 
-	// If present, extract the duration from the response.
-	duration := 0
-	if resp.Header.Get(durationHeaderName) != "" {
-		// If we had an error reading the duration header, just swallow it for now.
-		if intVar, err := strconv.Atoi(resp.Header.Get(durationHeaderName)); err == nil {
-			duration = intVar
-		}
-	}
-
+	duration := getDurationFromResponse(resp)
 	return true, duration, err
 }
 
@@ -170,15 +160,9 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 		b, _ := ioutil.ReadAll(resp.Body)
 		return false, nil, 0, fmt.Errorf("%s", string(b))
 	}
-	// If present, extract the duration from the response.
-	duration := 0
-	if resp.Header.Get(durationHeaderName) != "" {
-		intVar, err := strconv.Atoi(resp.Header.Get(durationHeaderName))
-		if err != nil {
-			return false, nil, 0, fmt.Errorf("invalid %s header: %w", durationHeaderName, err)
-		}
-		duration = intVar
-	}
+
+	duration := getDurationFromResponse(resp)
+
 	var tarReader io.Reader
 
 	defer func() { _ = resp.Body.Close() }()
@@ -210,6 +194,19 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 		return false, nil, 0, err
 	}
 	return true, files, duration, nil
+}
+
+// getDurationFromResponse extracts the duration from the response header
+func getDurationFromResponse(resp *http.Response) int {
+	duration := 0
+	if resp.Header.Get("x-artifact-duration") != "" {
+		// If we had an error reading the duration header, just swallow it for now.
+		if intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration")); err == nil {
+			duration = intVar
+		}
+	}
+
+	return duration
 }
 
 func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
