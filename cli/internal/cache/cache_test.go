@@ -24,7 +24,7 @@ func (tc *testCache) Fetch(_ turbopath.AbsoluteSystemPath, hash string, _ []stri
 	foundFiles, ok := tc.entries[hash]
 	if ok {
 		duration := 5
-		return NewFSTaskCacheStatus(true, duration), foundFiles, nil
+		return newFSTaskCacheStatus(true, duration), foundFiles, nil
 	}
 	return NewCacheMiss(), nil, nil
 }
@@ -35,7 +35,7 @@ func (tc *testCache) Exists(hash string) ItemStatus {
 	}
 	_, ok := tc.entries[hash]
 	if ok {
-		return NewFSTaskCacheStatus(true, 0)
+		return newFSTaskCacheStatus(true, 0)
 	}
 	return ItemStatus{}
 }

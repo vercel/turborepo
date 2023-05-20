@@ -45,33 +45,33 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _ []st
 	} else {
 		// It's not in the cache, bail now
 		f.logFetch(false, hash, 0)
-		return NewFSTaskCacheStatus(false, 0), nil, nil
+		return newFSTaskCacheStatus(false, 0), nil, nil
 	}
 
 	cacheItem, openErr := cacheitem.Open(actualCachePath)
 	if openErr != nil {
-		return NewFSTaskCacheStatus(false, 0), nil, openErr
+		return newFSTaskCacheStatus(false, 0), nil, openErr
 	}
 
 	restoredFiles, restoreErr := cacheItem.Restore(anchor)
 	if restoreErr != nil {
 		_ = cacheItem.Close()
-		return NewFSTaskCacheStatus(false, 0), nil, restoreErr
+		return newFSTaskCacheStatus(false, 0), nil, restoreErr
 	}
 
 	meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json"))
 	if err != nil {
 		_ = cacheItem.Close()
-		return NewFSTaskCacheStatus(false, 0), nil, fmt.Errorf("error reading cache metadata: %w", err)
+		return newFSTaskCacheStatus(false, 0), nil, fmt.Errorf("error reading cache metadata: %w", err)
 	}
 	f.logFetch(true, hash, meta.Duration)
 
 	// Wait to see what happens with close.
 	closeErr := cacheItem.Close()
 	if closeErr != nil {
-		return NewFSTaskCacheStatus(false, 0), restoredFiles, closeErr
+		return newFSTaskCacheStatus(false, 0), restoredFiles, closeErr
 	}
-	return NewFSTaskCacheStatus(true, meta.Duration), restoredFiles, nil
+	return newFSTaskCacheStatus(true, meta.Duration), restoredFiles, nil
 }
 
 // Exists returns the ItemStatus and the timeSaved
@@ -79,7 +79,7 @@ func (f *fsCache) Exists(hash string) ItemStatus {
 	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
 	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
-	status := NewFSTaskCacheStatus(false, 0)
+	status := newFSTaskCacheStatus(false, 0)
 	if compressedCachePath.FileExists() || uncompressedCachePath.FileExists() {
 		status.Hit = true
 	}

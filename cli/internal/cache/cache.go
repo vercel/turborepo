@@ -46,8 +46,8 @@ func NewCacheMiss() ItemStatus {
 	}
 }
 
-// NewFSTaskCacheStatus returns an ItemStatus with the fields set to indicate a local cache hit
-func NewFSTaskCacheStatus(hit bool, timeSaved int) ItemStatus {
+// newFSTaskCacheStatus returns an ItemStatus with the fields set to indicate a local cache hit
+func newFSTaskCacheStatus(hit bool, timeSaved int) ItemStatus {
 	return ItemStatus{
 		Source:    CacheSourceFS,
 		Hit:       hit,
