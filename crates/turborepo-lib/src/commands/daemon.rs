@@ -3,7 +3,7 @@ use std::{path::PathBuf, time::Duration};
 use pidlock::PidlockError::AlreadyOwned;
 use time::{format_description, OffsetDateTime};
 use tracing::{trace, warn};
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
 use super::CommandBase;
 use crate::{
@@ -23,12 +23,8 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
     let connector = DaemonConnector {
         can_start_server,
         can_kill_server,
-        pid_file: base.daemon_file_root().join_relative(
-            turbopath::RelativeSystemPathBuf::new("turbod.pid").expect("relative system"),
-        ),
-        sock_file: base.daemon_file_root().join_relative(
-            turbopath::RelativeSystemPathBuf::new("turbod.sock").expect("relative system"),
-        ),
+        pid_file: base.daemon_file_root().join_component("turbod.pid"),
+        sock_file: base.daemon_file_root().join_component("turbod.sock"),
     };
 
     let mut client = connector.connect().await?;
@@ -91,13 +87,9 @@ pub async fn daemon_server(
 
         let folder = AbsoluteSystemPathBuf::new(directories.data_dir()).expect("absolute");
 
-        let hash = format!("{}-turbo.log", base.repo_hash());
-
-        let logs = RelativeSystemPathBuf::new("logs").expect("forward relative");
-        let file = RelativeSystemPathBuf::new(hash).expect("forward relative");
-
-        let log_folder = folder.join_relative(logs);
-        let log_file = log_folder.join_relative(file);
+        let log_folder = folder.join_component("logs");
+        let log_file =
+            log_folder.join_component(format!("{}-turbo.log", base.repo_hash()).as_str());
 
         (log_folder, log_file)
     };
