@@ -63,7 +63,7 @@ impl<'a> Iterator for YarnDetector<'a> {
         }
         self.found = true;
 
-        let yarn_lockfile = self.repo_root.join_literal(LOCKFILE);
+        let yarn_lockfile = self.repo_root.join_component(LOCKFILE);
 
         if yarn_lockfile.exists() {
             Some(

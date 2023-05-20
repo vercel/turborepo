@@ -28,7 +28,7 @@ impl<'a> Iterator for NpmDetector<'a> {
         }
 
         self.found = true;
-        let package_json = self.repo_root.join_literal(LOCKFILE);
+        let package_json = self.repo_root.join_component(LOCKFILE);
 
         if package_json.exists() {
             Some(Ok(PackageManager::Npm))

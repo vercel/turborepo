@@ -29,7 +29,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
 
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
         let root_package_json =
-            PackageJson::load(&base.repo_root.join_literal("package.json")).ok();
+            PackageJson::load(&base.repo_root.join_component("package.json")).ok();
 
         let package_manager =
             PackageManager::get_package_manager(base, root_package_json.as_ref())?;

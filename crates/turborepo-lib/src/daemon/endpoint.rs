@@ -39,8 +39,8 @@ pub async fn listen_socket(
     ),
     SocketOpenError,
 > {
-    let pid_path = path.join_literal("turbod.pid");
-    let sock_path = path.join_literal("turbod.sock");
+    let pid_path = path.join_component("turbod.pid");
+    let sock_path = path.join_component("turbod.sock");
     let mut lock = pidlock::Pidlock::new(pid_path.as_path().to_owned());
 
     trace!("acquiring pidlock");

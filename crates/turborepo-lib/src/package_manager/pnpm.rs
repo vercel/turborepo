@@ -38,7 +38,7 @@ impl<'a> Iterator for PnpmDetector<'a> {
         }
         self.found = true;
 
-        let pnpm_lockfile = self.repo_root.join_literal(LOCKFILE);
+        let pnpm_lockfile = self.repo_root.join_component(LOCKFILE);
 
         pnpm_lockfile.exists().then(|| Ok(PackageManager::Pnpm))
     }

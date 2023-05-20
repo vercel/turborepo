@@ -159,8 +159,8 @@ impl AbsoluteSystemPathBuf {
         self.0.ends_with(child.as_ref())
     }
 
-    pub fn join_literal(&self, segment: &str) -> Self {
-        self.as_absolute_path().join_literal(segment)
+    pub fn join_component(&self, segment: &str) -> Self {
+        self.as_absolute_path().join_component(segment)
     }
 
     pub fn ensure_dir(&self) -> Result<(), io::Error> {

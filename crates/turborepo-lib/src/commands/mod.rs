@@ -151,8 +151,8 @@ impl CommandBase {
     pub fn daemon_file_root(&self) -> turbopath::AbsoluteSystemPathBuf {
         turbopath::AbsoluteSystemPathBuf::new(std::env::temp_dir())
             .expect("temp dir is valid")
-            .join_literal("turbod")
-            .join_literal(self.repo_hash().as_str())
+            .join_component("turbod")
+            .join_component(self.repo_hash().as_str())
     }
 
     fn repo_hash(&self) -> String {

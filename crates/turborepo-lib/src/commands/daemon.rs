@@ -23,8 +23,8 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
     let connector = DaemonConnector {
         can_start_server,
         can_kill_server,
-        pid_file: base.daemon_file_root().join_literal("turbod.pid"),
-        sock_file: base.daemon_file_root().join_literal("turbod.sock"),
+        pid_file: base.daemon_file_root().join_component("turbod.pid"),
+        sock_file: base.daemon_file_root().join_component("turbod.sock"),
     };
 
     let mut client = connector.connect().await?;
@@ -87,10 +87,9 @@ pub async fn daemon_server(
 
         let folder = AbsoluteSystemPathBuf::new(directories.data_dir()).expect("absolute");
 
-        let hash = format!("{}-turbo.log", base.repo_hash());
-
-        let log_folder = folder.join_literal("logs");
-        let log_file = log_folder.join_literal(hash.as_str());
+        let log_folder = folder.join_component("logs");
+        let log_file =
+            log_folder.join_component(format!("{}-turbo.log", base.repo_hash()).as_str());
 
         (log_folder, log_file)
     };

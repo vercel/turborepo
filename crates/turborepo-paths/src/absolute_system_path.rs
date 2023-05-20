@@ -109,13 +109,13 @@ impl AbsoluteSystemPath {
     }
 
     // intended for joining literals or obviously single-token strings
-    pub fn join_literal(&self, segment: &str) -> AbsoluteSystemPathBuf {
+    pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
         AbsoluteSystemPathBuf(self.0.join(segment).clean())
     }
 
     // intended for joining a path composed of literals
-    pub fn join_literals(&self, segments: &[&str]) -> AbsoluteSystemPathBuf {
+    pub fn join_components(&self, segments: &[&str]) -> AbsoluteSystemPathBuf {
         debug_assert!(!segments
             .iter()
             .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));

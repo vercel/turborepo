@@ -81,7 +81,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
 
         let watcher = Arc::new(HashGlobWatcher::new(
             AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("valid repo root"),
-            daemon_root.join_literal("flush").as_path().to_owned(),
+            daemon_root.join_component("flush").as_path().to_owned(),
         )?);
 
         let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
@@ -323,8 +323,8 @@ mod test {
 
         tracing::info!("server started");
 
-        let pid_path = path.join_literal("turbod.pid");
-        let sock_path = path.join_literal("turbod.sock");
+        let pid_path = path.join_component("turbod.pid");
+        let sock_path = path.join_component("turbod.sock");
 
         select! {
             _ = daemon.serve() => panic!("must not close"),
@@ -362,7 +362,7 @@ mod test {
         )
         .unwrap();
 
-        let pid_path = path.join_literal("turbod.pid");
+        let pid_path = path.join_component("turbod.pid");
 
         let now = Instant::now();
         let close_reason = daemon.serve().await;

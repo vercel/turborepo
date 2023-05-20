@@ -79,7 +79,7 @@ impl RepoConfig {
 }
 
 pub fn get_repo_config_path(repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-    repo_root.join_literals(&[".turbo", "config.json"])
+    repo_root.join_components(&[".turbo", "config.json"])
 }
 
 impl RepoConfigLoader {
