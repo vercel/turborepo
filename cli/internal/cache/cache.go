@@ -276,11 +276,6 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 	copy(caches, mplex.caches)
 	mplex.mu.RUnlock()
 
-	// We need to return a composite cache status from multiple caches
-	// Start with a cache miss, and we will assign values to it. This is similar
-	// to how the Exists() method works.
-	combinedCacheState := NewCacheMiss()
-
 	// Retrieve from caches sequentially; if we did them simultaneously we could
 	// easily write the same file from two goroutines at once.
 	for i, cache := range caches {
@@ -307,11 +302,8 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 			// result is a success at fetching. Storing in lower-priority caches is an optimization.
 			_ = mplex.storeUntil(anchor, key, itemStatus.TimeSaved, actualFiles, i)
 
-			// If another cache had already set this to true, we don't need to set it again from this cache
-			combinedCacheState.Hit = itemStatus.Hit
-			combinedCacheState.Source = itemStatus.Source
-			combinedCacheState.TimeSaved = itemStatus.TimeSaved
-			return combinedCacheState, actualFiles, nil
+			// Return this cache, and exit the for loop, since we don't need to keep looking.
+			return itemStatus, actualFiles, nil
 		}
 	}
 
