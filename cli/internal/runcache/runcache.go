@@ -115,6 +115,7 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
+		// TODO: do we want a more speicic bypass status here?
 		return cache.NewCacheMiss(), nil
 	}
 
@@ -152,6 +153,7 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		}
 	} else {
 		// If no outputs have changed, that means we have a local cache hit.
+		// We will still check to see whether the cache exists, so we can get the duration.
 		cacheStatus = tc.rc.cache.Exists(tc.hash)
 		prefixedUI.Warn(fmt.Sprintf("Configured outputs are already in place for %s, skipping cache check", tc.pt.TaskID))
 	}
