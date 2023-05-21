@@ -72,6 +72,7 @@ Check
     "command",
     "dependencies",
     "dependents",
+    "dotEnv",
     "envMode",
     "environmentVariables",
     "excludedOutputs",

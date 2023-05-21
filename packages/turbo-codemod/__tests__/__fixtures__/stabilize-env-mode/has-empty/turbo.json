@@ -1,9 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "experimentalGlobalPassThroughEnv": [],
   "pipeline": {
     "build": {
-      "outputs": ["dist/**"],
-      "experimentalPassthroughEnv": ["LOCAL_VAR_PT"]
+      "experimentalPassThroughEnv": []
     }
   }
 }

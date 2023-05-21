@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use bstr::BStr;
 
-use crate::{PathError, PathValidationError, RelativeSystemPathBuf};
+use crate::{PathError, PathValidationError};
 
 #[repr(transparent)]
 pub struct RelativeUnixPath {
@@ -21,14 +21,13 @@ impl RelativeUnixPath {
         Ok(unsafe { &*(path as *const BStr as *const Self) })
     }
 
-    pub fn to_system_path(&self) -> Result<RelativeSystemPathBuf, PathError> {
+    pub(crate) fn to_system_path_buf(&self) -> Result<PathBuf, PathError> {
         #[cfg(unix)]
         {
             // On unix, unix paths are already system paths. Copy the bytes
             // but skip validation.
             use std::{ffi::OsString, os::unix::prelude::OsStringExt};
-            let path = PathBuf::from(OsString::from_vec(self.inner.to_vec()));
-            Ok(RelativeSystemPathBuf::new_unchecked(path))
+            Ok(PathBuf::from(OsString::from_vec(self.inner.to_vec())))
         }
 
         #[cfg(windows)]
@@ -39,8 +38,7 @@ impl RelativeUnixPath {
                 .map(|byte| if *byte == b'/' { b'\\' } else { *byte })
                 .collect::<Vec<u8>>();
             let system_path_string = String::from_utf8(system_path_bytes)?;
-            let system_path_buf = PathBuf::from(system_path_string);
-            Ok(RelativeSystemPathBuf::new_unchecked(system_path_buf))
+            Ok(PathBuf::from(system_path_string))
         }
     }
 }

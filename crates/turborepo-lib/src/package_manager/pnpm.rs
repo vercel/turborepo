@@ -1,6 +1,6 @@
 use anyhow::Result;
 use node_semver::{Range, Version};
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
 use crate::package_manager::PackageManager;
 
@@ -38,9 +38,7 @@ impl<'a> Iterator for PnpmDetector<'a> {
         }
         self.found = true;
 
-        let pnpm_lockfile = self
-            .repo_root
-            .join_relative(RelativeSystemPathBuf::new(LOCKFILE).unwrap());
+        let pnpm_lockfile = self.repo_root.join_component(LOCKFILE);
 
         pnpm_lockfile.exists().then(|| Ok(PackageManager::Pnpm))
     }

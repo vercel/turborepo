@@ -29,7 +29,6 @@
 mod absolute_system_path;
 mod absolute_system_path_buf;
 mod anchored_system_path_buf;
-mod relative_system_path_buf;
 mod relative_unix_path;
 mod relative_unix_path_buf;
 
@@ -42,7 +41,6 @@ pub use absolute_system_path::AbsoluteSystemPath;
 pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
 pub use anchored_system_path_buf::AnchoredSystemPathBuf;
 use path_slash::{PathBufExt, PathExt};
-pub use relative_system_path_buf::RelativeSystemPathBuf;
 pub use relative_unix_path::RelativeUnixPath;
 pub use relative_unix_path_buf::RelativeUnixPathBuf;
 

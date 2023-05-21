@@ -4,8 +4,9 @@ description: Extend your Turborepo with new apps, and packages. Create new empty
 ---
 
 import Callout from "../../../../../components/Callout";
+import Badge from "../../../../../components/Badge";
 
-# Code Generation
+# Code Generation <Badge>Experimental</Badge>
 
 Splitting your monorepo into individual workspaces is a great way to organize your code, speed up tasks, and improve the local development
 experience. With Turborepo's code generation, it's easy to generate new source code for packages, modules,
@@ -39,7 +40,7 @@ turbo gen workspace --copy
 Create a new workspace in your monorepo by copying from a remote workspace.
 
 ```sh
-turbo gen workspace -e https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
+turbo gen workspace --copy -e https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
 ```
 
 <Callout>

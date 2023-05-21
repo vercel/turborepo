@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -251,7 +252,15 @@ func GetHashesForFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.
 	}
 
 	// Fall back to manual hashing.
-	return manuallyHashFiles(rootPath, files)
+	return manuallyHashFiles(rootPath, files, false)
+}
+
+// GetHashesForExistingFiles hashes the list of given files,
+// does not error if a file does not exist, then
+// returns a map of normalized path to hash.
+// This map is suitable for cross-platform caching.
+func GetHashesForExistingFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	return manuallyHashFiles(rootPath, files, true)
 }
 
 // gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths to `git hash-object`.
@@ -371,10 +380,13 @@ func gitHashObject(anchor turbopath.AbsoluteSystemPath, filesToHash []turbopath.
 	return output, nil
 }
 
-func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	hashObject := make(map[turbopath.AnchoredUnixPath]string)
+func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath, allowMissing bool) (map[turbopath.AnchoredUnixPath]string, error) {
+	hashObject := make(map[turbopath.AnchoredUnixPath]string, len(files))
 	for _, file := range files {
 		hash, err := fs.GitLikeHashFile(file.RestoreAnchor(rootPath))
+		if allowMissing && errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
 		}

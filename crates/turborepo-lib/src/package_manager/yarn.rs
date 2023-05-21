@@ -2,7 +2,7 @@ use std::process::Command;
 
 use anyhow::Result;
 use node_semver::{Range, Version};
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 use which::which;
 
 use crate::package_manager::PackageManager;
@@ -63,9 +63,7 @@ impl<'a> Iterator for YarnDetector<'a> {
         }
         self.found = true;
 
-        let yarn_lockfile = self
-            .repo_root
-            .join_relative(RelativeSystemPathBuf::new(LOCKFILE).unwrap());
+        let yarn_lockfile = self.repo_root.join_component(LOCKFILE);
 
         if yarn_lockfile.exists() {
             Some(

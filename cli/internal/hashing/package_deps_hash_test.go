@@ -518,3 +518,114 @@ func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	}
 
 }
+
+func Test_manuallyHashFiles(t *testing.T) {
+	testDir := turbopath.AbsoluteSystemPath(t.TempDir())
+
+	testFile := testDir.UntypedJoin("existing-file.txt")
+	assert.NilError(t, testFile.WriteFile([]byte(""), 0644))
+
+	type args struct {
+		rootPath     turbopath.AbsoluteSystemPath
+		files        []turbopath.AnchoredSystemPath
+		allowMissing bool
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    map[turbopath.AnchoredUnixPath]string
+		wantErr bool
+	}{
+		// Tests for allowMissing = true
+		{
+			name: "allowMissing, all missing",
+			args: args{
+				rootPath:     testDir,
+				files:        []turbopath.AnchoredSystemPath{"non-existent-file.txt"},
+				allowMissing: true,
+			},
+			want:    map[turbopath.AnchoredUnixPath]string{},
+			wantErr: false,
+		},
+		{
+			name: "allowMissing, some missing, some not",
+			args: args{
+				rootPath: testDir,
+				files: []turbopath.AnchoredSystemPath{
+					"existing-file.txt",
+					"non-existent-file.txt",
+				},
+				allowMissing: true,
+			},
+			want: map[turbopath.AnchoredUnixPath]string{
+				"existing-file.txt": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+			},
+			wantErr: false,
+		},
+		{
+			name: "allowMissing, none missing",
+			args: args{
+				rootPath: testDir,
+				files: []turbopath.AnchoredSystemPath{
+					"existing-file.txt",
+				},
+				allowMissing: true,
+			},
+			want: map[turbopath.AnchoredUnixPath]string{
+				"existing-file.txt": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+			},
+			wantErr: false,
+		},
+
+		// Tests for allowMissing = false
+		{
+			name: "don't allowMissing, all missing",
+			args: args{
+				rootPath:     testDir,
+				files:        []turbopath.AnchoredSystemPath{"non-existent-file.txt"},
+				allowMissing: false,
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "don't allowMissing, some missing, some not",
+			args: args{
+				rootPath: testDir,
+				files: []turbopath.AnchoredSystemPath{
+					"existing-file.txt",
+					"non-existent-file.txt",
+				},
+				allowMissing: false,
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "don't allowMissing, none missing",
+			args: args{
+				rootPath: testDir,
+				files: []turbopath.AnchoredSystemPath{
+					"existing-file.txt",
+				},
+				allowMissing: false,
+			},
+			want: map[turbopath.AnchoredUnixPath]string{
+				"existing-file.txt": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := manuallyHashFiles(tt.args.rootPath, tt.args.files, tt.args.allowMissing)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("manuallyHashFiles() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("manuallyHashFiles() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

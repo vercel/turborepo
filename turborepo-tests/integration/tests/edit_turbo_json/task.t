@@ -7,15 +7,15 @@ Baseline task hashes
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "8d90a05aa60bd604"
+    "hash": "0220ac0b414d5b1e"
   }
   {
     "taskId": "my-app#build",
-    "hash": "bcfea334449257fe"
+    "hash": "5337ec1c89125f9b"
   }
   {
     "taskId": "util#build",
-    "hash": "e64dab76e045fbb4"
+    "hash": "7d67ce9d6cdc1638"
   }
 
 Change only my-app#build
@@ -23,15 +23,15 @@ Change only my-app#build
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "8d90a05aa60bd604"
+    "hash": "0220ac0b414d5b1e"
   }
   {
     "taskId": "my-app#build",
-    "hash": "943c0f8cc9e90a1e"
+    "hash": "0212103ea7df2237"
   }
   {
     "taskId": "util#build",
-    "hash": "e64dab76e045fbb4"
+    "hash": "7d67ce9d6cdc1638"
   }
 
 Change my-app#build dependsOn
@@ -39,15 +39,15 @@ Change my-app#build dependsOn
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "8d90a05aa60bd604"
+    "hash": "0220ac0b414d5b1e"
   }
   {
     "taskId": "my-app#build",
-    "hash": "61dafe4314e0156a"
+    "hash": "04d324a5f9f448ed"
   }
   {
     "taskId": "util#build",
-    "hash": "e64dab76e045fbb4"
+    "hash": "7d67ce9d6cdc1638"
   }
 
 Non-materially modifying the dep graph does nothing.
@@ -55,15 +55,15 @@ Non-materially modifying the dep graph does nothing.
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "8d90a05aa60bd604"
+    "hash": "0220ac0b414d5b1e"
   }
   {
     "taskId": "my-app#build",
-    "hash": "61dafe4314e0156a"
+    "hash": "04d324a5f9f448ed"
   }
   {
     "taskId": "util#build",
-    "hash": "e64dab76e045fbb4"
+    "hash": "7d67ce9d6cdc1638"
   }
 
 
@@ -72,13 +72,13 @@ Change util#build impacts itself and my-app
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
   {
     "taskId": "another#build",
-    "hash": "8d90a05aa60bd604"
+    "hash": "0220ac0b414d5b1e"
   }
   {
     "taskId": "my-app#build",
-    "hash": "f976edb1e8ddf783"
+    "hash": "ddef688b34f0a747"
   }
   {
     "taskId": "util#build",
-    "hash": "1f378ad2e5831e1f"
+    "hash": "9e00e57d9edd2c3a"
   }

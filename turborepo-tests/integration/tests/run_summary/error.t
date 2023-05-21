@@ -33,8 +33,9 @@ Validate that we got a full task summary for the failed task with an error in .e
     "taskId": "my-app#maybefails",
     "task": "maybefails",
     "package": "my-app",
-    "hash": "3dcdb90e962517fb",
+    "hash": "9b547803b7018018",
     "inputs": {
+      ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56",
@@ -58,6 +59,8 @@ Validate that we got a full task summary for the failed task with an error in .e
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "passThroughEnv": null,
+      "dotEnv": null,
       "env": [],
       "persistent": false
     },
@@ -74,6 +77,7 @@ Validate that we got a full task summary for the failed task with an error in .e
       "passthrough": null,
       "globalPassthrough": null
     },
+    "dotEnv": null,
     "execution": {
       "startTime": [0-9]+, (re)
       "endTime": [0-9]+, (re)
