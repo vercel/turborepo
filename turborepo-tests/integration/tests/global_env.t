@@ -9,7 +9,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing 6f0f87b7790cbede
+  util:build: cache miss, executing 76ab904c7ecb2d51
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -20,7 +20,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache hit, suppressing output 6f0f87b7790cbede
+  util:build: cache hit, suppressing output 76ab904c7ecb2d51
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -31,7 +31,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing 6b16af418d79c997
+  util:build: cache miss, executing 113a16522caeab3d
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -42,7 +42,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache hit, suppressing output 6f0f87b7790cbede
+  util:build: cache hit, suppressing output 76ab904c7ecb2d51
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -53,7 +53,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing eca2514366ae965c
+  util:build: cache miss, executing effc9042679b97c6
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -61,7 +61,7 @@ Setup
   
 # THASH deprecation doesn't break --dry=json
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --dry=json | jq -r '.tasks[0].environmentVariables.global[0]'
-  SOME_ENV_VAR=
+  null
 
 # THASH deprecation doesn't break --graph
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --graph

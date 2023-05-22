@@ -16,11 +16,18 @@ Setup
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56",
-    "globalEnv": [
-      "SOME_ENV_VAR"
-    ],
-    "globalPassThroughEnv": null,
-    "globalDotEnv": null
+    "globalDotEnv": null,
+    "environmentVariables": {
+      "specified": {
+        "env": [
+          "SOME_ENV_VAR"
+        ],
+        "passThroughEnv": null
+      },
+      "configured": [],
+      "inferred": [],
+      "passthrough": null
+    }
   }
 
   $ cat tmpjson.log | jq 'keys'
@@ -43,7 +50,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "7787f0e20734f3e5",
+    "hash": "0d1e6ee2c143211c",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
@@ -86,14 +93,13 @@ Setup
     "framework": "<NO FRAMEWORK DETECTED>",
     "envMode": "loose",
     "environmentVariables": {
+      "specified": {
+        "env": null,
+        "passThroughEnv": null
+      },
       "configured": [],
       "inferred": [],
-      "global": [
-        "SOME_ENV_VAR=",
-        "VERCEL_ANALYTICS_ID="
-      ],
-      "passthrough": null,
-      "globalPassthrough": null
+      "passthrough": null
     },
     "dotEnv": [
       ".env.local"
@@ -106,7 +112,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "6f0f87b7790cbede",
+    "hash": "76ab904c7ecb2d51",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },
@@ -142,16 +148,15 @@ Setup
     "framework": "<NO FRAMEWORK DETECTED>",
     "envMode": "loose",
     "environmentVariables": {
-      "configured": [
-        "NODE_ENV="
-      ],
+      "specified": {
+        "env": [
+          "NODE_ENV"
+        ],
+        "passThroughEnv": null
+      },
+      "configured": [],
       "inferred": [],
-      "global": [
-        "SOME_ENV_VAR=",
-        "VERCEL_ANALYTICS_ID="
-      ],
-      "passthrough": null,
-      "globalPassthrough": null
+      "passthrough": null
     },
     "dotEnv": null
   }
@@ -159,16 +164,17 @@ Setup
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller
   $ NODE_ENV=banana ${TURBO} run build --dry=json --filter=util | jq '.tasks | map(select(.taskId == "util#build")) | .[0].environmentVariables'
   {
+    "specified": {
+      "env": [
+        "NODE_ENV"
+      ],
+      "passThroughEnv": null
+    },
     "configured": [
       "NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e"
     ],
     "inferred": [],
-    "global": [
-      "SOME_ENV_VAR=",
-      "VERCEL_ANALYTICS_ID="
-    ],
-    "passthrough": null,
-    "globalPassthrough": null
+    "passthrough": null
   }
 
 Tasks that don't exist throw an error

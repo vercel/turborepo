@@ -5,7 +5,7 @@ Setup
   $ ${TURBO} run build --dry=json
   {
     "id": "[a-zA-Z0-9]+", (re)
-    "version": "0",
+    "version": "1",
     "turboVersion": "[a-z0-9\.-]+", (re)
     "globalCacheInputs": {
       "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
@@ -15,8 +15,16 @@ Setup
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
-      "globalPassThroughEnv": null,
-      "globalDotEnv": null
+      "globalDotEnv": null,
+      "environmentVariables": {
+        "specified": {
+          "env": [],
+          "passThroughEnv": null
+        },
+        "configured": [],
+        "inferred": [],
+        "passthrough": null
+      }
     },
     "envMode": "infer",
     "frameworkInference": true,
@@ -24,7 +32,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "66a1baf97f3e7b49",
+        "hash": "9d6c858db9fd1eea",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
@@ -65,13 +73,13 @@ Setup
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "envMode": "loose",
         "environmentVariables": {
+          "specified": {
+            "env": null,
+            "passThroughEnv": null
+          },
           "configured": [],
           "inferred": [],
-          "global": [
-            "VERCEL_ANALYTICS_ID="
-          ],
-          "passthrough": null,
-          "globalPassthrough": null
+          "passthrough": null
         },
         "dotEnv": null
       }
