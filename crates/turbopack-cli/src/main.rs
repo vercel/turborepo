@@ -5,7 +5,6 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use once_cell::sync::Lazy;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use turbopack_cli::{arguments::Arguments, register};
 use turbopack_cli_utils::{
