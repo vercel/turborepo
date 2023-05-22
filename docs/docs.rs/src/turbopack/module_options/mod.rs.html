@@ -477,26 +477,6 @@
 <a href="#477" id="477">477</a>
 <a href="#478" id="478">478</a>
 <a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -561,8 +541,6 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleOptionsVc&gt; {
         <span class="kw">let </span>ModuleOptionsContext {
             enable_jsx,
-            enable_styled_jsx,
-            <span class="kw-2">ref </span>enable_styled_components,
             enable_types,
             enable_tree_shaking,
             <span class="kw-2">ref </span>enable_typescript_transform,
@@ -613,27 +591,9 @@
 
         <span class="comment">// Order of transforms is important. e.g. if the React transform occurs before
         // Styled JSX, there won&#39;t be JSX nodes for Styled JSX to transform.
-        </span><span class="kw">if </span>enable_styled_jsx {
-            transforms.push(EcmascriptInputTransform::StyledJsx);
-        }
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_styled_components) = enable_styled_components {
-            <span class="kw">let </span>styled_components_transform = <span class="kw-2">&amp;*</span>enable_styled_components.<span class="kw">await</span><span class="question-mark">?</span>;
-            transforms.push(EcmascriptInputTransform::StyledComponents {
-                display_name: styled_components_transform.display_name,
-                ssr: styled_components_transform.ssr,
-                file_name: styled_components_transform.file_name,
-                top_level_import_paths: StringsVc::cell(
-                    styled_components_transform.top_level_import_paths.clone(),
-                ),
-                meaningless_file_names: StringsVc::cell(
-                    styled_components_transform.meaningless_file_names.clone(),
-                ),
-                css_prop: styled_components_transform.css_prop,
-                namespace: OptionStringVc::cell(styled_components_transform.namespace.clone()),
-            });
-        }
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_jsx) = enable_jsx {
+        // If a custom plugin requires specific order _before_ core transform kicks in,
+        // should use `before_transform_plugins`.
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(enable_jsx) = enable_jsx {
             <span class="kw">let </span>jsx = enable_jsx.<span class="kw">await</span><span class="question-mark">?</span>;
 
             transforms.push(EcmascriptInputTransform::React {
