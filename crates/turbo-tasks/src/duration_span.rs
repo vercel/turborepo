@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+/// Guard that emits a tracing event when dropped with the duration of the
+/// lifetime of the guard.
 pub struct DurationSpanGuard<F: FnOnce(u64)> {
     start: Instant,
     f: Option<F>,
@@ -22,6 +24,11 @@ impl<F: FnOnce(u64)> Drop for DurationSpanGuard<F> {
     }
 }
 
+/// Creates a event-based span that traces a certain duration (lifetime of the
+/// guard). It's not a real span, which means it can be used across threads. It
+/// will trace a duration and not the time the cpu is doing actual work. This
+/// way it can be used to trace non-cpu-time or time that is spend in other
+/// processes.
 #[macro_export]
 macro_rules! duration_span {
     ($name:literal) => {

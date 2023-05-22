@@ -13,6 +13,7 @@ pub enum Arguments {
 }
 
 impl Arguments {
+    /// The directory of the application. see [CommonArguments]::dir
     pub fn dir(&self) -> Option<&Path> {
         match self {
             Arguments::Dev(args) => args.common.dir.as_deref(),

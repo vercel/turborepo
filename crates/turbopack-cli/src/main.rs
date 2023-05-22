@@ -8,7 +8,7 @@ use clap::Parser;
 use once_cell::sync::Lazy;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use turbopack_cli::{arguments::Arguments, register};
-use turbopack_cli_utils::{exit::exit_guard, raw_trace::RawTraceLayer, trace_writer::TraceWriter};
+use turbopack_cli_utils::{exit::ExitGuard, raw_trace::RawTraceLayer, trace_writer::TraceWriter};
 
 #[global_allocator]
 static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
@@ -19,6 +19,7 @@ static TRACING_TURBOPACK_TARGETS: Lazy<Vec<&str>> = Lazy::new(|| {
     [
         &TRACING_OVERVIEW_TARGETS[..],
         &[
+            "turbo_tasks=info",
             "turbopack=trace",
             "turbopack_core=trace",
             "turbopack_ecmascript=trace",
@@ -88,7 +89,7 @@ fn main() {
         let (trace_writer, guard) = TraceWriter::new(trace_writer);
         let subscriber = subscriber.with(RawTraceLayer::new(trace_writer));
 
-        let guard = exit_guard(guard).unwrap();
+        let guard = ExitGuard::new(guard).unwrap();
 
         subscriber.init();
 

@@ -12,16 +12,18 @@ impl<T> Drop for ExitGuard<T> {
     }
 }
 
-/// Drop a guard when Ctrl-C is pressed or the [ExitGuard] is dropped.
-pub fn exit_guard<T: Send + 'static>(guard: T) -> Result<ExitGuard<T>> {
-    let guard = Arc::new(Mutex::new(Some(guard)));
-    {
-        let guard = guard.clone();
-        ctrlc::set_handler(move || {
-            drop(guard.lock().unwrap().take());
-            std::process::exit(0);
-        })
-        .context("Unable to set ctrl-c handler")?;
+impl<T: Send + 'static> ExitGuard<T> {
+    /// Drop a guard when Ctrl-C is pressed or the [ExitGuard] is dropped.
+    pub fn new(guard: T) -> Result<Self> {
+        let guard = Arc::new(Mutex::new(Some(guard)));
+        {
+            let guard = guard.clone();
+            ctrlc::set_handler(move || {
+                drop(guard.lock().unwrap().take());
+                std::process::exit(0);
+            })
+            .context("Unable to set ctrl-c handler")?;
+        }
+        Ok(ExitGuard(guard))
     }
-    Ok(ExitGuard(guard))
 }

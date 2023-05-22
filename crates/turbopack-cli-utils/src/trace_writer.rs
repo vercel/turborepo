@@ -1,7 +1,3 @@
-// This is inspired by tracing-appender non_blocking, but allows writing a owned
-// Vec<u8> instead of a reference, and uses a unbounded channel to avoid slowing
-// down the application.
-
 use std::{debug_assert, io::Write, thread::JoinHandle};
 
 use crossbeam_channel::{unbounded, Sender, TryRecvError};
@@ -12,6 +8,15 @@ pub struct TraceWriter {
 }
 
 impl TraceWriter {
+    /// This is a non-blocking writer that writes a file in a background thread.
+    /// This is inspired by tracing-appender non_blocking, but has some
+    /// differences:
+    /// * It allows writing a owned Vec<u8> instead of a reference, so avoiding
+    ///   additional allocation.
+    /// * It uses a unbounded channel to avoid slowing down the application at
+    ///   all (memory) cost.
+    /// * It issues less writes by buffering the data into chunks of ~1MB, when
+    ///   possible.
     pub fn new<W: Write + Send + 'static>(mut writer: W) -> (Self, TraceWriterGuard) {
         let (tx, rx) = unbounded::<Vec<u8>>();
 
