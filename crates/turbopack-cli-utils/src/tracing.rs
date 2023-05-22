@@ -10,24 +10,51 @@ use serde::{Deserialize, Serialize};
 pub enum TraceRow<'a> {
     /// A new span has been started, but not entered yet.
     Start {
+        /// Timestamp
         ts: u64,
+        /// Unique id for this span.
         id: u64,
+        /// Id of the parent span, if any.
         parent: Option<u64>,
+        /// The name of the span.
         name: &'a str,
+        /// The target of the span.
         target: &'a str,
+        /// A list of key-value pairs for all attributes of the span.
         #[serde(borrow)]
         values: Vec<(Cow<'a, str>, TraceValue<'a>)>,
     },
     /// A span has ended. The id might be reused in future.
-    End { ts: u64, id: u64 },
+    End {
+        /// Timestamp
+        ts: u64,
+        /// Unique id for this span. Must be created by a `Start` event before.
+        id: u64,
+    },
     /// A span has been entered. This means it is spending CPU time now.
-    Enter { ts: u64, id: u64, thread_id: u64 },
+    Enter {
+        /// Timestamp
+        ts: u64,
+        /// Unique id for this span. Must be created by a `Start` event before.
+        id: u64,
+        /// The thread id of the thread that entered the span.
+        thread_id: u64,
+    },
     /// A span has been exited. This means it is not spending CPU time anymore.
-    Exit { ts: u64, id: u64 },
+    Exit {
+        /// Timestamp
+        ts: u64,
+        /// Unique id for this span. Must be entered by a `Enter` event before.
+        id: u64,
+    },
     /// A event has happened for some span.
     Event {
+        /// Timestamp
         ts: u64,
+        /// Id of the parent span, if any.
         parent: Option<u64>,
+        /// A list of key-value pairs for all attributes of the event.
+        #[serde(borrow)]
         values: Vec<(Cow<'a, str>, TraceValue<'a>)>,
     },
 }

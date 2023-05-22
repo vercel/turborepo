@@ -23,6 +23,8 @@ pub trait Visit<Node, Abort = !, Impl = ()> {
     /// `node`.
     fn edges(&mut self, node: &Node) -> Self::EdgesFuture;
 
+    /// Returns a [Span] for the given `node`, under which all edges are
+    /// processed.
     fn span(&mut self, node: &Node) -> Span {
         let _ = node;
         Span::current()
