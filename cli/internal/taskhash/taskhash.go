@@ -250,49 +250,50 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 
 	var framework *inference.Framework
 	if frameworkInference {
-		var err error
-		userInclusions, err := th.EnvAtExecutionStart.FromWildcardsInclusionsOnly(packageTask.TaskDefinition.EnvVarDependencies)
-		if err != nil {
-			return "", err
-		}
-
 		// See if we infer a framework.
-		var inferenceEnvVarMap env.EnvironmentVariableMap
 		framework = inference.InferFramework(packageTask.Pkg)
 		if framework != nil {
 			logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvWildcards)
 
+			computedWildcards := []string{}
+			computedWildcards = append(computedWildcards, framework.EnvWildcards...)
+
 			// Vendor excludes are only applied against inferred includes.
-			excludePrefix := th.EnvAtExecutionStart["TURBO_CI_VENDOR_ENV_KEY"]
-			if excludePrefix != "" {
-				inferenceDetailedMap, err := th.EnvAtExecutionStart.GetHashableEnvVars(nil, framework.EnvWildcards, "TURBO_CI_VENDOR_ENV_KEY")
-				if err != nil {
-					return "", err
-				}
-
-				inferenceEnvVarMap = inferenceDetailedMap.All
-			} else {
-				inferenceEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(framework.EnvWildcards)
-				if err != nil {
-					return "", err
-				}
+			excludePrefix, exists := th.EnvAtExecutionStart["TURBO_CI_VENDOR_ENV_KEY"]
+			if exists && excludePrefix != "" {
+				computedExclude := "!" + excludePrefix + "*"
+				logger.Debug(fmt.Sprintf("excluding environment variables matching wildcard %s", computedExclude))
+				computedWildcards = append(computedWildcards, computedExclude)
 			}
+
+			inferenceEnvVarMap, err := th.EnvAtExecutionStart.FromWildcards(computedWildcards)
+			if err != nil {
+				return "", err
+			}
+
+			userEnvVarSet, err := th.EnvAtExecutionStart.FromWildcardsUnresolved(packageTask.TaskDefinition.EnvVarDependencies)
+			if err != nil {
+				return "", err
+			}
+
+			allEnvVarMap.Merge(userEnvVarSet.Inclusions)
+			allEnvVarMap.Merge(inferenceEnvVarMap)
+			allEnvVarMap.Remove(userEnvVarSet.Exclusions)
+
+			explicitEnvVarMap.Merge(userEnvVarSet.Inclusions)
+			explicitEnvVarMap.Remove(userEnvVarSet.Exclusions)
+
+			matchingEnvVarMap.Merge(inferenceEnvVarMap)
+			matchingEnvVarMap.Remove(userEnvVarSet.Exclusions)
+		} else {
+			var err error
+			allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.EnvVarDependencies)
+			if err != nil {
+				return "", err
+			}
+
+			explicitEnvVarMap.Merge(allEnvVarMap)
 		}
-
-		userExclusions, err := th.EnvAtExecutionStart.FromWildcardsExclusionsOnly(packageTask.TaskDefinition.EnvVarDependencies)
-		if err != nil {
-			return "", err
-		}
-
-		allEnvVarMap.Merge(userInclusions)
-		allEnvVarMap.Merge(inferenceEnvVarMap)
-		allEnvVarMap.Remove(userExclusions)
-
-		explicitEnvVarMap.Merge(userInclusions)
-		explicitEnvVarMap.Remove(userExclusions)
-
-		matchingEnvVarMap.Merge(inferenceEnvVarMap)
-		matchingEnvVarMap.Remove(userExclusions)
 	} else {
 		var err error
 		allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.EnvVarDependencies)
@@ -300,7 +301,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 			return "", err
 		}
 
-		explicitEnvVarMap = allEnvVarMap
+		explicitEnvVarMap.Merge(allEnvVarMap)
 	}
 
 	envVars := env.DetailedMap{

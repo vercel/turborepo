@@ -248,36 +248,18 @@ func (evm EnvironmentVariableMap) FromWildcards(wildcardPatterns []string) (Envi
 	return resolvedSet.Resolved(), nil
 }
 
-func (evm EnvironmentVariableMap) FromWildcardsInclusionsOnly(wildcardPatterns []string) (EnvironmentVariableMap, error) {
+func (evm EnvironmentVariableMap) FromWildcardsUnresolved(wildcardPatterns []string) (wildcardSet, error) {
 	if wildcardPatterns == nil {
-		return nil, nil
+		return wildcardSet{}, nil
 	}
 
-	resolvedSet, err := evm.fromWildcards(wildcardPatterns)
-	if err != nil {
-		return nil, err
-	}
-
-	return resolvedSet.Inclusions, nil
-}
-
-func (evm EnvironmentVariableMap) FromWildcardsExclusionsOnly(wildcardPatterns []string) (EnvironmentVariableMap, error) {
-	if wildcardPatterns == nil {
-		return nil, nil
-	}
-
-	resolvedSet, err := evm.fromWildcards(wildcardPatterns)
-	if err != nil {
-		return nil, err
-	}
-
-	return resolvedSet.Exclusions, nil
+	return evm.fromWildcards(wildcardPatterns)
 }
 
 func (evm EnvironmentVariableMap) GetHashableEnvVars(keys []string, matchers []string, envVarContainingExcludePrefix string) (DetailedMap, error) {
 	output := DetailedMap{}
 
-	inclusions, err := evm.FromWildcardsInclusionsOnly(keys)
+	inclusions, err := evm.FromWildcards(keys)
 	if err != nil {
 		return output, err
 	}

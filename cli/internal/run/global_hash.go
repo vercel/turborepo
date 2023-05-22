@@ -111,27 +111,23 @@ func getGlobalHashInputs(
 	if err != nil {
 		return GlobalHashableInputs{}, err
 	}
-	inclusionsEnvVarMap, err := envAtExecutionStart.FromWildcardsInclusionsOnly(globalEnv)
-	if err != nil {
-		return GlobalHashableInputs{}, err
-	}
-	exclusionsEnvVarMap, err := envAtExecutionStart.FromWildcardsExclusionsOnly(globalEnv)
+	userEnvVarSet, err := envAtExecutionStart.FromWildcardsUnresolved(globalEnv)
 	if err != nil {
 		return GlobalHashableInputs{}, err
 	}
 
 	allEnvVarMap := env.EnvironmentVariableMap{}
-	allEnvVarMap.Merge(inclusionsEnvVarMap)
+	allEnvVarMap.Merge(userEnvVarSet.Inclusions)
 	allEnvVarMap.Merge(defaultEnvVarMap)
-	allEnvVarMap.Remove(exclusionsEnvVarMap)
+	allEnvVarMap.Remove(userEnvVarSet.Exclusions)
 
 	explicitEnvVarMap := env.EnvironmentVariableMap{}
-	explicitEnvVarMap.Merge(inclusionsEnvVarMap)
-	explicitEnvVarMap.Remove(exclusionsEnvVarMap)
+	explicitEnvVarMap.Merge(userEnvVarSet.Inclusions)
+	explicitEnvVarMap.Remove(userEnvVarSet.Exclusions)
 
 	matchingEnvVarMap := env.EnvironmentVariableMap{}
 	matchingEnvVarMap.Merge(defaultEnvVarMap)
-	matchingEnvVarMap.Remove(exclusionsEnvVarMap)
+	matchingEnvVarMap.Remove(userEnvVarSet.Exclusions)
 
 	globalHashableEnvVars := env.DetailedMap{
 		All: allEnvVarMap,
