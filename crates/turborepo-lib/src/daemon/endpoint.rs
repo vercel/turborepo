@@ -6,7 +6,7 @@ use futures::Stream;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::server::Connected;
 use tracing::{debug, trace};
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SocketOpenError {
@@ -39,8 +39,8 @@ pub async fn listen_socket(
     ),
     SocketOpenError,
 > {
-    let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
-    let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
+    let pid_path = path.join_component("turbod.pid");
+    let sock_path = path.join_component("turbod.sock");
     let mut lock = pidlock::Pidlock::new(pid_path.as_path().to_owned());
 
     trace!("acquiring pidlock");

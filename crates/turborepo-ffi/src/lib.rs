@@ -4,10 +4,10 @@
 //! and in ffi.go before modifying this file.
 mod lockfile;
 
-use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
+use std::{mem::ManuallyDrop, path::PathBuf};
 
 pub use lockfile::{patches, subgraph, transitive_closure};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
@@ -155,7 +155,7 @@ pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
         }
     };
 
-    let response = match turborepo_fs::recursive_copy(&src, &dst) {
+    let response = match turborepo_fs::recursive_copy(src, dst) {
         Ok(()) => proto::RecursiveCopyResponse { error: None },
         Err(e) => proto::RecursiveCopyResponse {
             error: Some(e.to_string()),
@@ -165,85 +165,41 @@ pub extern "C" fn recursive_copy(buffer: Buffer) -> Buffer {
 }
 
 #[no_mangle]
-pub extern "C" fn get_package_file_hashes_from_git_index(buffer: Buffer) -> Buffer {
-    let req: proto::GetPackageFileHashesFromGitIndexRequest = match buffer.into_proto() {
+pub extern "C" fn verify_signature(buffer: Buffer) -> Buffer {
+    let req: proto::VerifySignatureRequest = match buffer.into_proto() {
         Ok(req) => req,
         Err(err) => {
-            let resp = proto::GetPackageFileHashesFromGitIndexResponse {
-                response: Some(
-                    proto::get_package_file_hashes_from_git_index_response::Response::Error(
-                        err.to_string(),
-                    ),
-                ),
+            let resp = proto::VerifySignatureResponse {
+                response: Some(proto::verify_signature_response::Response::Error(
+                    err.to_string(),
+                )),
             };
             return resp.into();
         }
     };
 
-    let turbo_root = match AbsoluteSystemPathBuf::new(req.turbo_root) {
-        Ok(turbo_root) => turbo_root,
-        Err(err) => {
-            let resp = proto::GetPackageFileHashesFromGitIndexResponse {
-                response: Some(
-                    proto::get_package_file_hashes_from_git_index_response::Response::Error(
-                        err.to_string(),
-                    ),
-                ),
+    let authenticator =
+        turborepo_cache::signature_authentication::ArtifactSignatureAuthenticator::new(
+            req.team_id,
+            req.secret_key_override,
+        );
+
+    match authenticator.validate(req.hash.as_bytes(), &req.artifact_body, &req.expected_tag) {
+        Ok(verified) => {
+            let resp = proto::VerifySignatureResponse {
+                response: Some(proto::verify_signature_response::Response::Verified(
+                    verified,
+                )),
             };
-            return resp.into();
-        }
-    };
-    let package_path = match AnchoredSystemPathBuf::from_raw(req.package_path) {
-        Ok(package_path) => package_path,
-        Err(err) => {
-            let resp = proto::GetPackageFileHashesFromGitIndexResponse {
-                response: Some(
-                    proto::get_package_file_hashes_from_git_index_response::Response::Error(
-                        err.to_string(),
-                    ),
-                ),
-            };
-            return resp.into();
-        }
-    };
-    let response = match turborepo_scm::package_deps::get_package_file_hashes_from_git_index(
-        &turbo_root,
-        &package_path,
-    ) {
-        Ok(hashes) => {
-            let mut to_return = HashMap::new();
-            for (filename, hash) in hashes {
-                let filename = match filename.as_str() {
-                    Ok(s) => s.to_owned(),
-                    Err(err) => {
-                        let resp = proto::GetPackageFileHashesFromGitIndexResponse {
-                            response: Some(proto::get_package_file_hashes_from_git_index_response::Response::Error(err.to_string()))
-                        };
-                        return resp.into();
-                    }
-                };
-                to_return.insert(filename, hash);
-            }
-            let file_hashes = proto::FileHashes { hashes: to_return };
-            let resp = proto::GetPackageFileHashesFromGitIndexResponse {
-                response: Some(
-                    proto::get_package_file_hashes_from_git_index_response::Response::Hashes(
-                        file_hashes,
-                    ),
-                ),
-            };
-            resp
+            resp.into()
         }
         Err(err) => {
-            let resp = proto::GetPackageFileHashesFromGitIndexResponse {
-                response: Some(
-                    proto::get_package_file_hashes_from_git_index_response::Response::Error(
-                        err.to_string(),
-                    ),
-                ),
+            let resp = proto::VerifySignatureResponse {
+                response: Some(proto::verify_signature_response::Response::Error(
+                    err.to_string(),
+                )),
             };
-            return resp.into();
+            resp.into()
         }
-    };
-    response.into()
+    }
 }

@@ -154,8 +154,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
 
-	isStructuredOutput := r.opts.runOpts.GraphDot || r.opts.runOpts.DryRunJSON
-
 	var pkgDepGraph *context.Context
 	if r.opts.runOpts.SinglePackage {
 		pkgDepGraph, err = context.SinglePackageGraph(rootPackageJSON, executionState.PackageManager)
@@ -242,7 +240,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	globalHashInputs, err := getGlobalHashInputs(
 		r.base.RepoRoot,
 		rootPackageJSON,
-		pipeline,
 		turboJSON.GlobalEnv,
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
@@ -250,9 +247,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		turboJSON.GlobalPassthroughEnv,
 		r.opts.runOpts.EnvMode,
 		r.opts.runOpts.FrameworkInference,
+		turboJSON.GlobalDotEnv,
 		r.base.Logger,
-		r.base.UI,
-		isStructuredOutput,
 	)
 
 	if err != nil {
@@ -376,7 +372,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			globalHashInputs.envVars,
 			envVarPassthroughMap,
 			globalHashInputs.globalCacheKey,
-			globalHashInputs.pipeline,
+			globalHashInputs.dotEnv,
 		),
 		rs.Opts.SynthesizeCommand(rs.Targets),
 	)

@@ -39,6 +39,7 @@ Check
     "scm",
     "tasks",
     "turboVersion",
+    "user",
     "version"
   ]
 
@@ -71,6 +72,7 @@ Check
     "command",
     "dependencies",
     "dependents",
+    "dotEnv",
     "envMode",
     "environmentVariables",
     "excludedOutputs",

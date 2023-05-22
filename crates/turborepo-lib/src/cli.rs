@@ -14,7 +14,7 @@ use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
-    commands::{bin, daemon, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, generate, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
@@ -264,6 +264,29 @@ pub enum Command {
         #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
         target: LinkTarget,
     },
+    /// Generate a new app / package
+    #[clap(aliases = ["g", "gen"])]
+    Generate {
+        #[serde(skip)]
+        #[clap(long, default_value_t = String::from("latest"), hide = true)]
+        tag: String,
+        /// The name of the generator to run
+        generator_name: Option<String>,
+        /// Generator configuration file
+        #[clap(short = 'c', long)]
+        config: Option<String>,
+        /// The root of your repository (default: directory with root
+        /// turbo.json)
+        #[clap(short = 'r', long)]
+        root: Option<String>,
+        /// Answers passed directly to generator
+        #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+        args: Vec<String>,
+
+        #[clap(subcommand)]
+        #[serde(skip)]
+        command: Option<GenerateCommand>,
+    },
     /// Login to your Vercel account
     Login {
         #[clap(long = "sso-team")]
@@ -298,6 +321,66 @@ pub enum Command {
         #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
         target: LinkTarget,
     },
+}
+
+#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+pub struct GenerateWorkspaceArgs {
+    /// Name for the new workspace
+    #[clap(short = 'n', long)]
+    pub name: Option<String>,
+    /// Generate an empty workspace
+    #[clap(short = 'b', long, conflicts_with = "copy", default_value_t = true)]
+    pub empty: bool,
+    /// Generate a workspace using an existing workspace as a template
+    #[clap(short = 'c', long, conflicts_with = "empty", default_value_t = false)]
+    pub copy: bool,
+    /// Where the new workspace should be created
+    #[clap(short = 'd', long)]
+    pub destination: Option<String>,
+    /// The type of workspace to create
+    #[clap(short = 't', long)]
+    pub r#type: Option<String>,
+    /// The root of your repository (default: directory with root turbo.json)
+    #[clap(short = 'r', long)]
+    pub root: Option<String>,
+    /// An example package to add. You can use a GitHub URL with any branch
+    /// and/or subdirectory.
+    #[clap(short = 'e', long)]
+    pub example: Option<String>,
+    /// In a rare case, your GitHub URL might contain a branch name with a slash
+    /// (e.g. bug/fix-1) and the path to the example (e.g. foo/bar). In this
+    /// case, you must specify the path to the example separately:
+    /// --example-path foo/bar
+    #[clap(short = 'p', long)]
+    pub example_path: Option<String>,
+    /// Do not filter available dependencies by the workspace type
+    #[clap(long, default_value_t = false)]
+    pub show_all_dependencies: bool,
+}
+
+#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+pub struct GeneratorCustomArgs {
+    /// The name of the generator to run
+    generator_name: Option<String>,
+    /// Generator configuration file
+    #[clap(short = 'c', long)]
+    config: Option<String>,
+    /// The root of your repository (default: directory with root
+    /// turbo.json)
+    #[clap(short = 'r', long)]
+    root: Option<String>,
+    /// Answers passed directly to generator
+    #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+    args: Vec<String>,
+}
+
+#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+pub enum GenerateCommand {
+    /// Add a new package or app to your project
+    #[clap(name = "workspace", alias = "w")]
+    Workspace(GenerateWorkspaceArgs),
+    #[clap(name = "run", alias = "r")]
+    Run(GeneratorCustomArgs),
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -345,7 +428,7 @@ pub struct RunArgs {
     /// Environment variable mode.
     /// Loose passes the entire environment.
     /// Strict uses an allowlist specified in turbo.json.
-    #[clap(long = "experimental-env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
+    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
     pub env_mode: EnvMode,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
@@ -567,6 +650,25 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
+        Command::Generate {
+            tag,
+            generator_name,
+            config,
+            root,
+            args,
+            command,
+        } => {
+            // build GeneratorCustomArgs struct
+            let args = GeneratorCustomArgs {
+                generator_name: generator_name.clone(),
+                config: config.clone(),
+                root: root.clone(),
+                args: args.clone(),
+            };
+
+            generate::run(tag, command, &args)?;
+            Ok(Payload::Rust(Ok(0)))
+        }
         Command::Daemon { command, idle_time } => {
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
 
@@ -737,7 +839,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode"]).unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -750,8 +852,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "infer"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "infer"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -764,8 +865,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "loose"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "loose"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -778,8 +878,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "strict"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "strict"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],

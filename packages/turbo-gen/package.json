@@ -1,0 +1,58 @@
+{
+  "name": "@turbo/gen",
+  "version": "1.9.8",
+  "description": "Extend a Turborepo",
+  "homepage": "https://turbo.build/repo",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turbo",
+    "directory": "packages/turbo-gen"
+  },
+  "bugs": {
+    "url": "https://github.com/vercel/turbo/issues"
+  },
+  "bin": "dist/cli.js",
+  "types": "dist/types.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "chalk": "2.4.2",
+    "commander": "^10.0.0",
+    "fs-extra": "^10.1.0",
+    "inquirer": "^8.2.4",
+    "minimatch": "^9.0.0",
+    "node-plop": "^0.26.3",
+    "semver": "^7.3.8",
+    "ts-node": "^10.9.1",
+    "update-check": "^1.5.4",
+    "validate-npm-package-name": "^5.0.0"
+  },
+  "devDependencies": {
+    "@turbo/test-utils": "workspace:*",
+    "@turbo/tsconfig": "workspace:*",
+    "@turbo/utils": "workspace:*",
+    "@turbo/workspaces": "workspace:*",
+    "@types/fs-extra": "^9.0.13",
+    "@types/inquirer": "^8.2.5",
+    "@types/jest": "^27.4.0",
+    "@types/node": "^16.11.12",
+    "@types/semver": "^7.3.9",
+    "@types/validate-npm-package-name": "^4.0.0",
+    "eslint": "^7.23.0",
+    "jest": "^27.4.3",
+    "ts-jest": "^27.1.1",
+    "tsup": "^6.7.0",
+    "typescript": "^4.5.5"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

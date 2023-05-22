@@ -21,10 +21,6 @@ inputs:
     description: "Determiners whether the cache should be saved. If `false`, the cache is only restored."
     required: false
     default: "false"
-  install-cargo-sweep:
-    description: "Whether to install cargo-sweep"
-    required: false
-    default: true
 
 runs:
   using: "composite"
@@ -69,11 +65,9 @@ runs:
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
 
     - name: "Install cargo-sweep"
-      if: ${{ inputs.install-cargo-sweep }} == "true"
       uses: baptiste0928/cargo-install@v1
       with:
         crate: cargo-sweep
 
     - name: "Run cargo-sweep"
-      if: ${{ inputs.install-cargo-sweep }} == "true"
       uses: ./.github/actions/cargo-sweep

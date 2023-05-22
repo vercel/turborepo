@@ -1,7 +1,9 @@
 package packagemanager
 
 import (
+	"errors"
 	"fmt"
+	stdfs "io/fs"
 	"strings"
 
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -58,6 +60,10 @@ func getPnpmWorkspaceIgnores(pm PackageManager, rootpath turbopath.AbsoluteSyste
 	}
 	pkgGlobs, err := readPnpmWorkspacePackages(rootpath.UntypedJoin("pnpm-workspace.yaml"))
 	if err != nil {
+		// If workspace file doesn't exist we shouldn't error as we might be a single package repo
+		if errors.Is(err, stdfs.ErrNotExist) {
+			return ignores, nil
+		}
 		return nil, err
 	}
 	for _, pkgGlob := range pkgGlobs {
