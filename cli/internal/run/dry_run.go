@@ -30,8 +30,8 @@ func DryRun(
 	turboCache cache.Cache,
 	_ *fs.TurboJSON, // unused, but keep here for parity with RealRun method signature
 	globalEnvMode util.EnvMode,
-	globalEnv env.EnvironmentVariableMap,
-	globalPassthroughEnv env.EnvironmentVariableMap,
+	_ env.EnvironmentVariableMap,
+	_ env.EnvironmentVariableMap,
 	base *cmdutil.CmdBase,
 	summary runsummary.Meta,
 ) error {

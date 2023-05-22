@@ -311,13 +311,13 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			return nil, err
 		}
 
-		passthroughEnv.Merge(defaultPassthroughEnvVarMap)
-		passthroughEnv.Merge(ec.env)
-		passthroughEnv.Merge(ec.passthroughEnv)
-		passthroughEnv.Merge(ec.taskHashTracker.GetEnvVars(packageTask.TaskID).All)
-		passthroughEnv.Merge(envVarPassthroughMap)
+		passthroughEnv.Union(defaultPassthroughEnvVarMap)
+		passthroughEnv.Union(ec.env)
+		passthroughEnv.Union(ec.passthroughEnv)
+		passthroughEnv.Union(ec.taskHashTracker.GetEnvVars(packageTask.TaskID).All)
+		passthroughEnv.Union(envVarPassthroughMap)
 	} else {
-		passthroughEnv.Merge(ec.taskHashTracker.EnvAtExecutionStart)
+		passthroughEnv.Union(ec.taskHashTracker.EnvAtExecutionStart)
 	}
 
 	// Always last to make sure it clobbers.

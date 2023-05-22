@@ -276,15 +276,15 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 				return "", err
 			}
 
-			allEnvVarMap.Merge(userEnvVarSet.Inclusions)
-			allEnvVarMap.Merge(inferenceEnvVarMap)
-			allEnvVarMap.Remove(userEnvVarSet.Exclusions)
+			allEnvVarMap.Union(userEnvVarSet.Inclusions)
+			allEnvVarMap.Union(inferenceEnvVarMap)
+			allEnvVarMap.Difference(userEnvVarSet.Exclusions)
 
-			explicitEnvVarMap.Merge(userEnvVarSet.Inclusions)
-			explicitEnvVarMap.Remove(userEnvVarSet.Exclusions)
+			explicitEnvVarMap.Union(userEnvVarSet.Inclusions)
+			explicitEnvVarMap.Difference(userEnvVarSet.Exclusions)
 
-			matchingEnvVarMap.Merge(inferenceEnvVarMap)
-			matchingEnvVarMap.Remove(userEnvVarSet.Exclusions)
+			matchingEnvVarMap.Union(inferenceEnvVarMap)
+			matchingEnvVarMap.Difference(userEnvVarSet.Exclusions)
 		} else {
 			var err error
 			allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.EnvVarDependencies)
@@ -292,7 +292,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 				return "", err
 			}
 
-			explicitEnvVarMap.Merge(allEnvVarMap)
+			explicitEnvVarMap.Union(allEnvVarMap)
 		}
 	} else {
 		var err error
@@ -301,7 +301,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 			return "", err
 		}
 
-		explicitEnvVarMap.Merge(allEnvVarMap)
+		explicitEnvVarMap.Union(allEnvVarMap)
 	}
 
 	envVars := env.DetailedMap{

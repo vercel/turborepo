@@ -29,15 +29,17 @@ type DetailedMap struct {
 // EnvironmentVariablePairs is a list of "k=v" strings for env variables and their values
 type EnvironmentVariablePairs []string
 
-type wildcardSet struct {
+// WildcardMaps is a pair of EnvironmentVariableMaps.
+type WildcardMaps struct {
 	Inclusions EnvironmentVariableMap
 	Exclusions EnvironmentVariableMap
 }
 
-func (ws wildcardSet) Resolved() EnvironmentVariableMap {
+// Resolve collapses a WildcardSet into a single EnvironmentVariableMap.
+func (ws WildcardMaps) Resolve() EnvironmentVariableMap {
 	output := EnvironmentVariableMap{}
-	output.Merge(ws.Inclusions)
-	output.Remove(ws.Exclusions)
+	output.Union(ws.Inclusions)
+	output.Difference(ws.Exclusions)
 	return output
 }
 
@@ -53,17 +55,16 @@ func GetEnvMap() EnvironmentVariableMap {
 	return envMap
 }
 
-// Merge takes another EnvironmentVariableMap and merges it into the receiver
-// It overwrites values if they already exist, but since the source of both will be os.Environ()
-// it doesn't matter
-func (evm EnvironmentVariableMap) Merge(another EnvironmentVariableMap) {
+// Union takes another EnvironmentVariableMap and adds it into the receiver
+// It overwrites values if they already exist.
+func (evm EnvironmentVariableMap) Union(another EnvironmentVariableMap) {
 	for k, v := range another {
 		evm[k] = v
 	}
 }
 
-// Remove takes another EnvironmentVariableMap and removes matching keys from the receiver
-func (evm EnvironmentVariableMap) Remove(another EnvironmentVariableMap) {
+// Difference takes another EnvironmentVariableMap and removes matching keys from the receiver
+func (evm EnvironmentVariableMap) Difference(another EnvironmentVariableMap) {
 	for k := range another {
 		delete(evm, k)
 	}
@@ -178,9 +179,9 @@ func wildcardToRegexPattern(pattern string) (*string, string) {
 	return nil, strings.Join(regexString, "")
 }
 
-// FromWildcards returns an EnvironmentVariableMap after processing wildcards against it.
-func (evm EnvironmentVariableMap) fromWildcards(wildcardPatterns []string) (wildcardSet, error) {
-	output := wildcardSet{
+// fromWildcards returns a wildcardSet after processing wildcards against it.
+func (evm EnvironmentVariableMap) fromWildcards(wildcardPatterns []string) (WildcardMaps, error) {
+	output := WildcardMaps{
 		Inclusions: EnvironmentVariableMap{},
 		Exclusions: EnvironmentVariableMap{},
 	}
@@ -235,6 +236,8 @@ func (evm EnvironmentVariableMap) fromWildcards(wildcardPatterns []string) (wild
 	return output, nil
 }
 
+// FromWildcards returns an EnvironmentVariableMap containing the variables
+// in the environment which match an array of wildcard patterns.
 func (evm EnvironmentVariableMap) FromWildcards(wildcardPatterns []string) (EnvironmentVariableMap, error) {
 	if wildcardPatterns == nil {
 		return nil, nil
@@ -245,43 +248,16 @@ func (evm EnvironmentVariableMap) FromWildcards(wildcardPatterns []string) (Envi
 		return nil, err
 	}
 
-	return resolvedSet.Resolved(), nil
+	return resolvedSet.Resolve(), nil
 }
 
-func (evm EnvironmentVariableMap) FromWildcardsUnresolved(wildcardPatterns []string) (wildcardSet, error) {
+// FromWildcardsUnresolved returns a wildcardSet specifying the inclusions and
+// exclusions discovered from a set of wildcard patterns. This is used to ensure
+// that user exclusions have primacy over inferred inclusions.
+func (evm EnvironmentVariableMap) FromWildcardsUnresolved(wildcardPatterns []string) (WildcardMaps, error) {
 	if wildcardPatterns == nil {
-		return wildcardSet{}, nil
+		return WildcardMaps{}, nil
 	}
 
 	return evm.fromWildcards(wildcardPatterns)
-}
-
-func (evm EnvironmentVariableMap) GetHashableEnvVars(keys []string, matchers []string, envVarContainingExcludePrefix string) (DetailedMap, error) {
-	output := DetailedMap{}
-
-	inclusions, err := evm.FromWildcards(keys)
-	if err != nil {
-		return output, err
-	}
-
-	wildcards := []string{}
-	wildcards = append(wildcards, matchers...)
-	if envVarContainingExcludePrefix != "" && evm[envVarContainingExcludePrefix] != "" {
-		wildcards = append(wildcards, "!"+evm[envVarContainingExcludePrefix]+"*")
-	}
-
-	matched, err := evm.FromWildcards(wildcards)
-	if err != nil {
-		return output, err
-	}
-
-	all := EnvironmentVariableMap{}
-	all.Merge(inclusions)
-	all.Merge(matched)
-
-	output.All = all
-	output.BySource.Explicit = inclusions
-	output.BySource.Matching = matched
-
-	return output, nil
 }
