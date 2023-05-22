@@ -164,8 +164,8 @@ impl AbsoluteSystemPathBuf {
         self.as_absolute_path().join_component(segment)
     }
 
-    pub fn join_literals(&self, segments: &[&str]) -> Self {
-        self.as_absolute_path().join_literals(segments)
+    pub fn join_components(&self, segments: &[&str]) -> Self {
+        self.as_absolute_path().join_components(segments)
     }
 
     pub fn join_unix_path(

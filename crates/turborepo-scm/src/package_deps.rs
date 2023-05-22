@@ -94,13 +94,13 @@ mod tests {
     #[test]
     fn test_symlinked_git_root() {
         let (_, tmp_root) = tmp_dir();
-        let git_root = tmp_root.join_literal("actual_repo");
+        let git_root = tmp_root.join_component("actual_repo");
         git_root.create_dir_all().unwrap();
         setup_repository(&git_root);
-        git_root.join_literal("inside").create_dir_all().unwrap();
-        let link = tmp_root.join_literal("link");
+        git_root.join_component("inside").create_dir_all().unwrap();
+        let link = tmp_root.join_component("link");
         link.symlink_to_dir("actual_repo").unwrap();
-        let turbo_root = link.join_literal("inside");
+        let turbo_root = link.join_component("inside");
         let result = find_git_root(&turbo_root).unwrap();
         assert_eq!(result, link);
     }
@@ -125,24 +125,24 @@ mod tests {
         //     dir/
         //       nested-file
         let (_repo_root_tmp, repo_root) = tmp_dir();
-        let my_pkg_dir = repo_root.join_literal("my-pkg");
+        let my_pkg_dir = repo_root.join_component("my-pkg");
         my_pkg_dir.create_dir_all()?;
 
         // create file 1
-        let committed_file_path = my_pkg_dir.join_literal("committed-file");
+        let committed_file_path = my_pkg_dir.join_component("committed-file");
         committed_file_path.create_with_contents("committed bytes")?;
 
         // create file 2
-        let deleted_file_path = my_pkg_dir.join_literal("deleted-file");
+        let deleted_file_path = my_pkg_dir.join_component("deleted-file");
         deleted_file_path.create_with_contents("delete-me")?;
 
         // create file 3
-        let nested_file_path = my_pkg_dir.join_literals(&["dir", "nested-file"]);
+        let nested_file_path = my_pkg_dir.join_components(&["dir", "nested-file"]);
         nested_file_path.ensure_dir()?;
         nested_file_path.create_with_contents("nested")?;
 
         // create a package.json
-        let pkg_json_path = my_pkg_dir.join_literal("package.json");
+        let pkg_json_path = my_pkg_dir.join_component("package.json");
         pkg_json_path.create_with_contents("{}")?;
 
         setup_repository(&repo_root);
@@ -152,11 +152,11 @@ mod tests {
         deleted_file_path.remove()?;
 
         // create another untracked file in git
-        let uncommitted_file_path = my_pkg_dir.join_literal("uncommitted-file");
+        let uncommitted_file_path = my_pkg_dir.join_component("uncommitted-file");
         uncommitted_file_path.create_with_contents("uncommitted bytes")?;
 
         // create an untracked file in git up a level
-        let root_file_path = repo_root.join_literal("new-root-file");
+        let root_file_path = repo_root.join_component("new-root-file");
         root_file_path.create_with_contents("new-root bytes")?;
 
         let package_path = AnchoredSystemPathBuf::from_raw("my-pkg")?;

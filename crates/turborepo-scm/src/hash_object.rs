@@ -123,10 +123,14 @@ mod test {
         let cwd = std::env::current_dir().unwrap();
         let cwd = AbsoluteSystemPathBuf::new(cwd).unwrap();
         let git_root = find_git_root(&cwd).unwrap();
-        let fixture_path =
-            git_root.join_literals(&["crates", "turborepo-scm", "fixtures", "01-git-hash-object"]);
+        let fixture_path = git_root.join_components(&[
+            "crates",
+            "turborepo-scm",
+            "fixtures",
+            "01-git-hash-object",
+        ]);
 
-        let fixture_child_path = fixture_path.join_literal("child");
+        let fixture_child_path = fixture_path.join_component("child");
         let git_root = find_git_root(&fixture_path).unwrap();
 
         // paths for files here are relative to the package path.
