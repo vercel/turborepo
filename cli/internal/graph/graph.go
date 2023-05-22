@@ -149,6 +149,10 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			Framework:              framework,
 			EnvMode:                taskEnvMode,
 			EnvVars: runsummary.TaskEnvVarSummary{
+				Specified: runsummary.TaskEnvConfiguration{
+					Env:            taskDefinition.Env,
+					PassThroughEnv: taskDefinition.PassThroughEnv,
+				},
 				Configured:  envVars.BySource.Explicit.ToSecretHashable(),
 				Inferred:    envVars.BySource.Matching.ToSecretHashable(),
 				PassThrough: envVarPassThroughMap.ToSecretHashable(),
