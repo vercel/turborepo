@@ -130,10 +130,8 @@ const wildcard = '*'
 const wildcardEscape = '\\'
 const regexWildcardSegment = ".*"
 
-func wildcardToRegexPattern(pattern string) (*string, string) {
-	hasWildcard := false
+func wildcardToRegexPattern(pattern string) string {
 	var regexString []string
-	var literalString []string
 
 	var previousIndex int
 	var previousRune rune
@@ -144,11 +142,9 @@ func wildcardToRegexPattern(pattern string) (*string, string) {
 				// Found a literal *
 
 				// Replace the trailing "\*" with just "*" before adding the segment.
-				literalString = append(literalString, pattern[previousIndex:i-1]+"*")
 				regexString = append(regexString, regexp.QuoteMeta(pattern[previousIndex:i-1]+"*"))
 			} else {
 				// Found a wildcard
-				hasWildcard = true
 
 				// Add in the static segment since the last wildcard. Can be zero length.
 				regexString = append(regexString, regexp.QuoteMeta(pattern[previousIndex:i]))
@@ -166,17 +162,9 @@ func wildcardToRegexPattern(pattern string) (*string, string) {
 	}
 
 	// Add the last static segment. Can be zero length.
-	literalString = append(literalString, pattern[previousIndex:])
 	regexString = append(regexString, regexp.QuoteMeta(pattern[previousIndex:]))
 
-	// We need the computed literal env value because FOO= is meaningful.
-	var literalValue string
-	if !hasWildcard {
-		literalValue = strings.Join(literalString, "")
-		return &literalValue, strings.Join(regexString, "")
-	}
-
-	return nil, strings.Join(regexString, "")
+	return strings.Join(regexString, "")
 }
 
 // fromWildcards returns a wildcardSet after processing wildcards against it.
@@ -194,20 +182,14 @@ func (evm EnvironmentVariableMap) fromWildcards(wildcardPatterns []string) (Wild
 		isLiteralLeadingExclamation := strings.HasPrefix(wildcardPattern, "\\!")
 
 		if isExclude {
-			_, excludePattern := wildcardToRegexPattern(wildcardPattern[1:])
+			excludePattern := wildcardToRegexPattern(wildcardPattern[1:])
 			excludePatterns = append(excludePatterns, excludePattern)
 		} else if isLiteralLeadingExclamation {
-			includeLiteral, includePattern := wildcardToRegexPattern(wildcardPattern[1:])
-			if includeLiteral != nil {
-				output.Inclusions[*includeLiteral] = ""
-			}
+			includePattern := wildcardToRegexPattern(wildcardPattern[1:])
 			includePatterns = append(includePatterns, includePattern)
 		} else {
-			includeLiteral, includePattern := wildcardToRegexPattern(wildcardPattern[0:])
+			includePattern := wildcardToRegexPattern(wildcardPattern[0:])
 			includePatterns = append(includePatterns, includePattern)
-			if includeLiteral != nil {
-				output.Inclusions[*includeLiteral] = ""
-			}
 		}
 	}
 
