@@ -63,7 +63,7 @@ export async function create(
 
   if (!online) {
     error(
-      "You appear to be offline. Please check your network connection and try again."
+      "You appear to be offline. Pretty please check your network connection and try again."
     );
     process.exit(1);
   }
