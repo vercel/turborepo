@@ -2,9 +2,14 @@
 #![feature(provide_any)]
 
 pub mod cache_archive;
+pub mod http;
 pub mod signature_authentication;
 
-use std::{backtrace, backtrace::Backtrace};
+use std::{
+    backtrace,
+    backtrace::Backtrace,
+    sync::{MutexGuard, PoisonError},
+};
 
 use thiserror::Error;
 
@@ -23,6 +28,8 @@ pub enum CacheError {
     InvalidTag(#[backtrace] Backtrace),
     #[error("cannot untar file to {0}")]
     InvalidFilePath(String, #[backtrace] Backtrace),
+    #[error("artifact verification failed: {0}")]
+    ApiClientError(#[from] turborepo_api_client::Error, #[backtrace] Backtrace),
     #[error("signing artifact failed: {0}")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),
     #[error("invalid duration")]
@@ -41,8 +48,6 @@ pub enum CacheError {
     // way to display it nicely.
     #[error("attempted to create unsupported file type")]
     CreateUnsupportedFileType(#[backtrace] Backtrace),
-    #[error("file name is malformed: {0}")]
-    MalformedName(String, #[backtrace] Backtrace),
     #[error("tar file is malformed")]
     MalformedTar(#[backtrace] Backtrace),
     #[error("file name is not Windows-safe: {0}")]

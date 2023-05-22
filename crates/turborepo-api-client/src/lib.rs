@@ -4,8 +4,9 @@
 
 use std::env;
 
-use reqwest::RequestBuilder;
+use reqwest::{Method, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 pub use crate::error::{Error, Result};
 
@@ -37,6 +38,13 @@ pub enum CachingStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachingStatusResponse {
     pub status: CachingStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtifactResponse {
+    pub duration: u64,
+    pub expected_tag: Option<String>,
+    pub body: Vec<u8>,
 }
 
 /// Membership is the relationship between the logged-in user and a particular
@@ -109,6 +117,11 @@ pub struct User {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserResponse {
     pub user: User,
+}
+
+pub struct PreflightResponse {
+    location: Url,
+    allow_auth: bool,
 }
 
 pub struct APIClient {
@@ -237,6 +250,81 @@ impl APIClient {
         Ok(VerifiedSsoUser {
             token: verification_response.token,
             team_id: verification_response.team_id,
+        })
+    }
+
+    pub async fn fetch_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+        use_preflight: bool,
+    ) -> Result<Response> {
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
+        let mut allow_auth = true;
+
+        if use_preflight {
+            let preflight_response = self
+                .do_preflight(token, &request_url, "GET", "Authorization, User-Agent")
+                .await?;
+
+            allow_auth = preflight_response.allow_auth;
+            request_url = preflight_response.location.to_string();
+        };
+
+        let mut request_builder = self
+            .client
+            .get(&request_url)
+            .header("User-Agent", self.user_agent.clone());
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+
+        let response = retry::make_retryable_request(request_builder)
+            .await?
+            .error_for_status()?;
+
+        Ok(response)
+    }
+
+    pub async fn do_preflight(
+        &self,
+        token: &str,
+        request_url: &str,
+        request_method: &str,
+        request_headers: &str,
+    ) -> Result<PreflightResponse> {
+        let request_builder = self
+            .client
+            .request(Method::OPTIONS, request_url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Access-Control-Request-Method", request_method)
+            .header("Access-Control-Request-Headers", request_headers)
+            .header("Authorization", format!("Bearer {}", token));
+
+        let response = retry::make_retryable_request(request_builder).await?;
+
+        let headers = response.headers();
+        let location = if let Some(location) = headers.get("Location") {
+            let location = location.to_str()?;
+            Url::parse(location)?
+        } else {
+            response.url().clone()
+        };
+
+        let allowed_headers = headers
+            .get("Access-Control-Allow-Headers")
+            .map_or("", |h| h.to_str().unwrap_or(""));
+
+        let allow_auth = allowed_headers.to_lowercase().contains("authorization");
+
+        Ok(PreflightResponse {
+            location,
+            allow_auth,
         })
     }
 
