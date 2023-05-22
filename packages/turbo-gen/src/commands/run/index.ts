@@ -18,7 +18,7 @@ export async function run(
   const project = await getProject(opts);
 
   console.log();
-  logger.info(`Modify ${project.name} using custom generators`);
+  logger.info(`Modify "${project.name}" using custom generators`);
   console.log();
 
   await custom({ generator, project, opts });

@@ -29,12 +29,12 @@ export async function workspace(opts: TurboGeneratorOptions) {
     if (opts.example) {
       logger.info(`Copy a remote workspace from ${opts.example}`);
     } else {
-      logger.info(`Copy an existing workspace from ${project.name}`);
+      logger.info(`Copy an existing workspace from "${project.name}"`);
     }
     console.log();
     await copy(args);
   } else {
-    logger.info(`Add an empty workspace to ${project.name}`);
+    logger.info(`Add an empty workspace to "${project.name}"`);
     console.log();
     await empty(args);
   }
