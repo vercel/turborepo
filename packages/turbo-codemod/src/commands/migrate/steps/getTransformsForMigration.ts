@@ -1,4 +1,4 @@
-import { gt, lte } from "semver";
+import { gt, lte, eq } from "semver";
 
 import loadTransformers from "../../../utils/loadTransformers";
 import type { Transformer } from "../../../types";
@@ -13,13 +13,24 @@ function getTransformsForMigration({
   fromVersion: string;
   toVersion: string;
 }): Array<Transformer> {
-  const transforms = loadTransformers();
-  return transforms.filter((transformer) => {
+  const transforms = loadTransformers().filter((transformer) => {
     return (
       gt(transformer.introducedIn, fromVersion) &&
       lte(transformer.introducedIn, toVersion)
     );
   });
+
+  transforms.sort((a, b) => {
+    if (gt(a.introducedIn, b.introducedIn)) {
+      return 1;
+    } else if (eq(a.introducedIn, b.introducedIn)) {
+      return 0;
+    } else {
+      return -1;
+    }
+  });
+
+  return transforms;
 }
 
 export default getTransformsForMigration;

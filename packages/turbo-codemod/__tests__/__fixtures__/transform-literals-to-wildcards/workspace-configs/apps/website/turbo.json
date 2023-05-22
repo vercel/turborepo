@@ -1,0 +1,9 @@
+{
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "env": ["NO_WEBSITE_ENV", "!*!*WEBSITE"],
+      "passThroughEnv": ["NO_WEBSITE_PASSTHROUGH_ENV", "!*!*WEBSITE"]
+    }
+  }
+}
