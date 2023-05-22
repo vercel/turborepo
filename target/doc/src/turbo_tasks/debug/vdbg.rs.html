@@ -60,6 +60,18 @@
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
 </pre><pre class="rust"><code><span class="comment">// NOTE(alexkirsz) Implementation and comments are based on the `dbg!` macro
 // from the Rust standard library.
 </span><span class="doccomment">/// This macro supports the same syntax as `dbg!`, but also supports
@@ -78,22 +90,34 @@
         <span class="macro">eprintln!</span>(<span class="string">&quot;[{}:{}]&quot;</span>, <span class="macro">file!</span>(), <span class="macro">line!</span>())
     };
 
-    (__init <span class="macro-nonterminal">$depth</span>:expr ; $(<span class="macro-nonterminal">$val</span>:expr),* ) =&gt; {
+    (__init <span class="macro-nonterminal">$depth</span>:expr ; [ <span class="macro-nonterminal">$val</span>:expr $(, <span class="macro-nonterminal">$rest</span>:expr)* ] [ $(<span class="macro-nonterminal">$tt</span>:tt)* ] ) =&gt; {
+        {
+            <span class="kw">let </span>valstr = <span class="macro">stringify!</span>(<span class="macro-nonterminal">$val</span>);
+            <span class="comment">// We move the value into a new binding so we may refer to it multiple
+            // times without re-evaluating the expression.
+            </span><span class="kw">let </span>valmove = <span class="macro-nonterminal">$val</span>;
+            <span class="comment">// We convert the value to an owned value which will be moved into the
+            // spawned thread. This is necessary in order to ensure a &#39;static lifetime
+            // for the value, but it may require a clone.
+            </span><span class="kw">let </span>valowned = valmove.to_owned();
+            <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__init $depth </span>; [ $(<span class="macro-nonterminal">$rest</span>),* ] [ $(<span class="macro-nonterminal">$tt</span>)* valstr valmove valowned ])
+        }
+    };
+    (__init <span class="macro-nonterminal">$depth</span>:expr ; [ ] [ $(<span class="macro-nonterminal">$valstr</span>:ident <span class="macro-nonterminal">$valmove</span>:ident <span class="macro-nonterminal">$valowned</span>:ident)* ] ) =&gt; {
         {
             <span class="kw">use </span><span class="macro-nonterminal">$crate::debug::ValueDebugFormat</span>;
             <span class="kw">let </span>depth = <span class="macro-nonterminal">$depth</span>;
             <span class="macro-nonterminal">$crate::macro_helpers::spawn_detached</span>(<span class="kw">async move </span>{
-                <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__expand </span>depth ; [ $(<span class="macro-nonterminal">$val</span>),* ] []);
+                <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__expand </span>depth ; [ $(<span class="macro-nonterminal">$valstr $valowned</span>)* ] []);
                 <span class="prelude-val">Ok</span>(())
             });
-            ($(<span class="macro-nonterminal">$val</span>),<span class="kw-2">*</span>)
+            ($(<span class="macro-nonterminal">$valmove</span>),<span class="kw-2">*</span>)
         }
     };
 
-    (__expand <span class="macro-nonterminal">$depth</span>:ident ; [ <span class="macro-nonterminal">$val</span>:expr $(, <span class="macro-nonterminal">$rest</span>:expr )* ] [ $(<span class="macro-nonterminal">$tt</span>:tt)* ]) =&gt; {
-        <span class="kw">let </span>valstr = <span class="macro">stringify!</span>(<span class="macro-nonterminal">$val</span>);
+    (__expand <span class="macro-nonterminal">$depth</span>:ident ; [ <span class="macro-nonterminal">$valstr</span>:ident <span class="macro-nonterminal">$val</span>:ident $(<span class="macro-nonterminal">$rest</span>:tt)* ] [ $(<span class="macro-nonterminal">$tt</span>:tt)* ]) =&gt; {
         <span class="kw">let </span>valdbg = (<span class="kw-2">&amp;</span><span class="macro-nonterminal">$val</span>).value_debug_format(<span class="macro-nonterminal">$depth</span>).try_to_string().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__expand $depth </span>; [ $(<span class="macro-nonterminal">$rest</span>),* ] [ $(<span class="macro-nonterminal">$tt</span>)* valstr valdbg ]);
+        <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__expand $depth </span>; [ $(<span class="macro-nonterminal">$rest</span>)* ] [ $(<span class="macro-nonterminal">$tt</span>)* <span class="macro-nonterminal">$valstr </span>valdbg ]);
     };
     (__expand <span class="macro-nonterminal">$depth</span>:ident ; [] [ $( <span class="macro-nonterminal">$valstr</span>:ident <span class="macro-nonterminal">$valdbg</span>:ident )* ]) =&gt; {
         <span class="comment">// By pre-awaiting, then printing everything at once, we ensure that the
@@ -119,7 +143,7 @@
         <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__init $depth </span>; $(<span class="macro-nonterminal">$val</span>),<span class="kw-2">*</span>)
     };
     ($(<span class="macro-nonterminal">$val</span>:expr),+ $(,)<span class="question-mark">?</span>) =&gt; {
-        <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__init </span>usize::MAX ; $(<span class="macro-nonterminal">$val</span>),<span class="kw-2">*</span>)
+        <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__init </span>usize::MAX ; [ $(<span class="macro-nonterminal">$val</span>),* ] [])
     };
 }
 </code></pre></div>

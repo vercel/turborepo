@@ -1529,6 +1529,9 @@
 <a href="#1529" id="1529">1529</a>
 <a href="#1530" id="1530">1530</a>
 <a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -2526,7 +2529,10 @@
             turbo_tasks(),
             CURRENT_TASK_ID.scope(
                 current_task_id,
-                <span class="self">self</span>.backend.execution_scope(current_task_id, f),
+                CELL_COUNTERS.scope(
+                    Default::default(),
+                    <span class="self">self</span>.backend.execution_scope(current_task_id, f),
+                ),
             ),
         ))
     }
