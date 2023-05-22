@@ -689,7 +689,7 @@ mod test {
 
         // dropped when the test ends
         let task = tokio::task::spawn(async move { task_watcher.watch(token).await });
-
+        tokio::time::sleep(Duration::from_secs(3)).await;
         watcher.config.flush().await.unwrap();
         std::fs::remove_dir_all(dir.path()).unwrap();
 
