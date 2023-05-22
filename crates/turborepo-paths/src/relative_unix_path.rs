@@ -37,7 +37,9 @@ impl RelativeUnixPath {
                 .iter()
                 .map(|byte| if *byte == b'/' { b'\\' } else { *byte })
                 .collect::<Vec<u8>>();
-            let system_path_string = String::from_utf8(system_path_bytes)?;
+            let system_path_string = String::from_utf8(system_path_bytes).map_err(|_| {
+                PathError::InvalidUnicode(String::from_utf8_lossy(&system_path_bytes).to_string())
+            })?;
             Ok(PathBuf::from(system_path_string))
         }
     }
