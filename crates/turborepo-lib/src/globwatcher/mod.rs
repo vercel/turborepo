@@ -345,9 +345,10 @@ fn clear_hash_globs(
 
 #[cfg(test)]
 mod test {
-    use std::{fs::File, sync::Arc};
+    use std::{fs::File, sync::Arc, time::Duration};
 
     use globwatch::StopSource;
+    use tokio::time::timeout;
     use turbopath::AbsoluteSystemPathBuf;
 
     fn setup() -> tempdir::TempDir {
@@ -693,10 +694,10 @@ mod test {
         std::fs::remove_dir_all(dir.path()).unwrap();
 
         // it should shut down
-        let finish = task.await;
-        assert!(
-            finish.is_ok(),
-            "expected task to finish when root is deleted"
-        );
+        match timeout(Duration::from_secs(60), task).await {
+            Err(e) => panic!("test timed out: {e}"),
+            Ok(Err(e)) => panic!("expected task to finish when root is deleted: {e}"),
+            _ => (),
+        }
     }
 }
