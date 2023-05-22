@@ -393,6 +393,7 @@ importers:
       '@types/estree': ^1.0.0
       '@types/jest': ^27.4.0
       '@types/node': ^16.11.12
+      dotenv: 16.0.3
       eslint: '>6.6.0'
       jest: ^27.4.3
       json5: ^2.2.1
@@ -400,6 +401,7 @@ importers:
       tsup: ^6.2.0
       typescript: ^4.7.4
     dependencies:
+      dotenv: 16.0.3
       eslint: 8.23.0
     devDependencies:
       '@turbo/test-utils': link:../turbo-test-utils
@@ -4852,6 +4854,11 @@ packages:
       no-case: 3.0.4
       tslib: 2.4.1
     dev: true
+
+  /dotenv/16.0.3:
+    resolution: {integrity: sha512-7GO6HghkA5fYG9TYnNxi14/7K9f5occMlp3zXAuSxn7CKCxt9xbNWG7yF8hTCSUchlfWSe3uLmlPfigevRItzQ==}
+    engines: {node: '>=12'}
+    dev: false
 
   /eastasianwidth/0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
