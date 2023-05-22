@@ -10,7 +10,6 @@ use serde::Serialize;
 
 use crate::{
     AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
-    RelativeSystemPathBuf,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
@@ -86,7 +85,7 @@ impl AbsoluteSystemPathBuf {
     ///   let base = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
     ///   let anchored_path = AbsoluteSystemPathBuf::new("/Users/user/Documents").unwrap();
     ///   let anchored_path = base.anchor(&anchored_path).unwrap();
-    ///   assert_eq!(anchored_path.as_path(), Path::new("Documents"));
+    ///   assert_eq!(anchored_path.to_str().unwrap(), "Documents");
     /// }
     ///
     /// #[cfg(windows)]
@@ -94,7 +93,7 @@ impl AbsoluteSystemPathBuf {
     ///   let base = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
     ///   let anchored_path = AbsoluteSystemPathBuf::new("C:\\Users\\user\\Documents").unwrap();
     ///   let anchored_path = base.anchor(&anchored_path).unwrap();
-    ///  assert_eq!(anchored_path.as_path(), Path::new("Documents"));
+    ///  assert_eq!(anchored_path.to_str().unwrap(), "Documents");
     /// }
     /// ```
     pub fn anchor(
@@ -160,20 +159,8 @@ impl AbsoluteSystemPathBuf {
         self.0.ends_with(child.as_ref())
     }
 
-    pub fn join_relative(&self, path: RelativeSystemPathBuf) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(self.0.join(path.as_path()))
-    }
-
-    pub fn join_literal(&self, segment: &str) -> Self {
-        AbsoluteSystemPathBuf(self.0.join(segment))
-    }
-
-    pub fn join_unix_path_literal<S: AsRef<str>>(
-        &self,
-        unix_path: S,
-    ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let tail = Path::new(unix_path.as_ref()).into_system()?;
-        Ok(AbsoluteSystemPathBuf(self.0.join(tail)))
+    pub fn join_component(&self, segment: &str) -> Self {
+        self.as_absolute_path().join_component(segment)
     }
 
     pub fn ensure_dir(&self) -> Result<(), io::Error> {

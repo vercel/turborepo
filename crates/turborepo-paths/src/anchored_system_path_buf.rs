@@ -42,7 +42,7 @@ impl AnchoredSystemPathBuf {
         Ok(Self(system_path))
     }
 
-    pub fn as_path(&self) -> &Path {
+    pub(crate) fn as_path(&self) -> &Path {
         self.0.as_path()
     }
 

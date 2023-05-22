@@ -123,10 +123,10 @@ mod tests {
     #[test]
     fn test_copy_missing_file() -> Result<()> {
         let (_src_tmp, src_dir) = tmp_dir()?;
-        let src_file = src_dir.join_literal("src");
+        let src_file = src_dir.join_component("src");
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
-        let dst_file = dst_dir.join_literal("dest");
+        let dst_file = dst_dir.join_component("dest");
 
         let err = copy_file(src_file, dst_file).unwrap_err();
         let err = err.downcast::<PathError>()?;
@@ -137,10 +137,10 @@ mod tests {
     #[test]
     fn test_basic_copy_file() -> Result<()> {
         let (_src_tmp, src_dir) = tmp_dir()?;
-        let src_file = src_dir.join_literal("src");
+        let src_file = src_dir.join_component("src");
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
-        let dst_file = dst_dir.join_literal("dest");
+        let dst_file = dst_dir.join_component("dest");
 
         // src exists, dst doesn't
         src_file.create_with_contents("src")?;
@@ -153,13 +153,13 @@ mod tests {
     #[test]
     fn test_symlinks() -> Result<()> {
         let (_src_tmp, src_dir) = tmp_dir()?;
-        let src_symlink = src_dir.join_literal("symlink");
+        let src_symlink = src_dir.join_component("symlink");
 
         let (_target_tmp, target_dir) = tmp_dir()?;
-        let src_target = target_dir.join_literal("target");
+        let src_target = target_dir.join_component("target");
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
-        let dst_file = dst_dir.join_literal("dest");
+        let dst_file = dst_dir.join_component("dest");
 
         // create symlink target
         src_target.create_with_contents("target")?;
@@ -173,10 +173,10 @@ mod tests {
     #[test]
     fn test_copy_file_with_perms() -> Result<()> {
         let (_src_tmp, src_dir) = tmp_dir()?;
-        let src_file = src_dir.join_literal("src");
+        let src_file = src_dir.join_component("src");
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
-        let dst_file = dst_dir.join_literal("dest");
+        let dst_file = dst_dir.join_component("dest");
 
         // src exists, dst doesn't
         src_file.create_with_contents("src")?;
@@ -200,21 +200,21 @@ mod tests {
         //     broken -> missing
         //     circle -> ../child
         let (_src_tmp, src_dir) = tmp_dir()?;
-        let child_dir = src_dir.join_literal("child");
-        let a_path = child_dir.join_literal("a");
+        let child_dir = src_dir.join_component("child");
+        let a_path = child_dir.join_component("a");
         a_path.ensure_dir()?;
         a_path.create_with_contents("hello")?;
 
-        let b_path = src_dir.join_literal("b");
+        let b_path = src_dir.join_component("b");
         b_path.create_with_contents("bFile")?;
 
-        let link_path = child_dir.join_literal("link");
+        let link_path = child_dir.join_component("link");
         link_path.symlink_to_file("../b")?;
 
-        let broken_link_path = child_dir.join_literal("broken");
+        let broken_link_path = child_dir.join_component("broken");
         broken_link_path.symlink_to_file("missing")?;
 
-        let circle_path = child_dir.join_literal("circle");
+        let circle_path = child_dir.join_component("circle");
         circle_path.symlink_to_dir("../child")?;
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
@@ -224,23 +224,23 @@ mod tests {
         // Ensure double copy doesn't error
         recursive_copy(&src_dir, &dst_dir)?;
 
-        let dst_child_path = dst_dir.join_literal("child");
-        let dst_a_path = dst_child_path.join_literal("a");
+        let dst_child_path = dst_dir.join_component("child");
+        let dst_a_path = dst_child_path.join_component("a");
         assert_file_matches(&a_path, &dst_a_path);
 
-        let dst_b_path = dst_dir.join_literal("b");
+        let dst_b_path = dst_dir.join_component("b");
         assert_file_matches(&b_path, &dst_b_path);
 
-        let dst_link_path = dst_child_path.join_literal("link");
+        let dst_link_path = dst_child_path.join_component("link");
         assert_target_matches(&dst_link_path, "../b");
 
-        let dst_broken_path = dst_child_path.join_literal("broken");
+        let dst_broken_path = dst_child_path.join_component("broken");
         assert_eq!(dst_broken_path.as_path().exists(), false);
 
         // Currently, we convert symlink-to-directory to empty-directory
         // This is very likely not ideal behavior, but leaving this test here to verify
         // that it is what we expect at this point in time.
-        let dst_circle_path = dst_child_path.join_literal("circle");
+        let dst_circle_path = dst_child_path.join_component("circle");
         let dst_circle_metadata = fs::symlink_metadata(&dst_circle_path)?;
         assert_eq!(dst_circle_metadata.is_dir(), true);
 

@@ -82,6 +82,10 @@ impl RelativeUnixPathBuf {
         Self::new(tail_slice)
     }
 
+    // Marked as test-only because it doesn't automatically clean the resulting
+    // path. *If* we end up needing or wanting this method outside of tests, we
+    // will need to implement .clean() for the result.
+    #[cfg(test)]
     pub fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
         let buffer = Vec::with_capacity(self.0.len() + 1 + tail.0.len());
         let mut path = BString::new(buffer);
