@@ -195,7 +195,15 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                     None => CloseReason::ServerClosed,
                 }
             },
-            _ = watcher_fut => CloseReason::WatcherClosed,
+            watch_res = watcher_fut => {
+                match watch_res {
+                    Ok(()) => CloseReason::WatcherClosed,
+                    Err(e) => {
+                        error!("Globwatch config error: {:?}", e);
+                        CloseReason::WatcherClosed
+                    },
+                }
+            },
         }
 
         // here the stop token is dropped, and the pid lock is dropped
