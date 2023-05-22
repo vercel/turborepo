@@ -6,16 +6,46 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc};
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 
-#[turbo_tasks::value(transparent)]
-pub struct PluginModule(
+/// A wrapper around a SWC's ecma transform wasm plugin module bytes, allowing
+/// it to operate with the turbo_task caching requirements.
+/// Internally this contains a `CompiledPluginModuleBytes`, which points to the
+/// compiled, serialized wasmer::Module instead of raw file bytes to reduce the
+/// cost of the compilation.
+#[turbo_tasks::value(
+    transparent,
+    serialization = "none",
+    eq = "manual",
+    into = "new",
+    cell = "new"
+)]
+pub struct SwcPluginModule(
     #[turbo_tasks(trace_ignore)]
     #[cfg(feature = "swc_ecma_transform_plugin")]
     pub swc_core::plugin_runner::plugin_module_bytes::CompiledPluginModuleBytes,
     // Dummy field to avoid turbo_tasks macro complains about empty struct.
     // This is due to we can't import CompiledPluginModuleBytes by default, it should be only
     // available for the target / platforms can support swc plugins (which can build wasmer)
-    #[cfg(not(feature = "swc_ecma_transform_plugin"))] pub Option<()>,
+    #[cfg(not(feature = "swc_ecma_transform_plugin"))] pub (),
 );
+
+impl SwcPluginModule {
+    pub fn new(plugin_name: &str, plugin_bytes: Vec<u8>) -> Self {
+        Self {
+            #[cfg(feature = "swc_ecma_transform_plugin")]
+            0: {
+                use swc_core::plugin_runner::plugin_module_bytes::{
+                    CompiledPluginModuleBytes, RawPluginModuleBytes,
+                };
+                CompiledPluginModuleBytes::from(RawPluginModuleBytes::new(
+                    plugin_name.to_string(),
+                    plugin_bytes,
+                ))
+            },
+            #[cfg(not(feature = "swc_ecma_transform_plugin"))]
+            0: (),
+        }
+    }
+}
 
 #[turbo_tasks::value(shared)]
 struct UnsupportedSwcEcmaTransformPluginsIssue {
@@ -58,12 +88,12 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
 #[derive(Debug)]
 pub struct SwcEcmaTransformPluginsTransformer {
     #[cfg(feature = "swc_ecma_transform_plugin")]
-    plugins: Vec<(PluginModuleVc, serde_json::Value)>,
+    plugins: Vec<(SwcPluginModuleVc, serde_json::Value)>,
 }
 
 impl SwcEcmaTransformPluginsTransformer {
     #[cfg(feature = "swc_ecma_transform_plugin")]
-    pub fn new(plugins: Vec<(PluginModuleVc, serde_json::Value)>) -> Self {
+    pub fn new(plugins: Vec<(SwcPluginModuleVc, serde_json::Value)>) -> Self {
         Self { plugins }
     }
 
