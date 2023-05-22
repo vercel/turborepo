@@ -81,7 +81,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		// Task env mode is only independent when global env mode is `infer`.
 		taskEnvMode := globalEnvMode
 		if taskEnvMode == util.Infer {
-			if taskDefinition.PassthroughEnv != nil {
+			if taskDefinition.PassThroughEnv != nil {
 				taskEnvMode = util.Strict
 			} else {
 				// If we're in infer mode we have just detected non-usage of strict env vars.
@@ -127,7 +127,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		packageTask.LogFile = logFile
 		packageTask.Command = command
 
-		envVarPassthroughMap, err := g.TaskHashTracker.EnvAtExecutionStart.FromWildcards(taskDefinition.PassthroughEnv)
+		envVarPassThroughMap, err := g.TaskHashTracker.EnvAtExecutionStart.FromWildcards(taskDefinition.PassThroughEnv)
 		if err != nil {
 			return err
 		}
@@ -151,7 +151,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			EnvVars: runsummary.TaskEnvVarSummary{
 				Configured:  envVars.BySource.Explicit.ToSecretHashable(),
 				Inferred:    envVars.BySource.Matching.ToSecretHashable(),
-				Passthrough: envVarPassthroughMap.ToSecretHashable(),
+				PassThrough: envVarPassThroughMap.ToSecretHashable(),
 			},
 			DotEnv:           taskDefinition.DotEnv,
 			ExternalDepsHash: pkg.ExternalDepsHash,

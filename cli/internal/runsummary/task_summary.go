@@ -93,8 +93,8 @@ type TaskEnvVarSummary struct {
 	Configured        []string `json:"configured"`
 	Inferred          []string `json:"inferred"`
 	Global            []string `json:"global"`
-	Passthrough       []string `json:"passthrough"`
-	GlobalPassthrough []string `json:"globalPassthrough"`
+	PassThrough       []string `json:"passthrough"`
+	GlobalPassThrough []string `json:"globalPassthrough"`
 }
 
 // cleanForSinglePackage converts a TaskSummary to remove references to workspaces

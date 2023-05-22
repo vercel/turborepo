@@ -10,28 +10,35 @@ type GlobalHashSummary struct {
 	GlobalCacheKey       string                                `json:"rootKey"`
 	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"files"`
 	RootExternalDepsHash string                                `json:"hashOfExternalDependencies"`
-	DotEnv               turbopath.AnchoredUnixPathArray       `json:"dotEnv"`
+	Env                  []string                              `json:"globalEnv,omitempty"`
+	PassThroughEnv       []string                              `json:"globalPassThroughEnv"`
+	DotEnv               turbopath.AnchoredUnixPathArray       `json:"globalDotEnv"`
 
 	// This is a private field because and not in JSON, because we'll add it to each task
-	envVars            env.EnvironmentVariablePairs
-	passthroughEnvVars env.EnvironmentVariablePairs
+	resolvedEnvVars            env.EnvironmentVariablePairs
+	resolvedPassThroughEnvVars env.EnvironmentVariablePairs
 }
 
 // NewGlobalHashSummary creates a GlobalHashSummary struct from a set of fields.
 func NewGlobalHashSummary(
+	globalCacheKey string,
 	fileHashMap map[turbopath.AnchoredUnixPath]string,
 	rootExternalDepsHash string,
-	envVars env.DetailedMap,
-	passthroughEnvVars env.EnvironmentVariableMap,
-	globalCacheKey string,
+	globalEnv []string,
+	globalPassThroughEnv []string,
 	globalDotEnv turbopath.AnchoredUnixPathArray,
+	resolvedEnvVars env.DetailedMap,
+	resolvedPassThroughEnvVars env.EnvironmentVariableMap,
 ) *GlobalHashSummary {
 	return &GlobalHashSummary{
-		envVars:              envVars.All.ToSecretHashable(),
-		passthroughEnvVars:   passthroughEnvVars.ToSecretHashable(),
+		GlobalCacheKey:       globalCacheKey,
 		GlobalFileHashMap:    fileHashMap,
 		RootExternalDepsHash: rootExternalDepsHash,
-		GlobalCacheKey:       globalCacheKey,
+		Env:                  globalEnv,
+		PassThroughEnv:       globalPassThroughEnv,
 		DotEnv:               globalDotEnv,
+
+		resolvedEnvVars:            resolvedEnvVars.All.ToSecretHashable(),
+		resolvedPassThroughEnvVars: resolvedPassThroughEnvVars.ToSecretHashable(),
 	}
 }

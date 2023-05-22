@@ -24,22 +24,24 @@ var _defaultEnvVars = []string{
 
 // GlobalHashableInputs represents all the things that we use to create the global hash
 type GlobalHashableInputs struct {
+	globalCacheKey       string
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
-	envVars              env.DetailedMap
-	globalCacheKey       string
-	envVarPassthroughs   []string
+	env                  []string
+	resolvedEnvVars      env.DetailedMap
+	passThroughEnv       []string
 	envMode              util.EnvMode
 	frameworkInference   bool
 	dotEnv               turbopath.AnchoredUnixPathArray
 }
 
 type globalHashable struct {
+	globalCacheKey       string
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
-	envVars              env.EnvironmentVariablePairs
-	globalCacheKey       string
-	envVarPassthroughs   []string
+	env                  []string
+	resolvedEnvVars      env.EnvironmentVariablePairs
+	passThroughEnv       []string
 	envMode              util.EnvMode
 	frameworkInference   bool
 
@@ -52,11 +54,12 @@ type globalHashable struct {
 // as that is not compatible with existing global hashes.
 func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
 	return fs.HashObject(globalHashable{
+		globalCacheKey:       full.globalCacheKey,
 		globalFileHashMap:    full.globalFileHashMap,
 		rootExternalDepsHash: full.rootExternalDepsHash,
-		envVars:              full.envVars.All.ToHashable(),
-		globalCacheKey:       full.globalCacheKey,
-		envVarPassthroughs:   full.envVarPassthroughs,
+		env:                  full.env,
+		resolvedEnvVars:      full.resolvedEnvVars.All.ToHashable(),
+		passThroughEnv:       full.passThroughEnv,
 		envMode:              full.envMode,
 		frameworkInference:   full.frameworkInference,
 		dotEnv:               full.dotEnv,
@@ -67,7 +70,7 @@ func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
 func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, error) {
 	switch full.envMode {
 	case util.Infer:
-		if full.envVarPassthroughs != nil {
+		if full.passThroughEnv != nil {
 			// In infer mode, if there is any passThru config (even if it is an empty array)
 			// we'll hash the whole object, so we can detect changes to that config
 			// Further, resolve the envMode to the concrete value.
@@ -77,12 +80,12 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 		return calculateGlobalHash(full)
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
-		full.envVarPassthroughs = nil
+		full.passThroughEnv = nil
 		return calculateGlobalHash(full)
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
-		if full.envVarPassthroughs == nil {
-			full.envVarPassthroughs = make([]string, 0)
+		if full.passThroughEnv == nil {
+			full.passThroughEnv = make([]string, 0)
 		}
 		return calculateGlobalHash(full)
 	default:
@@ -91,18 +94,18 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 }
 
 func getGlobalHashInputs(
+	logger hclog.Logger,
 	rootpath turbopath.AbsoluteSystemPath,
 	rootPackageJSON *fs.PackageJSON,
-	envAtExecutionStart env.EnvironmentVariableMap,
-	globalEnv []string,
-	globalFileDependencies []string,
 	packageManager *packagemanager.PackageManager,
 	lockFile lockfile.Lockfile,
-	envVarPassthroughs []string,
+	globalFileDependencies []string,
+	envAtExecutionStart env.EnvironmentVariableMap,
+	globalEnv []string,
+	globalPassThroughEnv []string,
 	envMode util.EnvMode,
 	frameworkInference bool,
 	dotEnv turbopath.AnchoredUnixPathArray,
-	logger hclog.Logger,
 ) (GlobalHashableInputs, error) {
 	// Calculate env var dependencies
 
@@ -202,11 +205,12 @@ func getGlobalHashInputs(
 	}
 
 	return GlobalHashableInputs{
+		globalCacheKey:       _globalCacheKey,
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
-		envVars:              globalHashableEnvVars,
-		globalCacheKey:       _globalCacheKey,
-		envVarPassthroughs:   envVarPassthroughs,
+		env:                  globalEnv,
+		resolvedEnvVars:      globalHashableEnvVars,
+		passThroughEnv:       globalPassThroughEnv,
 		envMode:              envMode,
 		frameworkInference:   frameworkInference,
 		dotEnv:               dotEnv,
