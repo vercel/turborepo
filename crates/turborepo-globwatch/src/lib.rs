@@ -235,6 +235,8 @@ pub enum ConfigError {
     ServerStopped,
     /// Watch error
     WatchError(Vec<notify::Error>),
+    /// The server has already been consumed.
+    WatchingAlready,
 }
 
 impl<T: Watcher> WatchConfig<T> {
@@ -285,6 +287,24 @@ impl<T: Watcher> WatchConfig<T> {
                 }
             })
             .map_err(ConfigError::WatchError)
+    }
+
+    /// Register a single path to be included by the watcher.
+    pub async fn include_path(&self, path: &Path) -> Result<(), ConfigError> {
+        trace!("watching {:?}", path);
+        // Windows doesn't create an event when a watched directory itself is deleted
+        // we watch the parent directory instead.
+        // More information at https://github.com/notify-rs/notify/issues/403
+        #[cfg(windows)]
+        let watched_path = path.parent().expect("turbo is unusable at filesytem root");
+        #[cfg(not(windows))]
+        let watched_path = path;
+
+        self.watcher
+            .lock()
+            .expect("watcher lock poisoned")
+            .watch(watched_path, notify::RecursiveMode::NonRecursive)
+            .map_err(|e| ConfigError::WatchError(vec![e]))
     }
 
     /// Register a glob to be excluded by the watcher.
