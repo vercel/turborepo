@@ -115,10 +115,19 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write <span class="kw">as _</span>;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexMap;
+<span class="kw">use </span>tracing::{info_span, Instrument};
 <span class="kw">use </span>turbo_tasks::{
     primitives::{StringVc, U64Vc},
     TryJoinIterExt, Value, ValueToString,
@@ -181,11 +190,18 @@
             .chunk_items
             .iter()
             .map(|chunk_item| <span class="kw">async move </span>{
-                <span class="prelude-val">Ok</span>((
-                    chunk_item.id().<span class="kw">await</span><span class="question-mark">?</span>,
-                    EcmascriptDevChunkContentEntry::new(<span class="kw-2">*</span>chunk_item, availability_info).<span class="kw">await</span><span class="question-mark">?</span>,
+                <span class="kw">async move </span>{
+                    <span class="prelude-val">Ok</span>((
+                        chunk_item.id().<span class="kw">await</span><span class="question-mark">?</span>,
+                        EcmascriptDevChunkContentEntry::new(<span class="kw-2">*</span>chunk_item, availability_info).<span class="kw">await</span><span class="question-mark">?</span>,
+                    ))
+                }
+                .instrument(<span class="macro">info_span!</span>(
+                    <span class="string">&quot;chunk item&quot;</span>,
+                    name = display(chunk_item.asset_ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>)
                 ))
-            })
+                .<span class="kw">await
+            </span>})
             .try_join()
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()

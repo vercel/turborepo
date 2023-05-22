@@ -338,12 +338,19 @@
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>futures::{prelude::<span class="kw-2">*</span>, Stream};
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
+<span class="kw">use </span>tracing::Instrument;
 <span class="kw">use </span>turbo_tasks::{
     primitives::StringVc, CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance,
 };
@@ -551,7 +558,8 @@
 );
 
 <span class="kw">impl </span>UpdateStream {
-    <span class="kw">pub async fn </span>new(
+    <span class="attr">#[tracing::instrument(skip(get_content), name = <span class="string">&quot;UpdateStream::new&quot;</span>)]
+    </span><span class="kw">pub async fn </span>new(
         resource: String,
         get_content: TransientInstance&lt;GetContentFn&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateStream&gt; {
@@ -579,45 +587,49 @@
         <span class="kw">let </span><span class="kw-2">mut </span>last_had_issues = <span class="bool-val">false</span>;
 
         <span class="kw">let </span>stream = ReceiverStream::new(rx).filter_map(<span class="kw">move </span>|item| {
-            <span class="kw">let </span>(has_issues, issues_changed) =
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(UpdateStreamItem::Found { issues, .. }) = item.as_deref().ok() {
-                    <span class="kw">let </span>has_issues = !issues.is_empty();
-                    <span class="kw">let </span>issues_changed = has_issues != last_had_issues;
-                    last_had_issues = has_issues;
-                    (has_issues, issues_changed)
-                } <span class="kw">else </span>{
-                    (<span class="bool-val">false</span>, <span class="bool-val">false</span>)
-                };
+            {
+                <span class="kw">let </span>(has_issues, issues_changed) =
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(UpdateStreamItem::Found { issues, .. }) = item.as_deref().ok() {
+                        <span class="kw">let </span>has_issues = !issues.is_empty();
+                        <span class="kw">let </span>issues_changed = has_issues != last_had_issues;
+                        last_had_issues = has_issues;
+                        (has_issues, issues_changed)
+                    } <span class="kw">else </span>{
+                        (<span class="bool-val">false</span>, <span class="bool-val">false</span>)
+                    };
 
-            <span class="kw">async move </span>{
-                <span class="kw">match </span>item.as_deref() {
-                    <span class="prelude-val">Ok</span>(UpdateStreamItem::Found { update, .. }) =&gt; {
-                        <span class="kw">match </span><span class="kw-2">&amp;**</span>update {
-                            Update::Partial(PartialUpdate { to, .. })
-                            | Update::Total(TotalUpdate { to }) =&gt; {
-                                version_state
-                                    .set(to.clone())
-                                    .<span class="kw">await
-                                    </span>.expect(<span class="string">&quot;failed to update version&quot;</span>);
+                <span class="kw">async move </span>{
+                    <span class="kw">match </span>item.as_deref() {
+                        <span class="prelude-val">Ok</span>(UpdateStreamItem::Found { update, .. }) =&gt; {
+                            <span class="kw">match </span><span class="kw-2">&amp;**</span>update {
+                                Update::Partial(PartialUpdate { to, .. })
+                                | Update::Total(TotalUpdate { to }) =&gt; {
+                                    version_state
+                                        .set(to.clone())
+                                        .<span class="kw">await
+                                        </span>.expect(<span class="string">&quot;failed to update version&quot;</span>);
 
-                                <span class="prelude-val">Some</span>(item)
-                            }
-                            <span class="comment">// Do not propagate empty updates.
-                            </span>Update::None =&gt; {
-                                <span class="kw">if </span>has_issues || issues_changed {
                                     <span class="prelude-val">Some</span>(item)
-                                } <span class="kw">else </span>{
-                                    <span class="prelude-val">None
-                                </span>}
+                                }
+                                <span class="comment">// Do not propagate empty updates.
+                                </span>Update::None =&gt; {
+                                    <span class="kw">if </span>has_issues || issues_changed {
+                                        <span class="prelude-val">Some</span>(item)
+                                    } <span class="kw">else </span>{
+                                        <span class="prelude-val">None
+                                    </span>}
+                                }
                             }
                         }
-                    }
-                    <span class="kw">_ </span>=&gt; {
-                        <span class="comment">// Propagate other updates
-                        </span><span class="prelude-val">Some</span>(item)
+                        <span class="kw">_ </span>=&gt; {
+                            <span class="comment">// Propagate other updates
+                            </span><span class="prelude-val">Some</span>(item)
+                        }
                     }
                 }
+                .in_current_span()
             }
+            .in_current_span()
         });
 
         <span class="prelude-val">Ok</span>(UpdateStream(Box::pin(stream)))

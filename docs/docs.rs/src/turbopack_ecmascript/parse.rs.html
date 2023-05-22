@@ -440,6 +440,7 @@
 };
 <span class="kw">use </span>turbo_tasks::{
     primitives::{StringVc, U64Vc},
+    util::WrapFuture,
     Value, ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
@@ -457,7 +458,6 @@
 <span class="kw">use crate</span>::{
     analyzer::graph::EvalContext,
     transform::{EcmascriptInputTransformsVc, TransformContext},
-    utils::WrapFuture,
     EcmascriptInputTransform,
 };
 

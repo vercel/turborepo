@@ -245,6 +245,10 @@
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
 <a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro2::{Ident, Span, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>proc_macro_error::abort;
 <span class="kw">use </span>quote::quote;
@@ -412,8 +416,10 @@
         },
         (<span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; <span class="macro">quote! </span>{ #original_call_code.map(|v| v.into()) },
         (<span class="bool-val">false</span>, <span class="bool-val">true</span>) =&gt; <span class="macro">quote! </span>{
-            #original_call_code;
-            <span class="prelude-val">Ok</span>(turbo_tasks::NothingVc::new().into())
+            {
+                #original_call_code;
+                <span class="prelude-val">Ok</span>(turbo_tasks::NothingVc::new().into())
+            }
         },
         (<span class="bool-val">false</span>, <span class="bool-val">false</span>) =&gt; <span class="macro">quote! </span>{ <span class="prelude-val">Ok</span>(#original_call_code.into()) },
     };
@@ -431,10 +437,12 @@
                         #(#input_convert)*
                         <span class="prelude-val">Ok</span>(Box::new(<span class="kw">move </span>|| {
                             #(#input_clone)*
-                            Box::pin(<span class="kw">async move </span>{
+                            Box::pin(turbo_tasks::macro_helpers::tracing::Instrument::instrument(<span class="kw">async move </span>{
                                 #(#input_final)*
-                                #original_call_code
-                            })
+                                <span class="kw">let </span>turbo_tasks_result = #original_call_code;
+                                turbo_tasks::macro_helpers::notify_scheduled_tasks();
+                                turbo_tasks_result
+                            }, <span class="macro">turbo_tasks::macro_helpers::tracing::trace_span!</span>(#name_code)))
                         }))
                     }))
                 });

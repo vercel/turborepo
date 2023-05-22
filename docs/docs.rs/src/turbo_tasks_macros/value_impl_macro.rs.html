@@ -403,7 +403,7 @@
 
                 <span class="kw">let </span>(native_function_code, input_raw_vc_arguments) = gen_native_function_code(
                     <span class="comment">// use const string
-                    </span><span class="macro">quote! </span>{ <span class="macro">format!</span>(<span class="macro">concat!</span>(<span class="string">&quot;{}::&quot;</span>, <span class="macro">stringify!</span>(#ident)), std::any::type_name::&lt;#vc_ident&gt;()) },
+                    </span><span class="macro">quote! </span>{ <span class="macro">concat!</span>(<span class="macro">stringify!</span>(#vc_ident), <span class="string">&quot;::&quot;</span>, <span class="macro">stringify!</span>(#ident)) },
                     <span class="macro">quote! </span>{ #vc_ident::#inline_ident },
                     <span class="kw-2">&amp;</span>function_ident,
                     <span class="kw-2">&amp;</span>function_id_ident,

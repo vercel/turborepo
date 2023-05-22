@@ -822,6 +822,15 @@
 <a href="#822" id="822">822</a>
 <a href="#823" id="823">823</a>
 <a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::{Borrow, Cow},
     cell::RefCell,
@@ -843,6 +852,7 @@
 <span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>rustc_hash::FxHasher;
 <span class="kw">use </span>tokio::task::futures::TaskLocalFuture;
+<span class="kw">use </span>tracing::{trace_span, Instrument};
 <span class="kw">use </span>turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
@@ -1591,6 +1601,7 @@
     ) {
         <span class="kw">match </span><span class="self">self </span>{
             Job::RemoveFromScopes(tasks, scopes) =&gt; {
+                <span class="kw">let </span>_guard = <span class="macro">trace_span!</span>(<span class="string">&quot;Job::RemoveFromScopes&quot;</span>).entered();
                 <span class="kw">for </span>task <span class="kw">in </span>tasks {
                     backend.with_task(task, |task| {
                         task.remove_from_scopes(scopes.iter().copied(), backend, turbo_tasks)
@@ -1599,6 +1610,7 @@
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::RemoveFromScope(tasks, scope) =&gt; {
+                <span class="kw">let </span>_guard = <span class="macro">trace_span!</span>(<span class="string">&quot;Job::RemoveFromScope&quot;</span>).entered();
                 <span class="kw">for </span>task <span class="kw">in </span>tasks {
                     backend.with_task(task, |task| {
                         task.remove_from_scope(scope, backend, turbo_tasks)
@@ -1607,6 +1619,7 @@
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::ScheduleWhenDirtyFromScope(tasks) =&gt; {
+                <span class="kw">let </span>_guard = <span class="macro">trace_span!</span>(<span class="string">&quot;Job::ScheduleWhenDirtyFromScope&quot;</span>).entered();
                 <span class="kw">for </span>task <span class="kw">in </span>tasks.into_iter() {
                     backend.with_task(task, |task| {
                         task.schedule_when_dirty_from_scope(backend, turbo_tasks);
@@ -1623,16 +1636,20 @@
                     .run_low(<span class="kw">async </span>{
                         run_add_to_scope_queue(queue, scope, merging_scopes, backend, turbo_tasks);
                     })
+                    .instrument(<span class="macro">trace_span!</span>(<span class="string">&quot;Job::AddToScopeQueue&quot;</span>))
                     .<span class="kw">await</span>;
             }
             Job::RemoveFromScopeQueue(queue, id) =&gt; {
+                <span class="kw">let </span>_guard = <span class="macro">trace_span!</span>(<span class="string">&quot;Job::AddToScopeQueue&quot;</span>).entered();
                 run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::UnloadRootScope(id) =&gt; {
+                <span class="kw">let </span>span = <span class="macro">trace_span!</span>(<span class="string">&quot;Job::UnloadRootScope&quot;</span>);
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(future) = turbo_tasks.wait_foreground_done_excluding_own() {
-                    future.<span class="kw">await</span>;
+                    future.instrument(span.clone()).<span class="kw">await</span>;
                 }
+                <span class="kw">let </span>_guard = span.entered();
                 backend.with_scope(id, |scope| {
                     scope.assert_unused();
                 });
@@ -1641,6 +1658,7 @@
                 }
             }
             Job::GarbageCollection =&gt; {
+                <span class="kw">let </span>_guard = <span class="macro">trace_span!</span>(<span class="string">&quot;Job::GarbageCollection&quot;</span>).entered();
                 backend.run_gc(<span class="bool-val">true</span>, turbo_tasks);
             }
         }

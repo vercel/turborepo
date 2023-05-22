@@ -504,7 +504,7 @@
             inline_sig.ident = inline_ident.clone();
 
             <span class="kw">let </span>(native_function_code, input_raw_vc_arguments) = gen_native_function_code(
-                <span class="macro">quote! </span>{ <span class="macro">format!</span>(<span class="macro">concat!</span>(<span class="string">&quot;{}::&quot;</span>, <span class="macro">stringify!</span>(#method_ident)), std::any::type_name::&lt;#ref_ident&gt;()) },
+                <span class="macro">quote! </span>{ <span class="macro">concat!</span>(<span class="macro">stringify!</span>(#ref_ident), <span class="string">&quot;::&quot;</span>, <span class="macro">stringify!</span>(#method_ident)) },
                 <span class="macro">quote! </span>{ #ref_ident::#inline_ident },
                 <span class="kw-2">&amp;</span>function_ident,
                 <span class="kw-2">&amp;</span>function_id_ident,

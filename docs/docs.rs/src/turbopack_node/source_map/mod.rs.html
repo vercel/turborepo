@@ -328,6 +328,8 @@
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::Write,
@@ -340,6 +342,7 @@
 <span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>regex::Regex;
 <span class="kw">pub use </span>trace::{SourceMapTrace, SourceMapTraceVc, StackFrame, TraceResult, TraceResultVc};
+<span class="kw">use </span>tracing::{instrument, Level};
 <span class="kw">use </span>turbo_tasks_fs::{
     source_context::get_source_context, to_sys_path, FileLinesContent, FileLinesContentReadRef,
     FileSystemPathReadRef, FileSystemPathVc,
@@ -641,7 +644,8 @@
     }
 }
 
-<span class="kw">pub async fn </span>trace_stack(
+<span class="attr">#[instrument(level = Level::TRACE, skip_all)]
+</span><span class="kw">pub async fn </span>trace_stack(
     error: StructuredError,
     root_asset: AssetVc,
     output_path: FileSystemPathVc,

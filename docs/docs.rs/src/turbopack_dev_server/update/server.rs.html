@@ -279,6 +279,8 @@
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
 <a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     pin::Pin,
     task::{Context, Poll},
@@ -291,6 +293,7 @@
 <span class="kw">use </span>pin_project_lite::pin_project;
 <span class="kw">use </span>tokio::select;
 <span class="kw">use </span>tokio_stream::StreamMap;
+<span class="kw">use </span>tracing::{instrument, Level};
 <span class="kw">use </span>turbo_tasks::{TransientInstance, TurboTasksApi};
 <span class="kw">use </span>turbo_tasks_fs::json::parse_json_with_source_context;
 <span class="kw">use </span>turbopack_core::{error::PrettyPrintError, issue::IssueReporterVc, version::Update};
@@ -330,7 +333,8 @@
         }));
     }
 
-    <span class="kw">async fn </span>run_internal(<span class="self">self</span>, ws: HyperWebsocket) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="attr">#[instrument(level = Level::TRACE, skip_all, name = <span class="string">&quot;UpdateServer::run_internal&quot;</span>)]
+    </span><span class="kw">async fn </span>run_internal(<span class="self">self</span>, ws: HyperWebsocket) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client: UpdateClient = ws.<span class="kw">await</span><span class="question-mark">?</span>.into();
 
         <span class="kw">let </span><span class="kw-2">mut </span>streams = StreamMap::new();

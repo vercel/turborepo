@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["js_value_to_pattern","module_id_to_lit","unparen"],"struct":["FormatIter","StringifyJs","WrapFuture"]};
+window.SIDEBAR_ITEMS = {"fn":["js_value_to_pattern","module_id_to_lit","unparen"],"struct":["FormatIter","StringifyJs"]};

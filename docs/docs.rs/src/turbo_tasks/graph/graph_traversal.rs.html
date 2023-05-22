@@ -203,6 +203,10 @@
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
@@ -250,8 +254,9 @@
         <span class="kw">for </span>edge <span class="kw">in </span>root_edges {
             <span class="kw">match </span>visit.visit(edge) {
                 VisitControlFlow::Continue(node) =&gt; {
+                    <span class="kw">let </span>span = visit.span(<span class="kw-2">&amp;</span>node);
                     <span class="kw">if let </span><span class="prelude-val">Some</span>((parent_handle, node_ref)) = <span class="self">self</span>.insert(<span class="prelude-val">None</span>, GraphNode(node)) {
-                        futures.push(With::new(visit.edges(node_ref), parent_handle));
+                        futures.push(With::new(visit.edges(node_ref), span, parent_handle));
                     }
                 }
                 VisitControlFlow::Skip(node) =&gt; {
@@ -351,16 +356,19 @@
             GraphTraversalState::Running(<span class="kw-2">mut </span>running) =&gt; <span class="lifetime">&#39;outer</span>: <span class="kw">loop </span>{
                 <span class="kw">let </span>futures_pin = <span class="kw">unsafe </span>{ Pin::new_unchecked(<span class="kw-2">&amp;mut </span>running.futures) };
                 <span class="kw">match </span>futures_pin.poll_next(cx) {
-                    std::task::Poll::Ready(<span class="prelude-val">Some</span>((parent_handle, <span class="prelude-val">Ok</span>(edges)))) =&gt; {
+                    std::task::Poll::Ready(<span class="prelude-val">Some</span>((parent_handle, span, <span class="prelude-val">Ok</span>(edges)))) =&gt; {
+                        <span class="kw">let </span>_guard = span.enter();
                         <span class="kw">for </span>edge <span class="kw">in </span>edges {
                             <span class="kw">match </span>running.visit.visit(edge) {
                                 VisitControlFlow::Continue(node) =&gt; {
+                                    <span class="kw">let </span>span = running.visit.span(<span class="kw-2">&amp;</span>node);
                                     <span class="kw">if let </span><span class="prelude-val">Some</span>((node_handle, node_ref)) = running
                                         .store
                                         .insert(<span class="prelude-val">Some</span>(parent_handle.clone()), GraphNode(node))
                                     {
                                         running.futures.push(With::new(
                                             running.visit.edges(node_ref),
+                                            span,
                                             node_handle,
                                         ));
                                     }
@@ -381,7 +389,7 @@
                             }
                         }
                     }
-                    std::task::Poll::Ready(<span class="prelude-val">Some</span>((<span class="kw">_</span>, <span class="prelude-val">Err</span>(err)))) =&gt; {
+                    std::task::Poll::Ready(<span class="prelude-val">Some</span>((<span class="kw">_</span>, <span class="kw">_</span>, <span class="prelude-val">Err</span>(err)))) =&gt; {
                         <span class="kw">break </span>(
                             GraphTraversalState::Completed,
                             std::task::Poll::Ready(GraphTraversalResult::Completed(<span class="prelude-val">Err</span>(err))),

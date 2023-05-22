@@ -1532,6 +1532,34 @@
 <a href="#1532" id="1532">1532</a>
 <a href="#1533" id="1533">1533</a>
 <a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a>
+<a href="#1537" id="1537">1537</a>
+<a href="#1538" id="1538">1538</a>
+<a href="#1539" id="1539">1539</a>
+<a href="#1540" id="1540">1540</a>
+<a href="#1541" id="1541">1541</a>
+<a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
+<a href="#1544" id="1544">1544</a>
+<a href="#1545" id="1545">1545</a>
+<a href="#1546" id="1546">1546</a>
+<a href="#1547" id="1547">1547</a>
+<a href="#1548" id="1548">1548</a>
+<a href="#1549" id="1549">1549</a>
+<a href="#1550" id="1550">1550</a>
+<a href="#1551" id="1551">1551</a>
+<a href="#1552" id="1552">1552</a>
+<a href="#1553" id="1553">1553</a>
+<a href="#1554" id="1554">1554</a>
+<a href="#1555" id="1555">1555</a>
+<a href="#1556" id="1556">1556</a>
+<a href="#1557" id="1557">1557</a>
+<a href="#1558" id="1558">1558</a>
+<a href="#1559" id="1559">1559</a>
+<a href="#1560" id="1560">1560</a>
+<a href="#1561" id="1561">1561</a>
+<a href="#1562" id="1562">1562</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cell::RefCell,
@@ -1555,6 +1583,7 @@
 <span class="kw">use </span>nohash_hasher::BuildNoHashHasher;
 <span class="kw">use </span>serde::{de::Visitor, Deserialize, Serialize};
 <span class="kw">use </span>tokio::{runtime::Handle, select, task_local};
+<span class="kw">use </span>tracing::{instrument, trace_span, Instrument, Level};
 
 <span class="kw">use crate</span>::{
     backend::{Backend, CellContent, PersistentTaskType, TransientTaskType},
@@ -2030,10 +2059,12 @@
             anyhow::Ok(())
         };
 
-        <span class="kw">let </span>future = TURBO_TASKS.scope(
-            <span class="self">self</span>.pin(),
-            CURRENT_TASK_ID.scope(task_id, <span class="self">self</span>.backend.execution_scope(task_id, future)),
-        );
+        <span class="kw">let </span>future = TURBO_TASKS
+            .scope(
+                <span class="self">self</span>.pin(),
+                CURRENT_TASK_ID.scope(task_id, <span class="self">self</span>.backend.execution_scope(task_id, future)),
+            )
+            .in_current_span();
 
         <span class="attr">#[cfg(feature = <span class="string">&quot;tokio_tracing&quot;</span>)]
         </span>tokio::task::Builder::new()
@@ -2112,7 +2143,9 @@
         </span>{
             <span class="kw">return</span>;
         }
-        listener.<span class="kw">await</span>;
+        listener
+            .instrument(<span class="macro">trace_span!</span>(<span class="string">&quot;wait_foreground_done&quot;</span>))
+            .<span class="kw">await</span>;
     }
 
     <span class="kw">pub fn </span>get_in_progress_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
@@ -2272,27 +2305,31 @@
         <span class="kw">let </span>this = <span class="self">self</span>.pin();
         <span class="self">self</span>.currently_scheduled_background_jobs
             .fetch_add(<span class="number">1</span>, Ordering::AcqRel);
-        tokio::spawn(TURBO_TASKS.scope(this.clone(), <span class="kw">async move </span>{
-            <span class="kw">while </span>this.currently_scheduled_tasks.load(Ordering::Acquire) != <span class="number">0 </span>{
-                <span class="kw">let </span>listener = this
-                    .event
-                    .listen_with_note(|| <span class="string">&quot;background job waiting for execution&quot;</span>.to_string());
-                <span class="kw">if </span>this.currently_scheduled_tasks.load(Ordering::Acquire) != <span class="number">0 </span>{
-                    listener.<span class="kw">await</span>;
-                }
-            }
-            <span class="kw">let </span>this2 = this.clone();
-            <span class="kw">if </span>!this.stopped.load(Ordering::Acquire) {
-                func(this).<span class="kw">await</span>;
-            }
-            <span class="kw">if </span>this2
-                .currently_scheduled_background_jobs
-                .fetch_sub(<span class="number">1</span>, Ordering::AcqRel)
-                == <span class="number">1
-            </span>{
-                this2.event_background.notify(usize::MAX);
-            }
-        }));
+        tokio::spawn(
+            TURBO_TASKS
+                .scope(this.clone(), <span class="kw">async move </span>{
+                    <span class="kw">while </span>this.currently_scheduled_tasks.load(Ordering::Acquire) != <span class="number">0 </span>{
+                        <span class="kw">let </span>listener = this.event.listen_with_note(|| {
+                            <span class="string">&quot;background job waiting for execution&quot;</span>.to_string()
+                        });
+                        <span class="kw">if </span>this.currently_scheduled_tasks.load(Ordering::Acquire) != <span class="number">0 </span>{
+                            listener.<span class="kw">await</span>;
+                        }
+                    }
+                    <span class="kw">let </span>this2 = this.clone();
+                    <span class="kw">if </span>!this.stopped.load(Ordering::Acquire) {
+                        func(this).<span class="kw">await</span>;
+                    }
+                    <span class="kw">if </span>this2
+                        .currently_scheduled_background_jobs
+                        .fetch_sub(<span class="number">1</span>, Ordering::AcqRel)
+                        == <span class="number">1
+                    </span>{
+                        this2.event_background.notify(usize::MAX);
+                    }
+                })
+                .in_current_span(),
+        );
     }
 
     <span class="attr">#[track_caller]
@@ -2305,12 +2342,16 @@
     ) {
         <span class="kw">let </span>this = <span class="self">self</span>.pin();
         this.begin_foreground_job();
-        tokio::spawn(TURBO_TASKS.scope(this.clone(), <span class="kw">async move </span>{
-            <span class="kw">if </span>!this.stopped.load(Ordering::Acquire) {
-                func(this.clone()).<span class="kw">await</span>;
-            }
-            this.finish_foreground_job();
-        }));
+        tokio::spawn(
+            TURBO_TASKS
+                .scope(this.clone(), <span class="kw">async move </span>{
+                    <span class="kw">if </span>!this.stopped.load(Ordering::Acquire) {
+                        func(this.clone()).<span class="kw">await</span>;
+                    }
+                    this.finish_foreground_job();
+                })
+                .in_current_span(),
+        );
     }
 
     <span class="kw">fn </span>finish_current_task_state(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -2321,6 +2362,7 @@
             } = <span class="kw-2">&amp;mut *</span>cell.borrow_mut();
             <span class="kw">let </span>tasks = take(tasks_to_notify);
             <span class="kw">if </span>!tasks.is_empty() {
+                <span class="kw">let </span>_guard = <span class="macro">trace_span!</span>(<span class="string">&quot;finish_current_task_state&quot;</span>).entered();
                 <span class="self">self</span>.backend.invalidate_tasks(tasks, <span class="self">self</span>);
             }
             <span class="kw-2">*</span>stateful
@@ -2391,16 +2433,18 @@
 }
 
 <span class="kw">impl</span>&lt;B: Backend + <span class="lifetime">&#39;static</span>&gt; TurboTasksApi <span class="kw">for </span>TurboTasks&lt;B&gt; {
-    <span class="kw">fn </span>invalidate(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
+    <span class="attr">#[instrument(level = Level::INFO, skip_all, name = <span class="string">&quot;invalidate&quot;</span>)]
+    </span><span class="kw">fn </span>invalidate(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId) {
         <span class="self">self</span>.backend.invalidate_task(task, <span class="self">self</span>);
     }
 
-    <span class="kw">fn </span>invalidate_with_reason(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, reason: StaticOrArc&lt;<span class="kw">dyn </span>InvalidationReason&gt;) {
+    <span class="attr">#[instrument(level = Level::INFO, skip_all, name = <span class="string">&quot;invalidate&quot;</span>, fields(name = display(<span class="kw-2">&amp;</span>reason)))]
+    </span><span class="kw">fn </span>invalidate_with_reason(<span class="kw-2">&amp;</span><span class="self">self</span>, task: TaskId, reason: StaticOrArc&lt;<span class="kw">dyn </span>InvalidationReason&gt;) {
         {
             <span class="kw">let </span>(<span class="kw">_</span>, reason_set) = <span class="kw-2">&amp;mut *</span><span class="self">self</span>.aggregated_update.lock().unwrap();
             reason_set.insert(reason);
         }
-        <span class="self">self</span>.invalidate(task);
+        <span class="self">self</span>.backend.invalidate_task(task, <span class="self">self</span>);
     }
 
     <span class="kw">fn </span>notify_scheduled_tasks(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -2604,6 +2648,7 @@
             tasks_to_notify.extend(tasks.iter());
         });
         <span class="kw">if </span>result.is_err() {
+            <span class="kw">let </span>_guard = <span class="macro">trace_span!</span>(<span class="string">&quot;schedule_notify_tasks&quot;</span>, count = tasks.len()).entered();
             <span class="self">self</span>.backend.invalidate_tasks(tasks.to_vec(), <span class="self">self</span>);
         }
     }
@@ -2618,6 +2663,7 @@
             tasks_to_notify.extend(tasks.iter());
         });
         <span class="kw">if </span>result.is_err() {
+            <span class="kw">let </span>_guard = <span class="macro">trace_span!</span>(<span class="string">&quot;schedule_notify_tasks_set&quot;</span>, count = tasks.len()).entered();
             <span class="self">self</span>.backend
                 .invalidate_tasks(tasks.iter().copied().collect(), <span class="self">self</span>);
         };
@@ -2862,7 +2908,7 @@
 /// Beware: this method is not safe to use in production code. It is only
 /// intended for use in tests and for debugging purposes.
 </span><span class="kw">pub fn </span>spawn_detached(f: <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;static</span>) {
-    tokio::spawn(turbo_tasks().detached(Box::pin(f)));
+    tokio::spawn(turbo_tasks().detached(Box::pin(f.in_current_span())));
 }
 
 <span class="kw">pub fn </span>current_task_for_testing() -&gt; TaskId {
@@ -2897,12 +2943,19 @@
     })
 }
 
+<span class="doccomment">/// Notifies scheduled tasks for execution.
+</span><span class="kw">pub fn </span>notify_scheduled_tasks() {
+    with_turbo_tasks(|tt| tt.notify_scheduled_tasks())
+}
+
 <span class="kw">pub fn </span>emit&lt;T: ValueTraitVc&gt;(collectible: T) {
     with_turbo_tasks(|tt| tt.emit_collectible(T::get_trait_type_id(), collectible.into()))
 }
 
 <span class="kw">pub async fn </span>spawn_blocking&lt;T: Send + <span class="lifetime">&#39;static</span>&gt;(func: <span class="kw">impl </span>FnOnce() -&gt; T + Send + <span class="lifetime">&#39;static</span>) -&gt; T {
+    <span class="kw">let </span>span = <span class="macro">trace_span!</span>(<span class="string">&quot;blocking operation&quot;</span>).or_current();
     <span class="kw">let </span>(r, d) = tokio::task::spawn_blocking(|| {
+        <span class="kw">let </span>_guard = span.entered();
         <span class="kw">let </span>start = Instant::now();
         <span class="kw">let </span>r = func();
         (r, start.elapsed())
@@ -2915,10 +2968,13 @@
 
 <span class="kw">pub fn </span>spawn_thread(func: <span class="kw">impl </span>FnOnce() + Send + <span class="lifetime">&#39;static</span>) {
     <span class="kw">let </span>handle = Handle::current();
+    <span class="kw">let </span>span = <span class="macro">trace_span!</span>(<span class="string">&quot;thread&quot;</span>).or_current();
     thread::spawn(<span class="kw">move </span>|| {
+        <span class="kw">let </span>span = span.entered();
         <span class="kw">let </span>guard = handle.enter();
         func();
         drop(guard);
+        drop(span);
     });
 }
 

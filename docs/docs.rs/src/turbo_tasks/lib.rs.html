@@ -114,6 +114,8 @@
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
 </pre><pre class="rust"><code><span class="doccomment">//! A task scheduling and caching system that is focused on incremental
 //! execution.
 //!
@@ -154,6 +156,7 @@
 <span class="kw">mod </span>completion;
 <span class="kw">pub mod </span>debug;
 <span class="kw">mod </span>display;
+<span class="kw">pub mod </span>duration_span;
 <span class="kw">pub mod </span>event;
 <span class="kw">pub mod </span>graph;
 <span class="kw">mod </span>id;
@@ -219,8 +222,9 @@
 <span class="attr">#[doc(hidden)]
 </span><span class="kw">pub mod </span>macro_helpers {
     <span class="kw">pub use </span>once_cell::sync::{Lazy, OnceCell};
+    <span class="kw">pub use </span>tracing;
 
-    <span class="kw">pub use </span><span class="kw">super</span>::manager::{find_cell_by_type, spawn_detached};
+    <span class="kw">pub use </span><span class="kw">super</span>::manager::{find_cell_by_type, notify_scheduled_tasks, spawn_detached};
 }
 
 <span class="kw">pub mod </span>test_helpers {

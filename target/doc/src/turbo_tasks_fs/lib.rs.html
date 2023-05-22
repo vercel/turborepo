@@ -1958,6 +1958,8 @@
 <a href="#1958" id="1958">1958</a>
 <a href="#1959" id="1959">1959</a>
 <a href="#1960" id="1960">1960</a>
+<a href="#1961" id="1961">1961</a>
+<a href="#1962" id="1962">1962</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -2011,6 +2013,7 @@
     fs,
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
 };
+<span class="kw">use </span>tracing::{instrument, Level};
 <span class="kw">use </span>turbo_tasks::{
     mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
@@ -2316,7 +2319,8 @@
                     }
                     event = rx.try_recv();
                 }
-                <span class="kw">fn </span>invalidate(
+                <span class="attr">#[instrument(parent = <span class="prelude-val">None</span>, level = Level::INFO, name = <span class="string">&quot;DiskFileSystem file change&quot;</span>, skip_all, fields(name = display(path.display())))]
+                </span><span class="kw">fn </span>invalidate(
                     report_invalidation_reason: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;(String, PathBuf)&gt;,
                     path: <span class="kw-2">&amp;</span>Path,
                     invalidator: Invalidator,

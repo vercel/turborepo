@@ -220,17 +220,51 @@
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     any::Provider,
     error::Error <span class="kw">as </span>StdError,
     fmt::{Debug, Display},
+    future::Future,
     hash::{Hash, Hasher},
     ops::Deref,
+    pin::Pin,
     sync::Arc,
+    task::{Context, Poll},
     time::Duration,
 };
 
 <span class="kw">use </span>anyhow::{anyhow, Error};
+<span class="kw">use </span>pin_project_lite::pin_project;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 <span class="kw">pub use super</span>::{id_factory::IdFactory, no_move_vec::NoMoveVec, once_map::<span class="kw-2">*</span>};
@@ -440,6 +474,32 @@
 <span class="kw">impl</span>&lt;T: <span class="question-mark">?</span>Sized + Debug + <span class="lifetime">&#39;static</span>&gt; Debug <span class="kw">for </span>StaticOrArc&lt;T&gt; {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
         (<span class="kw-2">**</span><span class="self">self</span>).fmt(f)
+    }
+}
+
+<span class="macro">pin_project! </span>{
+    <span class="doccomment">/// A future that wraps another future and applies a function on every poll call.
+    </span><span class="kw">pub struct </span>WrapFuture&lt;F, W&gt; {
+        wrapper: W,
+        <span class="attr">#[pin]
+        </span>future: F,
+    }
+}
+
+<span class="kw">impl</span>&lt;F: Future, W: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(Pin&lt;<span class="kw-2">&amp;mut </span>F&gt;, <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; Poll&lt;F::Output&gt;&gt; WrapFuture&lt;F, W&gt; {
+    <span class="kw">pub fn </span>new(wrapper: W, future: F) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ wrapper, future }
+    }
+}
+
+<span class="kw">impl</span>&lt;F: Future, W: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Fn(Pin&lt;<span class="kw-2">&amp;mut </span>F&gt;, <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;a</span>&gt;) -&gt; Poll&lt;F::Output&gt;&gt; Future
+    <span class="kw">for </span>WrapFuture&lt;F, W&gt;
+{
+    <span class="kw">type </span>Output = F::Output;
+
+    <span class="kw">fn </span>poll(<span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="self">Self</span>::Output&gt; {
+        <span class="kw">let </span>this = <span class="self">self</span>.project();
+        (this.wrapper)(this.future, cx)
     }
 }
 </code></pre></div>

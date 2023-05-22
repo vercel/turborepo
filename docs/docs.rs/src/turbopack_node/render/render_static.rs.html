@@ -368,6 +368,25 @@
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
 <span class="kw">use </span>futures::{
@@ -375,7 +394,9 @@
     pin_mut, SinkExt, StreamExt, TryStreamExt,
 };
 <span class="kw">use </span>parking_lot::Mutex;
-<span class="kw">use </span>turbo_tasks::{mark_finished, primitives::StringVc, util::SharedError, RawVc};
+<span class="kw">use </span>turbo_tasks::{
+    duration_span, mark_finished, primitives::StringVc, util::SharedError, RawVc, ValueToString,
+};
 <span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
@@ -666,9 +687,13 @@
             .<span class="kw">await
             </span>.context(<span class="string">&quot;sending headers to node.js process&quot;</span>)<span class="question-mark">?</span>;
 
+        <span class="kw">let </span>entry = module.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>guard = <span class="macro">duration_span!</span>(<span class="string">&quot;Node.js rendering&quot;</span>, entry = display(entry));
+
         <span class="kw">match </span>operation.recv().<span class="kw">await</span><span class="question-mark">? </span>{
             RenderStaticIncomingMessage::Headers { data } =&gt; <span class="kw">yield </span>RenderItem::Headers(data),
             RenderStaticIncomingMessage::Rewrite { path } =&gt; {
+                drop(guard);
                 <span class="kw">yield </span>RenderItem::Response(StaticResultVc::rewrite(RewriteBuilder::new(path).build()));
                 <span class="kw">return</span>;
             }
@@ -677,6 +702,7 @@
                 headers,
                 body,
             } =&gt; {
+                drop(guard);
                 <span class="kw">yield </span>RenderItem::Response(StaticResultVc::content(
                     FileContent::Content(File::from(body)).into(),
                     status_code,
@@ -685,6 +711,7 @@
                 <span class="kw">return</span>;
             }
             RenderStaticIncomingMessage::Error(error) =&gt; {
+                drop(guard);
                 <span class="comment">// If we don&#39;t get headers, then something is very wrong. Instead, we send down a
                 // 500 proxy error as if it were the proper result.
                 </span><span class="kw">let </span>trace = trace_stack(
@@ -703,7 +730,11 @@
                 );
                 <span class="kw">return</span>;
             }
-            v =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unexpected message during rendering: {:#?}&quot;</span>, v))<span class="question-mark">?</span>,
+            v =&gt; {
+                drop(guard);
+                <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unexpected message during rendering: {:#?}&quot;</span>, v))<span class="question-mark">?</span>;
+                <span class="kw">return</span>;
+            },
         };
 
         <span class="comment">// If we get here, then the first message was a Headers. Now we need to stream out the body
@@ -720,11 +751,18 @@
                     </span>operation.disallow_reuse();
                     <span class="kw">let </span>trace =
                         trace_stack(error, intermediate_asset, intermediate_output_path, project_dir).<span class="kw">await</span><span class="question-mark">?</span>;
+                        drop(guard);
                     <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;error during streaming render: {}&quot;</span>, trace))<span class="question-mark">?</span>;
+                    <span class="kw">return</span>;
                 }
-                v =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unexpected message during rendering: {:#?}&quot;</span>, v))<span class="question-mark">?</span>,
+                v =&gt; {
+                    drop(guard);
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;unexpected message during rendering: {:#?}&quot;</span>, v))<span class="question-mark">?</span>;
+                    <span class="kw">return</span>;
+                },
             }
         }
+        drop(guard);
     };
 
     <span class="kw">let </span><span class="kw-2">mut </span>sender = (sender.get)();

@@ -648,6 +648,9 @@
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -662,7 +665,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value <span class="kw">as </span>JsonValue;
 <span class="kw">use </span>turbo_tasks::{
-    mark_finished,
+    duration_span, mark_finished,
     primitives::{JsonValueVc, StringVc},
     util::SharedError,
     CompletionVc, RawVc, TryJoinIterExt, Value, ValueToString,
@@ -1065,6 +1068,8 @@
     <span class="kw">let </span><span class="kw-2">mut </span>file_dependencies = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>dir_dependencies = Vec::new();
 
+    <span class="kw">let </span>guard = <span class="macro">duration_span!</span>(<span class="string">&quot;Node.js evaluation&quot;</span>);
+
     <span class="kw">let </span>output = <span class="kw">loop </span>{
         <span class="kw">match </span>operation.recv().<span class="kw">await</span><span class="question-mark">? </span>{
             EvalJavaScriptIncomingMessage::Error(error) =&gt; {
@@ -1120,6 +1125,7 @@
             }
         }
     };
+    drop(guard);
 
     <span class="comment">// Read dependencies to make them a dependencies of this task. This task will
     // execute again when they change.
