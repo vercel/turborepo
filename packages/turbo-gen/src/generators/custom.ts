@@ -18,7 +18,7 @@ export async function generate({
     console.log();
 
     const { answer } = await prompts.confirm({
-      message: `Would you like to add an example generator to ${project.name}?`,
+      message: `Would you like to add a config with a sample custom generator to ${project.name}?`,
     });
 
     if (answer) {
@@ -36,22 +36,22 @@ export async function generate({
 
       // make it obvious that we're done creating a generator, and now we're running it
       console.log();
-      logger.info(`Example generator config successfully created!`);
+      logger.info(`Generator config successfully created!`);
       logger.info(`Loading generator config...`);
       console.log();
 
       // fetch generators again, and continue to selection prompt
       generators = getCustomGenerators({ project, configPath: opts.config });
 
-      // something went wrong and we weren't able to find our new demo generator
+      // something went wrong and we weren't able to find our new custom generator
       if (!generators.length) {
-        logger.error(`Error loading generator.`);
+        logger.error(`Error loading generator`);
         return;
       }
     } else {
       console.log();
       logger.dimmed(
-        "Learn more about generators: https://turbo.hotwire.dev/reference/generators"
+        "Learn more about custom Turborepo generators - https://turbo.build/repo/docs/core-concepts/monorepos/code-generation#custom-generators"
       );
       return;
     }
@@ -88,7 +88,7 @@ export async function generate({
       console.log();
       logger.info(`Congrats! You just ran your first Turborepo generator`);
       logger.dimmed(
-        "Learn more about Turborepo generators at https://turbo.hotwire.dev/reference/generators"
+        "Learn more about custom Turborepo generators - https://turbo.build/repo/docs/core-concepts/monorepos/code-generation#custom-generators"
       );
     }
   }
