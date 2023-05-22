@@ -170,6 +170,8 @@ impl AbsoluteSystemPath {
         Ok(fs::metadata(&self.0)?)
     }
 
+    // The equivalent of lstat. Returns the metadata for this file,
+    // even if it is a symlink
     pub fn symlink_metadata(&self) -> Result<Metadata, PathError> {
         Ok(fs::symlink_metadata(&self.0)?)
     }
