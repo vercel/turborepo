@@ -8,48 +8,17 @@ use clap::Parser;
 use once_cell::sync::Lazy;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 use turbopack_cli::{arguments::Arguments, register};
-use turbopack_cli_utils::{exit::ExitGuard, raw_trace::RawTraceLayer, trace_writer::TraceWriter};
+use turbopack_cli_utils::{
+    exit::ExitGuard,
+    raw_trace::RawTraceLayer,
+    trace_writer::TraceWriter,
+    tracing_presets::{
+        TRACING_OVERVIEW_TARGETS, TRACING_TURBOPACK_TARGETS, TRACING_TURBO_TASKS_TARGETS,
+    },
+};
 
 #[global_allocator]
 static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
-
-static TRACING_OVERVIEW_TARGETS: Lazy<Vec<&str>> =
-    Lazy::new(|| vec!["turbo_tasks_fs=info", "turbopack_dev_server=info"]);
-static TRACING_TURBOPACK_TARGETS: Lazy<Vec<&str>> = Lazy::new(|| {
-    [
-        &TRACING_OVERVIEW_TARGETS[..],
-        &[
-            "turbo_tasks=info",
-            "turbopack=trace",
-            "turbopack_core=trace",
-            "turbopack_ecmascript=trace",
-            "turbopack_css=trace",
-            "turbopack_dev=trace",
-            "turbopack_image=trace",
-            "turbopack_dev_server=trace",
-            "turbopack_json=trace",
-            "turbopack_mdx=trace",
-            "turbopack_node=trace",
-            "turbopack_static=trace",
-            "turbopack_cli_utils=trace",
-            "turbopack_cli=trace",
-            "turbopack_ecmascript=trace",
-        ],
-    ]
-    .concat()
-});
-static TRACING_TURBO_TASKS_TARGETS: Lazy<Vec<&str>> = Lazy::new(|| {
-    [
-        &TRACING_TURBOPACK_TARGETS[..],
-        &[
-            "turbo_tasks=trace",
-            "turbo_tasks_viz=trace",
-            "turbo_tasks_memory=trace",
-            "turbo_tasks_fs=trace",
-        ],
-    ]
-    .concat()
-});
 
 fn main() {
     use turbo_tasks_malloc::TurboMalloc;

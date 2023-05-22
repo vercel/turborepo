@@ -10,6 +10,7 @@ pub mod runtime_entry;
 pub mod source_context;
 pub mod trace_writer;
 pub mod tracing;
+pub mod tracing_presets;
 
 pub fn register() {
     turbo_tasks::register();
