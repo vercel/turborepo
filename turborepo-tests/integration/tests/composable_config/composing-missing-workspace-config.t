@@ -12,7 +12,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing 2c6fd2559f2049dd
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 481bb1d809966041
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo "running missing-workspace-config-task" > out/foo.min.txt
@@ -34,7 +34,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing output 2c6fd2559f2049dd
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing output 481bb1d809966041
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -46,7 +46,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing 353eb25d2804965f
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 4da486e97596fb79
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo "running missing-workspace-config-task" > out/foo.min.txt
@@ -63,7 +63,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing output 353eb25d2804965f
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing output 4da486e97596fb79
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -74,7 +74,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing 0f92dbd9e710e0f8
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 0b5a56821a6ca71e
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
   missing-workspace-config:missing-workspace-config-task: > echo "running missing-workspace-config-task" > out/foo.min.txt
@@ -90,7 +90,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:cached-task-4: cache bypass, force executing 24c978230356d8f7
+  missing-workspace-config:cached-task-4: cache bypass, force executing 7c9681e565dc2683
   missing-workspace-config:cached-task-4: 
   missing-workspace-config:cached-task-4: > cached-task-4
   missing-workspace-config:cached-task-4: > echo 'cached-task-4' > out/foo.min.txt

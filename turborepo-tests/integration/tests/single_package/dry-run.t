@@ -13,7 +13,7 @@ Check
   Tasks to Run
   build
     Task                             = build                                                                                                                                           
-    Hash                             = dba2114627bfc5c1                                                                                                                                
+    Hash                             = 66a1baf97f3e7b49                                                                                                                                
     Cached (Local)                   = false                                                                                                                                           
     Cached (Remote)                  = false                                                                                                                                           
     Command                          = echo 'building' > foo                                                                                                                           
@@ -26,5 +26,5 @@ Check
     Configured Environment Variables =                                                                                                                                                 
     Inferred Environment Variables   =                                                                                                                                                 
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                                            
-    ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
+    ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                                                         

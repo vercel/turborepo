@@ -6,7 +6,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: add-tasks (esc)
   \xe2\x80\xa2 Running added-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  add-tasks:added-task: cache miss, executing 6186d461756e9a1e
+  add-tasks:added-task: cache miss, executing 2113d534d3cb68b3
   add-tasks:added-task: 
   add-tasks:added-task: > added-task
   add-tasks:added-task: > echo "running added-task" > out/foo.min.txt

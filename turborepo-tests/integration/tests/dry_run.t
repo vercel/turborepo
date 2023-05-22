@@ -26,7 +26,7 @@ Setup
   my-app#build
     Task                             = build                                                                                                                                                                         
     Package                          = my-app                                                                                                                                                                        
-    Hash                             = c47512f540523323                                                                                                                                                              
+    Hash                             = 7787f0e20734f3e5                                                                                                                                                              
     Cached (Local)                   = false                                                                                                                                                                         
     Cached (Remote)                  = false                                                                                                                                                                         
     Directory                        = apps/my-app                                                                                                                                                                   
@@ -45,7 +45,7 @@ Setup
   util#build
     Task                             = build                                                                                                                                                
     Package                          = util                                                                                                                                                 
-    Hash                             = 7d67ce9d6cdc1638                                                                                                                                     
+    Hash                             = 6f0f87b7790cbede                                                                                                                                     
     Cached (Local)                   = false                                                                                                                                                
     Cached (Remote)                  = false                                                                                                                                                
     Directory                        = packages/util                                                                                                                                        

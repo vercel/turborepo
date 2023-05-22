@@ -13,7 +13,7 @@ Check
   Tasks to Run
   build
     Task                             = build                                                                                                                                           
-    Hash                             = 70ccf9289213db1c                                                                                                                                
+    Hash                             = d96723e83a0b427f                                                                                                                                
     Cached (Local)                   = false                                                                                                                                           
     Cached (Remote)                  = false                                                                                                                                           
     Command                          = echo 'building' > foo                                                                                                                           
@@ -26,11 +26,11 @@ Check
     Configured Environment Variables =                                                                                                                                                 
     Inferred Environment Variables   =                                                                                                                                                 
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                                            
-    ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
+    ResolvedTaskDefinition           = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                                                         
   test
     Task                             = test                                                                                                                                              
-    Hash                             = bdd05cb3f6be32a1                                                                                                                                  
+    Hash                             = 09bd3d6c063c31e5                                                                                                                                  
     Cached (Local)                   = false                                                                                                                                             
     Cached (Remote)                  = false                                                                                                                                             
     Command                          = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                                                      
@@ -43,5 +43,5 @@ Check
     Configured Environment Variables =                                                                                                                                                   
     Inferred Environment Variables   =                                                                                                                                                   
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                                              
-    ResolvedTaskDefinition           = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
+    ResolvedTaskDefinition           = {"outputs":[],"cache":true,"dependsOn":["build"],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                                                           

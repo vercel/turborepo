@@ -14,7 +14,8 @@ Setup
         "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0"
       },
       "hashOfExternalDependencies": "",
-      "dotEnv": null
+      "globalPassThroughEnv": null,
+      "globalDotEnv": null
     },
     "envMode": "infer",
     "frameworkInference": true,
@@ -22,7 +23,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "70ccf9289213db1c",
+        "hash": "d96723e83a0b427f",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
@@ -55,10 +56,10 @@ Setup
           "dependsOn": [],
           "inputs": [],
           "outputMode": "full",
-          "passThroughEnv": null,
-          "dotEnv": null,
+          "persistent": false,
           "env": [],
-          "persistent": false
+          "passThroughEnv": null,
+          "dotEnv": null
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
@@ -77,7 +78,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "bdd05cb3f6be32a1",
+        "hash": "09bd3d6c063c31e5",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
@@ -108,10 +109,10 @@ Setup
           ],
           "inputs": [],
           "outputMode": "full",
-          "passThroughEnv": null,
-          "dotEnv": null,
+          "persistent": false,
           "env": [],
-          "persistent": false
+          "passThroughEnv": null,
+          "dotEnv": null
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",

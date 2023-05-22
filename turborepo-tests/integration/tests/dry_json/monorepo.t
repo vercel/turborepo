@@ -16,7 +16,11 @@ Setup
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56",
-    "dotEnv": null
+    "globalEnv": [
+      "SOME_ENV_VAR"
+    ],
+    "globalPassThroughEnv": null,
+    "globalDotEnv": null
   }
 
   $ cat tmpjson.log | jq 'keys'
@@ -39,7 +43,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "c47512f540523323",
+    "hash": "7787f0e20734f3e5",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
@@ -71,12 +75,12 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "persistent": false,
+      "env": [],
       "passThroughEnv": null,
       "dotEnv": [
         ".env.local"
-      ],
-      "env": [],
-      "persistent": false
+      ]
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
@@ -102,7 +106,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "7d67ce9d6cdc1638",
+    "hash": "6f0f87b7790cbede",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },
@@ -127,12 +131,12 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
-      "passThroughEnv": null,
-      "dotEnv": null,
+      "persistent": false,
       "env": [
         "NODE_ENV"
       ],
-      "persistent": false
+      "passThroughEnv": null,
+      "dotEnv": null
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",

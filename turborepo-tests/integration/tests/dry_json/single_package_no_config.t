@@ -16,7 +16,8 @@ Setup
         "package.json": "185771929d92c3865ce06c863c07d357500d3364"
       },
       "hashOfExternalDependencies": "",
-      "dotEnv": null
+      "globalPassThroughEnv": null,
+      "globalDotEnv": null
     },
     "envMode": "infer",
     "frameworkInference": true,
@@ -24,7 +25,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "832d928341d7ea3c",
+        "hash": "ac8a26cd9bd92aa9",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
@@ -51,10 +52,10 @@ Setup
           "dependsOn": [],
           "inputs": [],
           "outputMode": "full",
-          "passThroughEnv": null,
-          "dotEnv": null,
+          "persistent": false,
           "env": [],
-          "persistent": false
+          "passThroughEnv": null,
+          "dotEnv": null
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",

@@ -15,7 +15,7 @@ Check
   Tasks to Run
   build
     Task                             = build                                                                                                                                       
-    Hash                             = 832d928341d7ea3c                                                                                                                            
+    Hash                             = ac8a26cd9bd92aa9                                                                                                                            
     Cached (Local)                   = false                                                                                                                                       
     Cached (Remote)                  = false                                                                                                                                       
     Command                          = echo 'building' > foo                                                                                                                       
@@ -28,7 +28,7 @@ Check
     Configured Environment Variables =                                                                                                                                             
     Inferred Environment Variables   =                                                                                                                                             
     Global Environment Variables     = VERCEL_ANALYTICS_ID=                                                                                                                        
-    ResolvedTaskDefinition           = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","passThroughEnv":null,"dotEnv":null,"env":[],"persistent":false} 
+    ResolvedTaskDefinition           = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
     Framework                        = <NO FRAMEWORK DETECTED>                                                                                                                     
 
   $ ${TURBO} run build --graph
@@ -45,7 +45,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 832d928341d7ea3c
+  build: cache bypass, force executing ac8a26cd9bd92aa9
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -59,7 +59,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 832d928341d7ea3c
+  build: cache bypass, force executing ac8a26cd9bd92aa9
   build: 
   build: > build
   build: > echo 'building' > foo
