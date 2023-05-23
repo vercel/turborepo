@@ -6,15 +6,17 @@ linker = "rust-lld"
 
 [alias]
 xtask = "run --package xtask --"
-tr-test = "test -p turborepo* --features rustls-tls"
-tr-check = "check -p turborepo*"
+tr-build = "build -p turbo"
+tr-run = "run -p turbo"
+tr-test = "test -p turborepo-* -p turbopath -p vercel-api-mock -p turborepo-cache --features rustls-tls"
+tr-check = "check -p turbo -p vercel-api-mock -p turborepo-ffi"
 # Builds all test code to check for compiler errors before running
-tp-pre-test = "nextest run --no-run --release -p turbopack* -p turbo-tasks* -p node-file-trace"
-tp-test = "nextest run --release --no-fail-fast -p turbopack* -p turbo-tasks* -p node-file-trace"
+tp-pre-test = "nextest run --no-run --release -p turbopack* -p turbo-tasks* -p signposter* -p tracing-signposter -p node-file-trace -p auto-hash-map"
+tp-test = "nextest run --release --no-fail-fast -p turbopack* -p turbo-tasks* -p signposter* -p tracing-signposter -p node-file-trace -p auto-hash-map"
 # --exclude expects --workspace, so there's no easy way to tell cargo to include all turbopack* packages except turbopack-bench
-tp-bench = "bench --workspace --exclude turbopack-bench --exclude turborepo*"
-tp-bench-pre-test = "test --no-run --benches --release --workspace --exclude turbopack-bench --exclude turborepo*"
-tp-bench-test = "test --benches --release --no-fail-fast --workspace --exclude turbopack-bench --exclude turborepo*"
+tp-bench = "bench --workspace --exclude turbopack-bench --exclude turborepo* --exclude turbo --exclude vercel-api-mock --exclude turbopath"
+tp-bench-pre-test = "test --no-run --benches --release --workspace --exclude turbopack-bench --exclude turborepo* --exclude turbo --exclude vercel-api-mock --exclude turbopath"
+tp-bench-test = "test --benches --release --no-fail-fast --workspace --exclude turbopack-bench --exclude turborepo* --exclude turbo --exclude vercel-api-mock --exclude turbopath"
 tp-bench-other-pre-test = "test --no-run --benches --release -p turbopack-bench"
 tp-bench-other-test = "test --benches --release -p turbopack-bench"
 
