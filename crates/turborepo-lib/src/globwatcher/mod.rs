@@ -50,7 +50,7 @@ impl HashGlobWatcher<RecommendedWatcher> {
     pub fn new(
         relative_to: AbsoluteSystemPathBuf,
         flush_folder: PathBuf,
-    ) -> Result<Self, globwatch::Error> {
+    ) -> Result<Self, notify::Error> {
         let (watcher, config) = GlobWatcher::new(flush_folder)?;
         Ok(Self {
             relative_to: relative_to.as_path().canonicalize()?,
@@ -77,15 +77,12 @@ impl<T: Watcher> HashGlobWatcher<T> {
 
         let watcher = self.watcher.lock().expect("only fails if poisoned").take();
         let mut stream = match watcher {
-            Some(watcher) => watcher
-                .into_stream(token)
-                .await
-                .map_err(|err| ConfigError::WatchError(vec![err])),
+            Some(watcher) => watcher.into_stream(token),
             None => {
                 warn!("watcher already consumed");
-                Err(ConfigError::WatchingAlready)
+                return Err(ConfigError::WatchingAlready);
             }
-        }?;
+        };
 
         // watch the root of the repo to shut down if the folder is deleted
         self.config.include_path(&self.relative_to).await?;
@@ -95,7 +92,8 @@ impl<T: Watcher> HashGlobWatcher<T> {
             self.config.include(&self.relative_to, &glob).await.ok();
         }
 
-        while let Some(Ok(event)) = stream.next().await {
+        while let Some(Ok(result)) = stream.next().await {
+            let event = result?;
             if event.paths.contains(&self.relative_to) && matches!(event.kind, EventKind::Remove(_))
             {
                 // if the root of the repo is deleted, we shut down

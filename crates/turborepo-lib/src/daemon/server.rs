@@ -115,6 +115,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         let stop = StopSource::new();
         let watcher = self.watcher.clone();
         let watcher_fut = watcher.watch(stop.token());
+        tokio::pin!(watcher_fut);
 
         let timer = self.timeout.clone();
         let timeout_fut = timer.wait();
@@ -133,12 +134,12 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         };
 
         // when one of these futures complete, let the server gracefully shutdown
-        let mut shutdown_reason = Option::None;
-        let shutdown_fut = async {
-            shutdown_reason = select! {
-                _ = shutdown_fut => Some(CloseReason::Shutdown),
-                _ = timeout_fut => Some(CloseReason::Timeout),
-                _ = ctrl_c() => Some(CloseReason::Interrupt),
+        let (shutdown_tx, shutdown_reason) = oneshot::channel();
+        let shutdown_fut = async move {
+            select! {
+                _ = shutdown_fut => shutdown_tx.send(CloseReason::Shutdown).ok(),
+                _ = timeout_fut => shutdown_tx.send(CloseReason::Timeout).ok(),
+                _ = ctrl_c() => shutdown_tx.send(CloseReason::Interrupt).ok(),
             };
         };
 
@@ -184,23 +185,22 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                     .serve_with_incoming_shutdown(stream, shutdown_fut),
             )
         };
+        tokio::pin!(server_fut);
 
-        select! {
-            _ = server_fut => {
-                match shutdown_reason {
-                    Some(reason) => reason,
-                    None => CloseReason::ServerClosed,
-                }
-            },
-            watch_res = watcher_fut => {
-                match watch_res {
-                    Ok(()) => CloseReason::WatcherClosed,
-                    Err(e) => {
-                        error!("Globwatch config error: {:?}", e);
-                        CloseReason::WatcherClosed
-                    },
-                }
-            },
+        loop {
+            select! {
+                    _ = &mut server_fut => {
+                    return shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
+                },
+                watch_res = &mut watcher_fut => {
+                    match watch_res {
+                        Ok(()) => return CloseReason::WatcherClosed,
+                        Err(e) => {
+                            error!("Globwatch config error: {:?}", e);
+                        },
+                    }
+                },
+            }
         }
 
         // here the stop token is dropped, and the pid lock is dropped
@@ -286,7 +286,7 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
                 changed_output_globs: changed.into_iter().collect(),
             })),
             Err(e) => {
-                error!("failed to watch flush directory: {:?}", e);
+                error!("flush directory operation failed: {:?}", e);
                 Err(tonic::Status::internal("failed to watch flush directory"))
             }
         }
