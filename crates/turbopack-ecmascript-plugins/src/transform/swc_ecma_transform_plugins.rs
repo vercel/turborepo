@@ -67,7 +67,7 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
     #[turbo_tasks::function]
     async fn title(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
-            "Unsupported SWC Ecma transform plugins on this platform."
+            "Unsupported SWC EcmaScript transform plugins on this platform."
         )))
     }
 
