@@ -75,7 +75,9 @@ pub fn globwalk(
 
     // we enable following symlinks but only because without it they are ignored
     // completely (as opposed to yielded but not followed)
-    let walker = walkdir::WalkDir::new(base_path_new.as_path()).follow_links(false);
+    let walker = walkdir::WalkDir::new(base_path_new.as_path())
+        .follow_links(false)
+        .sort_by_file_name();
     let mut iter = walker.into_iter();
 
     Ok(std::iter::from_fn(move || loop {
