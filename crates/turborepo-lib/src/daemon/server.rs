@@ -187,16 +187,20 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         };
         tokio::pin!(server_fut);
 
+        // necessary to make sure we don't try to poll the watcher_fut once it
+        // has completed
+        let mut watcher_done = false;
         loop {
             select! {
                     _ = &mut server_fut => {
                     return shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
                 },
-                watch_res = &mut watcher_fut => {
+                watch_res = &mut watcher_fut, if !watcher_done => {
                     match watch_res {
                         Ok(()) => return CloseReason::WatcherClosed,
                         Err(e) => {
                             error!("Globwatch config error: {:?}", e);
+                            watcher_done = true;
                         },
                     }
                 },
