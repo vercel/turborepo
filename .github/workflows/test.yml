@@ -701,7 +701,7 @@ jobs:
       - name: Build nextest
         timeout-minutes: 120
         run: |
-          cargo tp-pre-test
+          cargo tp-test --no-run
       - name: Run nextest
         timeout-minutes: 120
         run: |
@@ -763,7 +763,7 @@ jobs:
       - name: Build nextest
         timeout-minutes: 120
         run: |
-          cargo tp-pre-test
+          cargo tp-test --no-run
 
       - name: Run nextest
         timeout-minutes: 120
@@ -813,13 +813,13 @@ jobs:
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
         timeout-minutes: 120
         run: |
-          cargo test --benches --release -p turbopack-bench --no-run
+          cargo tp-bench-other-test --no-run
 
       - name: Run cargo test on benchmarks for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
         timeout-minutes: 120
         run: |
-          cargo test --benches --release -p turbopack-bench
+          cargo tp-bench-other-test
 
   turbopack_rust_test_bench2:
     needs: [determine_jobs, rust_prepare]
@@ -868,24 +868,24 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --workspace --exclude turbopack-bench --no-run
+          cargo tp-bench-test --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --workspace --exclude turbopack-bench
+          cargo tp-bench-test
 
       - name: Build benchmarks for tests for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
         timeout-minutes: 120
         run: |
-          cargo test --benches --release -p turbopack-bench --no-run
+          cargo tp-bench-other-test --no-run
 
       - name: Run cargo test on benchmarks for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
         timeout-minutes: 120
         run: |
-          cargo test --benches --release -p turbopack-bench
+          cargo tp-bench-other-test
 
   rust_bench:
     needs: [determine_jobs, rust_prepare]
@@ -900,7 +900,7 @@ jobs:
           # This runs all the non next-dev benchmarks
           - name: generic
             cache_key: all
-            args: --workspace --exclude turbopack-bench
+            args: --exclude turbopack-bench -p turbopack* -p turbo-tasks* -p node-file-trace
 
           # This measures Turbopack with small app
           - name: turbopack
