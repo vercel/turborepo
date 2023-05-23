@@ -9,7 +9,7 @@ ogImage: /images/blog/turbo-1-9-0/twitter-card.png
 # Turborepo 1.9
 
 import { Authors } from '../../components/Authors'
-import Badge from '../../components/Badge'
+import { ExperimentalBadge } from '../../components/ExperimentalBadge'
 import Date from "../../components/blog/Date";
 
 <Date>
@@ -32,7 +32,7 @@ Turborepo 1.9 focuses on improving observability for your task runs to better un
 
 - [**Run Summaries**](#view-and-compare-task-runs): Use the `--summarize` flag to generate a summary of your task to compare against previous runs.
 - [**Easier Starters**](#bring-your-own-starter): Use the `--example` flag with `npx create-turbo` to start from official Turborepo examples or custom repositories.
-- [**Strict Environments** <Badge>Experimental</Badge>](#strict-environments-experimental): Try enabling strict mode to restrict the environment variables your tasks have access to.
+- [**Strict Environments** <ExperimentalBadge isLink={false} />](#strict-environments): Try enabling strict mode to restrict the environment variables your tasks have access to.
 
 Update today by running `npx @turbo/codemod migrate`.
 
@@ -73,7 +73,7 @@ Additionally, you can use `create-turbo` with custom repository sources, allowin
 npx create-turbo -e https://github.com/your-org/turbo-starter
 ```
 
-## Strict Environments <Badge>Experimental</Badge>
+## Strict Environments <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 You can now use the `--env-mode=strict` flag to restrict the environment variables your tasks have access to. Your tasks will only be aware of the variables you explicitly state, creating a safer caching environment.
 
