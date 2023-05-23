@@ -3,9 +3,6 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::trace::TraceRawVcs;
 use turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
 use turbopack_ecmascript::TransformPluginVc;
-use turbopack_ecmascript_plugins::transform::{
-    emotion::EmotionTransformConfigVc, styled_components::StyledComponentsTransformConfigVc,
-};
 use turbopack_node::{
     execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderItemsVc,
 };
@@ -155,7 +152,7 @@ impl MdxTransformModuleOptionsVc {
 pub struct ModuleOptionsContext {
     pub enable_jsx: Option<JsxTransformOptionsVc>,
     pub enable_postcss_transform: Option<PostCssTransformOptions>,
-    pub enable_webpack_loaders: Option<WebpackLoadersOptions>,
+    pub enable_webpack_loaders: Option<WebpackLoadersOptionsVc>,
     pub enable_types: bool,
     pub enable_typescript_transform: Option<TypescriptTransformOptionsVc>,
     pub decorators: Option<DecoratorsOptionsVc>,

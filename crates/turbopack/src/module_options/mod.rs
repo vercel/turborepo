@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
-use turbo_tasks::primitives::{OptionStringVc, StringsVc};
+use turbo_tasks::primitives::OptionStringVc;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
