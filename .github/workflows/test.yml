@@ -900,30 +900,30 @@ jobs:
           # This runs all the non next-dev benchmarks
           - name: generic
             cache_key: all
-            args: --exclude turbopack-bench -p turbopack* -p turbo-tasks* -p node-file-trace
+            args: tp-bench
 
           # This measures Turbopack with small app
           - name: turbopack
             cache_key: turbopack-cli
-            args: -p turbopack-cli
+            args: bench -p turbopack-cli
             TURBOPACK_BENCH_COUNTS: 100,500,1000
 
           # This measures Turbopack with normal apps
           - name: turbopack-large
             cache_key: turbopack-cli
-            args: -p turbopack-cli
+            args: bench -p turbopack-cli
             TURBOPACK_BENCH_COUNTS: 1000,2000,3000
 
           # This measures Turbopack with larger apps
           - name: turbopack-xlarge
             cache_key: turbopack-cli
-            args: -p turbopack-cli
+            args: bench -p turbopack-cli
             TURBOPACK_BENCH_COUNTS: 1000,5000
 
           # This measures Turbopack with huge apps
           - name: turbopack-xxlarge
             cache_key: turbopack-cli
-            args: -p turbopack-cli
+            args: bench -p turbopack-cli
             TURBOPACK_BENCH_COUNTS: 1000,10000
 
     runs-on: ubuntu-latest-8-core-oss
@@ -951,11 +951,11 @@ jobs:
         run: rm -rf target/criterion
 
       - name: Compile cargo benches
-        run: cargo bench --no-run ${{ matrix.bench.args }}
+        run: cargo ${{ matrix.bench.args }} --no-run
 
       - name: Run cargo bench
         timeout-minutes: 180
-        run: cargo bench ${{ matrix.bench.args }}
+        run: cargo ${{ matrix.bench.args }}
         env:
           TURBOPACK_BENCH_COUNTS: ${{ matrix.bench.TURBOPACK_BENCH_COUNTS }}
 

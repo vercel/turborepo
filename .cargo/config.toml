@@ -12,6 +12,7 @@ tr-check = "check -p turborepo*"
 tp-pre-test = "nextest run --no-run --release -p turbopack* -p turbo-tasks* -p node-file-trace"
 tp-test = "nextest run --release --no-fail-fast -p turbopack* -p turbo-tasks* -p node-file-trace"
 # --exclude expects --workspace, so there's no easy way to tell cargo to include all turbopack* packages except turbopack-bench
+tp-bench = "bench --workspace --exclude turbopack-bench --exclude turborepo*"
 tp-bench-pre-test = "test --no-run --benches --release --workspace --exclude turbopack-bench --exclude turborepo*"
 tp-bench-test = "test --benches --release --no-fail-fast --workspace --exclude turbopack-bench --exclude turborepo*"
 tp-bench-other-pre-test = "test --no-run --benches --release -p turbopack-bench"
