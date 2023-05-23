@@ -7,11 +7,9 @@ mod task_id;
 use anyhow::{Context as ErrorContext, Result};
 use graph::CompleteGraph;
 use tracing::{debug, info};
-use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
     commands::CommandBase,
-    daemon,
     daemon::DaemonConnector,
     manager::Manager,
     opts::Opts,
@@ -19,6 +17,7 @@ use crate::{
     run::{context::Context, task_id::ROOT_PKG_NAME},
 };
 
+#[derive(Debug)]
 pub struct Run<'a> {
     base: &'a CommandBase,
     opts: Opts<'a>,
@@ -36,9 +35,9 @@ impl<'a> Run<'a> {
     }
 
     pub async fn run(&mut self, targets: &[String]) -> Result<()> {
-        let start_at = std::time::Instant::now();
-        let package_json_path = self.base.repo_root.join_literal("package.json");
-        let root_package_json = PackageJson::load(&AbsoluteSystemPathBuf::new(package_json_path)?)?;
+        let _start_at = std::time::Instant::now();
+        let package_json_path = self.base.repo_root.join_component("package.json");
+        let root_package_json = PackageJson::load(package_json_path.as_absolute_path())?;
 
         let is_structured_output = self.opts.run_opts.graph_dot || self.opts.run_opts.dry_run_json;
 
@@ -55,15 +54,11 @@ impl<'a> Run<'a> {
             let connector = DaemonConnector {
                 can_start_server: true,
                 can_kill_server: true,
-                pid_file: self.base.daemon_file_root().join_relative(
-                    turbopath::RelativeSystemPathBuf::new("turbod.pid").expect("relative system"),
-                ),
-                sock_file: self.base.daemon_file_root().join_relative(
-                    turbopath::RelativeSystemPathBuf::new("turbod.sock").expect("relative system"),
-                ),
+                pid_file: self.base.daemon_file_root().join_component("turbod.pid"),
+                sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
             };
 
-            let mut client = connector.connect().await?;
+            let client = connector.connect().await?;
             debug!("running in daemon mode");
             self.opts.runcache_opts.output_watcher = Some(client);
         }
@@ -73,13 +68,13 @@ impl<'a> Run<'a> {
             .context("Invalid package dependency graph")?;
 
         let g = CompleteGraph::new(
-            &pkg_dep_graph.workspace_graph,
-            &pkg_dep_graph.workspace_infos,
-            AbsoluteSystemPathBuf::new(self.base.repo_root.clone())?,
+            pkg_dep_graph.workspace_graph.clone(),
+            pkg_dep_graph.workspace_infos.clone(),
+            self.base.repo_root.as_absolute_path(),
         );
 
-        let turbo_json =
-            g.get_turbo_config_from_workspace(ROOT_PKG_NAME, self.opts.run_opts.single_package)?;
+        let is_single_package = self.opts.run_opts.single_package;
+        let turbo_json = g.get_turbo_config_from_workspace(ROOT_PKG_NAME, is_single_package)?;
 
         self.opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_opts.clone();
 
@@ -91,6 +86,7 @@ impl<'a> Run<'a> {
 
         let mut filtered_pkgs =
             scope::resolve_packages(&self.opts.scope_opts, &self.base, &pkg_dep_graph)?;
+
         if filtered_pkgs.len() == pkg_dep_graph.len() {
             for target in targets {
                 let key = task_id::root_task_id(target);

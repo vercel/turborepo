@@ -1,19 +1,21 @@
+use std::rc::Rc;
+
 use anyhow::Result;
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{package_json::PackageJson, run::graph::WorkspaceCatalog};
 
 pub struct Context {
-    pub workspace_graph: petgraph::Graph<String, String>,
-    pub workspace_infos: WorkspaceCatalog,
+    pub workspace_graph: Rc<petgraph::Graph<String, String>>,
+    pub workspace_infos: Rc<WorkspaceCatalog>,
 }
 
 impl Context {
     pub fn build_single_package_graph(_root_package_json: PackageJson) -> Result<Context> {
         // TODO
         Ok(Context {
-            workspace_graph: petgraph::Graph::new(),
-            workspace_infos: WorkspaceCatalog::default(),
+            workspace_graph: Rc::new(petgraph::Graph::new()),
+            workspace_infos: Rc::new(WorkspaceCatalog::default()),
         })
     }
 
@@ -23,8 +25,8 @@ impl Context {
     ) -> Result<Context> {
         // TODO
         Ok(Context {
-            workspace_graph: petgraph::Graph::new(),
-            workspace_infos: WorkspaceCatalog::default(),
+            workspace_graph: Rc::new(petgraph::Graph::new()),
+            workspace_infos: Rc::new(WorkspaceCatalog::default()),
         })
     }
 

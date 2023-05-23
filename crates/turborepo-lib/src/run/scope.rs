@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
+use tracing::warn;
 
 use crate::{commands::CommandBase, opts::ScopeOpts, run::context};
 
@@ -9,5 +10,6 @@ pub fn resolve_packages(
     _base: &CommandBase,
     _ctx: &context::Context,
 ) -> Result<HashSet<String>> {
-    todo!()
+    warn!("resolve packages not implemented yet");
+    Ok(HashSet::new())
 }

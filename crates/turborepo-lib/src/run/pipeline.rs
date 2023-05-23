@@ -1,8 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
+use serde::{Deserialize, Serialize};
+
 pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct BookkeepingTaskDefinition {
     defined_fields: HashSet<String>,
     experimental_fields: HashSet<String>,
@@ -13,21 +15,21 @@ pub struct BookkeepingTaskDefinition {
 // A list of config fields in a task definition that are considered
 // experimental. We keep these separated so we can compute a global hash without
 // these.
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct TaskDefinitionExperiments {
     passthrough_env: Vec<String>,
 }
 
 // TaskOutputs represents the patterns for including and excluding files from
 // outputs
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct TaskOutputs {
     inclusions: Vec<String>,
     exclusions: Vec<String>,
 }
 
 // TaskOutputMode defines the ways turbo can display task output during a run
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 enum TaskOutputMode {
     // FullTaskOutput will show all task output
     #[default]
@@ -48,7 +50,7 @@ enum TaskOutputMode {
 // used downstream for calculating the global hash. We want to exclude
 // experimental fields here because we don't want experimental fields to be part
 // of the global hash.
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct TaskDefinitionHashable {
     outputs: TaskOutputs,
     should_cache: bool,
@@ -62,7 +64,7 @@ struct TaskDefinitionHashable {
 
 // task_definition is a representation of the configFile pipeline for further
 // computation.
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TaskDefinition {
     outputs: TaskOutputs,
     should_cache: bool,

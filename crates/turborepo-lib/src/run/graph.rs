@@ -1,38 +1,39 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc};
 
 use anyhow::Result;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::AbsoluteSystemPath;
 
 use crate::{
     config::TurboJson,
     run::pipeline::{Pipeline, TaskDefinition},
 };
 
-pub struct CompleteGraph {
+pub struct CompleteGraph<'run> {
     // TODO: This should actually be an acyclic graph type
     // Expresses the dependencies between packages
-    workspace_graph: petgraph::Graph<String, String>,
+    workspace_graph: Rc<petgraph::Graph<String, String>>,
     // Config from turbo.json
     pipeline: Pipeline,
     // Stores the package.json contents by package name
-    workspace_infos: WorkspaceCatalog,
+    workspace_infos: Rc<WorkspaceCatalog>,
     // Hash of all global dependencies
     global_hash: Option<String>,
 
     task_definitions: BTreeMap<String, TaskDefinition>,
-    repo_root: AbsoluteSystemPathBuf,
+    repo_root: &'run AbsoluteSystemPath,
 
     task_hash_tracker: TaskHashTracker,
 }
 
-impl CompleteGraph {
+impl<'run> CompleteGraph<'run> {
     pub fn new(
-        workspace_graph: &petgraph::Graph<String, String>,
-        workspace_infos: &WorkspaceCatalog,
-        repo_root: AbsoluteSystemPathBuf,
+        workspace_graph: Rc<petgraph::Graph<String, String>>,
+        workspace_infos: Rc<WorkspaceCatalog>,
+        repo_root: &'run AbsoluteSystemPath,
     ) -> Self {
         Self {
             workspace_graph,
+            pipeline: Pipeline::default(),
             workspace_infos,
             repo_root,
             global_hash: None,

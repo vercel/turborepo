@@ -37,11 +37,11 @@ pub fn is_task_in_package(task: &str, package_name: &str) -> bool {
     package_name_expected == package_name
 }
 
-pub fn strip_package_name(task_id: &str) -> &str {
+pub fn strip_package_name(task_id: &str) -> String {
     if is_package_task(task_id) {
         let (_, task) = get_package_task_from_id(task_id);
         task
     } else {
-        task_id
+        task_id.to_string()
     }
 }

@@ -14,7 +14,7 @@ use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
-    commands::{bin, daemon, generate, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, generate, link, login, logout, run, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
@@ -229,6 +229,17 @@ impl Args {
         }
 
         Ok(clap_args)
+    }
+
+    pub fn get_tasks(&self) -> &[String] {
+        match &self.command {
+            Some(Command::Run(box RunArgs { tasks, .. })) => tasks,
+            _ => self
+                .run_args
+                .as_ref()
+                .map(|run_args| run_args.tasks.as_slice())
+                .unwrap_or(&[]),
+        }
     }
 }
 
@@ -682,6 +693,14 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
+        #[cfg(feature = "run-stub")]
+        Command::Run(args) => {
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            run::run(&mut base).await?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        #[cfg(not(feature = "run-stub"))]
         Command::Run(args) => {
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
