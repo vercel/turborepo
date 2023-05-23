@@ -79,12 +79,14 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
     #[turbo_tasks::function]
     fn description(&self) -> StringVc {
         StringVc::cell(
-            "Turbopack does not yet support running SWC ecma transform plugins on this platform."
+            "Turbopack does not yet support running SWC EcmaScript transform plugins on this \
+             platform."
                 .to_string(),
         )
     }
 }
 
+/// A custom transformer plugin to execute SWC's transform plugins.
 #[derive(Debug)]
 pub struct SwcEcmaTransformPluginsTransformer {
     #[cfg(feature = "swc_ecma_transform_plugin")]
@@ -97,6 +99,8 @@ impl SwcEcmaTransformPluginsTransformer {
         Self { plugins }
     }
 
+    // [TODO] Due to WEB-1102 putting this module itself behind compile time feature
+    // doesn't work. Instead allow to instantiate dummy instance.
     #[cfg(not(feature = "swc_ecma_transform_plugin"))]
     pub fn new() -> Self {
         Self {}
