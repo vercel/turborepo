@@ -150,18 +150,17 @@ message RecursiveCopyResponse {
   optional string error = 1;
 }
 
-message GetPackageFileHashesFromGitIndexRequest {
-  string turbo_root = 1;
-  string package_path = 2;
+message VerifySignatureRequest {
+  string hash = 1;
+  bytes artifact_body = 2;
+  bytes team_id = 3;
+  string expected_tag = 4;
+  optional bytes secret_key_override = 5;
 }
 
-message FileHashes {
-  map<string, string> hashes = 1;
-}
-
-message GetPackageFileHashesFromGitIndexResponse {
+message VerifySignatureResponse {
   oneof response {
-    FileHashes hashes = 1;
+    bool verified = 1;
     string error = 2;
   }
 }

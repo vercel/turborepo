@@ -2,7 +2,6 @@ package runsummary
 
 import (
 	"github.com/vercel/turbo/cli/internal/env"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -11,7 +10,7 @@ type GlobalHashSummary struct {
 	GlobalCacheKey       string                                `json:"rootKey"`
 	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"files"`
 	RootExternalDepsHash string                                `json:"hashOfExternalDependencies"`
-	Pipeline             fs.PristinePipeline                   `json:"rootPipeline"`
+	DotEnv               turbopath.AnchoredUnixPathArray       `json:"dotEnv"`
 
 	// This is a private field because and not in JSON, because we'll add it to each task
 	envVars            env.EnvironmentVariablePairs
@@ -25,7 +24,7 @@ func NewGlobalHashSummary(
 	envVars env.DetailedMap,
 	passthroughEnvVars env.EnvironmentVariableMap,
 	globalCacheKey string,
-	pipeline fs.PristinePipeline,
+	globalDotEnv turbopath.AnchoredUnixPathArray,
 ) *GlobalHashSummary {
 	return &GlobalHashSummary{
 		envVars:              envVars.All.ToSecretHashable(),
@@ -33,6 +32,6 @@ func NewGlobalHashSummary(
 		GlobalFileHashMap:    fileHashMap,
 		RootExternalDepsHash: rootExternalDepsHash,
 		GlobalCacheKey:       globalCacheKey,
-		Pipeline:             pipeline,
+		DotEnv:               globalDotEnv,
 	}
 }

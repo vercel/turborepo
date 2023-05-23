@@ -75,6 +75,7 @@ type TaskSummary struct {
 	Framework              string                                `json:"framework"`
 	EnvMode                util.EnvMode                          `json:"envMode"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
+	DotEnv                 turbopath.AnchoredUnixPathArray       `json:"dotEnv"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
 }
 

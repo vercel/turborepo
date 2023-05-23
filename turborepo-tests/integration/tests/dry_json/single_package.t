@@ -8,26 +8,14 @@ Setup
     "version": "0",
     "turboVersion": "[a-z0-9\.-]+", (re)
     "globalCacheInputs": {
-      "rootKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+      "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
       "files": {
         "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
         "package.json": "185771929d92c3865ce06c863c07d357500d3364",
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
-      "rootPipeline": {
-        "//#build": {
-          "outputs": [
-            "foo"
-          ],
-          "cache": true,
-          "dependsOn": [],
-          "inputs": [],
-          "outputMode": "full",
-          "env": [],
-          "persistent": false
-        }
-      }
+      "dotEnv": null
     },
     "envMode": "infer",
     "frameworkInference": true,
@@ -35,7 +23,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "dd4a9a7b508b0e38",
+        "hash": "dba2114627bfc5c1",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
@@ -67,6 +55,8 @@ Setup
           "dependsOn": [],
           "inputs": [],
           "outputMode": "full",
+          "passThroughEnv": null,
+          "dotEnv": null,
           "env": [],
           "persistent": false
         },
@@ -81,9 +71,11 @@ Setup
           ],
           "passthrough": null,
           "globalPassthrough": null
-        }
+        },
+        "dotEnv": null
       }
     ],
+    "user": ".*", (re)
     "scm": {
       "type": "git",
       "sha": "[a-z0-9]+", (re)

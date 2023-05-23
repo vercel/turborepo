@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
@@ -15,6 +17,7 @@ use crate::{
 
 pub(crate) mod bin;
 pub(crate) mod daemon;
+pub(crate) mod generate;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
@@ -49,7 +52,7 @@ impl CommandBase {
     }
 
     fn create_repo_config(&self) -> Result<()> {
-        let repo_config_path = get_repo_config_path(&self.repo_root);
+        let repo_config_path = get_repo_config_path(self.repo_root.borrow());
 
         let repo_config = RepoConfigLoader::new(repo_config_path)
             .with_api(self.args.api.clone())
@@ -67,7 +70,7 @@ impl CommandBase {
     // currently do not have any commands that delete the repo config file
     // and then attempt to read from it.
     pub fn delete_repo_config_file(&mut self) -> Result<()> {
-        let repo_config_path = get_repo_config_path(&self.repo_root);
+        let repo_config_path = get_repo_config_path(self.repo_root.borrow());
         if repo_config_path.exists() {
             std::fs::remove_file(repo_config_path)?;
         }
@@ -148,12 +151,8 @@ impl CommandBase {
     pub fn daemon_file_root(&self) -> turbopath::AbsoluteSystemPathBuf {
         turbopath::AbsoluteSystemPathBuf::new(std::env::temp_dir())
             .expect("temp dir is valid")
-            .join_relative(
-                turbopath::RelativeSystemPathBuf::new("turbod").expect("turbod is valid"),
-            )
-            .join_relative(
-                turbopath::RelativeSystemPathBuf::new(self.repo_hash()).expect("hash is valid"),
-            )
+            .join_component("turbod")
+            .join_component(self.repo_hash().as_str())
     }
 
     fn repo_hash(&self) -> String {

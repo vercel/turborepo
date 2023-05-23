@@ -11,63 +11,12 @@ Setup
 
   $ cat tmpjson.log | jq .globalCacheInputs
   {
-    "rootKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+    "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
     "files": {
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56",
-    "rootPipeline": {
-      "//#something": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "build": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [
-          "NODE_ENV"
-        ],
-        "persistent": false
-      },
-      "maybefails": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "my-app#build": {
-        "outputs": [
-          "apple.json",
-          "banana.txt"
-        ],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "something": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      }
-    }
+    "dotEnv": null
   }
 
   $ cat tmpjson.log | jq 'keys'
@@ -80,6 +29,7 @@ Setup
     "scm",
     "tasks",
     "turboVersion",
+    "user",
     "version"
   ]
 
@@ -89,8 +39,9 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "2f192ed93e20f940",
+    "hash": "c47512f540523323",
     "inputs": {
+      ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56",
@@ -120,6 +71,10 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "passThroughEnv": null,
+      "dotEnv": [
+        ".env.local"
+      ],
       "env": [],
       "persistent": false
     },
@@ -135,7 +90,10 @@ Setup
       ],
       "passthrough": null,
       "globalPassthrough": null
-    }
+    },
+    "dotEnv": [
+      ".env.local"
+    ]
   }
 
 # Validate output of util#build task
@@ -144,7 +102,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "af2ba2d52192ee45",
+    "hash": "7d67ce9d6cdc1638",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },
@@ -169,6 +127,8 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "passThroughEnv": null,
+      "dotEnv": null,
       "env": [
         "NODE_ENV"
       ],
@@ -188,7 +148,8 @@ Setup
       ],
       "passthrough": null,
       "globalPassthrough": null
-    }
+    },
+    "dotEnv": null
   }
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller

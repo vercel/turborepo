@@ -7,8 +7,8 @@ package ffi
 
 // #include "bindings.h"
 //
-// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv
-// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv
+// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv -framework Security
+// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv -framework Security
 // #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind
 // #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind
 // #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz
@@ -314,25 +314,27 @@ func GlobalChange(packageManager string, prevContents []byte, currContents []byt
 	return resp.GetGlobalChange()
 }
 
-// GetPackageFileHashesFromGitIndex proxies to rust to use git to hash the files in a package.
-// It does not support additional files, it just hashes the non-ignored files in the package.
-func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[string]string, error) {
-	req := ffi_proto.GetPackageFileHashesFromGitIndexRequest{
-		TurboRoot:   rootPath,
-		PackagePath: packagePath,
+// VerifySignature checks that the signature of an artifact matches the expected tag
+func VerifySignature(teamID []byte, hash string, artifactBody []byte, expectedTag string, secretKeyOverride []byte) (bool, error) {
+	req := ffi_proto.VerifySignatureRequest{
+		TeamId:            teamID,
+		Hash:              hash,
+		ArtifactBody:      artifactBody,
+		ExpectedTag:       expectedTag,
+		SecretKeyOverride: secretKeyOverride,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.get_package_file_hashes_from_git_index(reqBuf)
+	resBuf := C.verify_signature(reqBuf)
 	reqBuf.Free()
 
-	resp := ffi_proto.GetPackageFileHashesFromGitIndexResponse{}
+	resp := ffi_proto.VerifySignatureResponse{}
 	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
 		panic(err)
 	}
 
 	if err := resp.GetError(); err != "" {
-		return nil, errors.New(err)
+		return false, errors.New(err)
 	}
-	hashes := resp.GetHashes()
-	return hashes.GetHashes(), nil
+
+	return resp.GetVerified(), nil
 }

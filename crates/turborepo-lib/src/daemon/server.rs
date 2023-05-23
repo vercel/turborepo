@@ -33,7 +33,7 @@ use tokio::{
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
 use tracing::error;
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
 use super::{
     bump_timeout::BumpTimeout,
@@ -81,10 +81,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
 
         let watcher = Arc::new(HashGlobWatcher::new(
             AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("valid repo root"),
-            daemon_root
-                .join_relative(RelativeSystemPathBuf::new("flush").expect("valid forward path"))
-                .as_path()
-                .to_owned(),
+            daemon_root.join_component("flush").as_path().to_owned(),
         )?);
 
         let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
@@ -195,7 +192,15 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                     None => CloseReason::ServerClosed,
                 }
             },
-            _ = watcher_fut => CloseReason::WatcherClosed,
+            watch_res = watcher_fut => {
+                match watch_res {
+                    Ok(()) => CloseReason::WatcherClosed,
+                    Err(e) => {
+                        error!("Globwatch config error: {:?}", e);
+                        CloseReason::WatcherClosed
+                    },
+                }
+            },
         }
 
         // here the stop token is dropped, and the pid lock is dropped
@@ -294,7 +299,7 @@ mod test {
     };
 
     use tokio::select;
-    use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::DaemonServer;
     use crate::{commands::CommandBase, ui::UI, Args};
@@ -326,8 +331,8 @@ mod test {
 
         tracing::info!("server started");
 
-        let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
-        let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
+        let pid_path = path.join_component("turbod.pid");
+        let sock_path = path.join_component("turbod.sock");
 
         select! {
             _ = daemon.serve() => panic!("must not close"),
@@ -365,7 +370,7 @@ mod test {
         )
         .unwrap();
 
-        let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
+        let pid_path = path.join_component("turbod.pid");
 
         let now = Instant::now();
         let close_reason = daemon.serve().await;
