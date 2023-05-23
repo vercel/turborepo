@@ -332,9 +332,11 @@ impl ChunkingContext for DevChunkingContext {
     }
 
     #[turbo_tasks::function]
-    fn asset_path(&self, content_hash: &str, extension: &str) -> FileSystemPathVc {
-        self.asset_root_path
-            .join(&format!("{content_hash}.{extension}"))
+    fn asset_path(&self, content_hash: &str, basename: &str, extension: &str) -> FileSystemPathVc {
+        self.asset_root_path.join(&format!(
+            "{basename}.{content_hash}.{extension}",
+            content_hash = &content_hash[..8]
+        ))
     }
 
     #[turbo_tasks::function]

@@ -33,7 +33,7 @@ pub trait ChunkingContext {
 
     fn can_be_in_same_chunk(&self, asset_a: AssetVc, asset_b: AssetVc) -> BoolVc;
 
-    fn asset_path(&self, content_hash: &str, extension: &str) -> FileSystemPathVc;
+    fn asset_path(&self, content_hash: &str, basename: &str, extension: &str) -> FileSystemPathVc;
 
     fn is_hot_module_replacement_enabled(&self) -> BoolVc {
         BoolVc::cell(false)

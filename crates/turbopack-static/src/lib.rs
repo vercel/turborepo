@@ -150,9 +150,15 @@ impl Asset for StaticAsset {
             return Err(anyhow!("StaticAsset::path: unsupported file content"));
         };
         let content_hash_b16 = turbo_tasks_hash::encode_hex(content_hash);
-        let asset_path = match source_path.await?.extension() {
-            Some(ext) => self.context.asset_path(&content_hash_b16, ext),
-            None => self.context.asset_path(&content_hash_b16, "bin"),
+        let source_path = source_path.await?;
+        let basename = source_path.file_name();
+        let asset_path = match source_path.extension() {
+            Some(ext) => self.context.asset_path(
+                &content_hash_b16,
+                &basename[..basename.len() - ext.len() - 1],
+                ext,
+            ),
+            None => self.context.asset_path(&content_hash_b16, basename, "bin"),
         };
         Ok(AssetIdentVc::from_path(asset_path))
     }
