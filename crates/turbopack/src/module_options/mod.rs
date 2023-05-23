@@ -454,15 +454,12 @@ impl ModuleOptionsVc {
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),
                     vec![
-                        // [TODO]: should accept rules as an option
-                        if ext == ".scss" || ext == ".sass" {
-                            ModuleRuleEffect::ModuleType(ModuleType::Css(css_transforms))
-                        } else {
-                            ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                                transforms: app_transforms,
-                                options: ecmascript_options.clone(),
-                            })
-                        },
+                        // By default, loaders are expected to return ecmascript code.
+                        // This can be overriden by specifying e. g. `as: "*.css"` in the rule.
+                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                            transforms: app_transforms,
+                            options: ecmascript_options.clone(),
+                        }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
                                 node_evaluate_asset_context(
