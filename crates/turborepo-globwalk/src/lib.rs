@@ -39,6 +39,8 @@ impl WalkType {
     }
 }
 
+pub use walkdir::Error as WalkDirError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError {
     // note: wax 0.5 has a lifetime in the BuildError, so we can't use it here
