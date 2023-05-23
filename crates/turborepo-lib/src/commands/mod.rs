@@ -145,7 +145,7 @@ impl CommandBase {
 
         let api_url = repo_config.api_url();
         let timeout = client_config.remote_cache_timeout();
-        APIClient::new(api_url, timeout, self.version)
+        Ok(APIClient::new(api_url, timeout, self.version)?)
     }
 
     pub fn daemon_file_root(&self) -> turbopath::AbsoluteSystemPathBuf {
