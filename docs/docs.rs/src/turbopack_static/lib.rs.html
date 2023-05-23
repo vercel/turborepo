@@ -244,8 +244,6 @@
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
-<a href="#248" id="248">248</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -386,7 +384,6 @@
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>StaticAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
-        <span class="kw">let </span>source_path = <span class="self">self</span>.source.ident().path();
         <span class="kw">let </span>content = <span class="self">self</span>.source.content();
         <span class="kw">let </span>content_hash = <span class="kw">if let </span>AssetContent::File(file) = <span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if let </span>FileContent::Content(file) = <span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -398,10 +395,9 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;StaticAsset::path: unsupported file content&quot;</span>));
         };
         <span class="kw">let </span>content_hash_b16 = turbo_tasks_hash::encode_hex(content_hash);
-        <span class="kw">let </span>asset_path = <span class="kw">match </span>source_path.<span class="kw">await</span><span class="question-mark">?</span>.extension() {
-            <span class="prelude-val">Some</span>(ext) =&gt; <span class="self">self</span>.context.asset_path(<span class="kw-2">&amp;</span>content_hash_b16, ext),
-            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.context.asset_path(<span class="kw-2">&amp;</span>content_hash_b16, <span class="string">&quot;bin&quot;</span>),
-        };
+        <span class="kw">let </span>asset_path = <span class="self">self
+            </span>.context
+            .asset_path(<span class="kw-2">&amp;</span>content_hash_b16, <span class="self">self</span>.source.ident());
         <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(asset_path))
     }
 

@@ -53,6 +53,10 @@
 <a href="#53" id="53">53</a>
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>anyhow::Result;
@@ -88,7 +92,11 @@
 
     <span class="kw">fn </span>can_be_in_same_chunk(<span class="kw-2">&amp;</span><span class="self">self</span>, asset_a: AssetVc, asset_b: AssetVc) -&gt; BoolVc;
 
-    <span class="kw">fn </span>asset_path(<span class="kw-2">&amp;</span><span class="self">self</span>, content_hash: <span class="kw-2">&amp;</span>str, extension: <span class="kw-2">&amp;</span>str) -&gt; FileSystemPathVc;
+    <span class="kw">fn </span>asset_path(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        content_hash: <span class="kw-2">&amp;</span>str,
+        original_asset_ident: AssetIdentVc,
+    ) -&gt; FileSystemPathVc;
 
     <span class="kw">fn </span>is_hot_module_replacement_enabled(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoolVc {
         BoolVc::cell(<span class="bool-val">false</span>)
