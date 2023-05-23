@@ -22,9 +22,9 @@ pub struct SwcPluginModule(
     #[turbo_tasks(trace_ignore)]
     #[cfg(feature = "swc_ecma_transform_plugin")]
     pub swc_core::plugin_runner::plugin_module_bytes::CompiledPluginModuleBytes,
-    // Dummy field to avoid turbo_tasks macro complains about empty struct.
-    // This is due to we can't import CompiledPluginModuleBytes by default, it should be only
-    // available for the target / platforms can support swc plugins (which can build wasmer)
+    // Dummy field to avoid turbo_tasks macro complaining about empty struct.
+    // This is because we can't import CompiledPluginModuleBytes by default, it should be only
+    // available for the target / platforms that support swc plugins (which can build wasmer)
     #[cfg(not(feature = "swc_ecma_transform_plugin"))] pub (),
 );
 
