@@ -16,8 +16,7 @@ use path_clean::PathClean;
 use path_slash::CowExt;
 
 use crate::{
-    AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
-    RelativeUnixPath,
+    AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError, RelativeUnixPath,
 };
 
 pub struct AbsoluteSystemPath(Path);
@@ -81,17 +80,17 @@ impl AbsoluteSystemPath {
     pub fn new<P: AsRef<Path> + ?Sized>(value: &P) -> Result<&Self, PathError> {
         let path = value.as_ref();
         if path.is_relative() {
-            return Err(PathValidationError::NotAbsolute(path.to_owned()).into());
+            return Err(PathError::NotAbsolute(path.to_owned()).into());
         }
-        let path_str = path.to_str().ok_or_else(|| {
-            PathError::PathValidationError(PathValidationError::InvalidUnicode(path.to_owned()))
-        })?;
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
 
         let system_path = Cow::from_slash(path_str);
 
         match system_path {
             Cow::Owned(path) => {
-                Err(PathValidationError::NotSystem(path.to_string_lossy().to_string()).into())
+                Err(PathError::NotSystem(path.to_string_lossy().to_string()).into())
             }
             Cow::Borrowed(path) => {
                 let path = Path::new(path);

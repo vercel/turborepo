@@ -47,18 +47,18 @@ export async function customGenerators({
 }
 
 export async function chooseGeneratorTemplate() {
-  return await inquirer.prompt<{ answer: "ts" | "js" }>({
+  return inquirer.prompt<{ answer: "ts" | "js" }>({
     type: "list",
     name: "answer",
     message: "Should the generator config be created with TS or JS?",
     default: "ts",
     choices: [
       {
-        name: "js",
+        name: "JavaScript",
         value: "js",
       },
       {
-        name: "ts",
+        name: "TypeScript",
         value: "ts",
       },
     ],
@@ -66,7 +66,7 @@ export async function chooseGeneratorTemplate() {
 }
 
 export async function confirm({ message }: { message: string }) {
-  return await inquirer.prompt<{ answer: boolean }>({
+  return inquirer.prompt<{ answer: boolean }>({
     type: "confirm",
     name: "answer",
     message,

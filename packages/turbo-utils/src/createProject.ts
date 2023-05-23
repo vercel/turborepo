@@ -139,7 +139,7 @@ export async function createProject({
    */
   const loader = turboLoader("Downloading files...");
   try {
-    if (repoInfo) {
+    if (!isDefaultExample && repoInfo) {
       console.log(
         `\nDownloading files from repo ${chalk.cyan(
           example

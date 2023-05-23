@@ -8,9 +8,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::{
-    AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
-};
+use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub struct AbsoluteSystemPathBuf(pub(crate) PathBuf);
@@ -38,7 +36,7 @@ impl AbsoluteSystemPathBuf {
     /// * `unchecked_path`: The path to be validated and converted to an
     ///   `AbsoluteSystemPathBuf`.
     ///
-    /// returns: Result<AbsoluteSystemPathBuf, PathValidationError>
+    /// returns: Result<AbsoluteSystemPathBuf, PathError>
     ///
     /// # Examples
     ///
@@ -60,7 +58,7 @@ impl AbsoluteSystemPathBuf {
     pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathError> {
         let unchecked_path = unchecked_path.into();
         if !unchecked_path.is_absolute() {
-            return Err(PathValidationError::NotAbsolute(unchecked_path).into());
+            return Err(PathError::NotAbsolute(unchecked_path).into());
         }
 
         let system_path = unchecked_path.into_system()?;
@@ -73,7 +71,7 @@ impl AbsoluteSystemPathBuf {
     ///
     /// * `path`: The path to be anchored at `self`
     ///
-    /// returns: Result<AnchoredSystemPathBuf, PathValidationError>
+    /// returns: Result<AnchoredSystemPathBuf, PathError>
     ///
     /// # Examples
     ///
@@ -197,10 +195,10 @@ impl AbsoluteSystemPathBuf {
         Ok(())
     }
 
-    pub fn to_str(&self) -> Result<&str, PathValidationError> {
+    pub fn to_str(&self) -> Result<&str, PathError> {
         self.0
             .to_str()
-            .ok_or_else(|| PathValidationError::InvalidUnicode(self.0.clone()))
+            .ok_or_else(|| PathError::InvalidUnicode(self.0.to_string_lossy().to_string()))
     }
 
     pub fn to_string_lossy(&self) -> Cow<'_, str> {
@@ -259,7 +257,7 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 mod tests {
     use std::assert_matches::assert_matches;
 
-    use crate::{AbsoluteSystemPathBuf, PathError, PathValidationError};
+    use crate::{AbsoluteSystemPathBuf, PathError};
 
     #[cfg(not(windows))]
     #[test]
@@ -267,16 +265,12 @@ mod tests {
         assert!(AbsoluteSystemPathBuf::new("/Users/user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new("./Users/user/"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
         );
 
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
         );
     }
 
@@ -286,21 +280,15 @@ mod tests {
         assert!(AbsoluteSystemPathBuf::new("C:\\Users\\user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new(".\\Users\\user\\"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
         );
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
         );
         assert_matches!(
             AbsoluteSystemPathBuf::new("/Users/home"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
         )
     }
 }

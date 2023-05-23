@@ -441,10 +441,12 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
+          setup-go: false
+          setup-rust: false
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter="./packages/*" --filter="!@vercel/*" --filter="!turborepo-tests*" --color
+          turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter="./packages/*" --color
 
   rust_prepare:
     name: Check rust crates
