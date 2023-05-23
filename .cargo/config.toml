@@ -9,8 +9,11 @@ xtask = "run --package xtask --"
 tr-test = "test -p turborepo* --features rustls-tls"
 tr-check = "check -p turborepo*"
 # Builds all test code to check for compiler errors before running
+tp-pre-test = "nextest run --no-run --release -p turbopack* -p turbo-tasks* -p node-file-trace"
 tp-test = "nextest run --release --no-fail-fast -p turbopack* -p turbo-tasks* -p node-file-trace"
+tp-bench-pre-test = "test --no-run --benches --release --exclude turbopack-bench -p turbopack* -p turbo-tasks* -p node-file-trace"
 tp-bench-test = "test --benches --release --no-fail-fast --exclude turbopack-bench -p turbopack* -p turbo-tasks* -p node-file-trace"
+tp-bench-other-pre-test = "test --no-run --benches --release -p turbopack-bench "
 tp-bench-other-test = "test --benches --release -p turbopack-bench "
 
 [target.'cfg(all())']

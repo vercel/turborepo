@@ -701,7 +701,7 @@ jobs:
       - name: Build nextest
         timeout-minutes: 120
         run: |
-          cargo tp-test --no-run
+          cargo tp-pre-test
       - name: Run nextest
         timeout-minutes: 120
         run: |
@@ -763,7 +763,7 @@ jobs:
       - name: Build nextest
         timeout-minutes: 120
         run: |
-          cargo tp-test --no-run
+          cargo tp-pre-test
 
       - name: Run nextest
         timeout-minutes: 120
@@ -802,7 +802,7 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo tp-bench-test --no-run
+          cargo tp-bench-pre-test
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
@@ -813,7 +813,7 @@ jobs:
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
         timeout-minutes: 120
         run: |
-          cargo tp-bench-other-test --no-run
+          cargo tp-bench-other-pre-test
 
       - name: Run cargo test on benchmarks for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
@@ -868,7 +868,7 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo tp-bench-test --no-run
+          cargo tp-bench-pre-test
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
@@ -879,7 +879,7 @@ jobs:
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
         timeout-minutes: 120
         run: |
-          cargo tp-bench-other-test --no-run
+          cargo tp-bench-other-pre-test
 
       - name: Run cargo test on benchmarks for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
