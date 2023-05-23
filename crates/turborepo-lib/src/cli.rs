@@ -674,7 +674,12 @@ pub async fn run(
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
+                #[cfg(not(feature = "go-daemon"))]
                 None => daemon::daemon_server(&base, idle_time, logger).await,
+                #[cfg(feature = "go-daemon")]
+                None => {
+                    return Ok(Payload::Go(Box::new(base)));
+                }
             }?;
 
             Ok(Payload::Rust(Ok(0)))

@@ -14,6 +14,8 @@ rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 # serve the daemon over a port (useful for testing)
 http = ["tonic-reflection"]
 
+go-daemon = []
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 assert_cmd = { workspace = true }
