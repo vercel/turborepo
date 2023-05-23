@@ -115,7 +115,7 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
-		// TODO: do we want a more speicic bypass status here?
+		// TODO: do we want a more specific bypass status here?
 		return cache.NewCacheMiss(), nil
 	}
 
