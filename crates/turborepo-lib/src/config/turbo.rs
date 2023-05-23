@@ -15,9 +15,8 @@ pub struct SpacesJson {
 pub struct TurboJson {
     #[serde(flatten)]
     other: serde_json::Value,
-    // This is 'static just to get stuff working
-    pub(crate) remote_cache_opts: Option<RemoteCacheOpts<'static>>,
-    pub space_id: Option<&'static str>,
+    pub(crate) remote_cache_opts: Option<RemoteCacheOpts>,
+    pub space_id: Option<String>,
     pub pipeline: Pipeline,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental_spaces: Option<SpacesJson>,

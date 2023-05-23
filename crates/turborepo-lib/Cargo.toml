@@ -10,6 +10,7 @@ license = "MPL-2.0"
 default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
+run-stub = []
 
 # serve the daemon over a port (useful for testing)
 http = ["tonic-reflection"]
@@ -56,8 +57,8 @@ itertools = { workspace = true }
 lazy_static = { workspace = true }
 libc = "0.2.140"
 notify = "5.1"
-pidlock = { path = "../turborepo-pidlock" }
 petgraph = { workspace = true }
+pidlock = { path = "../turborepo-pidlock" }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"

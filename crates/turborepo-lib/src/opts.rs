@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     cli::{Command, DryRunMode, EnvMode, LogPrefix, RunArgs},
@@ -6,6 +7,7 @@ use crate::{
     Args,
 };
 
+#[derive(Debug)]
 pub struct Opts<'a> {
     pub cache_opts: CacheOpts<'a>,
     pub run_opts: RunOpts<'a>,
@@ -13,13 +15,13 @@ pub struct Opts<'a> {
     pub scope_opts: ScopeOpts,
 }
 
-#[derive(Default)]
-struct CacheOpts<'a> {
+#[derive(Debug, Default)]
+pub struct CacheOpts<'a> {
     override_dir: Option<&'a str>,
     skip_remote: bool,
     skip_filesystem: bool,
     workers: u32,
-    pub(crate) remote_cache_opts: Option<RemoteCacheOpts<'a>>,
+    pub(crate) remote_cache_opts: Option<RemoteCacheOpts>,
 }
 
 impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
@@ -33,9 +35,9 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
     }
 }
 
-#[derive(Default, Clone)]
-pub struct RemoteCacheOpts<'a> {
-    team_id: &'a str,
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct RemoteCacheOpts {
+    team_id: String,
     signature: bool,
 }
 
@@ -52,6 +54,7 @@ impl<'a> TryFrom<&'a Args> for Opts<'a> {
         Ok(Self {
             run_opts,
             cache_opts,
+            scope_opts: ScopeOpts::default(),
             runcache_opts: RunCacheOpts::default(),
         })
     }
@@ -62,6 +65,7 @@ pub struct RunCacheOpts {
     pub(crate) output_watcher: Option<DaemonClient<DaemonConnector>>,
 }
 
+#[derive(Debug)]
 pub struct RunOpts<'a> {
     tasks: &'a [String],
     concurrency: u32,
@@ -79,7 +83,7 @@ pub struct RunOpts<'a> {
     pub(crate) single_package: bool,
     log_prefix: Option<LogPrefix>,
     summarize: Option<Option<bool>>,
-    pub(crate) experimental_space_id: Option<&'a str>,
+    pub(crate) experimental_space_id: Option<String>,
 }
 
 const DEFAULT_CONCURRENCY: u32 = 10;
@@ -105,7 +109,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             tasks: args.tasks.as_slice(),
             log_prefix: args.log_prefix,
             summarize: args.summarize,
-            experimental_space_id: args.experimental_space_id.as_deref(),
+            experimental_space_id: args.experimental_space_id.clone(),
             env_mode: args.env_mode,
             concurrency,
             parallel: args.parallel,
@@ -146,4 +150,5 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32> {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct ScopeOpts {}

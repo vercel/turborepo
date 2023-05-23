@@ -24,6 +24,7 @@ pub(crate) mod logout;
 pub(crate) mod run;
 pub(crate) mod unlink;
 
+#[derive(Debug)]
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
