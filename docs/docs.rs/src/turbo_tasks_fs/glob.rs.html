@@ -417,6 +417,15 @@
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
 <a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::mem::take;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
@@ -469,8 +478,7 @@
     <span class="kw">pub fn </span>execute(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str) -&gt; bool {
         <span class="kw">let </span>match_partial = path.ends_with(<span class="string">&#39;/&#39;</span>);
         <span class="self">self</span>.iter_matches(path, <span class="bool-val">true</span>, match_partial)
-            .next()
-            .is_some()
+            .any(|result| <span class="macro">matches!</span>(result, (<span class="string">&quot;&quot;</span>, <span class="kw">_</span>)))
     }
 
     <span class="kw">fn </span>iter_matches&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -834,6 +842,16 @@
         <span class="macro">println!</span>(<span class="string">&quot;{glob:?} {path}&quot;</span>);
 
         <span class="macro">assert!</span>(glob.execute(path));
+    }
+
+    <span class="attr">#[rstest]
+    #[case::early_end(<span class="string">&quot;*.raw&quot;</span>, <span class="string">&quot;hello.raw.js&quot;</span>)]
+    </span><span class="kw">fn </span>glob_not_matching(<span class="attr">#[case] </span>glob: <span class="kw-2">&amp;</span>str, <span class="attr">#[case] </span>path: <span class="kw-2">&amp;</span>str) {
+        <span class="kw">let </span>glob = Glob::parse(glob).unwrap();
+
+        <span class="macro">println!</span>(<span class="string">&quot;{glob:?} {path}&quot;</span>);
+
+        <span class="macro">assert!</span>(!glob.execute(path));
     }
 }
 </code></pre></div>

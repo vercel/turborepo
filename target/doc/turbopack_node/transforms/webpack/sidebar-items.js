@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["WebpackLoaderConfigItem"],"struct":["WebpackLoaderConfigItems","WebpackLoaderConfigItemsVc","WebpackLoaders","WebpackLoadersVc"],"type":["WebpackLoaderConfigItemsReadRef","WebpackLoadersReadRef"]};
+window.SIDEBAR_ITEMS = {"struct":["WebpackLoaderItem","WebpackLoaderItems","WebpackLoaderItemsVc","WebpackLoaders","WebpackLoadersVc"],"type":["WebpackLoaderItemsReadRef","WebpackLoadersReadRef"]};

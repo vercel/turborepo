@@ -195,6 +195,8 @@
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -232,25 +234,22 @@
 }
 
 <span class="attr">#[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
-#[serde(untagged)]
-</span><span class="kw">pub enum </span>WebpackLoaderConfigItem {
-    LoaderName(String),
-    LoaderNameWithOptions {
-        loader: String,
-        <span class="attr">#[turbo_tasks(trace_ignore)]
-        </span>options: serde_json::Map&lt;String, serde_json::Value&gt;,
-    },
+</span><span class="kw">pub struct </span>WebpackLoaderItem {
+    <span class="kw">pub </span>loader: String,
+    <span class="attr">#[turbo_tasks(trace_ignore)]
+    </span><span class="kw">pub </span>options: serde_json::Map&lt;String, serde_json::Value&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
 #[turbo_tasks::value(shared, transparent)]
-</span><span class="kw">pub struct </span>WebpackLoaderConfigItems(<span class="kw">pub </span>Vec&lt;WebpackLoaderConfigItem&gt;);
+</span><span class="kw">pub struct </span>WebpackLoaderItems(<span class="kw">pub </span>Vec&lt;WebpackLoaderItem&gt;);
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>WebpackLoaders {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
-    loaders: WebpackLoaderConfigItemsVc,
+    loaders: WebpackLoaderItemsVc,
+    rename_as: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -259,12 +258,14 @@
     </span><span class="kw">pub fn </span>new(
         evaluate_context: AssetContextVc,
         execution_context: ExecutionContextVc,
-        loaders: WebpackLoaderConfigItemsVc,
+        loaders: WebpackLoaderItemsVc,
+        rename_as: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; <span class="self">Self </span>{
         WebpackLoaders {
             evaluate_context,
             execution_context,
             loaders,
+            rename_as,
         }
         .cell()
     }
@@ -273,11 +274,9 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>SourceTransform <span class="kw">for </span>WebpackLoaders {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, source: AssetVc) -&gt; AssetVc {
+    </span><span class="kw">fn </span>transform(self_vc: WebpackLoadersVc, source: AssetVc) -&gt; AssetVc {
         WebpackLoadersProcessedAsset {
-            evaluate_context: <span class="self">self</span>.evaluate_context,
-            execution_context: <span class="self">self</span>.execution_context,
-            loaders: <span class="self">self</span>.loaders,
+            transform: self_vc,
             source,
         }
         .cell()
@@ -287,17 +286,21 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>WebpackLoadersProcessedAsset {
-    evaluate_context: AssetContextVc,
-    execution_context: ExecutionContextVc,
-    loaders: WebpackLoaderConfigItemsVc,
+    transform: WebpackLoadersVc,
     source: AssetVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>WebpackLoadersProcessedAsset {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
-        <span class="self">self</span>.source.ident()
+    </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
+        <span class="prelude-val">Ok</span>(
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(rename_as) = <span class="self">self</span>.transform.<span class="kw">await</span><span class="question-mark">?</span>.rename_as.as_deref() {
+                <span class="self">self</span>.source.ident().rename_as(rename_as)
+            } <span class="kw">else </span>{
+                <span class="self">self</span>.source.ident()
+            },
+        )
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -332,12 +335,13 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>process(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ProcessWebpackLoadersResultVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>transform = this.transform.<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>ExecutionContext {
             project_path,
             chunking_context,
             env,
-        } = <span class="kw-2">*</span>this.execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
+        } = <span class="kw-2">*</span>transform.execution_context.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>source_content = this.source.content();
         <span class="kw">let </span>AssetContent::File(file) = <span class="kw-2">*</span>source_content.<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
             <span class="macro">bail!</span>(<span class="string">&quot;Webpack Loaders transform only support transforming files&quot;</span>);
@@ -349,12 +353,12 @@
             }.cell());
         };
         <span class="kw">let </span>content = content.content().to_str()<span class="question-mark">?</span>;
-        <span class="kw">let </span>context = this.evaluate_context;
+        <span class="kw">let </span>context = transform.evaluate_context;
 
         <span class="kw">let </span>webpack_loaders_executor = webpack_loaders_executor(context);
         <span class="kw">let </span>resource_fs_path = this.source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>resource_path = resource_fs_path.path.as_str();
-        <span class="kw">let </span>loaders = this.loaders.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>loaders = transform.loaders.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>config_value = evaluate(
             webpack_loaders_executor,
             project_path,

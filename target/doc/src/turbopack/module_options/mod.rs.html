@@ -477,6 +477,12 @@
 <a href="#477" id="477">477</a>
 <a href="#478" id="478">478</a>
 <a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
@@ -485,8 +491,8 @@
 <span class="kw">pub use </span>module_options_context::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>module_rule::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>rule_condition::<span class="kw-2">*</span>;
-<span class="kw">use </span>turbo_tasks::primitives::{OptionStringVc, StringsVc};
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks::primitives::OptionStringVc;
+<span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
@@ -560,7 +566,7 @@
             <span class="kw">let </span>path_value = path.<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">for </span>(condition, new_context) <span class="kw">in </span>rules.iter() {
-                <span class="kw">if </span>condition.matches(<span class="kw-2">&amp;</span>path_value).<span class="kw">await </span>{
+                <span class="kw">if </span>condition.matches(<span class="kw-2">&amp;</span>path_value).<span class="kw">await</span><span class="question-mark">? </span>{
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(ModuleOptionsVc::new(path, <span class="kw-2">*</span>new_context));
                 }
             }
@@ -908,6 +914,7 @@
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(webpack_loaders_options) = enable_webpack_loaders {
+            <span class="kw">let </span>webpack_loaders_options = webpack_loaders_options.<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>execution_context = execution_context
                 .context(<span class="string">&quot;execution_context is required for webpack_loaders&quot;</span>)<span class="question-mark">?
                 </span>.with_layer(<span class="string">&quot;webpack_loaders&quot;</span>);
@@ -918,22 +925,26 @@
             } <span class="kw">else </span>{
                 package_import_map_from_context(<span class="string">&quot;loader-runner&quot;</span>, path)
             };
-            <span class="kw">for </span>(ext, loaders) <span class="kw">in </span>webpack_loaders_options.extension_to_loaders.iter() {
+            <span class="kw">for </span>(glob, rule) <span class="kw">in </span>webpack_loaders_options.rules.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
                 rules.push(ModuleRule::new(
                     ModuleRuleCondition::All(<span class="macro">vec!</span>[
-                        ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                        <span class="kw">if </span>!glob.contains(<span class="string">&quot;/&quot;</span>) {
+                            ModuleRuleCondition::ResourceBasePathGlob(GlobVc::new(glob).<span class="kw">await</span><span class="question-mark">?</span>)
+                        } <span class="kw">else </span>{
+                            ModuleRuleCondition::ResourcePathGlob {
+                                base: execution_context.project_path().<span class="kw">await</span><span class="question-mark">?</span>,
+                                glob: GlobVc::new(glob).<span class="kw">await</span><span class="question-mark">?</span>,
+                            }
+                        },
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),
                     <span class="macro">vec!</span>[
-                        <span class="comment">// [TODO]: should accept rules as an option
-                        </span><span class="kw">if </span>ext == <span class="string">&quot;.scss&quot; </span>|| ext == <span class="string">&quot;.sass&quot; </span>{
-                            ModuleRuleEffect::ModuleType(ModuleType::Css(css_transforms))
-                        } <span class="kw">else </span>{
-                            ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                                transforms: app_transforms,
-                                options: ecmascript_options.clone(),
-                            })
-                        },
+                        <span class="comment">// By default, loaders are expected to return ecmascript code.
+                        // This can be overriden by specifying e. g. `as: &quot;*.css&quot;` in the rule.
+                        </span>ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                            transforms: app_transforms,
+                            options: ecmascript_options.clone(),
+                        }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(<span class="macro">vec!</span>[
                             WebpackLoadersVc::new(
                                 node_evaluate_asset_context(
@@ -942,7 +953,8 @@
                                     <span class="prelude-val">None</span>,
                                 ),
                                 execution_context,
-                                <span class="kw-2">*</span>loaders,
+                                rule.loaders,
+                                rule.rename_as.clone(),
                             )
                             .into(),
                         ])),

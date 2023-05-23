@@ -100,6 +100,23 @@
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -132,6 +149,16 @@
 
     <span class="kw">pub fn </span>add_asset(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: StringVc, asset: AssetIdentVc) {
         <span class="self">self</span>.assets.push((key, asset));
+    }
+
+    <span class="kw">pub async fn </span>rename_as(<span class="kw-2">&amp;mut </span><span class="self">self</span>, pattern: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>root = <span class="self">self</span>.path.root();
+        <span class="kw">let </span>path = <span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.path = root
+            .join(<span class="kw-2">&amp;</span>pattern.replace(<span class="string">&quot;*&quot;</span>, <span class="kw-2">&amp;</span>path.path))
+            .resolve()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -194,6 +221,13 @@
     </span><span class="kw">pub async fn </span>with_part(<span class="self">self</span>, part: ModulePartVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
         this.part = <span class="prelude-val">Some</span>(part);
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(Value::new(this)))
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>rename_as(<span class="self">self</span>, pattern: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+        this.rename_as(pattern).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(Value::new(this)))
     }
 

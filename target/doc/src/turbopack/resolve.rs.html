@@ -514,7 +514,7 @@
     <span class="kw">if </span>!options_context_value.rules.is_empty() {
         <span class="kw">let </span>context_value = <span class="kw-2">&amp;*</span>context.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">for </span>(condition, new_options_context) <span class="kw">in </span>options_context_value.rules.iter() {
-            <span class="kw">if </span>condition.matches(context_value).<span class="kw">await </span>{
+            <span class="kw">if </span>condition.matches(context_value).<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(resolve_options(context, <span class="kw-2">*</span>new_options_context));
             }
         }

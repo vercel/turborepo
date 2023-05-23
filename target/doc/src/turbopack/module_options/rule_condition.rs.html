@@ -94,11 +94,37 @@
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
 <a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_recursion::async_recursion;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::{primitives::Regex, trace::TraceRawVcs};
-<span class="kw">use </span>turbo_tasks_fs::{FileSystemPath, FileSystemPathReadRef};
+<span class="kw">use </span>turbo_tasks_fs::{glob::GlobReadRef, FileSystemPath, FileSystemPathReadRef};
 <span class="kw">use </span>turbopack_core::{
     asset::AssetVc, reference_type::ReferenceType, virtual_asset::VirtualAssetVc,
 };
@@ -116,6 +142,18 @@
     ResourcePathInDirectory(String),
     ResourcePathInExactDirectory(FileSystemPathReadRef),
     ResourcePathRegex(<span class="attr">#[turbo_tasks(trace_ignore)] </span>Regex),
+    <span class="doccomment">/// For paths that are within the same filesystem as the `base`, it need to
+    /// match the relative path from base to resource. This includes `./` or
+    /// `../` prefix. For paths in a different filesystem, it need to match
+    /// the resource path in that filesystem without any prefix. This means
+    /// any glob starting with `./` or `../` will only match paths in the
+    /// project. Globs starting with `**` can match any path.
+    </span>ResourcePathGlob {
+        base: FileSystemPathReadRef,
+        <span class="attr">#[turbo_tasks(trace_ignore)]
+        </span>glob: GlobReadRef,
+    },
+    ResourceBasePathGlob(<span class="attr">#[turbo_tasks(trace_ignore)] </span>GlobReadRef),
 }
 
 <span class="kw">impl </span>ModuleRuleCondition {
@@ -185,6 +223,20 @@
             }
             ModuleRuleCondition::ResourceIsVirtualAsset =&gt; {
                 VirtualAssetVc::resolve_from(source).<span class="kw">await</span><span class="question-mark">?</span>.is_some()
+            }
+            ModuleRuleCondition::ResourcePathGlob { glob, base } =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = base.get_relative_path_to(path) {
+                    glob.execute(<span class="kw-2">&amp;</span>path)
+                } <span class="kw">else </span>{
+                    glob.execute(<span class="kw-2">&amp;</span>path.path)
+                }
+            }
+            ModuleRuleCondition::ResourceBasePathGlob(glob) =&gt; {
+                <span class="kw">let </span>basename = path
+                    .path
+                    .rsplit_once(<span class="string">&#39;/&#39;</span>)
+                    .map_or(path.path.as_str(), |(<span class="kw">_</span>, b)| b);
+                glob.execute(basename)
             }
             <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">&quot;not implemented yet&quot;</span>),
         })

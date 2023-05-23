@@ -184,16 +184,14 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
 </pre><pre class="rust"><code><span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbopack_core::{environment::EnvironmentVc, resolve::options::ImportMappingVc};
 <span class="kw">use </span>turbopack_ecmascript::TransformPluginVc;
-<span class="kw">use </span>turbopack_ecmascript_plugins::transform::{
-    emotion::EmotionTransformConfigVc, styled_components::StyledComponentsTransformConfigVc,
-};
 <span class="kw">use </span>turbopack_node::{
-    execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderConfigItemsVc,
+    execution_context::ExecutionContextVc, transforms::webpack::WebpackLoaderItemsVc,
 };
 
 <span class="kw">use </span><span class="kw">super</span>::ModuleRule;
@@ -205,13 +203,30 @@
     <span class="kw">pub </span>placeholder_for_future_extensions: (),
 }
 
-<span class="attr">#[turbo_tasks::value(shared)]
-#[derive(Default, Clone, Debug)]
-</span><span class="kw">pub struct </span>WebpackLoadersOptions {
-    <span class="kw">pub </span>extension_to_loaders: IndexMap&lt;String, WebpackLoaderConfigItemsVc&gt;,
-    <span class="kw">pub </span>loader_runner_package: <span class="prelude-ty">Option</span>&lt;ImportMappingVc&gt;,
-    <span class="kw">pub </span>placeholder_for_future_extensions: (),
+<span class="attr">#[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>LoaderRuleItem {
+    <span class="kw">pub </span>loaders: WebpackLoaderItemsVc,
+    <span class="kw">pub </span>rename_as: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
+
+<span class="attr">#[derive(Default)]
+#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>WebpackRules(IndexMap&lt;String, LoaderRuleItem&gt;);
+
+<span class="attr">#[derive(Default)]
+#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>OptionWebpackRules(<span class="prelude-ty">Option</span>&lt;WebpackRulesVc&gt;);
+
+<span class="attr">#[turbo_tasks::value(shared)]
+#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>WebpackLoadersOptions {
+    <span class="kw">pub </span>rules: WebpackRulesVc,
+    <span class="kw">pub </span>loader_runner_package: <span class="prelude-ty">Option</span>&lt;ImportMappingVc&gt;,
+}
+
+<span class="attr">#[derive(Default)]
+#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>OptionWebpackLoadersOptions(<span class="prelude-ty">Option</span>&lt;WebpackLoadersOptionsVc&gt;);
 
 <span class="doccomment">/// The kind of decorators transform to use.
 /// [TODO]: might need bikeshed for the name (Ecma)
@@ -278,21 +293,8 @@
     }
 }
 
-<span class="kw">impl </span>WebpackLoadersOptions {
-    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.extension_to_loaders.is_empty()
-    }
-
-    <span class="kw">pub fn </span>clone_if(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt; {
-        <span class="kw">if </span><span class="self">self</span>.is_empty() {
-            <span class="prelude-val">None
-        </span>} <span class="kw">else </span>{
-            <span class="prelude-val">Some</span>(<span class="self">self</span>.clone())
-        }
-    }
-}
-
-<span class="attr">#[turbo_tasks::value(shared)]
+<span class="comment">// [TODO]: should enabled_react_refresh belong to this options?
+</span><span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 </span><span class="kw">pub struct </span>JsxTransformOptions {
     <span class="kw">pub </span>development: bool,
@@ -337,7 +339,7 @@
 </span><span class="kw">pub struct </span>ModuleOptionsContext {
     <span class="kw">pub </span>enable_jsx: <span class="prelude-ty">Option</span>&lt;JsxTransformOptionsVc&gt;,
     <span class="kw">pub </span>enable_postcss_transform: <span class="prelude-ty">Option</span>&lt;PostCssTransformOptions&gt;,
-    <span class="kw">pub </span>enable_webpack_loaders: <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptions&gt;,
+    <span class="kw">pub </span>enable_webpack_loaders: <span class="prelude-ty">Option</span>&lt;WebpackLoadersOptionsVc&gt;,
     <span class="kw">pub </span>enable_types: bool,
     <span class="kw">pub </span>enable_typescript_transform: <span class="prelude-ty">Option</span>&lt;TypescriptTransformOptionsVc&gt;,
     <span class="kw">pub </span>decorators: <span class="prelude-ty">Option</span>&lt;DecoratorsOptionsVc&gt;,
