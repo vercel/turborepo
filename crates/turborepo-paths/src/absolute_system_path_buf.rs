@@ -8,10 +8,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::{
-    AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError,
-    RelativeUnixPath,
-};
+use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, RelativeUnixPath};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub struct AbsoluteSystemPathBuf(pub(crate) PathBuf);
