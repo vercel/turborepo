@@ -9,7 +9,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
     let (watcher, config) = GlobWatcher::new("./flush".into()).unwrap();
     let stop = stop_token::StopSource::new();
-    let mut stream = watcher.into_stream(stop.token());
+    let mut stream = watcher.into_stream(stop.token()).await.unwrap();
 
     let watch_fut = async {
         let span = info_span!("watch_fut");

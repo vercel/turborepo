@@ -75,13 +75,17 @@ impl<T: Watcher> HashGlobWatcher<T> {
                 .collect::<Vec<_>>()
         };
 
-        let mut stream = match self.watcher.lock().expect("only fails if poisoned").take() {
-            Some(watcher) => watcher.into_stream(token),
+        let watcher = self.watcher.lock().expect("only fails if poisoned").take();
+        let mut stream = match watcher {
+            Some(watcher) => watcher
+                .into_stream(token)
+                .await
+                .map_err(|err| ConfigError::WatchError(vec![err])),
             None => {
                 warn!("watcher already consumed");
-                return Err(ConfigError::WatchingAlready);
+                Err(ConfigError::WatchingAlready)
             }
-        };
+        }?;
 
         // watch the root of the repo to shut down if the folder is deleted
         self.config.include_path(&self.relative_to).await?;
@@ -146,7 +150,10 @@ impl<T: Watcher> HashGlobWatcher<T> {
         // this is a best effort, and times out after 500ms in
         // case there is a lot of activity on the filesystem
         match timeout(FLUSH_TIMEOUT, self.config.flush()).await {
-            Ok(_) => {}
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                return Err(e);
+            }
             Err(_) => {
                 trace!("timed out waiting for flush");
             }
@@ -223,7 +230,7 @@ impl<T: Watcher> HashGlobWatcher<T> {
         &self,
         hash: &Hash,
         mut candidates: HashSet<String>,
-    ) -> HashSet<String> {
+    ) -> Result<HashSet<String>, ConfigError> {
         // wait for a the watcher to flush its events
         // that will ensure that we have seen all filesystem writes
         // *by the calling client*. Other tasks _could_ write to the
@@ -233,7 +240,8 @@ impl<T: Watcher> HashGlobWatcher<T> {
         // this is a best effort, and times out after 500ms in
         // case there is a lot of activity on the filesystem
         match timeout(FLUSH_TIMEOUT, self.config.flush()).await {
-            Ok(_) => {}
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return Err(e),
             Err(_) => {
                 trace!("timed out waiting for flush");
             }
@@ -243,13 +251,13 @@ impl<T: Watcher> HashGlobWatcher<T> {
         // if a hash is not in globs, then either everything has changed
         // or it was never registered. either way, we return all candidates
         let hash_globs = self.hash_globs.lock().expect("only fails if poisoned");
-        match hash_globs.get(hash) {
+        Ok(match hash_globs.get(hash) {
             Some(glob) => {
                 candidates.retain(|c| !glob.include.contains(c));
                 candidates
             }
             None => candidates,
-        }
+        })
     }
 }
 
@@ -412,7 +420,8 @@ mod test {
 
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert!(
             changed.is_empty(),
@@ -425,7 +434,8 @@ mod test {
         File::create(dir.path().join("my-pkg/irrelevant2")).unwrap();
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert!(
             changed.is_empty(),
@@ -438,7 +448,8 @@ mod test {
         File::create(dir.path().join("my-pkg/.next/cache/next-file2")).unwrap();
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert!(
             changed.is_empty(),
@@ -451,7 +462,8 @@ mod test {
         File::create(dir.path().join("my-pkg/dist/dist-file2")).unwrap();
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(
             changed,
@@ -465,7 +477,8 @@ mod test {
         File::create(dir.path().join("my-pkg/.next/next-file2")).unwrap();
         let changed = watcher
             .changed_globs(&hash, include.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(
             changed,
@@ -533,7 +546,8 @@ mod test {
 
         let changed = watcher
             .changed_globs(&hash1, globs1_inclusion.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert!(
             changed.is_empty(),
@@ -543,7 +557,8 @@ mod test {
 
         let changed = watcher
             .changed_globs(&hash2, globs2_inclusion.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert!(
             changed.is_empty(),
@@ -556,7 +571,8 @@ mod test {
         File::create(dir.path().join("my-pkg/.next/cache/next-file2")).unwrap();
         let changed = watcher
             .changed_globs(&hash1, globs1_inclusion.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(
             changed,
@@ -566,7 +582,8 @@ mod test {
 
         let changed = watcher
             .changed_globs(&hash2, globs2_inclusion.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert!(
             changed.is_empty(),
@@ -579,7 +596,8 @@ mod test {
         File::create(dir.path().join("my-pkg/.next/next-file2")).unwrap();
         let changed = watcher
             .changed_globs(&hash2, globs2_inclusion.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(
             changed,
@@ -638,7 +656,8 @@ mod test {
         File::create(dir.path().join("my-pkg/.next/irrelevant")).unwrap();
         let changed = watcher
             .changed_globs(&hash, inclusions.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert!(
             changed.is_empty(),
@@ -649,7 +668,8 @@ mod test {
         File::create(dir.path().join("my-pkg/.next/next-file")).unwrap();
         let changed = watcher
             .changed_globs(&hash, inclusions.clone().into_iter().collect())
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(
             changed,

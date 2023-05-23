@@ -34,7 +34,10 @@ use itertools::Itertools;
 use merge_streams::MergeStreams;
 pub use notify::{Error, Event, Watcher};
 pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    watch,
+};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{event, span, trace, warn, Level};
 
@@ -45,6 +48,7 @@ pub struct GlobWatcher {
     flush_dir: PathBuf,
 
     config: UnboundedReceiver<WatcherCommand>,
+    setup_handle: tokio::task::JoinHandle<Result<(), Error>>,
 }
 
 impl GlobWatcher {
@@ -90,15 +94,24 @@ impl GlobWatcher {
         // background, to cut our startup time in half.
         let flush = watcher.clone();
         let path = flush_dir.as_path().to_owned();
-        tokio::task::spawn_blocking(move || {
+        let (setup_broadcaster, setup_receiver) = watch::channel(None);
+        let setup_handle = tokio::task::spawn_blocking(move || {
             if let Err(e) = flush
                 .lock()
                 .expect("only fails if poisoned")
                 .watch(&path, notify::RecursiveMode::Recursive)
             {
                 warn!("failed to watch flush dir: {}", e);
+                if setup_broadcaster.send(Some(false)).is_err() {
+                    trace!("setup channel shut down before setup completed");
+                }
+                Err(e)
             } else {
                 trace!("watching flush dir: {:?}", path);
+                if setup_broadcaster.send(Some(true)).is_err() {
+                    trace!("setup channel shut down before setup completed");
+                }
+                Ok(())
             }
         });
 
@@ -107,10 +120,12 @@ impl GlobWatcher {
                 flush_dir,
                 stream: receive_event,
                 config: receive_config,
+                setup_handle,
             },
             WatchConfig {
                 flush: send_config,
                 watcher,
+                setup_receiver,
             },
         ))
     }
@@ -124,15 +139,29 @@ impl GlobWatcher {
     /// and config changes driven by the same stream. This allows us to ensure
     /// that anything watching for filesystem is also propagating config changes
     #[tracing::instrument(skip(self))]
-    pub fn into_stream(
+    pub async fn into_stream(
         self,
         token: stop_token::StopToken,
-    ) -> impl Stream<Item = Result<Event, TimedOutError>> + Send + Sync + 'static + Unpin {
+    ) -> Result<
+        impl Stream<Item = Result<Event, TimedOutError>> + Send + Sync + 'static + Unpin,
+        Error,
+    > {
+        let Self {
+            setup_handle,
+            flush_dir,
+            ..
+        } = self;
         let flush_id = Arc::new(AtomicU64::new(1));
-        let flush_dir = Arc::new(self.flush_dir);
+        let flush_dir = Arc::new(flush_dir);
         let flush = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<()>>::new()));
 
-        Box::pin(
+        // Wait until we have watched the flush directory, before we start processing
+        // events
+        setup_handle
+            .await
+            .expect("globwatch setup thread panicked")?;
+
+        Ok(Box::pin(
             (
                 UnboundedReceiverStream::new(self.stream).map(Either::Left),
                 UnboundedReceiverStream::new(self.config).map(Either::Right),
@@ -203,7 +232,7 @@ impl GlobWatcher {
                     }
                 })
                 .timeout_at(token),
-        )
+        ))
     }
 }
 
@@ -226,6 +255,7 @@ pub enum WatcherCommand {
 pub struct WatchConfig<T: Watcher> {
     flush: UnboundedSender<WatcherCommand>,
     watcher: Arc<Mutex<T>>,
+    setup_receiver: watch::Receiver<Option<bool>>,
 }
 
 /// The server is no longer running.
@@ -237,6 +267,8 @@ pub enum ConfigError {
     WatchError(Vec<notify::Error>),
     /// The server has already been consumed.
     WatchingAlready,
+    /// We were unable to watch the flush directory
+    SeverFailedToStart,
 }
 
 impl<T: Watcher> WatchConfig<T> {
@@ -324,6 +356,15 @@ impl<T: Watcher> WatchConfig<T> {
 
     /// Await a full filesystem flush from the watcher.
     pub async fn flush(&self) -> Result<(), ConfigError> {
+        let mut setup_rx = self.setup_receiver.clone();
+        // TODO once upgraded to tokio 1.27 use wait_until
+        while setup_rx.borrow().is_none() {
+            setup_rx.changed().await.expect("setup channel closed");
+        }
+        if *setup_rx.borrow() == Some(false) {
+            return Err(ConfigError::SeverFailedToStart);
+        }
+
         let (tx, rx) = oneshot::channel();
         self.flush
             .send(WatcherCommand::Flush(tx))

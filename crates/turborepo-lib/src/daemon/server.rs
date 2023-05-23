@@ -26,7 +26,7 @@ use tokio::{
     select,
     signal::ctrl_c,
     sync::{
-        oneshot::{Receiver, Sender},
+        oneshot::{self, Receiver, Sender},
         Mutex,
     },
 };
@@ -281,9 +281,15 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
             )
             .await;
 
-        Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
-            changed_output_globs: changed.into_iter().collect(),
-        }))
+        match changed {
+            Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
+                changed_output_globs: changed.into_iter().collect(),
+            })),
+            Err(e) => {
+                error!("failed to watch flush directory: {:?}", e);
+                Err(tonic::Status::internal("failed to watch flush directory"))
+            }
+        }
     }
 }
 
