@@ -125,7 +125,7 @@ func (c *Connector) addr() string {
 // an error to the user that includes the file location so that
 // they can resolve it.
 const (
-	_maxAttempts       = 10
+	_maxAttempts       = 3
 	_shutdownTimeout   = 1 * time.Second
 	_socketPollTimeout = 1 * time.Second
 	_notReadyTimeout   = 3 * time.Millisecond
@@ -332,7 +332,7 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	case codes.FailedPrecondition:
 		return ErrVersionMismatch
 	case codes.Unavailable:
-		return errUnavailable
+		return errConnectionFailure
 	default:
 		return err
 	}
