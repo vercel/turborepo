@@ -388,7 +388,8 @@ mod test {
             std::fs::File::create(tmp.path().join(file)).unwrap();
         }
 
-        if cfg!(unix) {
+        #[cfg(unix)]
+        {
             // these files/symlinks won't work on Windows
             std::fs::File::create(tmp.path().join("-")).unwrap();
             std::fs::File::create(tmp.path().join("]")).unwrap();
