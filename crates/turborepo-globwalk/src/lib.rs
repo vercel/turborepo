@@ -906,7 +906,7 @@ mod test {
         "/repos/some-app/",
         &["**"],
         &["./dist"],
-        &[],
+        &["repos/some-app"],
         &[]
         ; "exclude everything with traversal applies at a non-base path"
     )]
@@ -990,10 +990,17 @@ mod test {
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js",
-        ], "/repos/some-app/", &["**"], &["dist/*"], &[
+        ],
+        "/repos/some-app/",
+        &["**"],
+        &["dist/*"],
+        &[
+            "/repos/some-app",
             "/repos/some-app/dist",
             "/repos/some-app/package.json",
-        ], &["/repos/some-app/package.json"] ; "depth of 1 excludes prevents capturing folders")]
+        ],
+        &["/repos/some-app/package.json"]
+        ; "depth of 1 excludes prevents capturing folders")]
     #[test_case(&[
             "/repos/some-app/dist/index.html",
             "/repos/some-app/dist/js/index.js",
@@ -1034,11 +1041,16 @@ mod test {
             "/repos/some-app/one/excluded.txt",
             "/repos/some-app/one/two/excluded.txt",
             "/repos/some-app/one/two/three/excluded.txt",
-        ], "/repos/some-app", &["**"], &["**/excluded.txt"], &[
+        ],
+        "/repos/some-app",
+        &["**"],
+        &["**/excluded.txt"],
+        &[
             "/repos/some-app/one/included.txt",
             "/repos/some-app/one/two/included.txt",
             "/repos/some-app/one/two/three/included.txt",
             "/repos/some-app/one",
+            "/repos/some-app",
             "/repos/some-app/one/two",
             "/repos/some-app/one/two/three",
         ], &[
