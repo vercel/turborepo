@@ -295,26 +295,52 @@ mod test {
     }
 
     #[cfg(unix)]
-    #[test_case("/a/b/c/d", &["/e/../../../f"], &[], "/a/b" ; "can traverse beyond the root")]
-    #[test_case("/a/b/c/d/", &["/e/../../../f"], &[], "/a/b" ; "can handle slash-trailing base path")]
-    #[test_case("/a/b/c/d/", &["e/../../../f"], &[], "/a/b" ; "can handle no slash on glob")]
-    #[test_case("/a/b/c/d", &["e/../../../f"], &[], "/a/b" ; "can handle no slash on either")]
-    #[test_case("/a/b/c/d", &["/e/f/../g"], &[], "/a/b/c/d" ; "can handle no collapse")]
-    #[test_case("/a/b/c/d", &["./././../.."], &[], "/a/b" ; "can handle dot followed by dotdot")]
+    #[test_case("/a/b/c/d", &["/e/../../../f"], &[], "/a/b", None, None ; "can traverse beyond the root")]
+    #[test_case("/a/b/c/d/", &["/e/../../../f"], &[], "/a/b", None, None ; "can handle slash-trailing base path")]
+    #[test_case("/a/b/c/d/", &["e/../../../f"], &[], "/a/b", None, None ; "can handle no slash on glob")]
+    #[test_case("/a/b/c/d", &["e/../../../f"], &[], "/a/b", None, None ; "can handle no slash on either")]
+    #[test_case("/a/b/c/d", &["/e/f/../g"], &[], "/a/b/c/d", None, None ; "can handle no collapse")]
+    #[test_case("/a/b/c/d", &["./././../.."], &[], "/a/b", None, None ; "can handle dot followed by dotdot")]
+    #[test_case("/a/b/c/d", &["**"], &["**/"], "/a/b/c/d", None, Some(&["/a/b/c/d/**/"]) ; "can handle dot followed by dotdot and dot")]
+    #[test_case("/a/b/c", &["**"], &["d/"], "/a/b/c", None, Some(&["/a/b/c/d/**"]) ; "will exclude all subfolders")]
     fn preprocess_paths_and_globs(
         base_path: &str,
         include: &[&str],
         exclude: &[&str],
-        expected: &str,
+        base_path_exp: &str,
+        include_exp: Option<&[&str]>,
+        exclude_exp: Option<&[&str]>,
     ) {
         let base_path = AbsoluteSystemPathBuf::new(base_path).unwrap();
         let include = include.iter().map(|s| s.to_string()).collect_vec();
         let exclude = exclude.iter().map(|s| s.to_string()).collect_vec();
 
-        let (base_expected, _, _) =
+        let (base_expected, include, exclude) =
             super::preprocess_paths_and_globs(&base_path, &include, &exclude).unwrap();
 
-        assert_eq!(base_expected.to_string_lossy(), expected);
+        assert_eq!(base_expected.to_string_lossy(), base_path_exp);
+
+        if let Some(include_exp) = include_exp {
+            assert_eq!(
+                include,
+                include_exp
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect_vec()
+                    .as_slice()
+            );
+        }
+
+        if let Some(exclude_exp) = exclude_exp {
+            assert_eq!(
+                exclude,
+                exclude_exp
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect_vec()
+                    .as_slice()
+            );
+        }
     }
 
     #[cfg(unix)]
