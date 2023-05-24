@@ -3,6 +3,8 @@ package env
 import (
 	"reflect"
 	"testing"
+
+	"gotest.tools/v3/assert"
 )
 
 func TestGetEnvVarsFromWildcards(t *testing.T) {
@@ -11,21 +13,18 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 		self             EnvironmentVariableMap
 		wildcardPatterns []string
 		want             EnvironmentVariableMap
-		wantErr          bool
 	}{
 		{
 			name:             "nil wildcard patterns",
 			self:             EnvironmentVariableMap{},
 			wildcardPatterns: nil,
 			want:             nil,
-			wantErr:          false,
 		},
 		{
 			name:             "empty wildcard patterns",
 			self:             EnvironmentVariableMap{},
 			wildcardPatterns: []string{},
 			want:             EnvironmentVariableMap{},
-			wantErr:          false,
 		},
 		{
 			name: "leading wildcard",
@@ -39,7 +38,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 				"_STATIC":    "VALUE",
 				"FOO_STATIC": "VALUE",
 			},
-			wantErr: false,
 		},
 		{
 			name: "trailing wildcard",
@@ -53,7 +51,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 				"STATIC_":        "VALUE",
 				"STATIC_TRAILER": "VALUE",
 			},
-			wantErr: false,
 		},
 		{
 			name: "leading & trailing wildcard",
@@ -73,7 +70,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 				"A_STATIC_":  "VALUE",
 				"A_STATIC_B": "VALUE",
 			},
-			wantErr: false,
 		},
 		{
 			name: "adjacent wildcard",
@@ -88,7 +84,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 				"FOO_1_BAR":  "VALUE",
 				"FOO_12_BAR": "VALUE",
 			},
-			wantErr: false,
 		},
 		{
 			name: "literal *",
@@ -99,7 +94,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 			want: EnvironmentVariableMap{
 				"LITERAL_*": "VALUE",
 			},
-			wantErr: false,
 		},
 		{
 			name: "literal *, then wildcard",
@@ -112,7 +106,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 				"LITERAL_*":          "VALUE",
 				"LITERAL_*_ANYTHING": "VALUE",
 			},
-			wantErr: false,
 		},
 		// Check ! for exclusion.
 		{
@@ -124,7 +117,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 			want: EnvironmentVariableMap{
 				"!LITERAL": "VALUE",
 			},
-			wantErr: false,
 		},
 		{
 			name: "literal ! anywhere else",
@@ -135,7 +127,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 			want: EnvironmentVariableMap{
 				"ANYWHERE!ELSE": "VALUE",
 			},
-			wantErr: false,
 		},
 		// The following tests are to confirm exclusion behavior.
 		// They're focused on set difference, not wildcard behavior.
@@ -157,7 +148,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 				"ARE":      "VALUE",
 				"INCLUDED": "VALUE",
 			},
-			wantErr: false,
 		},
 		{
 			name: "include everything, exclude everything",
@@ -170,7 +160,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 			},
 			wildcardPatterns: []string{"*", "!*"},
 			want:             EnvironmentVariableMap{},
-			wantErr:          false,
 		},
 		{
 			name: "include everything, exclude one",
@@ -188,7 +177,6 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 				"THESE": "VALUE",
 				"IS":    "VALUE",
 			},
-			wantErr: false,
 		},
 		{
 			name: "include everything, exclude a prefix",
@@ -207,16 +195,12 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 				"IS":       "VALUE",
 				"INCLUDED": "VALUE",
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.self.FromWildcards(tt.wildcardPatterns)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetEnvVarsFromWildcards() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			assert.NilError(t, err, "Did not fail regexp compile.")
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetEnvVarsFromWildcards() = %v, want %v", got, tt.want)
 			}
