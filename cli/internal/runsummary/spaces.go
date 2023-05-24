@@ -49,15 +49,23 @@ func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesCl
 		api:        api,
 		ui:         ui,
 		spaceID:    spaceID,
-		enabled:    spaceID != "",
+		enabled:    true,                     // Start with enabled true
 		requests:   make(chan *spaceRequest), // TODO: give this a size based on tasks
 		runCreated: make(chan struct{}, 1),
 		run:        &spaceRun{},
 	}
 
-	if c.enabled && !c.api.IsLinked() {
+	if spaceID == "" {
 		c.errors = append(c.errors, fmt.Errorf("Error: experimentalSpaceId is enabled, but repo is not linked to a Space. Run `turbo link --target=spaces`"))
+		// Explicitly turn enabled: false if we don't have a spaceID
 		c.enabled = false
+		return c
+	}
+
+	if !c.api.IsLinked() {
+		c.errors = append(c.errors, fmt.Errorf("Error: experimentalSpaceId is enabled, but repo is not linked to API. Run `turbo link` or `turbo login` first"))
+		c.enabled = false
+		return c
 	}
 
 	return c
