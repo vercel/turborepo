@@ -150,8 +150,8 @@ func Test_ReadTurboConfigDotEnvPopulated(t *testing.T) {
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
 				OutputMode:              util.FullTaskOutput,
-				DotEnv:                  turbopath.AnchoredUnixPathArray{"3", "2", "1"},
 				Env:                     []string{},
+				DotEnv:                  turbopath.AnchoredUnixPathArray{"3", "2", "1"},
 			},
 		},
 	}
