@@ -13,7 +13,7 @@ describe("get-transforms-for-migration", () => {
       "migrate-env-var-dependencies",
       "set-default-outputs",
       "stabilize-env-mode",
-      "transform-literals-to-wildcards",
+      "transform-env-literals-to-wildcards",
     ]);
   });
 });

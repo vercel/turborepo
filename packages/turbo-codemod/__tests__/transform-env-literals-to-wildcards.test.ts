@@ -1,10 +1,10 @@
-import { transformer } from "../src/transforms/transform-literals-to-wildcards";
+import { transformer } from "../src/transforms/transform-env-literals-to-wildcards";
 import { setupTestFixtures } from "@turbo/test-utils";
 
-describe.only("transform-literals-to-wildcards", () => {
+describe.only("transform-env-literals-to-wildcards", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "transform-literals-to-wildcards",
+    test: "transform-env-literals-to-wildcards",
   });
 
   it("migrates wildcards has-empty", async () => {

@@ -29,7 +29,7 @@ npx @turbo/codemod <transform> <path>
 3. [migrate-env-var-dependencies](#migrate-env-var-dependencies)
 4. [set-default-outputs](#set-default-outputs)
 5. [stabilize-env-mode](#stabilize-env-mode)
-6. [transform-literals-to-wildcards](#transform-literals-to-wildcards)
+6. [transform-env-literals-to-wildcards](#transform-env-literals-to-wildcards)
 
 ### `add-package-manager`
 
@@ -329,7 +329,7 @@ Run the codemod:
 npx @turbo/codemod stabilize-env-mode
 ```
 
-### `transform-literals-to-wildcards`
+### `transform-env-literals-to-wildcards`
 
 <Callout type="info">
   Introduced in v1.10.0
@@ -380,5 +380,5 @@ cd path-to-your-turborepo/
 Run the codemod:
 
 ```sh
-npx @turbo/codemod transform-literals-to-wildcards
+npx @turbo/codemod transform-env-literals-to-wildcards
 ```

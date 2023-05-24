@@ -9,7 +9,7 @@ import { TransformerResults } from "../runner";
 import { RootSchema } from "@turbo/types/src/types/config";
 
 // transformer details
-const TRANSFORMER = "transform-literals-to-wildcards";
+const TRANSFORMER = "transform-env-literals-to-wildcards";
 const DESCRIPTION = "Rewrite env fields to distinguish wildcards from literals";
 const INTRODUCED_IN = "1.10.0";
 

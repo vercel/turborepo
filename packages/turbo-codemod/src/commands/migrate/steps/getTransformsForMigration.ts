@@ -20,6 +20,7 @@ function getTransformsForMigration({
     );
   });
 
+  // Sort the transforms from oldest (1.0) to newest (1.10).
   transforms.sort((a, b) => {
     if (gt(a.introducedIn, b.introducedIn)) {
       return 1;
