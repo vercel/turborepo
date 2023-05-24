@@ -927,27 +927,6 @@ mod test {
             "/repos/some-app/dist/index.html",
             "/repos/some-app/dist/js/index.js",
             "/repos/some-app/dist/js/lib.js",
-            "/repos/some-app/dist/js/node_modules/browserify.js",
-        ], "/repos/some-app/", &["**/**/**"], &[], &[
-            "/repos/some-app/dist",
-            "/repos/some-app/dist/index.html",
-            "/repos/some-app/dist/js",
-            "/repos/some-app/dist/js/index.js",
-            "/repos/some-app/dist/js/lib.js",
-            "/repos/some-app/dist/js/node_modules",
-            "/repos/some-app/dist/js/node_modules/browserify.js",
-        ], &[
-            "/repos/some-app/dist/index.html",
-            "/repos/some-app/dist/js/index.js",
-            "/repos/some-app/dist/js/lib.js",
-            "/repos/some-app/dist/js/node_modules/browserify.js",
-        ]
-        ; "how do globs even work bad glob microformat"
-    )]
-    #[test_case(&[
-            "/repos/some-app/dist/index.html",
-            "/repos/some-app/dist/js/index.js",
-            "/repos/some-app/dist/js/lib.js",
             "/repos/some-app/dist/js/node_modules/browserify.js"
         ],
         "/repos/some-app/",
