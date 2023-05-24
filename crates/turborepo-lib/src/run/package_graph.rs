@@ -5,15 +5,15 @@ use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{package_json::PackageJson, run::graph::WorkspaceCatalog};
 
-pub struct Context {
+pub struct PackageGraph {
     pub workspace_graph: Rc<petgraph::Graph<String, String>>,
     pub workspace_infos: Rc<WorkspaceCatalog>,
 }
 
-impl Context {
-    pub fn build_single_package_graph(_root_package_json: PackageJson) -> Result<Context> {
+impl PackageGraph {
+    pub fn build_single_package_graph(_root_package_json: PackageJson) -> Result<PackageGraph> {
         // TODO
-        Ok(Context {
+        Ok(PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
             workspace_infos: Rc::new(WorkspaceCatalog::default()),
         })
@@ -22,9 +22,9 @@ impl Context {
     pub fn build_multi_package_graph(
         _repo_root: &AbsoluteSystemPathBuf,
         _root_package_json: &PackageJson,
-    ) -> Result<Context> {
+    ) -> Result<PackageGraph> {
         // TODO
-        Ok(Context {
+        Ok(PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
             workspace_infos: Rc::new(WorkspaceCatalog::default()),
         })
