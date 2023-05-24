@@ -132,6 +132,11 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			return err
 		}
 
+		specifiedEnvVarsPresentation := []string{}
+		if taskDefinition.Env != nil {
+			specifiedEnvVarsPresentation = taskDefinition.Env
+		}
+
 		summary := &runsummary.TaskSummary{
 			TaskID:                 taskID,
 			Task:                   taskName,
@@ -150,7 +155,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			EnvMode:                taskEnvMode,
 			EnvVars: runsummary.TaskEnvVarSummary{
 				Specified: runsummary.TaskEnvConfiguration{
-					Env:            taskDefinition.Env,
+					Env:            specifiedEnvVarsPresentation,
 					PassThroughEnv: taskDefinition.PassThroughEnv,
 				},
 				Configured:  envVars.BySource.Explicit.ToSecretHashable(),

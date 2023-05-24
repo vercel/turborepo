@@ -238,7 +238,8 @@ func LoadTurboConfig(dir turbopath.AbsoluteSystemPath, rootPackageJSON *PackageJ
 	} else if errors.Is(err, os.ErrNotExist) {
 		// turbo.json doesn't exist, but we're going try to synthesize something
 		turboJSON = &TurboJSON{
-			Pipeline: make(Pipeline),
+			GlobalEnv: []string{},
+			Pipeline:  make(Pipeline),
 		}
 	} else if err != nil {
 		// some other happened, we can't recover
@@ -455,8 +456,6 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 
 		if bookkeepingTaskDef.hasField("Env") {
 			mergedTaskDefinition.Env = taskDef.Env
-		} else {
-			mergedTaskDefinition.Env = []string{}
 		}
 
 		if bookkeepingTaskDef.hasField("PassThroughEnv") {
