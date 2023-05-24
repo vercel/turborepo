@@ -11,7 +11,7 @@
 <span class="item-spacer"></span>    fn <a href="#tymethod.schedule_notify_tasks" class="fn">schedule_notify_tasks</a>(&amp;self, tasks: &amp;[<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>]);
 <span class="item-spacer"></span>    fn <a href="#tymethod.schedule_notify_tasks_set" class="fn">schedule_notify_tasks_set</a>(
         &amp;self,
-        tasks: &amp;AutoSet&lt;<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>, BuildNoHashHasher&lt;<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>&gt;&gt;
+        tasks: &amp;<a class="struct" href="../auto_hash_map/set/struct.AutoSet.html" title="struct auto_hash_map::set::AutoSet">AutoSet</a>&lt;<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>, BuildNoHashHasher&lt;<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>&gt;&gt;
     );
 <span class="item-spacer"></span>    fn <a href="#tymethod.stats_type" class="fn">stats_type</a>(&amp;self) -&gt; <a class="enum" href="enum.StatsType.html" title="enum turbo_tasks::StatsType">StatsType</a>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.set_stats_type" class="fn">set_stats_type</a>(&amp;self, stats_type: <a class="enum" href="enum.StatsType.html" title="enum turbo_tasks::StatsType">StatsType</a>);
@@ -23,7 +23,7 @@
 eventually call <code>invalidate_tasks()</code> on all tasks.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.schedule_notify_tasks_set" class="method"><a class="srclink rightside" href="../src/turbo_tasks/manager.rs.html#208">source</a><h4 class="code-header">fn <a href="#tymethod.schedule_notify_tasks_set" class="fn">schedule_notify_tasks_set</a>(
     &amp;self,
-    tasks: &amp;AutoSet&lt;<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>, BuildNoHashHasher&lt;<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>&gt;&gt;
+    tasks: &amp;<a class="struct" href="../auto_hash_map/set/struct.AutoSet.html" title="struct auto_hash_map::set::AutoSet">AutoSet</a>&lt;<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>, BuildNoHashHasher&lt;<a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>&gt;&gt;
 )</h4></section></summary><div class="docblock"><p>Enqueues tasks for notification of changed dependencies. This will
 eventually call <code>invalidate_tasks()</code> on all tasks.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.stats_type" class="method"><a class="srclink rightside" href="../src/turbo_tasks/manager.rs.html#211">source</a><h4 class="code-header">fn <a href="#tymethod.stats_type" class="fn">stats_type</a>(&amp;self) -&gt; <a class="enum" href="enum.StatsType.html" title="enum turbo_tasks::StatsType">StatsType</a></h4></section></summary><div class="docblock"><p>Returns the stats reporting type.</p>
