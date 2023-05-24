@@ -69,7 +69,7 @@ export interface RootSchema extends BaseSchema {
    *
    * @default []
    */
-  globalEnv?: string[];
+  globalEnv?: EnvWildcard[];
 
   /**
    * An allowlist of environment variables that should be made to all tasks, but
@@ -90,7 +90,7 @@ export interface RootSchema extends BaseSchema {
    *
    * @default null
    */
-  globalPassThroughEnv?: null | string[];
+  globalPassThroughEnv?: null | EnvWildcard[];
 
   /**
    * A priority-ordered (most-significant to least-significant) array of project-anchored
@@ -143,7 +143,7 @@ export interface Pipeline {
    *
    * @default []
    */
-  env?: string[];
+  env?: EnvWildcard[];
 
   /**
    * An allowlist of environment variables that should be made available in this
@@ -166,7 +166,7 @@ export interface Pipeline {
    *
    * @default null
    */
-  passThroughEnv?: null | string[];
+  passThroughEnv?: null | EnvWildcard[];
 
   /**
    * A priority-ordered (most-significant to least-significant) array of workspace-anchored
@@ -270,3 +270,4 @@ export type OutputMode =
   | "none";
 
 export type AnchoredUnixPath = string;
+export type EnvWildcard = string;
