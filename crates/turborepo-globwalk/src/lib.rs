@@ -1081,24 +1081,34 @@ mod test {
         ],
         "/repos/some-app",
         &["**"],
-        &["**foo"],
+        &["*foo"],
         &[
+            "repos/some-app",
             "/repos/some-app/included",
         ],
         &[
             "/repos/some-app/included",
         ]
-        ; "exclude everything with leading **")]
+        ; "exclude everything with leading star"
+    )]
     #[test_case(&[
             "/repos/some-app/foo/bar",
             "/repos/some-app/foo-file",
             "/repos/some-app/foo-dir/bar",
             "/repos/some-app/included",
-        ], "/repos/some-app", &["**"], &["foo**"], &[
+        ],
+        "/repos/some-app",
+        &["**"],
+        &["foo*"],
+        &[
+            "repos/some-app",
             "/repos/some-app/included",
-        ], &[
+        ],
+        &[
             "/repos/some-app/included",
-        ] ; "exclude everything with trailing **")]
+        ]
+        ; "exclude everything with trailing star"
+    )]
     fn glob_walk_files(
         files: &[&str],
         base_path: &str,
