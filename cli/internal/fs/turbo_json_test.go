@@ -327,7 +327,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			},
 		},
 		"lint": {
-			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "Cache", "DependsOn"}),
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "Cache", "DependsOn", "Env"}),
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{

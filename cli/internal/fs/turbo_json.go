@@ -533,6 +533,7 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	for _, dependency := range task.DependsOn {
 		if strings.HasPrefix(dependency, envPipelineDelimiter) {
 			log.Printf("[DEPRECATED] Declaring an environment variable in \"dependsOn\" is deprecated, found %s. Use the \"env\" key or use `npx @turbo/codemod migrate-env-var-dependencies`.\n", dependency)
+			btd.definedFields.Add("Env")
 			envVarDependencies.Add(strings.TrimPrefix(dependency, envPipelineDelimiter))
 		} else if strings.HasPrefix(dependency, topologicalPipelineDelimiter) {
 			// Note: This will get assigned multiple times in the loop, but we only care that it's true
@@ -554,7 +555,6 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 	}
 
 	btd.TaskDefinition.Env = envVarDependencies.UnsafeListOfStrings()
-
 	sort.Strings(btd.TaskDefinition.Env)
 
 	if task.PassThroughEnv != nil {
