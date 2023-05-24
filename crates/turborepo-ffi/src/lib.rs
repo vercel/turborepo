@@ -6,7 +6,7 @@ mod lockfile;
 
 use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
 
-use globwalk::globwalk;
+use globwalk::{globwalk, WalkError};
 pub use lockfile::{patches, subgraph, transitive_closure};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -305,20 +305,39 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         false => globwalk::WalkType::All,
     };
 
-    let response = globwalk(
+    let mut iter = match globwalk(
         &AbsoluteSystemPathBuf::new(req.base_path).expect("absolute"),
         &req.include_patterns,
         &req.exclude_patterns,
         walk_type,
-    )
-    .map(|res| res.map(|p| p.to_string_lossy().to_string()))
-    .collect();
+    ) {
+        Ok(iter) => iter,
+        Err(err) => {
+            let resp = proto::GlobResp {
+                response: Some(proto::glob_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
 
+    let paths = match iter.collect::<Result<Vec<_>, WalkError>>() {
+        Ok(paths) => paths,
+        Err(err) => {
+            let resp = proto::GlobResp {
+                response: Some(proto::glob_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
+    // TODO: is to_string_lossy the right thing to do here? We could error...
+    let files: Vec<_> = paths
+        .into_iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect();
     proto::GlobResp {
-        response: Some(match response {
-            Ok(files) => proto::glob_resp::Response::Files(proto::GlobRespList { files }),
-            Err(e) => proto::glob_resp::Response::Error(e.to_string()),
-        }),
+        response: Some(proto::glob_resp::Response::Files(proto::GlobRespList {
+            files,
+        })),
     }
     .into()
 }
