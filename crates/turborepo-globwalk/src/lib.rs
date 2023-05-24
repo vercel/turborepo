@@ -467,18 +467,15 @@ mod test {
     #[test_case("a[^a][^a][^a]b", None, 0, 0 ; "multiple negated character classes mismatch")]
     #[test_case("a?b", None, 1, 1 ; "question mark not matching slash")]
     #[test_case("a*b", None, 1, 1 ; "single star not matching slash 2")]
-    #[test_case("[x-]", None, 2, 1 ; "trailing dash in character class match")]
-    #[test_case("[-x]", None, 2, 1 ; "leading dash in character class match")]
-    // #[test_case("[a-b-d]", None, 3, 2 ; "dash within character class range match")]
-    // #[test_case("[a-b-x]", None, 4, 3 ; "dash within character class range match 4")]
-    // #[test_case("[", Some(WalkError::BadPattern("[".into())), 0, 0 ; "unclosed character class
-    // error")] #[test_case("[^", Some(WalkError::BadPattern("[^".into())), 0, 0 ; "unclosed
-    // negated character class error")] #[test_case("[^bc",
-    // Some(WalkError::BadPattern("[^bc".into())), 0, 0 ; "unclosed negated character class error
-    // 2")] #[test_case("a[", Some(WalkError::BadPattern("a[".into())), 0, 0 ; "unclosed
-    // character class error after pattern")] glob watch will not error on this, since it does
-    // not get far enough into the glob to see the error
-    #[test_case("ad[", None, 0, 0 ; "unclosed character class error after pattern 3")]
+    #[test_case("[x-]", Some(WalkError::BadPattern("[x-]".into())), 0, 0 ; "trailing dash in character class fail")]
+    #[test_case("[-x]", Some(WalkError::BadPattern("[-x]".into())), 0, 0 ; "leading dash in character class fail")]
+    #[test_case("[a-b-d]", Some(WalkError::BadPattern("[a-b-d]".into())), 0, 0 ; "dash within character class range fail")]
+    #[test_case("[a-b-x]", Some(WalkError::BadPattern("[a-b-x]".into())), 0, 0 ; "dash within character class range fail 2")]
+    #[test_case("[", Some(WalkError::BadPattern("[".into())), 0, 0 ; "unclosed character class error")]
+    #[test_case("[^", Some(WalkError::BadPattern("[^".into())), 0, 0 ; "unclosed negated character class error")]
+    #[test_case("[^bc", Some(WalkError::BadPattern("[^bc".into())), 0, 0 ; "unclosed negated character class error 2")]
+    #[test_case("a[", Some(WalkError::BadPattern("a[".into())), 0, 0 ; "unclosed character class error after pattern")]
+    #[test_case("ad[", Some(WalkError::BadPattern("ad[".into())), 0, 0 ; "unclosed character class error after pattern 2")]
     #[test_case("*x", None, 4, 4 ; "star pattern match")]
     #[test_case("[abc]", None, 3, 3 ; "single character class match")]
     #[test_case("a/**", None, 7, 7 ; "a followed by double star match")]
@@ -489,10 +486,8 @@ mod test {
     #[test_case("a/b/c", None, 1, 1 ; "a followed by subdirectories and double slash mismatch")]
     #[test_case("ab{c,d}", None, 1, 1 ; "pattern with curly braces match")]
     #[test_case("ab{c,d,*}", None, 5, 5 ; "pattern with curly braces and wildcard match")]
-    // #[test_case("ab{c,d}[", Some(WalkError::BadPattern("ab{c,d}[".into())), 0, 0)]
-    // #[test_case("a{,bc}", None, 2, 2 ; "a followed by comma or b or c")]
-    // #[test_case("a{,bc}", Some(WalkError::BadPattern("a{,bc}".into())), 0, 0 ; "a followed by
-    // comma or b or c")]
+    #[test_case("ab{c,d}[", Some(WalkError::BadPattern("ab{c,d}[".into())), 0, 0)]
+    #[test_case("a{,bc}", Some(WalkError::BadPattern("a{,bc}".into())), 0, 0 ; "a followed by comma or b or c")]
     #[test_case("a/{b/c,c/b}", None, 2, 2)]
     #[test_case("{a/{b,c},abc}", None, 3, 3)]
     #[test_case("{a/ab*}", None, 1, 1)]
