@@ -56,7 +56,6 @@ func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesCl
 	}
 
 	if spaceID == "" {
-		c.errors = append(c.errors, fmt.Errorf("Error: experimentalSpaceId is enabled, but repo is not linked to a Space. Run `turbo link --target=spaces`"))
 		return c
 	}
 
