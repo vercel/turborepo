@@ -455,6 +455,8 @@ func MergeTaskDefinitions(taskDefinitions []BookkeepingTaskDefinition) (*TaskDef
 
 		if bookkeepingTaskDef.hasField("Env") {
 			mergedTaskDefinition.Env = taskDef.Env
+		} else {
+			mergedTaskDefinition.Env = []string{}
 		}
 
 		if bookkeepingTaskDef.hasField("PassThroughEnv") {

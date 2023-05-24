@@ -94,7 +94,7 @@ Setup
     "envMode": "loose",
     "environmentVariables": {
       "specified": {
-        "env": null,
+        "env": [],
         "passThroughEnv": null
       },
       "configured": [],

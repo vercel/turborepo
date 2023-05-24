@@ -69,7 +69,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     "envMode": "loose",
     "environmentVariables": {
       "specified": {
-        "env": null,
+        "env": [],
         "passThroughEnv": null
       },
       "configured": [],
