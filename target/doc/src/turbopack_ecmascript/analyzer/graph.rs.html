@@ -1767,6 +1767,26 @@
 <a href="#1767" id="1767">1767</a>
 <a href="#1768" id="1768">1768</a>
 <a href="#1769" id="1769">1769</a>
+<a href="#1770" id="1770">1770</a>
+<a href="#1771" id="1771">1771</a>
+<a href="#1772" id="1772">1772</a>
+<a href="#1773" id="1773">1773</a>
+<a href="#1774" id="1774">1774</a>
+<a href="#1775" id="1775">1775</a>
+<a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
+<a href="#1782" id="1782">1782</a>
+<a href="#1783" id="1783">1783</a>
+<a href="#1784" id="1784">1784</a>
+<a href="#1785" id="1785">1785</a>
+<a href="#1786" id="1786">1786</a>
+<a href="#1787" id="1787">1787</a>
+<a href="#1788" id="1788">1788</a>
+<a href="#1789" id="1789">1789</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -2994,7 +3014,7 @@
     ) {
         <span class="kw">let </span>old = replace(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values,
-            <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[JsValue::Constant(ConstantValue::Undefined)]),
+            <span class="prelude-val">Some</span>(get_fn_init_return_vals(decl.function.body.as_ref())),
         );
         <span class="kw">let </span>old_ident = <span class="self">self</span>.cur_fn_ident;
         <span class="self">self</span>.cur_fn_ident = decl.function.span.lo.<span class="number">0</span>;
@@ -3017,7 +3037,7 @@
     ) {
         <span class="kw">let </span>old = replace(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values,
-            <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[JsValue::Constant(ConstantValue::Undefined)]),
+            <span class="prelude-val">Some</span>(get_fn_init_return_vals(expr.function.body.as_ref())),
         );
         <span class="kw">let </span>old_ident = <span class="self">self</span>.cur_fn_ident;
         <span class="self">self</span>.cur_fn_ident = expr.function.span.lo.<span class="number">0</span>;
@@ -3052,7 +3072,7 @@
             BlockStmtOrExpr::BlockStmt(_block) =&gt; {
                 <span class="kw">let </span>old = replace(
                     <span class="kw-2">&amp;mut </span><span class="self">self</span>.cur_fn_return_values,
-                    <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[JsValue::Constant(ConstantValue::Undefined)]),
+                    <span class="prelude-val">Some</span>(get_fn_init_return_vals(<span class="prelude-val">Some</span>(_block))),
                 );
                 <span class="kw">let </span>old_ident = <span class="self">self</span>.cur_fn_ident;
                 <span class="self">self</span>.cur_fn_ident = expr.span.lo.<span class="number">0</span>;
@@ -3536,5 +3556,25 @@
 
     <span class="prelude-val">None
 </span>}
+
+<span class="kw">fn </span>get_fn_init_return_vals(fn_body_stmts: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>BlockStmt&gt;) -&gt; Vec&lt;JsValue&gt; {
+    <span class="kw">let </span>has_final_return_val = <span class="kw">match </span>fn_body_stmts {
+        <span class="prelude-val">Some</span>(fn_body_stmts) =&gt; {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(Stmt::Return(ReturnStmt { arg: <span class="prelude-val">Some</span>(<span class="kw">_</span>), .. })) = fn_body_stmts.stmts.last()
+            {
+                <span class="bool-val">true
+            </span>} <span class="kw">else </span>{
+                <span class="bool-val">false
+            </span>}
+        }
+        <span class="prelude-val">None </span>=&gt; <span class="bool-val">false</span>,
+    };
+
+    <span class="kw">if </span>has_final_return_val {
+        <span class="macro">vec!</span>[]
+    } <span class="kw">else </span>{
+        <span class="macro">vec!</span>[JsValue::Constant(ConstantValue::Undefined)]
+    }
+}
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_ecmascript" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>
