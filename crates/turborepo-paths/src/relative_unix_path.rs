@@ -56,7 +56,10 @@ impl RelativeUnixPath {
             return Ok(RelativeUnixPathBuf(self.0.to_owned()));
         }
         if !self.0.starts_with(&prefix.0) {
-            return Err(PathError::NotParent(prefix.0.to_string(), self.0.to_string()));
+            return Err(PathError::NotParent(
+                prefix.0.to_string(),
+                self.0.to_string(),
+            ));
         }
 
         // Handle the case where we are stripping the entire contents of this path
