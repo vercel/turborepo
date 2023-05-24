@@ -48,6 +48,18 @@ pub enum WalkError {
     WalkError(#[from] walkdir::Error),
 }
 
+#[cfg(test)]
+impl WalkError {
+    pub fn same_variant(&self, other: &Self) -> bool {
+        match (self, other) {
+            (WalkError::BadPattern(_), WalkError::BadPattern(_)) => true,
+            (WalkError::InvalidPath, WalkError::InvalidPath) => true,
+            (WalkError::WalkError(_), WalkError::WalkError(_)) => true,
+            _ => false,
+        }
+    }
+}
+
 /// Performs a glob walk, yielding paths that _are_ included in the include list
 /// (if it is nonempty) and _not_ included in the exclude list.
 ///
@@ -543,10 +555,17 @@ mod test {
 
         let path = AbsoluteSystemPathBuf::new(dir.path()).unwrap();
         let (success, error): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
-            super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All)
-                .unwrap()
-                .into_iter()
-                .partition_result();
+            match super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All) {
+                Ok(e) => e.into_iter().partition_result(),
+                Err(e) => match err_expected {
+                    Some(e_exp) => {
+                        println!("{:?} {:?}", e, e_exp);
+                        assert!(e.same_variant(&e_exp), "expected {} to equal {}", e, e_exp);
+                        return;
+                    }
+                    None => panic!("{} - unexpected error {:?}", pattern, e),
+                },
+            };
 
         assert_eq!(
             success.len(),
@@ -557,8 +576,8 @@ mod test {
             success
         );
 
-        if let Some(_) = err_expected {
-            assert!(error.len() > 0); // todo: check the error
+        if err_expected.is_some() {
+            assert!(!error.is_empty()); // todo: check the error
         }
     }
 
