@@ -1,11 +1,11 @@
 use std::{fs::Metadata, io::Read, path::Path};
 
-use glob_match::glob_match;
 use hex::ToHex;
 use ignore::WalkBuilder;
 use path_slash::PathExt;
 use sha1::{Digest, Sha1};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
+use wax::{any, Glob, Pattern};
 
 use crate::{package_deps::GitHashes, Error};
 
@@ -37,24 +37,32 @@ fn get_package_file_hashes_from_processing_gitignore(
         if pattern.starts_with("!") {
             let glob = Path::new(&pattern[1..])
                 .to_slash()
-                .ok_or_else(|| PathError::invalid_utf8_error(pattern[1..].as_bytes()))?;
-            excludes.push(glob);
+                .ok_or_else(|| PathError::invalid_utf8_error(pattern[1..].as_bytes()))?
+                .into_owned();
+            let g = Glob::new(glob.as_str())
+                .map(|g| g.into_owned())
+                .map_err(|e| e.into_owned())?;
+            excludes.push(g);
         } else {
             let glob = Path::new(pattern)
                 .to_slash()
-                .ok_or_else(|| PathError::invalid_utf8_error(pattern.as_bytes()))?;
-            includes.push(glob);
+                .ok_or_else(|| PathError::invalid_utf8_error(pattern.as_bytes()))?
+                .into_owned();
+            let g = Glob::new(glob.as_str())
+                .map(|g| g.into_owned())
+                .map_err(|e| e.into_owned())?;
+            includes.push(g);
         }
     }
     let include_pattern = if includes.is_empty() {
         None
     } else {
-        Some(format!("{{{}}}", includes.join(",")))
+        Some(any::<Glob<'static>, _>(includes)?)
     };
     let exclude_pattern = if excludes.is_empty() {
         None
     } else {
-        Some(format!("{{{}}}", excludes.join(",")))
+        Some(wax::any::<Glob<'static>, _>(excludes.into_iter())?)
     };
     let walker = walker_builder
         .follow_links(false)
@@ -73,12 +81,13 @@ fn get_package_file_hashes_from_processing_gitignore(
         let relative_path = full_package_path.anchor(&path)?;
         let relative_path = relative_path.to_unix()?;
         if let Some(include_pattern) = include_pattern.as_ref() {
-            if !glob_match(include_pattern, relative_path.as_str()?).unwrap_or(false) {
+            //if !glob_match(include_pattern, relative_path.as_str()?).unwrap_or(false) {
+            if !include_pattern.is_match(relative_path.as_str()?) {
                 continue;
             }
         }
         if let Some(exclude_pattern) = exclude_pattern.as_ref() {
-            if glob_match(exclude_pattern, relative_path.as_str()?).unwrap_or(false) {
+            if exclude_pattern.is_match(relative_path.as_str()?) {
                 continue;
             }
         }
@@ -142,11 +151,11 @@ mod tests {
             ("child-dir/libA/pkgignorethisdir/file", "anything", None),
         ];
 
-        let root_ignore_file = turbo_root.join_literal(".gitignore");
+        let root_ignore_file = turbo_root.join_component(".gitignore");
         root_ignore_file
             .create_with_contents(&root_ignore_contents)
             .unwrap();
-        let pkg_ignore_file = turbo_root.resolve(&pkg_path).join_literal(".gitignore");
+        let pkg_ignore_file = turbo_root.resolve(&pkg_path).join_component(".gitignore");
         pkg_ignore_file.ensure_dir().unwrap();
         pkg_ignore_file
             .create_with_contents(&pkg_ignore_contents)

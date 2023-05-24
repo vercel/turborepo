@@ -66,7 +66,7 @@ pub enum PathError {
 
 impl From<std::string::FromUtf8Error> for PathError {
     fn from(value: std::string::FromUtf8Error) -> Self {
-        PathError::Utf8Error(value.into_bytes())
+        PathError::InvalidUnicode(value.utf8_error().to_string())
     }
 }
 
@@ -79,7 +79,7 @@ impl PathError {
     }
 
     pub fn invalid_utf8_error(bytes: impl Into<Vec<u8>>) -> Self {
-        Self::Utf8Error(bytes.into())
+        Self::InvalidUnicode(std::string::String::from_utf8_lossy(&bytes.into()).into_owned())
     }
 
     pub(crate) fn not_relative_error(bytes: &[u8]) -> PathError {

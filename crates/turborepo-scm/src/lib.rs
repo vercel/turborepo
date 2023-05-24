@@ -37,6 +37,8 @@ pub enum Error {
     ),
     #[error("package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
+    #[error("invalid glob: {0}")]
+    Glob(#[from] wax::BuildError<'static>, backtrace::Backtrace),
 }
 
 impl Error {
