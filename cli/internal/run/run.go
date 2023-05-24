@@ -237,9 +237,12 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		}
 	}
 
+	envAtExecutionStart := env.GetEnvMap()
+
 	globalHashInputs, err := getGlobalHashInputs(
 		r.base.RepoRoot,
 		rootPackageJSON,
+		envAtExecutionStart,
 		turboJSON.GlobalEnv,
 		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
@@ -284,6 +287,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	taskHashTracker := taskhash.NewTracker(
 		g.RootNode,
 		g.GlobalHash,
+		envAtExecutionStart,
 		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
 		g.Pipeline,
 	)
@@ -342,11 +346,9 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		}
 	}
 
-	var envVarPassthroughMap env.EnvironmentVariableMap
-	if globalHashInputs.envVarPassthroughs != nil {
-		if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(globalHashInputs.envVarPassthroughs, nil, ""); err == nil {
-			envVarPassthroughMap = envVarPassthroughDetailedMap.BySource.Explicit
-		}
+	envVarPassthroughMap, err := envAtExecutionStart.FromWildcards(globalHashInputs.envVarPassthroughs)
+	if err != nil {
+		return err
 	}
 
 	globalEnvMode := rs.Opts.runOpts.EnvMode
@@ -366,6 +368,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,
+		envAtExecutionStart,
 		runsummary.NewGlobalHashSummary(
 			globalHashInputs.globalFileHashMap,
 			globalHashInputs.rootExternalDepsHash,
@@ -388,6 +391,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			turboCache,
 			turboJSON,
 			globalEnvMode,
+			globalHashInputs.envVars.All,
+			envVarPassthroughMap,
 			r.base,
 			summary,
 		)
@@ -403,6 +408,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		turboCache,
 		turboJSON,
 		globalEnvMode,
+		globalHashInputs.envVars.All,
+		envVarPassthroughMap,
 		packagesInScope,
 		r.base,
 		summary,

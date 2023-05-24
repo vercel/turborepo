@@ -93,7 +93,8 @@ func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, e
 func getGlobalHashInputs(
 	rootpath turbopath.AbsoluteSystemPath,
 	rootPackageJSON *fs.PackageJSON,
-	envVarDependencies []string,
+	envAtExecutionStart env.EnvironmentVariableMap,
+	globalEnv []string,
 	globalFileDependencies []string,
 	packageManager *packagemanager.PackageManager,
 	lockFile lockfile.Lockfile,
@@ -104,10 +105,38 @@ func getGlobalHashInputs(
 	logger hclog.Logger,
 ) (GlobalHashableInputs, error) {
 	// Calculate env var dependencies
-	envVars := []string{}
-	envVars = append(envVars, envVarDependencies...)
-	envVars = append(envVars, _defaultEnvVars...)
-	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, nil, "")
+
+	// Our "inferred" env var maps
+	defaultEnvVarMap, err := envAtExecutionStart.FromWildcards(_defaultEnvVars)
+	if err != nil {
+		return GlobalHashableInputs{}, err
+	}
+	userEnvVarSet, err := envAtExecutionStart.FromWildcardsUnresolved(globalEnv)
+	if err != nil {
+		return GlobalHashableInputs{}, err
+	}
+
+	allEnvVarMap := env.EnvironmentVariableMap{}
+	allEnvVarMap.Union(userEnvVarSet.Inclusions)
+	allEnvVarMap.Union(defaultEnvVarMap)
+	allEnvVarMap.Difference(userEnvVarSet.Exclusions)
+
+	explicitEnvVarMap := env.EnvironmentVariableMap{}
+	explicitEnvVarMap.Union(userEnvVarSet.Inclusions)
+	explicitEnvVarMap.Difference(userEnvVarSet.Exclusions)
+
+	matchingEnvVarMap := env.EnvironmentVariableMap{}
+	matchingEnvVarMap.Union(defaultEnvVarMap)
+	matchingEnvVarMap.Difference(userEnvVarSet.Exclusions)
+
+	globalHashableEnvVars := env.DetailedMap{
+		All: allEnvVarMap,
+		BySource: env.BySource{
+			Explicit: explicitEnvVarMap,
+			Matching: matchingEnvVarMap,
+		},
+	}
+
 	if err != nil {
 		return GlobalHashableInputs{}, err
 	}
