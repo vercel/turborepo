@@ -88,13 +88,19 @@ func (ts *TaskSummary) GetLogs() []byte {
 	return bytes
 }
 
+// TaskEnvConfiguration contains the environment variable inputs for a task
+type TaskEnvConfiguration struct {
+	Env            []string `json:"env"`
+	PassThroughEnv []string `json:"passThroughEnv"`
+}
+
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
 type TaskEnvVarSummary struct {
-	Configured        []string `json:"configured"`
-	Inferred          []string `json:"inferred"`
-	Global            []string `json:"global"`
-	Passthrough       []string `json:"passthrough"`
-	GlobalPassthrough []string `json:"globalPassthrough"`
+	Specified TaskEnvConfiguration `json:"specified"`
+
+	Configured  []string `json:"configured"`
+	Inferred    []string `json:"inferred"`
+	PassThrough []string `json:"passthrough"`
 }
 
 // cleanForSinglePackage converts a TaskSummary to remove references to workspaces

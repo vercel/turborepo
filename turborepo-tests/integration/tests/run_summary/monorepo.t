@@ -55,7 +55,7 @@ Setup
   $ cat $FIRST | jq '.tasks | length'
   2
   $ cat $FIRST | jq '.version'
-  "0"
+  "1"
   $ cat $FIRST | jq '.execution.exitCode'
   0
   $ cat $FIRST | jq '.execution.attempted'

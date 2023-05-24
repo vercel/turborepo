@@ -26,7 +26,7 @@ Update globalDeps in a material way: global hash changes.
   $ NEW_GLOBAL_DEPS=$(${TURBO} build -vv --env-mode=infer 2>&1 | "$TESTDIR/../_helpers/get-global-hash.sh")
   $ test $BASELINE != $NEW_GLOBAL_DEPS
 
-Update passthroughEnv: global hash changes.
+Update passThroughEnv: global hash changes.
   $ cp "$TESTDIR/fixture-configs/6-update-passthrough-env.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ NEW_GLOBAL_PASSTHROUGH=$(${TURBO} build -vv --env-mode=infer 2>&1 | "$TESTDIR/../_helpers/get-global-hash.sh")
   $ test $BASELINE != $NEW_GLOBAL_PASSTHROUGH

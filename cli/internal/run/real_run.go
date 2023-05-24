@@ -44,7 +44,7 @@ func RealRun(
 	turboJSON *fs.TurboJSON,
 	globalEnvMode util.EnvMode,
 	globalEnv env.EnvironmentVariableMap,
-	globalPassthroughEnv env.EnvironmentVariableMap,
+	globalPassThroughEnv env.EnvironmentVariableMap,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	runSummary runsummary.Meta,
@@ -82,7 +82,7 @@ func RealRun(
 		ui:              &cli.ConcurrentUi{Ui: base.UI},
 		runCache:        runCache,
 		env:             globalEnv,
-		passthroughEnv:  globalPassthroughEnv,
+		passThroughEnv:  globalPassThroughEnv,
 		logger:          base.Logger,
 		packageManager:  packageManager,
 		processes:       processes,
@@ -197,7 +197,7 @@ type execContext struct {
 	ui              cli.Ui
 	runCache        *runcache.RunCache
 	env             env.EnvironmentVariableMap
-	passthroughEnv  env.EnvironmentVariableMap
+	passThroughEnv  env.EnvironmentVariableMap
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
 	processes       *process.Manager
@@ -294,10 +294,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	cmd := exec.Command(ec.packageManager.Command, argsactual...)
 	cmd.Dir = packageTask.Pkg.Dir.ToSystemPath().RestoreAnchor(ec.repoRoot).ToString()
 
-	passthroughEnv := env.EnvironmentVariableMap{}
+	passThroughEnv := env.EnvironmentVariableMap{}
 
 	if packageTask.EnvMode == util.Strict {
-		defaultPassthroughEnvVarMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards([]string{
+		defaultPassThroughEnvVarMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards([]string{
 			"PATH",
 			"SHELL",
 			"SYSTEMROOT", // Go will always include this on Windows, but we're being explicit here
@@ -306,24 +306,24 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			return nil, err
 		}
 
-		envVarPassthroughMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.PassthroughEnv)
+		envVarPassThroughMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.PassThroughEnv)
 		if err != nil {
 			return nil, err
 		}
 
-		passthroughEnv.Union(defaultPassthroughEnvVarMap)
-		passthroughEnv.Union(ec.env)
-		passthroughEnv.Union(ec.passthroughEnv)
-		passthroughEnv.Union(ec.taskHashTracker.GetEnvVars(packageTask.TaskID).All)
-		passthroughEnv.Union(envVarPassthroughMap)
+		passThroughEnv.Union(defaultPassThroughEnvVarMap)
+		passThroughEnv.Union(ec.env)
+		passThroughEnv.Union(ec.passThroughEnv)
+		passThroughEnv.Union(ec.taskHashTracker.GetEnvVars(packageTask.TaskID).All)
+		passThroughEnv.Union(envVarPassThroughMap)
 	} else {
-		passthroughEnv.Union(ec.taskHashTracker.EnvAtExecutionStart)
+		passThroughEnv.Union(ec.taskHashTracker.EnvAtExecutionStart)
 	}
 
 	// Always last to make sure it clobbers.
-	passthroughEnv.Add("TURBO_HASH", hash)
+	passThroughEnv.Add("TURBO_HASH", hash)
 
-	cmd.Env = passthroughEnv.ToHashable()
+	cmd.Env = passThroughEnv.ToHashable()
 
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk

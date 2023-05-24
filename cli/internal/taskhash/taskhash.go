@@ -173,18 +173,19 @@ func (th *Tracker) CalculateFileHashes(
 }
 
 type taskHashable struct {
+	globalHash           string
+	taskDependencyHashes []string
 	packageDir           turbopath.AnchoredUnixPath
 	hashOfFiles          string
 	externalDepsHash     string
 	task                 string
 	outputs              fs.TaskOutputs
 	passThruArgs         []string
+	env                  []string
+	resolvedEnvVars      env.EnvironmentVariablePairs
+	passThroughEnv       []string
 	envMode              util.EnvMode
-	passthroughEnv       []string
-	hashableEnvPairs     []string
 	dotEnv               turbopath.AnchoredUnixPathArray
-	globalHash           string
-	taskDependencyHashes []string
 }
 
 // calculateTaskHashFromHashable returns a hash string from the taskHashable
@@ -192,12 +193,12 @@ func calculateTaskHashFromHashable(full *taskHashable) (string, error) {
 	switch full.envMode {
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
-		full.passthroughEnv = nil
+		full.passThroughEnv = nil
 		return fs.HashObject(full)
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
-		if full.passthroughEnv == nil {
-			full.passthroughEnv = make([]string, 0)
+		if full.passThroughEnv == nil {
+			full.passThroughEnv = make([]string, 0)
 		}
 		return fs.HashObject(full)
 	case util.Infer:
@@ -271,7 +272,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 				return "", err
 			}
 
-			userEnvVarSet, err := th.EnvAtExecutionStart.FromWildcardsUnresolved(packageTask.TaskDefinition.EnvVarDependencies)
+			userEnvVarSet, err := th.EnvAtExecutionStart.FromWildcardsUnresolved(packageTask.TaskDefinition.Env)
 			if err != nil {
 				return "", err
 			}
@@ -287,7 +288,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 			matchingEnvVarMap.Difference(userEnvVarSet.Exclusions)
 		} else {
 			var err error
-			allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.EnvVarDependencies)
+			allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.Env)
 			if err != nil {
 				return "", err
 			}
@@ -296,7 +297,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 		}
 	} else {
 		var err error
-		allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.EnvVarDependencies)
+		allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.Env)
 		if err != nil {
 			return "", err
 		}
@@ -322,18 +323,19 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
 	hash, err := calculateTaskHashFromHashable(&taskHashable{
+		globalHash:           th.globalHash,
+		taskDependencyHashes: taskDependencyHashes,
 		packageDir:           packageTask.Pkg.Dir.ToUnixPath(),
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,
 		outputs:              outputs,
 		passThruArgs:         args,
+		env:                  packageTask.TaskDefinition.Env,
+		resolvedEnvVars:      hashableEnvPairs,
+		passThroughEnv:       packageTask.TaskDefinition.PassThroughEnv,
 		envMode:              packageTask.EnvMode,
-		passthroughEnv:       packageTask.TaskDefinition.PassthroughEnv,
-		hashableEnvPairs:     hashableEnvPairs,
 		dotEnv:               packageTask.TaskDefinition.DotEnv,
-		globalHash:           th.globalHash,
-		taskDependencyHashes: taskDependencyHashes,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)

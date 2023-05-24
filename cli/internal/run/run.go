@@ -240,18 +240,18 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	envAtExecutionStart := env.GetEnvMap()
 
 	globalHashInputs, err := getGlobalHashInputs(
+		r.base.Logger,
 		r.base.RepoRoot,
 		rootPackageJSON,
-		envAtExecutionStart,
-		turboJSON.GlobalEnv,
-		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
-		turboJSON.GlobalPassthroughEnv,
+		turboJSON.GlobalDeps,
+		envAtExecutionStart,
+		turboJSON.GlobalEnv,
+		turboJSON.GlobalPassThroughEnv,
 		r.opts.runOpts.EnvMode,
 		r.opts.runOpts.FrameworkInference,
 		turboJSON.GlobalDotEnv,
-		r.base.Logger,
 	)
 
 	if err != nil {
@@ -346,13 +346,13 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		}
 	}
 
-	envVarPassthroughMap, err := envAtExecutionStart.FromWildcards(globalHashInputs.envVarPassthroughs)
+	resolvedPassThroughEnvVars, err := envAtExecutionStart.FromWildcards(globalHashInputs.passThroughEnv)
 	if err != nil {
 		return err
 	}
 
 	globalEnvMode := rs.Opts.runOpts.EnvMode
-	if globalEnvMode == util.Infer && turboJSON.GlobalPassthroughEnv != nil {
+	if globalEnvMode == util.Infer && turboJSON.GlobalPassThroughEnv != nil {
 		globalEnvMode = util.Strict
 	}
 
@@ -370,12 +370,14 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		globalEnvMode,
 		envAtExecutionStart,
 		runsummary.NewGlobalHashSummary(
+			globalHashInputs.globalCacheKey,
 			globalHashInputs.globalFileHashMap,
 			globalHashInputs.rootExternalDepsHash,
-			globalHashInputs.envVars,
-			envVarPassthroughMap,
-			globalHashInputs.globalCacheKey,
+			globalHashInputs.env,
+			globalHashInputs.passThroughEnv,
 			globalHashInputs.dotEnv,
+			globalHashInputs.resolvedEnvVars,
+			resolvedPassThroughEnvVars,
 		),
 		rs.Opts.SynthesizeCommand(rs.Targets),
 	)
@@ -391,8 +393,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			turboCache,
 			turboJSON,
 			globalEnvMode,
-			globalHashInputs.envVars.All,
-			envVarPassthroughMap,
+			globalHashInputs.resolvedEnvVars.All,
+			resolvedPassThroughEnvVars,
 			r.base,
 			summary,
 		)
@@ -408,8 +410,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		turboCache,
 		turboJSON,
 		globalEnvMode,
-		globalHashInputs.envVars.All,
-		envVarPassthroughMap,
+		globalHashInputs.resolvedEnvVars.All,
+		resolvedPassThroughEnvVars,
 		packagesInScope,
 		r.base,
 		summary,

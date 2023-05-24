@@ -29,7 +29,7 @@ const NoFrameworkDetected = "<NO FRAMEWORK DETECTED>"
 // FrameworkDetectionSkipped is a string to identify when framework detection was skipped
 const FrameworkDetectionSkipped = "<FRAMEWORK DETECTION SKIPPED>"
 
-const runSummarySchemaVersion = "0"
+const runSummarySchemaVersion = "1"
 
 type runType int
 
