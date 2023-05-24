@@ -50,7 +50,7 @@ Restoring files and logs from the cache happens near-instantaneously. This can r
 
 ## Turn off caching
 
-In some environments you don't want to write the cache output. To disable cache writes, append `--no-cache` to any command. This will run `dev` (and all tasks that it dependsOn) in all workspaces, but it won't cache the output.
+In some environments you don't want to write the cache output. To disable cache writes, append `--no-cache` to any command. For example, this will run `dev` (and all tasks that it `dependsOn`) in all workspaces, but it won't cache the output:
 
 ```shell
 turbo run dev --no-cache
@@ -58,7 +58,7 @@ turbo run dev --no-cache
 
 Note that `--no-cache` disables cache writes but does not disable cache reads. If you want to disable cache reads, use the `--force` flag.
 
-You can also permanently disable caching on specific tasks by setting the [`pipeline.<task>.cache`](/repo/docs/reference/configuration#cache) configuration to `false`:
+You can also configure specific tasks to skip writing to the cache by setting the [`pipeline.<task>.cache`](/repo/docs/reference/configuration#cache) configuration to `false`:
 
 ```json
 {

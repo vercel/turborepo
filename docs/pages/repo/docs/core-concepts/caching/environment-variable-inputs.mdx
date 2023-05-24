@@ -7,9 +7,7 @@ import Callout from "../../../../../components/Callout";
 
 # Environment Variable Inputs
 
-Since environment variables are not captured in code repositories they're not as easily shared across machines. Ensuring that the environment setup across two different machines is consistent is one of the most-difficult tasks for Turborepo configuration.
-
-Turborepo provides a lot of tools to make it possible to express both how, and what environment variables your application depends on.
+Since environment variables are not captured in source code they're not as easily shared across machines. Ensuring a consistent environment setup across different machines for developers and CI is a difficult task. Turborepo provides you with the tools to express which environment variables your application depends on.
 
 ## Configuration
 
@@ -57,7 +55,7 @@ Every place in `turbo.json` that accepts environment variables accepts wildcards
 
 Exclusion patterns apply only to the set of variables matched via inclusions.
 
-<Callout type="info">
+<Callout>
   Be careful about the combination of wildcards and CI environments. Some CI environments set additional environment variables such as `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` which will prevent ever getting a cache hit. After configuring wildcards be sure to carefully review a run summary from all of your environments in order to make sure that it is only including variables you care about.
 </Callout>
 
@@ -75,11 +73,11 @@ Exclusion patterns apply only to the set of variables matched via inclusions.
 ### Examples
 
 - `"*"`: matches every environment variable.
-- `"!*"`: excludes from the match set all environment variables.
-- `"FOO*"`: matches `FOO`, `FOOD`, and `FOO_FIGHTERS`.
+- `"!*"`: excludes every environment variables.
+- `"FOO*"`: matches `FOO`, `FOOD`, `FOO_FIGHTERS`, etc.
 - `"FOO\*"`: because this is specified in JSON, this resolves to `"FOO*"` and matches `FOO`, `FOOD`, and `FOO_FIGHTERS`.
 - `"FOO\\*"`: matches a single environment variable named `FOO*`.
-- `"!FOO*"`: excludes from the match set all environment variables that start with `FOO`.
+- `"!FOO*"`: excludes all environment variables that start with `FOO`.
 - `"\!FOO"`: because this is specified in JSON, this resolves to `"!FOO"`, and excludes from the match set a single environment variable named `!FOO`.
 - `"\\!FOO"`: matches a single environment variable named `!FOO`.
 - `"FOO!"`: matches a single environment variable named `FOO!`.
@@ -90,18 +88,18 @@ Turborepo offers two environment variable modes for tasks: loose mode and strict
 
 ### Loose Mode
 
-By default, and when `turbo` is invoked with `--env-mode=loose`, all environment variables from the machine are made available to every single task. This is described as "loose" environment mode. This ensures the greatest compatibility while accepting some risk that a task will implicitly respond to an unknown environment variable. A user may configure a particular environment variable that results in task behavior change, but, because it was not specified inside of `turbo.json`, the created cache artifact may not be suitable for sharing.
+By default, and when `turbo` is invoked with `--env-mode=loose`, all environment variables from the machine are made available to every single task. This is described as "loose" environment mode. This ensures the greatest compatibility while accepting some risk that a task will implicitly have access to an unspecified environment variable. A user may configure a particular environment variable that results in task behavior change, but, because it was not specified inside of `turbo.json`, the created cache artifact may not be suitable for sharing.
 
 ### Strict Mode
 
-In strict mode, when `turbo` is invoked with `--env-mode=strict`, only important system environment variables and environment variables enumerated inside of `turbo.json` will be made available to a task. There are four fields that enable specification of environment variables:
+In strict mode, when `turbo` is invoked with `--env-mode=strict`, only [important system environment variables](#system-environment-variables) and environment variables enumerated inside of `turbo.json` will be made available to a task. There are four fields that enable specification of environment variables:
 
 - **Hashed Environment Variables:** `globalEnv` and `env`
 - **Unhashed Environment Variables:** `globalPassThroughEnv` and `passThroughEnv`
 
 #### System Environment Variables
 
-Subject to addition at any time, Turborepo passes in the following three environment variables to all tasks:
+Turborepo passes in the following environment variables to all tasks:
 
 - `PATH`
 - `SHELL`
@@ -113,7 +111,7 @@ All hashed environment variables that appear in `globalEnv` and `env` will alway
 
 #### Unhashed Environment Variables
 
-Unhashed environment variables in `globalPassThroughEnv` and `passThroughEnv` are values which may be needed in order to _perform_ a task but should not be included in the hash. These are values that would be reasonably epxected to differ from machine to machine, but those differences would not be expected to have material consequences on the cache artifact creation.
+Unhashed environment variables in `globalPassThroughEnv` and `passThroughEnv` are values which may be needed in order to _perform_ a task but should not be included in the hash. These are values that would be reasonably expected to differ from machine to machine, but those differences would not be expected to have material consequences on the cache artifact creation.
 
 One example of a possible use case is `NPM_TOKEN`, a value that can change per-user, but whose purpose in a task may simply be to allow read access to a particular registry. Sharing of a single `NPM_TOKEN` is a bad security practice, and including it in `globalEnv` means that you can't share caches between people. Including it in `globalPassThroughEnv` enables it to be used in all tasks while still enabling shared cache artifacts.
 
@@ -141,7 +139,7 @@ Frameworks commonly use [`dotenv`](https://github.com/motdotla/dotenv) to automa
 Given the complexity of configuring this correctly using just file inputs, Turborepo explicitly supports the `.env` file pattern using the fields `globalDotEnv` and `dotEnv` inside of `turbo.json`. To have Turborepo consider the appropriate set of `.env` files, specify them inside of `turbo.json`. The below is the correct `dotEnv` configuration for a Next.js application:
 
 <Callout type="info">
-  In most cases this configuration should be matched to your framework's behavior, not the particular configuration you're presently using for your application.
+  In most cases, this configuration should be matched to your framework's behavior, not the particular configuration you're presently using for your application.
 </Callout>
 
 ```jsonc filename="/turbo.json"
@@ -172,7 +170,7 @@ These fields are _ordered_ lists of Unix-formatted (`/`-separated) paths, relati
 
 By default, Turborepo attempts to detect the framework for workspaces inside of your turborepo and uses this to help ensure that all of the default environment variables are properly considered for task hashes.
 
-If Turborepo successfully detects your framework you do not need to manually specify certain framework-specific environment variables inside of `turbo.json`'s pipeline configuration. The supported frameworks and the environment variables that Turborepo will detect and the env wildcards that will be include into the task's `env` key:
+If Turborepo successfully detects your framework you do not need to manually specify certain framework-specific environment variables inside of `turbo.json`'s pipeline configuration. The supported frameworks and the environment wildcards that Turborepo will include into the task's `env` key are:
 
 | Framework        | `env` Wildcard    |
 | ---------------- | ----------------- |
@@ -189,17 +187,20 @@ If Turborepo successfully detects your framework you do not need to manually spe
 | Vite             | `VITE_*`          |
 | Vue              | `VUE_APP_*`       |
 
+You can determine if Turborepo has successfully detected your framework for a workspace by:
+
+- Inspecting a run summary (via `--summarize`).
+- Inspecting the output from a dry run (via `--dry`).
+
 ### Framework Inference Exclusions
 
 Turborepo's automatically included wildcards from framework inference may also match environment variables that are inserted into the environment by CI platforms. Those variables can include things like run IDs or Git SHAs which would guarantee never getting a cache hit if included.
 
 As a consequence, Turborepo provides two methods to exclude variables from the hash:
 
-1. Set `TURBO_CI_VENDOR_ENV_KEY` with an exclude prefix. This is ideally handled for you by your CI environment if they detect that you are using Turborepo. For example, for a Next.js application building on Vercel, Vercel sets `TURBO_CI_VENDOR_ENV_KEY=NEXT_PUBLIC_VERCEL_` to make sure that it doesn't include variables that would result in caching issues. This variable is processed against the inferred framework variables match set only.
+1. Set `TURBO_CI_VENDOR_ENV_KEY` with an exclude prefix. This is ideally handled for you by your CI environment if they detect that you are using Turborepo. For example, for a Next.js application building on Vercel, Vercel sets `TURBO_CI_VENDOR_ENV_KEY=NEXT_PUBLIC_VERCEL_` to make sure that it doesn't include variables that would result in caching issues. This variable is processed against the inferred framework variables only.
 
 2. Manually specify the exclusions using `"env": ["!NEXT_PUBLIC_UNNEEDED_*"]` in the appropriate `task` definition's `env`. This enables extremely fine control of environment variable exclusion from hash consideration.
-
-The processing of the `TURBO_CI_VENDOR_ENV_KEY` values
 
 ### Framework Inference is Per-Workspace
 

@@ -7,7 +7,7 @@ import Callout from "../../../../../components/Callout";
 
 # To Cache or Not To Cache
 
-In building a monorepo you need to decide on a per-task basis if you are able to skip the task based upon having run it previously. This behavior is controlled via the `cache` field on task definitions inside of `turbo.json`:
+In building a monorepo you need to decide on a per-task basis if you are able to skip the task based upon having run it previously. This behavior is controlled via `pipeline.<task>.cache` inside of `turbo.json`:
 
 ```jsonc filename="/turbo.json"
 {
@@ -20,7 +20,7 @@ In building a monorepo you need to decide on a per-task basis if you are able to
 }
 ```
 
-Turborepo actually defaults to `"cache": true`, so you don't actually need to specify this value, meaning that this is an identical configuration:
+Turborepo defaults to `"cache": true`, so you don't need to specify this value, meaning that this is an identical configuration:
 
 ```jsonc filename="/turbo.json"
 {
@@ -33,7 +33,7 @@ Turborepo actually defaults to `"cache": true`, so you don't actually need to sp
 
 In these examples we have told Turborepo to cache the `lint` tasks. But, since we've only specified the `cache` key, the only thing that is being cached is contents of `stdout`. For some types of tasks, such as `lint` or `test` this type of minimal configuration is likely correct!
 
-However, for most tasks you will also need to specify [_what_ to cache](./what-to-cache), as well as the [files](./file-configurration) and [environment variables](./environment-variables) that must match in order for the cache to be valid.
+However, for most tasks you will also need to specify [_what_ to cache](./what-to-cache), as well as the [files](./file-configuration) and [environment variables](./environment-variables) that must match in order for the cache to be valid.
 
 ## When Not To Cache
 
@@ -48,4 +48,4 @@ Since caching is the default behavior, and is ideal for _most_ situations, knowi
 3. **Non-transformative file system operations.** If a task is "move a whole bunch of images from one directory to another" the task may take a while but the process of doing that locally will always be faster than caching and restoring the moved assets.
 4. **Tasks which implement their own application-behavior-aware cache.** Some tasks have their own internal caching behavior, for example, something like Docker's Layer Cache. In most cases these secondary caches work hand-in-hand with Turborepo, but in some cases that configuration becomes extremely complicated.
 
-As you become more-familiar with Turborepo you'll discover that some of these guidelines have weird tradeoffs when executing in different environments. For example, sometimes disk reads on continuous integration services are significantly slower than network reads. Be sure to test the behavior in your own projects to determine if not caching provides a performance benefit.
+As you become more-familiar with Turborepo you'll discover that some of these guidelines have unexpected tradeoffs when executing in different environments. For example, sometimes disk reads on continuous integration services are significantly slower than network reads. Be sure to test the behavior in your own projects to determine if not caching provides a performance benefit.
