@@ -13,8 +13,10 @@ use serde::Serialize;
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 
+#[cfg(feature = "run-stub")]
+use crate::commands::run;
 use crate::{
-    commands::{bin, daemon, generate, link, login, logout, run, unlink, CommandBase},
+    commands::{bin, daemon, generate, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
@@ -692,8 +694,8 @@ pub async fn run(
         }
         #[cfg(feature = "run-stub")]
         Command::Run(args) => {
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
-            run::run(&mut base).await?;
+            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            run::run(base).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }

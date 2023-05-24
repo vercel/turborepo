@@ -1,20 +1,15 @@
 use anyhow::Result;
 use tracing::{error, info};
 
-use crate::{commands::CommandBase, opts::Opts, run::Run};
+use crate::{commands::CommandBase, run::Run};
 
-pub async fn run(base: &mut CommandBase) -> Result<()> {
+#[allow(dead_code)]
+pub async fn run(base: CommandBase) -> Result<()> {
     info!("Executing run stub");
-    // equivalent of optsFromArgs
-    let opts: Opts = (&base.args).try_into()?;
-    info!("generated opts struct: {:?}", opts);
-    // equivalent of configureRun
-    let mut run = Run::new(base, opts);
+    let mut run = Run::new(base);
     info!("configured run struct: {:?}", run);
-    let targets = base.args.get_tasks();
-    info!("tasks are {:?}", targets);
 
-    match run.run(targets).await {
+    match run.run().await {
         Ok(_) => Ok(()),
         Err(err) => {
             error!("run failed: {}", err);
