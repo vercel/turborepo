@@ -14,7 +14,7 @@ impl<'a> InclusiveEmptyAny<'a> {
         I::Item: TryInto<P>,
     {
         let iter = patterns.into_iter().collect::<Vec<_>>();
-        if iter.len() == 0 {
+        if iter.is_empty() {
             Ok(Self(None))
         } else {
             Ok(Self(Some(wax::any(iter)?)))

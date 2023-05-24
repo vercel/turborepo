@@ -77,8 +77,6 @@ pub fn globwalk(
     Ok(std::iter::from_fn(move || loop {
         let entry = iter.next()?;
 
-        println!("{:?}", entry);
-
         let (is_symlink, path) = match entry {
             Ok(entry) => (entry.path_is_symlink(), entry.into_path()),
             Err(err) => match (err.io_error(), err.path()) {
@@ -161,14 +159,14 @@ fn preprocess_paths_and_globs(
         .to_slash()
         .ok_or(WalkError::InvalidPath)?;
     let (include_paths, lowest_segment) = include
-        .into_iter()
+        .iter()
         .map(|s| join_unix_like_paths(&base_path_slash, s))
         .filter_map(|s| collapse_path(&s).map(|(s, v)| (s.to_string(), v)))
         .fold(
             (vec![], usize::MAX),
             |(mut vec, lowest_segment), (path, lowest_segment_next)| {
                 let lowest_segment = std::cmp::min(lowest_segment, lowest_segment_next);
-                vec.push(path.to_string()); // we stringify here due to lifetime issues
+                vec.push(path); // we stringify here due to lifetime issues
                 (vec, lowest_segment)
             },
         );
@@ -179,12 +177,15 @@ fn preprocess_paths_and_globs(
         .collect::<PathBuf>();
 
     let exclude_paths = exclude
-        .into_iter()
+        .iter()
         .map(|s| join_unix_like_paths(&base_path_slash, s))
         .filter_map(|g| {
             let (split, _) = collapse_path(&g)?;
             let split = split.to_string();
-            if split.ends_with('/') {
+
+            // if the glob ends with a slash, then we need to add a double star,
+            // unless it already ends with a double star
+            if split.ends_with('/') && !split.ends_with("**/") {
                 Some(format!("{}**", split))
             } else {
                 Some(split)
@@ -217,7 +218,7 @@ fn do_match(path: &Path, include: &InclusiveEmptyAny, exclude: &Any) -> MatchTyp
 fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
     let mut stack: Vec<&str> = vec![];
     let mut changed = false;
-    let is_root = path.starts_with("/");
+    let is_root = path.starts_with('/');
 
     // the index of the lowest segment that was collapsed
     // this is defined as the lowest stack size after a collapse
@@ -227,9 +228,7 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
         match segment {
             ".." => {
                 lowest_index.get_or_insert(stack.len());
-                if let None = stack.pop() {
-                    return None;
-                }
+                stack.pop()?;
                 changed = true;
             }
             "." => {
@@ -238,7 +237,9 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
             }
             _ => stack.push(segment),
         }
-        lowest_index.as_mut().map(|s| *s = stack.len().min(*s));
+        if let Some(lowest_index) = lowest_index.as_mut() {
+            *lowest_index = (*lowest_index).min(stack.len());
+        }
     }
 
     let lowest_index = lowest_index.unwrap_or(stack.len());
@@ -1167,7 +1168,7 @@ mod test {
             let path = tmp.path().join(file);
             let parent = path.parent().unwrap();
             std::fs::create_dir_all(parent)
-                .expect(format!("failed to create {:?}", parent).as_str());
+                .unwrap_or_else(|_| panic!("failed to create {:?}", parent));
             std::fs::File::create(path).unwrap();
         }
         tmp
