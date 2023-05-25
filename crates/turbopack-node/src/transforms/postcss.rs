@@ -21,9 +21,6 @@ use turbopack_core::{
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
-use turbopack_ecmascript::{
-    EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
-};
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 use crate::{
@@ -146,15 +143,12 @@ async fn extra_configs(
             Ok(
                 matches!(&*path.get_type().await?, FileSystemEntryType::File).then(|| {
                     any_content_changed(
-                        EcmascriptModuleAssetVc::new(
-                            SourceAssetVc::new(path).into(),
-                            context,
-                            Value::new(EcmascriptModuleAssetType::Ecmascript),
-                            EcmascriptInputTransformsVc::cell(vec![]),
-                            Value::new(Default::default()),
-                            context.compile_time_info(),
-                        )
-                        .into(),
+                        context
+                            .process(
+                                SourceAssetVc::new(path).into(),
+                                Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+                            )
+                            .into(),
                     )
                 }),
             )

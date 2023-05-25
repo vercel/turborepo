@@ -7,6 +7,14 @@ use crate::{asset::AssetVc, resolve::ModulePartVc};
 #[turbo_tasks::value(transparent)]
 pub struct InnerAssets(IndexMap<String, AssetVc>);
 
+#[turbo_tasks::value_impl]
+impl InnerAssetsVc {
+    #[turbo_tasks::function]
+    pub fn empty() -> Self {
+        InnerAssetsVc::cell(IndexMap::new())
+    }
+}
+
 // These enums list well-known types, which we use internally. Plugins might add
 // custom types too.
 
