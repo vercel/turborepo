@@ -1,3 +1,4 @@
+// Manager is a wrapper around child processes executed by turbo
 #[derive(Debug)]
 pub struct Manager {
     // TODO
