@@ -106,11 +106,15 @@ var SourceType;
     SourceType[SourceType["Parent"] = 1] = "Parent";
 })(SourceType || (SourceType = {}));
 ;
+;
 const path = require("path");
 const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
 const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
 const moduleFactories = Object.create(null);
 const moduleCache = Object.create(null);
+function commonJsRequireContext(entry, sourceModule) {
+    return entry.external ? externalRequire(entry.id(), false) : commonJsRequire(sourceModule, entry.id());
+}
 function externalRequire(id, esm1 = false) {
     let raw;
     try {

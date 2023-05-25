@@ -1,12 +1,8 @@
 (globalThis.TURBOPACK = globalThis.TURBOPACK || []).push(["output/79fb1_turbopack-tests_tests_snapshot_node_node_protocol_external_input_index_b53fce.js", {
 
-"[project]/crates/turbopack-tests/tests/snapshot/node/node_protocol_external/input/index.js (ecmascript)": (({ r: __turbopack_require__, x: __turbopack_external_require__, f: __turbopack_require_context__, i: __turbopack_import__, s: __turbopack_esm__, v: __turbopack_export_value__, n: __turbopack_export_namespace__, c: __turbopack_cache__, l: __turbopack_load__, j: __turbopack_cjs__, g: global, __dirname, k: __turbopack_refresh__ }) => (() => {
+"[project]/crates/turbopack-tests/tests/snapshot/node/node_protocol_external/input/index.js (ecmascript)": (() => {{
 
-var __TURBOPACK__external__node$3a$fs__ = __turbopack_external_require__("node:fs", true);
-"__TURBOPACK__ecmascript__hoisting__location__";
-;
+throw new Error("An error occurred while generating the chunk item [project]/crates/turbopack-tests/tests/snapshot/node/node_protocol_external/input/index.js (ecmascript)\n\nCaused by:\n- the chunking context does not support Node.js external modules\n\nDebug info:\n- An error occurred while generating the chunk item [project]/crates/turbopack-tests/tests/snapshot/node/node_protocol_external/input/index.js (ecmascript)\n- Execution of EcmascriptChunkItemContentVc::module_factory failed\n- Execution of EcmascriptChunkItemContentVc::new failed\n- Execution of EcmascriptModuleContentVc::new failed\n- Execution of EsmAssetReference::code_generation failed\n- the chunking context does not support Node.js external modules");
 
-})()),
+}}),
 }]);
-
-//# sourceMappingURL=79fb1_turbopack-tests_tests_snapshot_node_node_protocol_external_input_index_b53fce.js.map

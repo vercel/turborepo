@@ -112,6 +112,7 @@ function getChunkPath(chunkData) {
 ;
 ;
 ;
+;
 var SourceType;
 (function(SourceType) {
     SourceType[SourceType["Runtime"] = 0] = "Runtime";
@@ -129,26 +130,6 @@ const chunkModulesMap = new Map();
 const runtimeChunkLists = new Set();
 const chunkListChunksMap = new Map();
 const chunkChunkListsMap = new Map();
-const commonJsRequireContext = (entry, sourceModule)=>{
-    return entry.internal ? commonJsRequire(sourceModule, entry.id()) : externalRequire(entry.id(), false);
-};
-function externalRequire(id, esm = false) {
-    let raw;
-    try {
-        raw = require(id);
-    } catch (err) {
-        throw new Error(`Failed to load external module ${id}: ${err}`);
-    }
-    if (!esm) {
-        return raw;
-    }
-    const ns = {};
-    interopEsm(raw, ns, raw.__esModule);
-    return ns;
-}
-externalRequire.resolve = (id, options)=>{
-    return require.resolve(id, options);
-};
 const availableModules = new Map();
 const availableModuleChunks = new Map();
 async function loadChunk(source, chunkData) {
@@ -266,10 +247,9 @@ function instantiateModule(id, source) {
     moduleHotState.set(module, hotState);
     try {
         runModuleExecutionHooks(module, (refresh)=>{
-            moduleFactory.call(module.exports, {
+            moduleFactory.call(module.exports, augmentContext({
                 e: module.exports,
                 r: commonJsRequire.bind(null, module),
-                x: externalRequire,
                 f: requireContext.bind(null, module),
                 i: esmImport.bind(null, module),
                 s: esmExport.bind(null, module),
@@ -285,7 +265,7 @@ function instantiateModule(id, source) {
                 g: globalThis,
                 k: refresh,
                 __dirname: module.id.replace(/(^|\/)[\/]+$/, "")
-            });
+            }));
         });
     } catch (error) {
         module.error = error;
@@ -890,6 +870,12 @@ globalThis.TURBOPACK_CHUNK_LISTS = {
     }
 };
 let BACKEND;
+function augmentContext(context1) {
+    return context1;
+}
+function commonJsRequireContext(entry1, sourceModule1) {
+    return commonJsRequire(sourceModule1, entry1.id());
+}
 (()=>{
     BACKEND = {
         async registerChunk (chunkPath1, params1) {
