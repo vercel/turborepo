@@ -49,24 +49,16 @@ fn read_status<R: Read>(
     let mut to_hash = Vec::new();
     let mut reader = BufReader::new(reader);
     let mut buffer = Vec::new();
-    loop {
-        buffer.clear();
-        {
-            let bytes_read = reader.read_until(b'\0', &mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-            {
-                let entry = parse_status(&buffer)?;
-                let path = RelativeUnixPathBuf::new(entry.filename)?;
-                if entry.is_delete {
-                    let path = path.strip_prefix(pkg_prefix)?;
-                    hashes.remove(&path);
-                } else {
-                    to_hash.push(path);
-                }
-            }
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        let entry = parse_status(&buffer)?;
+        let path = RelativeUnixPathBuf::new(entry.filename)?;
+        if entry.is_delete {
+            let path = path.strip_prefix(pkg_prefix)?;
+            hashes.remove(&path);
+        } else {
+            to_hash.push(path);
         }
+        buffer.clear();
     }
     Ok(to_hash)
 }
@@ -77,7 +69,7 @@ struct StatusEntry<'a> {
 }
 
 fn parse_status(i: &[u8]) -> Result<StatusEntry<'_>, Error> {
-    match nom_parse_status(i).finish() {
+    match nom::combinator::all_consuming(nom_parse_status)(i).finish() {
         Ok((_, tup)) => Ok(tup),
         Err(e) => Err(Error::git_error(format!(
             "failed to parse git-status: {}",
@@ -91,6 +83,8 @@ fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
     let (i, y) = nom::bytes::complete::take(1usize)(i)?;
     let (i, _) = nom::character::complete::space1(i)?;
     let (i, filename) = nom::bytes::complete::is_not(" \0")(i)?;
+    // We explicitly support a missing terminator
+    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
     Ok((
         i,
         StatusEntry {
