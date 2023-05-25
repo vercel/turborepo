@@ -33,20 +33,12 @@ pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error
 fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error> {
     let mut reader = BufReader::new(reader);
     let mut buffer = Vec::new();
-    loop {
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        let entry = parse_ls_tree(&buffer)?;
+        let hash = String::from_utf8(entry.hash.to_vec())?;
+        let path = RelativeUnixPathBuf::new(entry.filename)?;
+        hashes.insert(path, hash);
         buffer.clear();
-        {
-            let bytes_read = reader.read_until(b'\0', &mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-            {
-                let entry = parse_ls_tree(&buffer)?;
-                let hash = String::from_utf8(entry.hash.to_vec())?;
-                let path = RelativeUnixPathBuf::new(entry.filename)?;
-                hashes.insert(path, hash);
-            }
-        }
     }
     Ok(())
 }
@@ -57,7 +49,8 @@ struct LsTreeEntry<'a> {
 }
 
 fn parse_ls_tree(i: &[u8]) -> Result<LsTreeEntry<'_>, Error> {
-    match nom_parse_ls_tree(i).finish() {
+    let mut parser = nom::combinator::all_consuming(nom_parse_ls_tree);
+    match parser(i).finish() {
         Ok((_, entry)) => Ok(entry),
         Err(e) => Err(Error::git_error(format!(
             "failed to parse git-ls-tree: {}",
@@ -74,6 +67,8 @@ fn nom_parse_ls_tree(i: &[u8]) -> nom::IResult<&[u8], LsTreeEntry<'_>> {
     let (i, hash) = nom::bytes::complete::take(40usize)(i)?;
     let (i, _) = nom::bytes::complete::take(1usize)(i)?;
     let (i, filename) = nom::bytes::complete::is_not(" \0")(i)?;
+    // We explicitly support a missing terminator
+    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
     Ok((i, LsTreeEntry { filename, hash }))
 }
 
