@@ -13,7 +13,7 @@ describe("eslint settings check", () => {
     const { root: cwd } = useFixture({ fixture: "workspace" });
     execSync(`npm install`, { cwd });
 
-    const configString = execSync(`eslint --print-config peer.js`, {
+    const configString = execSync(`npm exec eslint -- --print-config peer.js`, {
       cwd,
       encoding: "utf8",
     });
@@ -29,10 +29,13 @@ describe("eslint settings check", () => {
     execSync(`npm install`, { cwd: root });
 
     const cwd = path.join(root, "child");
-    const configString = execSync(`eslint --print-config child.js`, {
-      cwd,
-      encoding: "utf8",
-    });
+    const configString = execSync(
+      `npm exec eslint -- --print-config child.js`,
+      {
+        cwd,
+        encoding: "utf8",
+      }
+    );
     const configJson = JSON5.parse(configString);
 
     expect(configJson.settings).toEqual({
@@ -55,7 +58,10 @@ describe("eslint cache is busted", () => {
 
     const cwd = path.join(root, "child");
     try {
-      execSync(`eslint --format=json child.js`, { cwd, encoding: "utf8" });
+      execSync(`npm exec eslint -- --format=json child.js`, {
+        cwd,
+        encoding: "utf8",
+      });
     } catch (error: any) {
       const outputJson = JSON5.parse(error.stdout);
       expect(outputJson).toMatchObject([
@@ -78,7 +84,7 @@ describe("eslint cache is busted", () => {
     }
 
     // test that we invalidated the eslint cache
-    const output = execSync(`eslint --format=json child.js`, {
+    const output = execSync(`npm exec eslint -- --format=json child.js`, {
       cwd,
       encoding: "utf8",
     });
