@@ -102,15 +102,13 @@ function envContextTestArray(envContext: EnvContext) {
 }
 
 function workspaceNameFromFilePath(filePath: string): string | null {
-  let workspacePaths = Object.keys(workspaceLookup);
+  let workspacePaths = Object.keys(workspacePathToName);
   let possibleWorkspacePaths = workspacePaths
     .filter((workspacePath) => filePath.startsWith(workspacePath))
     .sort();
 
   if (possibleWorkspacePaths.length > 0) {
-    return workspaceLookup[
-      possibleWorkspacePaths[possibleWorkspacePaths.length - 1]
-    ];
+    return workspacePathToName[possibleWorkspacePaths[0]];
   }
 
   return null;
@@ -198,10 +196,11 @@ function getEnvContext(cwd: string, config: EnvConfig) {
   return envContext;
 }
 
-const workspaceLookup: { [path: string]: string } = {};
+const workspacePathToName: { [path: string]: string } = {};
+const workspaceNameToPath: { [name: string]: string } = {};
 function getWorkspaceName(workspacePath: string): string {
-  if (workspaceLookup[workspacePath]) {
-    return workspaceLookup[workspacePath];
+  if (workspacePathToName[workspacePath]) {
+    return workspacePathToName[workspacePath];
   }
 
   const packageJsonContents = fs.readFileSync(
@@ -211,7 +210,8 @@ function getWorkspaceName(workspacePath: string): string {
   const packageJson = JSON.parse(packageJsonContents);
 
   if (packageJson.name) {
-    workspaceLookup[workspacePath] = packageJson.name;
+    workspacePathToName[workspacePath] = packageJson.name;
+    workspaceNameToPath[packageJson.name] = workspacePath;
     return packageJson.name;
   }
 
@@ -375,8 +375,12 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     return {};
   }
 
-  const globalTurboVars = allTurboVars["//"];
   const hasWorkspaceConfigs = Object.keys(allTurboVars).length > 1;
+  const workspaceName = workspaceNameFromFilePath(filePath);
+  let workspacePath: string | null = null;
+  if (workspaceName) {
+    workspacePath = workspaceNameToPath[workspaceName];
+  }
 
   // find any workspace configs that match the current file path
   // find workspace config (if any) that match the current file path
@@ -394,7 +398,6 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
       return {};
     }
 
-    let workspaceName = workspaceNameFromFilePath(filePath);
     let configured = checkForInclusion(
       calculatedTestContext,
       workspaceName,
@@ -407,12 +410,12 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
       let message = `{{ envKey }} is not listed as a dependency in ${
         hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
       }`;
-      if (workspaceKey && workspaceTurboVars) {
+      if (workspacePath && workspaceTurboVars) {
         if (cwd) {
           // if we have a cwd, we can provide a relative path to the workspace config
           message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
             cwd,
-            workspaceKey
+            workspacePath
           )}) turbo.json`;
         } else {
           message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
