@@ -39,8 +39,7 @@ use crate::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkVc,
-        EcmascriptChunkingContext, EcmascriptChunkingContextVc, EcmascriptExports,
-        EcmascriptExportsVc,
+        EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
     chunk_group_files_asset::ChunkGroupFilesAssetVc,
     code_gen::{CodeGenerateable, CodeGeneration, CodeGenerationVc},
