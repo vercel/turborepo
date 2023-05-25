@@ -1,8 +1,20 @@
 import type { Project } from "@turbo/workspaces";
-import type { TurboGeneratorOptions } from "../commands/workspace";
-import type { CustomGeneratorOptions } from "../commands/run";
+import type { TurboGeneratorCLIOptions } from "../commands/workspace";
+import type { CustomGeneratorCLIOptions } from "../commands/run";
 
 export type WorkspaceType = "app" | "package";
+export type CopyData = {
+  type: "internal" | "external";
+  source: string;
+};
+
+export type TurboGeneratorOptions = Omit<
+  TurboGeneratorCLIOptions,
+  "copy" | "empty"
+> & {
+  copy: CopyData;
+  method: "copy" | "empty";
+};
 
 export interface TurboGeneratorArguments {
   project: Project;
@@ -12,5 +24,5 @@ export interface TurboGeneratorArguments {
 export interface CustomGeneratorArguments {
   generator: string | undefined;
   project: Project;
-  opts: CustomGeneratorOptions;
+  opts: CustomGeneratorCLIOptions;
 }

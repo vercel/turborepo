@@ -444,7 +444,7 @@ jobs:
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter="./packages/*" --filter="!@vercel/*" --filter="!turborepo-tests*" --color
+          turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter="./packages/*" --color
 
   rust_prepare:
     name: Check rust crates
@@ -1151,6 +1151,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: determine_jobs
     if: needs.determine_jobs.outputs.format == 'true'
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
     steps:
       - name: Checkout
         uses: actions/checkout@v3

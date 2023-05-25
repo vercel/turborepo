@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
-use turbo_tasks::primitives::{OptionStringVc, StringsVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::primitives::OptionStringVc;
+use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 use turbopack_core::{
     reference_type::{ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
@@ -62,8 +62,6 @@ impl ModuleOptionsVc {
     ) -> Result<ModuleOptionsVc> {
         let ModuleOptionsContext {
             enable_jsx,
-            enable_styled_jsx,
-            ref enable_styled_components,
             enable_types,
             enable_tree_shaking,
             ref enable_typescript_transform,
@@ -83,7 +81,7 @@ impl ModuleOptionsVc {
             let path_value = path.await?;
 
             for (condition, new_context) in rules.iter() {
-                if condition.matches(&path_value).await {
+                if condition.matches(&path_value).await? {
                     return Ok(ModuleOptionsVc::new(path, *new_context));
                 }
             }
@@ -114,26 +112,8 @@ impl ModuleOptionsVc {
 
         // Order of transforms is important. e.g. if the React transform occurs before
         // Styled JSX, there won't be JSX nodes for Styled JSX to transform.
-        if enable_styled_jsx {
-            transforms.push(EcmascriptInputTransform::StyledJsx);
-        }
-
-        if let Some(enable_styled_components) = enable_styled_components {
-            let styled_components_transform = &*enable_styled_components.await?;
-            transforms.push(EcmascriptInputTransform::StyledComponents {
-                display_name: styled_components_transform.display_name,
-                ssr: styled_components_transform.ssr,
-                file_name: styled_components_transform.file_name,
-                top_level_import_paths: StringsVc::cell(
-                    styled_components_transform.top_level_import_paths.clone(),
-                ),
-                meaningless_file_names: StringsVc::cell(
-                    styled_components_transform.meaningless_file_names.clone(),
-                ),
-                css_prop: styled_components_transform.css_prop,
-                namespace: OptionStringVc::cell(styled_components_transform.namespace.clone()),
-            });
-        }
+        // If a custom plugin requires specific order _before_ core transform kicks in,
+        // should use `before_transform_plugins`.
         if let Some(enable_jsx) = enable_jsx {
             let jsx = enable_jsx.await?;
 
@@ -449,6 +429,7 @@ impl ModuleOptionsVc {
         }
 
         if let Some(webpack_loaders_options) = enable_webpack_loaders {
+            let webpack_loaders_options = webpack_loaders_options.await?;
             let execution_context = execution_context
                 .context("execution_context is required for webpack_loaders")?
                 .with_layer("webpack_loaders");
@@ -459,22 +440,26 @@ impl ModuleOptionsVc {
             } else {
                 package_import_map_from_context("loader-runner", path)
             };
-            for (ext, loaders) in webpack_loaders_options.extension_to_loaders.iter() {
+            for (glob, rule) in webpack_loaders_options.rules.await?.iter() {
                 rules.push(ModuleRule::new(
                     ModuleRuleCondition::All(vec![
-                        ModuleRuleCondition::ResourcePathEndsWith(ext.to_string()),
+                        if !glob.contains("/") {
+                            ModuleRuleCondition::ResourceBasePathGlob(GlobVc::new(glob).await?)
+                        } else {
+                            ModuleRuleCondition::ResourcePathGlob {
+                                base: execution_context.project_path().await?,
+                                glob: GlobVc::new(glob).await?,
+                            }
+                        },
                         ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
                     ]),
                     vec![
-                        // [TODO]: should accept rules as an option
-                        if ext == ".scss" || ext == ".sass" {
-                            ModuleRuleEffect::ModuleType(ModuleType::Css(css_transforms))
-                        } else {
-                            ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
-                                transforms: app_transforms,
-                                options: ecmascript_options.clone(),
-                            })
-                        },
+                        // By default, loaders are expected to return ecmascript code.
+                        // This can be overriden by specifying e. g. `as: "*.css"` in the rule.
+                        ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
+                            transforms: app_transforms,
+                            options: ecmascript_options.clone(),
+                        }),
                         ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
                             WebpackLoadersVc::new(
                                 node_evaluate_asset_context(
@@ -483,7 +468,8 @@ impl ModuleOptionsVc {
                                     None,
                                 ),
                                 execution_context,
-                                *loaders,
+                                rule.loaders,
+                                rule.rename_as.clone(),
                             )
                             .into(),
                         ])),

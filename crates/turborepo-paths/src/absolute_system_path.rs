@@ -12,11 +12,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use path_clean::PathClean;
 use path_slash::CowExt;
 
 use crate::{
-    AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
-    RelativeSystemPathBuf, RelativeUnixPath,
+    AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError, RelativeUnixPath,
 };
 
 pub struct AbsoluteSystemPath(Path);
@@ -80,17 +80,17 @@ impl AbsoluteSystemPath {
     pub fn new<P: AsRef<Path> + ?Sized>(value: &P) -> Result<&Self, PathError> {
         let path = value.as_ref();
         if path.is_relative() {
-            return Err(PathValidationError::NotAbsolute(path.to_owned()).into());
+            return Err(PathError::NotAbsolute(path.to_owned()).into());
         }
-        let path_str = path.to_str().ok_or_else(|| {
-            PathError::PathValidationError(PathValidationError::InvalidUnicode(path.to_owned()))
-        })?;
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
 
         let system_path = Cow::from_slash(path_str);
 
         match system_path {
             Cow::Owned(path) => {
-                Err(PathValidationError::NotSystem(path.to_string_lossy().to_string()).into())
+                Err(PathError::NotSystem(path.to_string_lossy().to_string()).into())
             }
             Cow::Borrowed(path) => {
                 let path = Path::new(path);
@@ -107,21 +107,30 @@ impl AbsoluteSystemPath {
         &self.0
     }
 
-    pub fn join_relative(&self, path: &RelativeSystemPathBuf) -> AbsoluteSystemPathBuf {
-        let path = self.0.join(path.as_path());
-        AbsoluteSystemPathBuf(path)
+    // intended for joining literals or obviously single-token strings
+    pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
+        debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
+        AbsoluteSystemPathBuf(self.0.join(segment).clean())
     }
 
-    pub fn join_literal(&self, segment: &str) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(self.0.join(segment))
+    // intended for joining a path composed of literals
+    pub fn join_components(&self, segments: &[&str]) -> AbsoluteSystemPathBuf {
+        debug_assert!(!segments
+            .iter()
+            .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
+        AbsoluteSystemPathBuf(
+            self.0
+                .join(segments.join(std::path::MAIN_SEPARATOR_STR))
+                .clean(),
+        )
     }
 
     pub fn join_unix_path(
         &self,
         unix_path: &RelativeUnixPath,
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let tail = unix_path.to_system_path()?;
-        Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path())))
+        let tail = unix_path.to_system_path_buf()?;
+        Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path()).clean()))
     }
 
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {
@@ -161,6 +170,8 @@ impl AbsoluteSystemPath {
         Ok(fs::metadata(&self.0)?)
     }
 
+    // The equivalent of lstat. Returns the metadata for this file,
+    // even if it is a symlink
     pub fn symlink_metadata(&self) -> Result<Metadata, PathError> {
         Ok(fs::symlink_metadata(&self.0)?)
     }

@@ -10,9 +10,12 @@ license = "MPL-2.0"
 default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
+run-stub = []
 
 # serve the daemon over a port (useful for testing)
 http = ["tonic-reflection"]
+
+go-daemon = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
@@ -55,6 +58,7 @@ itertools = { workspace = true }
 lazy_static = { workspace = true }
 libc = "0.2.140"
 notify = "5.1"
+petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
@@ -82,6 +86,7 @@ const_format = "0.2.30"
 go-parse-duration = "0.1.1"
 is-terminal = "0.4.7"
 node-semver = "2.1.0"
+num_cpus = "1.15.0"
 owo-colors.workspace = true
 regex.workspace = true
 tracing-appender = "0.2.2"

@@ -8,18 +8,30 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       {
         type: "input",
         name: "file",
-        message: "What is the name of the file to create?",
-      },
-      {
-        type: "input",
-        name: "author",
-        message: "What is your name? (Will be added as the file author)",
+        message: "What is the name of the new file to create?",
+        validate: (input: string) => {
+          if (input.includes(".")) {
+            return "file name cannot include an extension";
+          }
+          if (input.includes(" ")) {
+            return "file name cannot include spaces";
+          }
+          if (!input) {
+            return "file name is required";
+          }
+          return true;
+        },
       },
       {
         type: "list",
         name: "type",
         message: "What type of file should be created?",
         choices: [".md", ".txt"],
+      },
+      {
+        type: "input",
+        name: "title",
+        message: "What should be the title of the new file?",
       },
     ],
     actions: [
