@@ -21,8 +21,10 @@ pub(crate) mod generate;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
+pub(crate) mod run;
 pub(crate) mod unlink;
 
+#[derive(Debug)]
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
@@ -151,12 +153,8 @@ impl CommandBase {
     pub fn daemon_file_root(&self) -> turbopath::AbsoluteSystemPathBuf {
         turbopath::AbsoluteSystemPathBuf::new(std::env::temp_dir())
             .expect("temp dir is valid")
-            .join_relative(
-                turbopath::RelativeSystemPathBuf::new("turbod").expect("turbod is valid"),
-            )
-            .join_relative(
-                turbopath::RelativeSystemPathBuf::new(self.repo_hash()).expect("hash is valid"),
-            )
+            .join_component("turbod")
+            .join_component(self.repo_hash().as_str())
     }
 
     fn repo_hash(&self) -> String {

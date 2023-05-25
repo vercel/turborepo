@@ -29,7 +29,7 @@ const NoFrameworkDetected = "<NO FRAMEWORK DETECTED>"
 // FrameworkDetectionSkipped is a string to identify when framework detection was skipped
 const FrameworkDetectionSkipped = "<FRAMEWORK DETECTION SKIPPED>"
 
-const runSummarySchemaVersion = "0"
+const runSummarySchemaVersion = "1"
 
 type runType int
 
@@ -79,6 +79,7 @@ func NewRunSummary(
 	runOpts util.RunOpts,
 	packages []string,
 	globalEnvMode util.EnvMode,
+	envAtExecutionStart env.EnvironmentVariableMap,
 	globalHashSummary *GlobalHashSummary,
 	synthesizedCommand string,
 ) Meta {
@@ -97,7 +98,6 @@ func NewRunSummary(
 
 	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
-	envVars := env.GetEnvMap()
 	rsm := Meta{
 		RunSummary: &RunSummary{
 			ID:                 ksuid.New(),
@@ -109,8 +109,8 @@ func NewRunSummary(
 			FrameworkInference: runOpts.FrameworkInference,
 			Tasks:              []*TaskSummary{},
 			GlobalHashSummary:  globalHashSummary,
-			SCM:                getSCMState(envVars, repoRoot),
-			User:               getUser(envVars, repoRoot),
+			SCM:                getSCMState(envAtExecutionStart, repoRoot),
+			User:               getUser(envAtExecutionStart, repoRoot),
 		},
 		ui:                 ui,
 		runType:            runType,

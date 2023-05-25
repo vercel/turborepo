@@ -13,7 +13,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task-with-deps in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task-with-deps: cache miss, executing 64742adc89c20a85
+  override-values:override-values-task-with-deps: cache miss, executing 83ee0949c3d7de54
   override-values:override-values-task-with-deps: 
   override-values:override-values-task-with-deps: > override-values-task-with-deps
   override-values:override-values-task-with-deps: > echo "running override-values-task-with-deps" > out/foo.min.txt
@@ -32,10 +32,10 @@ Setup
     "dependsOn": [],
     "inputs": [],
     "outputMode": "full",
-    "passThroughEnv": null,
-    "dotEnv": null,
+    "persistent": false,
     "env": [],
-    "persistent": false
+    "passThroughEnv": null,
+    "dotEnv": null
   }
 
 # This task is similar, but `dependsOn` in the root turbo.json _only_ has a topological dependency
@@ -47,8 +47,8 @@ Setup
     "dependsOn": [],
     "inputs": [],
     "outputMode": "full",
-    "passThroughEnv": null,
-    "dotEnv": null,
+    "persistent": false,
     "env": [],
-    "persistent": false
+    "passThroughEnv": null,
+    "dotEnv": null
   }

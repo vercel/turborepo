@@ -21,10 +21,10 @@ Make sure we prune tasks that reference a pruned workspace
         "dependsOn": [],
         "inputs": [],
         "outputMode": "full",
-        "passThroughEnv": null,
-        "dotEnv": null,
+        "persistent": false,
         "env": [],
-        "persistent": false
+        "passThroughEnv": null,
+        "dotEnv": null
       }
     },
     "remoteCache": {}

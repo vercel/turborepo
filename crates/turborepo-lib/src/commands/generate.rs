@@ -1,6 +1,7 @@
 use std::process::{Command, Stdio};
 
 use anyhow::Result;
+use tracing::debug;
 
 use crate::{
     child::spawn_child,
@@ -23,6 +24,10 @@ fn verify_requirements() -> Result<()> {
 }
 
 fn call_turbo_gen(command: &str, tag: &String, raw_args: &str) -> Result<i32> {
+    debug!(
+        "Running @turbo/gen@{} with command `{}` and args {:?}",
+        tag, command, raw_args
+    );
     let mut npx = Command::new("npx");
     npx.arg("--yes")
         .arg(format!("@turbo/gen@{}", tag))

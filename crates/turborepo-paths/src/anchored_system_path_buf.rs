@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{AbsoluteSystemPath, IntoSystem, PathError, PathValidationError, RelativeUnixPathBuf};
+use crate::{AbsoluteSystemPath, IntoSystem, PathError, RelativeUnixPathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct AnchoredSystemPathBuf(PathBuf);
@@ -13,7 +13,7 @@ impl TryFrom<&Path> for AnchoredSystemPathBuf {
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
         if path.is_absolute() {
             let bad_path = path.display().to_string();
-            return Err(PathValidationError::NotRelative(bad_path).into());
+            return Err(PathError::NotRelative(bad_path).into());
         }
 
         Ok(AnchoredSystemPathBuf(path.into_system()?))
@@ -30,7 +30,7 @@ impl AnchoredSystemPathBuf {
         let stripped_path = path
             .as_path()
             .strip_prefix(root.as_path())
-            .map_err(|_| PathValidationError::NotParent(root.to_string(), path.to_string()))?
+            .map_err(|_| PathError::NotParent(root.to_string(), path.to_string()))?
             .to_path_buf();
 
         Ok(AnchoredSystemPathBuf(stripped_path))
@@ -42,14 +42,14 @@ impl AnchoredSystemPathBuf {
         Ok(Self(system_path))
     }
 
-    pub fn as_path(&self) -> &Path {
+    pub(crate) fn as_path(&self) -> &Path {
         self.0.as_path()
     }
 
     pub fn to_str(&self) -> Result<&str, PathError> {
         self.0
             .to_str()
-            .ok_or_else(|| PathValidationError::InvalidUnicode(self.0.clone()).into())
+            .ok_or_else(|| PathError::InvalidUnicode(self.0.to_string_lossy().to_string()).into())
     }
 
     pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
@@ -65,7 +65,7 @@ impl AnchoredSystemPathBuf {
             let unix_buf = self.0.as_path().into_unix()?;
             let unix_str = unix_buf
                 .to_str()
-                .ok_or_else(|| PathValidationError::InvalidUnicode(unix_buf.clone()))?;
+                .ok_or_else(|| PathError::InvalidUnicode(unix_buf.to_string_lossy().to_string()))?;
             return RelativeUnixPathBuf::new(unix_str.as_bytes());
         }
     }
