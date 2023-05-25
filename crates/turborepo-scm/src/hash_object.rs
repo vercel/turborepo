@@ -41,10 +41,9 @@ pub(crate) fn hash_objects(
         .stderr
         .take()
         .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
-    let result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes);
-    if let Err(err) = result {
-        return Err(read_git_error(&mut stderr).unwrap_or(err));
-    }
+    let result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes).map_err(|err| {
+      read_git_error(&mut stderr).unwrap_or(err)
+    })?;
     wait_for_success(git, &mut stderr, "git hash-object", pkg_path)?;
     Ok(())
 }
