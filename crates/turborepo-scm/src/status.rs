@@ -35,11 +35,8 @@ pub(crate) fn append_git_status(
         .stderr
         .take()
         .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
-    let result = read_status(stdout, pkg_prefix, hashes);
-    let to_hash = match result {
-        Err(err) => return Err(read_git_error(&mut stderr).unwrap_or(err)),
-        Ok(to_hash) => to_hash,
-    };
+    let to_hash = read_status(stdout, pkg_prefix, hashes)
+        .map_err(|err| read_git_error(&mut stderr).unwrap_or(err))?;
     wait_for_success(git, &mut stderr, "git status", &root_path)?;
     Ok(to_hash)
 }

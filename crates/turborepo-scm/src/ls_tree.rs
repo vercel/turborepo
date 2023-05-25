@@ -25,10 +25,7 @@ pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error
         .stderr
         .take()
         .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
-    let result = read_ls_tree(stdout, &mut hashes);
-    if let Err(err) = result {
-        return Err(read_git_error(&mut stderr).unwrap_or(err));
-    }
+    read_ls_tree(stdout, &mut hashes).map_err(|err| read_git_error(&mut stderr).unwrap_or(err))?;
     wait_for_success(git, &mut stderr, "git ls-tree", root_path)?;
     Ok(hashes)
 }
