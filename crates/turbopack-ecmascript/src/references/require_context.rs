@@ -460,7 +460,7 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
                 value: match *self.context.environment().node_externals().await? {
                     true => quote_expr!(
                         "{ external: $external, id: () => $id }",
-                        external: Expr = !pm.is_internal_import().into(),
+                        external: Expr = (!pm.is_internal_import()).into(),
                         id: Expr =
                             pm.apply(Expr::Lit(Lit::Str(entry.origin_relative.as_str().into()))),
                     ),
