@@ -112,7 +112,7 @@ jobs:
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
-            crates/turbpack*/js/**
+            crates/turbopack*/js/**
 
       - name: Turborepo Rust related changes
         id: turborepo_rust
