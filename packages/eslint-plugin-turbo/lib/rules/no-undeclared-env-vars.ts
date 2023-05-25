@@ -375,7 +375,7 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     return {};
   }
 
-  const hasWorkspaceConfigs = Object.keys(allTurboVars).length > 1;
+  const hasWorkspaceConfigs = workspaceTurboJsons.length > 0;
   const workspaceName = workspaceNameFromFilePath(filePath);
   let workspacePath: string | null = null;
   if (workspaceName) {
@@ -391,6 +391,12 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   let workspaceTurboVars: Set<string> | null = null;
   if (workspaceKey) {
     workspaceTurboVars = allTurboVars[workspaceKey];
+  }
+
+  let hasThisWorkspaceConfigs = false;
+  if (workspaceName) {
+    hasThisWorkspaceConfigs =
+      !!calculatedTestContext.workspaceTasks[workspaceName];
   }
 
   const checkKey = (node: Node, envKey?: string) => {
@@ -410,7 +416,7 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
       let message = `{{ envKey }} is not listed as a dependency in ${
         hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
       }`;
-      if (workspacePath && workspaceTurboVars) {
+      if (workspacePath && hasThisWorkspaceConfigs) {
         if (cwd) {
           // if we have a cwd, we can provide a relative path to the workspace config
           message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
