@@ -108,7 +108,9 @@ function workspaceNameFromFilePath(filePath: string): string | null {
     .sort();
 
   if (possibleWorkspacePaths.length > 0) {
-    return workspaceLookup[possibleWorkspacePaths[0]];
+    return workspaceLookup[
+      possibleWorkspacePaths[possibleWorkspacePaths.length - 1]
+    ];
   }
 
   return null;
@@ -135,7 +137,7 @@ function checkForInclusion(
     );
   }
 
-  return tests.flat().findIndex((test) => test(variable)) === -1;
+  return tests.flat().findIndex((test) => test(variable)) !== -1;
 }
 
 function TestFalse(_: EnvVar) {
@@ -292,6 +294,9 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
               throw new Error("Invalid task name found in turbo.json.");
             }
 
+            // Make sure the workspace exists.
+            workspaceTasks[workspaceName] = workspaceTasks[workspaceName] || {};
+
             // This task applies to
             workspaceTasks[workspaceName][scriptName] = getEnvContext(
               rootTurboJson.turboConfigPath,
@@ -333,6 +338,9 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
 
         let workspaceName = getWorkspaceName(turboJson.workspacePath);
         let scriptName = taskName;
+
+        // Make sure the workspace exists.
+        workspaceTasks[workspaceName] = workspaceTasks[workspaceName] || {};
 
         workspaceTasks[workspaceName][scriptName] = getEnvContext(
           turboJson.turboConfigPath,
@@ -382,46 +390,40 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   }
 
   const checkKey = (node: Node, envKey?: string) => {
-    if (envKey) {
-      let workspaceName = workspaceNameFromFilePath(filePath);
-      let configured = checkForInclusion(
-        calculatedTestContext,
-        workspaceName,
-        envKey
-      );
-      console.log(configured);
+    if (!envKey) {
+      return {};
     }
 
-    if (
-      envKey &&
-      !globalTurboVars.has(envKey) &&
-      !regexAllowList.some((regex) => regex.test(envKey))
-    ) {
-      // if we have a workspace config, check that too
-      if (workspaceTurboVars && workspaceTurboVars.has(envKey)) {
-        return {};
-      } else {
-        let message = `{{ envKey }} is not listed as a dependency in ${
-          hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
-        }`;
-        if (workspaceKey && workspaceTurboVars) {
-          if (cwd) {
-            // if we have a cwd, we can provide a relative path to the workspace config
-            message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
-              cwd,
-              workspaceKey
-            )}) turbo.json`;
-          } else {
-            message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
-          }
-        }
+    let workspaceName = workspaceNameFromFilePath(filePath);
+    let configured = checkForInclusion(
+      calculatedTestContext,
+      workspaceName,
+      envKey
+    );
 
-        context.report({
-          node,
-          message,
-          data: { envKey },
-        });
+    if (configured) {
+      return {};
+    } else {
+      let message = `{{ envKey }} is not listed as a dependency in ${
+        hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
+      }`;
+      if (workspaceKey && workspaceTurboVars) {
+        if (cwd) {
+          // if we have a cwd, we can provide a relative path to the workspace config
+          message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
+            cwd,
+            workspaceKey
+          )}) turbo.json`;
+        } else {
+          message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
+        }
       }
+
+      context.report({
+        node,
+        message,
+        data: { envKey },
+      });
     }
   };
 
