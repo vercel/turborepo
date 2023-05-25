@@ -2,9 +2,7 @@ use std::io::Write;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{
-    debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs, Value, ValueToString,
-};
+use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, Value, ValueToString};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::{
     asset::AssetVc,
@@ -24,6 +22,7 @@ use super::{
 };
 use crate::{
     manifest::{chunk_asset::ManifestChunkAssetVc, loader_item::ManifestLoaderItemVc},
+    utils::FormatIter,
     EcmascriptModuleContentVc, ParseResultSourceMapVc,
 };
 
