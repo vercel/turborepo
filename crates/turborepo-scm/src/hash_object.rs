@@ -69,17 +69,12 @@ fn read_object_hashes<R: Read, W: Write + Send>(
         });
         // Buffer size is HASH_LEN + 1 to account for the trailing \n
         let mut buffer: [u8; HASH_LEN + 1] = [0; HASH_LEN + 1];
-        for (i, filename) in to_hash.iter().enumerate() {
-            if i == to_hash.len() {
-                break;
-            }
+        for filename in to_hash.iter() {
             reader.read_exact(&mut buffer)?;
-            {
-                let hash = parse_hash_object(&buffer)?;
-                let hash = String::from_utf8(hash.to_vec())?;
-                let path = filename.strip_prefix(pkg_prefix)?;
-                hashes.insert(path, hash);
-            }
+            let hash = parse_hash_object(&buffer)?;
+            let hash = String::from_utf8(hash.to_vec())?;
+            let path = filename.strip_prefix(pkg_prefix)?;
+            hashes.insert(path, hash);
         }
         match write_thread.join() {
             // the error case is if the thread panic'd. In that case, we propagate
@@ -92,7 +87,7 @@ fn read_object_hashes<R: Read, W: Write + Send>(
 }
 
 fn parse_hash_object(i: &[u8]) -> Result<&[u8], Error> {
-    match nom_parse_hash_object(i).finish() {
+    match nom::combinator::all_consuming(nom_parse_hash_object)(i).finish() {
         Ok((_, hash)) => Ok(hash),
         Err(e) => Err(Error::git_error(format!(
             "failed to parse git-hash-object {}",
