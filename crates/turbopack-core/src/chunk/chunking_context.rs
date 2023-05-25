@@ -56,7 +56,4 @@ pub trait ChunkingContext {
         entry: ChunkVc,
         evaluatable_assets: EvaluatableAssetsVc,
     ) -> AssetsVc;
-
-    /// Generate an output chunk asset for the given chunk.
-    fn generate_chunk(&self, chunk: ChunkVc) -> AssetVc;
 }

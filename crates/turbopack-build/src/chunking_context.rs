@@ -147,6 +147,17 @@ impl BuildChunkingContextVc {
 
         Ok(asset)
     }
+
+    #[turbo_tasks::function]
+    async fn generate_chunk(self, chunk: ChunkVc) -> Result<AssetVc> {
+        Ok(
+            if let Some(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).await? {
+                EcmascriptBuildNodeChunkVc::new(self, ecmascript_chunk).into()
+            } else {
+                chunk.into()
+            },
+        )
+    }
 }
 
 impl BuildChunkingContextVc {
@@ -304,17 +315,6 @@ impl ChunkingContext for BuildChunkingContext {
         ));
 
         Ok(AssetsVc::cell(assets))
-    }
-
-    #[turbo_tasks::function]
-    async fn generate_chunk(self_vc: BuildChunkingContextVc, chunk: ChunkVc) -> Result<AssetVc> {
-        Ok(
-            if let Some(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).await? {
-                EcmascriptBuildNodeChunkVc::new(self_vc, ecmascript_chunk).into()
-            } else {
-                chunk.into()
-            },
-        )
     }
 }
 

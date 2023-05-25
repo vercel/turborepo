@@ -159,6 +159,17 @@ impl DevChunkingContextVc {
     ) -> AssetVc {
         EcmascriptDevChunkListVc::new(self_vc, entry_chunk, other_chunks, source).into()
     }
+
+    #[turbo_tasks::function]
+    async fn generate_chunk(self, chunk: ChunkVc) -> Result<AssetVc> {
+        Ok(
+            if let Some(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).await? {
+                EcmascriptDevChunkVc::new(self, ecmascript_chunk).into()
+            } else {
+                chunk.into()
+            },
+        )
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -325,17 +336,6 @@ impl ChunkingContext for DevChunkingContext {
         assets.push(self_vc.generate_evaluate_chunk(entry_chunk, other_assets, evaluatable_assets));
 
         Ok(AssetsVc::cell(assets))
-    }
-
-    #[turbo_tasks::function]
-    async fn generate_chunk(self_vc: DevChunkingContextVc, chunk: ChunkVc) -> Result<AssetVc> {
-        Ok(
-            if let Some(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).await? {
-                EcmascriptDevChunkVc::new(self_vc, ecmascript_chunk).into()
-            } else {
-                chunk.into()
-            },
-        )
     }
 }
 
