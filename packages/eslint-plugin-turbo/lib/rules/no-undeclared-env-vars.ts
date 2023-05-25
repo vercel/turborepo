@@ -167,22 +167,22 @@ function getEnvContext(cwd: string, config: EnvConfig) {
 
   // b. Check the env configuration.
   if (config.env && config.env.length > 0) {
-    const testRegexes = wildcardTests(config.env);
+    const testables = wildcardTests(config.env);
     envContext.env = (variable: EnvVar) => {
       return (
-        testRegexes.inclusions.test(variable) &&
-        !testRegexes.exclusions.test(variable)
+        testables.inclusions.test(variable) &&
+        !testables.exclusions.test(variable)
       );
     };
   }
 
   // c. Check the passThroughEnv configuration.
   if (config.passThroughEnv && config.passThroughEnv.length > 0) {
-    const testRegexes = wildcardTests(config.passThroughEnv);
+    const testables = wildcardTests(config.passThroughEnv);
     envContext.passThroughEnv = (variable: EnvVar) => {
       return (
-        testRegexes.inclusions.test(variable) &&
-        !testRegexes.exclusions.test(variable)
+        testables.inclusions.test(variable) &&
+        !testables.exclusions.test(variable)
       );
     };
   }
@@ -263,6 +263,12 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
 
   // Process the project.
   const turboJsons = getTurboConfigs(cwd);
+
+  // if turboJsons is empty, something went wrong reading from the turbo config
+  // so there is no point continuing if we have nothing to check against
+  if (turboJsons.length === 0) {
+    return {};
+  }
 
   // 2. Create the tests for the root turbo.json.
   const rootTurboJson = turboJsons.find((turboJson) => turboJson.isRootConfig);
@@ -363,34 +369,12 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   };
 
   const filePath = getPhysicalFilename();
-  const allTurboVars = getEnvVarDependencies({
-    cwd,
-  });
-
-  // if allTurboVars is null, something went wrong reading from the turbo config
-  // (this is different from finding a config with no env vars present, which would
-  // return an empty set) - so there is no point continuing if we have nothing to check against
-  if (!allTurboVars) {
-    // return of {} bails early from a rule check
-    return {};
-  }
 
   const hasWorkspaceConfigs = workspaceTurboJsons.length > 0;
   const workspaceName = workspaceNameFromFilePath(filePath);
   let workspacePath: string | null = null;
   if (workspaceName) {
     workspacePath = workspaceNameToPath[workspaceName];
-  }
-
-  // find any workspace configs that match the current file path
-  // find workspace config (if any) that match the current file path
-  const workspaceKey = Object.keys(allTurboVars).find(
-    (workspacePath) => filePath !== "//" && filePath.startsWith(workspacePath)
-  );
-
-  let workspaceTurboVars: Set<string> | null = null;
-  if (workspaceKey) {
-    workspaceTurboVars = allTurboVars[workspaceKey];
   }
 
   let hasThisWorkspaceConfigs = false;

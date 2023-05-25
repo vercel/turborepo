@@ -52,9 +52,19 @@ function wildcardToRegexPattern(pattern: string): string {
   return regexString.join("");
 }
 
+interface Testable {
+  test(input: string): boolean;
+}
+
+const NO_PATTERNS = {
+  test(_: string): boolean {
+    return false;
+  },
+};
+
 export type WildcardTests = {
-  inclusions: RegExp;
-  exclusions: RegExp;
+  inclusions: Testable;
+  exclusions: Testable;
 };
 
 // wildcardTests returns a WildcardSet after processing wildcards against it.
@@ -78,11 +88,20 @@ export function wildcardTests(wildcardPatterns: EnvWildcard[]): WildcardTests {
     }
   });
 
-  let includeRegexString = "^(" + includePatterns.join("|") + ")$";
-  let excludeRegexString = "^(" + excludePatterns.join("|") + ")$";
+  // Set some defaults.
+  let inclusions = NO_PATTERNS;
+  let exclusions = NO_PATTERNS;
+
+  // Override if they're not empty.
+  if (includePatterns.length > 0) {
+    inclusions = new RegExp("^(" + includePatterns.join("|") + ")$");
+  }
+  if (excludePatterns.length > 0) {
+    exclusions = new RegExp("^(" + excludePatterns.join("|") + ")$");
+  }
 
   return {
-    inclusions: new RegExp(includeRegexString),
-    exclusions: new RegExp(excludeRegexString),
+    inclusions,
+    exclusions,
   };
 }
