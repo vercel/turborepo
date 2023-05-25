@@ -28,12 +28,13 @@ use turbopack_core::{
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    reference_type::InnerAssetsVc,
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
+    EcmascriptModuleAssetVc,
 };
 
 use crate::{
