@@ -106,6 +106,8 @@ impl EcmascriptBuildNodeEvaluateChunkVc {
             if let Some(other_chunk_public_path) = output_root.get_path_to(other_chunk_path) {
                 writedoc!(
                     code,
+                    // TODO(WEB-1112) This should call `require()` directly, perhaps as an argument
+                    // to `loadChunk`.
                     r#"
                         runtime.loadChunk({});
                     "#,
