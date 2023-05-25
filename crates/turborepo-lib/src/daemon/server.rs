@@ -13,7 +13,7 @@
 //! globs, and to query for changes for those globs.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -58,6 +58,8 @@ pub struct DaemonServer<T: Watcher> {
     shutdown_rx: Option<Receiver<()>>,
 
     running: Arc<AtomicBool>,
+
+    times_saved: HashMap<String, u64>,
 }
 
 #[derive(Debug)]
@@ -98,6 +100,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
             shutdown_rx: Some(recv_shutdown),
 
             running: Arc::new(AtomicBool::new(true)),
+            times_saved: HashMap::new(),
         })
     }
 }
@@ -255,6 +258,9 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
         let inner = request.into_inner();
 
+        self.times_saved
+            .insert(inner.hash.clone(), inner.time_saved);
+
         match self
             .watcher
             .watch_globs(
@@ -285,9 +291,15 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
             )
             .await;
 
+        let mut timeSaved = 0;
+        if let Some(value) = self.times_saved.get(&inner.hash.clone()) {
+            timeSaved = *value;
+        }
+
         match changed {
             Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
                 changed_output_globs: changed.into_iter().collect(),
+                time_saved: timeSaved,
             })),
             Err(e) => {
                 error!("flush directory operation failed: {:?}", e);

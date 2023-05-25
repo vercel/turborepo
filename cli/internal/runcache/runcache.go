@@ -119,7 +119,8 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		return cache.NewCacheMiss(), nil
 	}
 
-	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
+	changedOutputGlobs, timeSavedFromDaemon, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
+	fmt.Printf("[debug] timeSavedFromDaemon %#v\n", timeSavedFromDaemon)
 	if err != nil {
 		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
 		prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
@@ -147,13 +148,18 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 			return cache.NewCacheMiss(), nil
 		}
 
-		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
+		fmt.Printf("[debug] notifying daemon of cacheStatus.TimeSaved %#v\n", cacheStatus.TimeSaved)
+		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs, cacheStatus.TimeSaved); err != nil {
 			// Don't fail the whole operation just because we failed to watch the outputs
 			prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
 	} else {
 		// If no outputs have changed, that means we have a local cache hit.
-		// We will still check to see whether the cache exists, so we can get the duration.
+		cacheStatus = cache.ItemStatus{
+			Hit:       true,
+			Source:    cache.CacheSourceNone, // CacheSourceNone because this was not a cache restoration
+			TimeSaved: timeSavedFromDaemon,
+		}
 		cacheStatus = tc.rc.cache.Exists(tc.hash)
 		prefixedUI.Warn(fmt.Sprintf("Configured outputs are already in place for %s, skipping cache check", tc.pt.TaskID))
 	}
@@ -277,7 +283,7 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 	if err = tc.rc.cache.Put(tc.rc.repoRoot, tc.hash, duration, relativePaths); err != nil {
 		return err
 	}
-	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs)
+	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs, duration)
 	if err != nil {
 		// Don't fail the cache write because we also failed to record it, we will just do
 		// extra I/O in the future restoring files that haven't changed from cache
