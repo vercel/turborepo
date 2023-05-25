@@ -14,7 +14,7 @@ use turbopack_ecmascript::{chunk::EcmascriptChunkContentVc, utils::StringifyJs};
 use super::chunk::EcmascriptBuildNodeChunkVc;
 use crate::BuildChunkingContextVc;
 
-#[turbo_tasks::value(serialization = "none")]
+#[turbo_tasks::value]
 pub(super) struct EcmascriptBuildNodeChunkContent {
     pub(super) content: EcmascriptChunkContentVc,
     pub(super) chunking_context: BuildChunkingContextVc,
