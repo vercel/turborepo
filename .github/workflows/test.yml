@@ -1221,6 +1221,7 @@ jobs:
       - rust_lint
       - rust_check
       - turbopack_rust_test1
+      - turbopack_typescript
       - turborepo_rust_test
       - turbopack_rust_test_bench1
       - turbopack_build_release
@@ -1258,6 +1259,7 @@ jobs:
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.rust_check.result}} "Rust checks"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
+          subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           subjob ${{needs.turbopack_build_release.result}} "Turbopack Release Build"
@@ -1336,6 +1338,7 @@ jobs:
       - rust_check
       - turbopack_rust_test1
       - turbopack_rust_test2
+      - turbopack_typescript
       - turborepo_rust_test
       - turbopack_rust_test_bench1
       - turbopack_rust_test_bench2
@@ -1376,6 +1379,7 @@ jobs:
           subjob ${{needs.rust_check.result}} "Rust checks"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
+          subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
