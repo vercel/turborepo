@@ -22,8 +22,7 @@ use turbopack_core::{
     virtual_asset::VirtualAssetVc,
 };
 use turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc,
+    EcmascriptInputTransformsVc, EcmascriptModuleAssetType, EcmascriptModuleAssetVc,
 };
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
@@ -176,24 +175,16 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );
 
-    EcmascriptModuleAssetVc::new_with_inner_assets(
+    context.process(
         VirtualAssetVc::new(
-            postcss_config_path.join("transform.js"),
+            postcss_config_path.join("transform.ts"),
             AssetContent::File(embed_file("transforms/postcss.ts")).cell(),
         )
         .into(),
-        context,
-        Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: false,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
-        InnerAssetsVc::cell(indexmap! {
+        Value::new(ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
-        }),
+        }))),
     )
-    .into()
 }
 
 #[turbo_tasks::value_impl]
