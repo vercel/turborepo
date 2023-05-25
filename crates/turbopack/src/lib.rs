@@ -122,9 +122,16 @@ async fn apply_module_type(
             transforms,
             options,
         } => {
+            let context_for_module = match module_type {
+                ModuleType::TypescriptWithTypes { .. }
+                | ModuleType::TypescriptDeclaration { .. } => {
+                    context.with_types_resolving_enabled()
+                }
+                _ => context,
+            };
             let mut builder = EcmascriptModuleAssetVc::builder(
                 source,
-                context.into(),
+                context_for_module.into(),
                 *transforms,
                 *options,
                 context.compile_time_info(),
