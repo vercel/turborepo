@@ -29,8 +29,6 @@ type EsmImport = (
 type EsmExport = (exportGetters: Record<string, () => any>) => void;
 type ExportValue = (value: any) => void;
 
-type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
-
 type LoadChunk = (chunkPath: ChunkPath) => Promise<any> | undefined;
 
 type ModuleCache = Record<ModuleId, Module>;

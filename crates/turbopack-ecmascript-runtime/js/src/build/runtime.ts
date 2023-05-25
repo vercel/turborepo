@@ -24,6 +24,12 @@ type SourceInfo =
       parentId: ModuleId;
     };
 
+interface RequireContextEntry {
+  external: boolean;
+}
+
+type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
+
 interface TurbopackNodeBuildContext {
   e: Module["exports"];
   r: CommonJsRequire;
@@ -52,6 +58,15 @@ const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
 
 const moduleFactories: ModuleFactories = Object.create(null);
 const moduleCache: ModuleCache = Object.create(null);
+
+function commonJsRequireContext(
+  entry: RequireContextEntry,
+  sourceModule: Module
+): Exports {
+  return entry.external
+    ? externalRequire(entry.id(), false)
+    : commonJsRequire(sourceModule, entry.id());
+}
 
 function externalRequire(
   id: ModuleId,

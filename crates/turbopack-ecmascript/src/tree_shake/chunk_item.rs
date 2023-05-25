@@ -56,10 +56,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             availability_info,
         );
 
-        Ok(EcmascriptChunkItemContentVc::new(
-            content,
-            this.context.has_react_refresh(),
-        ))
+        Ok(EcmascriptChunkItemContentVc::new(content, this.context))
     }
 
     #[turbo_tasks::function]

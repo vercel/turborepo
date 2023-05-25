@@ -3,10 +3,6 @@
  * runtime (e.g. `module.hot`).
  */
 
-interface RequireContextEntry {
-  internal: boolean;
-}
-
 declare const enum HotUpdateStatus {
   idle = "idle",
 }

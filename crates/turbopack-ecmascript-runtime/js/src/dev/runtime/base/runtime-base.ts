@@ -45,10 +45,9 @@ type RefreshHelpers = {
   scheduleUpdate(): void;
 };
 
-interface TurbopackDevContext {
+interface TurbopackDevBaseContext {
   e: Module["exports"];
   r: CommonJsRequire;
-  x: ExternalRequire;
   f: RequireContextFactory;
   i: EsmImport;
   s: EsmExport;
@@ -62,6 +61,8 @@ interface TurbopackDevContext {
   k: RefreshContext;
   __dirname: string;
 }
+
+interface TurbopackDevContext extends TurbopackDevBaseContext {}
 
 // string encoding of a module factory (used in hmr updates)
 type ModuleFactoryString = string;
@@ -168,47 +169,6 @@ const chunkListChunksMap: Map<ChunkPath, Set<ChunkPath>> = new Map();
  * Map from chunk path to the chunk lists it belongs to.
  */
 const chunkChunkListsMap: Map<ChunkPath, Set<ChunkPath>> = new Map();
-
-const commonJsRequireContext: CommonJsRequireContext = (
-  entry,
-  sourceModule
-) => {
-  return entry.internal
-    ? commonJsRequire(sourceModule, entry.id())
-    : externalRequire(entry.id(), false);
-};
-
-function externalRequire(
-  id: ModuleId,
-  esm: boolean = false
-): Exports | EsmNamespaceObject {
-  let raw;
-  try {
-    raw = require(id);
-  } catch (err) {
-    // TODO(alexkirsz) This can happen when a client-side module tries to load
-    // an external module we don't provide a shim for (e.g. querystring, url).
-    // For now, we fail semi-silently, but in the future this should be a
-    // compilation error.
-    throw new Error(`Failed to load external module ${id}: ${err}`);
-  }
-  if (!esm) {
-    return raw;
-  }
-  const ns = {};
-  interopEsm(raw, ns, raw.__esModule);
-  return ns;
-}
-externalRequire.resolve = (
-  id: string,
-  options?:
-    | {
-        paths?: string[] | undefined;
-      }
-    | undefined
-) => {
-  return require.resolve(id, options);
-};
 
 const availableModules: Map<ModuleId, Promise<any> | true> = new Map();
 
@@ -373,23 +333,25 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
   // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
   try {
     runModuleExecutionHooks(module, (refresh) => {
-      moduleFactory.call(module.exports, {
-        e: module.exports,
-        r: commonJsRequire.bind(null, module),
-        x: externalRequire,
-        f: requireContext.bind(null, module),
-        i: esmImport.bind(null, module),
-        s: esmExport.bind(null, module),
-        j: cjsExport.bind(null, module.exports),
-        v: exportValue.bind(null, module),
-        n: exportNamespace.bind(null, module),
-        m: module,
-        c: moduleCache,
-        l: loadChunk.bind(null, { type: SourceType.Parent, parentId: id }),
-        g: globalThis,
-        k: refresh,
-        __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
-      });
+      moduleFactory.call(
+        module.exports,
+        augmentContext({
+          e: module.exports,
+          r: commonJsRequire.bind(null, module),
+          f: requireContext.bind(null, module),
+          i: esmImport.bind(null, module),
+          s: esmExport.bind(null, module),
+          j: cjsExport.bind(null, module.exports),
+          v: exportValue.bind(null, module),
+          n: exportNamespace.bind(null, module),
+          m: module,
+          c: moduleCache,
+          l: loadChunk.bind(null, { type: SourceType.Parent, parentId: id }),
+          g: globalThis,
+          k: refresh,
+          __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
+        })
+      );
     });
   } catch (error) {
     module.error = error as any;

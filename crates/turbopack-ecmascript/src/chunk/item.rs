@@ -3,16 +3,15 @@ use std::io::Write;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
-    primitives::{BoolVc, StringVc},
-    trace::TraceRawVcs,
-    Value, ValueToString,
+    debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs, Value, ValueToString,
 };
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::{
     asset::AssetVc,
     chunk::{
         availability_info::AvailabilityInfo, available_assets::AvailableAssetsVc, ChunkItem,
-        ChunkItemVc, ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleIdVc,
+        ChunkItemVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, FromChunkableAsset,
+        ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
     error::PrettyPrintError,
@@ -25,7 +24,6 @@ use super::{
 };
 use crate::{
     manifest::{chunk_asset::ManifestChunkAssetVc, loader_item::ManifestLoaderItemVc},
-    utils::FormatIter,
     EcmascriptModuleContentVc, ParseResultSourceMapVc,
 };
 
@@ -43,9 +41,10 @@ impl EcmascriptChunkItemContentVc {
     #[turbo_tasks::function]
     pub async fn new(
         content: EcmascriptModuleContentVc,
-        has_react_refresh: BoolVc,
+        context: EcmascriptChunkingContextVc,
     ) -> Result<Self> {
-        let refresh = *has_react_refresh.await?;
+        let refresh = *context.has_react_refresh().await?;
+        let externals = *context.environment().node_externals().await?;
 
         let content = content.await?;
         Ok(EcmascriptChunkItemContent {
@@ -54,11 +53,13 @@ impl EcmascriptChunkItemContentVc {
             options: if content.is_esm {
                 EcmascriptChunkItemOptions {
                     refresh,
+                    externals,
                     ..Default::default()
                 }
             } else {
                 EcmascriptChunkItemOptions {
                     refresh,
+                    externals,
                     // These things are not available in ESM
                     module: true,
                     exports: true,
@@ -76,7 +77,6 @@ impl EcmascriptChunkItemContentVc {
         let this = self.await?;
         let mut args = vec![
             "r: __turbopack_require__",
-            "x: __turbopack_external_require__",
             "f: __turbopack_require_context__",
             "i: __turbopack_import__",
             "s: __turbopack_esm__",
@@ -89,6 +89,9 @@ impl EcmascriptChunkItemContentVc {
             // HACK
             "__dirname",
         ];
+        if this.options.externals {
+            args.push("x: __turbopack_external_require__");
+        }
         if this.options.refresh {
             args.push("k: __turbopack_refresh__");
         }
@@ -128,6 +131,9 @@ pub struct EcmascriptChunkItemOptions {
     /// Whether this chunk item's module factory should include an `exports`
     /// argument.
     pub exports: bool,
+    /// Whether this chunk item's module factory should include a
+    /// `__turbopack_external_require__` argument.
+    pub externals: bool,
     pub this: bool,
     pub placeholder_for_future_extensions: (),
 }

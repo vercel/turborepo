@@ -73,8 +73,7 @@ use turbopack_core::{
 pub use self::references::AnalyzeEcmascriptModuleResultVc;
 use self::{
     chunk::{
-        placeable::EcmascriptExportsReadRef, EcmascriptChunkItemContentVc,
-        EcmascriptChunkingContext, EcmascriptExportsVc,
+        placeable::EcmascriptExportsReadRef, EcmascriptChunkItemContentVc, EcmascriptExportsVc,
     },
     code_gen::{
         CodeGen, CodeGenerateableWithAvailabilityInfo, CodeGenerateableWithAvailabilityInfoVc,
@@ -436,10 +435,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     ) -> Result<EcmascriptChunkItemContentVc> {
         let this = self_vc.await?;
         let content = this.module.module_content(this.context, availability_info);
-        Ok(EcmascriptChunkItemContentVc::new(
-            content,
-            this.context.has_react_refresh(),
-        ))
+        Ok(EcmascriptChunkItemContentVc::new(content, this.context))
     }
 }
 

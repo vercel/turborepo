@@ -15,6 +15,17 @@ type ChunkRunner = {
 
 let BACKEND: RuntimeBackend;
 
+function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
+  return context;
+}
+
+function commonJsRequireContext(
+  entry: RequireContextEntry,
+  sourceModule: Module
+): Exports {
+  return commonJsRequire(sourceModule, entry.id());
+}
+
 (() => {
   BACKEND = {
     // The "none" runtime expects all chunks within the same chunk group to be

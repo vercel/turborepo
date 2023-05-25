@@ -16,6 +16,17 @@ type ChunkResolver = {
 
 let BACKEND: RuntimeBackend;
 
+function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
+  return context;
+}
+
+function commonJsRequireContext(
+  entry: RequireContextEntry,
+  sourceModule: Module
+): Exports {
+  return commonJsRequire(sourceModule, entry.id());
+}
+
 (() => {
   BACKEND = {
     async registerChunk(chunkPath, params) {
