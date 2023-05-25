@@ -23,6 +23,30 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     },
     {
       code: `
+        const { ROOT_DOT_ENV, WEB_DOT_ENV } = process.env;
+      `,
+      options: [
+        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+      ],
+      filename: path.join(
+        __dirname,
+        "../../__fixtures__/workspace-configs/apps/web/index.js"
+      ),
+    },
+    {
+      code: `
+        const { NEXT_PUBLIC_HAHAHAHA } = process.env;
+      `,
+      options: [
+        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+      ],
+      filename: path.join(
+        __dirname,
+        "../../__fixtures__/workspace-configs/apps/web/index.js"
+      ),
+    },
+    {
+      code: `
         const { ENV_1 } = process.env;
       `,
       options: [
@@ -245,6 +269,28 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
         {
           message:
             "ENV_2 is not listed as a dependency in the root turbo.json or workspace (apps/docs) turbo.json",
+        },
+      ],
+    },
+    {
+      code: `
+        const { NEXT_PUBLIC_HAHAHAHA, NEXT_PUBLIC_EXCLUDE, NEXT_PUBLIC_EXCLUDED } = process.env;
+      `,
+      options: [
+        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+      ],
+      filename: path.join(
+        __dirname,
+        "../../__fixtures__/workspace-configs/apps/web/index.js"
+      ),
+      errors: [
+        {
+          message:
+            "NEXT_PUBLIC_EXCLUDE is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json",
+        },
+        {
+          message:
+            "NEXT_PUBLIC_EXCLUDED is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json",
         },
       ],
     },

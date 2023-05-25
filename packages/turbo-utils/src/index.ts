@@ -1,6 +1,6 @@
 // utils
 export { getTurboRoot } from "./getTurboRoot";
-export { getTurboConfigs } from "./getTurboConfigs";
+export { getTurboConfigs, getWorkspaceConfigs } from "./getTurboConfigs";
 export { searchUp } from "./searchUp";
 export { getAvailablePackageManagers } from "./managers";
 export { isFolderEmpty } from "./isFolderEmpty";
@@ -22,4 +22,8 @@ export * as logger from "./logger";
 // types
 export type { PackageManagerAvailable } from "./managers";
 export type { RepoInfo } from "./examples";
-export type { TurboConfigs } from "./getTurboConfigs";
+export type {
+  TurboConfig,
+  TurboConfigs,
+  WorkspaceConfig,
+} from "./getTurboConfigs";

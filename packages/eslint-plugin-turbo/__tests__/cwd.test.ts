@@ -20,7 +20,48 @@ describe("eslint settings check", () => {
     const configJson = JSON5.parse(configString);
 
     expect(configJson.settings).toEqual({
-      turbo: { envVars: ["CI", "UNORDERED"] },
+      turbo: {
+        cacheKey: {
+          global: {
+            legacyConfig: [],
+            env: ["CI", "UNORDERED"],
+            passThroughEnv: null,
+            dotEnv: {
+              filePaths: [".env", "missing.env"],
+              hashes: {
+                ".env": "58970a9a72aacd0216f8e3687b21c55d0d4e2e1e",
+              },
+            },
+          },
+          globalTasks: {
+            build: {
+              legacyConfig: [],
+              env: [],
+              passThroughEnv: null,
+              dotEnv: null,
+            },
+            test: {
+              legacyConfig: [],
+              env: [],
+              passThroughEnv: null,
+              dotEnv: null,
+            },
+            lint: {
+              legacyConfig: [],
+              env: [],
+              passThroughEnv: null,
+              dotEnv: null,
+            },
+            deploy: {
+              legacyConfig: [],
+              env: [],
+              passThroughEnv: null,
+              dotEnv: null,
+            },
+          },
+          workspaceTasks: {},
+        },
+      },
     });
   });
 
@@ -39,7 +80,48 @@ describe("eslint settings check", () => {
     const configJson = JSON5.parse(configString);
 
     expect(configJson.settings).toEqual({
-      turbo: { envVars: ["CI", "UNORDERED"] },
+      turbo: {
+        cacheKey: {
+          global: {
+            legacyConfig: [],
+            env: ["CI", "UNORDERED"],
+            passThroughEnv: null,
+            dotEnv: {
+              filePaths: [".env", "missing.env"],
+              hashes: {
+                ".env": "58970a9a72aacd0216f8e3687b21c55d0d4e2e1e",
+              },
+            },
+          },
+          globalTasks: {
+            build: {
+              legacyConfig: [],
+              env: [],
+              passThroughEnv: null,
+              dotEnv: null,
+            },
+            test: {
+              legacyConfig: [],
+              env: [],
+              passThroughEnv: null,
+              dotEnv: null,
+            },
+            lint: {
+              legacyConfig: [],
+              env: [],
+              passThroughEnv: null,
+              dotEnv: null,
+            },
+            deploy: {
+              legacyConfig: [],
+              env: [],
+              passThroughEnv: null,
+              dotEnv: null,
+            },
+          },
+          workspaceTasks: {},
+        },
+      },
     });
   });
 });
