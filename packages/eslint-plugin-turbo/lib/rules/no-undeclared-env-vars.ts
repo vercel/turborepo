@@ -1,8 +1,12 @@
 import type { Rule } from "eslint";
+import fs from "fs";
 import path from "path";
 import { Node, MemberExpression } from "estree";
 import { RULES } from "../constants";
 import getEnvVarDependencies from "../utils/getEnvVarDependencies";
+import { getTurboConfigs } from "@turbo/utils";
+import { wildcardTests } from "../utils/wildcard-processing";
+import { dotEnv } from "../utils/dotenv-processing";
 
 const meta: Rule.RuleMetaData = {
   type: "problem",
@@ -59,8 +63,180 @@ function normalizeCwd(
   return undefined;
 }
 
+type EnvVar = string;
+type EnvTest = (variable: EnvVar) => boolean;
+interface EnvContext {
+  legacyConfig: EnvTest;
+  env: EnvTest;
+  passThroughEnv: EnvTest;
+  dotEnv: EnvTest;
+}
+
+interface EnvConfig {
+  legacyConfig: string[] | undefined;
+  env: string[] | undefined;
+  passThroughEnv: string[] | null | undefined;
+  dotEnv: string[] | null | undefined;
+}
+
+type TestContext = {
+  allowList: EnvTest[];
+  global: EnvContext;
+  globalTasks: {
+    [script: string]: EnvContext;
+  };
+  workspaceTasks: {
+    [workspace: string]: {
+      [script: string]: EnvContext;
+    };
+  };
+};
+
+function envContextTestArray(envContext: EnvContext) {
+  return [
+    envContext.legacyConfig,
+    envContext.env,
+    envContext.passThroughEnv,
+    envContext.dotEnv,
+  ];
+}
+
+function workspaceNameFromFilePath(filePath: string): string | null {
+  let workspacePaths = Object.keys(workspaceLookup);
+  let possibleWorkspacePaths = workspacePaths
+    .filter((workspacePath) => filePath.startsWith(workspacePath))
+    .sort();
+
+  if (possibleWorkspacePaths.length > 0) {
+    return workspaceLookup[possibleWorkspacePaths[0]];
+  }
+
+  return null;
+}
+
+function checkForInclusion(
+  testContext: TestContext,
+  workspaceName: string | null,
+  variable: EnvVar
+): boolean {
+  const tests = [
+    testContext.allowList,
+    envContextTestArray(testContext.global),
+    ...Object.values(testContext.globalTasks).map((context) =>
+      envContextTestArray(context)
+    ),
+  ];
+
+  if (workspaceName !== null) {
+    tests.push(
+      ...Object.values(testContext.workspaceTasks[workspaceName]).map(
+        (context) => envContextTestArray(context)
+      )
+    );
+  }
+
+  return tests.flat().findIndex((test) => test(variable)) === -1;
+}
+
+function TestFalse(_: EnvVar) {
+  return false;
+}
+function getEnvContext(cwd: string, config: EnvConfig) {
+  const envContext: EnvContext = {
+    legacyConfig: TestFalse,
+    env: TestFalse,
+    passThroughEnv: TestFalse,
+    dotEnv: TestFalse,
+  };
+
+  // a. Check for legacy configuration
+  if (config.legacyConfig) {
+    const legacyConfigEnvVars = config.legacyConfig
+      // filter for env vars
+      .filter((dep) => dep.startsWith("$"))
+      // remove leading $
+      .map((variable) => variable.slice(1));
+
+    // Conditionally add this function.
+    if (legacyConfigEnvVars.length) {
+      const dependsOnEnvSet = new Set(legacyConfigEnvVars);
+      envContext.legacyConfig = (variable: EnvVar) =>
+        dependsOnEnvSet.has(variable);
+    }
+  }
+
+  // b. Check the env configuration.
+  if (config.env && config.env.length > 0) {
+    const testRegexes = wildcardTests(config.env);
+    envContext.env = (variable: EnvVar) => {
+      return (
+        testRegexes.inclusions.test(variable) &&
+        !testRegexes.exclusions.test(variable)
+      );
+    };
+  }
+
+  // c. Check the passThroughEnv configuration.
+  if (config.passThroughEnv && config.passThroughEnv.length > 0) {
+    const testRegexes = wildcardTests(config.passThroughEnv);
+    envContext.passThroughEnv = (variable: EnvVar) => {
+      return (
+        testRegexes.inclusions.test(variable) &&
+        !testRegexes.exclusions.test(variable)
+      );
+    };
+  }
+
+  // d. Check to see if the variable is accounted for by dotEnv.
+  if (config.dotEnv && config.dotEnv.length > 0) {
+    const dotEnvEnvSet = dotEnv(cwd, config.dotEnv);
+    envContext.dotEnv = (variable: EnvVar) => dotEnvEnvSet.has(variable);
+  }
+
+  return envContext;
+}
+
+const workspaceLookup: { [path: string]: string } = {};
+function getWorkspaceName(workspacePath: string): string {
+  if (workspaceLookup[workspacePath]) {
+    return workspaceLookup[workspacePath];
+  }
+
+  const packageJsonContents = fs.readFileSync(
+    path.join(workspacePath, "package.json"),
+    "utf8"
+  );
+  const packageJson = JSON.parse(packageJsonContents);
+
+  if (packageJson.name) {
+    workspaceLookup[workspacePath] = packageJson.name;
+    return packageJson.name;
+  }
+
+  throw new Error(`Unable to discover workspace name: ${workspacePath}`);
+}
+
 function create(context: Rule.RuleContext): Rule.RuleListener {
   const { options, getPhysicalFilename } = context;
+
+  // This will get bundled up as a neat little object later.
+  let allowListTests: EnvTest[];
+  let globalEnvContext: EnvContext = {
+    legacyConfig: TestFalse,
+    env: TestFalse,
+    passThroughEnv: TestFalse,
+    dotEnv: TestFalse,
+  };
+  let globalTasks: {
+    [script: string]: EnvContext;
+  } = {};
+  let workspaceTasks: {
+    [workspace: string]: {
+      [script: string]: EnvContext;
+    };
+  } = {};
+
+  // 1. Create the tests for the regex allowList.
   const allowList: Array<string> = options?.[0]?.allowList || [];
   const regexAllowList: Array<RegExp> = [];
   allowList.forEach((allowed) => {
@@ -72,10 +248,112 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     }
   });
 
+  allowListTests = regexAllowList.map((allowedRegex) => {
+    return (variable: EnvVar) => {
+      return allowedRegex.test(variable);
+    };
+  });
+
   const cwd = normalizeCwd(
     context.getCwd ? context.getCwd() : undefined,
     options
   );
+
+  // Process the project.
+  const turboJsons = getTurboConfigs(cwd);
+
+  // 2. Create the tests for the root turbo.json.
+  const rootTurboJson = turboJsons.find((turboJson) => turboJson.isRootConfig);
+  if (rootTurboJson && !("extends" in rootTurboJson.config)) {
+    // second clause is a type assertion
+    // First, there is a default, unconditional, global context.
+    globalEnvContext = getEnvContext(rootTurboJson.turboConfigPath, {
+      legacyConfig: rootTurboJson.config.globalDependencies,
+      env: rootTurboJson.config.globalEnv,
+      passThroughEnv: rootTurboJson.config.globalPassThroughEnv,
+      dotEnv: rootTurboJson.config.globalDotEnv,
+    });
+
+    // Second, there is a list of tasks which are conditional.
+    Object.entries(rootTurboJson.config.pipeline).forEach(
+      ([taskName, taskDefinition]) => {
+        let workspaceName;
+        let scriptName;
+
+        if (taskName.length === 0) {
+          throw new Error("Invalid task name found in turbo.json.");
+        }
+
+        // See if there is a workspace name.
+        if (taskName.indexOf("#") !== -1) {
+          if (taskName.indexOf("#") === taskName.lastIndexOf("#")) {
+            [workspaceName, scriptName] = taskName.split("#");
+            if (workspaceName.length === 0 || scriptName.length === 0) {
+              throw new Error("Invalid task name found in turbo.json.");
+            }
+
+            // This task applies to
+            workspaceTasks[workspaceName][scriptName] = getEnvContext(
+              rootTurboJson.turboConfigPath,
+              {
+                legacyConfig: taskDefinition.dependsOn,
+                env: taskDefinition.env,
+                passThroughEnv: taskDefinition.passThroughEnv,
+                dotEnv: taskDefinition.dotEnv,
+              }
+            );
+          }
+        } else {
+          scriptName = taskName;
+          globalTasks[scriptName] = getEnvContext(
+            rootTurboJson.turboConfigPath,
+            {
+              legacyConfig: taskDefinition.dependsOn,
+              env: taskDefinition.env,
+              passThroughEnv: taskDefinition.passThroughEnv,
+              dotEnv: taskDefinition.dotEnv,
+            }
+          );
+        }
+      }
+    );
+  }
+
+  // 3. Process the rest of the workspace turbo.json files.
+  const workspaceTurboJsons = turboJsons.filter(
+    (turboJson) => !turboJson.isRootConfig
+  );
+
+  workspaceTurboJsons.forEach((turboJson) => {
+    Object.entries(turboJson.config.pipeline).forEach(
+      ([taskName, taskDefinition]) => {
+        if (taskName.length === 0 || taskName.indexOf("#") !== -1) {
+          throw new Error("Invalid task name found in turbo.json.");
+        }
+
+        let workspaceName = getWorkspaceName(turboJson.workspacePath);
+        let scriptName = taskName;
+
+        workspaceTasks[workspaceName][scriptName] = getEnvContext(
+          turboJson.turboConfigPath,
+          {
+            legacyConfig: taskDefinition.dependsOn,
+            env: taskDefinition.env,
+            passThroughEnv: taskDefinition.passThroughEnv,
+            dotEnv: taskDefinition.dotEnv,
+          }
+        );
+      }
+    );
+  });
+
+  const calculatedTestContext: TestContext = {
+    allowList: allowListTests,
+    global: globalEnvContext,
+    globalTasks: globalTasks,
+    workspaceTasks: workspaceTasks,
+  };
+
   const filePath = getPhysicalFilename();
   const allTurboVars = getEnvVarDependencies({
     cwd,
@@ -104,6 +382,16 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
   }
 
   const checkKey = (node: Node, envKey?: string) => {
+    if (envKey) {
+      let workspaceName = workspaceNameFromFilePath(filePath);
+      let configured = checkForInclusion(
+        calculatedTestContext,
+        workspaceName,
+        envKey
+      );
+      console.log(configured);
+    }
+
     if (
       envKey &&
       !globalTurboVars.has(envKey) &&
