@@ -464,7 +464,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: ./.github/actions/setup-node
 
       - name: Install dependencies
         run: pnpm install -r --side-effects-cache false
