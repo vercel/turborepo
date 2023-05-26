@@ -75,6 +75,8 @@
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
@@ -88,9 +90,9 @@
 <span class="kw">use crate</span>::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
-        EcmascriptChunkingContextVc,
+        EcmascriptChunkingContext, EcmascriptChunkingContextVc,
     },
-    gen_content,
+    EcmascriptModuleContentVc,
 };
 
 <span class="doccomment">/// This is an implementation of [ChunkItem] for [EcmascriptModulePartAssetVc].
@@ -125,13 +127,15 @@
         <span class="kw">let </span>split_data = split_module(module.full_module);
         <span class="kw">let </span>parsed = part_of_module(split_data, module.part);
 
-        <span class="prelude-val">Ok</span>(gen_content(
-            this.context,
-            this.module.analyze(),
+        <span class="kw">let </span>content = EcmascriptModuleContentVc::new(
             parsed,
             module.full_module.ident(),
+            this.context,
+            this.module.analyze(),
             availability_info,
-        ))
+        );
+
+        <span class="prelude-val">Ok</span>(EcmascriptChunkItemContentVc::new(content, this.context))
     }
 
     <span class="attr">#[turbo_tasks::function]

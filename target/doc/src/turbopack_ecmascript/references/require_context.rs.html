@@ -514,6 +514,15 @@
 <a href="#514" id="514">514</a>
 <a href="#515" id="515">515</a>
 <a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::VecDeque, sync::Arc};
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -538,7 +547,8 @@
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContextVc,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext,
+        ChunkingContextVc,
     },
     ident::AssetIdentVc,
     issue::{IssueSeverityVc, OptionIssueSourceVc},
@@ -971,11 +981,19 @@
 
             <span class="kw">let </span>prop = KeyValueProp {
                 key: PropName::Str(key.as_str().into()),
-                value: <span class="macro">quote_expr!</span>(
-                    <span class="string">&quot;{ internal: $internal, id: () =&gt; $id }&quot;</span>,
-                    internal: Expr = pm.is_internal_import().into(),
-                    id: Expr = pm.apply(Expr::Lit(Lit::Str(entry.origin_relative.as_str().into()))),
-                ),
+                value: <span class="kw">match </span><span class="kw-2">*</span><span class="self">self</span>.context.environment().node_externals().<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="bool-val">true </span>=&gt; <span class="macro">quote_expr!</span>(
+                        <span class="string">&quot;{ external: $external, id: () =&gt; $id }&quot;</span>,
+                        external: Expr = (!pm.is_internal_import()).into(),
+                        id: Expr =
+                            pm.apply(Expr::Lit(Lit::Str(entry.origin_relative.as_str().into()))),
+                    ),
+                    <span class="bool-val">false </span>=&gt; <span class="macro">quote_expr!</span>(
+                        <span class="string">&quot;{ id: () =&gt; $id }&quot;</span>,
+                        id: Expr =
+                            pm.apply(Expr::Lit(Lit::Str(entry.origin_relative.as_str().into()))),
+                    ),
+                },
             };
 
             context_map

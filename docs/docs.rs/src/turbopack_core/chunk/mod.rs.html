@@ -637,10 +637,13 @@
 <a href="#637" id="637">637</a>
 <a href="#638" id="638">638</a>
 <a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>containment_tree;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>data;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>evaluate;
 <span class="kw">pub mod </span>optimize;
 
@@ -668,6 +671,7 @@
 <span class="kw">use </span><span class="self">self</span>::availability_info::AvailabilityInfo;
 <span class="kw">pub use </span><span class="self">self</span>::{
     chunking_context::{ChunkingContext, ChunkingContextVc},
+    data::{ChunkData, ChunkDataOption, ChunkDataOptionVc, ChunkDataVc, ChunksData, ChunksDataVc},
     evaluate::{EvaluatableAsset, EvaluatableAssetVc, EvaluatableAssets, EvaluatableAssetsVc},
 };
 <span class="kw">use crate</span>::{

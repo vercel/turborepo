@@ -243,43 +243,19 @@
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
-<a href="#248" id="248">248</a>
-<a href="#249" id="249">249</a>
-<a href="#250" id="250">250</a>
-<a href="#251" id="251">251</a>
-<a href="#252" id="252">252</a>
-<a href="#253" id="253">253</a>
-<a href="#254" id="254">254</a>
-<a href="#255" id="255">255</a>
-<a href="#256" id="256">256</a>
-<a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indoc::writedoc;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
-<span class="kw">use </span>turbo_tasks_fs::{embed_file, File, FileContent};
+<span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
-    chunk::{ChunkVc, ChunkingContext, EvaluatableAssetsVc, ModuleIdReadRef},
+    chunk::{
+        ChunkDataVc, ChunkVc, ChunkingContext, ChunksDataVc, EvaluatableAssetsVc, ModuleIdReadRef,
+    },
     code_builder::{CodeBuilder, CodeVc},
-    environment::ChunkLoading,
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
     source_map::{
@@ -287,14 +263,12 @@
     },
 };
 <span class="kw">use </span>turbopack_ecmascript::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    chunk::{EcmascriptChunkData, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     utils::StringifyJs,
 };
+<span class="kw">use </span>turbopack_ecmascript_runtime::RuntimeType;
 
-<span class="kw">use crate</span>::{
-    ecmascript::chunk_data::{ChunkDataVc, ChunksDataVc},
-    DevChunkingContextVc,
-};
+<span class="kw">use </span><span class="kw">crate</span>::DevChunkingContextVc;
 
 <span class="doccomment">/// An Ecmascript chunk that:
 /// * Contains the Turbopack dev runtime code; and
@@ -338,6 +312,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>code(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CodeVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>environment = this.chunking_context.environment();
 
         <span class="kw">let </span>output_root = this.chunking_context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>chunk_path = <span class="self">self</span>.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -355,7 +330,7 @@
         <span class="kw">let </span>other_chunks_data = other_chunks_data.iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>other_chunks_data: Vec&lt;<span class="kw">_</span>&gt; = other_chunks_data
             .iter()
-            .map(|chunk_data| chunk_data.runtime_chunk_data())
+            .map(|chunk_data| EcmascriptChunkData::new(chunk_data))
             .collect();
 
         <span class="kw">let </span>runtime_module_ids = this
@@ -402,47 +377,22 @@
                     {{}},
                     {}
                 ]);
-                (() =&gt; {{
-                if (!Array.isArray(globalThis.TURBOPACK)) {{
-                    return;
-                }}
             &quot;#</span>,
             StringifyJs(<span class="kw-2">&amp;</span>chunk_public_path),
             StringifyJs(<span class="kw-2">&amp;</span>params),
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>shared_runtime_code = <span class="macro">embed_file!</span>(<span class="string">&quot;js/src/runtime.js&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>shared_runtime_code {
-            FileContent::NotFound =&gt; <span class="macro">bail!</span>(<span class="string">&quot;shared runtime code is not found&quot;</span>),
-            FileContent::Content(file) =&gt; code.push_source(file.content(), <span class="prelude-val">None</span>),
-        };
-
-        <span class="comment">// The specific runtime code depends on declarations in the shared runtime code,
-        // hence it must be appended after it.
-        </span><span class="kw">let </span>specific_runtime_code =
-            <span class="kw">match </span><span class="kw-2">&amp;*</span>this.chunking_context.environment().chunk_loading().<span class="kw">await</span><span class="question-mark">? </span>{
-                ChunkLoading::None =&gt; <span class="macro">embed_file!</span>(<span class="string">&quot;js/src/runtime.none.js&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>,
-                ChunkLoading::NodeJs =&gt; <span class="macro">embed_file!</span>(<span class="string">&quot;js/src/runtime.nodejs.js&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>,
-                ChunkLoading::Dom =&gt; <span class="macro">embed_file!</span>(<span class="string">&quot;js/src/runtime.dom.js&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>,
-            };
-
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>specific_runtime_code {
-            FileContent::NotFound =&gt; <span class="macro">bail!</span>(<span class="string">&quot;specific runtime code is not found&quot;</span>),
-            FileContent::Content(file) =&gt; code.push_source(file.content(), <span class="prelude-val">None</span>),
-        };
-
-        <span class="comment">// Registering chunks depends on the BACKEND variable, which is set by the
-        // specific runtime code, hence it must be appended after it.
-        </span><span class="macro">writedoc!</span>(
-            code,
-            <span class="string">r#&quot;
-                const chunksToRegister = globalThis.TURBOPACK;
-                globalThis.TURBOPACK = {{ push: registerChunk }};
-                chunksToRegister.forEach(registerChunk);
-                }})();
-            &quot;#
-        </span>)<span class="question-mark">?</span>;
+        <span class="kw">match </span>this.chunking_context.<span class="kw">await</span><span class="question-mark">?</span>.runtime_type() {
+            RuntimeType::Default =&gt; {
+                <span class="kw">let </span>runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(environment);
+                code.push_code(<span class="kw-2">&amp;*</span>runtime_code.<span class="kw">await</span><span class="question-mark">?</span>);
+            }
+            <span class="attr">#[cfg(feature = <span class="string">&quot;test&quot;</span>)]
+            </span>RuntimeType::Dummy =&gt; {
+                <span class="kw">let </span>runtime_code = turbopack_ecmascript_runtime::get_dummy_runtime_code();
+                code.push_code(<span class="kw-2">&amp;</span>runtime_code);
+            }
+        }
 
         <span class="kw">if </span>code.has_source_map() {
             <span class="kw">let </span>filename = chunk_path.file_name();

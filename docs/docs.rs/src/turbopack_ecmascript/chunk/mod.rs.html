@@ -452,8 +452,11 @@
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
 <a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>content;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>context;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>data;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>item;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>placeable;
 
@@ -484,6 +487,7 @@
 <span class="kw">pub use </span><span class="self">self</span>::{
     content::{EcmascriptChunkContent, EcmascriptChunkContentVc},
     context::{EcmascriptChunkingContext, EcmascriptChunkingContextVc},
+    data::EcmascriptChunkData,
     item::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemOptions, EcmascriptChunkItemVc,

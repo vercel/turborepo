@@ -17,7 +17,6 @@
 <a href="#17" id="17">17</a>
 <a href="#18" id="18">18</a>
 <a href="#19" id="19">19</a>
-<a href="#20" id="20">20</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(lint_reasons)]
 #![feature(iter_intersperse)]
 #![feature(int_roundings)]
@@ -25,17 +24,16 @@
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>css;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>ecmascript;
-<span class="kw">pub mod </span>embed_js;
 <span class="kw">pub mod </span>react_refresh;
 
 <span class="kw">pub use </span>chunking_context::{DevChunkingContext, DevChunkingContextBuilder, DevChunkingContextVc};
-<span class="kw">pub use </span>ecmascript::chunk_data::{ChunkDataOptionVc, ChunkDataVc, ChunksDataVc};
 
 <span class="kw">pub fn </span>register() {
     turbo_tasks::register();
     turbo_tasks_fs::register();
     turbopack_core::register();
     turbopack_ecmascript::register();
+    turbopack_ecmascript_runtime::register();
     <span class="macro">include!</span>(<span class="macro">concat!</span>(<span class="macro">env!</span>(<span class="string">&quot;OUT_DIR&quot;</span>), <span class="string">&quot;/register.rs&quot;</span>));
 }
 </code></pre></div>

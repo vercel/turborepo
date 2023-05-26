@@ -195,6 +195,12 @@
 <a href="#195" id="195">195</a>
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     cmp::min,
     io::{BufRead, <span class="prelude-ty">Result </span><span class="kw">as </span>IoResult, Write},
@@ -318,6 +324,12 @@
 }
 
 <span class="kw">impl </span>ops::AddAssign&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; <span class="kw">for </span>CodeBuilder {
+    <span class="kw">fn </span>add_assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rhs: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) {
+        <span class="self">self</span>.push_static_bytes(rhs.as_bytes());
+    }
+}
+
+<span class="kw">impl </span>ops::AddAssign&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt; <span class="kw">for </span><span class="kw-2">&amp;mut </span>CodeBuilder {
     <span class="kw">fn </span>add_assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rhs: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) {
         <span class="self">self</span>.push_static_bytes(rhs.as_bytes());
     }
