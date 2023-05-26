@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) strict_env_vars
 
-With --experimental-env-mode=loose, all vars are available
+With --env-mode=loose, all vars are available
 
 Set the env vars
   $ export GLOBAL_VAR_PT=higlobalpt
@@ -13,12 +13,12 @@ Set the env vars
   $ export SYSTEMROOT=hisysroot
 
 All vars available in loose mode
-  $ ${TURBO} build -vv --experimental-env-mode=loose > /dev/null 2>&1
+  $ ${TURBO} build -vv --env-mode=loose > /dev/null 2>&1
   $ cat apps/my-app/out.txt
   globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes'
 
 All vars available in loose mode, even when global and pass through configs defined
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/all.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
-  $ ${TURBO} build -vv --experimental-env-mode=loose > /dev/null 2>&1
+  $ ${TURBO} build -vv --env-mode=loose > /dev/null 2>&1
   $ cat apps/my-app/out.txt
   globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes'

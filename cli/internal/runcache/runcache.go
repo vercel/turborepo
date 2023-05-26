@@ -321,7 +321,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		hash:              hash,
 		pt:                pt,
 		taskOutputMode:    taskOutputMode,
-		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
+		cachingDisabled:   !pt.TaskDefinition.Cache,
 		LogFileName:       logFileName,
 	}
 }

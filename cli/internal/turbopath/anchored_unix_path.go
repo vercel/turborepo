@@ -1,12 +1,21 @@
 package turbopath
 
 import (
+	"fmt"
 	"path"
 	"path/filepath"
 )
 
 // AnchoredUnixPath is a path stemming from a specified root using Unix `/` separators.
 type AnchoredUnixPath string
+
+// CheckedToAnchoredUnixPath inspects a string and determines if it is a relative path.
+func CheckedToAnchoredUnixPath(s string) (AnchoredUnixPath, error) {
+	if filepath.IsAbs(s) {
+		return "", fmt.Errorf("%v is not a relative path", s)
+	}
+	return AnchoredUnixPath(s), nil
+}
 
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.

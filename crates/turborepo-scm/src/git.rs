@@ -5,6 +5,7 @@ use std::{
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
 };
+use which::which;
 
 use crate::Error;
 
@@ -76,7 +77,8 @@ fn execute_git_command(
     args: &[&str],
     pathspec: &str,
 ) -> Result<Vec<u8>, Error> {
-    let mut command = Command::new("git");
+    let git_binary = which("git")?;
+    let mut command = Command::new(git_binary);
     command.args(args).current_dir(git_root);
 
     add_pathspec(&mut command, pathspec);
@@ -156,7 +158,8 @@ pub fn previous_content(
         file_path.as_path().try_into()?
     };
 
-    let mut command = Command::new("git");
+    let git_binary = which("git")?;
+    let mut command = Command::new(git_binary);
     let command = command
         .arg("show")
         .arg(format!(
@@ -189,7 +192,8 @@ mod tests {
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
-    use turbopath::{PathError, PathValidationError};
+    use turbopath::PathError;
+    use which::which;
 
     use super::previous_content;
     use crate::{git::changed_files, Error};
@@ -253,7 +257,9 @@ mod tests {
     #[test]
     fn test_shallow_clone() -> Result<(), Error> {
         let tmp_dir = tempfile::tempdir()?;
-        let output = Command::new("git")
+
+        let git_binary = which("git")?;
+        let output = Command::new(git_binary)
             .args(&[
                 "clone",
                 "--depth",
@@ -619,10 +625,7 @@ mod tests {
 
         assert_matches!(
             turbo_root_is_not_subdir_of_git_root,
-            Err(Error::Path(
-                PathError::PathValidationError(PathValidationError::NotParent(_, _)),
-                _
-            ))
+            Err(Error::Path(PathError::NotParent(_, _), _))
         );
 
         Ok(())

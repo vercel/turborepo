@@ -27,9 +27,10 @@ import (
 // package-task hashing is threadsafe, provided topographical order is
 // respected.
 type Tracker struct {
-	rootNode   string
-	globalHash string
-	pipeline   fs.Pipeline
+	rootNode            string
+	globalHash          string
+	EnvAtExecutionStart env.EnvironmentVariableMap
+	pipeline            fs.Pipeline
 
 	packageInputsHashes map[string]string
 
@@ -49,10 +50,11 @@ type Tracker struct {
 }
 
 // NewTracker creates a tracker for package-inputs combinations and package-task combinations.
-func NewTracker(rootNode string, globalHash string, pipeline fs.Pipeline) *Tracker {
+func NewTracker(rootNode string, globalHash string, envAtExecutionStart env.EnvironmentVariableMap, pipeline fs.Pipeline) *Tracker {
 	return &Tracker{
 		rootNode:               rootNode,
 		globalHash:             globalHash,
+		EnvAtExecutionStart:    envAtExecutionStart,
 		pipeline:               pipeline,
 		packageTaskHashes:      make(map[string]string),
 		packageTaskFramework:   make(map[string]string),
@@ -127,6 +129,21 @@ func (th *Tracker) CalculateFileHashes(
 					return err
 				}
 
+				// Make sure we include specified .env files in the file hash.
+				// Handled separately because these are not globs!
+				if len(packageFileHashInputs.taskDefinition.DotEnv) > 0 {
+					packagePath := pkg.Dir.RestoreAnchor(repoRoot)
+					dotEnvObject, err := hashing.GetHashesForExistingFiles(packagePath, packageFileHashInputs.taskDefinition.DotEnv.ToSystemPathArray())
+					if err != nil {
+						return err
+					}
+
+					// Add the dotEnv files into the file hash object.
+					for key, value := range dotEnvObject {
+						hashObject[key] = value
+					}
+				}
+
 				// Get the combined hash of all the files.
 				hash, err := fs.HashObject(hashObject)
 				if err != nil {
@@ -156,57 +173,32 @@ func (th *Tracker) CalculateFileHashes(
 }
 
 type taskHashable struct {
+	globalHash           string
+	taskDependencyHashes []string
 	packageDir           turbopath.AnchoredUnixPath
 	hashOfFiles          string
 	externalDepsHash     string
 	task                 string
 	outputs              fs.TaskOutputs
 	passThruArgs         []string
+	env                  []string
+	resolvedEnvVars      env.EnvironmentVariablePairs
+	passThroughEnv       []string
 	envMode              util.EnvMode
-	passthroughEnv       []string
-	hashableEnvPairs     []string
-	globalHash           string
-	taskDependencyHashes []string
-}
-
-type oldTaskHashable struct {
-	packageDir           turbopath.AnchoredUnixPath
-	hashOfFiles          string
-	externalDepsHash     string
-	task                 string
-	outputs              fs.TaskOutputs
-	passThruArgs         []string
-	hashableEnvPairs     []string
-	globalHash           string
-	taskDependencyHashes []string
+	dotEnv               turbopath.AnchoredUnixPathArray
 }
 
 // calculateTaskHashFromHashable returns a hash string from the taskHashable
-func calculateTaskHashFromHashable(full *taskHashable, useOldTaskHashable bool) (string, error) {
-	// The user is not using the strict environment variables feature.
-	if useOldTaskHashable {
-		return fs.HashObject(&oldTaskHashable{
-			packageDir:           full.packageDir,
-			hashOfFiles:          full.hashOfFiles,
-			externalDepsHash:     full.externalDepsHash,
-			task:                 full.task,
-			outputs:              full.outputs,
-			passThruArgs:         full.passThruArgs,
-			hashableEnvPairs:     full.hashableEnvPairs,
-			globalHash:           full.globalHash,
-			taskDependencyHashes: full.taskDependencyHashes,
-		})
-	}
-
+func calculateTaskHashFromHashable(full *taskHashable) (string, error) {
 	switch full.envMode {
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
-		full.passthroughEnv = nil
+		full.passThroughEnv = nil
 		return fs.HashObject(full)
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
-		if full.passthroughEnv == nil {
-			full.passthroughEnv = make([]string, 0)
+		if full.passThroughEnv == nil {
+			full.passThroughEnv = make([]string, 0)
 		}
 		return fs.HashObject(full)
 	case util.Infer:
@@ -247,34 +239,80 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // CalculateTaskHash calculates the hash for package-task combination. It is threadsafe, provided
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
-func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.PackageTask, dependencySet dag.Set, frameworkInference bool, args []string, useOldTaskHashable bool) (string, error) {
+func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.PackageTask, dependencySet dag.Set, frameworkInference bool, args []string) (string, error) {
 	hashOfFiles, ok := th.packageInputsHashes[packageTask.TaskID]
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", packageTask.TaskID)
 	}
 
-	var keyMatchers []string
+	allEnvVarMap := env.EnvironmentVariableMap{}
+	explicitEnvVarMap := env.EnvironmentVariableMap{}
+	matchingEnvVarMap := env.EnvironmentVariableMap{}
+
 	var framework *inference.Framework
-	envVarContainingExcludePrefix := ""
-
 	if frameworkInference {
-		envVarContainingExcludePrefix = "TURBO_CI_VENDOR_ENV_KEY"
+		// See if we infer a framework.
 		framework = inference.InferFramework(packageTask.Pkg)
-		if framework != nil && framework.EnvMatcher != "" {
-			// log auto detected framework and env prefix
-			logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvMatcher)
-			keyMatchers = append(keyMatchers, framework.EnvMatcher)
+		if framework != nil {
+			logger.Debug(fmt.Sprintf("auto detected framework for %s", packageTask.PackageName), "framework", framework.Slug, "env_prefix", framework.EnvWildcards)
+
+			computedWildcards := []string{}
+			computedWildcards = append(computedWildcards, framework.EnvWildcards...)
+
+			// Vendor excludes are only applied against inferred includes.
+			excludePrefix, exists := th.EnvAtExecutionStart["TURBO_CI_VENDOR_ENV_KEY"]
+			if exists && excludePrefix != "" {
+				computedExclude := "!" + excludePrefix + "*"
+				logger.Debug(fmt.Sprintf("excluding environment variables matching wildcard %s", computedExclude))
+				computedWildcards = append(computedWildcards, computedExclude)
+			}
+
+			inferenceEnvVarMap, err := th.EnvAtExecutionStart.FromWildcards(computedWildcards)
+			if err != nil {
+				return "", err
+			}
+
+			userEnvVarSet, err := th.EnvAtExecutionStart.FromWildcardsUnresolved(packageTask.TaskDefinition.Env)
+			if err != nil {
+				return "", err
+			}
+
+			allEnvVarMap.Union(userEnvVarSet.Inclusions)
+			allEnvVarMap.Union(inferenceEnvVarMap)
+			allEnvVarMap.Difference(userEnvVarSet.Exclusions)
+
+			explicitEnvVarMap.Union(userEnvVarSet.Inclusions)
+			explicitEnvVarMap.Difference(userEnvVarSet.Exclusions)
+
+			matchingEnvVarMap.Union(inferenceEnvVarMap)
+			matchingEnvVarMap.Difference(userEnvVarSet.Exclusions)
+		} else {
+			var err error
+			allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.Env)
+			if err != nil {
+				return "", err
+			}
+
+			explicitEnvVarMap.Union(allEnvVarMap)
 		}
+	} else {
+		var err error
+		allEnvVarMap, err = th.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.Env)
+		if err != nil {
+			return "", err
+		}
+
+		explicitEnvVarMap.Union(allEnvVarMap)
 	}
 
-	envVars, err := env.GetHashableEnvVars(
-		packageTask.TaskDefinition.EnvVarDependencies,
-		keyMatchers,
-		envVarContainingExcludePrefix,
-	)
-	if err != nil {
-		return "", err
+	envVars := env.DetailedMap{
+		All: allEnvVarMap,
+		BySource: env.BySource{
+			Explicit: explicitEnvVarMap,
+			Matching: matchingEnvVarMap,
+		},
 	}
+
 	hashableEnvPairs := envVars.All.ToHashable()
 	outputs := packageTask.HashableOutputs()
 	taskDependencyHashes, err := th.calculateDependencyHashes(dependencySet)
@@ -285,18 +323,20 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
 	hash, err := calculateTaskHashFromHashable(&taskHashable{
+		globalHash:           th.globalHash,
+		taskDependencyHashes: taskDependencyHashes,
 		packageDir:           packageTask.Pkg.Dir.ToUnixPath(),
 		hashOfFiles:          hashOfFiles,
 		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
 		task:                 packageTask.Task,
-		outputs:              outputs.Sort(),
+		outputs:              outputs,
 		passThruArgs:         args,
+		env:                  packageTask.TaskDefinition.Env,
+		resolvedEnvVars:      hashableEnvPairs,
+		passThroughEnv:       packageTask.TaskDefinition.PassThroughEnv,
 		envMode:              packageTask.EnvMode,
-		passthroughEnv:       packageTask.TaskDefinition.PassthroughEnv,
-		hashableEnvPairs:     hashableEnvPairs,
-		globalHash:           th.globalHash,
-		taskDependencyHashes: taskDependencyHashes,
-	}, useOldTaskHashable)
+		dotEnv:               packageTask.TaskDefinition.DotEnv,
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)
 	}

@@ -148,7 +148,7 @@ pub enum DaemonError {
     InvalidTimeout(String),
     /// The server is unable to start file watching.
     #[error("unable to start file watching")]
-    FileWatching(#[from] globwatch::Error),
+    FileWatching(#[from] notify::Error),
 
     #[error("unable to display output: {0}")]
     DisplayError(#[from] serde_json::Error),

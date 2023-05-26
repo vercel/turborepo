@@ -36,3 +36,48 @@ Set package manager to pnpm in package.json
 Run test run
   $ ${TURBO} run build --__test-run | jq .package_manager
   "pnpm"
+
+Clear package manager field in package.json
+  $ jq 'del(.packageManager)' package.json > package.json.tmp && mv package.json.tmp package.json
+
+Delete package-lock.json
+  $ rm package-lock.json
+
+Use yarn 1.22.19
+  $ corepack prepare yarn@1.22.19 --activate
+  Preparing yarn@1.22.19 for immediate activation...
+
+Create yarn.lock
+  $ touch yarn.lock
+
+Run test run
+  $ ${TURBO} run build --__test-run | jq .package_manager
+  "yarn"
+
+Use yarn 3.5.1
+  $ corepack prepare yarn@3.5.1 --activate
+  Preparing yarn@3.5.1 for immediate activation...
+
+Run test run
+  $ ${TURBO} run build --__test-run | jq .package_manager
+  "berry"
+
+Delete yarn.lock
+  $ rm yarn.lock
+
+Create pnpm-lock.yaml
+  $ touch pnpm-lock.yaml
+
+Run test run
+  $ ${TURBO} run build --__test-run | jq .package_manager
+  "pnpm"
+
+Delete pnpm-lock.yaml
+  $ rm pnpm-lock.yaml
+
+Create package-lock.json
+  $ touch package-lock.json
+
+Run test run
+  $ ${TURBO} run build --__test-run | jq .package_manager
+  "npm"

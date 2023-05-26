@@ -3,7 +3,10 @@
   "pipeline": {
     "test": {
       "outputs": ["coverage/**/*"],
-      "dependsOn": ["cli#build", "^build"]
+
+      // ^build is generically set here, we haven't fully enumerated which workspaces
+      // actually need to build before running tests.
+      "dependsOn": ["^build"]
     },
 
     // lint tasks

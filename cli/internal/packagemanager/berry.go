@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
-	"github.com/vercel/turbo/cli/internal/util"
 )
 
 var nodejsBerry = PackageManager{
@@ -41,11 +39,6 @@ var nodejsBerry = PackageManager{
 	},
 
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
-		if isNMLinker, err := util.IsNMLinker(cwd.ToStringDuringMigration()); err != nil {
-			return false, errors.Wrap(err, "could not determine if yarn is using `nodeLinker: node-modules`")
-		} else if !isNMLinker {
-			return false, errors.New("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
-		}
 		return true, nil
 	},
 

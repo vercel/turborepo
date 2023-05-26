@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/vercel/turbo/cli/internal/cmdutil"
@@ -69,7 +70,12 @@ func (p *prune) prune(opts *turbostate.PrunePayload, packageManagerName string) 
 	if err != nil {
 		return errors.Wrap(err, "could not construct graph")
 	}
-	outDir := p.base.RepoRoot.UntypedJoin(opts.OutputDir)
+	var outDir turbopath.AbsoluteSystemPath
+	if filepath.IsAbs(opts.OutputDir) {
+		outDir = turbopath.AbsoluteSystemPathFromUpstream(opts.OutputDir)
+	} else {
+		outDir = p.base.RepoRoot.UntypedJoin(opts.OutputDir)
+	}
 	fullDir := outDir
 	if opts.Docker {
 		fullDir = fullDir.UntypedJoin("full")

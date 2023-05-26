@@ -26,14 +26,14 @@ use tokio::{
     select,
     signal::ctrl_c,
     sync::{
-        oneshot::{Receiver, Sender},
+        oneshot::{self, Receiver, Sender},
         Mutex,
     },
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
 use tracing::error;
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
 use super::{
     bump_timeout::BumpTimeout,
@@ -81,10 +81,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
 
         let watcher = Arc::new(HashGlobWatcher::new(
             AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("valid repo root"),
-            daemon_root
-                .join_relative(RelativeSystemPathBuf::new("flush").expect("valid forward path"))
-                .as_path()
-                .to_owned(),
+            daemon_root.join_component("flush").as_path().to_owned(),
         )?);
 
         let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
@@ -118,6 +115,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         let stop = StopSource::new();
         let watcher = self.watcher.clone();
         let watcher_fut = watcher.watch(stop.token());
+        tokio::pin!(watcher_fut);
 
         let timer = self.timeout.clone();
         let timeout_fut = timer.wait();
@@ -136,12 +134,12 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         };
 
         // when one of these futures complete, let the server gracefully shutdown
-        let mut shutdown_reason = Option::None;
-        let shutdown_fut = async {
-            shutdown_reason = select! {
-                _ = shutdown_fut => Some(CloseReason::Shutdown),
-                _ = timeout_fut => Some(CloseReason::Timeout),
-                _ = ctrl_c() => Some(CloseReason::Interrupt),
+        let (shutdown_tx, shutdown_reason) = oneshot::channel();
+        let shutdown_fut = async move {
+            select! {
+                _ = shutdown_fut => shutdown_tx.send(CloseReason::Shutdown).ok(),
+                _ = timeout_fut => shutdown_tx.send(CloseReason::Timeout).ok(),
+                _ = ctrl_c() => shutdown_tx.send(CloseReason::Interrupt).ok(),
             };
         };
 
@@ -187,15 +185,26 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                     .serve_with_incoming_shutdown(stream, shutdown_fut),
             )
         };
+        tokio::pin!(server_fut);
 
-        select! {
-            _ = server_fut => {
-                match shutdown_reason {
-                    Some(reason) => reason,
-                    None => CloseReason::ServerClosed,
-                }
-            },
-            _ = watcher_fut => CloseReason::WatcherClosed,
+        // necessary to make sure we don't try to poll the watcher_fut once it
+        // has completed
+        let mut watcher_done = false;
+        loop {
+            select! {
+                    _ = &mut server_fut => {
+                    return shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
+                },
+                watch_res = &mut watcher_fut, if !watcher_done => {
+                    match watch_res {
+                        Ok(()) => return CloseReason::WatcherClosed,
+                        Err(e) => {
+                            error!("Globwatch config error: {:?}", e);
+                            watcher_done = true;
+                        },
+                    }
+                },
+            }
         }
 
         // here the stop token is dropped, and the pid lock is dropped
@@ -276,9 +285,15 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
             )
             .await;
 
-        Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
-            changed_output_globs: changed.into_iter().collect(),
-        }))
+        match changed {
+            Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
+                changed_output_globs: changed.into_iter().collect(),
+            })),
+            Err(e) => {
+                error!("flush directory operation failed: {:?}", e);
+                Err(tonic::Status::internal("failed to watch flush directory"))
+            }
+        }
     }
 }
 
@@ -294,7 +309,7 @@ mod test {
     };
 
     use tokio::select;
-    use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::DaemonServer;
     use crate::{commands::CommandBase, ui::UI, Args};
@@ -326,8 +341,8 @@ mod test {
 
         tracing::info!("server started");
 
-        let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
-        let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
+        let pid_path = path.join_component("turbod.pid");
+        let sock_path = path.join_component("turbod.sock");
 
         select! {
             _ = daemon.serve() => panic!("must not close"),
@@ -365,7 +380,7 @@ mod test {
         )
         .unwrap();
 
-        let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
+        let pid_path = path.join_component("turbod.pid");
 
         let now = Instant::now();
         let close_reason = daemon.serve().await;

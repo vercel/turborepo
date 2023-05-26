@@ -25,7 +25,7 @@ Run as `infer`
 
 Run as `strict`
   $ rm -rf .turbo/runs
-  $ ${TURBO} run build --experimental-env-mode=strict --summarize > /dev/null
+  $ ${TURBO} run build --env-mode=strict --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -38,7 +38,7 @@ Run as `strict`
 
 Run as `loose`
   $ rm -rf .turbo/runs
-  $ ${TURBO} run build --experimental-env-mode=loose --summarize > /dev/null
+  $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -62,15 +62,13 @@ All specified + infer
     "passthrough": [
       "LOCAL_VAR_PT=7cd1bb19c058cf4d6ad6aa579d685bddddf3ab587b78bdcb1e6e488fb6f47a3b"
     ],
-    "globalPassthrough": [
-      "GLOBAL_VAR_PT=cecd31fff1e723588eac8fe1edff89a6d2ec072f5c3bd884a98297487670b1f0"
-    ]
+    "globalPassthrough": null
   }
 
 All specified + loose
   $ rm -rf .turbo/runs
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/all.json" "$(pwd)/turbo.json" && git commit --allow-empty -am "no comment" --quiet
-  $ ${TURBO} run build --experimental-env-mode=loose --summarize > /dev/null
+  $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -80,9 +78,7 @@ All specified + loose
     "passthrough": [
       "LOCAL_VAR_PT=7cd1bb19c058cf4d6ad6aa579d685bddddf3ab587b78bdcb1e6e488fb6f47a3b"
     ],
-    "globalPassthrough": [
-      "GLOBAL_VAR_PT=cecd31fff1e723588eac8fe1edff89a6d2ec072f5c3bd884a98297487670b1f0"
-    ]
+    "globalPassthrough": null
   }
 
 Global passthrough specified empty array + infer
@@ -96,7 +92,7 @@ Global passthrough specified empty array + infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
-    "globalPassthrough": []
+    "globalPassthrough": null
   }
 
 Global passthrough specified value + infer
@@ -110,15 +106,13 @@ Global passthrough specified value + infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
-    "globalPassthrough": [
-      "GLOBAL_VAR_PT=cecd31fff1e723588eac8fe1edff89a6d2ec072f5c3bd884a98297487670b1f0"
-    ]
+    "globalPassthrough": null
   }
 
 Global passthrough specified empty array + loose
   $ rm -rf .turbo/runs
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/global_pt-empty.json" "$(pwd)/turbo.json" && git commit --allow-empty -am "no comment" --quiet
-  $ ${TURBO} run build --experimental-env-mode=loose --summarize > /dev/null
+  $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -126,13 +120,13 @@ Global passthrough specified empty array + loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
-    "globalPassthrough": []
+    "globalPassthrough": null
   }
 
 Global passthrough specified value + loose
   $ rm -rf .turbo/runs
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/global_pt.json" "$(pwd)/turbo.json" && git commit --allow-empty -am "no comment" --quiet
-  $ ${TURBO} run build --experimental-env-mode=loose --summarize > /dev/null
+  $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -140,9 +134,7 @@ Global passthrough specified value + loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
-    "globalPassthrough": [
-      "GLOBAL_VAR_PT=cecd31fff1e723588eac8fe1edff89a6d2ec072f5c3bd884a98297487670b1f0"
-    ]
+    "globalPassthrough": null
   }
 
 Task passthrough specified empty array + infer
@@ -178,7 +170,7 @@ Task passthrough specified value + infer
 Task passthrough specified empty array + loose
   $ rm -rf .turbo/runs
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/task_pt-empty.json" "$(pwd)/turbo.json" && git commit --allow-empty -am "no comment" --quiet
-  $ ${TURBO} run build --experimental-env-mode=loose --summarize > /dev/null
+  $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -192,7 +184,7 @@ Task passthrough specified empty array + loose
 Task passthrough specified value + loose
   $ rm -rf .turbo/runs
   $ cp "$TESTDIR/../_fixtures/strict_env_vars_configs/task_pt.json" "$(pwd)/turbo.json" && git commit --allow-empty -am "no comment" --quiet
-  $ ${TURBO} run build --experimental-env-mode=loose --summarize > /dev/null
+  $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'

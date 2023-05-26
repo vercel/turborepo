@@ -15,7 +15,7 @@ Check
   $ cat $SUMMARY | jq '.tasks | length'
   1
   $ cat $SUMMARY | jq '.version'
-  "0"
+  "1"
   $ cat $SUMMARY | jq '.execution | keys'
   [
     "attempted",
@@ -39,6 +39,7 @@ Check
     "scm",
     "tasks",
     "turboVersion",
+    "user",
     "version"
   ]
 
@@ -71,6 +72,7 @@ Check
     "command",
     "dependencies",
     "dependents",
+    "dotEnv",
     "envMode",
     "environmentVariables",
     "excludedOutputs",
