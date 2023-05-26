@@ -55,7 +55,7 @@ pub fn derive_value_debug_format(input: TokenStream) -> TokenStream {
 /// Formats a single field nested inside named or unnamed fields.
 fn format_field(value: TokenStream2) -> TokenStream2 {
     quote! {
-        turbo_tasks::macro_helpers::value_debug_format_field(&#value, depth).await
+        turbo_tasks::macro_helpers::value_debug_format_field(#value.value_debug_format(depth.saturating_sub(1))).await
     }
 }
 
