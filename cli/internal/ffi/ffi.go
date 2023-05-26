@@ -216,6 +216,8 @@ func toPackageManager(packageManager string) ffi_proto.PackageManager {
 		return ffi_proto.PackageManager_NPM
 	case "berry":
 		return ffi_proto.PackageManager_BERRY
+	case "pnpm":
+		return ffi_proto.PackageManager_PNPM
 	default:
 		panic(fmt.Sprintf("Invalid package manager string: %s", packageManager))
 	}
