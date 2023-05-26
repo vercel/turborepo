@@ -637,23 +637,9 @@
 <a href="#637" id="637">637</a>
 <a href="#638" id="638">638</a>
 <a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
-<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
 <span class="kw">use </span>futures::{
     channel::mpsc::{unbounded, UnboundedSender},
@@ -677,16 +663,15 @@
 };
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc},
+    chunk::{
+        ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+    },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    reference_type::{InnerAssetsVc, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
-};
-<span class="kw">use </span>turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -761,17 +746,10 @@
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;NodeJsPoolVc&gt; {
-    <span class="kw">let </span>runtime_asset = EcmascriptModuleAssetVc::new(
+    <span class="kw">let </span>runtime_asset = context.process(
         SourceAssetVc::new(embed_file_path(<span class="string">&quot;ipc/evaluate.ts&quot;</span>)).into(),
-        context,
-        Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: <span class="bool-val">false</span>,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
-    )
-    .as_asset();
+        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+    );
 
     <span class="kw">let </span>module_path = module_asset.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>file_name = module_path.file_name();
@@ -783,7 +761,7 @@
         Cow::Owned(<span class="macro">format!</span>(<span class="string">&quot;{file_name}.js&quot;</span>))
     };
     <span class="kw">let </span>path = chunking_context.output_root().join(file_name.as_ref());
-    <span class="kw">let </span>entry_module = EcmascriptModuleAssetVc::new_with_inner_assets(
+    <span class="kw">let </span>entry_module = context.process(
         VirtualAssetVc::new(
             runtime_asset.ident().path().join(<span class="string">&quot;evaluate.js&quot;</span>),
             File::from(
@@ -793,40 +771,34 @@
             .into(),
         )
         .into(),
-        context,
-        Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: <span class="bool-val">false</span>,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
-        InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
+        Value::new(ReferenceType::Internal(InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
             <span class="string">&quot;INNER&quot;</span>.to_string() =&gt; module_asset,
             <span class="string">&quot;RUNTIME&quot;</span>.to_string() =&gt; runtime_asset
-        }),
+        }))),
     );
+
+    <span class="kw">let </span><span class="prelude-val">Some</span>(entry_module) = EvaluatableAssetVc::resolve_from(entry_module).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="macro">bail!</span>(<span class="string">&quot;Internal module is not evaluatable&quot;</span>);
+    };
 
     <span class="kw">let </span>(<span class="prelude-val">Some</span>(cwd), <span class="prelude-val">Some</span>(entrypoint)) = (to_sys_path(cwd).<span class="kw">await</span><span class="question-mark">?</span>, to_sys_path(path).<span class="kw">await</span><span class="question-mark">?</span>) <span class="kw">else </span>{
         <span class="macro">panic!</span>(<span class="string">&quot;can only evaluate from a disk filesystem&quot;</span>);
     };
 
     <span class="kw">let </span>runtime_entries = {
-        <span class="kw">let </span>globals_module = EcmascriptModuleAssetVc::new(
+        <span class="kw">let </span>globals_module = context.process(
             SourceAssetVc::new(embed_file_path(<span class="string">&quot;globals.ts&quot;</span>)).into(),
-            context,
-            Value::new(EcmascriptModuleAssetType::Typescript),
-            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
-                use_define_for_class_fields: <span class="bool-val">false</span>,
-            }]),
-            Value::new(Default::default()),
-            context.compile_time_info(),
-        )
-        .as_evaluatable_asset();
+            Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+        );
+
+        <span class="kw">let </span><span class="prelude-val">Some</span>(globals_module) = EvaluatableAssetVc::resolve_from(globals_module).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Internal module is not evaluatable&quot;</span>);
+        };
 
         <span class="kw">let </span><span class="kw-2">mut </span>entries = <span class="macro">vec!</span>[globals_module];
         <span class="kw">if let </span><span class="prelude-val">Some</span>(runtime_entries) = runtime_entries {
-            <span class="kw">for </span>entry <span class="kw">in </span><span class="kw-2">&amp;*</span>runtime_entries.<span class="kw">await</span><span class="question-mark">? </span>{
-                entries.push(<span class="kw-2">*</span>entry)
+            <span class="kw">for </span><span class="kw-2">&amp;</span>entry <span class="kw">in </span><span class="kw-2">&amp;*</span>runtime_entries.<span class="kw">await</span><span class="question-mark">? </span>{
+                entries.push(entry)
             }
         }
 
@@ -837,7 +809,7 @@
         path,
         chunking_context,
         entry: entry_module.as_root_chunk(chunking_context),
-        evaluatable_assets: runtime_entries.with_entry(entry_module.into()),
+        evaluatable_assets: runtime_entries.with_entry(entry_module),
     }
     .cell()
     .into();

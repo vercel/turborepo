@@ -170,6 +170,8 @@
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
@@ -202,16 +204,18 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) part: ModulePartVc,
 }
 
-<span class="kw">impl </span>EcmascriptModulePartAssetVc {
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>EcmascriptModulePartAssetVc {
     <span class="doccomment">/// Create a new instance of [EcmascriptModulePartAssetVc], whcih consists
     /// of a pointer to the full module and the [ModulePart] pointing the part
     /// of the module.
-    </span><span class="kw">pub fn </span>new(module: EcmascriptModuleAssetVc, part: ModulePartVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="prelude-val">Ok</span>(EcmascriptModulePartAsset {
+    </span><span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new(module: EcmascriptModuleAssetVc, part: ModulePartVc) -&gt; <span class="self">Self </span>{
+        EcmascriptModulePartAsset {
             full_module: module,
             part,
         }
-        .cell())
+        .cell()
     }
 }
 
@@ -251,8 +255,8 @@
                     EcmascriptModulePartAssetVc::new(
                         <span class="self">self</span>.full_module,
                         ModulePartVc::internal(part_id),
-                    )<span class="question-mark">?
-                    </span>.as_asset(),
+                    )
+                    .as_asset(),
                     StringVc::cell(<span class="string">&quot;ecmascript module part&quot;</span>.to_string()),
                 )
                 .as_asset_reference())

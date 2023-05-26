@@ -594,6 +594,82 @@
 <a href="#594" id="594">594</a>
 <a href="#595" id="595">595</a>
 <a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
+<a href="#628" id="628">628</a>
+<a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
+<a href="#634" id="634">634</a>
+<a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
+<a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(min_specialization)]
 #![feature(iter_intersperse)]
@@ -627,7 +703,6 @@
     EcmascriptChunkingContextVc,
 };
 <span class="kw">use </span>code_gen::CodeGenerateableVc;
-<span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>parse::{parse, ParseResult};
 <span class="kw">pub use </span>parse::{ParseResultSourceMap, ParseResultSourceMapVc};
 <span class="kw">use </span>path_visitor::ApplyVisitors;
@@ -660,9 +735,11 @@
     context::AssetContextVc,
     ident::AssetIdentVc,
     reference::{AssetReferencesReadRef, AssetReferencesVc},
+    reference_type::InnerAssetsVc,
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
+        ModulePartVc,
     },
 };
 
@@ -676,6 +753,7 @@
         VisitorFactory,
     },
     parse::ParseResultVc,
+    tree_shake::asset::EcmascriptModulePartAssetVc,
 };
 <span class="kw">use crate</span>::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
@@ -718,9 +796,6 @@
     </span>TypescriptDeclaration,
 }
 
-<span class="attr">#[turbo_tasks::value(transparent)]
-</span><span class="kw">pub struct </span>InnerAssets(IndexMap&lt;String, AssetVc&gt;);
-
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>modifier() -&gt; StringVc {
     StringVc::cell(<span class="string">&quot;ecmascript&quot;</span>.to_string())
@@ -731,6 +806,62 @@
     operation: RawVc,
     references: AssetReferencesReadRef,
     exports: EcmascriptExportsReadRef,
+}
+
+<span class="kw">pub struct </span>EcmascriptModuleAssetBuilder {
+    source: AssetVc,
+    context: AssetContextVc,
+    ty: EcmascriptModuleAssetType,
+    transforms: EcmascriptInputTransformsVc,
+    options: EcmascriptOptions,
+    compile_time_info: CompileTimeInfoVc,
+    inner_assets: <span class="prelude-ty">Option</span>&lt;InnerAssetsVc&gt;,
+    part: <span class="prelude-ty">Option</span>&lt;ModulePartVc&gt;,
+}
+
+<span class="kw">impl </span>EcmascriptModuleAssetBuilder {
+    <span class="kw">pub fn </span>with_inner_assets(<span class="kw-2">mut </span><span class="self">self</span>, inner_assets: InnerAssetsVc) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.inner_assets = <span class="prelude-val">Some</span>(inner_assets);
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>with_type(<span class="kw-2">mut </span><span class="self">self</span>, ty: EcmascriptModuleAssetType) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.ty = ty;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>with_part(<span class="kw-2">mut </span><span class="self">self</span>, part: ModulePartVc) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.part = <span class="prelude-val">Some</span>(part);
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; AssetVc {
+        <span class="kw">let </span>base = <span class="kw">if let </span><span class="prelude-val">Some</span>(inner_assets) = <span class="self">self</span>.inner_assets {
+            EcmascriptModuleAssetVc::new_with_inner_assets(
+                <span class="self">self</span>.source,
+                <span class="self">self</span>.context,
+                Value::new(<span class="self">self</span>.ty),
+                <span class="self">self</span>.transforms,
+                Value::new(<span class="self">self</span>.options),
+                <span class="self">self</span>.compile_time_info,
+                inner_assets,
+            )
+        } <span class="kw">else </span>{
+            EcmascriptModuleAssetVc::new(
+                <span class="self">self</span>.source,
+                <span class="self">self</span>.context,
+                Value::new(<span class="self">self</span>.ty),
+                <span class="self">self</span>.transforms,
+                Value::new(<span class="self">self</span>.options),
+                <span class="self">self</span>.compile_time_info,
+            )
+        };
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(part) = <span class="self">self</span>.part {
+            EcmascriptModulePartAssetVc::new(base, part).into()
+        } <span class="kw">else </span>{
+            base.into()
+        }
+    }
 }
 
 <span class="attr">#[turbo_tasks::value]
@@ -750,6 +881,27 @@
 <span class="doccomment">/// An optional [EcmascriptModuleAsset]
 </span><span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>OptionEcmascriptModuleAsset(<span class="prelude-ty">Option</span>&lt;EcmascriptModuleAssetVc&gt;);
+
+<span class="kw">impl </span>EcmascriptModuleAssetVc {
+    <span class="kw">pub fn </span>builder(
+        source: AssetVc,
+        context: AssetContextVc,
+        transforms: EcmascriptInputTransformsVc,
+        options: EcmascriptOptions,
+        compile_time_info: CompileTimeInfoVc,
+    ) -&gt; EcmascriptModuleAssetBuilder {
+        EcmascriptModuleAssetBuilder {
+            source,
+            context,
+            ty: EcmascriptModuleAssetType::Ecmascript,
+            transforms,
+            options,
+            compile_time_info,
+            inner_assets: <span class="prelude-val">None</span>,
+            part: <span class="prelude-val">None</span>,
+        }
+    }
+}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EcmascriptModuleAssetVc {

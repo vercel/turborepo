@@ -254,21 +254,6 @@
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
-<a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
-<a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -286,15 +271,11 @@
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::IssueContextExt,
-    reference_type::{EntryReferenceSubType, ReferenceType},
+    reference_type::{EntryReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
-};
-<span class="kw">use </span>turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 <span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_assets, EmittedAsset};
@@ -418,15 +399,12 @@
             <span class="prelude-val">Ok</span>(
                 <span class="macro">matches!</span>(<span class="kw-2">&amp;*</span>path.get_type().<span class="kw">await</span><span class="question-mark">?</span>, FileSystemEntryType::File).then(|| {
                     any_content_changed(
-                        EcmascriptModuleAssetVc::new(
-                            SourceAssetVc::new(path).into(),
-                            context,
-                            Value::new(EcmascriptModuleAssetType::Ecmascript),
-                            EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[]),
-                            Value::new(Default::default()),
-                            context.compile_time_info(),
-                        )
-                        .into(),
+                        context
+                            .process(
+                                SourceAssetVc::new(path).into(),
+                                Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+                            )
+                            .into(),
                     )
                 }),
             )
@@ -447,24 +425,16 @@
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );
 
-    EcmascriptModuleAssetVc::new_with_inner_assets(
+    context.process(
         VirtualAssetVc::new(
-            postcss_config_path.join(<span class="string">&quot;transform.js&quot;</span>),
+            postcss_config_path.join(<span class="string">&quot;transform.ts&quot;</span>),
             AssetContent::File(embed_file(<span class="string">&quot;transforms/postcss.ts&quot;</span>)).cell(),
         )
         .into(),
-        context,
-        Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(<span class="macro">vec!</span>[EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: <span class="bool-val">false</span>,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
-        InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
+        Value::new(ReferenceType::Internal(InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
             <span class="string">&quot;CONFIG&quot;</span>.to_string() =&gt; config_asset
-        }),
+        }))),
     )
-    .into()
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

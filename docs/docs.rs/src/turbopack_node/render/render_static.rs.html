@@ -386,7 +386,6 @@
 <a href="#386" id="386">386</a>
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
 <span class="kw">use </span>futures::{
@@ -402,14 +401,13 @@
 <span class="kw">use </span>turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc},
-    chunk::{ChunkingContextVc, EvaluatableAssetsVc},
+    chunk::{ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc},
     error::PrettyPrintError,
 };
 <span class="kw">use </span>turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{Body, HeaderListVc, RewriteBuilder, RewriteVc},
 };
-<span class="kw">use </span>turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 <span class="kw">use super</span>::{
     issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
@@ -459,7 +457,7 @@
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
@@ -584,7 +582,7 @@
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
@@ -644,7 +642,7 @@
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
@@ -663,7 +661,7 @@
     <span class="kw">let </span>stream = <span class="macro">generator! </span>{
         <span class="kw">let </span>intermediate_asset = get_intermediate_asset(
             chunking_context,
-            module.into(),
+            module,
             runtime_entries,
         );
         <span class="kw">let </span>renderer_pool = get_renderer_pool(
