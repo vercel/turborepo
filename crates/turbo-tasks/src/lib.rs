@@ -112,6 +112,7 @@ pub fn register() {
 }
 
 /// Helper for derive macros
+#[doc(hidden)]
 mod turbo_tasks {
     pub use crate::macro_helpers;
 }
