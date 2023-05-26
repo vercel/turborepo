@@ -8,7 +8,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError};
+use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, RelativeUnixPath};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub struct AbsoluteSystemPathBuf(pub(crate) PathBuf);
@@ -161,6 +161,17 @@ impl AbsoluteSystemPathBuf {
         self.as_absolute_path().join_component(segment)
     }
 
+    pub fn join_components(&self, segments: &[&str]) -> Self {
+        self.as_absolute_path().join_components(segments)
+    }
+
+    pub fn join_unix_path(
+        &self,
+        unix_path: impl AsRef<RelativeUnixPath>,
+    ) -> Result<AbsoluteSystemPathBuf, PathError> {
+        self.as_absolute_path().join_unix_path(unix_path)
+    }
+
     pub fn ensure_dir(&self) -> Result<(), io::Error> {
         if let Some(parent) = self.0.parent() {
             fs::create_dir_all(parent)
@@ -222,7 +233,7 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn to_realpath(&self) -> Result<Self, PathError> {
-        let realpath = fs::canonicalize(&self.0)?;
+        let realpath = dunce::canonicalize(&self.0)?;
         Ok(Self(realpath))
     }
 
@@ -257,7 +268,7 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 mod tests {
     use std::assert_matches::assert_matches;
 
-    use crate::{AbsoluteSystemPathBuf, PathError};
+    use crate::{AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
     #[cfg(not(windows))]
     #[test]
@@ -271,6 +282,17 @@ mod tests {
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
             Err(PathError::NotAbsolute(_))
+        );
+
+        let tail = RelativeUnixPathBuf::new("../other").unwrap();
+
+        assert_eq!(
+            AbsoluteSystemPathBuf::new("/some/dir")
+                .unwrap()
+                .as_absolute_path()
+                .join_unix_path(&tail)
+                .unwrap(),
+            AbsoluteSystemPathBuf::new("/some/other").unwrap(),
         );
     }
 
@@ -289,6 +311,17 @@ mod tests {
         assert_matches!(
             AbsoluteSystemPathBuf::new("/Users/home"),
             Err(PathError::NotAbsolute(_))
-        )
+        );
+
+        let tail = RelativeUnixPathBuf::new("../other").unwrap();
+
+        assert_eq!(
+            AbsoluteSystemPathBuf::new("C:\\some\\dir")
+                .unwrap()
+                .as_absolute_path()
+                .join_unix_path(&tail)
+                .unwrap(),
+            AbsoluteSystemPathBuf::new("C:\\some\\other").unwrap(),
+        );
     }
 }
