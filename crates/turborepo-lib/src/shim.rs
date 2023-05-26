@@ -1,6 +1,5 @@
 use std::{
     env,
-    env::current_dir,
     ffi::OsString,
     fs::{self},
     path::{Path, PathBuf},
@@ -17,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
+use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
     cli, get_version, package_manager::Globs, spawn_child, tracing::TurboSubscriber, ui::UI,
@@ -50,8 +50,8 @@ fn turbo_version_has_shim(version: &str) -> bool {
 
 #[derive(Debug)]
 struct ShimArgs {
-    cwd: PathBuf,
-    invocation_dir: PathBuf,
+    cwd: AbsoluteSystemPathBuf,
+    invocation_dir: AbsoluteSystemPathBuf,
     skip_infer: bool,
     verbosity: usize,
     force_update_check: bool,
@@ -64,7 +64,7 @@ struct ShimArgs {
 impl ShimArgs {
     pub fn parse() -> Result<Self> {
         let mut found_cwd_flag = false;
-        let mut cwd: Option<PathBuf> = None;
+        let mut cwd: Option<AbsoluteSystemPathBuf> = None;
         let mut skip_infer = false;
         let mut found_verbosity_flag = false;
         let mut verbosity = 0;
@@ -102,7 +102,8 @@ impl ShimArgs {
                 verbosity = arg[1..].len();
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
-                cwd = Some(arg.into());
+                //cwd = Some(arg.into());
+                cwd = Some(AbsoluteSystemPathBuf::from_cwd(arg)?);
                 found_cwd_flag = false;
             } else if arg == "--cwd" {
                 if cwd.is_some() {
@@ -116,7 +117,7 @@ impl ShimArgs {
                 if cwd.is_some() {
                     return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
                 }
-                cwd = Some(cwd_arg.into());
+                cwd = Some(AbsoluteSystemPathBuf::from_cwd(cwd_arg)?);
             } else if arg == "--color" {
                 color = true;
             } else if arg == "--no-color" {
@@ -129,12 +130,8 @@ impl ShimArgs {
         if found_cwd_flag {
             Err(anyhow!("No value assigned to `--cwd` argument"))
         } else {
-            let invocation_dir = current_dir()?;
-            let cwd = if let Some(cwd) = cwd {
-                fs_canonicalize(cwd)?
-            } else {
-                invocation_dir.clone()
-            };
+            let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
+            let cwd = cwd.unwrap_or_else(|| invocation_dir.clone());
 
             Ok(ShimArgs {
                 cwd,
@@ -590,8 +587,9 @@ impl RepoState {
     /// * `current_dir`: Current working directory
     ///
     /// returns: Result<RepoState, Error>
-    pub fn infer(reference_dir: &Path) -> Result<Self> {
-        let potential_turbo_roots = RepoState::generate_potential_turbo_roots(reference_dir);
+    pub fn infer<P: AsRef<Path>>(reference_dir: P) -> Result<Self> {
+        let potential_turbo_roots =
+            RepoState::generate_potential_turbo_roots(reference_dir.as_ref());
         RepoState::process_potential_turbo_roots(potential_turbo_roots)
     }
 
@@ -621,7 +619,10 @@ impl RepoState {
             try_check_for_updates(&shim_args, get_version());
             // cli::run checks for this env var, rather than an arg, so that we can support
             // calling old versions without passing unknown flags.
-            env::set_var(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir);
+            env::set_var(
+                cli::INVOCATION_DIR_ENV_VAR,
+                shim_args.invocation_dir.as_path(),
+            );
             debug!("Running command as global turbo");
             cli::run(Some(self), subscriber, ui)
         }
@@ -679,7 +680,10 @@ impl RepoState {
             .args(&raw_args)
             // rather than passing an argument that local turbo might not understand, set
             // an environment variable that can be optionally used
-            .env(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir)
+            .env(
+                cli::INVOCATION_DIR_ENV_VAR,
+                shim_args.invocation_dir.as_path(),
+            )
             .current_dir(cwd)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
