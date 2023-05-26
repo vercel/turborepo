@@ -149,13 +149,19 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 
 <span class="kw">use </span>indexmap::IndexMap;
 
 <span class="kw">use crate</span>::{asset::AssetVc, resolve::ModulePartVc};
 
-<span class="attr">#[turbo_tasks::value(transparent)]
+<span class="doccomment">/// Named references to inner assets. Modules can used them to allow to
+/// per-module aliases of some requests to already created module assets.
+/// Name is usually in UPPER_CASE to make it clear that this is an inner asset.
+</span><span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">pub struct </span>InnerAssets(IndexMap&lt;String, AssetVc&gt;);
 
 <span class="attr">#[turbo_tasks::value_impl]
