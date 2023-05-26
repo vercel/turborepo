@@ -56,13 +56,10 @@ impl Error {
 
 pub(crate) fn read_git_error<R: Read>(stderr: &mut R) -> Option<Error> {
     let mut buf = String::new();
-    if let Ok(bytes_read) = stderr.read_to_string(&mut buf) {
-        if bytes_read > 0 {
-            // something failed with git, report that error
-            Some(Error::git_error(buf))
-        } else {
-            None
-        }
+    let bytes_read = stderr.read_to_string(&mut buf).ok()?;
+    if bytes_read > 0 {
+        // something failed with git, report that error
+        Some(Error::git_error(buf))
     } else {
         None
     }
