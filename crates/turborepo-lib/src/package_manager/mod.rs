@@ -11,6 +11,7 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use turbopath::AbsoluteSystemPath;
 
 use crate::{
     commands::CommandBase,
@@ -121,10 +122,11 @@ impl PackageManager {
     ///
     /// ```
     /// ```
-    pub fn get_workspace_globs(&self, root_path: &Path) -> Result<Option<Globs>> {
+    pub fn get_workspace_globs(&self, root_path: &AbsoluteSystemPath) -> Result<Option<Globs>> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                let workspace_yaml = fs::read_to_string(root_path.join("pnpm-workspace.yaml"))?;
+                let workspace_yaml =
+                    fs::read_to_string(root_path.join_component("pnpm-workspace.yaml"))?;
                 let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
                 if pnpm_workspace.packages.is_empty() {
                     return Ok(None);
@@ -133,7 +135,8 @@ impl PackageManager {
                 }
             }
             PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
-                let package_json_text = fs::read_to_string(root_path.join("package.json"))?;
+                let package_json_text =
+                    fs::read_to_string(root_path.join_component("package.json"))?;
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.as_ref().is_empty() {
@@ -237,7 +240,7 @@ impl PackageManager {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, path::Path};
+    use std::fs::File;
 
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
@@ -393,9 +396,15 @@ mod tests {
 
     #[test]
     fn test_get_workspace_globs() {
+        let cwd = AbsoluteSystemPathBuf::cwd().unwrap();
+        let repo_root = cwd
+            .ancestors()
+            .find(|path| path.join_component(".git").exists())
+            .unwrap();
+        let with_yarn = repo_root.join_components(&["examples", "with-yarn"]);
         let package_manager = PackageManager::Npm;
         let globs = package_manager
-            .get_workspace_globs(Path::new("../../examples/with-yarn"))
+            .get_workspace_globs(with_yarn.as_absolute_path())
             .unwrap()
             .unwrap();
 

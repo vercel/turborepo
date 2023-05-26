@@ -473,10 +473,10 @@ impl RepoState {
                 // However, we don't have that functionality implemented in Rust yet.
                 // PackageManager::detect(path).get_workspace_globs().unwrap_or(None)
                 let workspace_globs = PackageManager::Pnpm
-                    .get_workspace_globs(path.as_path())
+                    .get_workspace_globs(path)
                     .unwrap_or_else(|_| {
                         PackageManager::Npm
-                            .get_workspace_globs(path.as_path())
+                            .get_workspace_globs(path)
                             .unwrap_or(None)
                     });
 
