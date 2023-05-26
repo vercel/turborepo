@@ -44,3 +44,9 @@ impl RelativeUnixPath {
         }
     }
 }
+
+impl AsRef<RelativeUnixPath> for RelativeUnixPath {
+    fn as_ref(&self) -> &RelativeUnixPath {
+        self
+    }
+}

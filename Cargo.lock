@@ -9250,6 +9250,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bstr",
+ "dunce",
  "path-clean 1.0.1",
  "path-slash",
  "serde",
@@ -9418,9 +9419,9 @@ dependencies = [
 name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "dunce",
+ "bstr",
  "git2 0.16.1",
+ "nom",
  "tempfile",
  "thiserror",
  "turbopath",
