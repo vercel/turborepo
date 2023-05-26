@@ -85,7 +85,7 @@ pub struct Globs {
 }
 
 impl Globs {
-    pub fn test(&self, root: PathBuf, target: PathBuf) -> Result<bool> {
+    pub fn test(&self, root: &Path, target: PathBuf) -> Result<bool> {
         let search_value = target
             .strip_prefix(root)?
             .to_str()
@@ -422,7 +422,7 @@ mod tests {
         }];
 
         for test in tests {
-            match test.globs.test(test.root, test.target) {
+            match test.globs.test(&test.root, test.target) {
                 Ok(value) => assert_eq!(value, test.output.unwrap()),
                 Err(value) => assert_eq!(value.to_string(), test.output.unwrap_err().to_string()),
             };
