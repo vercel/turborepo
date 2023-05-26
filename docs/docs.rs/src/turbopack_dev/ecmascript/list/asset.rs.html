@@ -221,11 +221,11 @@
 
         ident.add_modifier(modifier());
 
-        <span class="kw">for </span>chunk <span class="kw">in </span><span class="kw-2">&amp;*</span><span class="self">self</span>.chunks.<span class="kw">await</span><span class="question-mark">? </span>{
-            ident.add_modifier(chunk.ident().to_string());
-        }
+        <span class="comment">// We must not include the actual chunks idents as part of the chunk list&#39;s
+        // ident, because it must remain stable whenever a chunk is added or
+        // removed from the list.
 
-        <span class="kw">let </span>ident = AssetIdentVc::new(Value::new(ident));
+        </span><span class="kw">let </span>ident = AssetIdentVc::new(Value::new(ident));
         <span class="prelude-val">Ok</span>(AssetIdentVc::from_path(
             <span class="self">self</span>.chunking_context.chunk_path(ident, <span class="string">&quot;.js&quot;</span>),
         ))
