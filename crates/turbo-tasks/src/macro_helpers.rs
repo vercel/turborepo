@@ -6,7 +6,10 @@ pub use super::manager::{find_cell_by_type, notify_scheduled_tasks, spawn_detach
 use crate::debug::ValueDebugFormat;
 
 #[inline(never)]
-pub async fn value_debug_format_field(value: &dyn ValueDebugFormat, depth: usize) -> String {
+pub async fn value_debug_format_field(
+    value: &(dyn ValueDebugFormat + Sync),
+    depth: usize,
+) -> String {
     match value
         .value_debug_format(depth.saturating_sub(1))
         .try_to_value_debug_string()
