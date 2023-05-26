@@ -8815,6 +8815,7 @@ dependencies = [
  "turbo-updater",
  "turbopack",
  "turbopack-bench",
+ "turbopack-build",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-create-test-app",
@@ -8823,6 +8824,7 @@ dependencies = [
  "turbopack-dev-server",
  "turbopack-ecmascript",
  "turbopack-ecmascript-plugins",
+ "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-image",
  "turbopack-json",
@@ -8832,6 +8834,25 @@ dependencies = [
  "turbopack-swc-utils",
  "turbopack-test-utils",
  "turbopack-tests",
+]
+
+[[package]]
+name = "turbopack-build"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "indoc",
+ "serde",
+ "serde_json",
+ "serde_qs",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack-core",
+ "turbopack-css",
+ "turbopack-ecmascript",
+ "turbopack-ecmascript-runtime",
 ]
 
 [[package]]
@@ -8868,6 +8889,7 @@ dependencies = [
  "turbopack-dev",
  "turbopack-dev-server",
  "turbopack-ecmascript-plugins",
+ "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-node",
  "webbrowser",
@@ -8984,6 +9006,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
+ "swc_core",
  "tracing",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -8993,6 +9016,7 @@ dependencies = [
  "turbopack-core",
  "turbopack-css",
  "turbopack-ecmascript",
+ "turbopack-ecmascript-runtime",
 ]
 
 [[package]]
@@ -9082,6 +9106,22 @@ dependencies = [
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
+ "turbopack-ecmascript",
+]
+
+[[package]]
+name = "turbopack-ecmascript-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indoc",
+ "serde",
+ "swc_core",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbopack",
+ "turbopack-core",
  "turbopack-ecmascript",
 ]
 
@@ -9237,9 +9277,11 @@ dependencies = [
  "turbo-tasks-fs",
  "turbo-tasks-memory",
  "turbopack",
+ "turbopack-build",
  "turbopack-core",
  "turbopack-dev",
  "turbopack-ecmascript-plugins",
+ "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-test-utils",
 ]
