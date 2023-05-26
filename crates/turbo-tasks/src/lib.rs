@@ -45,7 +45,8 @@ mod id;
 mod id_factory;
 mod invalidation;
 mod join_iter_ext;
-pub mod macro_rt;
+#[doc(hidden)]
+pub mod macro_helpers;
 mod magic_any;
 mod manager;
 mod native_function;
@@ -102,18 +103,15 @@ pub use value_type::{
     ValueType, ValueVc,
 };
 
-#[doc(hidden)]
-pub mod macro_helpers {
-    pub use once_cell::sync::{Lazy, OnceCell};
-    pub use tracing;
-
-    pub use super::manager::{find_cell_by_type, notify_scheduled_tasks, spawn_detached};
-}
-
 pub mod test_helpers {
     pub use super::manager::{current_task_for_testing, with_turbo_tasks_for_testing};
 }
 
 pub fn register() {
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
+}
+
+/// Helper for derive macros
+mod turbo_tasks {
+    pub use crate::macro_helpers;
 }
