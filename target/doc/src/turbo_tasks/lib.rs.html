@@ -163,6 +163,8 @@
 <span class="kw">mod </span>id_factory;
 <span class="kw">mod </span>invalidation;
 <span class="kw">mod </span>join_iter_ext;
+<span class="attr">#[doc(hidden)]
+</span><span class="kw">pub mod </span>macro_helpers;
 <span class="kw">mod </span>magic_any;
 <span class="kw">mod </span>manager;
 <span class="kw">mod </span>native_function;
@@ -219,20 +221,18 @@
     ValueType, ValueVc,
 };
 
-<span class="attr">#[doc(hidden)]
-</span><span class="kw">pub mod </span>macro_helpers {
-    <span class="kw">pub use </span>once_cell::sync::{Lazy, OnceCell};
-    <span class="kw">pub use </span>tracing;
-
-    <span class="kw">pub use </span><span class="kw">super</span>::manager::{find_cell_by_type, notify_scheduled_tasks, spawn_detached};
-}
-
 <span class="kw">pub mod </span>test_helpers {
     <span class="kw">pub use </span><span class="kw">super</span>::manager::{current_task_for_testing, with_turbo_tasks_for_testing};
 }
 
 <span class="kw">pub fn </span>register() {
     <span class="macro">include!</span>(<span class="macro">concat!</span>(<span class="macro">env!</span>(<span class="string">&quot;OUT_DIR&quot;</span>), <span class="string">&quot;/register.rs&quot;</span>));
+}
+
+<span class="doccomment">/// Helper for derive macros
+</span><span class="attr">#[doc(hidden)]
+</span><span class="kw">mod </span>turbo_tasks {
+    <span class="kw">pub use </span><span class="kw">crate</span>::macro_helpers;
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="turbo_tasks" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

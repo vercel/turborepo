@@ -114,12 +114,6 @@
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
@@ -177,14 +171,8 @@
 <span class="doccomment">/// Formats a single field nested inside named or unnamed fields.
 </span><span class="kw">fn </span>format_field(value: TokenStream2) -&gt; TokenStream2 {
     <span class="macro">quote! </span>{
-        <span class="kw">match </span>#value.value_debug_format(depth.saturating_sub(<span class="number">1</span>)).try_to_value_debug_string().<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(result) =&gt; <span class="kw">match </span>result.<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(result) =&gt; result.to_string(),
-                <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, err),
-            },
-            <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, err),
-        }
-    }
+        turbo_tasks::macro_helpers::value_debug_format_field(#value.value_debug_format(depth.saturating_sub(<span class="number">1</span>))).<span class="kw">await
+    </span>}
 }
 
 <span class="doccomment">/// Formats a struct or enum variant with named fields (e.g. `struct Foo {
