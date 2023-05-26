@@ -73,8 +73,9 @@ fn parse_dep_path(i: &str) -> IResult<&str, DepPath> {
     let (i, _) = nom::character::complete::one_of("/@")(i)?;
     let (i, version) = parse_version(i)?;
     let (i, peer_suffix) = opt(alt((parse_new_peer_suffix, parse_old_peer_suffix)))(i)?;
+    let (_, _) = nom::combinator::eof(i)?;
     Ok((
-        i,
+        "",
         DepPath::new(name, version)
             .with_host(host)
             .with_peer_suffix(peer_suffix),
