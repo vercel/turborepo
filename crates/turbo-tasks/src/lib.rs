@@ -45,6 +45,7 @@ mod id;
 mod id_factory;
 mod invalidation;
 mod join_iter_ext;
+pub mod macro_rt;
 mod magic_any;
 mod manager;
 mod native_function;
