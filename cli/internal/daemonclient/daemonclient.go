@@ -4,7 +4,6 @@ package daemonclient
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -41,7 +40,6 @@ func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoR
 	if err != nil {
 		return nil, 0, err
 	}
-	fmt.Printf("[debug] daemon response %#v\n", resp.TimeSaved)
 	return resp.ChangedOutputGlobs, int(resp.TimeSaved), nil
 }
 
