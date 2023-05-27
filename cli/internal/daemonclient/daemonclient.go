@@ -4,6 +4,7 @@ package daemonclient
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -32,24 +33,25 @@ func New(client *connector.Client) *DaemonClient {
 }
 
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
-func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, error) {
+func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, int, error) {
 	resp, err := d.client.GetChangedOutputs(ctx, &turbodprotocol.GetChangedOutputsRequest{
 		Hash:        hash,
 		OutputGlobs: repoRelativeOutputGlobs,
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-
-	return resp.ChangedOutputGlobs, nil
+	fmt.Printf("[debug] daemon response %#v\n", resp.TimeSaved)
+	return resp.ChangedOutputGlobs, int(resp.TimeSaved), nil
 }
 
 // NotifyOutputsWritten implements runcache.OutputWatcher.NotifyOutputsWritten
-func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs fs.TaskOutputs) error {
+func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs fs.TaskOutputs, timeSaved int) error {
 	_, err := d.client.NotifyOutputsWritten(ctx, &turbodprotocol.NotifyOutputsWrittenRequest{
 		Hash:                 hash,
 		OutputGlobs:          repoRelativeOutputGlobs.Inclusions,
 		OutputExclusionGlobs: repoRelativeOutputGlobs.Exclusions,
+		TimeSaved:            uint64(timeSaved),
 	})
 	return err
 }
