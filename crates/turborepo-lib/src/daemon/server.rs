@@ -258,9 +258,10 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
         let inner = request.into_inner();
 
-        self.times_saved
-            .insert(inner.hash.clone(), inner.time_saved);
-
+        {
+            let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.insert(inner.hash.clone(), inner.time_saved);
+        }
         match self
             .watcher
             .watch_globs(
