@@ -21,12 +21,12 @@ var _ OutputWatcher = (*NoOpOutputWatcher)(nil)
 
 // GetChangedOutputs implements OutputWatcher.GetChangedOutputs.
 // Since this is a no-op watcher, no tracking is done.
-func (NoOpOutputWatcher) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, int, error) {
+func (NoOpOutputWatcher) GetChangedOutputs(_ context.Context, _ string, repoRelativeOutputGlobs []string) ([]string, int, error) {
 	return repoRelativeOutputGlobs, 0, nil
 }
 
 // NotifyOutputsWritten implements OutputWatcher.NotifyOutputsWritten.
 // Since this is a no-op watcher, consider all globs to have changed
-func (NoOpOutputWatcher) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs fs.TaskOutputs, timeSaved int) error {
+func (NoOpOutputWatcher) NotifyOutputsWritten(_ context.Context, _ string, _ fs.TaskOutputs, _ int) error {
 	return nil
 }
