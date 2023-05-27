@@ -284,12 +284,10 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         request: tonic::Request<proto::GetChangedOutputsRequest>,
     ) -> Result<tonic::Response<proto::GetChangedOutputsResponse>, tonic::Status> {
         let inner = request.into_inner();
+        let hash = Arc::new(inner.hash);
         let changed = self
             .watcher
-            .changed_globs(
-                &Arc::new(inner.hash),
-                HashSet::from_iter(inner.output_globs),
-            )
+            .changed_globs(&hash, HashSet::from_iter(inner.output_globs))
             .await;
 
         let timeSaved = {
