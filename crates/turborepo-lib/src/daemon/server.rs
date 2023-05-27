@@ -290,7 +290,7 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
             .changed_globs(&hash, HashSet::from_iter(inner.output_globs))
             .await;
 
-        let timeSaved = {
+        let time_saved = {
             let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
             times_saved.get(hash.as_str()).copied().unwrap_or_default()
         };
@@ -298,7 +298,7 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         match changed {
             Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
                 changed_output_globs: changed.into_iter().collect(),
-                time_saved: timeSaved,
+                time_saved: time_saved,
             })),
             Err(e) => {
                 error!("flush directory operation failed: {:?}", e);
