@@ -100,7 +100,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
             shutdown_rx: Some(recv_shutdown),
 
             running: Arc::new(AtomicBool::new(true)),
-            times_saved: HashMap::new(),
+            times_saved: Arc::new(std::sync::Mutex(HashMap::new())),
         })
     }
 }
