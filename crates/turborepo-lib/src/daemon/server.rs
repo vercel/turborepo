@@ -59,7 +59,7 @@ pub struct DaemonServer<T: Watcher> {
 
     running: Arc<AtomicBool>,
 
-    times_saved: HashMap<String, u64>,
+    times_saved: Arc<std::sync::Mutex<HashMap<String, u64>>>,
 }
 
 #[derive(Debug)]
