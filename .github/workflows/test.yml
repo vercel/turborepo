@@ -738,7 +738,14 @@ jobs:
       - name: Run nextest
         timeout-minutes: 120
         run: |
-          cargo tp-test
+          cargo tp-test --profile tp-test-linux
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test_reports
+          path: target/nextest/**/*.xml
 
   turbopack_rust_test2:
     needs: [determine_jobs, rust_prepare]
@@ -798,10 +805,24 @@ jobs:
         run: |
           cargo tp-pre-test
 
-      - name: Run nextest
+      - name: Run nextest (Mac)
         timeout-minutes: 120
+        if: matrix.os.name == 'macos'
         run: |
-          cargo tp-test
+          cargo tp-test --profile tp-test-mac
+
+      - name: Run nextest (Windows)
+        timeout-minutes: 120
+        if: matrix.os.name == 'windows'
+        run: |
+          cargo tp-test --profile tp-test-win
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test_reports
+          path: target/nextest/**/*.xml
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, rust_prepare]
@@ -1319,6 +1340,45 @@ jobs:
       - name: It's fine
         if: steps.info.outputs.success == 'true'
         run: echo Ok
+
+  # Upload Turbopack's test results into datadog.
+  upload_test_results:
+    name: Upload Test results
+    needs:
+      - turbopack_rust_test1
+      - turbopack_rust_test2
+    if: always()
+    runs-on: ubuntu-latest
+    # Do not block CI if upload fails for some reason
+    continue-on-error: true
+    steps:
+      # Uploading test results does not require turbopack's src codes, but this
+      # allows datadog uploader to sync with git information.
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install datadog
+        run: npm install -g @datadog/datadog-ci
+
+      - name: Download test results
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: List test files
+        run: find ./artifacts/test_reports
+
+      - name: Upload
+        continue-on-error: true
+        env:
+          DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
+        run: |
+          DD_ENV=ci datadog-ci junit upload --service Turbopack ./artifacts/test_reports/**/*.xml
 
   done:
     name: Done
