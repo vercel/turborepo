@@ -292,10 +292,10 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
             )
             .await;
 
-        let mut timeSaved = 0;
-        if let Some(value) = self.times_saved.get(&inner.hash.clone()) {
-            timeSaved = *value;
-        }
+        let timeSaved = {
+            let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.get(hash.as_str()).copied().unwrap_or_default()
+        };
 
         match changed {
             Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
