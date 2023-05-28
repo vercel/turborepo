@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{fs::File, io::Write, net::SocketAddr, process};
 
 use anyhow::Result;
 use axum::{routing::get, Json, Router};
@@ -84,11 +84,29 @@ pub async fn start_test_server(port: u16) -> Result<()> {
             }),
         );
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    // We print the port so integration tests can use it
-    println!("{}", port);
+
+    // Print the port to a file, so integration tests can use this server and then
+    // kill the server after
+    match write_to_file("server.port", &port.to_string()) {
+        Ok(()) => {}
+        Err(e) => println!("Failed to write to file: {}", e),
+    }
+
+    let pid = process::id();
+    match write_to_file("server.pid", &pid.to_string()) {
+        Ok(()) => {}
+        Err(e) => println!("Failed to write to file: {}", e),
+    }
+
     axum_server::bind(addr)
         .serve(app.into_make_service())
         .await?;
 
+    Ok(())
+}
+
+fn write_to_file(filename: &str, content: &str) -> Result<()> {
+    let mut file = File::create(filename)?;
+    file.write_all(content.as_bytes())?;
     Ok(())
 }

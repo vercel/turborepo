@@ -2,19 +2,20 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
 
-Kill what's running on port 8000 first, but also return 0 exit code if nothing is running on 8000
-  $ PID=$(lsof -t -i:8000 2>/dev/null) && [[ -n $PID ]] && kill $PID || true
 
 Start mock server. Note if anything fails in the test run after this,
 the cleanup step won't run at the end so we have to be careful
 send stdout and stderr to /dev/null and also background the server
-  $ node "${TESTDIR}/mock-api.js" --port 8000 &
+  $ cargo run -p vercel-api-mock & # this writes a server.pid file we can clean up after
 
-Run turbo. Since we have a --token (Note: remote caching will be turned on, and there isn't a way to turn it off for this test)
-  $ TURBO_API=http://localhost:8000 ${TURBO} run build --experimental-space-id=myspace --token="sometokenfromcli" --team="some-team-from-cli" > /dev/null 2>&1
+  $ PORT=$(cat server.port)
+  $ echo $PORT
 
-Expect 3 POST requests. 
-(Note: there's a 4th one for analytics, but we aren't ignoring it entirely and there isn't a way to turn off analytics)
+Run turbo. Since we have a --token, remote caching is turned on, and there isn't a way to turn it off for this test.
+  $ TURBO_API=http://localhost:$PORT ${TURBO} run build --experimental-space-id=myspace --token="sometokenfromcli" --team="some-team-from-cli" > /dev/null 2>&1
+
+Expect 3 POST requests. There's a 4th one for analytics, but we aren't ignoring it entirely and there
+isn't a way to turn off analytics from the CLI command
   $ ls post-*.json
   post-0.json
   post-1.json
