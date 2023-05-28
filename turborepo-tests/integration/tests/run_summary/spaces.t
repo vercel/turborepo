@@ -54,7 +54,7 @@ post-1 and post-2 should be for task summaries
   $ cat post-2.json | jq '.requestUrl'
   "/v0/spaces/myspace/runs/1234/tasks?slug=some-team-from-cli"
 
-# Spot check the first task POST that all the keys were sent
+Spot check the first task POST that all the keys were sent
   $ cat post-1.json | jq '.requestBody | keys'
   [
     "cache",
@@ -84,7 +84,7 @@ Patch request is pretty small so we can validate the URL and request payload tog
     }
   }
 
-# Kill mock server after
+Kill mock server after
   $ pid=$(cat server.pid)
   $ rm server.pid
   $ kill -9 $pid
