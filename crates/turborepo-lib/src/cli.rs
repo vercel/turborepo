@@ -1272,7 +1272,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: Some(LogOrder::Stream),
+                    log_order: LogOrder::Stream,
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -1284,7 +1284,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: Some(LogOrder::Grouped),
+                    log_order: LogOrder::Grouped,
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
