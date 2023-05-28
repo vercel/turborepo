@@ -11,8 +11,7 @@ send stdout and stderr to /dev/null and also background the server
   $ node "${TESTDIR}/mock-api.js" --port 8000 &
 
 Run turbo. Since we have a --token (Note: remote caching will be turned on, and there isn't a way to turn it off for this test)
-  $ TURBO_API=http://localhost:8000 ${TURBO} run build --experimental-space-id=myspace --token="sometokenfromcli" --team="some-team-from-cli" > /dev/null 2>&1
-
+  $ TURBO_API=http://localhost:8000 ${TURBO} run build --experimental-space-id=myspace --token="sometokenfromcli" --team="some-team-from-cli"
 Expect 3 POST requests. 
 (Note: there's a 4th one for analytics, but we aren't ignoring it entirely and there isn't a way to turn off analytics)
   $ ls post-*.json
