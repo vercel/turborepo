@@ -4,12 +4,13 @@ use anyhow::{bail, Result};
 use indoc::writedoc;
 use serde::Serialize;
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::{embed_file, File, FileContent};
+use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
-    chunk::{ChunkVc, ChunkingContext, EvaluatableAssetsVc, ModuleIdReadRef},
+    chunk::{
+        ChunkDataVc, ChunkVc, ChunkingContext, ChunksDataVc, EvaluatableAssetsVc, ModuleIdReadRef,
+    },
     code_builder::{CodeBuilder, CodeVc},
-    environment::ChunkLoading,
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
     source_map::{
@@ -17,11 +18,12 @@ use turbopack_core::{
     },
 };
 use turbopack_ecmascript::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    chunk::{EcmascriptChunkData, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
     utils::StringifyJs,
 };
+use turbopack_ecmascript_runtime::RuntimeType;
 
-use crate::{ecmascript::chunk_data::ChunkData, DevChunkingContextVc};
+use crate::DevChunkingContextVc;
 
 /// An Ecmascript chunk that:
 /// * Contains the Turbopack dev runtime code; and
@@ -54,8 +56,18 @@ impl EcmascriptDevEvaluateChunkVc {
     }
 
     #[turbo_tasks::function]
+    async fn chunks_data(self) -> Result<ChunksDataVc> {
+        let this = self.await?;
+        Ok(ChunkDataVc::from_assets(
+            this.chunking_context.output_root(),
+            this.other_chunks,
+        ))
+    }
+
+    #[turbo_tasks::function]
     async fn code(self) -> Result<CodeVc> {
         let this = self.await?;
+        let environment = this.chunking_context.environment();
 
         let output_root = this.chunking_context.output_root().await?;
         let chunk_path = self.ident().path().await?;
@@ -69,14 +81,12 @@ impl EcmascriptDevEvaluateChunkVc {
             );
         };
 
-        let other_chunks = this.other_chunks.await?;
-        let mut other_chunks_data = Vec::with_capacity(other_chunks.len());
-        for &other_chunk in &*other_chunks {
-            if let Some(other_chunk_data) = ChunkData::from_asset(&output_root, other_chunk).await?
-            {
-                other_chunks_data.push(other_chunk_data);
-            }
-        }
+        let other_chunks_data = self.chunks_data().await?;
+        let other_chunks_data = other_chunks_data.iter().try_join().await?;
+        let other_chunks_data: Vec<_> = other_chunks_data
+            .iter()
+            .map(|chunk_data| EcmascriptChunkData::new(chunk_data))
+            .collect();
 
         let runtime_module_ids = this
             .evaluatable_assets
@@ -105,7 +115,7 @@ impl EcmascriptDevEvaluateChunkVc {
             .collect();
 
         let params = EcmascriptDevChunkRuntimeParams {
-            other_chunks: other_chunks_data,
+            other_chunks: &other_chunks_data,
             runtime_module_ids,
         };
 
@@ -122,47 +132,22 @@ impl EcmascriptDevEvaluateChunkVc {
                     {{}},
                     {}
                 ]);
-                (() => {{
-                if (!Array.isArray(globalThis.TURBOPACK)) {{
-                    return;
-                }}
             "#,
             StringifyJs(&chunk_public_path),
             StringifyJs(&params),
         )?;
 
-        let shared_runtime_code = embed_file!("js/src/runtime.js").await?;
-
-        match &*shared_runtime_code {
-            FileContent::NotFound => bail!("shared runtime code is not found"),
-            FileContent::Content(file) => code.push_source(file.content(), None),
-        };
-
-        // The specific runtime code depends on declarations in the shared runtime code,
-        // hence it must be appended after it.
-        let specific_runtime_code =
-            match &*this.chunking_context.environment().chunk_loading().await? {
-                ChunkLoading::None => embed_file!("js/src/runtime.none.js").await?,
-                ChunkLoading::NodeJs => embed_file!("js/src/runtime.nodejs.js").await?,
-                ChunkLoading::Dom => embed_file!("js/src/runtime.dom.js").await?,
-            };
-
-        match &*specific_runtime_code {
-            FileContent::NotFound => bail!("specific runtime code is not found"),
-            FileContent::Content(file) => code.push_source(file.content(), None),
-        };
-
-        // Registering chunks depends on the BACKEND variable, which is set by the
-        // specific runtime code, hence it must be appended after it.
-        writedoc!(
-            code,
-            r#"
-                const chunksToRegister = globalThis.TURBOPACK;
-                globalThis.TURBOPACK = {{ push: registerChunk }};
-                chunksToRegister.forEach(registerChunk);
-                }})();
-            "#
-        )?;
+        match this.chunking_context.await?.runtime_type() {
+            RuntimeType::Default => {
+                let runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(environment);
+                code.push_code(&*runtime_code.await?);
+            }
+            #[cfg(feature = "test")]
+            RuntimeType::Dummy => {
+                let runtime_code = turbopack_ecmascript_runtime::get_dummy_runtime_code();
+                code.push_code(&runtime_code);
+            }
+        }
 
         if code.has_source_map() {
             let filename = chunk_path.file_name();
@@ -212,8 +197,23 @@ impl Asset for EcmascriptDevEvaluateChunk {
     }
 
     #[turbo_tasks::function]
-    fn references(self_vc: EcmascriptDevEvaluateChunkVc) -> AssetReferencesVc {
-        AssetReferencesVc::cell(vec![SourceMapAssetReferenceVc::new(self_vc.into()).into()])
+    async fn references(self_vc: EcmascriptDevEvaluateChunkVc) -> Result<AssetReferencesVc> {
+        let this = self_vc.await?;
+        let mut references = Vec::new();
+
+        if *this
+            .chunking_context
+            .reference_chunk_source_maps(self_vc.into())
+            .await?
+        {
+            references.push(SourceMapAssetReferenceVc::new(self_vc.into()).into());
+        }
+
+        for chunk_data in &*self_vc.chunks_data().await? {
+            references.extend(chunk_data.references().await?.iter().copied());
+        }
+
+        Ok(AssetReferencesVc::cell(references))
     }
 
     #[turbo_tasks::function]
@@ -233,13 +233,13 @@ impl GenerateSourceMap for EcmascriptDevEvaluateChunk {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EcmascriptDevChunkRuntimeParams<T> {
+struct EcmascriptDevChunkRuntimeParams<'a, T> {
     /// Other chunks in the chunk group this chunk belongs to, if any. Does not
     /// include the chunk itself.
     ///
     /// These chunks must be loaed before the runtime modules can be
     /// instantiated.
-    other_chunks: Vec<T>,
+    other_chunks: &'a [T],
     /// List of module IDs that this chunk should instantiate when executed.
     runtime_module_ids: Vec<ModuleIdReadRef>,
 }

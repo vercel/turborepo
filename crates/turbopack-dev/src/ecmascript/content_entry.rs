@@ -2,6 +2,7 @@ use std::io::Write as _;
 
 use anyhow::Result;
 use indexmap::IndexMap;
+use tracing::{info_span, Instrument};
 use turbo_tasks::{
     primitives::{StringVc, U64Vc},
     TryJoinIterExt, Value, ValueToString,
@@ -15,8 +16,6 @@ use turbopack_core::{
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkContentVc, EcmascriptChunkItem, EcmascriptChunkItemVc,
 };
-
-use crate::ecmascript::module_factory::module_factory;
 
 /// A chunk item's content entry.
 ///
@@ -36,7 +35,8 @@ impl EcmascriptDevChunkContentEntry {
         chunk_item: EcmascriptChunkItemVc,
         availability_info: AvailabilityInfo,
     ) -> Result<Self> {
-        let code = item_code(chunk_item, Value::new(availability_info))
+        let code = chunk_item
+            .code(Value::new(availability_info))
             .resolve()
             .await?;
         Ok(EcmascriptDevChunkContentEntry {
@@ -64,10 +64,17 @@ impl EcmascriptDevChunkContentEntriesVc {
             .chunk_items
             .iter()
             .map(|chunk_item| async move {
-                Ok((
-                    chunk_item.id().await?,
-                    EcmascriptDevChunkContentEntry::new(*chunk_item, availability_info).await?,
+                async move {
+                    Ok((
+                        chunk_item.id().await?,
+                        EcmascriptDevChunkContentEntry::new(*chunk_item, availability_info).await?,
+                    ))
+                }
+                .instrument(info_span!(
+                    "chunk item",
+                    name = display(chunk_item.asset_ident().to_string().await?)
                 ))
+                .await
             })
             .try_join()
             .await?
@@ -84,7 +91,9 @@ async fn item_code(
     availability_info: Value<AvailabilityInfo>,
 ) -> Result<CodeVc> {
     Ok(
-        match module_factory(item.content_with_availability_info(availability_info))
+        match item
+            .content_with_availability_info(availability_info)
+            .module_factory()
             .resolve()
             .await
         {

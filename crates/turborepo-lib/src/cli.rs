@@ -9,13 +9,17 @@ use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use dunce::canonicalize as fs_canonicalize;
-use log::{debug, error};
 use serde::Serialize;
+use tracing::{debug, error};
+use turbopath::AbsoluteSystemPathBuf;
 
+#[cfg(feature = "run-stub")]
+use crate::commands::run;
 use crate::{
-    commands::{bin, daemon, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, generate, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
+    tracing::TurboSubscriber,
     ui::UI,
     Payload,
 };
@@ -66,17 +70,12 @@ pub enum DryRunMode {
     Json,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
 pub enum EnvMode {
+    #[default]
     Infer,
     Loose,
     Strict,
-}
-
-impl Default for EnvMode {
-    fn default() -> EnvMode {
-        EnvMode::Infer
-    }
 }
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
@@ -86,6 +85,7 @@ impl Default for EnvMode {
 #[clap(arg_required_else_help = true)]
 pub struct Args {
     #[clap(long, global = true)]
+    #[serde(skip)]
     pub version: bool,
     #[clap(long, global = true)]
     #[serde(skip)]
@@ -94,6 +94,7 @@ pub struct Args {
     pub skip_infer: bool,
     /// Disable the turbo update notification
     #[clap(long, global = true)]
+    #[serde(skip)]
     pub no_update_notifier: bool,
     /// Override the endpoint for API calls
     #[clap(long, global = true, value_parser)]
@@ -135,12 +136,16 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
-    #[clap(long, global = true, hide = true)]
     /// Force a check for a new version of turbo
+    #[clap(long, global = true, hide = true)]
+    #[serde(skip)]
     pub check_for_update: bool,
     #[clap(long = "__test-run", global = true, hide = true)]
     pub test_run: bool,
     #[clap(flatten, next_help_heading = "Run Arguments")]
+    // We don't serialize this because by the time we're calling
+    // Go, we've moved it to the command field as a Command::Run
+    #[serde(skip)]
     pub run_args: Option<RunArgs>,
     #[clap(subcommand)]
     pub command: Option<Command>,
@@ -191,6 +196,12 @@ pub enum DaemonCommand {
     Stop,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum LinkTarget {
+    RemoteCache,
+    Spaces,
+}
+
 impl Args {
     pub fn new() -> Result<Self> {
         let mut clap_args = match Args::try_parse() {
@@ -222,8 +233,8 @@ impl Args {
                 process::exit(0);
             }
         };
-        // --version flag doesn't work with ignore_errors in clap, so we have to handle
-        // it manually
+        // We have to override the --version flag because we use `get_version`
+        // instead of a hard-coded version or the crate version
         if clap_args.version {
             println!("{}", get_version());
             process::exit(0);
@@ -234,6 +245,17 @@ impl Args {
         }
 
         Ok(clap_args)
+    }
+
+    pub fn get_tasks(&self) -> &[String] {
+        match &self.command {
+            Some(Command::Run(box RunArgs { tasks, .. })) => tasks,
+            _ => self
+                .run_args
+                .as_ref()
+                .map(|run_args| run_args.tasks.as_slice())
+                .unwrap_or(&[]),
+        }
     }
 }
 
@@ -251,9 +273,9 @@ pub enum Command {
     Completion { shell: Shell },
     /// Runs the Turborepo background daemon
     Daemon {
-        /// Set the idle timeout for turbod (default 4h0m0s)
-        #[clap(long)]
-        idle_time: Option<String>,
+        /// Set the idle timeout for turbod
+        #[clap(long, default_value_t = String::from("4h0m0s"))]
+        idle_time: String,
         #[clap(subcommand)]
         #[serde(flatten)]
         command: Option<DaemonCommand>,
@@ -264,6 +286,33 @@ pub enum Command {
         /// Do not create or modify .gitignore (default false)
         #[clap(long)]
         no_gitignore: bool,
+
+        /// Specify what should be linked (default "remote cache")
+        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
+        target: LinkTarget,
+    },
+    /// Generate a new app / package
+    #[clap(aliases = ["g", "gen"])]
+    Generate {
+        #[serde(skip)]
+        #[clap(long, default_value_t = String::from("latest"), hide = true)]
+        tag: String,
+        /// The name of the generator to run
+        generator_name: Option<String>,
+        /// Generator configuration file
+        #[clap(short = 'c', long)]
+        config: Option<String>,
+        /// The root of your repository (default: directory with root
+        /// turbo.json)
+        #[clap(short = 'r', long)]
+        root: Option<String>,
+        /// Answers passed directly to generator
+        #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+        args: Vec<String>,
+
+        #[clap(subcommand)]
+        #[serde(skip)]
+        command: Option<GenerateCommand>,
     },
     /// Login to your Vercel account
     Login {
@@ -294,7 +343,69 @@ pub enum Command {
     Run(Box<RunArgs>),
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink {},
+    Unlink {
+        /// Specify what should be unlinked (default "remote cache")
+        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
+        target: LinkTarget,
+    },
+}
+
+#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+pub struct GenerateWorkspaceArgs {
+    /// Name for the new workspace
+    #[clap(short = 'n', long)]
+    pub name: Option<String>,
+    /// Generate an empty workspace
+    #[clap(short = 'b', long, conflicts_with = "copy", default_value_t = true)]
+    pub empty: bool,
+    /// Generate a workspace using an existing workspace as a template. Can be
+    /// the name of a local workspace within your monorepo, or a fully
+    /// qualified GitHub URL with any branch and/or subdirectory
+    #[clap(short = 'c', long, conflicts_with = "empty", num_args = 0..=1, default_missing_value = "")]
+    pub copy: Option<String>,
+    /// Where the new workspace should be created
+    #[clap(short = 'd', long)]
+    pub destination: Option<String>,
+    /// The type of workspace to create
+    #[clap(short = 't', long)]
+    pub r#type: Option<String>,
+    /// The root of your repository (default: directory with root turbo.json)
+    #[clap(short = 'r', long)]
+    pub root: Option<String>,
+    /// In a rare case, your GitHub URL might contain a branch name with a slash
+    /// (e.g. bug/fix-1) and the path to the example (e.g. foo/bar). In this
+    /// case, you must specify the path to the example separately:
+    /// --example-path foo/bar
+    #[clap(short = 'p', long)]
+    pub example_path: Option<String>,
+    /// Do not filter available dependencies by the workspace type
+    #[clap(long, default_value_t = false)]
+    pub show_all_dependencies: bool,
+}
+
+#[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+pub struct GeneratorCustomArgs {
+    /// The name of the generator to run
+    generator_name: Option<String>,
+    /// Generator configuration file
+    #[clap(short = 'c', long)]
+    config: Option<String>,
+    /// The root of your repository (default: directory with root
+    /// turbo.json)
+    #[clap(short = 'r', long)]
+    root: Option<String>,
+    /// Answers passed directly to generator
+    #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+    args: Vec<String>,
+}
+
+#[derive(Subcommand, Clone, Debug, Serialize, PartialEq)]
+pub enum GenerateCommand {
+    /// Add a new package or app to your project
+    #[clap(name = "workspace", alias = "w")]
+    Workspace(GenerateWorkspaceArgs),
+    #[clap(name = "run", alias = "r")]
+    Run(GeneratorCustomArgs),
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
@@ -325,8 +436,11 @@ pub struct RunArgs {
     #[clap(short = 'F', long, action = ArgAction::Append)]
     pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
-    #[clap(long)]
-    pub force: bool,
+    #[clap(long, env = "TURBO_FORCE", default_missing_value = "true")]
+    pub force: Option<Option<bool>>,
+    /// Specify whether or not to do framework inference for tasks
+    #[clap(long, value_name = "BOOL", action = ArgAction::Set, default_value = "true", default_missing_value = "true", num_args = 0..=1)]
+    pub framework_inference: bool,
     /// Specify glob of global filesystem dependencies to be hashed. Useful
     /// for .env and files
     #[clap(long = "global-deps", action = ArgAction::Append)]
@@ -339,7 +453,7 @@ pub struct RunArgs {
     /// Environment variable mode.
     /// Loose passes the entire environment.
     /// Strict uses an allowlist specified in turbo.json.
-    #[clap(long = "experimental-env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
+    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
     pub env_mode: EnvMode,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
@@ -435,16 +549,22 @@ pub enum LogPrefix {
 /// * `repo_state`: If we have done repository inference and NOT executed
 /// local turbo, such as in the case where `TURBO_BINARY_PATH` is set,
 /// we use it here to modify clap's arguments.
+/// * `logger`: The logger to use for the run.
+/// * `ui`: The UI to use for the run.
 ///
 /// returns: Result<Payload, Error>
 #[tokio::main]
-pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
-    let mut clap_args = Args::new()?;
+pub async fn run(
+    repo_state: Option<RepoState>,
+    logger: &TurboSubscriber,
+    ui: UI,
+) -> Result<Payload> {
+    let mut cli_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
-    if clap_args.command.is_none() {
-        if let Some(run_args) = mem::take(&mut clap_args.run_args) {
-            clap_args.command = Some(Command::Run(Box::new(run_args)));
+    if cli_args.command.is_none() {
+        if let Some(run_args) = mem::take(&mut cli_args.run_args) {
+            cli_args.command = Some(Command::Run(Box::new(run_args)));
         } else {
             return Err(anyhow!("No command specified"));
         }
@@ -452,8 +572,8 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
     // If this is a run command, and we know the actual invocation path, set the
     // inference root, as long as the user hasn't overridden the cwd
-    if clap_args.cwd.is_none() {
-        if let Some(Command::Run(run_args)) = &mut clap_args.command {
+    if cli_args.cwd.is_none() {
+        if let Some(Command::Run(run_args)) = &mut cli_args.command {
             if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
                 let invocation_path = Path::new(&invocation_dir);
 
@@ -478,44 +598,47 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
     // Do this after the above, since we're now always setting cwd.
     if let Some(repo_state) = repo_state {
-        if let Some(Command::Run(run_args)) = &mut clap_args.command {
+        if let Some(Command::Run(run_args)) = &mut cli_args.command {
             run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
         }
-        clap_args.cwd = Some(repo_state.root);
+        cli_args.cwd = Some(repo_state.root);
     }
 
-    let repo_root = if let Some(cwd) = &clap_args.cwd {
+    let repo_root = if let Some(cwd) = &cli_args.cwd {
         let canonical_cwd = fs_canonicalize(cwd)?;
         // Update on clap_args so that Go gets a canonical path.
-        clap_args.cwd = Some(canonical_cwd.clone());
+        cli_args.cwd = Some(canonical_cwd.clone());
         canonical_cwd
     } else {
         current_dir()?
     };
 
+    // a non-absolute repo root is a bug
+    let repo_root = AbsoluteSystemPathBuf::new(repo_root).expect("repo_root is not absolute");
+
     let version = get_version();
 
-    match clap_args.command.as_ref().unwrap() {
+    match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Login { sso_team } => {
-            if clap_args.test_run {
+            if cli_args.test_run {
                 println!("Login test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
             let sso_team = sso_team.clone();
 
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
 
             if let Some(sso_team) = sso_team {
                 login::sso_login(&mut base, &sso_team).await?;
@@ -525,62 +648,95 @@ pub async fn run(repo_state: Option<RepoState>) -> Result<Payload> {
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Link { no_gitignore } => {
-            if clap_args.test_run {
+        Command::Link {
+            no_gitignore,
+            target,
+        } => {
+            if cli_args.test_run {
                 println!("Link test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
             let modify_gitignore = !*no_gitignore;
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let to = *target;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
 
-            if let Err(err) = link::link(&mut base, modify_gitignore).await {
+            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
                 error!("error: {}", err.to_string())
-            };
+            }
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Unlink { .. } => {
-            if clap_args.test_run {
+        Command::Unlink { target } => {
+            if cli_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(Payload::Rust(Ok(0)));
             }
 
-            let mut base = CommandBase::new(clap_args, repo_root, version)?;
+            let from = *target;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
 
-            unlink::unlink(&mut base)?;
+            unlink::unlink(&mut base, from)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon {
-            command: Some(command),
-            ..
+        Command::Generate {
+            tag,
+            generator_name,
+            config,
+            root,
+            args,
+            command,
         } => {
-            let command = *command;
-            let base = CommandBase::new(clap_args, repo_root, version)?;
-            daemon::main(&command, &base).await?;
+            // build GeneratorCustomArgs struct
+            let args = GeneratorCustomArgs {
+                generator_name: generator_name.clone(),
+                config: config.clone(),
+                root: root.clone(),
+                args: args.clone(),
+            };
+
+            generate::run(tag, command, &args)?;
             Ok(Payload::Rust(Ok(0)))
-        },
-        Command::Prune { .. }
-        | Command::Run(_)
-        // the daemon itself still delegates to Go
-        | Command::Daemon { .. } => Ok(Payload::Go(Box::new(clap_args))),
+        }
+        Command::Daemon { command, idle_time } => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
+
+            match command {
+                Some(command) => daemon::daemon_client(command, &base).await,
+                #[cfg(not(feature = "go-daemon"))]
+                None => daemon::daemon_server(&base, idle_time, logger).await,
+                #[cfg(feature = "go-daemon")]
+                None => {
+                    return Ok(Payload::Go(Box::new(base)));
+                }
+            }?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        #[cfg(feature = "run-stub")]
+        Command::Run(args) => {
+            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            run::run(base).await?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        #[cfg(not(feature = "run-stub"))]
+        Command::Run(args) => {
+            if args.tasks.is_empty() {
+                return Err(anyhow!("at least one task must be specified"));
+            }
+            let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
+            Ok(Payload::Go(Box::new(base)))
+        }
+        Command::Prune { .. } => {
+            let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
+            Ok(Payload::Go(Box::new(base)))
+        }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
             Ok(Payload::Rust(Ok(0)))
-        }
-    }
-}
-
-impl Args {
-    pub fn ui(&self) -> UI {
-        if self.no_color {
-            UI::new(true)
-        } else if self.color {
-            UI::new(false)
-        } else {
-            UI::infer()
         }
     }
 }
@@ -604,6 +760,7 @@ mod test {
         RunArgs {
             cache_workers: 10,
             output_logs: None,
+            framework_inference: true,
             ..RunArgs::default()
         }
     }
@@ -642,7 +799,9 @@ mod test {
 
     use anyhow::Result;
 
-    use crate::cli::{Args, Command, DryRunMode, EnvMode, LogOrder, OutputLogsMode, RunArgs, Verbosity};
+    use crate::cli::{
+        Args, Command, DryRunMode, EnvMode, LogOrder, OutputLogsMode, RunArgs, Verbosity,
+    };
 
     #[test]
     fn test_parse_run() -> Result<()> {
@@ -662,6 +821,60 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
+                    framework_inference: true,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "framework_inference: default to true"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--framework-inference"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    framework_inference: true,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "framework_inference: flag only"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--framework-inference", "true"])
+                .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    framework_inference: true,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "framework_inference: flag set to true"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--framework-inference", "false"])
+                .unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    framework_inference: false,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "framework_inference: flag set to false"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
                     env_mode: EnvMode::Infer,
                     ..get_default_run_args()
                 }))),
@@ -671,7 +884,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode"]).unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -684,8 +897,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "infer"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "infer"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -698,8 +910,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "loose"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "loose"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -712,8 +923,7 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "run", "build", "--experimental-env-mode", "strict"])
-                .unwrap(),
+            Args::try_parse_from(["turbo", "run", "build", "--env-mode", "strict"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
@@ -875,7 +1085,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    force: true,
+                    force: Some(Some(true)),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -1255,7 +1465,9 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink {}),
+                command: Some(Command::Unlink {
+                    target: crate::cli::LinkTarget::RemoteCache
+                }),
                 ..Args::default()
             }
         );
@@ -1265,7 +1477,9 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink {}),
+                command: Some(Command::Unlink {
+                    target: crate::cli::LinkTarget::RemoteCache,
+                }),
                 cwd: Some(PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },

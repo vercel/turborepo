@@ -1,5 +1,6 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use turbo_tasks::primitives::JsonValueReadRef;
 
 use crate::{route_matcher::Param, ResponseHeaders, StructuredError};
 
@@ -16,9 +17,11 @@ pub struct RenderData {
     params: IndexMap<String, Param>,
     method: String,
     url: String,
+    original_url: String,
     raw_query: String,
     raw_headers: Vec<(String, String)>,
     path: String,
+    data: Option<JsonValueReadRef>,
 }
 
 #[derive(Serialize)]

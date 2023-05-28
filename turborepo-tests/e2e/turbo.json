@@ -1,0 +1,9 @@
+{
+  "extends": ["//"],
+  "pipeline": {
+    "test": {
+      "dependsOn": ["cli#build", "^build"],
+      "output": []
+    }
+  }
+}

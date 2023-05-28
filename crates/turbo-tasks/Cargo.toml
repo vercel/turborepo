@@ -36,8 +36,12 @@ serde_regex = "1.1.0"
 stable_deref_trait = "1.2.0"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 turbo-tasks-hash = { workspace = true }
 turbo-tasks-macros = { workspace = true }
+
+[dev-dependencies]
+serde_test = "1.0.157"
 
 [build-dependencies]
 turbo-tasks-build = { workspace = true }

@@ -40,3 +40,12 @@ brew install python pkg-config pixman cairo pango
 Now try `pnpm install` again.
 
 See also: https://github.com/Automattic/node-canvas/blob/master/Readme.md#compiling
+
+## Enabling logging in Turborepo
+
+Logging can be enabled in two ways, first with the verbosity flag (-vvv) which
+sets the global log level, but it is also possible to use the TURBO_LOG_VERBOSITY
+environment variable. With this, you can set different log levels per module.
+For syntax, see the [Env Filter Syntax][1]
+
+[1][https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html]

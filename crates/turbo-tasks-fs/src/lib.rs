@@ -3,7 +3,6 @@
 #![feature(min_specialization)]
 #![feature(iter_advance_by)]
 #![feature(io_error_more)]
-#![feature(box_syntax)]
 #![feature(round_char_boundary)]
 
 pub mod attach;
@@ -52,6 +51,7 @@ use tokio::{
     fs,
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
 };
+use tracing::{instrument, Level};
 use turbo_tasks::{
     mark_stateful,
     primitives::{BoolVc, StringReadRef, StringVc},
@@ -357,6 +357,7 @@ impl DiskFileSystem {
                     }
                     event = rx.try_recv();
                 }
+                #[instrument(parent = None, level = Level::INFO, name = "DiskFileSystem file change", skip_all, fields(name = display(path.display())))]
                 fn invalidate(
                     report_invalidation_reason: &Option<(String, PathBuf)>,
                     path: &Path,
@@ -873,6 +874,9 @@ impl FileSystemPath {
         self.path.is_empty()
     }
 
+    /// Returns the path of `inner` relative to `self`.
+    ///
+    /// Note: this method always strips the leading `/` from the result.
     pub fn get_path_to<'a>(&self, inner: &'a FileSystemPath) -> Option<&'a str> {
         if self.fs != inner.fs {
             return None;
@@ -1683,9 +1687,9 @@ impl FileContent {
                 let de = &mut serde_json::Deserializer::from_reader(file.read());
                 match serde_path_to_error::deserialize(de) {
                     Ok(data) => FileJsonContent::Content(data),
-                    Err(e) => FileJsonContent::Unparseable(
-                        box UnparseableJson::from_serde_path_to_error(e),
-                    ),
+                    Err(e) => FileJsonContent::Unparseable(Box::new(
+                        UnparseableJson::from_serde_path_to_error(e),
+                    )),
                 }
             }
             FileContent::NotFound => FileJsonContent::NotFound,
@@ -1709,9 +1713,8 @@ impl FileContent {
                             "text content doesn't contain any json data",
                         ),
                     },
-                    Err(e) => FileJsonContent::Unparseable(box UnparseableJson::from_jsonc_error(
-                        e,
-                        string.as_ref(),
+                    Err(e) => FileJsonContent::Unparseable(Box::new(
+                        UnparseableJson::from_jsonc_error(e, string.as_ref()),
                     )),
                 },
                 Err(_) => FileJsonContent::unparseable("binary is not valid utf-8 text"),

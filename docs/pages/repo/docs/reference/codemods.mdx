@@ -28,6 +28,8 @@ npx @turbo/codemod <transform> <path>
 2. [create-turbo-config](#create-turbo-config)
 3. [migrate-env-var-dependencies](#migrate-env-var-dependencies)
 4. [set-default-outputs](#set-default-outputs)
+5. [stabilize-env-mode](#stabilize-env-mode)
+6. [transform-env-literals-to-wildcards](#transform-env-literals-to-wildcards)
 
 ### `add-package-manager`
 
@@ -275,4 +277,108 @@ Run the codemod:
 
 ```sh
 npx @turbo/codemod set-default-outputs
+```
+
+### `stabilize-env-mode`
+
+<Callout type="info">
+  Introduced in v1.10.0
+</Callout>
+
+Migrates `turbo.json`'s `experimentalGlobalPassThroughEnv` to `globalPassThroughEnv` and `experimentalPassThroughEnv` to `passThroughEnv`.
+
+For example:
+
+```json
+// Before, turbo.json
+{
+  "$schema": "https://turbo.build/schema.json",
+  "experimentalGlobalPassThroughEnv": ["CC"],
+  "pipeline": {
+    "build": {
+      "experimentalPassThroughEnv": ["GOROOT"],
+    }
+  }
+}
+```
+
+```diff
+// After, turbo.json
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": ["CC"],
+  "pipeline": {
+    "build": {
+      "passThroughEnv": ["GOROOT"],
+    }
+  }
+}
+```
+
+#### Usage
+
+Go to your project:
+
+```sh
+cd path-to-your-turborepo/
+```
+
+Run the codemod:
+
+```sh
+npx @turbo/codemod stabilize-env-mode
+```
+
+### `transform-env-literals-to-wildcards`
+
+<Callout type="info">
+  Introduced in v1.10.0
+</Callout>
+
+Updates any existing env var fields whose contents would be ambiguous to the new wildcard syntax.
+
+For example:
+
+```json
+// Before, turbo.json
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["THIS_*_IS_LITERAL"],
+  "globalPassThroughEnv": ["!LITERAL_LEADING_EXCLAMATION"],
+  "pipeline": {
+    "build": {
+      "env": ["50_PERCENT_OFF*_HAS_SMALL_PRINT"],
+      "passThroughEnv": ["**BOLDED**"],
+    }
+  }
+}
+```
+
+```diff
+// After, turbo.json
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["THIS_\\*_IS_LITERAL"],
+  "globalPassThroughEnv": ["\\!LITERAL_LEADING_EXCLAMATION"],
+  "pipeline": {
+    "build": {
+      "env": ["50_PERCENT_OFF\\*_HAS_SMALL_PRINT"],
+      "passThroughEnv": ["\\*\\*BOLDED\\*\\*"],
+    }
+  }
+}
+```
+
+#### Usage
+
+Go to your project:
+
+```sh
+cd path-to-your-turborepo/
+```
+
+Run the codemod:
+
+```sh
+npx @turbo/codemod transform-env-literals-to-wildcards
 ```

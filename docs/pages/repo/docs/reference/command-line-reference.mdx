@@ -178,11 +178,11 @@ Task details include:
 - `dependencies`: Tasks that must run before this task
 - `dependents`: Tasks that must be run after this task
 
-#### `--experimental-env-mode`
+#### `--env-mode`
 
 `type: string`
 
-<Callout type="info">
+<Callout>
   **Warning**: This is an experimental flag, so its name and behavior can change.
 </Callout>
 
@@ -198,30 +198,29 @@ Controls the available environment variables to your tasks.
 
 ##### `infer`
 
-In infer mode, Turborepo will look for [`experimentalPassThroughEnv`][1] for
-each task config, and [`experimentalGlobalPassThroughEnv`][2] in the root of the
+In infer mode, Turborepo will look for [`passThroughEnv`][1] for
+each task config, and [`globalPassThroughEnv`][2] in the root of the
 `turbo.json` config. If either is defined, "strict" mode is inferred. If
 neither is defined, then `loose` mode is inferred.
 
-In this mode, the value of `experimentalGlobalPassThroughEnv` and the flag's
+In this mode, the value of `globalPassThroughEnv` and the flag's
 value ("infer") will only be incorporated into the global hash if
-`experimentalGlobalPassThroughEnv` is set.
+`globalPassThroughEnv` is set.
 
 ##### `loose`
 
 In loose mode, all environment variables are made available to the task.
-The value of `experimentalGlobalPassThroughEnv` and the flag's value ("loose")
-itself will be incorporated into the global hash.
+The flag's value ("loose") itself will be incorporated into the global hash.
 
 ##### `strict`
 
 In strict mode, only environment variables specified in the following keys are
 available to the task:
 
-- `env` and `experimentalPassThroughEnv` in each task configuration
-- `globalEnv` and `experimentalGlobalPassThroughEnv` in the root of your config
+- `env` and `passThroughEnv` in each task configuration
+- `globalEnv` and `globalPassThroughEnv` in the root of your config
 
-The value of `experimentalGlobalPassThroughEnv` and the flag's value ("strict")
+The value of `globalPassThroughEnv` and the flag's value ("strict")
 itself will be incorporated into the global hash.
 
 If strict mode is specified or inferred, _all_ tasks are run in strict mode,
@@ -292,6 +291,16 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
 ```
 
 You can also specify these in your `turbo` configuration as `globalDependencies` key.
+
+#### `--framework-inference`
+
+`type: bool`
+
+Specify whether or not to do framework inference for tasks. Defaults to `true`, can be configured to be `false` which skips framework inference for tasks. This disables [automatic environment variable inclusion](../core-concepts/caching#automatic-environment-variable-inclusion).
+
+```sh
+turbo run build --framework-inference=false
+```
 
 #### `--ignore`
 
@@ -430,19 +439,6 @@ Specify/filter workspaces to act as entry points for execution. Globs against `p
 ```sh
 turbo run lint --scope="@example/**"
 turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
-```
-
-#### `--serial`
-
-<Callout type="error">
-  `serial` is deprecated in `0.5.3`.Please use
-  [`--concurrency=1`](#--concurrency) instead.
-</Callout>
-
-Executes all tasks serially (i.e. one-at-a-time).
-
-```sh
-turbo run build --serial
 ```
 
 #### `--since`
@@ -709,5 +705,76 @@ Unlink the current directory from the Remote Cache.
 
 Get the path to the `turbo` binary.
 
-[1]: /repo/docs/refernce/configuration#experimentalPassThroughEnv
-[2]: /repo/docs/refernce/configuration#experimentalGlobalPassThroughEnv
+## `turbo gen`
+
+<Callout>
+  **Warning**: This is an experimental command, so its name and behavior can change.
+</Callout>
+
+Extend your Turborepo with new apps, and packages. Create new empty workspaces, copy existing workspaces, add workspaces from remote sources or run custom generators defined using Plop configurations.
+
+**Note:** The default command for `generate` is [run](#run-generator-name).
+
+### `workspace`
+
+Add a new package or app to your monorepo.
+
+#### Options
+
+##### `--name`
+
+The name for the new workspace
+
+##### `--empty`
+
+Generate an empty workspace (default: `true`)
+
+##### `--copy`
+
+Generate a workspace using an existing workspace as a template
+
+##### `--destination`
+
+Where the new workspace should be created
+
+##### `--type`
+
+The type of workspace to create (`app` or `package`)
+
+##### `--root`
+
+The root of your repository (default: directory with _root_ `turbo.json`)
+
+##### `--example / -e`
+
+An example package to add. You can use a GitHub URL with any branch and/or subdirectory
+
+##### `--example-path / -p`
+
+In a rare case, your GitHub URL might contain a branch name with a slash (e.g. `bug/fix-1`) and the path to the example (e.g. `foo/bar`).
+In this case, you must specify the path to the example separately: `--example-path foo/bar`
+
+##### `--show-all-dependencies`
+
+When selecting dependencies to add to your new workspace, do not filter available dependencies by the selected workspace type (`app` or `package`)
+
+### `run [generator-name]`
+
+Run custom generators within your monorepo. Optionally specify a generator name to directly run a specific generator.
+
+#### Options
+
+##### `--config`
+
+Generator configuration file (default: `turbo/generators/config.js`)
+
+##### `--root`
+
+The root of your repository (default: directory with _root_ `turbo.json`)
+
+##### `--args`
+
+Prompt answers passed directly to generator
+
+[1]: /repo/docs/reference/configuration#passThroughEnv
+[2]: /repo/docs/reference/configuration#globalPassThroughEnv

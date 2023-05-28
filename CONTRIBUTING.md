@@ -10,12 +10,12 @@ Thanks for your interest in contributing to Turbo!
     - [TLS Implementation](#tls-implementation)
     - [Running Turborepo Tests](#running-turborepo-tests)
       - [Go Tests](#go-tests)
-      - [Rust Tests](#rust-tests)
   - [Debugging Turborepo](#debugging-turborepo)
   - [Benchmarking Turborepo](#benchmarking-turborepo)
   - [Updating `turbo`](#updating-turbo)
   - [Manually testing `turbo`](#manually-testing-turbo)
   - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
+  - [Creating a new release blog post](#creating-a-new-release-blog-post)
   - [Adding A New Crate](#adding-a-new-crate)
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
@@ -50,28 +50,54 @@ to the build command. This allows for us to build for more platforms, as `native
 
 ### Running Turborepo Tests
 
-Dependencies
+Install dependencies
 
-1. Install `jq`, `sponge`, and `zstd`
+On macOS:
 
-On macOS: `brew install sponge jq zstd`
+```bash
+brew install moreutils jq zstd # (moreutils is for sponge)
+```
 
 #### Go Tests
 
-From the root directory, you can
+First: `npm install -g turbo`.
 
-- run unit tests with `pnpm run --filter=cli test`
-- run integration tests with `pnpm run --filter=cli integration-tests`
-- run e2e tests with `pnpm run --filter=cli e2e`
+Then from the root directory, you can run:
 
-To run a single Go test, you can run `go test ./[path/to/package/]`. See more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages).
-
-#### Rust Tests
-
-The recommended way to run tests is: `cargo nextest run -p turborepo-lib --features rustls-tls`.
-You'll have to [install it first](https://nexte.st/book/pre-built-binaries.html).
-
-You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) directly `cargo test -p turborepo-lib`.
+- Go unit tests
+  ```bash
+  pnpm test -- --filter=cli
+  ```
+- A single Go unit test (see more [in the Go docs](https://pkg.go.dev/cmd/go#hdr-Test_packages))
+  ```bash
+  cd cli && go test ./[path/to/package/]
+  ```
+- Rust unit tests ([install `nextest` first](https://nexte.st/book/pre-built-binaries.html))
+  ```bash
+  cargo nextest run -p turborepo-lib --features rustls-tls
+  ```
+  You can also use the built in [`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html)
+  directly with `cargo test -p turborepo-lib`.
+- CLI Integration tests
+  ```bash
+  pnpm test -- --filter=turborepo-tests-integration
+  ```
+- A single Integration test
+  e.g to run everything in `tests/run_summary`:
+  ```
+  # build first because the next command doesn't run through turbo
+  pnpm -- turbo run build --filter=cli
+  pnpm test -F turborepo-tests-integration -- "run_summary"
+  ```
+  Note: this is not through turbo, so you'll have to build turbo yourself first.
+- E2E test
+  ```bash
+  pnpm -- turbo e2e --filter=cli
+  ```
+- Example tests
+  ```bash
+  pnpm test -- --filter=turborepo-tests-examples -- <example-name> <packagemanager>
+  ```
 
 ## Debugging Turborepo
 
@@ -134,6 +160,24 @@ These lists are by no means exhaustive. Feel free to add to them with other stra
 ## Publishing `turbo` to the npm registry
 
 See [the publishing guide](./release.md#release-turborepo).
+
+## Creating a new release blog post
+
+Creating a new release post can be done via a turborepo generator. Run the following command from anywhere within the repo:
+
+```bash
+turbo generate run "blog - release post"
+```
+
+This will walk you through creating a new blog post from start to finish.
+
+NOTE: If you would like to update the stats (github stars / npm downloads / time saved) for an existing blog post that has yet to be published (useful if time has passed since the blog post was created, and up to date stats are required before publishing) - run:
+
+```bash
+turbo generate run "blog - "blog - update release post stats"
+```
+
+and choose the blog post you would like to update.
 
 ## Adding A New Crate
 

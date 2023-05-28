@@ -5,12 +5,12 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
 use axum::{extract::Query, response::Redirect, routing::get, Router};
-use log::debug;
-#[cfg(not(test))]
-use log::warn;
 use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
+use tracing::debug;
+#[cfg(not(test))]
+use tracing::warn;
 
 use crate::{
     commands::{
@@ -304,6 +304,7 @@ mod test {
     use serde::Deserialize;
     use tempfile::NamedTempFile;
     use tokio::sync::OnceCell;
+    use turbopath::AbsoluteSystemPathBuf;
     use vercel_api_mock::start_test_server;
 
     use crate::{
@@ -325,6 +326,7 @@ mod test {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
         // Explicitly pass the wrong port to confirm that we're reading it from the
         // manual override
         fs::write(
@@ -343,7 +345,7 @@ mod test {
                     .unwrap(),
             ),
             repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                RepoConfigLoader::new(repo_config_path)
                     .with_api(Some(format!("http://localhost:{}", port)))
                     .load()
                     .unwrap(),
@@ -376,6 +378,7 @@ mod test {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
         // Explicitly pass the wrong port to confirm that we're reading it from the
         // manual override
         fs::write(
@@ -394,7 +397,7 @@ mod test {
                     .unwrap(),
             ),
             repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                RepoConfigLoader::new(repo_config_path)
                     .with_api(Some(format!("http://localhost:{}", port)))
                     .load()
                     .unwrap(),

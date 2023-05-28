@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::trace::TraceRawVcs;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    asset::AssetVc, reference_type::ReferenceType, source_transform::SourceTransformsVc,
+    asset::AssetVc, plugin::CustomModuleTypeVc, reference_type::ReferenceType,
+    source_transform::SourceTransformsVc,
 };
 use turbopack_css::CssInputTransformsVc;
 use turbopack_ecmascript::{EcmascriptInputTransformsVc, EcmascriptOptions};
@@ -42,7 +43,6 @@ pub enum ModuleRuleEffect {
     ModuleType(ModuleType),
     AddEcmascriptTransforms(EcmascriptInputTransformsVc),
     SourceTransforms(SourceTransformsVc),
-    Custom,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input", shared)]
@@ -53,9 +53,21 @@ pub enum ModuleType {
         #[turbo_tasks(trace_ignore)]
         options: EcmascriptOptions,
     },
-    Typescript(EcmascriptInputTransformsVc),
-    TypescriptWithTypes(EcmascriptInputTransformsVc),
-    TypescriptDeclaration(EcmascriptInputTransformsVc),
+    Typescript {
+        transforms: EcmascriptInputTransformsVc,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
+    TypescriptWithTypes {
+        transforms: EcmascriptInputTransformsVc,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
+    TypescriptDeclaration {
+        transforms: EcmascriptInputTransformsVc,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
     Json,
     Raw,
     Mdx {
@@ -65,6 +77,5 @@ pub enum ModuleType {
     Css(CssInputTransformsVc),
     CssModule(CssInputTransformsVc),
     Static,
-    // TODO allow custom function when we support function pointers
-    Custom(u8),
+    Custom(CustomModuleTypeVc),
 }

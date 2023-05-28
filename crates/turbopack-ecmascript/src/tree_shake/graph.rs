@@ -296,9 +296,9 @@ impl DepGraph {
                     .push(ModuleItem::ModuleDecl(ModuleDecl::Import(ImportDecl {
                         span: DUMMY_SP,
                         specifiers,
-                        src: box uri_of_module.clone().into(),
+                        src: Box::new(uri_of_module.clone().into()),
                         type_only: false,
-                        asserts: Some(box create_turbopack_chunk_id_assert(dep)),
+                        asserts: Some(Box::new(create_turbopack_chunk_id_assert(dep))),
                     })));
             }
 
@@ -312,10 +312,11 @@ impl DepGraph {
                 // Emit `export { foo }`
                 for var in data.write_vars.iter() {
                     if required_vars.remove(var) {
-                        let assertion_prop = PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
-                            key: quote_ident!("__turbopack_var__").into(),
-                            value: box true.into(),
-                        }));
+                        let assertion_prop =
+                            PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
+                                key: quote_ident!("__turbopack_var__").into(),
+                                value: Box::new(true.into()),
+                            })));
 
                         chunk
                             .body
@@ -332,10 +333,10 @@ impl DepGraph {
                                     )],
                                     src: None,
                                     type_only: false,
-                                    asserts: Some(box ObjectLit {
+                                    asserts: Some(Box::new(ObjectLit {
                                         span: DUMMY_SP,
                                         props: vec![assertion_prop],
-                                    }),
+                                    })),
                                 },
                             )));
                     }
@@ -370,9 +371,6 @@ impl DepGraph {
             global_done: &mut FxHashSet<u32>,
             group_done: &mut FxHashSet<u32>,
         ) -> bool {
-            // TODO(WEB-706): Consider cycles
-            //
-
             let mut changed = false;
 
             // Check deps of `start`.
@@ -413,6 +411,24 @@ impl DepGraph {
             if let ItemId::Group(_) = id {
                 groups.push((vec![id.clone()], FxHashSet::default()));
                 global_done.insert(ix);
+            }
+        }
+
+        // Cycles should form a separate group
+        for id in self.g.graph_ix.iter() {
+            let ix = self.g.get_node(id);
+
+            if let Some(cycle) = cycles.iter().find(|v| v.contains(&ix)) {
+                if cycle.iter().all(|v| !global_done.contains(v)) {
+                    let ids = cycle
+                        .iter()
+                        .map(|&ix| self.g.graph_ix[ix as usize].clone())
+                        .collect::<Vec<_>>();
+
+                    global_done.extend(cycle.iter().copied());
+
+                    groups.push((ids, Default::default()));
+                }
             }
         }
 
@@ -826,10 +842,10 @@ const ASSERT_CHUNK_KEY: &str = "__turbopack_chunk__";
 fn create_turbopack_chunk_id_assert(dep: u32) -> ObjectLit {
     ObjectLit {
         span: DUMMY_SP,
-        props: vec![PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+        props: vec![PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
             key: PropName::Ident(Ident::new(ASSERT_CHUNK_KEY.into(), DUMMY_SP)),
             value: (dep as f64).into(),
-        }))],
+        })))],
     }
 }
 

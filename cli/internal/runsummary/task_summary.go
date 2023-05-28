@@ -1,6 +1,8 @@
 package runsummary
 
 import (
+	"os"
+
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -73,16 +75,32 @@ type TaskSummary struct {
 	Framework              string                                `json:"framework"`
 	EnvMode                util.EnvMode                          `json:"envMode"`
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
+	DotEnv                 turbopath.AnchoredUnixPathArray       `json:"dotEnv"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
+}
+
+// GetLogs reads the Logfile and returns the data
+func (ts *TaskSummary) GetLogs() []byte {
+	bytes, err := os.ReadFile(ts.LogFile)
+	if err != nil {
+		return []byte{}
+	}
+	return bytes
+}
+
+// TaskEnvConfiguration contains the environment variable inputs for a task
+type TaskEnvConfiguration struct {
+	Env            []string `json:"env"`
+	PassThroughEnv []string `json:"passThroughEnv"`
 }
 
 // TaskEnvVarSummary contains the environment variables that impacted a task's hash
 type TaskEnvVarSummary struct {
-	Configured        []string `json:"configured"`
-	Inferred          []string `json:"inferred"`
-	Global            []string `json:"global"`
-	Passthrough       []string `json:"passthrough"`
-	GlobalPassthrough []string `json:"globalPassthrough"`
+	Specified TaskEnvConfiguration `json:"specified"`
+
+	Configured  []string `json:"configured"`
+	Inferred    []string `json:"inferred"`
+	PassThrough []string `json:"passthrough"`
 }
 
 // cleanForSinglePackage converts a TaskSummary to remove references to workspaces

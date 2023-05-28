@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import getTurboRoot from "./getTurboRoot";
+import { getTurboRoot } from "./getTurboRoot";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
 import { Schema } from "@turbo/types";
@@ -14,6 +14,11 @@ export type TurboConfigs = Array<{
   workspacePath: string;
   isRootConfig: boolean;
 }>;
+
+interface PackageJson {
+  turbo?: Schema;
+  workspaces?: { packages: Array<string> } | Array<string>;
+}
 
 interface Options {
   cache?: boolean;
@@ -34,15 +39,22 @@ function getWorkspaceGlobs(root: string): Array<string> {
     } else {
       const packageJson = JSON.parse(
         fs.readFileSync(path.join(root, "package.json"), "utf8")
-      );
-      return packageJson?.workspaces || [];
+      ) as PackageJson;
+      if (packageJson?.workspaces) {
+        // support nested packages workspace format
+        if ("packages" in packageJson?.workspaces) {
+          return packageJson.workspaces.packages || [];
+        }
+        return packageJson?.workspaces || [];
+      }
+      return [];
     }
   } catch (e) {
     return [];
   }
 }
 
-function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
+export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
   const turboRoot = getTurboRoot(cwd, opts);
   const configs: TurboConfigs = [];
 
@@ -102,5 +114,3 @@ function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
 
   return configs;
 }
-
-export default getTurboConfigs;

@@ -10,7 +10,7 @@ pub use node_entry::{
     NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 use turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological, SkipDuplicates},
+    graph::{GraphTraversal, ReverseTopological},
     CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString,
 };
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
@@ -24,7 +24,6 @@ use turbopack_core::{
     source_map::GenerateSourceMapVc,
     virtual_asset::VirtualAssetVc,
 };
-use turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 use self::{
     bootstrap::NodeJsBootstrapAsset,
@@ -114,13 +113,13 @@ async fn internal_assets_for_source_mapping(
 /// subgraph
 #[turbo_tasks::function]
 pub async fn external_asset_entrypoints(
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<AssetsSetVc> {
     Ok(separate_assets(
-        get_intermediate_asset(chunking_context, module.into(), runtime_entries)
+        get_intermediate_asset(chunking_context, module, runtime_entries)
             .resolve()
             .await?,
         intermediate_output_path,
@@ -170,13 +169,12 @@ async fn separate_assets(
             .await
     };
 
-    let graph = GraphTraversal::<SkipDuplicates<ReverseTopological<Type>, _>>::visit(
-        once(Type::Internal(intermediate_asset)),
-        get_asset_children,
-    )
-    .await
-    .completed()?
-    .into_inner();
+    let graph = ReverseTopological::new()
+        .skip_duplicates()
+        .visit(once(Type::Internal(intermediate_asset)), get_asset_children)
+        .await
+        .completed()?
+        .into_inner();
 
     let mut internal_assets = IndexSet::new();
     let mut external_asset_entrypoints = IndexSet::new();

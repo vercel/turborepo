@@ -1,10 +1,19 @@
 use std::{path::PathBuf, time::Duration};
 
+use pidlock::PidlockError::AlreadyOwned;
+use time::{format_description, OffsetDateTime};
+use tracing::{trace, warn};
+use turbopath::AbsoluteSystemPathBuf;
+
 use super::CommandBase;
-use crate::{cli::DaemonCommand, daemon::DaemonConnector};
+use crate::{
+    cli::DaemonCommand,
+    daemon::{endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonError},
+    tracing::TurboSubscriber,
+};
 
 /// Runs the daemon command.
-pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result<()> {
+pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Result<(), DaemonError> {
     let (can_start_server, can_kill_server) = match command {
         DaemonCommand::Status { .. } => (false, false),
         DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
@@ -14,12 +23,8 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result
     let connector = DaemonConnector {
         can_start_server,
         can_kill_server,
-        pid_file: base.daemon_file_root().join_relative(
-            turbopath::RelativeSystemPathBuf::new("turbod.pid").expect("relative system"),
-        ),
-        sock_file: base.daemon_file_root().join_relative(
-            turbopath::RelativeSystemPathBuf::new("turbod.sock").expect("relative system"),
-        ),
+        pid_file: base.daemon_file_root().join_component("turbod.pid"),
+        sock_file: base.daemon_file_root().join_component("turbod.sock"),
     };
 
     let mut client = connector.connect().await?;
@@ -36,9 +41,10 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result
         }
         DaemonCommand::Status { json } => {
             let status = client.status().await?;
+            let log_file = log_filename(&status.log_file)?;
             let status = DaemonStatus {
                 uptime_ms: status.uptime_msec,
-                log_file: status.log_file.into(),
+                log_file: log_file.into(),
                 pid_file: client.pid_file().to_owned(),
                 sock_file: client.sock_file().to_owned(),
             };
@@ -53,6 +59,69 @@ pub async fn main(command: &DaemonCommand, base: &CommandBase) -> anyhow::Result
                 println!("Daemon pid file: {}", status.pid_file.to_string_lossy());
                 println!("Daemon socket file: {}", status.sock_file.to_string_lossy());
             }
+        }
+    };
+
+    Ok(())
+}
+
+// log_filename matches the algorithm used by tracing_appender::Rotation::DAILY
+// to generate the log filename. This is kind of a hack, but there didn't appear
+// to be a simple way to grab the generated filename.
+fn log_filename(base_filename: &str) -> Result<String, time::Error> {
+    let now = OffsetDateTime::now_utc();
+    let format = format_description::parse("[year]-[month]-[day]")?;
+    let date = now.format(&format)?;
+    Ok(format!("{}.{}", base_filename, date))
+}
+
+#[tracing::instrument(skip(base, logging), fields(repo_root = %base.repo_root))]
+pub async fn daemon_server(
+    base: &CommandBase,
+    idle_time: &String,
+    logging: &TurboSubscriber,
+) -> Result<(), DaemonError> {
+    let (log_folder, log_file) = {
+        let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
+            .expect("user has a home dir");
+
+        let folder = AbsoluteSystemPathBuf::new(directories.data_dir()).expect("absolute");
+
+        let log_folder = folder.join_component("logs");
+        let log_file =
+            log_folder.join_component(format!("{}-turbo.log", base.repo_hash()).as_str());
+
+        (log_folder, log_file)
+    };
+
+    tracing::trace!("logging to file: {:?}", log_file);
+    if let Err(e) = logging.set_daemon_logger(tracing_appender::rolling::daily(
+        log_folder,
+        log_file.clone(),
+    )) {
+        // error here is not fatal, just log it
+        tracing::error!("failed to set file logger: {}", e);
+    }
+
+    let timeout = go_parse_duration::parse_duration(idle_time)
+        .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
+        .map(|d| Duration::from_nanos(d as u64))?;
+
+    let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
+    let reason = server.serve().await;
+
+    match reason {
+        CloseReason::SocketOpenError(SocketOpenError::LockError(AlreadyOwned)) => {
+            warn!("daemon already running");
+        }
+        CloseReason::SocketOpenError(e) => return Err(e.into()),
+        CloseReason::Interrupt
+        | CloseReason::ServerClosed
+        | CloseReason::WatcherClosed
+        | CloseReason::Timeout
+        | CloseReason::Shutdown => {
+            // these are all ok, just exit
+            trace!("shutting down daemon: {:?}", reason);
         }
     };
 

@@ -1,5 +1,6 @@
 pub(crate) mod content;
 pub(crate) mod context;
+pub(crate) mod data;
 pub(crate) mod item;
 pub(crate) mod placeable;
 
@@ -30,6 +31,7 @@ use self::content::ecmascript_chunk_content;
 pub use self::{
     content::{EcmascriptChunkContent, EcmascriptChunkContentVc},
     context::{EcmascriptChunkingContext, EcmascriptChunkingContextVc},
+    data::EcmascriptChunkData,
     item::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemOptions, EcmascriptChunkItemVc,
@@ -339,7 +341,7 @@ impl Asset for EcmascriptChunk {
             let need_root = if let [(_, main_entry)] = &assets[..] {
                 main_entry.resolve().await? != ident.resolve().await?
             } else {
-                false
+                true
             };
             if need_root {
                 let availability_root_key = StringVc::cell("current_availability_root".to_string());

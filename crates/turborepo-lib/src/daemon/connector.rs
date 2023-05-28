@@ -5,12 +5,12 @@ use std::{
 };
 
 use command_group::AsyncCommandGroup;
-use log::{debug, error};
 use notify::{Config, Event, EventKind, Watcher};
 use sysinfo::{Pid, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
 use thiserror::Error;
 use tokio::{sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
+use tracing::debug;
 
 use super::{client::proto::turbod_client::TurbodClient, DaemonClient};
 use crate::daemon::DaemonError;
@@ -67,6 +67,7 @@ impl DaemonConnector {
     const CONNECT_RETRY_MAX: usize = 3;
     const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
     const SOCKET_TIMEOUT: Duration = Duration::from_secs(1);
+    const SOCKET_ERROR_WAIT: Duration = Duration::from_millis(50);
 
     /// Attempt, with retries, to:
     /// 1. find (or start) the daemon process
@@ -86,7 +87,13 @@ impl DaemonConnector {
             debug!("got daemon with pid: {}", pid);
 
             let conn = match self.get_connection(self.sock_file.clone()).await {
-                Err(DaemonConnectorError::Watcher(_) | DaemonConnectorError::Socket(_)) => continue,
+                Err(DaemonConnectorError::Watcher(_)) => continue,
+                Err(DaemonConnectorError::Socket(e)) => {
+                    // assume the server is not yet ready
+                    debug!("socket error: {}", e);
+                    tokio::time::sleep(DaemonConnector::SOCKET_ERROR_WAIT).await;
+                    continue;
+                }
                 rest => rest?,
             };
 
@@ -95,7 +102,7 @@ impl DaemonConnector {
             match client.handshake().await {
                 Ok(_) => {
                     return {
-                        debug!("connected in {}ms", time.elapsed().as_micros());
+                        debug!("connected in {}µs", time.elapsed().as_micros());
                         Ok(client.with_connect_settings(self))
                     }
                 }
@@ -141,6 +148,7 @@ impl DaemonConnector {
         // this creates a new process group for the given command
         // in a cross platform way, directing all output to /dev/null
         let mut group = tokio::process::Command::new(binary_path)
+            .arg("--skip-infer")
             .arg("daemon")
             .stderr(Stdio::null())
             .stdout(Stdio::null())
@@ -188,6 +196,7 @@ impl DaemonConnector {
         // note, this endpoint is just a dummy. the actual path is passed in
         Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
+            .timeout(Duration::from_secs(1))
             .connect_with_connector(tower::service_fn(make_service))
             .await
             .map(TurbodClient::new)
@@ -374,6 +383,7 @@ mod test {
         select,
         sync::{oneshot::Sender, Mutex},
     };
+    use tracing::info;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
@@ -561,7 +571,7 @@ mod test {
             &self,
             req: tonic::Request<proto::ShutdownRequest>,
         ) -> tonic::Result<tonic::Response<proto::ShutdownResponse>> {
-            log::info!("shutdown request: {:?}", req);
+            info!("shutdown request: {:?}", req);
             self.shutdown
                 .lock()
                 .await

@@ -5,16 +5,18 @@ use futures::{
     pin_mut, SinkExt, StreamExt, TryStreamExt,
 };
 use parking_lot::Mutex;
-use turbo_tasks::{mark_finished, primitives::StringVc, util::SharedError, RawVc};
+use turbo_tasks::{
+    duration_span, mark_finished, primitives::StringVc, util::SharedError, RawVc, ValueToString,
+};
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
-    chunk::{ChunkingContextVc, EvaluatableAssetsVc},
+    asset::Asset,
+    chunk::{ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc},
     error::PrettyPrintError,
 };
 use turbopack_dev_server::source::{Body, BodyVc, ProxyResult, ProxyResultVc};
-use turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 use super::{
     issue::RenderingIssue, RenderDataVc, RenderProxyIncomingMessage, RenderProxyOutgoingMessage,
@@ -31,7 +33,7 @@ pub async fn render_proxy(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
@@ -147,7 +149,7 @@ fn render_stream(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
@@ -207,7 +209,7 @@ async fn render_stream_internal(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
@@ -258,9 +260,13 @@ async fn render_stream_internal(
         }
         operation.send(RenderProxyOutgoingMessage::BodyEnd).await?;
 
+        let entry = module.ident().to_string().await?;
+        let guard = duration_span!("Node.js api execution", entry = display(entry));
+
         match operation.recv().await? {
             RenderProxyIncomingMessage::Headers { data } => yield RenderItem::Headers(data),
             RenderProxyIncomingMessage::Error(error) => {
+                drop(guard);
                 // If we don't get headers, then something is very wrong. Instead, we send down a
                 // 500 proxy error as if it were the proper result.
                 let trace = trace_stack(
@@ -281,7 +287,11 @@ async fn render_stream_internal(
                 yield RenderItem::BodyChunk(body.into());
                 return;
             }
-            v => Err(anyhow!("unexpected message during rendering: {:#?}", v))?,
+            v => {
+                drop(guard);
+                Err(anyhow!("unexpected message during rendering: {:#?}", v))?;
+                return;
+            },
         };
 
         loop {
@@ -291,16 +301,23 @@ async fn render_stream_internal(
                 }
                 RenderProxyIncomingMessage::BodyEnd => break,
                 RenderProxyIncomingMessage::Error(error) => {
+                    drop(guard);
                     // We have already started to send a result, so we can't change the
                     // headers/body to a proxy error.
                     operation.disallow_reuse();
                     let trace =
                         trace_stack(error, intermediate_asset, intermediate_output_path, project_dir).await?;
                     Err(anyhow!("error during streaming render: {}", trace))?;
+                    return;
                 }
-                v => Err(anyhow!("unexpected message during rendering: {:#?}", v))?,
+                v => {
+                    drop(guard);
+                    Err(anyhow!("unexpected message during rendering: {:#?}", v))?;
+                    return;
+                },
             }
         }
+        drop(guard);
     };
 
     let mut sender = (sender.get)();

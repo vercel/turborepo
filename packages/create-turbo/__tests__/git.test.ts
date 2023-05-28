@@ -117,13 +117,13 @@ describe("git", () => {
   describe("tryGitInit", () => {
     const { useFixture } = setupTestFixtures({
       directory: path.join(__dirname, "../"),
+      options: { emptyFixture: true },
     });
 
-    it("inits a repo succesfully", async () => {
+    it("inits a repo successfully", async () => {
       const { root } = useFixture({ fixture: `git` });
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
-        .mockReturnValueOnce("git version 2.38.1")
         .mockImplementationOnce(() => {
           throw new Error(
             "fatal: not a git repository (or any of the parent directories): .git"
@@ -138,11 +138,10 @@ describe("git", () => {
       expect(result).toBe(true);
 
       const calls = [
-        "git --version",
         "git init",
         "git checkout -b main",
         "git add -A",
-        'git commit -m "test commit"',
+        'git commit --author="Turbobot <turbobot@vercel.com>" -am "test commit"',
       ];
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length + 2);
       calls.forEach((call) => {
@@ -154,19 +153,20 @@ describe("git", () => {
     });
 
     it("skips init if already in a repo", async () => {
-      const { root } = useFixture({ fixture: `git` });
+      const { root } = useFixture({
+        fixture: `git`,
+      });
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
-        .mockReturnValueOnce("git version 2.38.1")
         .mockReturnValueOnce("true")
         .mockReturnValue("success");
 
       const result = tryGitInit(root, "test commit");
       expect(result).toBe(false);
 
-      const calls = ["git --version"];
+      const calls: string[] = [];
 
-      // 1 call for git --version, 1 call for isInGitRepository
+      // 1 call for isInGitRepository
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length + 1);
       calls.forEach((call) => {
         expect(mockExecSync).toHaveBeenCalledWith(call, {
@@ -181,13 +181,21 @@ describe("git", () => {
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
         .mockImplementationOnce(() => {
-          throw new Error("fatal: unknown command git");
+          throw new Error(
+            "fatal: not a git repository (or any of the parent directories): .git"
+          );
+        })
+        .mockImplementationOnce(() => {
+          throw new Error("abort: no repository found (.hg not found)");
+        })
+        .mockImplementationOnce(() => {
+          throw new Error("fatal: 128");
         });
 
       const result = tryGitInit(root, "test commit");
       expect(result).toBe(false);
 
-      const calls = ["git --version"];
+      const calls: string[] = [GIT_REPO_COMMAND, HG_REPO_COMMAND, "git init"];
 
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length);
       calls.forEach((call) => {
@@ -202,7 +210,6 @@ describe("git", () => {
       const { root } = useFixture({ fixture: `git` });
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
-        .mockReturnValueOnce("git version 2.38.1")
         .mockImplementationOnce(() => {
           throw new Error(
             "fatal: not a git repository (or any of the parent directories): .git"
@@ -221,10 +228,9 @@ describe("git", () => {
       expect(result).toBe(false);
 
       const calls = [
-        "git --version",
+        "git rev-parse --is-inside-work-tree",
+        "hg --cwd . root",
         "git init",
-        "git checkout -b main",
-        "git add -A",
       ];
 
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length + 2);

@@ -26,6 +26,7 @@ var (
 	// ErrVersionMismatch is returned when the daemon process was spawned by a different version than the connecting client
 	ErrVersionMismatch   = errors.New("daemon version does not match client version")
 	errConnectionFailure = errors.New("could not connect to daemon")
+	errUnavailable       = errors.New("the server is not ready yet")
 	// ErrTooManyAttempts is returned when the client fails to connect too many times
 	ErrTooManyAttempts = errors.New("reached maximum number of attempts contacting daemon")
 	// ErrDaemonNotRunning is returned when the client cannot contact the daemon and has
@@ -127,6 +128,7 @@ const (
 	_maxAttempts       = 3
 	_shutdownTimeout   = 1 * time.Second
 	_socketPollTimeout = 1 * time.Second
+	_notReadyTimeout   = 3 * time.Millisecond
 )
 
 // killLiveServer tells a running server to shut down. This method is also responsible
@@ -252,13 +254,12 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 				return nil, err
 			}
 			// Loops back around and tries again.
-		} else if errors.Is(err, errConnectionFailure) {
-			// close the client, see if we can kill the stale daemon
-			_ = client.Close()
-			if err := c.killDeadServer(serverPid); err != nil {
-				return nil, err
-			}
-			// if we successfully killed the dead server, loop around and try again
+		} else if errors.Is(err, errUnavailable) {
+			// The rust daemon will open the socket a few ms before it's ready to accept connections.
+			// If we get here, we know that the socket exists, but the server isn't ready yet.
+			// We'll wait a few ms and try again.
+			c.Logger.Debug("server not ready yet")
+			time.Sleep(_notReadyTimeout)
 		} else if err != nil {
 			// Some other error occurred, close the client and
 			// report the error to the user
@@ -374,7 +375,7 @@ func (c *Connector) waitForSocket() error {
 
 // startDaemon starts the daemon and returns the pid for the new process
 func (c *Connector) startDaemon() (int, error) {
-	args := []string{"daemon"}
+	args := []string{"--skip-infer", "daemon"}
 	if c.Opts.ServerTimeout != 0 {
 		args = append(args, fmt.Sprintf("--idle-time=%v", c.Opts.ServerTimeout.String()))
 	}

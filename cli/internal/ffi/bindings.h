@@ -16,6 +16,16 @@ struct Buffer changed_files(struct Buffer buffer);
 
 struct Buffer previous_content(struct Buffer buffer);
 
-struct Buffer npm_transitive_closure(struct Buffer buf);
+struct Buffer recursive_copy(struct Buffer buffer);
 
-struct Buffer npm_subgraph(struct Buffer buf);
+struct Buffer verify_signature(struct Buffer buffer);
+
+struct Buffer get_package_file_hashes_from_git_index(struct Buffer buffer);
+
+struct Buffer transitive_closure(struct Buffer buf);
+
+struct Buffer subgraph(struct Buffer buf);
+
+struct Buffer patches(struct Buffer buf);
+
+struct Buffer global_change(struct Buffer buf);

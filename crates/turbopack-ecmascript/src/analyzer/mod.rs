@@ -722,36 +722,36 @@ impl JsValue {
     pub fn equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::Equal,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn not_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::NotEqual,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn strict_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::StrictEqual,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn strict_not_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::StrictNotEqual,
-            box b,
+            Box::new(b),
         )
     }
 
@@ -1522,6 +1522,14 @@ impl JsValue {
 
 // Defineable name management
 impl JsValue {
+    /// When the value has a user-defineable name, return the length of it (in
+    /// segments). Otherwise returns None.
+    /// - any free var has itself as user-defineable name.
+    /// - any member access adds the identifier as segement to the name of the
+    ///   object.
+    /// - some well-known objects/functions have a user-defineable names.
+    /// - member calls without arguments also have a user-defineable name which
+    ///   is the property with `()` appended.
     pub fn get_defineable_name_len(&self) -> Option<usize> {
         match self {
             JsValue::FreeVar(_) => Some(1),
@@ -1540,6 +1548,12 @@ impl JsValue {
         }
     }
 
+    /// Returns a reverse iterator over the segments of the user-defineable
+    /// name. e. g. `foo.bar().baz` would yield `baz`, `bar()`, `foo`.
+    /// `(1+2).foo.baz` would also yield `baz`, `foo` even while the value is
+    /// not a complete user-defineable name. Before calling this method you must
+    /// use [JsValue::get_defineable_name_len] to determine if the value has a
+    /// user-defineable name at all.
     pub fn iter_defineable_name_rev(&self) -> DefineableNameIter<'_> {
         DefineableNameIter {
             next: Some(self),
@@ -3363,7 +3377,7 @@ mod tests {
                                 let new_args = handle_args(args, &mut queue, &var_graph, i).await;
                                 resolved.push((
                                     format!("{parent} -> {i} call"),
-                                    JsValue::call(box func, new_args),
+                                    JsValue::call(Box::new(func), new_args),
                                 ));
                             }
                             Effect::FreeVar { var, .. } => {
@@ -3377,7 +3391,7 @@ mod tests {
                                 let new_args = handle_args(args, &mut queue, &var_graph, i).await;
                                 resolved.push((
                                     format!("{parent} -> {i} member call"),
-                                    JsValue::member_call(box obj, box prop, new_args),
+                                    JsValue::member_call(Box::new(obj), Box::new(prop), new_args),
                                 ));
                             }
                             _ => {}

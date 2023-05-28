@@ -77,8 +77,19 @@ impl Team {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Space {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamsResponse {
     pub teams: Vec<Team>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpacesResponse {
+    pub spaces: Vec<Space>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,6 +224,37 @@ impl APIClient {
         })
     }
 
+    pub async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse> {
+        // create url with teamId if provided
+        let endpoint = match team_id {
+            Some(team_id) => format!("/v0/spaces?limit=100&teamId={}", team_id),
+            None => "/v0/spaces?limit=100".to_string(),
+        };
+
+        let response = self
+            .make_retryable_request(|| {
+                let request_builder = self
+                    .client
+                    .get(self.make_url(endpoint.as_str()))
+                    .header("User-Agent", self.user_agent.clone())
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", token));
+
+                request_builder.send()
+            })
+            .await?
+            .error_for_status()?;
+
+        response.json().await.map_err(|err| {
+            anyhow!(
+                "Error getting spaces: {}",
+                err.status()
+                    .and_then(|status| status.canonical_reason())
+                    .unwrap_or(&err.to_string())
+            )
+        })
+    }
+
     pub async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
         let response = self
             .make_retryable_request(|| {
@@ -266,16 +308,13 @@ impl APIClient {
         false
     }
 
-    pub fn new(
-        base_url: impl AsRef<str>,
-        timeout: Option<u64>,
-        version: &'static str,
-    ) -> Result<Self> {
-        let client = match timeout {
-            Some(timeout) => reqwest::Client::builder()
+    pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &'static str) -> Result<Self> {
+        let client = if timeout != 0 {
+            reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout))
-                .build()?,
-            None => reqwest::Client::builder().build()?,
+                .build()?
+        } else {
+            reqwest::Client::builder().build()?
         };
 
         let user_agent = format!(

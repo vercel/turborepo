@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/vercel/turbo/cli/internal/cache"
-	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -42,7 +41,6 @@ func (rs *runSpec) ArgsForTask(task string) []string {
 type Opts struct {
 	runOpts      util.RunOpts
 	cacheOpts    cache.Opts
-	clientOpts   client.Opts
 	runcacheOpts runcache.Opts
 	scopeOpts    scope.Opts
 }
@@ -82,9 +80,6 @@ func getDefaultOptions() *Opts {
 	return &Opts{
 		runOpts: util.RunOpts{
 			Concurrency: 10,
-		},
-		clientOpts: client.Opts{
-			Timeout: client.ClientTimeout,
 		},
 	}
 }
