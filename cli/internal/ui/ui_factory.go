@@ -7,8 +7,8 @@ import (
 	"github.com/mitchellh/cli"
 )
 
-// UIFactory provides an interface for creating cli.Ui instances from input, output and error IOs
-type UIFactory interface {
+// Factory provides an interface for creating cli.Ui instances from input, output and error IOs
+type Factory interface {
 	Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui
 }
 
@@ -28,7 +28,7 @@ func (factory *BasicUIFactory) Build(in io.Reader, out io.Writer, err io.Writer)
 // ColoredUIFactory provides a method for creating a cli.ColoredUi from input, output and error IOs
 type ColoredUIFactory struct {
 	ColorMode ColorMode
-	Base      UIFactory
+	Base      Factory
 }
 
 // Build builds a cli.ColoredUi from input, output and error IOs
@@ -56,7 +56,7 @@ func (factory *ColoredUIFactory) Build(in io.Reader, out io.Writer, err io.Write
 
 // ConcurrentUIFactory provides a method for creating a cli.ConcurrentUi from input, output and error IOs
 type ConcurrentUIFactory struct {
-	Base UIFactory
+	Base Factory
 }
 
 // Build builds a cli.ConcurrentUi from input, output and error IOs
@@ -68,7 +68,7 @@ func (factory *ConcurrentUIFactory) Build(in io.Reader, out io.Writer, err io.Wr
 
 // PrefixedUIFactory provides a method for creating a cli.PrefixedUi from input, output and error IOs
 type PrefixedUIFactory struct {
-	Base UIFactory
+	Base Factory
 
 	AskPrefix       string
 	AskSecretPrefix string

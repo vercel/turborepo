@@ -151,7 +151,7 @@ func RealRun(
 
 		ui := concurrentUIFactory.Build(os.Stdin, outWriter, errWriter)
 
-		taskExecutionSummary, err := ec.exec(ctx, packageTask, ui, outWriter, errWriter)
+		taskExecutionSummary, err := ec.exec(ctx, packageTask, ui, outWriter)
 
 		// taskExecutionSummary will be nil if the task never executed
 		// (i.e. if the workspace didn't implement the script corresponding to the task)
@@ -282,7 +282,7 @@ func (ec *execContext) logError(prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, ui cli.Ui, outWriter io.Writer, errWriter io.Writer) (*runsummary.TaskExecutionSummary, error) {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, ui cli.Ui, outWriter io.Writer) (*runsummary.TaskExecutionSummary, error) {
 	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
 	// So make sure to call it before returning.
 	successExitCode := 0 // We won't use this till later

@@ -76,7 +76,7 @@ func (h *Helper) getUI(cliArgs *turbostate.ParsedArgsFromRust) cli.Ui {
 	return factory.Build(os.Stdout, os.Stdin, os.Stderr)
 }
 
-func (h *Helper) getUIFactory(cliArgs *turbostate.ParsedArgsFromRust) ui.UIFactory {
+func (h *Helper) getUIFactory(cliArgs *turbostate.ParsedArgsFromRust) ui.Factory {
 	colorMode := ui.GetColorModeFromEnv()
 	if cliArgs.NoColor {
 		colorMode = ui.ColorModeSuppressed
@@ -182,7 +182,7 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 // CmdBase encompasses configured components common to all turbo commands.
 type CmdBase struct {
 	UI           cli.Ui
-	UIFactory    ui.UIFactory
+	UIFactory    ui.Factory
 	Logger       hclog.Logger
 	RepoRoot     turbopath.AbsoluteSystemPath
 	APIClient    *client.APIClient
