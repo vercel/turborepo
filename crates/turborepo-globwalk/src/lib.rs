@@ -178,7 +178,10 @@ fn preprocess_paths_and_globs(
 
     let base_path = base_path
         .components()
-        .take(lowest_segment + 1)
+        .take(
+            // this can be usize::MAX if there are no include paths
+            lowest_segment.saturating_add(1),
+        )
         .collect::<PathBuf>();
 
     let exclude_paths = exclude

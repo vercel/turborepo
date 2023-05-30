@@ -5,6 +5,7 @@ mod package_graph;
 pub mod pipeline;
 mod scope;
 mod task_id;
+mod workspace_catalog;
 
 use anyhow::{Context as ErrorContext, Result};
 use graph::CompleteGraph;

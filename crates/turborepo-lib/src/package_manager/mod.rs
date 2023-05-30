@@ -85,8 +85,8 @@ impl fmt::Display for PackageManager {
 pub struct Globs {
     inclusions: Any<'static>,
     exclusions: Any<'static>,
-    raw_inclusions: Vec<String>,
-    raw_exclusions: Vec<String>,
+    pub(crate) raw_inclusions: Vec<String>,
+    pub(crate) raw_exclusions: Vec<String>,
 }
 
 impl PartialEq for Globs {
