@@ -84,8 +84,8 @@ impl fmt::Display for PackageManager {
 pub struct Globs {
     inclusions: Any<'static>,
     exclusions: Any<'static>,
-    raw_inclusions: Vec<String>,
-    raw_exclusions: Vec<String>,
+    pub(crate) raw_inclusions: Vec<String>,
+    pub(crate) raw_exclusions: Vec<String>,
 }
 
 impl PartialEq for Globs {
@@ -142,9 +142,6 @@ impl Globs {
 
 impl PackageManager {
     /// Returns a list of globs for the package workspace.
-    /// NOTE: We return a `Vec<PathBuf>` instead of a `GlobSet` because we
-    /// may need to iterate through these globs and a `GlobSet` doesn't allow
-    /// that.
     ///
     /// # Arguments
     ///

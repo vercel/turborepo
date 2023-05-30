@@ -5,7 +5,6 @@ mod child;
 mod cli;
 mod commands;
 mod config;
-mod context;
 mod daemon;
 mod execution_state;
 pub(crate) mod globwatcher;

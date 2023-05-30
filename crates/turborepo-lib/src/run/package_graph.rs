@@ -3,7 +3,7 @@ use std::rc::Rc;
 use anyhow::Result;
 use turbopath::AbsoluteSystemPathBuf;
 
-use crate::{package_json::PackageJson, run::graph::WorkspaceCatalog};
+use crate::{package_json::PackageJson, run::workspace_catalog::WorkspaceCatalog};
 
 pub struct PackageGraph {
     pub workspace_graph: Rc<petgraph::Graph<String, String>>,
