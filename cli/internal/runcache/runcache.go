@@ -159,7 +159,6 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 			Source:    cache.CacheSourceNone, // CacheSourceNone because this was not a cache restoration
 			TimeSaved: timeSavedFromDaemon,
 		}
-		cacheStatus = tc.rc.cache.Exists(tc.hash)
 		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
