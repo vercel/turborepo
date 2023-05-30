@@ -7,7 +7,7 @@ import Callout from "../../../../../components/Callout";
 
 # What to Cache?
 
-By default, the console output (also known as `stdout`) from all tasks is _always_ captured by Turborepo. If your task does not emit any files (e.g. unit tests with Jest) you can omit `outputs`. Beyond that, you will generally need to specify which files on disk you need to capture (and restore!) in order to be able to run subsequent dependent tasks.
+By default, the console output from all tasks is _always_ captured by Turborepo. If your task does not emit any files (e.g. unit tests with Jest) you can omit `outputs`. Beyond that, you will generally need to specify which files on disk you need to capture (and restore!) in order to be able to run subsequent dependent tasks.
 
 ## Configuring Cache Outputs
 
@@ -23,8 +23,6 @@ You configure cache outputs in Turborepo by passing specifying an array of globs
   }
 }
 ```
-
-This idea is simple but can grow in complexity depending upon the tools you are using in your pipeline.
 
 ### Inclusions
 

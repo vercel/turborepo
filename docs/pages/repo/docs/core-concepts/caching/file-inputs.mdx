@@ -15,7 +15,7 @@ Almost every repository has some configuration that appears at the root of the r
 
 ### `package.json` and `turbo.json`
 
-By default, Turborepo includes the root `package.json`, any lockfile that may be present, and the root `turbo.json` file into the global hash. You do not need to specify them separately.
+By default, Turborepo includes the root `package.json` and the root `turbo.json` file into the global hash. You do not need to specify them separately.
 
 ### Specifying Additional Inputs
 
@@ -43,7 +43,7 @@ In addition to global files, which appear outside of any workspace, you may also
 
 ### `package.json` and `turbo.json`
 
-The contents of `package.json` and `turbo.json` are automatically considered for workspace hashes. This behavior is not configurable.
+The contents of each workspaces's `package.json` and `turbo.json` (if it exists) are automatically considered for workspace hashes. This behavior is not configurable.
 
 ### Turborepo's Default Behavior
 
@@ -52,7 +52,7 @@ The default behavior of Turborepo is to inspect the repository and identify whic
 - All of the files which appear in the Git index which are children of the workspace directory.
 - All of the untracked files which are children of the workspace directory and are not `.gitignore`d.
 
-If either Git or the Git index (typically in `.git/index`) is unavailable, we attempt to approximate the contents which would appear in the Git index using the following strategy:
+If Git is not available, or a repository has not been setup, we attempt to approximate the contents which would appear in the Git index using the following strategy:
 
 - Include all of the files which are children of a workspace directory.
 - Exclude all of the files which appear in the root `.gitignore` and the workspace directory's `.gitignore`.
