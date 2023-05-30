@@ -718,4 +718,51 @@ mod test {
             _ => (),
         }
     }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_finder_removal() {
+        let dir = setup();
+        let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
+        let watcher = Arc::new(
+            super::HashGlobWatcher::new(
+                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
+                flush.path().to_path_buf(),
+            )
+            .unwrap(),
+        );
+
+        let task_watcher = watcher.clone();
+        let stop = StopSource::new();
+        let token = stop.token();
+
+        // dropped when the test ends
+        let _s = tokio::task::spawn(async move { task_watcher.watch(token).await });
+
+        let hash = Arc::new("the-hash".to_string());
+        let inclusions = ["my-pkg/.next/next-file".to_string()];
+        File::create(dir.path().join("my-pkg/.next/next-file")).unwrap();
+
+        watcher
+            .watch_globs(
+                hash.clone(),
+                inclusions.clone().into_iter(),
+                vec![].into_iter(),
+            )
+            .await
+            .unwrap();
+
+        std::fs::rename(dir.path().join("my-pkg"), dir.path().join("my-pkg-temp")).unwrap();
+        let changed = watcher
+            .changed_globs(&hash, inclusions.clone().into_iter().collect())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            changed,
+            inclusions.iter().cloned().collect(),
+            "expected change for watched path got {:?}",
+            changed
+        );
+    }
 }
