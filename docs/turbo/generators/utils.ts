@@ -47,8 +47,6 @@ export async function releasePostStats(answers: Answers): Promise<string> {
     0
   );
 
-  console.log(JSON.stringify(weeklyDownloads));
-
   const prettyRound = (num: number): string => {
     if (num < 1000) {
       return num.toString();
