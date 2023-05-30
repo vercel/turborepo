@@ -1,6 +1,22 @@
 use std::fmt::Display;
 
-use crate::resolve::ModulePartVc;
+use indexmap::IndexMap;
+
+use crate::{asset::AssetVc, resolve::ModulePartVc};
+
+/// Named references to inner assets. Modules can used them to allow to
+/// per-module aliases of some requests to already created module assets.
+/// Name is usually in UPPER_CASE to make it clear that this is an inner asset.
+#[turbo_tasks::value(transparent)]
+pub struct InnerAssets(IndexMap<String, AssetVc>);
+
+#[turbo_tasks::value_impl]
+impl InnerAssetsVc {
+    #[turbo_tasks::function]
+    pub fn empty() -> Self {
+        InnerAssetsVc::cell(IndexMap::new())
+    }
+}
 
 // These enums list well-known types, which we use internally. Plugins might add
 // custom types too.
@@ -72,6 +88,7 @@ pub enum ReferenceType {
     Url(UrlReferenceSubType),
     TypeScript(TypeScriptReferenceSubType),
     Entry(EntryReferenceSubType),
+    Internal(InnerAssetsVc),
     Custom(u8),
     Undefined,
 }
@@ -89,6 +106,7 @@ impl Display for ReferenceType {
             ReferenceType::Url(_) => "url",
             ReferenceType::TypeScript(_) => "typescript",
             ReferenceType::Entry(_) => "entry",
+            ReferenceType::Internal(_) => "internal",
             ReferenceType::Custom(_) => todo!(),
             ReferenceType::Undefined => "undefined",
         };
@@ -126,6 +144,7 @@ impl ReferenceType {
                 matches!(other, ReferenceType::Entry(_))
                     && matches!(sub_type, EntryReferenceSubType::Undefined)
             }
+            ReferenceType::Internal(_) => matches!(other, ReferenceType::Internal(_)),
             ReferenceType::Custom(_) => {
                 todo!()
             }
