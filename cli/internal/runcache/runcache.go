@@ -156,7 +156,7 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		// If no outputs have changed, that means we have a local cache hit.
 		cacheStatus = cache.ItemStatus{
 			Hit:       true,
-			Source:    cache.CacheSourceNone, // CacheSourceNone because this was not a cache restoration
+			Source:    cache.CacheSourceFS,
 			TimeSaved: timeSavedFromDaemon,
 		}
 		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
