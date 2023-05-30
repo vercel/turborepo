@@ -16,4 +16,4 @@ tp-test = "nextest run --workspace --release --no-fail-fast --exclude turbo --ex
 tp-bench-test = "test --benches --workspace --release --no-fail-fast --exclude turbopack-bench --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock"
 
 [target.'cfg(all())']
-rustflags = ["--cfg", "tokio_unstable", "-Csymbol-mangling-version=v0", "-Aclippy::too_many_arguments"]
+rustflags = ["--cfg", "tokio_unstable", "-Zshare-generics=y", "-Csymbol-mangling-version=v0", "-Aclippy::too_many_arguments"]
