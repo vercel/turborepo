@@ -6,6 +6,7 @@ use std::{
     path::{Components, Path, PathBuf},
 };
 
+use path_clean::PathClean;
 use serde::Serialize;
 
 use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, RelativeUnixPath};
@@ -63,6 +64,29 @@ impl AbsoluteSystemPathBuf {
 
         let system_path = unchecked_path.into_system()?;
         Ok(AbsoluteSystemPathBuf(system_path))
+    }
+
+    pub fn from_unknown(base: &AbsoluteSystemPath, unknown: impl Into<PathBuf>) -> Self {
+        // we have an absolute system path and an unknown kind of system path.
+        let unknown: PathBuf = unknown.into();
+        if unknown.is_absolute() {
+            Self(unknown)
+        } else {
+            Self(base.as_path().join(unknown).clean())
+        }
+    }
+
+    pub fn from_cwd(unknown: impl Into<PathBuf>) -> Result<Self, PathError> {
+        let cwd = Self::cwd()?;
+        Ok(Self::from_unknown(cwd.as_absolute_path(), unknown))
+    }
+
+    pub fn cwd() -> Result<Self, PathError> {
+        Ok(Self(std::env::current_dir()?))
+    }
+
+    pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
+        self.as_absolute_path().ancestors()
     }
 
     /// Anchors `path` at `self`.
