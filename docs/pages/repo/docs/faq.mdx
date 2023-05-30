@@ -4,6 +4,7 @@ description: Frequently asked questions about Turborepo.
 ---
 
 import Callout from '../../../components/Callout'
+import { Tabs, Tab } from '../../../components/Tabs'
 
 # Frequently Asked Questions
 
@@ -15,6 +16,35 @@ You have two options when working with Turborepo:
 2. Install a local version in your project
 
 We recommend installing the `turbo` CLI globally. This gives you a smooth, ergonomic experience for running tasks.
+
+### Why isn't my global `turbo` working as expected?
+
+It's possible to end up with multiple versions of global `turbo` on your machine if you install with different package managers. This can cause unexpected behavior if you're accidentally executing an older version of `turbo`.
+
+You can quickly check which package manager's version you are using with:
+
+- macOS and Linux: `which turbo`
+- Windows: `where turbo`
+
+The easiest way to ensure stability is to run the uninstall commands for your non-preferred package managers:
+
+  <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+    <Tab>
+      ```bash
+      npm uninstall turbo --global
+      ```
+    </Tab>
+    <Tab>
+      ```bash
+      yarn global remove turbo
+      ```
+    </Tab>
+    <Tab>
+      ```bash
+      pnpm uninstall turbo --global
+      ```
+    </Tab>
+  </Tabs>
 
 ## Do I have to use Remote Caching to use Turborepo?
 
