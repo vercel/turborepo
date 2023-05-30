@@ -21,8 +21,10 @@ pub(crate) mod generate;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
+pub(crate) mod run;
 pub(crate) mod unlink;
 
+#[derive(Debug)]
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,

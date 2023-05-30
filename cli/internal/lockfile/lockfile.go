@@ -79,6 +79,9 @@ func AllTransitiveClosures(
 	if lf, ok := lockFile.(*BerryLockfile); ok {
 		return rustTransitiveDeps(lf.contents, "berry", workspaces, lf.resolutions)
 	}
+	if lf, ok := lockFile.(*PnpmLockfile); ok {
+		return rustTransitiveDeps(lf.contents, "pnpm", workspaces, nil)
+	}
 
 	g := new(errgroup.Group)
 	c := make(chan closureMsg, len(workspaces))
