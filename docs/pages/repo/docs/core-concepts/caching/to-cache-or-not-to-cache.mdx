@@ -7,7 +7,7 @@ import Callout from "../../../../../components/Callout";
 
 # To Cache or Not To Cache
 
-In building a monorepo you need to decide on a per-task basis if you are able to skip the task based upon having run it previously. This behavior is controlled via `pipeline.<task>.cache` inside of `turbo.json`:
+In building a monorepo you need to decide on a per-task basis if you are able to skip the task based upon having run it previously. This behavior is controlled via [`pipeline.<task>.cache`](/repo/docs/reference/configuration#cache) inside of `turbo.json`:
 
 ```jsonc filename="/turbo.json"
 {
