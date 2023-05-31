@@ -90,12 +90,14 @@ impl DaemonClient<DaemonConnector> {
         hash: String,
         output_globs: Vec<String>,
         output_exclusion_globs: Vec<String>,
+        time_saved: u64,
     ) -> Result<(), DaemonError> {
         self.client
             .notify_outputs_written(proto::NotifyOutputsWrittenRequest {
                 hash,
                 output_globs,
                 output_exclusion_globs,
+                time_saved,
             })
             .await?;
 

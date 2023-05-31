@@ -2,10 +2,7 @@ import path from "path";
 import fs from "fs-extra";
 import type { PlopTypes } from "@turbo/gen";
 
-export default function generator(
-  plop: PlopTypes.NodePlopAPI,
-  config: PlopTypes.PlopCfg
-): void {
+export default function generator(plop: PlopTypes.NodePlopAPI): void {
   plop.setGenerator("transformer", {
     description: "Add a new transformer",
     prompts: [
@@ -44,7 +41,8 @@ export default function generator(
         }
 
         const directory = path.join(
-          config.destBasePath,
+          // resolves to the root of the current workspace
+          plop.getDestBasePath(),
           "__tests__",
           "__fixtures__",
           answers.name

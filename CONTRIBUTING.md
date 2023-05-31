@@ -9,7 +9,7 @@ Thanks for your interest in contributing to Turbo!
     - [Building Turborepo](#building-turborepo)
     - [TLS Implementation](#tls-implementation)
     - [Running Turborepo Tests](#running-turborepo-tests)
-      - [Go Tests](#go-tests)
+      - [Turborepo Tests](#turborepo-tests)
   - [Debugging Turborepo](#debugging-turborepo)
   - [Benchmarking Turborepo](#benchmarking-turborepo)
   - [Updating `turbo`](#updating-turbo)
@@ -58,7 +58,7 @@ On macOS:
 brew install moreutils jq zstd # (moreutils is for sponge)
 ```
 
-#### Go Tests
+#### Turborepo Tests
 
 First: `npm install -g turbo`.
 
@@ -106,8 +106,7 @@ Then from the root directory, you can run:
 
 ## Benchmarking Turborepo
 
-1. `make turbo-prod`
-2. From the `benchmark/` directory, run `pnpm run benchmark`.
+Follow the instructions in the [`benchmark/README.md`](./benchmark/README.md).
 
 ## Updating `turbo`
 
