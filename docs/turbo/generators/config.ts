@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import { releasePostStats } from "./utils";
 import * as helpers from "./helpers";
 import type { PlopTypes } from "@turbo/gen";
@@ -101,16 +102,19 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         pageSize: 20,
         message: "Which release post should the stats be updated?",
         choices: () => {
-          return fs
-            .readdirSync("pages/blog")
-            .filter((f) => f.startsWith("turbo-"))
-            .map((f) => ({
-              name: f
-                .replace("turbo-", "")
-                .replace(".mdx", "")
-                .replace(/-/g, "."),
-              value: f,
-            }));
+          return (
+            fs
+              // getDestBasePath resolves to the root of the current workspace
+              .readdirSync(path.join(plop.getDestBasePath(), "pages/blog"))
+              .filter((f) => f.startsWith("turbo-"))
+              .map((f) => ({
+                name: f
+                  .replace("turbo-", "")
+                  .replace(".mdx", "")
+                  .replace(/-/g, "."),
+                value: f,
+              }))
+          );
         },
       },
     ],

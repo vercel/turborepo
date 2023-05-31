@@ -25,6 +25,7 @@ type PackageManager int32
 const (
 	PackageManager_NPM   PackageManager = 0
 	PackageManager_BERRY PackageManager = 1
+	PackageManager_PNPM  PackageManager = 2
 )
 
 // Enum value maps for PackageManager.
@@ -32,10 +33,12 @@ var (
 	PackageManager_name = map[int32]string{
 		0: "NPM",
 		1: "BERRY",
+		2: "PNPM",
 	}
 	PackageManager_value = map[string]int32{
 		"NPM":   0,
 		"BERRY": 1,
+		"PNPM":  2,
 	}
 )
 
@@ -1821,6 +1824,190 @@ func (*VerifySignatureResponse_Verified) isVerifySignatureResponse_Response() {}
 
 func (*VerifySignatureResponse_Error) isVerifySignatureResponse_Response() {}
 
+type GetPackageFileHashesFromGitIndexRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	TurboRoot   string `protobuf:"bytes,1,opt,name=turbo_root,json=turboRoot,proto3" json:"turbo_root,omitempty"`
+	PackagePath string `protobuf:"bytes,2,opt,name=package_path,json=packagePath,proto3" json:"package_path,omitempty"`
+}
+
+func (x *GetPackageFileHashesFromGitIndexRequest) Reset() {
+	*x = GetPackageFileHashesFromGitIndexRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_turborepo_ffi_messages_proto_msgTypes[28]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetPackageFileHashesFromGitIndexRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPackageFileHashesFromGitIndexRequest) ProtoMessage() {}
+
+func (x *GetPackageFileHashesFromGitIndexRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_turborepo_ffi_messages_proto_msgTypes[28]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPackageFileHashesFromGitIndexRequest.ProtoReflect.Descriptor instead.
+func (*GetPackageFileHashesFromGitIndexRequest) Descriptor() ([]byte, []int) {
+	return file_turborepo_ffi_messages_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *GetPackageFileHashesFromGitIndexRequest) GetTurboRoot() string {
+	if x != nil {
+		return x.TurboRoot
+	}
+	return ""
+}
+
+func (x *GetPackageFileHashesFromGitIndexRequest) GetPackagePath() string {
+	if x != nil {
+		return x.PackagePath
+	}
+	return ""
+}
+
+type FileHashes struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Hashes map[string]string `protobuf:"bytes,1,rep,name=hashes,proto3" json:"hashes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+}
+
+func (x *FileHashes) Reset() {
+	*x = FileHashes{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_turborepo_ffi_messages_proto_msgTypes[29]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *FileHashes) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileHashes) ProtoMessage() {}
+
+func (x *FileHashes) ProtoReflect() protoreflect.Message {
+	mi := &file_turborepo_ffi_messages_proto_msgTypes[29]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileHashes.ProtoReflect.Descriptor instead.
+func (*FileHashes) Descriptor() ([]byte, []int) {
+	return file_turborepo_ffi_messages_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *FileHashes) GetHashes() map[string]string {
+	if x != nil {
+		return x.Hashes
+	}
+	return nil
+}
+
+type GetPackageFileHashesFromGitIndexResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Response:
+	//	*GetPackageFileHashesFromGitIndexResponse_Hashes
+	//	*GetPackageFileHashesFromGitIndexResponse_Error
+	Response isGetPackageFileHashesFromGitIndexResponse_Response `protobuf_oneof:"response"`
+}
+
+func (x *GetPackageFileHashesFromGitIndexResponse) Reset() {
+	*x = GetPackageFileHashesFromGitIndexResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_turborepo_ffi_messages_proto_msgTypes[30]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetPackageFileHashesFromGitIndexResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPackageFileHashesFromGitIndexResponse) ProtoMessage() {}
+
+func (x *GetPackageFileHashesFromGitIndexResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_turborepo_ffi_messages_proto_msgTypes[30]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPackageFileHashesFromGitIndexResponse.ProtoReflect.Descriptor instead.
+func (*GetPackageFileHashesFromGitIndexResponse) Descriptor() ([]byte, []int) {
+	return file_turborepo_ffi_messages_proto_rawDescGZIP(), []int{30}
+}
+
+func (m *GetPackageFileHashesFromGitIndexResponse) GetResponse() isGetPackageFileHashesFromGitIndexResponse_Response {
+	if m != nil {
+		return m.Response
+	}
+	return nil
+}
+
+func (x *GetPackageFileHashesFromGitIndexResponse) GetHashes() *FileHashes {
+	if x, ok := x.GetResponse().(*GetPackageFileHashesFromGitIndexResponse_Hashes); ok {
+		return x.Hashes
+	}
+	return nil
+}
+
+func (x *GetPackageFileHashesFromGitIndexResponse) GetError() string {
+	if x, ok := x.GetResponse().(*GetPackageFileHashesFromGitIndexResponse_Error); ok {
+		return x.Error
+	}
+	return ""
+}
+
+type isGetPackageFileHashesFromGitIndexResponse_Response interface {
+	isGetPackageFileHashesFromGitIndexResponse_Response()
+}
+
+type GetPackageFileHashesFromGitIndexResponse_Hashes struct {
+	Hashes *FileHashes `protobuf:"bytes,1,opt,name=hashes,proto3,oneof"`
+}
+
+type GetPackageFileHashesFromGitIndexResponse_Error struct {
+	Error string `protobuf:"bytes,2,opt,name=error,proto3,oneof"`
+}
+
+func (*GetPackageFileHashesFromGitIndexResponse_Hashes) isGetPackageFileHashesFromGitIndexResponse_Response() {
+}
+
+func (*GetPackageFileHashesFromGitIndexResponse_Error) isGetPackageFileHashesFromGitIndexResponse_Response() {
+}
+
 var File_turborepo_ffi_messages_proto protoreflect.FileDescriptor
 
 var file_turborepo_ffi_messages_proto_rawDesc = []byte{
@@ -2021,11 +2208,33 @@ var file_turborepo_ffi_messages_proto_rawDesc = []byte{
 	0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x48, 0x00, 0x52,
 	0x08, 0x76, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x64, 0x12, 0x16, 0x0a, 0x05, 0x65, 0x72, 0x72,
 	0x6f, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f,
-	0x72, 0x42, 0x0a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a, 0x24, 0x0a,
-	0x0e, 0x50, 0x61, 0x63, 0x6b, 0x61, 0x67, 0x65, 0x4d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x12,
-	0x07, 0x0a, 0x03, 0x4e, 0x50, 0x4d, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x45, 0x52, 0x52,
-	0x59, 0x10, 0x01, 0x42, 0x0b, 0x5a, 0x09, 0x66, 0x66, 0x69, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x72, 0x42, 0x0a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x6b, 0x0a,
+	0x27, 0x47, 0x65, 0x74, 0x50, 0x61, 0x63, 0x6b, 0x61, 0x67, 0x65, 0x46, 0x69, 0x6c, 0x65, 0x48,
+	0x61, 0x73, 0x68, 0x65, 0x73, 0x46, 0x72, 0x6f, 0x6d, 0x47, 0x69, 0x74, 0x49, 0x6e, 0x64, 0x65,
+	0x78, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x74, 0x75, 0x72, 0x62,
+	0x6f, 0x5f, 0x72, 0x6f, 0x6f, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x74, 0x75,
+	0x72, 0x62, 0x6f, 0x52, 0x6f, 0x6f, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x61, 0x63, 0x6b, 0x61,
+	0x67, 0x65, 0x5f, 0x70, 0x61, 0x74, 0x68, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x70,
+	0x61, 0x63, 0x6b, 0x61, 0x67, 0x65, 0x50, 0x61, 0x74, 0x68, 0x22, 0x78, 0x0a, 0x0a, 0x46, 0x69,
+	0x6c, 0x65, 0x48, 0x61, 0x73, 0x68, 0x65, 0x73, 0x12, 0x2f, 0x0a, 0x06, 0x68, 0x61, 0x73, 0x68,
+	0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x17, 0x2e, 0x46, 0x69, 0x6c, 0x65, 0x48,
+	0x61, 0x73, 0x68, 0x65, 0x73, 0x2e, 0x48, 0x61, 0x73, 0x68, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72,
+	0x79, 0x52, 0x06, 0x68, 0x61, 0x73, 0x68, 0x65, 0x73, 0x1a, 0x39, 0x0a, 0x0b, 0x48, 0x61, 0x73,
+	0x68, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61,
+	0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x3a, 0x02, 0x38, 0x01, 0x22, 0x75, 0x0a, 0x28, 0x47, 0x65, 0x74, 0x50, 0x61, 0x63, 0x6b, 0x61,
+	0x67, 0x65, 0x46, 0x69, 0x6c, 0x65, 0x48, 0x61, 0x73, 0x68, 0x65, 0x73, 0x46, 0x72, 0x6f, 0x6d,
+	0x47, 0x69, 0x74, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x25, 0x0a, 0x06, 0x68, 0x61, 0x73, 0x68, 0x65, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b,
+	0x32, 0x0b, 0x2e, 0x46, 0x69, 0x6c, 0x65, 0x48, 0x61, 0x73, 0x68, 0x65, 0x73, 0x48, 0x00, 0x52,
+	0x06, 0x68, 0x61, 0x73, 0x68, 0x65, 0x73, 0x12, 0x16, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x42,
+	0x0a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a, 0x2e, 0x0a, 0x0e, 0x50,
+	0x61, 0x63, 0x6b, 0x61, 0x67, 0x65, 0x4d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x12, 0x07, 0x0a,
+	0x03, 0x4e, 0x50, 0x4d, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x45, 0x52, 0x52, 0x59, 0x10,
+	0x01, 0x12, 0x08, 0x0a, 0x04, 0x50, 0x4e, 0x50, 0x4d, 0x10, 0x02, 0x42, 0x0b, 0x5a, 0x09, 0x66,
+	0x66, 0x69, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -2041,64 +2250,70 @@ func file_turborepo_ffi_messages_proto_rawDescGZIP() []byte {
 }
 
 var file_turborepo_ffi_messages_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_turborepo_ffi_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_turborepo_ffi_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_turborepo_ffi_messages_proto_goTypes = []interface{}{
-	(PackageManager)(0),             // 0: PackageManager
-	(*TurboDataDirResp)(nil),        // 1: TurboDataDirResp
-	(*GlobReq)(nil),                 // 2: GlobReq
-	(*GlobResp)(nil),                // 3: GlobResp
-	(*GlobRespList)(nil),            // 4: GlobRespList
-	(*ChangedFilesReq)(nil),         // 5: ChangedFilesReq
-	(*ChangedFilesResp)(nil),        // 6: ChangedFilesResp
-	(*ChangedFilesList)(nil),        // 7: ChangedFilesList
-	(*PreviousContentReq)(nil),      // 8: PreviousContentReq
-	(*PreviousContentResp)(nil),     // 9: PreviousContentResp
-	(*PackageDependency)(nil),       // 10: PackageDependency
-	(*PackageDependencyList)(nil),   // 11: PackageDependencyList
-	(*WorkspaceDependencies)(nil),   // 12: WorkspaceDependencies
-	(*TransitiveDepsRequest)(nil),   // 13: TransitiveDepsRequest
-	(*TransitiveDepsResponse)(nil),  // 14: TransitiveDepsResponse
-	(*AdditionalBerryData)(nil),     // 15: AdditionalBerryData
-	(*LockfilePackage)(nil),         // 16: LockfilePackage
-	(*LockfilePackageList)(nil),     // 17: LockfilePackageList
-	(*SubgraphRequest)(nil),         // 18: SubgraphRequest
-	(*SubgraphResponse)(nil),        // 19: SubgraphResponse
-	(*PatchesRequest)(nil),          // 20: PatchesRequest
-	(*PatchesResponse)(nil),         // 21: PatchesResponse
-	(*Patches)(nil),                 // 22: Patches
-	(*GlobalChangeRequest)(nil),     // 23: GlobalChangeRequest
-	(*GlobalChangeResponse)(nil),    // 24: GlobalChangeResponse
-	(*RecursiveCopyRequest)(nil),    // 25: RecursiveCopyRequest
-	(*RecursiveCopyResponse)(nil),   // 26: RecursiveCopyResponse
-	(*VerifySignatureRequest)(nil),  // 27: VerifySignatureRequest
-	(*VerifySignatureResponse)(nil), // 28: VerifySignatureResponse
-	nil,                             // 29: WorkspaceDependencies.DependenciesEntry
-	nil,                             // 30: TransitiveDepsRequest.WorkspacesEntry
-	nil,                             // 31: AdditionalBerryData.ResolutionsEntry
+	(PackageManager)(0),                              // 0: PackageManager
+	(*TurboDataDirResp)(nil),                         // 1: TurboDataDirResp
+	(*GlobReq)(nil),                                  // 2: GlobReq
+	(*GlobResp)(nil),                                 // 3: GlobResp
+	(*GlobRespList)(nil),                             // 4: GlobRespList
+	(*ChangedFilesReq)(nil),                          // 5: ChangedFilesReq
+	(*ChangedFilesResp)(nil),                         // 6: ChangedFilesResp
+	(*ChangedFilesList)(nil),                         // 7: ChangedFilesList
+	(*PreviousContentReq)(nil),                       // 8: PreviousContentReq
+	(*PreviousContentResp)(nil),                      // 9: PreviousContentResp
+	(*PackageDependency)(nil),                        // 10: PackageDependency
+	(*PackageDependencyList)(nil),                    // 11: PackageDependencyList
+	(*WorkspaceDependencies)(nil),                    // 12: WorkspaceDependencies
+	(*TransitiveDepsRequest)(nil),                    // 13: TransitiveDepsRequest
+	(*TransitiveDepsResponse)(nil),                   // 14: TransitiveDepsResponse
+	(*AdditionalBerryData)(nil),                      // 15: AdditionalBerryData
+	(*LockfilePackage)(nil),                          // 16: LockfilePackage
+	(*LockfilePackageList)(nil),                      // 17: LockfilePackageList
+	(*SubgraphRequest)(nil),                          // 18: SubgraphRequest
+	(*SubgraphResponse)(nil),                         // 19: SubgraphResponse
+	(*PatchesRequest)(nil),                           // 20: PatchesRequest
+	(*PatchesResponse)(nil),                          // 21: PatchesResponse
+	(*Patches)(nil),                                  // 22: Patches
+	(*GlobalChangeRequest)(nil),                      // 23: GlobalChangeRequest
+	(*GlobalChangeResponse)(nil),                     // 24: GlobalChangeResponse
+	(*RecursiveCopyRequest)(nil),                     // 25: RecursiveCopyRequest
+	(*RecursiveCopyResponse)(nil),                    // 26: RecursiveCopyResponse
+	(*VerifySignatureRequest)(nil),                   // 27: VerifySignatureRequest
+	(*VerifySignatureResponse)(nil),                  // 28: VerifySignatureResponse
+	(*GetPackageFileHashesFromGitIndexRequest)(nil),  // 29: GetPackageFileHashesFromGitIndexRequest
+	(*FileHashes)(nil),                               // 30: FileHashes
+	(*GetPackageFileHashesFromGitIndexResponse)(nil), // 31: GetPackageFileHashesFromGitIndexResponse
+	nil, // 32: WorkspaceDependencies.DependenciesEntry
+	nil, // 33: TransitiveDepsRequest.WorkspacesEntry
+	nil, // 34: AdditionalBerryData.ResolutionsEntry
+	nil, // 35: FileHashes.HashesEntry
 }
 var file_turborepo_ffi_messages_proto_depIdxs = []int32{
 	4,  // 0: GlobResp.files:type_name -> GlobRespList
 	7,  // 1: ChangedFilesResp.files:type_name -> ChangedFilesList
 	10, // 2: PackageDependencyList.list:type_name -> PackageDependency
-	29, // 3: WorkspaceDependencies.dependencies:type_name -> WorkspaceDependencies.DependenciesEntry
+	32, // 3: WorkspaceDependencies.dependencies:type_name -> WorkspaceDependencies.DependenciesEntry
 	0,  // 4: TransitiveDepsRequest.package_manager:type_name -> PackageManager
-	30, // 5: TransitiveDepsRequest.workspaces:type_name -> TransitiveDepsRequest.WorkspacesEntry
+	33, // 5: TransitiveDepsRequest.workspaces:type_name -> TransitiveDepsRequest.WorkspacesEntry
 	15, // 6: TransitiveDepsRequest.resolutions:type_name -> AdditionalBerryData
 	12, // 7: TransitiveDepsResponse.dependencies:type_name -> WorkspaceDependencies
-	31, // 8: AdditionalBerryData.resolutions:type_name -> AdditionalBerryData.ResolutionsEntry
+	34, // 8: AdditionalBerryData.resolutions:type_name -> AdditionalBerryData.ResolutionsEntry
 	16, // 9: LockfilePackageList.list:type_name -> LockfilePackage
 	0,  // 10: SubgraphRequest.package_manager:type_name -> PackageManager
 	15, // 11: SubgraphRequest.resolutions:type_name -> AdditionalBerryData
 	0,  // 12: PatchesRequest.package_manager:type_name -> PackageManager
 	22, // 13: PatchesResponse.patches:type_name -> Patches
 	0,  // 14: GlobalChangeRequest.package_manager:type_name -> PackageManager
-	17, // 15: WorkspaceDependencies.DependenciesEntry.value:type_name -> LockfilePackageList
-	11, // 16: TransitiveDepsRequest.WorkspacesEntry.value:type_name -> PackageDependencyList
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	35, // 15: FileHashes.hashes:type_name -> FileHashes.HashesEntry
+	30, // 16: GetPackageFileHashesFromGitIndexResponse.hashes:type_name -> FileHashes
+	17, // 17: WorkspaceDependencies.DependenciesEntry.value:type_name -> LockfilePackageList
+	11, // 18: TransitiveDepsRequest.WorkspacesEntry.value:type_name -> PackageDependencyList
+	19, // [19:19] is the sub-list for method output_type
+	19, // [19:19] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_turborepo_ffi_messages_proto_init() }
@@ -2443,6 +2658,42 @@ func file_turborepo_ffi_messages_proto_init() {
 				return nil
 			}
 		}
+		file_turborepo_ffi_messages_proto_msgTypes[28].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetPackageFileHashesFromGitIndexRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_turborepo_ffi_messages_proto_msgTypes[29].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*FileHashes); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_turborepo_ffi_messages_proto_msgTypes[30].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetPackageFileHashesFromGitIndexResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	file_turborepo_ffi_messages_proto_msgTypes[2].OneofWrappers = []interface{}{
 		(*GlobResp_Files)(nil),
@@ -2477,13 +2728,17 @@ func file_turborepo_ffi_messages_proto_init() {
 		(*VerifySignatureResponse_Verified)(nil),
 		(*VerifySignatureResponse_Error)(nil),
 	}
+	file_turborepo_ffi_messages_proto_msgTypes[30].OneofWrappers = []interface{}{
+		(*GetPackageFileHashesFromGitIndexResponse_Hashes)(nil),
+		(*GetPackageFileHashesFromGitIndexResponse_Error)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_turborepo_ffi_messages_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   31,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
