@@ -67,24 +67,24 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         }
         DaemonCommand::Clean => {
             // try to connect and shutdown the daemon
-            let client = connector.clone().connect().await;
+            let client = connector.connect().await;
             match client {
                 Ok(client) => match client.stop().await {
                     Ok(_) => {
-                        tracing::trace!("Successfully stopped the daemon");
+                        tracing::trace!("successfully stopped the daemon");
                     }
                     Err(e) => {
-                        tracing::trace!("Unable to stop the daemon: {:?}", e);
+                        tracing::trace!("unable to stop the daemon: {:?}", e);
                     }
                 },
                 Err(e) => {
-                    tracing::trace!("Unable to connect to the daemon: {:?}", e);
+                    tracing::trace!("unable to connect to the daemon: {:?}", e);
                 }
             }
 
             // remove pid and sock files
             let mut success = true;
-            trace!("Cleaning up daemon files");
+            trace!("cleaning up daemon files");
             // if the pid_file and sock_file still exist, remove them:
             if pid_file.exists() {
                 let result = std::fs::remove_file(pid_file.clone());
@@ -106,8 +106,10 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             }
 
             if success {
-                println!("Success!");
-                println!("Restart the daemon with `turbo daemon start`");
+                println!("Done");
+            } else {
+                // return error
+                return Err(DaemonError::CleanFailed);
             }
         }
     };

@@ -51,7 +51,7 @@ pub enum ForkError {
     Spawn(#[from] std::io::Error),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DaemonConnector {
     /// Whether the connector is allowed to start a daemon if it is not already
     /// running.
