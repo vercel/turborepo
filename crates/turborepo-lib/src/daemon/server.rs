@@ -13,10 +13,10 @@
 //! globs, and to query for changes for those globs.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex as StdMutux,
     },
     time::{Duration, Instant},
 };
@@ -58,6 +58,8 @@ pub struct DaemonServer<T: Watcher> {
     shutdown_rx: Option<Receiver<()>>,
 
     running: Arc<AtomicBool>,
+
+    times_saved: Arc<std::sync::Mutex<HashMap<String, u64>>>,
 }
 
 #[derive(Debug)]
@@ -98,6 +100,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
             shutdown_rx: Some(recv_shutdown),
 
             running: Arc::new(AtomicBool::new(true)),
+            times_saved: Arc::new(StdMutux::new(HashMap::new())),
         })
     }
 }
@@ -255,6 +258,10 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
         let inner = request.into_inner();
 
+        {
+            let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.insert(inner.hash.clone(), inner.time_saved);
+        }
         match self
             .watcher
             .watch_globs(
@@ -277,17 +284,21 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         request: tonic::Request<proto::GetChangedOutputsRequest>,
     ) -> Result<tonic::Response<proto::GetChangedOutputsResponse>, tonic::Status> {
         let inner = request.into_inner();
+        let hash = Arc::new(inner.hash);
         let changed = self
             .watcher
-            .changed_globs(
-                &Arc::new(inner.hash),
-                HashSet::from_iter(inner.output_globs),
-            )
+            .changed_globs(&hash, HashSet::from_iter(inner.output_globs))
             .await;
+
+        let time_saved = {
+            let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.get(hash.as_str()).copied().unwrap_or_default()
+        };
 
         match changed {
             Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
                 changed_output_globs: changed.into_iter().collect(),
+                time_saved: time_saved,
             })),
             Err(e) => {
                 error!("flush directory operation failed: {:?}", e);
