@@ -74,10 +74,15 @@ type ConnectionError struct {
 }
 
 func (ce *ConnectionError) Error() string {
-	return fmt.Sprintf(`connection to turbo daemon process failed. Please ensure the following:
+	return fmt.Sprintf(`connection to turbo daemon process failed.
+	To quickly resolve the issue, try running:
+	- $ turbo daemon clean
+
+	To debug further - please ensure the following:
 	- the process identified by the pid in the file at %v is not running, and remove %v
 	- check the logs at %v
 	- the unix domain socket at %v has been removed
+
 	You can also run without the daemon process by passing --no-daemon`, ce.PidPath, ce.PidPath, ce.LogPath, ce.SockPath)
 }
 

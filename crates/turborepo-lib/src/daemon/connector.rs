@@ -51,7 +51,7 @@ pub enum ForkError {
     Spawn(#[from] std::io::Error),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DaemonConnector {
     /// Whether the connector is allowed to start a daemon if it is not already
     /// running.
@@ -204,7 +204,7 @@ impl DaemonConnector {
             .map_err(DaemonConnectorError::Socket)
     }
 
-    /// Kills a currently active server but shutting it down and waiting for it
+    /// Kills a currently active server by shutting it down and waiting for it
     /// to exit.
     #[tracing::instrument(skip(self, client))]
     async fn kill_live_server(
