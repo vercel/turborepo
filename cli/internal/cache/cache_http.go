@@ -92,26 +92,26 @@ func (cache *httpCache) write(w io.WriteCloser, anchor turbopath.AbsoluteSystemP
 	cacheErrorChan <- cacheItem.Close()
 }
 
-func (cache *httpCache) Fetch(_ turbopath.AbsoluteSystemPath, key string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
+func (cache *httpCache) Fetch(_ turbopath.AbsoluteSystemPath, key string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, files, duration, err := cache.retrieve(key)
 	if err != nil {
 		// TODO: analytics event?
-		return newRemoteTaskCacheStatus(false, duration), files, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
+		return ItemStatus{Remote: false}, files, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
 	cache.logFetch(hit, key, duration)
-	return newRemoteTaskCacheStatus(hit, duration), files, err
+	return ItemStatus{Remote: hit}, files, duration, err
 }
 
 func (cache *httpCache) Exists(key string) ItemStatus {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
-	hit, timeSaved, err := cache.exists(key)
+	hit, err := cache.exists(key)
 	if err != nil {
-		return newRemoteTaskCacheStatus(false, 0)
+		return ItemStatus{Remote: false}
 	}
-	return newRemoteTaskCacheStatus(hit, timeSaved)
+	return ItemStatus{Remote: hit}
 }
 
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
@@ -130,22 +130,20 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	cache.recorder.LogEvent(payload)
 }
 
-func (cache *httpCache) exists(hash string) (bool, int, error) {
+func (cache *httpCache) exists(hash string) (bool, error) {
 	resp, err := cache.client.ArtifactExists(hash)
 	if err != nil {
-		return false, 0, nil
+		return false, nil
 	}
 
 	defer func() { err = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return false, 0, nil
+		return false, nil
 	} else if resp.StatusCode != http.StatusOK {
-		return false, 0, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
+		return false, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
 	}
-
-	duration := getDurationFromResponse(resp)
-	return true, duration, err
+	return true, err
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemPath, int, error) {
@@ -160,9 +158,15 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 		b, _ := ioutil.ReadAll(resp.Body)
 		return false, nil, 0, fmt.Errorf("%s", string(b))
 	}
-
-	duration := getDurationFromResponse(resp)
-
+	// If present, extract the duration from the response.
+	duration := 0
+	if resp.Header.Get("x-artifact-duration") != "" {
+		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
+		if err != nil {
+			return false, nil, 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
+		}
+		duration = intVar
+	}
 	var tarReader io.Reader
 
 	defer func() { _ = resp.Body.Close() }()
@@ -194,19 +198,6 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 		return false, nil, 0, err
 	}
 	return true, files, duration, nil
-}
-
-// getDurationFromResponse extracts the duration from the response header
-func getDurationFromResponse(resp *http.Response) int {
-	duration := 0
-	if resp.Header.Get("x-artifact-duration") != "" {
-		// If we had an error reading the duration header, just swallow it for now.
-		if intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration")); err == nil {
-			duration = intVar
-		}
-	}
-
-	return duration
 }
 
 func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {

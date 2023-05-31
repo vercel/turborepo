@@ -23,31 +23,30 @@ type TaskCacheSummary struct {
 // Importantly, it adds the derived keys of `source` and `status` based on
 // the local/remote booleans. It would be nice if these were just included
 // from upstream, but that is a more invasive change.
-func NewTaskCacheSummary(itemStatus cache.ItemStatus) TaskCacheSummary {
+func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheSummary {
 	status := cache.CacheEventMiss
-	if itemStatus.Hit {
+	if itemStatus.Local || itemStatus.Remote {
 		status = cache.CacheEventHit
 	}
+
 	var source string
-	if itemStatus.Hit {
-		source = itemStatus.Source
+	if itemStatus.Local {
+		source = cache.CacheSourceFS
+	} else if itemStatus.Remote {
+		source = cache.CacheSourceRemote
 	}
 
 	cs := TaskCacheSummary{
-		Status:    status,
-		Source:    source,
-		TimeSaved: itemStatus.TimeSaved,
+		// copy these over
+		Local:  itemStatus.Local,
+		Remote: itemStatus.Remote,
+		Status: status,
+		Source: source,
 	}
-
-	// Assign these deprecated fields Local and Remote based on the information available
-	// in the itemStatus. Note that these fields are problematic, because an ItemStatus isn't always
-	// the composite of both local and remote caches. That means that an ItemStatus might say it
-	// was a local cache hit, and we return remote: false here. That's misleading because it does
-	// not mean that there is no remote cache hit, it _could_ mean that we never checked the remote
-	// cache. These fields are being deprecated for this reason.
-	cs.Local = itemStatus.Hit && itemStatus.Source == cache.CacheSourceFS
-	cs.Remote = itemStatus.Hit && itemStatus.Source == cache.CacheSourceRemote
-
+	// add in a dereferences timeSaved, should be 0 if nil
+	if timeSaved != nil {
+		cs.TimeSaved = *timeSaved
+	}
 	return cs
 }
 
