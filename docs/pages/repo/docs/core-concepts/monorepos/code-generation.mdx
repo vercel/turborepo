@@ -40,7 +40,7 @@ turbo gen workspace --copy
 Create a new workspace in your monorepo by copying from a remote workspace.
 
 ```sh
-turbo gen workspace --copy -e https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
+turbo gen workspace --copy https://github.com/vercel/turbo/tree/main/examples/with-tailwind/packages/tailwind-config
 ```
 
 <Callout>
@@ -217,3 +217,7 @@ The [vercel/turbo](https://github.com/vercel/turbo) monorepo contains several cu
   live stats fetched from the NPM and Github API's.
 - [Create a new code transform](https://github.com/vercel/turbo/blob/main/packages/turbo-codemod/turbo/generators/config.ts) - Creates a new code transform
   for [`@turbo/codemod`](https://github.com/vercel/turbo/tree/main/packages/turbo-codemod) complete with all boilerplate and tests.
+
+Turborepo Examples
+
+- [examples/basic](https://github.com/vercel/turbo/blob/main/examples/basic/packages/ui/turbo/generators/config.ts)

@@ -118,7 +118,8 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		return cache.ItemStatus{Local: false, Remote: false}, 0, nil
 	}
 
-	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
+	changedOutputGlobs, timeSavedFromDaemon, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
+
 	if err != nil {
 		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
 		prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
@@ -149,13 +150,14 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 			return cache.ItemStatus{Local: false, Remote: false}, 0, nil
 		}
 
-		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
+		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs, timeSavedFromDaemon); err != nil {
 			// Don't fail the whole operation just because we failed to watch the outputs
 			prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
 	} else {
 		// If no outputs have changed, that means we have a local cache hit.
 		cacheStatus.Local = true
+		timeSaved = timeSavedFromDaemon
 		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
 	}
 
@@ -279,7 +281,7 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 	if err = tc.rc.cache.Put(tc.rc.repoRoot, tc.hash, duration, relativePaths); err != nil {
 		return err
 	}
-	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs)
+	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs, duration)
 	if err != nil {
 		// Don't fail the cache write because we also failed to record it, we will just do
 		// extra I/O in the future restoring files that haven't changed from cache
@@ -321,7 +323,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		hash:              hash,
 		pt:                pt,
 		taskOutputMode:    taskOutputMode,
-		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
+		cachingDisabled:   !pt.TaskDefinition.Cache,
 		LogFileName:       logFileName,
 	}
 }

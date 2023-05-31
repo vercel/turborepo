@@ -62,9 +62,7 @@ All specified + infer
     "passthrough": [
       "LOCAL_VAR_PT=7cd1bb19c058cf4d6ad6aa579d685bddddf3ab587b78bdcb1e6e488fb6f47a3b"
     ],
-    "globalPassthrough": [
-      "GLOBAL_VAR_PT=cecd31fff1e723588eac8fe1edff89a6d2ec072f5c3bd884a98297487670b1f0"
-    ]
+    "globalPassthrough": null
   }
 
 All specified + loose
@@ -80,9 +78,7 @@ All specified + loose
     "passthrough": [
       "LOCAL_VAR_PT=7cd1bb19c058cf4d6ad6aa579d685bddddf3ab587b78bdcb1e6e488fb6f47a3b"
     ],
-    "globalPassthrough": [
-      "GLOBAL_VAR_PT=cecd31fff1e723588eac8fe1edff89a6d2ec072f5c3bd884a98297487670b1f0"
-    ]
+    "globalPassthrough": null
   }
 
 Global passthrough specified empty array + infer
@@ -96,7 +92,7 @@ Global passthrough specified empty array + infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
-    "globalPassthrough": []
+    "globalPassthrough": null
   }
 
 Global passthrough specified value + infer
@@ -110,9 +106,7 @@ Global passthrough specified value + infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
-    "globalPassthrough": [
-      "GLOBAL_VAR_PT=cecd31fff1e723588eac8fe1edff89a6d2ec072f5c3bd884a98297487670b1f0"
-    ]
+    "globalPassthrough": null
   }
 
 Global passthrough specified empty array + loose
@@ -126,7 +120,7 @@ Global passthrough specified empty array + loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
-    "globalPassthrough": []
+    "globalPassthrough": null
   }
 
 Global passthrough specified value + loose
@@ -140,9 +134,7 @@ Global passthrough specified value + loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].environmentVariables | {passthrough, globalPassthrough}'
   {
     "passthrough": null,
-    "globalPassthrough": [
-      "GLOBAL_VAR_PT=cecd31fff1e723588eac8fe1edff89a6d2ec072f5c3bd884a98297487670b1f0"
-    ]
+    "globalPassthrough": null
   }
 
 Task passthrough specified empty array + infer

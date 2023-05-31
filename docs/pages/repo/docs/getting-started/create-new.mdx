@@ -328,7 +328,8 @@ Let's take a look inside `turbo.json`, at the root:
     },
     "lint": {},
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -500,6 +501,7 @@ Take a look at `turbo.json`:
 Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the
 results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so there
 is nothing to cache. Learn more about it in our docs on [turning off caching](/repo/docs/core-concepts/caching#turn-off-caching).
+
 Additionally, we set `"persistent": true`, to let turbo know that this is a long-running dev server,
 so that turbo can ensure that no other tasks depend on it. You can read more in the [docs for the
 `persistent` option](/repo/docs/reference/configuration#persistent).

@@ -90,12 +90,14 @@ impl DaemonClient<DaemonConnector> {
         hash: String,
         output_globs: Vec<String>,
         output_exclusion_globs: Vec<String>,
+        time_saved: u64,
     ) -> Result<(), DaemonError> {
         self.client
             .notify_outputs_written(proto::NotifyOutputsWrittenRequest {
                 hash,
                 output_globs,
                 output_exclusion_globs,
+                time_saved,
             })
             .await?;
 
@@ -148,7 +150,7 @@ pub enum DaemonError {
     InvalidTimeout(String),
     /// The server is unable to start file watching.
     #[error("unable to start file watching")]
-    FileWatching(#[from] globwatch::Error),
+    FileWatching(#[from] notify::Error),
 
     #[error("unable to display output: {0}")]
     DisplayError(#[from] serde_json::Error),
@@ -160,7 +162,7 @@ pub enum DaemonError {
 impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
-            Code::FailedPrecondition => DaemonError::VersionMismatch,
+            Code::FailedPrecondition | Code::Unimplemented => DaemonError::VersionMismatch,
             Code::Unavailable => DaemonError::Unavailable,
             c => DaemonError::GrpcFailure(c),
         }
