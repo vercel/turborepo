@@ -296,7 +296,7 @@ You can also specify these in your `turbo` configuration as `globalDependencies`
 
 `type: bool`
 
-Specify whether or not to do framework inference for tasks. Defaults to `true`, can be configured to be `false` which skips framework inference for tasks. This disables [automatic environment variable inclusion](../core-concepts/caching#automatic-environment-variable-inclusion).
+Specify whether or not to do framework inference for tasks. Defaults to `true`, can be configured to be `false` which skips framework inference for tasks. This disables [automatic environment variable inclusion](../core-concepts/caching/environment-variable-inputs#framework-inference).
 
 ```sh
 turbo run build --framework-inference=false
@@ -729,9 +729,10 @@ The name for the new workspace
 
 Generate an empty workspace (default: `true`)
 
-##### `--copy`
+##### `--copy [source]`
 
-Generate a workspace using an existing workspace as a template
+Generate a workspace using an existing workspace as a template.
+Can be the name of a local workspace within your monorepo, or a fully qualified GitHub URL with any branch and/or subdirectory.
 
 ##### `--destination`
 
@@ -744,10 +745,6 @@ The type of workspace to create (`app` or `package`)
 ##### `--root`
 
 The root of your repository (default: directory with _root_ `turbo.json`)
-
-##### `--example / -e`
-
-An example package to add. You can use a GitHub URL with any branch and/or subdirectory
 
 ##### `--example-path / -p`
 

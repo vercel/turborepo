@@ -1,8 +1,8 @@
-use std::{fmt::Debug, io::Write};
+use std::{borrow::Borrow, fmt::Debug, io::Write};
 
-use bstr::{BString, ByteSlice};
+use bstr::{BStr, BString, ByteSlice};
 
-use crate::PathError;
+use crate::{PathError, RelativeUnixPath};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct RelativeUnixPathBuf(BString);
@@ -81,12 +81,17 @@ impl RelativeUnixPathBuf {
         let tail_slice = &self.0[(prefix_len + 1)..];
         Self::new(tail_slice)
     }
+}
 
+pub trait RelativeUnixPathBufTestExt {
+    fn join(&self, tail: &RelativeUnixPathBuf) -> Self;
+}
+
+impl RelativeUnixPathBufTestExt for RelativeUnixPathBuf {
     // Marked as test-only because it doesn't automatically clean the resulting
     // path. *If* we end up needing or wanting this method outside of tests, we
     // will need to implement .clean() for the result.
-    #[cfg(test)]
-    pub fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
+    fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
         let buffer = Vec::with_capacity(self.0.len() + 1 + tail.0.len());
         let mut path = BString::new(buffer);
         if self.0.len() > 0 {
@@ -95,6 +100,19 @@ impl RelativeUnixPathBuf {
         }
         path.extend_from_slice(&tail.0);
         Self(path)
+    }
+}
+
+impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
+    fn borrow(&self) -> &RelativeUnixPath {
+        let inner: &BStr = &self.0.borrow();
+        unsafe { &*(inner as *const BStr as *const RelativeUnixPath) }
+    }
+}
+
+impl AsRef<RelativeUnixPath> for RelativeUnixPathBuf {
+    fn as_ref(&self) -> &RelativeUnixPath {
+        self.borrow()
     }
 }
 

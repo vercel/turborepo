@@ -42,7 +42,7 @@ pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
 pub use anchored_system_path_buf::AnchoredSystemPathBuf;
 use path_slash::{PathBufExt, PathExt};
 pub use relative_unix_path::RelativeUnixPath;
-pub use relative_unix_path_buf::RelativeUnixPathBuf;
+pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
 #[derive(Debug, thiserror::Error)]
 pub enum PathError {

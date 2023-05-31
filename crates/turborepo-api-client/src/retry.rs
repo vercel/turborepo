@@ -1,35 +1,32 @@
-use std::future::Future;
-
-use anyhow::anyhow;
+use reqwest::{RequestBuilder, Response, StatusCode};
 use tokio::time::sleep;
+
+use crate::Error;
 
 const MIN_SLEEP_TIME_SECS: u64 = 2;
 const MAX_SLEEP_TIME_SECS: u64 = 10;
+const RETRY_MAX: u32 = 2;
 
-/// Retries a future until `max_retries` is reached, the `should_retry` function
-/// returns false, or the future succeeds. Uses an exponential backoff with a
-/// base of 2 to delay between retries.
+/// Retries a request until `RETRY_MAX` is reached, the `should_retry_request`
+/// function returns false, or the future succeeds. Uses an exponential backoff
+/// with a base of 2 to delay between retries.
 ///
 /// # Arguments
 ///
-/// * `max_retries`: Maximum number of retries
-/// * `future_generator`: Function to call to generate the future for each retry
-/// * `should_retry`: Determines if a retry should be attempted based on the
-///   error
+/// * `request_builder`: The request builder with everything, i.e. headers and
+///   body already set. NOTE: This must be cloneable, so no streams are allowed.
 ///
-/// returns: Result<T, Error>
-pub async fn retry_future<T, E: Into<anyhow::Error>, F: Future<Output = Result<T, E>>>(
-    max_retries: u32,
-    future_generator: impl Fn() -> F,
-    should_retry: impl Fn(&E) -> bool,
-) -> Result<T, anyhow::Error> {
+/// returns: Result<Response, Error>
+pub(crate) async fn make_retryable_request(
+    request_builder: RequestBuilder,
+) -> Result<Response, Error> {
     let mut last_error = None;
-    for retry_count in 0..max_retries {
-        let future = future_generator();
-        match future.await {
+    for retry_count in 0..RETRY_MAX {
+        let builder = request_builder.try_clone().expect("cannot clone request");
+        match builder.send().await {
             Ok(value) => return Ok(value),
             Err(err) => {
-                if !should_retry(&err) {
+                if !should_retry_request(&err) {
                     return Err(err.into());
                 }
                 last_error = Some(err);
@@ -42,8 +39,19 @@ pub async fn retry_future<T, E: Into<anyhow::Error>, F: Future<Output = Result<T
         sleep(std::time::Duration::from_secs(sleep_period)).await;
     }
 
-    Err(anyhow!(
-        "skipping HTTP Request, too many failures have occurred.\nLast error: {}",
-        last_error.unwrap().into()
-    ))
+    Err(Error::TooManyFailures(Box::new(last_error.unwrap())))
+}
+
+fn should_retry_request(error: &reqwest::Error) -> bool {
+    if let Some(status) = error.status() {
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            return true;
+        }
+
+        if status.as_u16() >= 500 && status.as_u16() != 501 {
+            return true;
+        }
+    }
+
+    false
 }
