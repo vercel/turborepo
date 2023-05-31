@@ -63,6 +63,11 @@
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fs::{<span class="self">self</span>, File},
     io::{<span class="self">self</span>, Write},
@@ -107,7 +112,12 @@
             </span>.write_all(<span class="macro">format!</span>(<span class="string">&quot;{:#}&quot;</span>, package_json).as_bytes())<span class="question-mark">?</span>;
     }
 
-    <span class="kw">let </span><span class="kw-2">mut </span>args = <span class="macro">vec!</span>[<span class="string">&quot;install&quot;</span>.to_owned(), <span class="string">&quot;--force&quot;</span>.to_owned()];
+    <span class="kw">let </span><span class="kw-2">mut </span>args = <span class="macro">vec!</span>[
+        <span class="string">&quot;install&quot;</span>.to_owned(),
+        <span class="string">&quot;--force&quot;</span>.to_owned(),
+        <span class="string">&quot;--install-links&quot;</span>.to_owned(),
+        <span class="string">&quot;false&quot;</span>.to_owned(),
+    ];
     args.append(
         <span class="kw-2">&amp;mut </span>packages
             .iter()
