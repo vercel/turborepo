@@ -34,6 +34,7 @@ message NotifyOutputsWrittenRequest {
   repeated string output_globs = 1;
   string hash = 2;
   repeated string output_exclusion_globs = 3;
+  uint64 time_saved = 4;
 }
 
 message NotifyOutputsWrittenResponse {}
@@ -45,6 +46,7 @@ message GetChangedOutputsRequest {
 
 message GetChangedOutputsResponse {
   repeated string changed_output_globs = 1;
+  uint64 time_saved = 2;
 }
 
 message DaemonStatus {
