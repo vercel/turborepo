@@ -103,13 +103,13 @@ impl GlobWatcher {
             {
                 warn!("failed to watch flush dir: {}", e);
                 if setup_broadcaster.send(Some(false)).is_err() {
-                    trace!("setup channel shut down before setup completed");
+                    trace!("failed to notify failed flush watch");
                 }
                 Err(e)
             } else {
                 trace!("watching flush dir: {:?}", path);
                 if setup_broadcaster.send(Some(true)).is_err() {
-                    trace!("setup channel shut down before setup completed");
+                    trace!("failed to notify successful flush watch");
                 }
                 Ok(())
             }
