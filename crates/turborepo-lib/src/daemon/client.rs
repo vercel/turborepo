@@ -162,7 +162,7 @@ pub enum DaemonError {
 impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
-            Code::FailedPrecondition => DaemonError::VersionMismatch,
+            Code::FailedPrecondition | Code::Unimplemented => DaemonError::VersionMismatch,
             Code::Unavailable => DaemonError::Unavailable,
             c => DaemonError::GrpcFailure(c),
         }
