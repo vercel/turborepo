@@ -584,9 +584,13 @@ mod test {
 
         async fn hello(
             &self,
-            _req: tonic::Request<proto::HelloRequest>,
+            request: tonic::Request<proto::HelloRequest>,
         ) -> tonic::Result<tonic::Response<proto::HelloResponse>> {
-            unimplemented!()
+            let client_version = request.into_inner().version;
+            Err(tonic::Status::failed_precondition(format!(
+                "version mismatch. Client {} Server test-version",
+                client_version
+            )))
         }
 
         async fn status(
@@ -650,7 +654,7 @@ mod test {
             can_start_server: false,
         };
 
-        let client = Endpoint::try_from("http://[::]:50051")
+        let mut client = Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
             .connect_with_connector(tower::service_fn(move |_| {
                 // when a connection is made, create a duplex stream and send it to the server
@@ -667,6 +671,15 @@ mod test {
             .map(TurbodClient::new)
             .unwrap();
 
+        let hello_resp: DaemonError = client
+            .hello(proto::HelloRequest {
+                version: "version-mismatch".to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap_err()
+            .into();
+        assert_matches!(hello_resp, DaemonError::VersionMismatch);
         let client = DaemonClient::new(client);
 
         let shutdown_fut = conn.kill_live_server(client, Pid::from(1000));
