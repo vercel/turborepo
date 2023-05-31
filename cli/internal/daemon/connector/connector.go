@@ -329,6 +329,8 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	switch status.Code() {
 	case codes.OK:
 		return nil
+	case codes.Unimplemented:
+		fallthrough // some versions of the rust daemon return Unimplemented rather than FailedPrecondition
 	case codes.FailedPrecondition:
 		return ErrVersionMismatch
 	case codes.Unavailable:
