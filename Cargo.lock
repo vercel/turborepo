@@ -791,6 +791,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "build-fs-tree"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f6df31e7320fd9910fe9d5eaf17c2c554f11d950b55e56a315acc6279713fca"
+dependencies = [
+ "derive_more",
+ "pipe-trait",
+ "serde",
+ "serde_yaml 0.8.26",
+ "text-block-macros",
+]
+
+[[package]]
 name = "build-target"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1330,6 +1343,12 @@ dependencies = [
  "quote",
  "unicode-xid",
 ]
+
+[[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "convert_case"
@@ -1898,6 +1917,19 @@ checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
 dependencies = [
  "proc-macro2",
  "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_more"
+version = "0.99.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
+dependencies = [
+ "convert_case 0.4.0",
+ "proc-macro2",
+ "quote",
+ "rustc_version 0.4.0",
  "syn 1.0.109",
 ]
 
@@ -2690,7 +2722,7 @@ dependencies = [
  "thiserror",
  "turbopath",
  "walkdir",
- "wax",
+ "wax 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4805,6 +4837,12 @@ name = "pin-utils"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+
+[[package]]
+name = "pipe-trait"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fd92f5561e74c246a0b7332e09d2364afb40b67d152c4520b3ba2a7d3dea5b3"
 
 [[package]]
 name = "pkg-config"
@@ -7722,6 +7760,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tardar"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8935f900089aed6a8842d2b81d303d10da0e8a49641692641dc1db9b66361187"
+dependencies = [
+ "miette 5.8.0",
+ "vec1",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7874,6 +7922,12 @@ dependencies = [
  "relative-path",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "text-block-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f8b59b4da1c1717deaf1de80f0179a9d8b4ac91c986d5fd9f4a8ff177b84049"
 
 [[package]]
 name = "textwrap"
@@ -9468,7 +9522,7 @@ dependencies = [
  "uds_windows",
  "url",
  "vercel-api-mock",
- "wax",
+ "wax 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "webbrowser",
  "which",
 ]
@@ -9751,6 +9805,12 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vec1"
+version = "1.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bda7c41ca331fe9a1c278a9e7ee055f4be7f5eb1c2b72f079b4ff8b5fce9d5c"
 
 [[package]]
 name = "vec_map"
@@ -10337,6 +10397,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56681922808216ab86d96bb750f70d500b5a7800e41564290fd46bb773581299"
 dependencies = [
  "wast",
+]
+
+[[package]]
+name = "wax"
+version = "0.5.0"
+dependencies = [
+ "build-fs-tree",
+ "const_format",
+ "dunce",
+ "itertools",
+ "miette 5.8.0",
+ "nom",
+ "pori",
+ "regex",
+ "tardar",
+ "tempfile",
+ "thiserror",
+ "walkdir",
 ]
 
 [[package]]
