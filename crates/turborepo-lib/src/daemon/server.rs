@@ -221,8 +221,13 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         request: tonic::Request<proto::HelloRequest>,
     ) -> Result<tonic::Response<proto::HelloResponse>, tonic::Status> {
-        if request.into_inner().version != get_version() {
-            return Err(tonic::Status::unimplemented("version mismatch"));
+        let client_version = request.into_inner().version;
+        let server_version = get_version();
+        if client_version != server_version {
+            return Err(tonic::Status::failed_precondition(format!(
+                "version mismatch. Client {} Server {}",
+                client_version, server_version
+            )));
         } else {
             Ok(tonic::Response::new(proto::HelloResponse {}))
         }
