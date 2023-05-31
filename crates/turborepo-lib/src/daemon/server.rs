@@ -32,7 +32,7 @@ use tokio::{
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
-use tracing::error;
+use tracing::{error, trace};
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::{
@@ -176,6 +176,8 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 Ok(val) => val,
                 Err(e) => return CloseReason::SocketOpenError(e),
             };
+
+            trace!("acquired connection stream for socket");
 
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(self.timeout.clone()))

@@ -157,6 +157,9 @@ pub enum DaemonError {
 
     #[error("unable to construct log file name: {0}")]
     InvalidLogFile(#[from] time::Error),
+
+    #[error("unable to complete daemon clean")]
+    CleanFailed,
 }
 
 impl From<Status> for DaemonError {

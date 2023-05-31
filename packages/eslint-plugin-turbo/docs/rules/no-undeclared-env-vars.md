@@ -71,4 +71,4 @@ Examples of **correct** code for this rule:
 
 ## Further Reading
 
-- [Altering Caching Based on Environment Variables](https://turbo.build/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables)
+- [Environment Variable Inputs](https://turbo.build/repo/docs/core-concepts/caching/environment-variable-inputs)
