@@ -121,7 +121,9 @@ impl TurboSubscriber {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
         trace!("created non-blocking file writer");
 
-        let layer = tracing_subscriber::fmt::layer().with_writer(file_writer);
+        let layer = tracing_subscriber::fmt::layer()
+            .with_writer(file_writer)
+            .with_ansi(false);
 
         self.update.reload(Some(layer))?;
         self.guard.lock().expect("not poisoned").replace(guard);
