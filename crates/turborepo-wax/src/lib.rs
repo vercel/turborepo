@@ -1348,6 +1348,8 @@ mod tests {
         Glob::new("a/[i-kxy]").unwrap();
         Glob::new("a/[!xy]").unwrap();
         Glob::new("a/[!x-z]").unwrap();
+        Glob::new("a/[^xy]").unwrap();
+        Glob::new("a/[^x-z]").unwrap();
         Glob::new("a/[xy]b/c").unwrap();
     }
 

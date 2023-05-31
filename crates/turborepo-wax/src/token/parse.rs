@@ -449,7 +449,10 @@ pub fn parse(expression: &str) -> Result<Tokenized, ParseError> {
         combinator::map(
             sequence::delimited(
                 bytes::tag("["),
-                sequence::tuple((combinator::opt(bytes::tag("!")), archetypes)),
+                sequence::tuple((
+                    combinator::opt(bytes::tag("!").or(bytes::tag("^"))),
+                    archetypes,
+                )),
                 bytes::tag("]"),
             ),
             |(negation, archetypes)| {
