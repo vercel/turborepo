@@ -10,7 +10,7 @@ use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
 use turbopath::AbsoluteSystemPathBuf;
-use wax::{Any, Glob, Pattern};
+use wax::{Any, BuildError, Glob, Pattern};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -41,7 +41,7 @@ impl WalkType {
 pub enum WalkError {
     // note: wax 0.5 has a lifetime in the BuildError, so we can't use it here
     #[error("bad pattern: {0}")]
-    BadPattern(String),
+    BadPattern(#[from] BuildError),
     #[error("invalid path")]
     InvalidPath,
     #[error("walk error: {0}")]
@@ -144,16 +144,15 @@ fn build_glob_matchers(
         .iter()
         .map(|g| Glob::new(g.as_str()).map(|g| g.into_owned()))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| WalkError::BadPattern(e.to_string()))?;
+        .map_err(Into::<WalkError>::into)?;
     let include = InclusiveEmptyAny::new::<Glob<'static>, _>(inc_patterns)
-        .map_err(|e| WalkError::BadPattern(e.to_string()))?;
+        .map_err(Into::<WalkError>::into)?;
     let ex_patterns = exclude_paths
         .iter()
         .map(|g| Glob::new(g.as_str()).map(|g| g.into_owned()))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| WalkError::BadPattern(e.to_string()))?;
-    let exclude = wax::any::<Glob<'static>, _>(ex_patterns)
-        .map_err(|e| WalkError::BadPattern(e.to_string()))?;
+        .map_err(Into::<WalkError>::into)?;
+    let exclude = wax::any(ex_patterns).map_err(Into::<WalkError>::into)?;
     Ok((include, exclude))
 }
 

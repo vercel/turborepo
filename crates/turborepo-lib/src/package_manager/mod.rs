@@ -100,7 +100,7 @@ impl Globs {
     pub fn new<S: Into<String>>(
         inclusions: Vec<S>,
         exclusions: Vec<S>,
-    ) -> Result<Self, wax::BuildError<'static>> {
+    ) -> Result<Self, wax::BuildError> {
         // take ownership of the inputs
         let raw_inclusions: Vec<String> = inclusions
             .into_iter()
@@ -112,23 +112,15 @@ impl Globs {
             .collect::<Vec<String>>();
         let inclusion_globs = raw_inclusions
             .iter()
-            .map(|s| {
-                Glob::new(s.as_ref())
-                    .map(|g| g.into_owned())
-                    .map_err(|e| e.into_owned())
-            })
+            .map(|s| Glob::new(s.as_ref()).map(|g| g.into_owned()))
             .collect::<Result<Vec<_>, _>>()?;
         let exclusion_globs = raw_exclusions
             .iter()
-            .map(|s| {
-                Glob::new(s.as_ref())
-                    .map(|g| g.into_owned())
-                    .map_err(|e| e.into_owned())
-            })
+            .map(|s| Glob::new(s.as_ref()).map(|g| g.into_owned()))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            inclusions: wax::any::<Glob<'static>, _>(inclusion_globs)?,
-            exclusions: wax::any::<Glob<'static>, _>(exclusion_globs)?,
+            inclusions: wax::any(inclusion_globs)?,
+            exclusions: wax::any(exclusion_globs)?,
             raw_inclusions,
             raw_exclusions,
         })
