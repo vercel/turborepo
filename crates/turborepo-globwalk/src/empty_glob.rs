@@ -1,17 +1,17 @@
 //! A simple `wax` combinator that unconditionally matches if the set of globs
 //! is empty.
 
-use wax::{Any, BuildError, CandidatePath, Pattern};
+use wax::{Any, BuildError, CandidatePath, Compose, Pattern};
 
 pub struct InclusiveEmptyAny<'a>(Option<Any<'a>>);
 
 impl<'a> InclusiveEmptyAny<'a> {
-    pub fn new<P, I>(patterns: I) -> Result<Self, BuildError<'a>>
+    pub fn new<P, I>(patterns: I) -> Result<Self, BuildError>
     where
-        BuildError<'a>: From<<I::Item as TryInto<P>>::Error>,
+        BuildError: From<<I::Item as TryInto<P>>::Error>,
         P: Pattern<'a>,
         I: IntoIterator,
-        I::Item: TryInto<P>,
+        I::Item: TryInto<P> + Compose<'a>,
     {
         let iter = patterns.into_iter().collect::<Vec<_>>();
         if iter.is_empty() {
