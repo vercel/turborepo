@@ -193,7 +193,8 @@ impl DaemonConnector {
             async move { win(path) }
         };
 
-        // note, this endpoint is just a dummy. the actual path is passed in
+        // note, this endpoint is just a placeholder. the actual path is passed in via
+        // make_service
         Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
             .timeout(Duration::from_secs(1))
@@ -255,6 +256,16 @@ impl DaemonConnector {
     }
 
     async fn wait_for_socket(&self) -> Result<(), DaemonConnectorError> {
+        // Note that we don't care if this is our daemon
+        // or not. We started a process, but someone else could beat
+        // use to listening. That's fine, we'll check the version
+        // later. However, we need to ensure that _some_ pid file
+        // exists to protect against stale .sock files
+        timeout(
+            Self::SOCKET_TIMEOUT,
+            wait_for_file(&self.pid_file, WaitAction::Exists),
+        )
+        .await??;
         timeout(
             Self::SOCKET_TIMEOUT,
             wait_for_file(&self.sock_file, WaitAction::Exists),
