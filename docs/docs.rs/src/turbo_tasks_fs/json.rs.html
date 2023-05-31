@@ -118,6 +118,9 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     fmt::{Display, Formatter, Write},
@@ -167,7 +170,10 @@
         <span class="self">Self </span>{
             message: inner.to_string().into(),
             path: <span class="prelude-val">Some</span>(e.path().to_string()),
-            start_location: <span class="prelude-val">Some</span>((inner.line() - <span class="number">1</span>, inner.column() - <span class="number">1</span>)),
+            start_location: <span class="prelude-val">Some</span>((
+                inner.line().saturating_sub(<span class="number">1</span>),
+                inner.column().saturating_sub(<span class="number">1</span>),
+            )),
             end_location: <span class="prelude-val">None</span>,
         }
     }

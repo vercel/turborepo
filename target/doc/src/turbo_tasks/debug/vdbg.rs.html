@@ -140,7 +140,7 @@
     (__repeat <span class="macro-nonterminal">$str</span>:literal) =&gt; { <span class="string">&quot;&quot; </span>};
 
     ($(<span class="macro-nonterminal">$val</span>:expr),* ; depth = <span class="macro-nonterminal">$depth</span>:expr) =&gt; {
-        <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__init $depth </span>; $(<span class="macro-nonterminal">$val</span>),<span class="kw-2">*</span>)
+        <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__init $depth </span>; [ $(<span class="macro-nonterminal">$val</span>),* ] [])
     };
     ($(<span class="macro-nonterminal">$val</span>:expr),+ $(,)<span class="question-mark">?</span>) =&gt; {
         <span class="macro-nonterminal">$</span><span class="macro">crate::vdbg!</span>(<span class="macro-nonterminal">__init </span>usize::MAX ; [ $(<span class="macro-nonterminal">$val</span>),* ] [])
