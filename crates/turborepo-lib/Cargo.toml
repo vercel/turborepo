@@ -58,7 +58,9 @@ indicatif = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 libc = "0.2.140"
-notify = "5.1"
+notify = { version = "5.1", default-features = false, features = [
+  "macos_fsevent",
+] }
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
 prost = "0.11.6"

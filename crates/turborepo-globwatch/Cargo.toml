@@ -10,7 +10,9 @@ futures = { version = "0.3.26" }
 glob-match = "0.2.1"
 itertools.workspace = true
 merge-streams = "0.1.2"
-notify = "5.1"
+notify = { version = "5.1", default-features = false, features = [
+  "macos_fsevent",
+] }
 notify-debouncer-mini = { version = "0.2.1", default-features = false }
 pin-project = "1.0.12"
 stop-token = "0.7.0"
