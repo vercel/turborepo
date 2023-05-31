@@ -9528,6 +9528,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-env"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "regex",
+ "serde",
+ "test-case",
+ "thiserror",
+]
+
+[[package]]
 name = "turborepo-ffi"
 version = "0.1.0"
 dependencies = [
@@ -9539,6 +9550,7 @@ dependencies = [
  "thiserror",
  "turbopath",
  "turborepo-cache",
+ "turborepo-env",
  "turborepo-fs",
  "turborepo-lockfiles",
  "turborepo-scm",
