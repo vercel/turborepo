@@ -230,3 +230,69 @@ func TestWatchSingleFile(t *testing.T) {
 	})
 	assert.Equal(t, 0, len(globWatcher.hashGlobs))
 }
+
+func TestParentMove(t *testing.T) {
+	logger := hclog.Default()
+
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+
+	setup(t, repoRoot)
+
+	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
+	globs := fs.TaskOutputs{
+		Inclusions: []string{"my-pkg/.next/next-file"},
+		Exclusions: []string{},
+	}
+	hash := "the-hash"
+	err := globWatcher.WatchGlobs(hash, globs)
+	assert.NilError(t, err, "WatchGlobs")
+
+	assert.Equal(t, 1, len(globWatcher.hashGlobs))
+
+	// A rename
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileRenamed,
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next"),
+	})
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileRenamed,
+		Path:      repoRoot.UntypedJoin("my-pkg-temp", ".next"),
+	})
+	// This is existing incorrect behavior
+	assert.Equal(t, 1, len(globWatcher.hashGlobs))
+}
+
+func TestParentRemoval(t *testing.T) {
+	logger := hclog.Default()
+
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+
+	setup(t, repoRoot)
+
+	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
+	globs := fs.TaskOutputs{
+		Inclusions: []string{"my-pkg/.next/next-file"},
+		Exclusions: []string{},
+	}
+	hash := "the-hash"
+	err := globWatcher.WatchGlobs(hash, globs)
+	assert.NilError(t, err, "WatchGlobs")
+
+	assert.Equal(t, 1, len(globWatcher.hashGlobs))
+
+	// A rename
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileDeleted,
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "next-file"),
+	})
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileDeleted,
+		Path:      repoRoot.UntypedJoin("my-pkg", ".next"),
+	})
+	globWatcher.OnFileWatchEvent(filewatcher.Event{
+		EventType: filewatcher.FileDeleted,
+		Path:      repoRoot.UntypedJoin("my-pkg"),
+	})
+
+	assert.Equal(t, 0, len(globWatcher.hashGlobs))
+}
