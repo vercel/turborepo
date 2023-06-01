@@ -68,6 +68,8 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fs::{<span class="self">self</span>, File},
     io::{<span class="self">self</span>, Write},
@@ -115,8 +117,10 @@
     <span class="kw">let </span><span class="kw-2">mut </span>args = <span class="macro">vec!</span>[
         <span class="string">&quot;install&quot;</span>.to_owned(),
         <span class="string">&quot;--force&quot;</span>.to_owned(),
-        <span class="string">&quot;--install-links&quot;</span>.to_owned(),
-        <span class="string">&quot;false&quot;</span>.to_owned(),
+        <span class="comment">// install-links will copy local dependencies into the node_modules folder instead of
+        // symlinking, which fixes our root detection.
+        </span><span class="string">&quot;--install-links&quot;</span>.to_owned(),
+        <span class="string">&quot;true&quot;</span>.to_owned(),
     ];
     args.append(
         <span class="kw-2">&amp;mut </span>packages
