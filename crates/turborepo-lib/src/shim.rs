@@ -814,10 +814,7 @@ mod test {
                     path: root.clone(),
                     has_package_json: true,
                     has_turbo_json: true,
-                    workspace_globs: Some(Globs {
-                        inclusions: vec!["packages/*".to_string()],
-                        exclusions: vec![],
-                    }),
+                    workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                 }],
                 output: Ok(root.clone()),
             },
@@ -837,10 +834,7 @@ mod test {
                     path: root.clone(),
                     has_package_json: true,
                     has_turbo_json: false,
-                    workspace_globs: Some(Globs {
-                        inclusions: vec!["packages/*".to_string()],
-                        exclusions: vec![],
-                    }),
+                    workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                 }],
                 output: Ok(root.clone()),
             },
@@ -868,10 +862,7 @@ mod test {
                         path: root.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                 ],
                 output: Ok(root.clone()),
@@ -895,11 +886,14 @@ mod test {
                         path: root.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            // This `**` is important:
-                            inclusions: vec!["packages/**".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(
+                                // This `**` is important:
+                                vec!["packages/**"],
+                                vec![],
+                            )
+                            .unwrap(),
+                        ),
                     },
                 ],
                 output: Ok(root.clone()),
@@ -911,19 +905,13 @@ mod test {
                         path: root_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                     InferInfo {
                         path: root_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                 ],
                 output: Ok(root_two.clone()),
@@ -942,19 +930,17 @@ mod test {
                         path: root_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                     InferInfo {
                         path: root_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two/root-one-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(vec!["root-two/root-one-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                 ],
                 output: Ok(root_two.clone()),
@@ -973,19 +959,17 @@ mod test {
                         path: root_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                     InferInfo {
                         path: root_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two/root-one-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            Globs::new(vec!["root-two/root-one-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                 ],
                 output: Ok(root_one.clone()),
@@ -1003,10 +987,7 @@ mod test {
                         path: root.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                 ],
                 output: Ok(root.join_component("some-other-project")),
@@ -1019,19 +1000,13 @@ mod test {
                         path: root_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["packages/*"], vec![]).unwrap()),
                     },
                     InferInfo {
                         path: root_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(Globs::new(vec!["root-two"], vec![]).unwrap()),
                     },
                 ],
                 output: Ok(root_two.clone()),

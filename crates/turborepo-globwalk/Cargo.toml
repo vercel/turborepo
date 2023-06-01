@@ -1,0 +1,19 @@
+[package]
+name = "globwalk"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+itertools.workspace = true
+path-slash = "0.2.1"
+thiserror.workspace = true
+turbopath.workspace = true
+walkdir = "2.3.3"
+wax.workspace = true
+
+[dev-dependencies]
+tempdir = "0.3.7"
+test-case = "3.1.0"

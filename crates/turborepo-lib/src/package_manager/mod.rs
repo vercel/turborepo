@@ -8,10 +8,11 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPath;
+use wax::{Any, Glob, Pattern};
 
 use crate::{
     commands::CommandBase,
@@ -81,28 +82,61 @@ impl fmt::Display for PackageManager {
 
 #[derive(Debug)]
 pub struct Globs {
-    pub inclusions: Vec<String>,
-    pub exclusions: Vec<String>,
+    inclusions: Any<'static>,
+    exclusions: Any<'static>,
+    raw_inclusions: Vec<String>,
+    raw_exclusions: Vec<String>,
 }
 
+impl PartialEq for Globs {
+    fn eq(&self, other: &Self) -> bool {
+        // Use the literals for comparison, not the compiled globs
+        self.raw_inclusions == other.raw_inclusions && self.raw_exclusions == other.raw_exclusions
+    }
+}
+
+impl Eq for Globs {}
+
 impl Globs {
+    pub fn new<S: Into<String>>(
+        inclusions: Vec<S>,
+        exclusions: Vec<S>,
+    ) -> Result<Self, wax::BuildError> {
+        // take ownership of the inputs
+        let raw_inclusions: Vec<String> = inclusions
+            .into_iter()
+            .map(|s| s.into())
+            .collect::<Vec<String>>();
+        let raw_exclusions: Vec<String> = exclusions
+            .into_iter()
+            .map(|s| s.into())
+            .collect::<Vec<String>>();
+        let inclusion_globs = raw_inclusions
+            .iter()
+            .map(|s| Glob::new(s.as_ref()).map(|g| g.into_owned()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let exclusion_globs = raw_exclusions
+            .iter()
+            .map(|s| Glob::new(s.as_ref()).map(|g| g.into_owned()))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            inclusions: wax::any(inclusion_globs)?,
+            exclusions: wax::any(exclusion_globs)?,
+            raw_inclusions,
+            raw_exclusions,
+        })
+    }
+
     pub fn test(&self, root: &Path, target: PathBuf) -> Result<bool> {
         let search_value = target
             .strip_prefix(root)?
             .to_str()
             .ok_or_else(|| anyhow!("The relative path is not UTF8."))?;
 
-        let includes = &self
-            .inclusions
-            .iter()
-            .any(|inclusion| glob_match::glob_match(inclusion, search_value));
+        let includes = self.inclusions.is_match(search_value);
+        let excludes = self.exclusions.is_match(search_value);
 
-        let excludes = &self
-            .exclusions
-            .iter()
-            .any(|exclusion| glob_match::glob_match(exclusion, search_value));
-
-        Ok(*includes && !*excludes)
+        Ok(includes && !excludes)
     }
 }
 
@@ -147,21 +181,18 @@ impl PackageManager {
             }
         };
 
-        let mut inclusions = Vec::new();
-        let mut exclusions = Vec::new();
-
-        for glob in globs {
-            if let Some(exclusion) = glob.strip_prefix('!') {
-                exclusions.push(exclusion.to_string());
+        let (inclusions, exclusions) = globs.into_iter().partition_map(|glob| {
+            if glob.starts_with('!') {
+                Either::Right(glob[1..].to_string())
             } else {
-                inclusions.push(glob);
+                Either::Left(glob)
             }
-        }
+        });
 
-        Ok(Some(Globs {
-            inclusions,
-            exclusions,
-        }))
+        match Globs::new(inclusions, exclusions) {
+            Ok(globs) => Ok(Some(globs)),
+            Err(err) => Err(anyhow!("Error building globs: {}", err)),
+        }
     }
 
     pub fn get_package_manager(base: &CommandBase, pkg: Option<&PackageJson>) -> Result<Self> {
@@ -408,7 +439,8 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(globs.inclusions, vec!["apps/*", "packages/*"]);
+        let expected = Globs::new(vec!["apps/*", "packages/*"], vec![]).unwrap();
+        assert_eq!(globs, expected);
     }
 
     #[test]
@@ -421,10 +453,7 @@ mod tests {
         }
 
         let tests = [TestCase {
-            globs: Globs {
-                inclusions: vec!["d/**".to_string()],
-                exclusions: vec![],
-            },
+            globs: Globs::new(vec!["d/**".to_string()], vec![]).unwrap(),
             root: PathBuf::from("/a/b/c"),
             target: PathBuf::from("/a/b/c/d/e/f"),
             output: Ok(true),
