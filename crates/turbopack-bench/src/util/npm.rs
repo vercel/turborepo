@@ -46,7 +46,7 @@ pub fn install(install_dir: &Path, packages: &[NpmPackage<'_>]) -> Result<()> {
         "install".to_owned(),
         "--force".to_owned(),
         "--install-links".to_owned(),
-        "false".to_owned(),
+        "true".to_owned(),
     ];
     args.append(
         &mut packages
