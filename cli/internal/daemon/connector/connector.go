@@ -365,10 +365,7 @@ func (c *Connector) waitForSocket() error {
 	if err := waitForFile(c.PidPath); err != nil {
 		return err
 	}
-	if err := waitForFile(c.SockPath); err != nil {
-		return err
-	}
-	return nil
+	return waitForFile(c.SockPath)
 }
 
 func waitForFile(file turbopath.AbsoluteSystemPath) error {
