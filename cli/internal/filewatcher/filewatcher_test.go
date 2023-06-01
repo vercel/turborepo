@@ -149,6 +149,10 @@ func TestFileWatching(t *testing.T) {
 	err = repoRoot.UntypedJoin("parent", "sibling").Rename(twinPath)
 	assert.NilError(t, err, "Rename")
 	expectFilesystemEvent(t, ch, Event{
+		Path:      repoRoot.UntypedJoin("parent", "sibling"),
+		EventType: FileRenamed,
+	})
+	expectFilesystemEvent(t, ch, Event{
 		Path:      twinPath,
 		EventType: FileRenamed,
 	})
