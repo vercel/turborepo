@@ -1,9 +1,0 @@
-{
-  "extends": ["//"],
-  "pipeline": {
-    "build": {
-      "env": ["NO_DOCS_ENV", "!*!*DOCS"],
-      "passThroughEnv": ["NO_DOCS_PASSTHROUGH_ENV", "!*!*DOCS"]
-    }
-  }
-}
