@@ -109,12 +109,12 @@ Workspaces that do not have the specified script defined in their `package.json`
       // (and not the monorepo root)
       "outputs": [".next/**", "!.next/cache/**"]
     },
-      "deploy": {
-        // A package's `deploy` script depends on the `build`,
-        // `test`, and `lint` scripts of the same package
-        // being completed. It also has no filesystem outputs.
-        "dependsOn": ["build", "test", "lint"]
-      },
+    "deploy": {
+      // A package's `deploy` script depends on the `build`,
+      // `test`, and `lint` scripts of the same package
+      // being completed. It also has no filesystem outputs.
+      "dependsOn": ["build", "test", "lint"]
+    },
     "test": {
       // A package's `test` script depends on that package's
       // own `build` script being completed first.
