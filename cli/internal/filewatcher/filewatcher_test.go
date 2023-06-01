@@ -19,7 +19,7 @@ type testClient struct {
 }
 
 func (c *testClient) OnFileWatchEvent(ev Event) {
-	if ev.EventType == FileAdded {
+	if ev.EventType == FileAdded || ev.EventType == FileDeleted || ev.EventType == FileRenamed {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		c.createEvents = append(c.createEvents, ev)
@@ -144,6 +144,21 @@ func TestFileWatching(t *testing.T) {
 	})
 	expectedWatching = append(expectedWatching, deepPath, repoRoot.UntypedJoin("parent", "sibling", "deep"))
 	expectWatching(t, c, expectedWatching)
+
+	twinPath := repoRoot.UntypedJoin("parent", "twin")
+	err = repoRoot.UntypedJoin("parent", "sibling").Rename(twinPath)
+	assert.NilError(t, err, "Rename")
+	expectFilesystemEvent(t, ch, Event{
+		Path:      twinPath,
+		EventType: FileRenamed,
+	})
+
+	err = twinPath.RemoveAll()
+	assert.NilError(t, err, "RemoveAll")
+	expectFilesystemEvent(t, ch, Event{
+		Path:      twinPath,
+		EventType: FileDeleted,
+	})
 
 	gitFilePath := repoRoot.UntypedJoin(".git", "git-file")
 	err = gitFilePath.WriteFile([]byte("nope"), 0644)
