@@ -78,6 +78,7 @@ mod tests {
 
     use turbopath::RelativeUnixPathBuf;
 
+    use super::*;
     use crate::{ls_tree::read_ls_tree, package_deps::GitHashes};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
@@ -131,5 +132,15 @@ mod tests {
             read_ls_tree(input_bytes, &mut hashes).unwrap();
             assert_eq!(hashes, expected);
         }
+    }
+
+    #[test]
+    fn test_ls_tree_bad() {
+        let res = git_ls_tree(
+            &AbsoluteSystemPathBuf::new(
+                std::path::Path::new("/Users/olszewski/code/vercel/turborepo").to_path_buf(),
+            )
+            .unwrap(),
+        );
     }
 }
