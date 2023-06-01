@@ -451,7 +451,7 @@ mod test {
     #[test_case("a\\*b", 0, 0 => matches None ; "escaped star mismatch")]
     #[test_case("a?b", 1, 1 => matches None ; "question mark unicode match")]
     // this is disabled until a fix is available upstream
-    // #[test_case("a[!a]b", 1, 1 => matches None ; "negated character class unicode match 2")]
+    #[test_case("a[!a]b", 1, 1 => matches None ; "negated character class unicode match 2")]
     #[test_case("a???b", 0, 0 => matches None ; "insufficient question marks mismatch")]
     #[test_case("a[^a][^a][^a]b", 0, 0 => matches None ; "multiple negated character classes mismatch")]
     #[test_case("a?b", 1, 1 => matches None ; "question mark not matching slash")]
