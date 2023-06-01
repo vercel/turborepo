@@ -1,0 +1,479 @@
+---
+title: "`turbo run`"
+description: Turborepo CLI Reference for `run` command
+---
+
+import Callout from "../../../../../components/Callout";
+import OuputModeTable from "../../../../../components/output-mode-table.mdx";
+
+# `turbo run <task>`
+
+Run npm scripts across all workspaces in specified scope. Tasks must be specified in your `pipeline` configuration.
+
+`turbo run <task1> <task2> [options] [-- <args passed to task1 and task2>]`
+
+`turbo` can run multiple tasks, and any arguments following `--` will be passed through
+to the tasks to be executed. Note that these additional arguments will _not_ be passed to
+any additional tasks that are run due to dependencies from the [pipeline](/repo/docs/reference/configuration#pipeline) configuration.
+
+## Options
+
+### `--cache-dir`
+
+`type: string`
+
+Defaults to `./node_modules/.cache/turbo`. Specify local filesystem cache directory. Be sure to add this folder to your `.gitignore` if you change it from the default.
+
+```sh
+turbo run build --cache-dir="./my-cache"
+```
+
+### `--concurrency`
+
+`type: number | string`
+
+Defaults to `10`. Set/limit the max concurrency of task execution. This must be an integer greater than or equal to `1` or a percentage value like `50%`. Use `1` to force serial (i.e. one task at a time) execution. Use `100%` to use all available logical processors. This option is ignored if the [`--parallel`](#--parallel) flag is also passed.
+
+```sh
+turbo run build --concurrency=50%
+turbo run test --concurrency=1
+```
+
+### `--continue`
+
+Defaults to `false`. This flag tells `turbo` whether or not to continue with execution in the presence of an error (i.e. non-zero exit code from a task).
+By default, specifying the `--parallel` flag will automatically set `--continue` to `true` unless explicitly set to `false`.
+When `--continue` is `true`, `turbo` will exit with the highest exit code value encountered during execution.
+
+```sh
+turbo run build --continue
+```
+
+### `--cwd`
+
+Set the working directory of the command.
+
+```sh
+turbo run build --cwd=./somewhere/else
+```
+
+### `--deps`
+
+<Callout type="error">
+  `--deps` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependents-of-matched-workspaces)
+  instead.
+</Callout>
+
+Defaults to `true`. Include dependent workspace consumers in the execution.
+
+```sh
+turbo run build --deps
+turbo run build --no-deps
+```
+
+**Example**
+
+Let's say you have workspaces A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
+
+### `--dry / --dry-run`
+
+Instead of executing tasks, display details about the affected workspaces and tasks that would be run.
+Specify `--dry=json` to get the output in JSON format.
+
+Task details include:
+
+- `task`: The name of the task to be executed
+- `package`: The workspace in which to run the task
+- `hash`: The hash of the task, used for caching
+- `directory`: The directory where the task will be run
+- `command`: The actual command used to run the task
+- `outputs`: Location of outputs from the task that will cached
+- `logFile`: Location of the log file for the task run
+- `dependencies`: Tasks that must run before this task
+- `dependents`: Tasks that must be run after this task
+
+### `--env-mode`
+
+`type: string`
+
+<Callout>
+  **Warning**: This is an experimental flag, so its name and behavior can change.
+</Callout>
+
+Controls the available environment variables to your tasks.
+
+| option | description                                                |
+| ------ | ---------------------------------------------------------- |
+| infer  | infers strict mode or loose mode based on allowlist config |
+| loose  | allows all environment variables                           |
+| strict | only allow declared variables                              |
+
+`PATH`, `SHELL`, and `SYSTEMROOT` are always available to all tasks.
+
+#### `infer`
+
+In infer mode, Turborepo will look for [`passThroughEnv`][1] for
+each task config, and [`globalPassThroughEnv`][2] in the root of the
+`turbo.json` config. If either is defined, "strict" mode is inferred. If
+neither is defined, then `loose` mode is inferred.
+
+In this mode, the value of `globalPassThroughEnv` and the flag's
+value ("infer") will only be incorporated into the global hash if
+`globalPassThroughEnv` is set.
+
+#### `loose`
+
+In loose mode, all environment variables are made available to the task.
+The flag's value ("loose") itself will be incorporated into the global hash.
+
+#### `strict`
+
+In strict mode, only environment variables specified in the following keys are
+available to the task:
+
+- `env` and `passThroughEnv` in each task configuration
+- `globalEnv` and `globalPassThroughEnv` in the root of your config
+
+The value of `globalPassThroughEnv` and the flag's value ("strict")
+itself will be incorporated into the global hash.
+
+If strict mode is specified or inferred, _all_ tasks are run in strict mode,
+regardless of their configuration.
+
+### `--filter`
+
+`type: string[]`
+
+Specify combinations of workspaces, directories, and git commits to act as entrypoints
+for execution.
+
+Multiple filters can be combined to select distinct sets of targets. Additionally, filters
+can also exclude targets. A target that matches any filter and is not explicitly excluded will
+be in the final entrypoint selection.
+
+For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/repo/docs/core-concepts/monorepos/filtering).
+
+```sh
+turbo run build --filter=my-pkg
+turbo run test --filter=...^@scope/my-lib
+turbo run build --filter=./apps/* --filter=!./apps/admin
+```
+
+### `--graph`
+
+This command will generate an svg, png, jpg, pdf, json, html, or [other supported output formats](https://graphviz.org/doc/info/output.html) of the current task graph.
+The output file format defaults to jpg, but can be controlled by specifying the filename's extension.
+
+If Graphviz is not installed, or no filename is provided, this command prints the dot graph to `stdout`.
+
+```sh
+turbo run build --graph
+turbo run build test lint --graph=my-graph.svg
+turbo run build test lint --graph=my-json-graph.json
+turbo run build test lint --graph=my-graph.pdf
+turbo run build test lint --graph=my-graph.png
+turbo run build test lint --graph=my-graph.html
+turbo run build test lint --graph=my-graph.mermaid
+```
+
+<Callout type="info">
+  **Known Bug**: All possible pipeline task nodes will be added to the graph at
+  the moment, even if that pipeline task does not actually exist in a given
+  workspace. This has no impact on execution, it means that 1) the terminal
+  output may overstate the number of workspaces in which a task is running and
+  2) your dot viz graph may contain additional nodes that represents tasks that
+  do not exist.
+</Callout>
+
+### `--force`
+
+Ignore existing cached artifacts and forcibly re-execute all tasks (overwriting artifacts that overlap)
+
+```sh
+turbo run build --force
+```
+
+The same behavior also be set via the `TURBO_FORCE=true` environment variable.
+
+### `--global-deps`
+
+Specify glob of global filesystem dependencies to be hashed. Useful for .env and files in the root directory that impact multiple packages/apps.
+Can be specified multiple times.
+
+```sh
+turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="jest.config.js"
+```
+
+You can also specify these in your `turbo` configuration as `globalDependencies` key.
+
+### `--framework-inference`
+
+`type: bool`
+
+Specify whether or not to do framework inference for tasks. Defaults to `true`, can be configured to be `false` which skips framework inference for tasks. This disables [automatic environment variable inclusion](../core-concepts/caching/environment-variable-inputs#framework-inference).
+
+```sh
+turbo run build --framework-inference=false
+```
+
+### `--ignore`
+
+`type: string[]`
+
+Ignore **files or directories** from impacting scope. Uses glob patterns under the hood.
+
+```
+turbo run build --ignore="apps/**/*"
+turbo run build --ignore="packages/**/*"
+turbo run build --ignore="packages/**/*" --ignore="\!/packages/not-this-one/**/*"
+```
+
+#### How multiple patterns work
+
+Positive patterns (e.g. `foo` or `*`) add to the results, while negative patterns (e.g. `!foo`) subtract from the results.
+
+Therefore a lone negation (e.g. `['!foo']`) will never match anything – use `['*', '!foo']` instead.
+
+#### Globbing patterns
+
+Just a quick overview.
+
+- `*` matches any number of characters, but not `/`
+- `?` matches a single character, but not `/`
+- `**` matches any number of characters, including `/`, as long as it's the only thing in a path part
+- `{}` allows for a comma-separated list of "or" expressions
+- `!` at the beginning of a pattern will negate the match
+
+### `--include-dependencies`
+
+<Callout type="error">
+  `--include-dependencies` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependencies-of-matched-workspaces)
+  instead.
+</Callout>
+
+Default `false`. When `true`, `turbo` will add any workspaces that the workspaces in the current execution _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
+
+This is useful when using `--filter` in CI as it guarantees that every dependency needed for the execution is actually executed.
+
+### `--no-cache`
+
+Default `false`. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
+
+```shell
+turbo run build --no-cache
+turbo run dev --no-cache
+```
+
+### `--no-daemon`
+
+Default `false`. `turbo` can run a standalone process in some cases to precalculate values used for determining what work needs to be done.
+This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
+Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
+
+### `--output-logs`
+
+`type: string`
+
+Set type of output logging. Defaults to "outputMode" for the task in `turbo.json`.
+
+<OuputModeTable />
+
+**Example**
+
+```shell
+turbo run build --output-logs=full
+turbo run build --output-logs=new-only
+turbo run build --output-logs=errors-only
+turbo run build --output-logs=none
+```
+
+### `--only`
+
+Default `false`. Restricts execution to include specified tasks only. This is very similar to how `lerna` and `pnpm` run tasks by default.
+
+Given this pipeline in `turbo.json`:
+
+```json
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    }
+  }
+}
+```
+
+```shell
+turbo run test --only
+```
+
+Will execute _only_ the `test` tasks in each workspace. It will not `build`.
+
+### `--parallel`
+
+Default `false`. Run commands in parallel across workspaces and ignore the task dependency graph.
+
+<Callout type="info">
+  The `--parallel` flag is typically used for "dev" or `--watch` mode tasks that don't exit.
+  Starting in `turbo@1.7`, we recommend configuring these tasks using the
+  [`persistent`](/repo/docs/reference/configuration#persistent) config instead.
+</Callout>
+
+```sh
+turbo run lint --parallel --no-cache
+turbo run dev --parallel --no-cache
+```
+
+### `--remote-only`
+
+Default `false`. Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache.
+
+```shell
+turbo run build --remote-only
+```
+
+The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment variable.
+
+### `--scope`
+
+<Callout type="error">
+  `--scope` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-package) instead.
+</Callout>
+
+`type: string[]`
+
+Specify/filter workspaces to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
+
+```sh
+turbo run lint --scope="@example/**"
+turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
+```
+
+### `--since`
+
+<Callout type="error">
+  `--since` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-changed-workspaces)
+  instead.
+</Callout>
+
+Filter execution based on which workspaces have changed since a merge-base.
+
+```
+turbo run build --since=origin/main
+```
+
+<Callout type="info">
+  **Important**: This uses the `git diff ${target_branch}...` mechanism to
+  identify which workspaces have changed. There is an assumption that all the
+  input files for a workspace exist inside their respective workspace folders.
+</Callout>
+
+### `--summarize`
+
+Generates a JSON file in `.turbo/runs` containing metadata about the run, including affected workspaces,
+executed tasks (including their timings and hashes), expanded to the cache key based on your config
+and all the files included in the cached artifact. This flag can be helpful to determine, among other
+things:
+
+- How turbo interpreted your glob syntax for `inputs` and `outputs`
+- What inputs changed between two task runs to produce a cache hit or miss
+- How task timings changed over time
+
+### `--token`
+
+A bearer token for remote caching. Useful for running in non-interactive shells (e.g. CI/CD) in combination with `--team` flags.
+
+```sh
+turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
+```
+
+You can also set the value of the current token by setting an environment variable named `TURBO_TOKEN`. The flag will take precedence over the environment variable if both are present.
+
+If you are using Remote Caching on Vercel and building your project on Vercel, this environment variable and flag are unnecessary because they are automatically set for you. Suppose you are using Remote Caching on Vercel but building in another CI provider like CircleCI or GitHub Actions. You can use a Vercel Personal Access Token as your `--token` or `TURBO_TOKEN`. If you are using a custom Remote Cache, this value will be used to send an HTTP Bearer token with requests to your custom Remote Cache.
+
+### `--team`
+
+The slug of the remote cache team. Useful for running in non-interactive shells in combination with `--token` and `--team` flags.
+
+```sh
+turbo run build --team=my-team
+turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
+```
+
+You can also set the value of the current team by setting an environment variable named `TURBO_TEAM`. The flag will take precedence over the environment variable if both are present.
+
+### `--preflight`
+
+Only applicable when remote artifact caching is configured. Enables sending a preflight request before every cache artifact and analytics request. The follow-up upload and download will follow redirects.
+
+```sh
+turbo run build --preflight
+```
+
+The same behavior can also be set via the `TURBO_PREFLIGHT=true` environment variable.
+
+### `--trace`
+
+`type: string`
+
+To view CPU trace, outputs the trace to the given file, use `go tool trace [file]`.
+
+<Callout>
+  **Important**: The trace viewer doesn't work under Windows Subsystem for
+  Linux.
+</Callout>
+
+```sh
+turbo run build --trace="<trace-file-name>"
+```
+
+### `--heap`
+
+`type: string`
+
+To view heap trace, outputs the trace to the given file, use `go tool pprof [file]` and type `top`. You can also drop it into [speedscope](https://www.speedscope.app/) and use the `left heavy` or `sandwich` view modes.
+
+```sh
+turbo run build --heap="<heap-file-name>"
+```
+
+### `--cpuprofile`
+
+`type: string`
+
+To view CPU profile, outputs the profile to the given file, drop the file into [speedscope](https://www.speedscope.app/).
+
+<Callout>
+  **Important**: The CPU profiler doesn't work under Windows Subsystem for
+  Linux. The profiler has to be built for native Windows and run using the
+  command prompt instead.
+</Callout>
+
+```sh
+turbo run build --cpuprofile="<cpu-profile-file-name>"
+```
+
+### `--verbosity`
+
+To specify log level, use `--verbosity=<num>` or `-v, -vv, -vvv`.
+
+- `Info `: `--verbosity=1`, or `-v`
+- `Debug`: `--verbosity=2`, or `-vv`
+- `Trace`: `--verbosity=3`, or `-vvv`
+
+```sh
+turbo run build -v
+turbo run build --verbosity=2
+turbo run build -vvv
+```
+
+[1]: /repo/docs/reference/configuration#passThroughEnv
+[2]: /repo/docs/reference/configuration#globalPassThroughEnv
