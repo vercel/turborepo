@@ -144,7 +144,7 @@ impl RepoConfigLoader {
         } = self;
         let raw_disk_config = Config::builder()
             .add_source(
-                config::File::with_name(path.to_string_lossy().as_ref())
+                config::File::with_name(path.as_str())
                     .format(config::FileFormat::Json)
                     .required(false),
             )
@@ -218,7 +218,7 @@ mod test {
     #[test_case("TEAMSLUG" ; "ALLCAPS")]
     fn test_repo_config_with_different_cases(field_name: &str) -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"{}\": \"123\"}}", field_name)?;
 
         let config = RepoConfigLoader::new(config_path).load()?;
@@ -231,7 +231,7 @@ mod test {
     #[test]
     fn test_repo_config_with_team_and_api_flags() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
 
         let config = RepoConfigLoader::new(config_path)
@@ -266,7 +266,7 @@ mod test {
     #[test]
     fn test_team_override_clears_id() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
         let loader = RepoConfigLoader::new(config_path).with_team_slug(Some("foo".into()));
 
@@ -280,7 +280,7 @@ mod test {
     #[test]
     fn test_set_team_clears_id() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         // We will never pragmatically write the "teamslug" field as camelCase,
         // but viper is case insensitive and we want to keep this functionality.
         writeln!(&mut config_file, "{{\"teamSlug\": \"my-team\"}}")?;
@@ -299,7 +299,7 @@ mod test {
     #[test]
     fn test_repo_env_variable() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamslug\": \"other-team\"}}")?;
         let login_url = "http://my-login-url";
         let api_url = "http://my-api";

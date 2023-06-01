@@ -1,27 +1,33 @@
-use std::{borrow::Borrow, fmt::Debug, io::Write, ops::Deref};
-
-use bstr::{BStr, BString, ByteSlice};
+use std::{
+    borrow::Borrow,
+    fmt,
+    fmt::{Debug, Display, Formatter},
+    io::Write,
+    ops::Deref,
+};
 
 use crate::{PathError, RelativeUnixPath};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct RelativeUnixPathBuf(pub(crate) BString);
+pub struct RelativeUnixPathBuf(pub(crate) String);
+
+impl Display for RelativeUnixPathBuf {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl RelativeUnixPathBuf {
-    pub fn new(path: impl Into<Vec<u8>>) -> Result<Self, PathError> {
-        let bytes: Vec<u8> = path.into();
-        if bytes.first() == Some(&b'/') {
-            return Err(PathError::not_relative_error(&bytes));
+    pub fn new(path: impl Into<String>) -> Result<Self, PathError> {
+        let path_string = path.into();
+        if path_string.starts_with('/') {
+            return Err(PathError::NotRelative(path_string).into());
         }
-        Ok(Self(BString::new(bytes)))
+        Ok(Self(path_string))
     }
 
-    pub fn as_str(&self) -> Result<&str, PathError> {
-        let s = self
-            .0
-            .to_str()
-            .map_err(|_| PathError::InvalidUnicode(self.0.as_bytes().to_str_lossy().to_string()))?;
-        Ok(s)
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 
     // write_escaped_bytes writes this path to the given writer in the form
@@ -37,19 +43,48 @@ impl RelativeUnixPathBuf {
         let mut i: usize = 0;
         for (to_escaped_index, byte) in self
             .0
-            .iter()
+            .bytes()
             .enumerate()
-            .filter(|(_, byte)| **byte == b'\"' || **byte == b'\n')
+            .filter(|(_, byte)| *byte == b'\"' || *byte == b'\n')
         {
-            writer.write_all(&self.0[i..to_escaped_index])?;
-            writer.write_all(&[b'\\', *byte])?;
+            writer.write_all(self.0[i..to_escaped_index].as_bytes())?;
+            writer.write_all(&[b'\\', byte])?;
             i = to_escaped_index + 1;
         }
         if i < self.0.len() {
-            writer.write_all(&self.0[i..])?;
+            writer.write_all(self.0[i..].as_bytes())?;
         }
         writer.write_all(&[b'\"'])?;
         Ok(())
+    }
+
+    pub fn strip_prefix(&self, prefix: &RelativeUnixPathBuf) -> Result<Self, PathError> {
+        let prefix_len = prefix.0.len();
+        if prefix_len == 0 {
+            return Ok(self.clone());
+        }
+        if !self.0.starts_with(&prefix.0) {
+            return Err(PathError::NotParent(
+                prefix.0.to_string(),
+                self.0.to_string(),
+            ));
+        }
+
+        // Handle the case where we are stripping the entire contents of this path
+        if self.0.len() == prefix.0.len() {
+            return Self::new("");
+        }
+
+        // We now know that this path starts with the prefix, and that this path's
+        // length is greater than the prefix's length
+        if self.0.as_bytes()[prefix_len] != b'/' {
+            let prefix_str = prefix.0.clone();
+            let this = self.0.clone();
+            return Err(PathError::PrefixError(prefix_str, this));
+        }
+
+        let tail_slice = &self.0[(prefix_len + 1)..];
+        Self::new(tail_slice)
     }
 }
 
@@ -62,21 +97,20 @@ impl RelativeUnixPathBufTestExt for RelativeUnixPathBuf {
     // path. *If* we end up needing or wanting this method outside of tests, we
     // will need to implement .clean() for the result.
     fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
-        let buffer = Vec::with_capacity(self.0.len() + 1 + tail.0.len());
-        let mut path = BString::new(buffer);
-        if self.0.len() > 0 {
-            path.extend_from_slice(&self.0);
-            path.push(b'/');
+        if self.0.is_empty() {
+            return tail.clone();
         }
-        path.extend_from_slice(&tail.0);
-        Self(path)
+        let mut joined = self.0.clone();
+        joined.push('/');
+        joined.push_str(&tail.0);
+        Self(joined)
     }
 }
 
 impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
     fn borrow(&self) -> &RelativeUnixPath {
-        let inner: &BStr = self.0.borrow();
-        unsafe { &*(inner as *const BStr as *const RelativeUnixPath) }
+        let inner: &str = &self.0.borrow();
+        unsafe { &*(inner as *const str as *const RelativeUnixPath) }
     }
 }
 
@@ -96,10 +130,7 @@ impl Deref for RelativeUnixPathBuf {
 
 impl Debug for RelativeUnixPathBuf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.as_str() {
-            Ok(s) => write!(f, "{}", s),
-            Err(_) => write!(f, "Non-utf8 {:?}", self.0),
-        }
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -114,13 +145,13 @@ mod tests {
     #[test]
     fn test_relative_unix_path_buf() {
         let path = RelativeUnixPathBuf::new("foo/bar").unwrap();
-        assert_eq!(path.as_str().unwrap(), "foo/bar");
+        assert_eq!(path.as_str(), "foo/bar");
     }
 
     #[test]
     fn test_relative_unix_path_buf_with_extension() {
         let path = RelativeUnixPathBuf::new("foo/bar.txt").unwrap();
-        assert_eq!(path.as_str().unwrap(), "foo/bar.txt");
+        assert_eq!(path.as_str(), "foo/bar.txt");
     }
 
     #[test]
@@ -128,7 +159,7 @@ mod tests {
         let head = RelativeUnixPathBuf::new("some/path").unwrap();
         let tail = RelativeUnixPathBuf::new("child/leaf").unwrap();
         let combined = head.join(&tail);
-        assert_eq!(combined.as_str().unwrap(), "some/path/child/leaf");
+        assert_eq!(combined.as_str(), "some/path/child/leaf");
     }
 
     #[test]
@@ -136,7 +167,7 @@ mod tests {
         let combined = RelativeUnixPathBuf::new("some/path/child/leaf").unwrap();
         let head = RelativeUnixPathBuf::new("some/path").unwrap();
         let expected = RelativeUnixPathBuf::new("child/leaf").unwrap();
-        let tail = combined.strip_prefix(head).unwrap();
+        let tail = combined.strip_prefix(&head).unwrap();
         assert_eq!(tail, expected);
     }
 
@@ -145,7 +176,7 @@ mod tests {
         let combined = RelativeUnixPathBuf::new("some/path").unwrap();
         let head = combined.clone();
         let expected = RelativeUnixPathBuf::new("").unwrap();
-        let tail = combined.strip_prefix(head).unwrap();
+        let tail = combined.strip_prefix(&head).unwrap();
         assert_eq!(tail, expected);
     }
 
@@ -153,15 +184,15 @@ mod tests {
     fn test_strip_empty_prefix() {
         let combined = RelativeUnixPathBuf::new("some/path").unwrap();
         let tail = combined
-            .strip_prefix(RelativeUnixPathBuf::new("").unwrap())
+            .strip_prefix(&RelativeUnixPathBuf::new("").unwrap())
             .unwrap();
         assert_eq!(tail, combined);
     }
 
     #[test]
     fn test_write_escaped() {
-        let input = "\"quote\"\nnewline\n".as_bytes();
-        let expected = "\"\\\"quote\\\"\\\nnewline\\\n\"".as_bytes();
+        let input = "\"quote\"\nnewline\n";
+        let expected = b"\"\\\"quote\\\"\\\nnewline\\\n\"";
         let mut buffer = Vec::new();
         {
             let mut writer = BufWriter::new(&mut buffer);

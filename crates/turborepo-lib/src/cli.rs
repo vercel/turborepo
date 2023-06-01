@@ -1,10 +1,7 @@
-use std::{
-    env, io, mem,
-    path::{Path, PathBuf},
-    process,
-};
+use std::{env, io, mem, path::Path, process};
 
 use anyhow::{anyhow, Result};
+use camino::Utf8PathBuf;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use serde::Serialize;
@@ -107,7 +104,7 @@ pub struct Args {
     pub cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
-    pub cwd: Option<PathBuf>,
+    pub cwd: Option<Utf8PathBuf>,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
@@ -778,8 +775,7 @@ pub async fn run(
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
-
+    use camino::Utf8PathBuf;
     use clap::Parser;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
@@ -1518,7 +1514,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Bin {}),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1541,7 +1537,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Login { sso_team: None }),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1555,7 +1551,7 @@ mod test {
                 command: Some(Command::Login {
                     sso_team: Some("my-team".to_string()),
                 }),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1578,7 +1574,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Logout {}),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1605,7 +1601,7 @@ mod test {
                 command: Some(Command::Unlink {
                     target: crate::cli::LinkTarget::RemoteCache,
                 }),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1634,7 +1630,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(default_prune),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1701,7 +1697,7 @@ mod test {
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }

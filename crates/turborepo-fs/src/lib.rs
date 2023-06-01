@@ -26,7 +26,7 @@ pub fn recursive_copy(
                 }
                 Ok(entry) => {
                     let path = entry.path();
-                    let path = AbsoluteSystemPath::new(path)?;
+                    let path = AbsoluteSystemPath::from_std_path(path)?;
                     let file_type = entry.file_type();
                     // currently we support symlinked files, but not symlinked directories:
                     // For copying, we Mkdir and bail if we encounter a symlink to a directoy
@@ -116,7 +116,7 @@ mod tests {
 
     fn tmp_dir<'a>() -> Result<(tempfile::TempDir, AbsoluteSystemPathBuf)> {
         let tmp_dir = tempfile::tempdir()?;
-        let dir = AbsoluteSystemPathBuf::new(tmp_dir.path())?;
+        let dir = AbsoluteSystemPathBuf::try_from(tmp_dir.path())?;
         Ok((tmp_dir, dir))
     }
 

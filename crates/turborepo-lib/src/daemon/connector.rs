@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsStr,
     process::Stdio,
     sync::Arc,
     time::{Duration, Instant},
@@ -178,7 +179,7 @@ impl DaemonConnector {
         #[cfg(not(target_os = "windows"))]
         self.wait_for_socket().await?;
 
-        debug!("connecting to socket: {}", path.to_string_lossy());
+        debug!("connecting to socket: {}", path);
         let path = Arc::new(path);
 
         #[cfg(not(target_os = "windows"))]
@@ -343,10 +344,11 @@ async fn wait_for_file(
                 }),
                 WaitAction::Deleted,
             ) => {
-                if paths
-                    .iter()
-                    .any(|p| p.file_name().map(|f| file_name.eq(f)).unwrap_or_default())
-                {
+                if paths.iter().any(|p| {
+                    p.file_name()
+                        .map(|f| OsStr::new(&file_name).eq(f))
+                        .unwrap_or_default()
+                }) {
                     futures::executor::block_on(async {
                         // if the receiver is dropped, it is because the future has
                         // been cancelled, so we don't need to do anything
@@ -363,7 +365,7 @@ async fn wait_for_file(
     std::fs::create_dir_all(parent.as_path())?;
 
     debug!("watching {:?}", parent);
-    watcher.watch(parent.as_path(), notify::RecursiveMode::NonRecursive)?;
+    watcher.watch(parent.as_std_path(), notify::RecursiveMode::NonRecursive)?;
 
     match (action, path.exists()) {
         (WaitAction::Exists, false) => {}
@@ -411,11 +413,11 @@ mod test {
     const NODE_EXE: &str = "node.exe";
 
     fn pid_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::new(tmp_path.join("turbod.pid")).unwrap()
+        AbsoluteSystemPathBuf::try_from(tmp_path.join("turbod.pid")).unwrap()
     }
 
     fn sock_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::new(tmp_path.join("turbod.sock")).unwrap()
+        AbsoluteSystemPathBuf::try_from(tmp_path.join("turbod.sock")).unwrap()
     }
 
     #[tokio::test]
@@ -652,13 +654,13 @@ mod test {
 
         let (pid_file, sock_file) = if cfg!(windows) {
             (
-                AbsoluteSystemPathBuf::new(PathBuf::from("C:\\pid")).unwrap(),
-                AbsoluteSystemPathBuf::new(PathBuf::from("C:\\sock")).unwrap(),
+                AbsoluteSystemPathBuf::new("C:\\pid").unwrap(),
+                AbsoluteSystemPathBuf::new("C:\\sock").unwrap(),
             )
         } else {
             (
-                AbsoluteSystemPathBuf::new(PathBuf::from("/pid")).unwrap(),
-                AbsoluteSystemPathBuf::new(PathBuf::from("/sock")).unwrap(),
+                AbsoluteSystemPathBuf::new("/pid").unwrap(),
+                AbsoluteSystemPathBuf::new("/sock").unwrap(),
             )
         };
 

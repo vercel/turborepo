@@ -32,10 +32,10 @@ pub fn changed_files(
     from_commit: Option<&str>,
     to_commit: &str,
 ) -> Result<HashSet<String>, Error> {
-    let git_root = AbsoluteSystemPathBuf::new(git_root)?;
-    let turbo_root = AbsoluteSystemPathBuf::new(turbo_root)?;
+    let git_root = AbsoluteSystemPath::from_std_path(&git_root)?;
+    let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root.as_path())?;
     let turbo_root_relative_to_git_root = git_root.anchor(&turbo_root)?;
-    let pathspec = turbo_root_relative_to_git_root.to_str()?;
+    let pathspec = turbo_root_relative_to_git_root.as_str();
 
     let mut files = HashSet::new();
 
@@ -112,12 +112,7 @@ fn add_files_from_stdout(
         let path = RelativeUnixPath::new(&line).unwrap();
         let anchored_to_turbo_root_file_path =
             reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, path).unwrap();
-        files.insert(
-            anchored_to_turbo_root_file_path
-                .to_str()
-                .unwrap()
-                .to_string(),
-        );
+        files.insert(anchored_to_turbo_root_file_path.to_string());
     }
 }
 
@@ -147,13 +142,13 @@ pub fn previous_content(
     file_path: PathBuf,
 ) -> Result<Vec<u8>, Error> {
     // If git root is not absolute, we error.
-    let git_root = AbsoluteSystemPathBuf::new(git_root)?;
+    let git_root = AbsoluteSystemPathBuf::try_from(git_root)?;
 
     // However for file path we handle both absolute and relative paths
     // Note that we assume any relative file path is relative to the git root
     let anchored_file_path = if file_path.is_absolute() {
-        let absolute_file_path = AbsoluteSystemPathBuf::new(file_path)?;
-        git_root.anchor(absolute_file_path)?
+        let absolute_file_path = AbsoluteSystemPathBuf::try_from(file_path)?;
+        git_root.anchor(&absolute_file_path)?
     } else {
         file_path.as_path().try_into()?
     };
@@ -162,11 +157,7 @@ pub fn previous_content(
     let mut command = Command::new(git_binary);
     let command = command
         .arg("show")
-        .arg(format!(
-            "{}:{}",
-            from_commit,
-            anchored_file_path.to_str().unwrap()
-        ))
+        .arg(format!("{}:{}", from_commit, anchored_file_path.as_str()))
         .current_dir(&git_root);
 
     let output = command.output()?;

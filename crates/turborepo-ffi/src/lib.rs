@@ -262,15 +262,7 @@ pub extern "C" fn get_package_file_hashes_from_git_index(buffer: Buffer) -> Buff
         Ok(hashes) => {
             let mut to_return = HashMap::new();
             for (filename, hash) in hashes {
-                let filename = match filename.as_str() {
-                    Ok(s) => s.to_owned(),
-                    Err(err) => {
-                        let resp = proto::GetPackageFileHashesFromGitIndexResponse {
-                            response: Some(proto::get_package_file_hashes_from_git_index_response::Response::Error(err.to_string()))
-                        };
-                        return resp.into();
-                    }
-                };
+                let filename = filename.to_string();
                 to_return.insert(filename, hash);
             }
             let file_hashes = proto::FileHashes { hashes: to_return };
@@ -347,15 +339,7 @@ pub extern "C" fn get_package_file_hashes_from_processing_git_ignore(buffer: Buf
         Ok(hashes) => {
             let mut to_return = HashMap::new();
             for (filename, hash) in hashes {
-                let filename = match filename.as_str() {
-                    Ok(s) => s.to_owned(),
-                    Err(err) => {
-                        let resp = proto::GetPackageFileHashesFromProcessingGitIgnoreResponse {
-                            response: Some(proto::get_package_file_hashes_from_processing_git_ignore_response::Response::Error(err.to_string()))
-                        };
-                        return resp.into();
-                    }
-                };
+                let filename = filename.to_string();
                 to_return.insert(filename, hash);
             }
             let file_hashes = proto::FileHashes { hashes: to_return };
@@ -432,15 +416,7 @@ pub extern "C" fn get_package_file_hashes_from_inputs(buffer: Buffer) -> Buffer 
         Ok(hashes) => {
             let mut to_return = HashMap::new();
             for (filename, hash) in hashes {
-                let filename = match filename.as_str() {
-                    Ok(s) => s.to_owned(),
-                    Err(err) => {
-                        let resp = proto::GetPackageFileHashesFromInputsResponse {
-                            response: Some(proto::get_package_file_hashes_from_inputs_response::Response::Error(err.to_string()))
-                        };
-                        return resp.into();
-                    }
-                };
+                let filename = filename.to_string();
                 to_return.insert(filename, hash);
             }
             let file_hashes = proto::FileHashes { hashes: to_return };
@@ -498,11 +474,8 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         }
     };
 
-    // TODO: is to_string_lossy the right thing to do here? We could error...
-    let files: Vec<_> = files
-        .into_iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect();
+    let files: Vec<_> = files.into_iter().map(|path| path.to_string()).collect();
+
     proto::GlobResp {
         response: Some(proto::glob_resp::Response::Files(proto::GlobRespList {
             files,

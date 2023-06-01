@@ -150,8 +150,8 @@ impl CommandBase {
         Ok(APIClient::new(api_url, timeout, self.version)?)
     }
 
-    pub fn daemon_file_root(&self) -> turbopath::AbsoluteSystemPathBuf {
-        turbopath::AbsoluteSystemPathBuf::new(std::env::temp_dir())
+    pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
             .expect("temp dir is valid")
             .join_component("turbod")
             .join_component(self.repo_hash().as_str())
@@ -159,7 +159,7 @@ impl CommandBase {
 
     fn repo_hash(&self) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(self.repo_root.to_str().unwrap().as_bytes());
+        hasher.update(self.repo_root.as_bytes());
         hex::encode(&hasher.finalize()[..8])
     }
 }

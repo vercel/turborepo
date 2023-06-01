@@ -13,6 +13,9 @@
 ///   and uses the system's path separator. Used for handling files relative to
 ///   the repository root.
 ///
+/// NOTE: All paths contain UTF-8 strings and use `camino` as the underlying
+/// representation. For reasons why, see [the `camino` documentation](https://github.com/camino-rs/camino/).
+///
 /// As in `std::path`, there are `Path` and `PathBuf` variants of each path
 /// type, that indicate whether the path is borrowed or owned.
 ///
@@ -32,15 +35,12 @@ mod anchored_system_path_buf;
 mod relative_unix_path;
 mod relative_unix_path_buf;
 
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::io;
 
 pub use absolute_system_path::AbsoluteSystemPath;
 pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
 pub use anchored_system_path_buf::AnchoredSystemPathBuf;
-use path_slash::{PathBufExt, PathExt};
+use camino::Utf8PathBuf;
 pub use relative_unix_path::RelativeUnixPath;
 pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
@@ -48,8 +48,10 @@ pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt
 pub enum PathError {
     #[error("Path is non-UTF-8: {0}")]
     InvalidUnicode(String),
+    #[error("Failed to convert path")]
+    FromPathBufError(#[from] camino::FromPathBufError),
     #[error("Path is not absolute: {0}")]
-    NotAbsolute(PathBuf),
+    NotAbsolute(String),
     #[error("Path is not relative: {0}")]
     NotRelative(String),
     #[error("Path {0} is not parent of {1}")]
@@ -74,44 +76,87 @@ impl PathError {
     pub fn is_io_error(&self, kind: io::ErrorKind) -> bool {
         matches!(self, PathError::IO(err) if err.kind() == kind)
     }
+}
 
-    pub fn invalid_utf8_error(bytes: impl Into<Vec<u8>>) -> Self {
-        Self::InvalidUnicode(std::string::String::from_utf8_lossy(&bytes.into()).into_owned())
+pub trait IntoSystem {
+    fn into_system(self) -> Utf8PathBuf;
+}
+
+pub trait IntoUnix {
+    fn into_unix(self) -> Utf8PathBuf;
+}
+
+// Checks if path contains a non system separator.
+fn is_not_system(path: impl AsRef<str>) -> bool {
+    let non_system_separator;
+
+    #[cfg(windows)]
+    {
+        non_system_separator = '/';
     }
 
-    pub(crate) fn not_relative_error(bytes: &[u8]) -> PathError {
-        let s = String::from_utf8_lossy(bytes).to_string();
-        PathError::NotRelative(s)
+    #[cfg(not(windows))]
+    {
+        non_system_separator = '\\';
+    }
+
+    path.as_ref().contains(non_system_separator)
+}
+
+fn convert_separator(
+    path: impl AsRef<str>,
+    input_separator: char,
+    output_separator: char,
+) -> Utf8PathBuf {
+    let path = path.as_ref();
+
+    Utf8PathBuf::from(
+        path.chars()
+            .map(|c| {
+                if c == input_separator {
+                    output_separator
+                } else {
+                    c
+                }
+            })
+            .collect::<String>(),
+    )
+}
+
+impl<T: AsRef<str>> IntoSystem for T {
+    fn into_system(self) -> Utf8PathBuf {
+        let output;
+        #[cfg(windows)]
+        {
+            output = convert_separator(self, '/', std::path::MAIN_SEPARATOR)
+        }
+
+        #[cfg(not(windows))]
+        {
+            output = convert_separator(self, '\\', std::path::MAIN_SEPARATOR)
+        }
+
+        output
     }
 }
 
-trait IntoSystem {
-    fn into_system(self) -> Result<PathBuf, PathError>;
-}
-
-trait IntoUnix {
-    fn into_unix(self) -> Result<PathBuf, PathError>;
-}
-
-impl IntoSystem for &Path {
-    fn into_system(self) -> Result<PathBuf, PathError> {
-        let path_str = self
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(self.to_string_lossy().to_string()))?;
-
-        Ok(PathBuf::from_slash(path_str))
-    }
-}
-
-impl IntoUnix for &Path {
+impl<T: AsRef<str>> IntoUnix for T {
     /// NOTE: `into_unix` *only* converts Windows paths to Unix paths *on* a
     /// Windows system. Do not pass a Windows path on a Unix system and
     /// assume it'll be converted.
-    fn into_unix(self) -> Result<PathBuf, PathError> {
-        Ok(PathBuf::from(
-            self.to_slash()
-                .ok_or_else(|| PathError::InvalidUnicode(self.to_string_lossy().to_string()))?
-                .as_ref(),
-        ))
+    fn into_unix(self) -> Utf8PathBuf {
+        let output;
+
+        #[cfg(windows)]
+        {
+            output = convert_separator(self, std::path::MAIN_SEPARATOR, '/')
+        }
+
+        #[cfg(not(windows))]
+        {
+            output = Utf8PathBuf::from(self.as_ref())
+        }
+
+        output
     }
 }

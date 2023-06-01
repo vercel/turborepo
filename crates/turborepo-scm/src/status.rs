@@ -49,7 +49,7 @@ fn read_status<R: Read>(
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
-        let path = RelativeUnixPathBuf::new(entry.filename)?;
+        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_owned())?)?;
         if entry.is_delete {
             let path = path.strip_prefix(pkg_prefix)?;
             hashes.remove(&path);
@@ -115,7 +115,7 @@ mod tests {
             ("A  some-pkg/some-file\0", "some-pkg", ("some-file", false)),
         ];
         for (input, prefix, (expected_filename, expect_delete)) in tests {
-            let prefix = RelativeUnixPathBuf::new(prefix.as_bytes()).unwrap();
+            let prefix = RelativeUnixPathBuf::new(*prefix).unwrap();
             let mut hashes = to_hash_map(&[(expected_filename, "some-hash")]);
             let to_hash = read_status(input.as_bytes(), &prefix, &mut hashes).unwrap();
             if *expect_delete {
@@ -129,11 +129,10 @@ mod tests {
     }
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
-            (
-                RelativeUnixPathBuf::new(path.as_bytes()).unwrap(),
-                hash.to_string(),
-            )
-        }))
+        HashMap::from_iter(
+            pairs
+                .into_iter()
+                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
+        )
     }
 }

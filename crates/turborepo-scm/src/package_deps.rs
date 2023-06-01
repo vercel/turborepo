@@ -35,7 +35,7 @@ pub fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
     let git_root = find_git_root(turbo_root)?;
     let full_pkg_path = turbo_root.resolve(package_path);
     let package_unix_path_buf = package_path.to_unix()?;
-    let package_unix_path = package_unix_path_buf.as_str()?;
+    let package_unix_path = package_unix_path_buf.as_str();
 
     let mut inputs = inputs
         .iter()
@@ -100,7 +100,7 @@ pub(crate) fn find_git_root(
     let cursor = std::io::Cursor::new(rev_parse.stdout);
     let mut lines = cursor.byte_lines();
     if let Some(line) = lines.next() {
-        let line = line?;
+        let line = String::from_utf8(line?)?;
         let tail = RelativeUnixPathBuf::new(line)?;
         turbo_root.join_unix_path(tail).map_err(|e| e.into())
     } else {
@@ -120,7 +120,7 @@ mod tests {
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
-        let dir = AbsoluteSystemPathBuf::new(tmp_dir.path().to_path_buf())
+        let dir = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
             .unwrap()
             .to_realpath()
             .unwrap();
@@ -292,11 +292,10 @@ mod tests {
     }
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
-            (
-                RelativeUnixPathBuf::new(path.as_bytes()).unwrap(),
-                hash.to_string(),
-            )
-        }))
+        HashMap::from_iter(
+            pairs
+                .into_iter()
+                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
+        )
     }
 }

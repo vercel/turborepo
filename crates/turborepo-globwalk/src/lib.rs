@@ -113,7 +113,9 @@ pub fn _globwalk(
         match match_type {
             // if it is a perfect match, and our walk_type allows it, then we should yield it
             MatchType::Match if walk_type.should_emit(is_directory) => {
-                return Some(Ok(AbsoluteSystemPathBuf::new(path).expect("absolute")));
+                return Some(Ok(
+                    AbsoluteSystemPathBuf::try_from(path.as_path()).expect("absolute")
+                ));
             }
             // we should yield potential matches if they are symlinks. we don't want to traverse
             // into them, but simply say 'hey this is a symlink that could match'
@@ -163,11 +165,12 @@ fn preprocess_paths_and_globs(
     exclude: &[String],
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
     let base_path_slash = base_path
-        .as_path()
+        .as_std_path()
         .to_slash()
         // Windows drive paths need to be escaped, and ':' is a valid token in unix paths
         .map(|s| s.replace(':', "\\:"))
         .ok_or(WalkError::InvalidPath)?;
+
     let (include_paths, lowest_segment) = include
         .iter()
         .map(|s| join_unix_like_paths(&base_path_slash, s))
@@ -325,7 +328,7 @@ pub fn globwalk(
                 assert!(prefix.is_absolute(), "Found relative glob path {}", glob);
                 // We're either going to return this path or nothing. Check if it's a directory
                 // and if we want directories
-                match AbsoluteSystemPathBuf::new(prefix).and_then(|path| {
+                match AbsoluteSystemPathBuf::try_from(prefix).and_then(|path| {
                     let metadata = path.symlink_metadata()?;
                     Ok((path, metadata))
                 }) {
@@ -355,9 +358,9 @@ pub fn globwalk(
                         Ok(entry) if walk_type == WalkType::Files && entry.file_type().is_dir() => {
                             None
                         }
-                        Ok(entry) => {
-                            Some(AbsoluteSystemPathBuf::new(entry.path()).map_err(|e| e.into()))
-                        }
+                        Ok(entry) => Some(
+                            AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
+                        ),
                         Err(e) => Some(Err(e.into())),
                     })
                     .collect::<Vec<_>>()

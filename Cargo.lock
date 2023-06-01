@@ -877,6 +877,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "camino"
+version = "1.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c530edf18f37068ac2d977409ed5cd50d53d73bc653c7647b48eb78976ac9ae2"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "cargo-lock"
 version = "8.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2762,6 +2771,7 @@ dependencies = [
 name = "globwatch"
 version = "0.1.0"
 dependencies = [
+ "camino",
  "futures",
  "itertools",
  "merge-streams",
@@ -9411,10 +9421,9 @@ name = "turbopath"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bstr",
+ "camino",
  "dunce",
  "path-clean 1.0.1",
- "path-slash",
  "serde",
  "thiserror",
  "wax",
@@ -9506,6 +9515,7 @@ dependencies = [
  "atty",
  "axum",
  "axum-server",
+ "camino",
  "chrono",
  "clap 4.1.11",
  "clap_complete",
@@ -9610,7 +9620,6 @@ dependencies = [
  "ignore",
  "itertools",
  "nom",
- "path-slash",
  "sha1 0.10.5",
  "tempfile",
  "thiserror",

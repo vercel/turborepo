@@ -623,7 +623,7 @@ mod tests {
     #[test]
     fn test_detect_multiple_package_managers() -> Result<(), Error> {
         let repo_root = tempdir()?;
-        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
 
         let package_lock_json_path = repo_root.path().join(npm::LOCKFILE);
         File::create(&package_lock_json_path)?;

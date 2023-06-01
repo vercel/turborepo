@@ -86,7 +86,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
         let daemon_root = base.daemon_file_root();
 
         let watcher = Arc::new(HashGlobWatcher::new(
-            AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("valid repo root"),
+            base.repo_root.clone(),
             daemon_root.join_component("flush").as_path().to_owned(),
         )?);
 
@@ -258,7 +258,7 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         Ok(tonic::Response::new(proto::StatusResponse {
             daemon_status: Some(proto::DaemonStatus {
                 uptime_msec: self.start_time.elapsed().as_millis() as u64,
-                log_file: self.log_file.to_str().unwrap().to_string(),
+                log_file: self.log_file.to_string(),
             }),
         }))
     }
@@ -342,7 +342,7 @@ mod test {
     #[tracing_test::traced_test]
     async fn lifecycle() {
         let tempdir = tempfile::tempdir().unwrap();
-        let path = AbsoluteSystemPathBuf::new(tempdir.path()).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
 
         tracing::info!("start");
 
@@ -385,7 +385,7 @@ mod test {
     #[tracing_test::traced_test]
     async fn timeout() {
         let tempdir = tempfile::tempdir().unwrap();
-        let path = AbsoluteSystemPathBuf::new(tempdir.path()).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
 
         let daemon = DaemonServer::new(
             &CommandBase::new(

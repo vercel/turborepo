@@ -1,15 +1,14 @@
-use std::{fs::Metadata, io::Read, path::Path};
+use std::{fs::Metadata, io::Read};
 
 use hex::ToHex;
 use ignore::WalkBuilder;
-use path_slash::PathExt;
 use sha1::{Digest, Sha1};
-use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoUnix};
 use wax::{any, Glob, Pattern};
 
 use crate::{package_deps::GitHashes, Error};
 
-fn git_like_hash_file(path: &AbsoluteSystemPathBuf, metadata: &Metadata) -> Result<String, Error> {
+fn git_like_hash_file(path: &AbsoluteSystemPath, metadata: &Metadata) -> Result<String, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
     let mut buffer = Vec::new();
@@ -36,17 +35,11 @@ pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     for pattern in inputs {
         let pattern = pattern.as_ref();
         if let Some(exclusion) = pattern.strip_prefix('!') {
-            let glob = Path::new(exclusion)
-                .to_slash()
-                .ok_or_else(|| PathError::invalid_utf8_error(exclusion.as_bytes()))?
-                .into_owned();
+            let glob = exclusion.into_unix();
             let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
             excludes.push(g);
         } else {
-            let glob = Path::new(pattern)
-                .to_slash()
-                .ok_or_else(|| PathError::invalid_utf8_error(pattern.as_bytes()))?
-                .into_owned();
+            let glob = pattern.into_unix();
             let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
             includes.push(g);
         }
@@ -75,20 +68,20 @@ pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
         if metadata.is_dir() {
             continue;
         }
-        let path = AbsoluteSystemPathBuf::new(dirent.path())?;
+        let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
         let relative_path = full_package_path.anchor(&path)?;
         let relative_path = relative_path.to_unix()?;
         if let Some(include_pattern) = include_pattern.as_ref() {
-            if !include_pattern.is_match(relative_path.as_str()?) {
+            if !include_pattern.is_match(relative_path.as_str()) {
                 continue;
             }
         }
         if let Some(exclude_pattern) = exclude_pattern.as_ref() {
-            if exclude_pattern.is_match(relative_path.as_str()?) {
+            if exclude_pattern.is_match(relative_path.as_str()) {
                 continue;
             }
         }
-        let hash = git_like_hash_file(&path, &metadata)?;
+        let hash = git_like_hash_file(path, &metadata)?;
         hashes.insert(relative_path, hash);
     }
     Ok(hashes)
@@ -102,7 +95,7 @@ mod tests {
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
-        let dir = AbsoluteSystemPathBuf::new(tmp_dir.path().to_path_buf())
+        let dir = AbsoluteSystemPathBuf::try_from(tmp_dir.path().to_path_buf())
             .unwrap()
             .to_realpath()
             .unwrap();
@@ -165,8 +158,11 @@ mod tests {
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();
             if let Some(hash) = expected_hash {
+                println!("unix_path: {}", unix_path);
+                println!("unix_pkg_path: {}", unix_pkg_path);
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
-                expected.insert(unix_pkg_file_path, (*hash).to_owned());
+                println!("unix_pkg_file_path: {}", unix_pkg_file_path);
+                expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
             }
         }
         expected.insert(
@@ -190,7 +186,7 @@ mod tests {
                 if unix_pkg_file_path.ends_with("file")
                     && !unix_pkg_file_path.ends_with("excluded-file")
                 {
-                    expected.insert(unix_pkg_file_path, (*hash).to_owned());
+                    expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
                 }
             }
         }

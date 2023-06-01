@@ -1,29 +1,42 @@
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
+use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::{AbsoluteSystemPath, IntoSystem, PathError, RelativeUnixPathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
-pub struct AnchoredSystemPathBuf(PathBuf);
+pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
+
+impl TryFrom<&str> for AnchoredSystemPathBuf {
+    type Error = PathError;
+
+    fn try_from(path: &str) -> Result<Self, Self::Error> {
+        let path = Utf8Path::new(path);
+        if path.is_absolute() {
+            return Err(PathError::NotRelative(path.to_string()).into());
+        }
+
+        Ok(AnchoredSystemPathBuf(path.into_system()))
+    }
+}
 
 impl TryFrom<&Path> for AnchoredSystemPathBuf {
     type Error = PathError;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        if path.is_absolute() {
-            let bad_path = path.display().to_string();
-            return Err(PathError::NotRelative(bad_path));
-        }
+        let path = path
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
 
-        Ok(AnchoredSystemPathBuf(path.into_system()?))
+        Self::try_from(path)
     }
 }
 
 // TODO: perhaps we ought to be converting to a unix path?
-impl<'a> From<&'a AnchoredSystemPathBuf> for wax::CandidatePath<'a> {
-    fn from(value: &'a AnchoredSystemPathBuf) -> wax::CandidatePath<'a> {
-        value.as_path().into()
+impl<'a> Into<wax::CandidatePath<'a>> for &'a AnchoredSystemPathBuf {
+    fn into(self) -> wax::CandidatePath<'a> {
+        self.0.as_std_path().into()
     }
 }
 
@@ -38,7 +51,7 @@ impl AnchoredSystemPathBuf {
             .as_path()
             .strip_prefix(root.as_path())
             .map_err(|_| PathError::NotParent(root.to_string(), path.to_string()))?
-            .to_path_buf();
+            .into();
 
         Ok(AnchoredSystemPathBuf(stripped_path))
     }
@@ -53,11 +66,11 @@ impl AnchoredSystemPathBuf {
         // For windows paths, we may want an assertion that we aren't crossing drives
         let these_components = start
             .components()
-            .skip_while(|c| *c == Component::RootDir)
+            .skip_while(|c| *c == Utf8Component::RootDir)
             .collect::<Vec<_>>();
         let other_components = end
             .components()
-            .skip_while(|c| *c == Component::RootDir)
+            .skip_while(|c| *c == Utf8Component::RootDir)
             .collect::<Vec<_>>();
         let prefix_len = these_components
             .iter()
@@ -75,51 +88,51 @@ impl AnchoredSystemPathBuf {
         let traverse_count = these_components.len() - prefix_len;
         // For every remaining non-matching segment in self, add a directory traversal
         // Then, add every non-matching segment from other
-        let path = std::iter::repeat(Component::ParentDir)
+        let path = std::iter::repeat(Utf8Component::ParentDir)
             .take(traverse_count)
             .chain(other_components.into_iter().skip(prefix_len))
-            .collect::<PathBuf>();
+            .collect::<Utf8PathBuf>();
+
         Self(path)
     }
 
-    pub fn from_raw<P: AsRef<Path>>(raw: P) -> Result<Self, PathError> {
+    pub fn from_raw<P: AsRef<str>>(raw: P) -> Result<Self, PathError> {
         let system_path = raw.as_ref();
-        let system_path = system_path.into_system()?;
+        let system_path = system_path.into_system();
         Ok(Self(system_path))
     }
 
-    pub(crate) fn as_path(&self) -> &Path {
-        self.0.as_path()
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 
-    pub fn to_str(&self) -> Result<&str, PathError> {
-        self.0
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(self.0.to_string_lossy().to_string()))
+    pub fn to_string(&self) -> String {
+        self.0.to_string()
     }
 
     pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
         #[cfg(unix)]
         {
-            use std::os::unix::ffi::OsStrExt;
-            let bytes = self.0.as_os_str().as_bytes();
-            RelativeUnixPathBuf::new(bytes)
+            return RelativeUnixPathBuf::new(self.0.as_str());
         }
         #[cfg(not(unix))]
         {
             use crate::IntoUnix;
             let unix_buf = self.0.as_path().into_unix()?;
-            let unix_str = unix_buf
-                .to_str()
-                .ok_or_else(|| PathError::InvalidUnicode(unix_buf.to_string_lossy().to_string()))?;
-            RelativeUnixPathBuf::new(unix_str.as_bytes())
+            RelativeUnixPathBuf::new(unix_buf)
         }
     }
 }
 
 impl From<AnchoredSystemPathBuf> for PathBuf {
     fn from(path: AnchoredSystemPathBuf) -> PathBuf {
-        path.0
+        path.0.into_std_path_buf()
+    }
+}
+
+impl AsRef<Utf8Path> for AnchoredSystemPathBuf {
+    fn as_ref(&self) -> &Utf8Path {
+        self.0.as_ref()
     }
 }
 

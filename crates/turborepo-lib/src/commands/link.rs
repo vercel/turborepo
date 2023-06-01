@@ -115,7 +115,7 @@ pub async fn link(
 ) -> Result<()> {
     let homedir_path = home_dir().ok_or_else(|| anyhow!("could not find home directory."))?;
     let homedir = homedir_path.to_string_lossy();
-    let repo_root_with_tilde = base.repo_root.to_string_lossy().replacen(&*homedir, "~", 1);
+    let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
     let token = base.user_config()?.token().ok_or_else(|| {
         anyhow!(
@@ -451,6 +451,8 @@ fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> 
 mod test {
     use std::fs;
 
+    use anyhow::Result;
+    use camino::{Utf8Path, Utf8PathBuf};
     use tempfile::{NamedTempFile, TempDir};
     use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
@@ -465,11 +467,11 @@ mod test {
     };
 
     #[tokio::test]
-    async fn test_link_remote_cache() {
+    async fn test_link_remote_cache() -> Result<()> {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
-        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
         fs::write(
             repo_config_file.path(),
             r#"{ "apiurl": "http://localhost:3000" }"#,
@@ -483,7 +485,7 @@ mod test {
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .with_token(Some("token".to_string()))
                     .load()
                     .unwrap(),
@@ -509,6 +511,8 @@ mod test {
             team_id == Some(vercel_api_mock::EXPECTED_USER_ID)
                 || team_id == Some(vercel_api_mock::EXPECTED_TEAM_ID)
         );
+
+        Ok(())
     }
 
     #[tokio::test]
@@ -519,7 +523,7 @@ mod test {
 
         // repo config
         let repo_config_file = NamedTempFile::new().unwrap();
-        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
         fs::write(
             repo_config_file.path(),
             r#"{ "apiurl": "http://localhost:3000" }"#,
@@ -529,11 +533,12 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            repo_root: AbsoluteSystemPathBuf::new(TempDir::new().unwrap().into_path()).unwrap(),
+            repo_root: AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().into_path())
+                .unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .with_token(Some("token".to_string()))
                     .load()
                     .unwrap(),
