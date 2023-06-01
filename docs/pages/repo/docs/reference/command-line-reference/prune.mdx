@@ -6,7 +6,9 @@ description: Turborepo CLI Reference for `prune` command
 import Callout from "../../../../../components/Callout";
 import OuputModeTable from "../../../../../components/output-mode-table.mdx";
 
-# `turbo prune --scope=<target>`
+# `turbo prune`
+
+## `--scope=<target>`
 
 Generate a sparse/partial monorepo with a pruned lockfile for a target workspace.
 
@@ -97,3 +99,9 @@ With the `--docker` flag. The `prune` command will generate folder called `out` 
 │           └── package.json
 └── yarn.lock                           # The pruned lockfile for all targets in the subworkspace
 ```
+
+## `--out-dir`
+
+**Default**: `./out`
+
+Customize the directory the pruned output is generated in.
