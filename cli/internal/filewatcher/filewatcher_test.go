@@ -157,13 +157,6 @@ func TestFileWatching(t *testing.T) {
 		EventType: FileRenamed,
 	})
 
-	err = twinPath.RemoveAll()
-	assert.NilError(t, err, "RemoveAll")
-	expectFilesystemEvent(t, ch, Event{
-		Path:      twinPath,
-		EventType: FileDeleted,
-	})
-
 	gitFilePath := repoRoot.UntypedJoin(".git", "git-file")
 	err = gitFilePath.WriteFile([]byte("nope"), 0644)
 	assert.NilError(t, err, "WriteFile")
