@@ -92,16 +92,16 @@ func (cache *httpCache) write(w io.WriteCloser, anchor turbopath.AbsoluteSystemP
 	cacheErrorChan <- cacheItem.Close()
 }
 
-func (cache *httpCache) Fetch(_ turbopath.AbsoluteSystemPath, key string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
+func (cache *httpCache) Fetch(_ turbopath.AbsoluteSystemPath, key string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, files, duration, err := cache.retrieve(key)
 	if err != nil {
 		// TODO: analytics event?
-		return newRemoteTaskCacheStatus(false, duration), files, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
+		return newRemoteTaskCacheStatus(false, duration), files, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
 	cache.logFetch(hit, key, duration)
-	return newRemoteTaskCacheStatus(hit, duration), files, duration, err
+	return newRemoteTaskCacheStatus(hit, duration), files, err
 }
 
 func (cache *httpCache) Exists(key string) ItemStatus {
