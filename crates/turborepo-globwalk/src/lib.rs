@@ -50,18 +50,6 @@ pub enum WalkError {
     WalkError(#[from] walkdir::Error),
 }
 
-#[cfg(test)]
-impl WalkError {
-    pub fn same_variant(&self, other: &Self) -> bool {
-        match (self, other) {
-            (WalkError::BadPattern(_), WalkError::BadPattern(_)) => true,
-            (WalkError::InvalidPath, WalkError::InvalidPath) => true,
-            (WalkError::WalkError(_), WalkError::WalkError(_)) => true,
-            _ => false,
-        }
-    }
-}
-
 /// Performs a glob walk, yielding paths that _are_ included in the include list
 /// (if it is nonempty) and _not_ included in the exclude list.
 ///
@@ -449,73 +437,71 @@ mod test {
         tmp
     }
 
-    #[test_case("abc", false, 1, 1 ; "exact match")]
-    #[test_case("*", false, 19, 15 ; "single star match")]
-    #[test_case("*c", false, 2, 2 ; "single star suffix match")]
-    #[test_case("a*", false, 9, 9 ; "single star prefix match")]
-    #[test_case("a*/b", false, 2, 2 ; "single star prefix with suffix match")]
-    #[test_case("a*b*c*d*e*", false, 3, 3 ; "multiple single stars match")]
-    #[test_case("a*b*c*d*e*/f", false, 2, 2 ; "single star and double star match")]
-    #[test_case("a*b?c*x", false, 2, 2 ; "single star and question mark match")]
-    #[test_case("ab[c]", false, 1, 1 ; "character class match")]
-    #[test_case("ab[b-d]", false, 1, 1 ; "character class range match")]
-    #[test_case("ab[e-g]", false, 0, 0 ; "character class range mismatch")]
-    #[test_case("a\\*b", false, 0, 0 ; "escaped star mismatch")]
-    #[test_case("a?b", false, 1, 1 ; "question mark unicode match")]
+    #[test_case("abc", 1, 1 => matches None ; "exact match")]
+    #[test_case("*", 19, 15 => matches None ; "single star match")]
+    #[test_case("*c", 2, 2 => matches None ; "single star suffix match")]
+    #[test_case("a*", 9, 9 => matches None ; "single star prefix match")]
+    #[test_case("a*/b", 2, 2 => matches None ; "single star prefix with suffix match")]
+    #[test_case("a*b*c*d*e*", 3, 3 => matches None ; "multiple single stars match")]
+    #[test_case("a*b*c*d*e*/f", 2, 2 => matches None ; "single star and double star match")]
+    #[test_case("a*b?c*x", 2, 2 => matches None ; "single star and question mark match")]
+    #[test_case("ab[c]", 1, 1 => matches None ; "character class match")]
+    #[test_case("ab[b-d]", 1, 1 => matches None ; "character class range match")]
+    #[test_case("ab[e-g]", 0, 0 => matches None ; "character class range mismatch")]
+    #[test_case("a\\*b", 0, 0 => matches None ; "escaped star mismatch")]
+    #[test_case("a?b", 1, 1 => matches None ; "question mark unicode match")]
     // this is disabled until a fix is available upstream
-    // #[test_case("a[!a]b", false, 1, 1 ; "negated character class unicode match 2")]
-    #[test_case("a???b", false, 0, 0 ; "insufficient question marks mismatch")]
-    #[test_case("a[^a][^a][^a]b", false, 0, 0 ; "multiple negated character classes mismatch")]
-    #[test_case("a?b", false, 1, 1 ; "question mark not matching slash")]
-    #[test_case("a*b", false, 1, 1 ; "single star not matching slash 2")]
-    #[test_case("[x-]", true, 0, 0 ; "trailing dash in character class fail")]
-    #[test_case("[-x]", true, 0, 0 ; "leading dash in character class fail")]
-    #[test_case("[a-b-d]", true, 0, 0 ; "dash within character class range fail")]
-    #[test_case("[a-b-x]", true, 0, 0 ; "dash within character class range fail 2")]
-    #[test_case("[", true, 0, 0 ; "unclosed character class error")]
-    #[test_case("[^", true, 0, 0 ; "unclosed negated character class error")]
-    #[test_case("[^bc", true, 0, 0 ; "unclosed negated character class error 2")]
-    #[test_case("a[", true, 0, 0 ; "unclosed character class error after pattern")]
-    #[test_case("ad[", true, 0, 0 ; "unclosed character class error after pattern 2")]
-    #[test_case("*x", false, 4, 4 ; "star pattern match")]
-    #[test_case("[abc]", false, 3, 3 ; "single character class match")]
-    #[test_case("a/**", false, 7, 7 ; "a followed by double star match")]
-    #[test_case("**/c", false, 4, 4 ; "double star and single subdirectory match")]
-    #[test_case("a/**/b", false, 2, 2 ; "a followed by double star and single subdirectory match")]
-    #[test_case("a/**/c", false, 2, 2 ; "a followed by double star and multiple subdirectories match 2")]
-    #[test_case("a/**/d", false, 1, 1 ; "a followed by double star and multiple subdirectories with target match")]
-    #[test_case("a/b/c", false, 1, 1 ; "a followed by subdirectories and double slash mismatch")]
-    #[test_case("ab{c,d}", false, 1, 1 ; "pattern with curly braces match")]
-    #[test_case("ab{c,d,*}", false, 5, 5 ; "pattern with curly braces and wildcard match")]
-    #[test_case("ab{c,d}[", true, 0, 0)]
-    #[test_case("a{,bc}", true, 0, 0 ; "a followed by comma or b or c")]
-    #[test_case("a/{b/c,c/b}", false, 2, 2)]
-    #[test_case("{a/{b,c},abc}", false, 3, 3)]
-    #[test_case("{a/ab*}", false, 1, 1)]
-    #[test_case("a/*", false, 3, 3)]
-    #[test_case("{a/*}", false, 3, 3 ; "curly braces with single star match")]
-    #[test_case("{a/abc}", false, 1, 1)]
-    #[test_case("{a/b,a/c}", false, 2, 2)]
-    #[test_case("abc/**", false, 3, 3 ; "abc then doublestar")]
-    #[test_case("**/abc", false, 2, 2)]
-    #[test_case("**/*.txt", false, 1, 1)]
-    #[test_case("**/【*", false, 1, 1)]
+    // #[test_case("a[!a]b", 1, 1 => matches None ; "negated character class unicode match 2")]
+    #[test_case("a???b", 0, 0 => matches None ; "insufficient question marks mismatch")]
+    #[test_case("a[^a][^a][^a]b", 0, 0 => matches None ; "multiple negated character classes mismatch")]
+    #[test_case("a?b", 1, 1 => matches None ; "question mark not matching slash")]
+    #[test_case("a*b", 1, 1 => matches None ; "single star not matching slash 2")]
+    #[test_case("[x-]", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "trailing dash in character class fail")]
+    #[test_case("[-x]", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "leading dash in character class fail")]
+    #[test_case("[a-b-d]", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "dash within character class range fail")]
+    #[test_case("[a-b-x]", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "dash within character class range fail 2")]
+    #[test_case("[", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed character class error")]
+    #[test_case("[^", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed negated character class error")]
+    #[test_case("[^bc", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed negated character class error 2")]
+    #[test_case("a[", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed character class error after pattern")]
+    #[test_case("ad[", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed character class error after pattern 2")]
+    #[test_case("*x", 4, 4 => matches None ; "star pattern match")]
+    #[test_case("[abc]", 3, 3 => matches None ; "single character class match")]
+    #[test_case("a/**", 7, 7 => matches None ; "a followed by double star match")]
+    #[test_case("**/c", 4, 4 => matches None ; "double star and single subdirectory match")]
+    #[test_case("a/**/b", 2, 2 => matches None ; "a followed by double star and single subdirectory match")]
+    #[test_case("a/**/c", 2, 2 => matches None ; "a followed by double star and multiple subdirectories match 2")]
+    #[test_case("a/**/d", 1, 1 => matches None ; "a followed by double star and multiple subdirectories with target match")]
+    #[test_case("a/b/c", 1, 1 => matches None ; "a followed by subdirectories and double slash mismatch")]
+    #[test_case("ab{c,d}", 1, 1 => matches None ; "pattern with curly braces match")]
+    #[test_case("ab{c,d,*}", 5, 5 => matches None ; "pattern with curly braces and wildcard match")]
+    #[test_case("ab{c,d}[", 0, 0 => matches Some(WalkError::BadPattern(_)))]
+    #[test_case("a{,bc}", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "a followed by comma or b or c")]
+    #[test_case("a/{b/c,c/b}", 2, 2 => matches None)]
+    #[test_case("{a/{b,c},abc}", 3, 3 => matches None)]
+    #[test_case("{a/ab*}", 1, 1 => matches None)]
+    #[test_case("a/*", 3, 3 => matches None)]
+    #[test_case("{a/*}", 3, 3 => matches None ; "curly braces with single star match")]
+    #[test_case("{a/abc}", 1, 1 => matches None)]
+    #[test_case("{a/b,a/c}", 2, 2 => matches None)]
+    #[test_case("abc/**", 3, 3 => matches None ; "abc then doublestar")]
+    #[test_case("**/abc", 2, 2 => matches None)]
+    #[test_case("**/*.txt", 1, 1 => matches None)]
+    #[test_case("**/【*", 1, 1 => matches None)]
     // in the go implementation, broken-symlink is yielded,
     // however in symlink mode, walkdir yields broken symlinks as errors
-    #[test_case("broken-symlink", false, 1, 1 ; "broken symlinks should be yielded")]
+    #[test_case("broken-symlink", 1, 1 => matches None ; "broken symlinks should be yielded")]
     // globs that match across a symlink should not follow the symlink
-    #[test_case("working-symlink/c/*", false, 0, 0 ; "working symlink should not be followed")]
-    #[test_case("working-sym*/*", false, 0, 0 ; "working symlink should not be followed 2")]
-    #[test_case("b/**/f", false, 0, 0)]
+    #[test_case("working-symlink/c/*", 0, 0 => matches None ; "working symlink should not be followed")]
+    #[test_case("working-sym*/*", 0, 0 => matches None ; "working symlink should not be followed 2")]
+    #[test_case("b/**/f", 0, 0 => matches None)]
     fn glob_walk(
         pattern: &str,
-        expect_bad_pattern: bool,
         result_count: usize,
         result_count_windows: usize,
-    ) {
+    ) -> Option<WalkError> {
         glob_walk_inner(
             pattern,
-            expect_bad_pattern,
             if cfg!(windows) {
                 result_count_windows
             } else {
@@ -526,10 +512,10 @@ mod test {
 
     // these tests were configured to only run on unix, and not on windows
     #[cfg(unix)]
-    #[test_case("[\\]a]", false, 2 ; "escaped bracket match")]
-    #[test_case("[\\-]", false, 1 ; "escaped dash match")]
-    #[test_case("[x\\-]", false, 2 ; "escaped dash in character class match")]
-    #[test_case("[\\-x]", false, 2 ; "escaped dash and character match")]
+    #[test_case("[\\]a]", 2 => matches None ; "escaped bracket match")]
+    #[test_case("[\\-]", 1  => matches None; "escaped dash match")]
+    #[test_case("[x\\-]", 2  => matches None; "escaped dash in character class match")]
+    #[test_case("[\\-x]", 2  => matches None; "escaped dash and character match")]
     // #[test_case("[-]", Some(WalkError::BadPattern("[-]".into())), 0 ; "bare dash in character
     // class match")] #[test_case("[x-]", Some(WalkError::BadPattern("[x-]".into())), 0 ;
     // "trailing dash in character class match 2")] #[test_case("[-x]",
@@ -537,24 +523,20 @@ mod test {
     // #[test_case("[a-b-d]", Some(WalkError::BadPattern("[a-b-d]".into())), 0 ; "dash within
     // character class range match 3")] #[test_case("\\",
     // Some(WalkError::BadPattern("\\".into())), 0 ; "single backslash error")]
-    #[test_case("a/\\**", false, 0 ; "a followed by escaped double star and subdirectories mismatch")]
-    #[test_case("a/\\[*\\]", false, 0 ; "a followed by escaped character class and pattern mismatch")]
-    fn glob_walk_unix(pattern: &str, expect_bad_pattern: bool, result_count: usize) {
-        glob_walk_inner(pattern, expect_bad_pattern, result_count)
+    #[test_case("a/\\**", 0  => matches None; "a followed by escaped double star and subdirectories mismatch")]
+    #[test_case("a/\\[*\\]", 0  => matches None; "a followed by escaped character class and pattern mismatch")]
+    fn glob_walk_unix(pattern: &str, result_count: usize) -> Option<WalkError> {
+        glob_walk_inner(pattern, result_count)
     }
 
-    fn glob_walk_inner(pattern: &str, expected_bad_pattern: bool, result_count: usize) {
+    fn glob_walk_inner(pattern: &str, result_count: usize) -> Option<WalkError> {
         let dir = setup();
 
         let path = AbsoluteSystemPathBuf::new(dir.path()).unwrap();
         let (success, error): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
             match super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All) {
                 Ok(e) => e.into_iter().partition_result(),
-                Err(e) => {
-                    assert!(expected_bad_pattern, "unexpected error {}", e);
-                    assert_matches!(e, WalkError::BadPattern(_));
-                    return;
-                }
+                Err(e) => return Some(e),
             };
 
         assert_eq!(
@@ -566,7 +548,7 @@ mod test {
             success
         );
 
-        assert!(error.is_empty());
+        None
     }
 
     #[test_case(
