@@ -36,6 +36,29 @@ type ItemStatus struct {
 	Remote bool `json:"remote"`
 }
 
+// NewCacheMiss returns an ItemStatus with the fields set to indicate a cache miss
+func NewCacheMiss() ItemStatus {
+	return ItemStatus{
+		Local:  false,
+		Remote: false,
+	}
+}
+
+// newFSTaskCacheStatus returns an ItemStatus with the fields set to indicate a local cache hit
+func newFSTaskCacheStatus(hit bool, _ int) ItemStatus {
+	return ItemStatus{
+		Local:  hit,
+		Remote: false,
+	}
+}
+
+func newRemoteTaskCacheStatus(hit bool, _ int) ItemStatus {
+	return ItemStatus{
+		Local:  false,
+		Remote: hit,
+	}
+}
+
 const (
 	// CacheSourceFS is a constant to indicate local cache hit
 	CacheSourceFS = "LOCAL"
@@ -284,7 +307,7 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 		}
 	}
 
-	return ItemStatus{Local: false, Remote: false}, nil, 0, nil
+	return NewCacheMiss(), nil, 0, nil
 }
 
 func (mplex *cacheMultiplexer) Exists(target string) ItemStatus {

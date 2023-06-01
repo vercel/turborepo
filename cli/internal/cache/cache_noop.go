@@ -12,10 +12,11 @@ func (c *noopCache) Put(_ turbopath.AbsoluteSystemPath, _ string, _ int, _ []tur
 	return nil
 }
 func (c *noopCache) Fetch(_ turbopath.AbsoluteSystemPath, _ string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
-	return ItemStatus{Local: false, Remote: false}, nil, 0, nil
+	return NewCacheMiss(), nil, 0, nil
 }
+
 func (c *noopCache) Exists(_ string) ItemStatus {
-	return ItemStatus{}
+	return NewCacheMiss()
 }
 
 func (c *noopCache) Clean(_ turbopath.AbsoluteSystemPath) {}

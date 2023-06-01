@@ -115,7 +115,7 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
-		return cache.ItemStatus{Local: false, Remote: false}, 0, nil
+		return cache.NewCacheMiss(), 0, nil
 	}
 
 	changedOutputGlobs, timeSavedFromDaemon, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
@@ -141,13 +141,13 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		cacheStatus = itemStatus
 		if err != nil {
 			// If there was an error fetching from cache, we'll say there was no cache hit
-			return cache.ItemStatus{Local: false, Remote: false}, 0, err
+			return cache.NewCacheMiss(), 0, err
 		} else if !hit {
 			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			// If there was no hit, we can also say there was no hit
-			return cache.ItemStatus{Local: false, Remote: false}, 0, nil
+			return cache.NewCacheMiss(), 0, nil
 		}
 
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs, timeSavedFromDaemon); err != nil {
