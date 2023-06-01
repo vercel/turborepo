@@ -365,9 +365,17 @@ func (c *Connector) waitForSocket() error {
 	// Note that we don't care if this is our daemon
 	// or not. We started a process, but someone else could beat
 	// use to listening. That's fine, we'll check the version
-	// later.
+	// later. However, we need to ensure that _some_ pid file
+	// exists to protect against stale .sock files
+	if err := waitForFile(c.PidPath); err != nil {
+		return err
+	}
+	return waitForFile(c.SockPath)
+}
+
+func waitForFile(file turbopath.AbsoluteSystemPath) error {
 	err := backoff.Retry(func() error {
-		if !c.SockPath.FileExists() {
+		if !file.FileExists() {
 			return errNeedsRetry
 		}
 		return nil
