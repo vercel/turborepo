@@ -671,6 +671,10 @@ mod test {
             .map(TurbodClient::new)
             .unwrap();
 
+        // spawn the future for the server so that it responds to
+        // the hello request
+        let server_fut = tokio::spawn(server_fut);
+
         let hello_resp: DaemonError = client
             .hello(proto::HelloRequest {
                 version: "version-mismatch".to_string(),
