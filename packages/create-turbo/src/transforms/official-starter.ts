@@ -12,7 +12,7 @@ const meta = {
 
 // applied to "official starter" examples (those hosted within vercel/turbo/examples)
 export async function transform(args: TransformInput): TransformResult {
-  const { prompts, example } = args;
+  const { prompts, example, opts } = args;
 
   const defaultExample = isDefaultExample(example.name);
   const isOfficialStarter =
@@ -50,10 +50,19 @@ export async function transform(args: TransformInput): TransformResult {
         packageJsonContent.name = prompts.projectName;
       }
 
-      // if we're using a pre-release version of create-turbo, install turbo canary instead of latest
-      const shouldUsePreRelease = semverPrerelease(cliPkgJson.version) !== null;
-      if (shouldUsePreRelease && packageJsonContent?.devDependencies?.turbo) {
-        packageJsonContent.devDependencies.turbo = "canary";
+      if (packageJsonContent?.devDependencies?.turbo) {
+        const shouldUsePreRelease =
+          semverPrerelease(cliPkgJson.version) !== null;
+        // if the user specified a turbo version, use that
+        if (opts.turboVersion) {
+          packageJsonContent.devDependencies.turbo = opts.turboVersion;
+          // if we're using a pre-release version of create-turbo, use turbo canary
+        } else if (shouldUsePreRelease) {
+          packageJsonContent.devDependencies.turbo = "canary";
+          // otherwise, use the latest stable version
+        } else {
+          packageJsonContent.devDependencies.turbo = "latest";
+        }
       }
 
       try {

@@ -157,12 +157,15 @@ pub enum DaemonError {
 
     #[error("unable to construct log file name: {0}")]
     InvalidLogFile(#[from] time::Error),
+
+    #[error("unable to complete daemon clean")]
+    CleanFailed,
 }
 
 impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
-            Code::FailedPrecondition => DaemonError::VersionMismatch,
+            Code::FailedPrecondition | Code::Unimplemented => DaemonError::VersionMismatch,
             Code::Unavailable => DaemonError::Unavailable,
             c => DaemonError::GrpcFailure(c),
         }

@@ -32,7 +32,7 @@ use tokio::{
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
-use tracing::error;
+use tracing::{error, trace};
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::{
@@ -177,6 +177,8 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 Err(e) => return CloseReason::SocketOpenError(e),
             };
 
+            trace!("acquired connection stream for socket");
+
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(self.timeout.clone()))
                 .service(crate::daemon::proto::turbod_server::TurbodServer::new(self));
@@ -221,8 +223,13 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         request: tonic::Request<proto::HelloRequest>,
     ) -> Result<tonic::Response<proto::HelloResponse>, tonic::Status> {
-        if request.into_inner().version != get_version() {
-            return Err(tonic::Status::unimplemented("version mismatch"));
+        let client_version = request.into_inner().version;
+        let server_version = get_version();
+        if client_version != server_version {
+            return Err(tonic::Status::failed_precondition(format!(
+                "version mismatch. Client {} Server {}",
+                client_version, server_version
+            )));
         } else {
             Ok(tonic::Response::new(proto::HelloResponse {}))
         }

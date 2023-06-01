@@ -178,6 +178,9 @@ pub enum DaemonCommand {
     },
     /// Stops the turbo daemon
     Stop,
+    /// Stops the turbo daemon if it is already running, and removes any stale
+    /// daemon state
+    Clean,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]

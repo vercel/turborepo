@@ -65,6 +65,7 @@ pub struct DaemonConnector {
 
 impl DaemonConnector {
     const CONNECT_RETRY_MAX: usize = 3;
+    const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
     const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
     const SOCKET_TIMEOUT: Duration = Duration::from_secs(1);
     const SOCKET_ERROR_WAIT: Duration = Duration::from_millis(50);
@@ -193,18 +194,20 @@ impl DaemonConnector {
             async move { win(path) }
         };
 
-        // note, this endpoint is just a dummy. the actual path is passed in
+        // note, this endpoint is just a placeholder. the actual path is passed in via
+        // make_service
         Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
-            .timeout(Duration::from_secs(1))
+            .timeout(Self::CONNECT_TIMEOUT)
             .connect_with_connector(tower::service_fn(make_service))
             .await
             .map(TurbodClient::new)
             .map_err(DaemonConnectorError::Socket)
     }
 
-    /// Kills a currently active server but shutting it down and waiting for it
+    /// Kills a currently active server by shutting it down and waiting for it
     /// to exit.
+    #[tracing::instrument(skip(self, client))]
     async fn kill_live_server(
         &self,
         client: DaemonClient<()>,
@@ -226,6 +229,7 @@ impl DaemonConnector {
     }
 
     /// Kills a server that is not responding.
+    #[tracing::instrument(skip(self))]
     async fn kill_dead_server(&self, pid: sysinfo::Pid) -> Result<(), DaemonConnectorError> {
         let lock = self.pid_lock();
 
@@ -254,7 +258,18 @@ impl DaemonConnector {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn wait_for_socket(&self) -> Result<(), DaemonConnectorError> {
+        // Note that we don't care if this is our daemon
+        // or not. We started a process, but someone else could beat
+        // use to listening. That's fine, we'll check the version
+        // later. However, we need to ensure that _some_ pid file
+        // exists to protect against stale .sock files
+        timeout(
+            Self::SOCKET_TIMEOUT,
+            wait_for_file(&self.pid_file, WaitAction::Exists),
+        )
+        .await??;
         timeout(
             Self::SOCKET_TIMEOUT,
             wait_for_file(&self.sock_file, WaitAction::Exists),
@@ -292,6 +307,7 @@ pub enum FileWaitError {
 ///
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
+#[tracing::instrument(skip(path))]
 async fn wait_for_file(
     path: &turbopath::AbsoluteSystemPathBuf,
     action: WaitAction,
@@ -584,9 +600,13 @@ mod test {
 
         async fn hello(
             &self,
-            _req: tonic::Request<proto::HelloRequest>,
+            request: tonic::Request<proto::HelloRequest>,
         ) -> tonic::Result<tonic::Response<proto::HelloResponse>> {
-            unimplemented!()
+            let client_version = request.into_inner().version;
+            Err(tonic::Status::failed_precondition(format!(
+                "version mismatch. Client {} Server test-version",
+                client_version
+            )))
         }
 
         async fn status(
@@ -650,7 +670,7 @@ mod test {
             can_start_server: false,
         };
 
-        let client = Endpoint::try_from("http://[::]:50051")
+        let mut client = Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
             .connect_with_connector(tower::service_fn(move |_| {
                 // when a connection is made, create a duplex stream and send it to the server
@@ -667,6 +687,19 @@ mod test {
             .map(TurbodClient::new)
             .unwrap();
 
+        // spawn the future for the server so that it responds to
+        // the hello request
+        let server_fut = tokio::spawn(server_fut);
+
+        let hello_resp: DaemonError = client
+            .hello(proto::HelloRequest {
+                version: "version-mismatch".to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap_err()
+            .into();
+        assert_matches!(hello_resp, DaemonError::VersionMismatch);
         let client = DaemonClient::new(client);
 
         let shutdown_fut = conn.kill_live_server(client, Pid::from(1000));
