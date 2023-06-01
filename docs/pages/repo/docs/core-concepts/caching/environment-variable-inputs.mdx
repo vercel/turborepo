@@ -56,7 +56,7 @@ Every place in `turbo.json` that accepts environment variables accepts wildcards
 Exclusion patterns apply only to the set of variables matched via inclusions.
 
 <Callout>
-  Be careful about the combination of wildcards and CI environments. Some CI environments set additional environment variables such as `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` which will prevent ever getting a cache hit. After configuring wildcards be sure to carefully review a [run summary](/repo/docs/reference/command-line-reference#--summarize) from all of your environments in order to make sure that it is only including variables you care about.
+  Be careful about the combination of wildcards and CI environments. Some CI environments set additional environment variables such as `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` which will prevent ever getting a cache hit. After configuring wildcards be sure to carefully review a [run summary](/repo/docs/reference/command-line-reference/run#--summarize) from all of your environments in order to make sure that it is only including variables you care about.
 </Callout>
 
 ### Syntax
@@ -165,7 +165,7 @@ These fields are _ordered_ lists of Unix-formatted (`/`-separated) paths, relati
 ## Framework Inference
 
 <Callout type="info">
-  This feature can be disabled by passing [`--framework-inference=false`](../reference/command-line-reference#--framework-inference) to your `turbo` command.
+  This feature can be disabled by passing [`--framework-inference=false`](../reference/command-line-reference/run#--framework-inference) to your `turbo` command.
 </Callout>
 
 By default, Turborepo attempts to detect the framework for workspaces inside of your turborepo and uses this to help ensure that all of the default environment variables are properly considered for task hashes.
@@ -189,8 +189,8 @@ If Turborepo successfully detects your framework you do not need to manually spe
 
 You can determine if Turborepo has successfully detected your framework for a workspace by:
 
-- Inspecting a run summary (via [`--summarize`](/repo/docs/reference/command-line-reference#--summarize)).
-- Inspecting the output from a dry run (via [`--dry`](/repo/docs/reference/command-line-reference#--dry----dry-run)).
+- Inspecting a run summary (via [`--summarize`](/repo/docs/reference/command-line-reference/run#--summarize)).
+- Inspecting the output from a dry run (via [`--dry`](/repo/docs/reference/command-line-reference/run#--dry----dry-run)).
 
 ### Framework Inference Exclusions
 
