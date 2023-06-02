@@ -4,8 +4,6 @@ import { TurboIgnoreArgs } from "./types";
 export interface GetComparisonArgs extends TurboIgnoreArgs {
   // the workspace to check for changes
   workspace: string;
-  // A ref/head to compare against if no previously deployed SHA is available
-  fallback?: string;
 }
 
 export function getComparison(args: GetComparisonArgs): {
