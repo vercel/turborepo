@@ -1221,9 +1221,11 @@ jobs:
 
       - name: Format check
         # This is the syntax for running the `//#lint` task specifically in turbo.json
-        # It runs the taplo check on taplo.toml, and prettier check across the whole repo.
-        # TODO: run prettier in individual workspaces instead of globally.
-        run: turbo run lint --filter=//
+        # It runs the taplo check on taplo.toml, and lint:prettier per workspace.
+        # Skip `cli` workspace for now. It has the lint task, but in Github CI
+        # we need to setup golangci-lint to make it work. Go linting is run in the "Go linting"
+        # job in this workflow. We can move that in here in the next step.
+        run: turbo run lint --filter=!cli
 
   final:
     name: Ok
