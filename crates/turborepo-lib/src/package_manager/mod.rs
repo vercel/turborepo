@@ -502,9 +502,7 @@ mod tests {
             .unwrap();
         let with_yarn = repo_root.join_components(&["examples", "with-yarn"]);
         let package_manager = PackageManager::Npm;
-        let globs = package_manager
-            .get_workspace_globs(&with_yarn)
-            .unwrap();
+        let globs = package_manager.get_workspace_globs(&with_yarn).unwrap();
 
         let expected = Globs::new(vec!["apps/*", "packages/*"], vec![]).unwrap();
         assert_eq!(globs, expected);
