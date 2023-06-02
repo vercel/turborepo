@@ -753,12 +753,12 @@ pub fn run() -> Result<Payload> {
     // it to execute local turbo. We simply use it to set the `--single-package`
     // and `--cwd` flags.
     if is_turbo_binary_path_set() {
-        let repo_state = RepoState::infer(args.cwd.as_absolute_path())?;
+        let repo_state = RepoState::infer(&args.cwd)?;
         debug!("Repository Root: {}", repo_state.root.to_string_lossy());
         return cli::run(Some(repo_state), &subscriber, ui);
     }
 
-    match RepoState::infer(args.cwd.as_absolute_path()) {
+    match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root.to_string_lossy());
             repo_state.run_correct_turbo(args, &subscriber, ui)
