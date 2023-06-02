@@ -448,7 +448,7 @@ impl InferInfo {
     pub fn is_workspace_root_of(&self, target_path: &Path) -> bool {
         match &self.workspace_globs {
             Some(globs) => globs
-                .test(self.path.as_path(), target_path.to_path_buf())
+                .test(&self.path, target_path.to_path_buf())
                 .unwrap_or(false),
             None => false,
         }
@@ -472,13 +472,16 @@ impl RepoState {
                 // FIXME: This should be based upon detecting the pacakage manager.
                 // However, we don't have that functionality implemented in Rust yet.
                 // PackageManager::detect(path).get_workspace_globs().unwrap_or(None)
-                let workspace_globs = PackageManager::Pnpm
-                    .get_workspace_globs(path)
-                    .unwrap_or_else(|_| {
-                        PackageManager::Npm
-                            .get_workspace_globs(path)
-                            .unwrap_or(None)
-                    });
+                let workspace_globs = PackageManager::get_package_manager(reference_dir, None)
+                    .and_then(|mgr| mgr.get_workspace_globs(reference_dir))
+                    .ok();
+                // let workspace_globs = PackageManager::Pnpm
+                //     .get_workspace_globs(path)
+                //     .unwrap_or_else(|_| {
+                //         PackageManager::Npm
+                //             .get_workspace_globs(path)
+                //             .unwrap_or(None)
+                //     });
 
                 Some(InferInfo {
                     path: path.to_owned(),

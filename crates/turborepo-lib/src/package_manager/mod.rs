@@ -6,7 +6,7 @@ use std::{
     backtrace,
     fmt::{self, Display},
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use anyhow::{anyhow, Result as AnyhowResult};
@@ -18,10 +18,9 @@ use turbopath::AbsoluteSystemPath;
 use wax::{Any, Glob, Pattern};
 
 use crate::{
-    commands::CommandBase,
     package_json::PackageJson,
     package_manager::{npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
-    ui::UNDERLINE,
+    ui::{UI, UNDERLINE},
 };
 
 #[derive(Debug, Deserialize)]
@@ -130,7 +129,7 @@ impl Globs {
         })
     }
 
-    pub fn test(&self, root: &Path, target: PathBuf) -> anyhow::Result<bool> {
+    pub fn test(&self, root: &AbsoluteSystemPath, target: PathBuf) -> AnyhowResult<bool> {
         let search_value = target
             .strip_prefix(root)?
             .to_str()
@@ -144,8 +143,31 @@ impl Globs {
 }
 
 #[derive(Debug, Error)]
-struct MissingWorkspaceError {
+pub struct MissingWorkspaceError {
     package_manager: PackageManager,
+}
+
+#[derive(Debug, Error)]
+pub struct NoPackageManager;
+
+impl NoPackageManager {
+    pub fn ui_display(&self, ui: &UI) -> String {
+        let url =
+            ui.apply(UNDERLINE.apply_to("https://nodejs.org/api/packages.html#packagemanager"));
+        format!(
+            "We did not find a package manager specified in your root package.json. Please set \
+             the \"packageManager\" property in your root package.json ({url}) or run `npx \
+             @turbo/codemod add-package-manager` in the root of your monorepo."
+        )
+    }
+}
+
+impl Display for NoPackageManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "We did not find a package manager specified in your root package.json. \
+        Please set the \"packageManager\" property in your root package.json (https://nodejs.org/api/packages.html#packagemanager) \
+        or run `npx @turbo/codemod add-package-manager` in the root of your monorepo.")
+    }
 }
 
 impl Display for MissingWorkspaceError {
@@ -190,6 +212,17 @@ pub enum Error {
     Wax(#[from] wax::BuildError, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+    #[error(transparent)]
+    NoPackageManager(#[from] NoPackageManager),
+    #[error("We detected multiple package managers in your repository: {}. Please remove one \
+    of them.", managers.join(", "))]
+    MultiplePackageManagers { managers: Vec<String> },
+    #[error(transparent)]
+    Semver(#[from] node_semver::SemverError),
+    #[error(transparent)]
+    Which(#[from] which::Error),
+    #[error("invalid utf8: {0}")]
+    Utf8Error(#[from] std::string::FromUtf8Error),
 }
 
 impl PackageManager {
@@ -235,9 +268,9 @@ impl PackageManager {
     }
 
     pub fn get_package_manager(
-        base: &CommandBase,
+        repo_root: &AbsoluteSystemPath,
         pkg: Option<&PackageJson>,
-    ) -> AnyhowResult<Self> {
+    ) -> Result<Self, Error> {
         // We don't surface errors for `read_package_manager` as we can fall back to
         // `detect_package_manager`
         if let Some(package_json) = pkg {
@@ -246,7 +279,7 @@ impl PackageManager {
             }
         }
 
-        Self::detect_package_manager(base)
+        Self::detect_package_manager(repo_root)
     }
 
     // Attempts to read the package manager from the package.json
@@ -267,29 +300,22 @@ impl PackageManager {
         Ok(manager)
     }
 
-    fn detect_package_manager(base: &CommandBase) -> AnyhowResult<PackageManager> {
-        let mut detected_package_managers = PnpmDetector::new(&base.repo_root)
-            .chain(NpmDetector::new(&base.repo_root))
-            .chain(YarnDetector::new(&base.repo_root))
-            .collect::<AnyhowResult<Vec<_>>>()?;
+    fn detect_package_manager(repo_root: &AbsoluteSystemPath) -> Result<PackageManager, Error> {
+        let mut detected_package_managers = PnpmDetector::new(repo_root)
+            .chain(NpmDetector::new(repo_root))
+            .chain(YarnDetector::new(repo_root))
+            .collect::<Result<Vec<_>, Error>>()?;
 
         match detected_package_managers.len() {
-            0 => {
-                let url = base.ui.apply(
-                    UNDERLINE.apply_to("https://nodejs.org/api/packages.html#packagemanager"),
-                );
-                Err(anyhow!(
-                    "We did not find a package manager specified in your root package.json. \
-                     Please set the \"packageManager\" property in your root package.json ({url}) \
-                     or run `npx @turbo/codemod add-package-manager` in the root of your monorepo."
-                ))
-            }
+            0 => Err(NoPackageManager.into()),
             1 => Ok(detected_package_managers.pop().unwrap()),
-            _ => Err(anyhow!(
-                "We detected multiple package managers in your repository: {}. Please remove one \
-                 of them.",
-                detected_package_managers.into_iter().join(", ")
-            )),
+            _ => {
+                let managers = detected_package_managers
+                    .iter()
+                    .map(|mgr| mgr.to_string())
+                    .collect();
+                Err(Error::MultiplePackageManagers { managers })
+            }
         }
     }
 
@@ -319,7 +345,6 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::{get_version, ui::UI, Args};
 
     struct TestCase {
         name: String,
@@ -440,19 +465,14 @@ mod tests {
     fn test_detect_multiple_package_managers() -> AnyhowResult<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
-        let base = CommandBase::new(
-            Args::default(),
-            repo_root_path,
-            get_version(),
-            UI::new(true),
-        )?;
 
         let package_lock_json_path = repo_root.path().join(npm::LOCKFILE);
         File::create(&package_lock_json_path)?;
         let pnpm_lock_path = repo_root.path().join(pnpm::LOCKFILE);
         File::create(pnpm_lock_path)?;
 
-        let error = PackageManager::detect_package_manager(&base).unwrap_err();
+        let error =
+            PackageManager::detect_package_manager(repo_root_path.as_absolute_path()).unwrap_err();
         assert_eq!(
             error.to_string(),
             "We detected multiple package managers in your repository: pnpm, npm. Please remove \
@@ -461,7 +481,8 @@ mod tests {
 
         fs::remove_file(&package_lock_json_path)?;
 
-        let package_manager = PackageManager::detect_package_manager(&base)?;
+        let package_manager =
+            PackageManager::detect_package_manager(repo_root_path.as_absolute_path())?;
         assert_eq!(package_manager, PackageManager::Pnpm);
 
         Ok(())
@@ -488,15 +509,25 @@ mod tests {
     fn test_globs_test() {
         struct TestCase {
             globs: Globs,
-            root: PathBuf,
+            root: AbsoluteSystemPathBuf,
             target: PathBuf,
             output: AnyhowResult<bool>,
         }
 
+        #[cfg(unix)]
+        let root = AbsoluteSystemPathBuf::new("/a/b/c").unwrap();
+        #[cfg(windows)]
+        let root = AbsoluteSystemPathBuf::new("C:\\a\\b\\c").unwrap();
+
+        #[cfg(unix)]
+        let target = PathBuf::from("/a/b/c/d/e/f");
+        #[cfg(windows)]
+        let target = PathBuf::from("C:\\a\\b\\c\\d\\e\\f");
+
         let tests = [TestCase {
             globs: Globs::new(vec!["d/**".to_string()], vec![]).unwrap(),
-            root: PathBuf::from("/a/b/c"),
-            target: PathBuf::from("/a/b/c/d/e/f"),
+            root,
+            target,
             output: Ok(true),
         }];
 
