@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/logged_in.sh
+  $ . ${TESTDIR}/_helpers/logged_in.sh
 
 Logout while logged in
   $ ${TURBO} logout
