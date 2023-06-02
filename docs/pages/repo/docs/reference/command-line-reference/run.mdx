@@ -410,13 +410,13 @@ turbo run build -vvv
 
 ## Deprecated
 
-<Callout type="error">
-  The options below are deprecated. Please use their noted alternatives instead.
-</Callout>
-
 ### `--include-dependencies`
 
-**deprecated in: 1.2.x**, use [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependencies-of-matched-workspaces) instead.
+<Callout type="error">
+  `--include-dependencies` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependencies-of-matched-workspaces)
+  instead.
+</Callout>
 
 Default `false`. When `true`, `turbo` will add any workspaces that the
 workspaces in the current execution _depend_ on (i.e. those declared in
@@ -427,7 +427,11 @@ dependency needed for the execution is actually executed.
 
 ### `--deps`
 
-\*\*deprecated in `1.2.x`, use [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependents-of-matched-workspaces) instead.
+<Callout type="error">
+  `--deps` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependents-of-matched-workspaces)
+  instead.
+</Callout>
 
 Defaults to `true`. Include dependent workspace consumers in the execution.
 
@@ -447,7 +451,10 @@ because they are not impacted by the change. If you were to run
 
 ### `--scope`
 
-**deprecated in 1.2.x**, use [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-package) instead.
+<Callout type="error">
+  `--scope` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-package) instead.
+</Callout>
 
 `type: string[]`
 
@@ -461,7 +468,11 @@ turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
 
 ### `--since`
 
-**deprecated in 1.2.x**, use [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-changed-workspaces) instead.
+<Callout type="error">
+  `--since` is deprecated in `1.2.x`, use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-changed-workspaces)
+  instead.
+</Callout>
 
 Filter execution based on which workspaces have changed since a merge-base.
 
