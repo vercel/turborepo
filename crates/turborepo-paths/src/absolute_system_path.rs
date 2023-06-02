@@ -114,7 +114,7 @@ impl AbsoluteSystemPath {
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
         self.0
             .ancestors()
-            .map(|a| unsafe { Self::new_unchecked(a) })
+            .map(|ancestor| unsafe { Self::new_unchecked(ancestor) })
     }
 
     // intended for joining literals or obviously single-token strings

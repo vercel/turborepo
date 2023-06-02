@@ -14,7 +14,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 
 use crate::{
     cache_archive::{
-        restore_directory::restore_directory,
+        restore_directory::{restore_directory, CachedDirTree},
         restore_regular::restore_regular,
         restore_symlink::{
             canonicalize_linkname, restore_symlink, restore_symlink_allow_missing_target,
@@ -80,15 +80,17 @@ impl CacheReader {
         // If you violate these assumptions and the current cache does
         // not apply for your path, it will clobber and re-start from the common
         // shared prefix.
+        let dir_cache = CachedDirTree::new(anchor.to_owned());
         let mut tr = tar::Archive::new(&mut self.reader);
 
-        Self::restore_entries(&mut tr, &mut restored, anchor)?;
+        Self::restore_entries(&mut tr, &mut restored, dir_cache, anchor)?;
         Ok(restored)
     }
 
     fn restore_entries<'a, T: Read>(
         tr: &'a mut tar::Archive<T>,
         restored: &mut Vec<AnchoredSystemPathBuf>,
+        mut dir_cache: CachedDirTree,
         anchor: &AbsoluteSystemPath,
     ) -> Result<(), CacheError> {
         // On first attempt to restore it's possible that a link target doesn't exist.
@@ -97,7 +99,7 @@ impl CacheReader {
 
         for entry in tr.entries()? {
             let mut entry = entry?;
-            match restore_entry(anchor, &mut entry) {
+            match restore_entry(&mut dir_cache, anchor, &mut entry) {
                 Err(CacheError::LinkTargetDoesNotExist(_, _)) => {
                     symlinks.push(entry);
                 }
@@ -106,12 +108,14 @@ impl CacheReader {
             }
         }
 
-        let mut restored_symlinks = Self::topologically_restore_symlinks(anchor, &symlinks)?;
+        let mut restored_symlinks =
+            Self::topologically_restore_symlinks(&mut dir_cache, anchor, &symlinks)?;
         restored.append(&mut restored_symlinks);
         Ok(())
     }
 
     fn topologically_restore_symlinks<'a, T: Read>(
+        dir_cache: &mut CachedDirTree,
         anchor: &AbsoluteSystemPath,
         symlinks: &[Entry<'a, T>],
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
@@ -153,7 +157,7 @@ impl CacheReader {
             let Some(header) = header_lookup.get(key) else {
                 continue
             };
-            let file = restore_symlink_allow_missing_target(anchor, header)?;
+            let file = restore_symlink_allow_missing_target(dir_cache, anchor, header)?;
             restored.push(file);
         }
 
@@ -162,15 +166,16 @@ impl CacheReader {
 }
 
 fn restore_entry<T: Read>(
+    dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<T>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let header = entry.header();
 
     match header.entry_type() {
-        tar::EntryType::Directory => restore_directory(anchor, entry.header()),
-        tar::EntryType::Regular => restore_regular(anchor, entry),
-        tar::EntryType::Symlink => restore_symlink(anchor, entry.header()),
+        tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry.header()),
+        tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry),
+        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry.header()),
         ty => Err(CacheError::UnsupportedFileType(ty, Backtrace::capture())),
     }
 }
