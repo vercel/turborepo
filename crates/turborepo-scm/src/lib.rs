@@ -61,10 +61,8 @@ pub(crate) fn wait_for_success<R: Read, T>(
     parse_result: Result<T, Error>,
 ) -> Result<T, Error> {
     let exit_status = child.wait()?;
-    if exit_status.success() {
-        if let Ok(result) = parse_result {
-            return Ok(result);
-        }
+    if exit_status.success() && parse_result.is_ok() {
+        return parse_result;
     }
     let stderr_output = read_git_error_to_string(stderr);
     let stderr_text = stderr_output
