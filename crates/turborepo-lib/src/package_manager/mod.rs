@@ -180,7 +180,7 @@ impl Display for MissingWorkspaceError {
                  thus packages to be defined in the root pnpm-workspace.yaml"
             }
             PackageManager::Yarn | PackageManager::Berry => {
-                "package.json: no workspaces found. Turborepo requires yarn workspaces to be \
+                "package.json: no workspaces found. Turborepo requires Yarn workspaces to be \
                  defined in the root package.json"
             }
             PackageManager::Npm => {
@@ -502,7 +502,9 @@ mod tests {
             .unwrap();
         let with_yarn = repo_root.join_components(&["examples", "with-yarn"]);
         let package_manager = PackageManager::Npm;
-        let globs = package_manager.get_workspace_globs(&with_yarn).unwrap();
+        let globs = package_manager
+            .get_workspace_globs(&with_yarn)
+            .unwrap();
 
         let expected = Globs::new(vec!["apps/*", "packages/*"], vec![]).unwrap();
         assert_eq!(globs, expected);
