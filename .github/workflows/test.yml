@@ -1347,9 +1347,9 @@ jobs:
   upload_test_results:
     name: Upload Test results
     needs:
-      - turbopack_rust_test1
-      - turbopack_rust_test2
-    if: always()
+      [determine_jobs, turbopack_rust_test1, turbopack_rust_test2]
+    # We have to set condition to always, since we want to upload test results for the failed tests as well.
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     # Do not block CI if upload fails for some reason
     continue-on-error: true
@@ -1371,9 +1371,6 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           path: artifacts
-
-      - name: List test files
-        run: find ./artifacts/test_reports
 
       - name: Upload
         continue-on-error: true
