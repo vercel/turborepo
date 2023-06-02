@@ -24,6 +24,7 @@ If <workspace> is not provided, it will be inferred from the "name"
 field of the "package.json" located at the current working directory.
 
 Flags:
+  --since=<ref>       A ref/head to compare against
   --fallback=<ref>    On Vercel, if no previously deployed SHA is available to compare against,
                       fallback to comparing against the provided ref [default: None]
   --help, -h          Show this help message
