@@ -6,7 +6,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, read_git_error, wait_for_success, Error};
+use crate::{package_deps::GitHashes, wait_for_success, Error};
 
 pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
     let mut hashes = GitHashes::new();
@@ -25,8 +25,8 @@ pub fn git_ls_tree(root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error
         .stderr
         .take()
         .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
-    read_ls_tree(stdout, &mut hashes).map_err(|err| read_git_error(&mut stderr).unwrap_or(err))?;
-    wait_for_success(git, &mut stderr, "git ls-tree", root_path)?;
+    let parse_result = read_ls_tree(stdout, &mut hashes);
+    wait_for_success(git, &mut stderr, "git ls-tree", root_path, parse_result)?;
     Ok(hashes)
 }
 
@@ -66,7 +66,7 @@ fn nom_parse_ls_tree(i: &[u8]) -> nom::IResult<&[u8], LsTreeEntry<'_>> {
     let (i, _) = nom::character::complete::space1(i)?;
     let (i, hash) = nom::bytes::complete::take(40usize)(i)?;
     let (i, _) = nom::bytes::complete::take(1usize)(i)?;
-    let (i, filename) = nom::bytes::complete::is_not(" \0")(i)?;
+    let (i, filename) = nom::bytes::complete::is_not("\0")(i)?;
     // We explicitly support a missing terminator
     let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
     Ok((i, LsTreeEntry { filename, hash }))
@@ -110,7 +110,8 @@ mod tests {
                  7360f2d292aec95907cebdcbb412a6bf2bd10f8a\tapps\000100644 blob \
                  9ec2879b24ce2c817296eebe2cb3846f8e4751ea\tpackage.json\000040000 tree \
                  5759aadaea2cde55468a61e7104eb0a9d86c1d30\tpackages\000100644 blob \
-                 33d0621ee2f4da4a2f6f6bdd51a42618d181e337\tturbo.json\0",
+                 33d0621ee2f4da4a2f6f6bdd51a42618d181e337\tturbo.json\000100644 blob \
+                 579f273c9536d324c20b2e8f0d7fe4784ed0d9df\tfile with spaces\0",
                 &[
                     ("\t", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"),
                     ("\"", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"),
@@ -121,6 +122,10 @@ mod tests {
                     ("package.json", "9ec2879b24ce2c817296eebe2cb3846f8e4751ea"),
                     ("packages", "5759aadaea2cde55468a61e7104eb0a9d86c1d30"),
                     ("turbo.json", "33d0621ee2f4da4a2f6f6bdd51a42618d181e337"),
+                    (
+                        "file with spaces",
+                        "579f273c9536d324c20b2e8f0d7fe4784ed0d9df",
+                    ),
                 ],
             ),
         ];
