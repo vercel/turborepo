@@ -172,10 +172,10 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	case util.NewTaskOutput:
 		fallthrough
 	case util.HashTaskOutput:
-		prefixedUI.Info(fmt.Sprintf("cache hit %s, suppressing output %s", moreContext, ui.Dim(tc.hash)))
+		prefixedUI.Info(fmt.Sprintf("cache hit %s, suppressing logs %s", moreContext, ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
-		prefixedUI.Info(fmt.Sprintf("cache hit %s, replaying output %s", moreContext, ui.Dim(tc.hash)))
+		prefixedUI.Info(fmt.Sprintf("cache hit %s, replaying logs %s", moreContext, ui.Dim(tc.hash)))
 		tc.ReplayLogFile(prefixedUI, progressLogger)
 	case util.ErrorTaskOutput:
 		// The task succeeded, so we don't output anything in this case
