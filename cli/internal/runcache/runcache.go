@@ -158,7 +158,7 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 			Source:    cache.CacheSourceFS,
 			TimeSaved: timeSavedFromDaemon,
 		}
-		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
+		prefixedUI.Warn(fmt.Sprintf("Configured outputs are already in place for %s, skipping cache check", tc.pt.TaskID))
 	}
 
 	switch tc.taskOutputMode {
