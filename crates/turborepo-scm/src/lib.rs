@@ -69,7 +69,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
     let stderr_output = read_git_error_to_string(stderr);
     let stderr_text = stderr_output
         .map(|stderr| format!(" stderr: {}", stderr))
-        .unwrap_or("".to_string());
+        .unwrap_or_default();
     let exit_text = if exit_status.success() {
         "".to_string()
     } else {
