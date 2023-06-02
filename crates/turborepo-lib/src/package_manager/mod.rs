@@ -3,14 +3,17 @@ mod pnpm;
 mod yarn;
 
 use std::{
-    fmt, fs,
+    backtrace,
+    fmt::{self, Display},
+    fs,
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result as AnyhowResult};
 use itertools::{Either, Itertools};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use turbopath::AbsoluteSystemPath;
 use wax::{Any, Glob, Pattern};
 
@@ -127,7 +130,7 @@ impl Globs {
         })
     }
 
-    pub fn test(&self, root: &Path, target: PathBuf) -> Result<bool> {
+    pub fn test(&self, root: &Path, target: PathBuf) -> anyhow::Result<bool> {
         let search_value = target
             .strip_prefix(root)?
             .to_str()
@@ -140,30 +143,68 @@ impl Globs {
     }
 }
 
+#[derive(Debug, Error)]
+struct MissingWorkspaceError {
+    package_manager: PackageManager,
+}
+
+impl Display for MissingWorkspaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let err = match self.package_manager {
+            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                "pnpm-workspace.yaml: no packages found. Turborepo requires pnpm workspaces and \
+                 thus packages to be defined in the root pnpm-workspace.yaml"
+            }
+            PackageManager::Yarn | PackageManager::Berry => {
+                "package.json: no workspaces found. Turborepo requires Yarn workspaces to be \
+                 defined in the root package.json"
+            }
+            PackageManager::Npm => {
+                "package.json: no workspaces found. Turborepo requires npm workspaces to be \
+                 defined in the root package.json"
+            }
+        };
+        write!(f, "{}", err)
+    }
+}
+
+impl From<&PackageManager> for MissingWorkspaceError {
+    fn from(value: &PackageManager) -> Self {
+        Self {
+            package_manager: value.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
+    #[error(transparent)]
+    Workspace(#[from] MissingWorkspaceError),
+    #[error("yaml parsing error: {0}")]
+    ParsingYaml(#[from] serde_yaml::Error, #[backtrace] backtrace::Backtrace),
+    #[error("json parsing error: {0}")]
+    ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
+    #[error("globbing error: {0}")]
+    Wax(#[from] wax::BuildError, #[backtrace] backtrace::Backtrace),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
 impl PackageManager {
-    /// Returns a list of globs for the package workspace.
-    /// NOTE: We return a `Vec<PathBuf>` instead of a `GlobSet` because we
-    /// may need to iterate through these globs and a `GlobSet` doesn't allow
-    /// that.
-    ///
-    /// # Arguments
-    ///
-    /// * `root_path`:
-    ///
-    /// returns: Result<Option<Globs>, Error>
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// ```
-    pub fn get_workspace_globs(&self, root_path: &AbsoluteSystemPath) -> Result<Option<Globs>> {
+    /// Returns the set of globs for the workspace.
+    pub fn get_workspace_globs(
+        &self,
+        root_path: &AbsoluteSystemPath,
+    ) -> std::result::Result<Globs, Error> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml =
                     fs::read_to_string(root_path.join_component("pnpm-workspace.yaml"))?;
                 let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
                 if pnpm_workspace.packages.is_empty() {
-                    return Ok(None);
+                    return Err(MissingWorkspaceError::from(self).into());
                 } else {
                     pnpm_workspace.packages
                 }
@@ -174,7 +215,7 @@ impl PackageManager {
                 let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
 
                 if package_json.workspaces.as_ref().is_empty() {
-                    return Ok(None);
+                    return Err(MissingWorkspaceError::from(self).into());
                 } else {
                     package_json.workspaces.into()
                 }
@@ -189,13 +230,14 @@ impl PackageManager {
             }
         });
 
-        match Globs::new(inclusions, exclusions) {
-            Ok(globs) => Ok(Some(globs)),
-            Err(err) => Err(anyhow!("Error building globs: {}", err)),
-        }
+        let globs = Globs::new(inclusions, exclusions)?;
+        Ok(globs)
     }
 
-    pub fn get_package_manager(base: &CommandBase, pkg: Option<&PackageJson>) -> Result<Self> {
+    pub fn get_package_manager(
+        base: &CommandBase,
+        pkg: Option<&PackageJson>,
+    ) -> AnyhowResult<Self> {
         // We don't surface errors for `read_package_manager` as we can fall back to
         // `detect_package_manager`
         if let Some(package_json) = pkg {
@@ -208,7 +250,7 @@ impl PackageManager {
     }
 
     // Attempts to read the package manager from the package.json
-    fn read_package_manager(pkg: &PackageJson) -> Result<Option<Self>> {
+    fn read_package_manager(pkg: &PackageJson) -> AnyhowResult<Option<Self>> {
         let Some(package_manager) = &pkg.package_manager else {
             return Ok(None)
         };
@@ -225,11 +267,11 @@ impl PackageManager {
         Ok(manager)
     }
 
-    fn detect_package_manager(base: &CommandBase) -> Result<PackageManager> {
+    fn detect_package_manager(base: &CommandBase) -> AnyhowResult<PackageManager> {
         let mut detected_package_managers = PnpmDetector::new(&base.repo_root)
             .chain(NpmDetector::new(&base.repo_root))
             .chain(YarnDetector::new(&base.repo_root))
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<AnyhowResult<Vec<_>>>()?;
 
         match detected_package_managers.len() {
             0 => {
@@ -251,7 +293,7 @@ impl PackageManager {
         }
     }
 
-    pub(crate) fn parse_package_manager_string(manager: &str) -> Result<(&str, &str)> {
+    pub(crate) fn parse_package_manager_string(manager: &str) -> AnyhowResult<(&str, &str)> {
         let package_manager_pattern =
             Regex::new(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)")?;
         if let Some(captures) = package_manager_pattern.captures(manager) {
@@ -368,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_package_manager() -> Result<()> {
+    fn test_read_package_manager() -> AnyhowResult<()> {
         let mut package_json = PackageJson {
             package_manager: Some("npm@8.19.4".to_string()),
         };
@@ -395,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_multiple_package_managers() -> Result<()> {
+    fn test_detect_multiple_package_managers() -> AnyhowResult<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
         let base = CommandBase::new(
@@ -436,7 +478,6 @@ mod tests {
         let package_manager = PackageManager::Npm;
         let globs = package_manager
             .get_workspace_globs(&with_yarn)
-            .unwrap()
             .unwrap();
 
         let expected = Globs::new(vec!["apps/*", "packages/*"], vec![]).unwrap();
@@ -449,7 +490,7 @@ mod tests {
             globs: Globs,
             root: PathBuf,
             target: PathBuf,
-            output: Result<bool>,
+            output: AnyhowResult<bool>,
         }
 
         let tests = [TestCase {
@@ -468,7 +509,7 @@ mod tests {
     }
 
     #[test]
-    fn test_nested_workspace_globs() -> Result<()> {
+    fn test_nested_workspace_globs() -> AnyhowResult<()> {
         let top_level: PackageJsonWorkspaces =
             serde_json::from_str("{ \"workspaces\": [\"packages/**\"]}")?;
         assert_eq!(top_level.workspaces.as_ref(), vec!["packages/**"]);
