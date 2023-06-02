@@ -13,7 +13,7 @@ use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use wax::{Any, Glob, Pattern};
 
 use crate::{
@@ -81,24 +81,25 @@ impl fmt::Display for PackageManager {
     }
 }
 
+// WorkspaceGlobs is suitable for finding package.json files via globwalk
 #[derive(Debug)]
-pub struct Globs {
+pub struct WorkspaceGlobs {
     inclusions: Any<'static>,
     exclusions: Any<'static>,
-    pub(crate) raw_inclusions: Vec<String>,
-    pub(crate) raw_exclusions: Vec<String>,
+    raw_inclusions: Vec<String>,
+    raw_exclusions: Vec<String>,
 }
 
-impl PartialEq for Globs {
+impl PartialEq for WorkspaceGlobs {
     fn eq(&self, other: &Self) -> bool {
         // Use the literals for comparison, not the compiled globs
         self.raw_inclusions == other.raw_inclusions && self.raw_exclusions == other.raw_exclusions
     }
 }
 
-impl Eq for Globs {}
+impl Eq for WorkspaceGlobs {}
 
-impl Globs {
+impl WorkspaceGlobs {
     pub fn new<S: Into<String>>(
         inclusions: Vec<S>,
         exclusions: Vec<S>,
@@ -180,7 +181,7 @@ impl Display for MissingWorkspaceError {
                  thus packages to be defined in the root pnpm-workspace.yaml"
             }
             PackageManager::Yarn | PackageManager::Berry => {
-                "package.json: no workspaces found. Turborepo requires Yarn workspaces to be \
+                "package.json: no workspaces found. Turborepo requires yarn workspaces to be \
                  defined in the root package.json"
             }
             PackageManager::Npm => {
@@ -231,6 +232,8 @@ pub enum Error {
         "We could not parse the packageManager field in package.json, expected: {0}, received: {1}"
     )]
     InvalidPackageManager(String, String),
+    #[error(transparent)]
+    WalkError(#[from] globwalk::WalkError),
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
@@ -241,7 +244,37 @@ impl PackageManager {
     pub fn get_workspace_globs(
         &self,
         root_path: &AbsoluteSystemPath,
-    ) -> std::result::Result<Globs, Error> {
+    ) -> Result<WorkspaceGlobs, Error> {
+        let (mut inclusions, mut exclusions) = self.get_configured_workspace_globs(root_path)?;
+        exclusions.extend(self.get_default_exclusions().into_iter());
+
+        inclusions.iter_mut().for_each(|inclusion| {
+            // Yarn appends node_modules to every other glob specified
+            if *self == PackageManager::Yarn {
+                exclusions.push(inclusion.clone() + "/node_modules/**")
+            }
+            inclusion.push_str("/package.json");
+        });
+        let globs = WorkspaceGlobs::new(inclusions, exclusions)?;
+        Ok(globs)
+    }
+
+    fn get_default_exclusions(&self) -> Vec<String> {
+        let ignores = match self {
+            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                vec!["**/node_modules/**", "**/bower_components/**"]
+            }
+            PackageManager::Npm => vec!["**/node_modules/**"],
+            PackageManager::Berry => vec!["**/node_modules", "**/.git", "**/.yarn"],
+            PackageManager::Yarn => vec![], // yarn does its own handling above
+        };
+        ignores.into_iter().map(|s| s.to_string()).collect()
+    }
+
+    fn get_configured_workspace_globs(
+        &self,
+        root_path: &AbsoluteSystemPath,
+    ) -> Result<(Vec<String>, Vec<String>), Error> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 let workspace_yaml =
@@ -274,8 +307,7 @@ impl PackageManager {
             }
         });
 
-        let globs = Globs::new(inclusions, exclusions)?;
-        Ok(globs)
+        Ok((inclusions, exclusions))
     }
 
     pub fn get_package_manager(
@@ -342,11 +374,29 @@ impl PackageManager {
             ))
         }
     }
+
+    pub fn get_package_jsons(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+    ) -> Result<Vec<AbsoluteSystemPathBuf>, Error> {
+        let globs = self.get_workspace_globs(repo_root)?;
+
+        let walker = globwalk::globwalk(
+            repo_root,
+            &globs.raw_inclusions,
+            &globs.raw_exclusions,
+            globwalk::WalkType::Files,
+        )?;
+        let items = walker
+            .map(|result| result.map_err(|e| e.into()))
+            .collect::<Result<Vec<_>, Error>>()?;
+        Ok(items)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
+    use std::{collections::HashSet, fs::File};
 
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
@@ -359,6 +409,95 @@ mod tests {
         expected_manager: String,
         expected_version: String,
         expected_error: bool,
+    }
+
+    fn repo_root() -> AbsoluteSystemPathBuf {
+        let cwd = AbsoluteSystemPathBuf::cwd().unwrap();
+        for ancestor in cwd.ancestors() {
+            if ancestor.join_component(".git").exists() {
+                return ancestor.to_owned();
+            }
+        }
+        panic!("Couldn't find Turborepo root from {}", cwd);
+    }
+
+    #[test]
+    fn test_get_package_jsons() {
+        let root = repo_root();
+        let examples = root.join_component("examples");
+
+        let with_yarn = examples.join_component("with-yarn");
+        let with_yarn_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(
+            [
+                with_yarn.join_components(&["apps", "docs", "package.json"]),
+                with_yarn.join_components(&["apps", "web", "package.json"]),
+                with_yarn.join_components(&["packages", "eslint-config-custom", "package.json"]),
+                with_yarn.join_components(&["packages", "tsconfig", "package.json"]),
+                with_yarn.join_components(&["packages", "ui", "package.json"]),
+            ]
+            .into_iter(),
+        );
+        for mgr in &[
+            PackageManager::Berry,
+            PackageManager::Yarn,
+            PackageManager::Npm,
+        ] {
+            let found = mgr.get_package_jsons(&with_yarn).unwrap();
+            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found.into_iter());
+            assert_eq!(found, with_yarn_expected);
+        }
+
+        let basic = examples.join_component("basic");
+        let basic_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(
+            [
+                basic.join_components(&["apps", "docs", "package.json"]),
+                basic.join_components(&["apps", "web", "package.json"]),
+                basic.join_components(&["packages", "eslint-config-custom", "package.json"]),
+                basic.join_components(&["packages", "tsconfig", "package.json"]),
+                basic.join_components(&["packages", "ui", "package.json"]),
+            ]
+            .into_iter(),
+        );
+        for mgr in &[PackageManager::Pnpm, PackageManager::Pnpm6] {
+            let found = mgr.get_package_jsons(&basic).unwrap();
+            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found.into_iter());
+            assert_eq!(found, basic_expected);
+        }
+    }
+
+    #[test]
+    fn test_get_workspace_ignores() {
+        let root = repo_root();
+        let fixtures = root.join_components(&[
+            "crates",
+            "turborepo-lib",
+            "src",
+            "package_manager",
+            "fixtures",
+        ]);
+        for mgr in &[
+            PackageManager::Npm,
+            PackageManager::Yarn,
+            PackageManager::Berry,
+            PackageManager::Pnpm,
+            PackageManager::Pnpm6,
+        ] {
+            let globs = mgr.get_workspace_globs(&fixtures).unwrap();
+            let ignores: HashSet<String> = HashSet::from_iter(globs.raw_exclusions.into_iter());
+            let expected: &[&str] = match mgr {
+                PackageManager::Npm => &["**/node_modules/**"],
+                PackageManager::Berry => &["**/node_modules", "**/.git", "**/.yarn"],
+                PackageManager::Yarn => &["apps/*/node_modules/**", "packages/*/node_modules/**"],
+                PackageManager::Pnpm | PackageManager::Pnpm6 => &[
+                    "**/node_modules/**",
+                    "**/bower_components/**",
+                    "packages/skip",
+                ],
+            };
+            let expected: HashSet<String> =
+                HashSet::from_iter(expected.into_iter().map(|s| s.to_string()));
+            assert_eq!(ignores, expected);
+        }
     }
 
     #[test]
@@ -494,24 +633,9 @@ mod tests {
     }
 
     #[test]
-    fn test_get_workspace_globs() {
-        let cwd = AbsoluteSystemPathBuf::cwd().unwrap();
-        let repo_root = cwd
-            .ancestors()
-            .find(|path| path.join_component(".git").exists())
-            .unwrap();
-        let with_yarn = repo_root.join_components(&["examples", "with-yarn"]);
-        let package_manager = PackageManager::Npm;
-        let globs = package_manager.get_workspace_globs(&with_yarn).unwrap();
-
-        let expected = Globs::new(vec!["apps/*", "packages/*"], vec![]).unwrap();
-        assert_eq!(globs, expected);
-    }
-
-    #[test]
     fn test_globs_test() {
         struct TestCase {
-            globs: Globs,
+            globs: WorkspaceGlobs,
             root: AbsoluteSystemPathBuf,
             target: AbsoluteSystemPathBuf,
             output: Result<bool, Error>,
@@ -528,7 +652,7 @@ mod tests {
         let target = AbsoluteSystemPathBuf::new("C:\\a\\b\\c\\d\\e\\f").unwrap();
 
         let tests = [TestCase {
-            globs: Globs::new(vec!["d/**".to_string()], vec![]).unwrap(),
+            globs: WorkspaceGlobs::new(vec!["d/**".to_string()], vec![]).unwrap(),
             root,
             target,
             output: Ok(true),

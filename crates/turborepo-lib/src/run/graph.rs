@@ -3,7 +3,6 @@ use std::{collections::BTreeMap, rc::Rc};
 use anyhow::Result;
 use turbopath::AbsoluteSystemPath;
 
-use super::workspace_catalog::WorkspaceCatalog;
 use crate::{
     config::TurboJson,
     run::pipeline::{Pipeline, TaskDefinition},
@@ -52,6 +51,9 @@ impl<'run> CompleteGraph<'run> {
         Ok(TurboJson::default())
     }
 }
+
+#[derive(Default)]
+pub struct WorkspaceCatalog {}
 
 #[derive(Default)]
 pub struct TaskHashTracker {}

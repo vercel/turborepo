@@ -9,7 +9,7 @@ use std::{
     fmt, fs,
     fs::Metadata,
     io,
-    path::{Path, PathBuf},
+    path::{Components, Path, PathBuf},
 };
 
 use path_clean::PathClean;
@@ -192,6 +192,10 @@ impl AbsoluteSystemPath {
 
     pub fn remove_file(&self) -> Result<(), io::Error> {
         fs::remove_file(&self.0)
+    }
+
+    pub fn components(&self) -> Components<'_> {
+        self.0.components()
     }
 }
 

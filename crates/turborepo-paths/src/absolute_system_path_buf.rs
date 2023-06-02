@@ -164,10 +164,6 @@ impl AbsoluteSystemPathBuf {
         self.0.as_path()
     }
 
-    pub fn components(&self) -> Components<'_> {
-        self.0.components()
-    }
-
     pub fn parent(&self) -> Option<Self> {
         self.0
             .parent()
