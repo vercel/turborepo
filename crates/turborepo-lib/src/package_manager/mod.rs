@@ -435,7 +435,7 @@ mod tests {
         let with_yarn = repo_root.join_components(&["examples", "with-yarn"]);
         let package_manager = PackageManager::Npm;
         let globs = package_manager
-            .get_workspace_globs(with_yarn.as_absolute_path())
+            .get_workspace_globs(&with_yarn)
             .unwrap()
             .unwrap();
 
