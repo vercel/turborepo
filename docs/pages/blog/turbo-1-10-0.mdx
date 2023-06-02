@@ -3,7 +3,7 @@ title: Turborepo 1.10
 date: 2023/06/01
 description: Turborepo 1.10 introduces a new features to improve your local development experience
 tag: "web development"
-ogImage: /images/blog/turbo-1-9-0/twitter-card.png
+ogImage: /images/blog/turbo-1-10-0/twitter-card.png
 ---
 
 # Turborepo 1.10
@@ -61,12 +61,12 @@ For more, check out the [documentation](/repo/docs/core-concepts/monorepos/code-
 
 ### Support for `.env` files
 
-Developers and frameworks commonly use `.env` files to load environment variables into their development environments. This can cause problems when running with turbo, as these variables can be [invisible](/repo/docs/core-concepts/caching/environment-variable-inputs#invisible-environment-variables), and are not easily
-included in the hash for your task. This problem could cause an unintended cache hit while working locally.
+[`.env` files](https://www.dotenv.org/docs/) are commonly used to load environment variables. This can cause problems when running with `turbo`, because these variables can be [invisible](/repo/docs/core-concepts/caching/environment-variable-inputs#invisible-environment-variables), and are not easily
+included in the hash for your task. This problem could cause unintended cache hits while working locally.
 
-Turbo now makes this much easier with automatic support for `.env` files.
+Turborepo now makes this much easier with automatic support for `.env` files.
 
-To ensure that `turbo` includes these variables in your hash, use the `dotEnv` key. For example, here is a configuration for a Next.js application:
+To ensure that Turborepo includes these variables in your hash, use the `dotEnv` key. For example, here is a configuration for a Next.js application:
 
 ```json
 {
@@ -115,10 +115,10 @@ For more, check out the [documentation](/repo/docs/core-concepts/caching/environ
 
 Turborepo environment modes are now out of [experimental mode](/repo/docs/faq#what-does-experimental-mean) and are available for general use.
 
-By default, and when turbo is invoked with --env-mode=loose , all environment variables from the machine are made available to every single turbo task.
+By default, and when `turbo run` is invoked with `--env-mode=loose`, all environment variables from the machine are made available to every single Turborepo task.
 This ensures the greatest compatibility while accepting some risk that a task will implicitly have access to a environment variable that is not specified in your `turbo.json`.
 
-In the new strict mode, when turbo is invoked with --env-mode=strict , only [important system environment variables](/repo/docs/core-concepts/caching/environment-variable-inputs#system-environment-variables) and environment variables enumerated inside of turbo.json will be made available to a task.
+In the new strict mode, when `turbo` is invoked with `--env-mode=strict`, only [important system environment variables](/repo/docs/core-concepts/caching/environment-variable-inputs#system-environment-variables) and environment variables enumerated inside of `turbo.json` will be made available to a task.
 
 For more, check out the [documentation](/repo/docs/core-concepts/caching/environment-variable-inputs#loose--strict-environment-modes).
 
