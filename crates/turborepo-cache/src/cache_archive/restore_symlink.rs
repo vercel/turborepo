@@ -7,11 +7,12 @@ use path_clean::clean;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
-    cache_archive::{restore::canonicalize_name, restore_regular::safe_mkdir_file},
+    cache_archive::{restore::canonicalize_name, restore_directory::CachedDirTree},
     CacheError,
 };
 
 pub fn restore_symlink(
+    dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     header: &tar::Header,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
@@ -30,28 +31,30 @@ pub fn restore_symlink(
         ));
     }
 
-    actually_restore_symlink(anchor, processed_name.as_anchored_path(), header)?;
+    actually_restore_symlink(dir_cache, anchor, processed_name.as_anchored_path(), header)?;
 
     Ok(processed_name)
 }
 
 pub fn restore_symlink_allow_missing_target(
+    dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     header: &tar::Header,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let processed_name = canonicalize_name(&header.path()?)?;
 
-    actually_restore_symlink(anchor, processed_name.as_anchored_path(), header)?;
+    actually_restore_symlink(dir_cache, anchor, processed_name.as_anchored_path(), header)?;
 
     Ok(processed_name)
 }
 
 fn actually_restore_symlink<'a>(
+    dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     processed_name: &'a AnchoredSystemPath,
     header: &tar::Header,
 ) -> Result<&'a AnchoredSystemPath, CacheError> {
-    safe_mkdir_file(anchor, &processed_name)?;
+    dir_cache.safe_mkdir_file(anchor, &processed_name)?;
 
     let symlink_from = anchor.resolve(processed_name);
 

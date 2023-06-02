@@ -1,5 +1,6 @@
 use std::{
     backtrace::Backtrace,
+    ffi::OsString,
     fs,
     path::{Component, Path},
 };
@@ -13,51 +14,103 @@ use turbopath::{
 use crate::{cache_archive::restore::canonicalize_name, CacheError};
 
 pub fn restore_directory(
+    dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     header: &Header,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let processed_name = canonicalize_name(&header.path()?)?;
 
-    safe_mkdir_all(anchor, processed_name.as_anchored_path(), header.mode()?)?;
+    dir_cache.safe_mkdir_all(anchor, processed_name.as_anchored_path(), header.mode()?)?;
 
     Ok(processed_name)
 }
 
-pub fn safe_mkdir_all(
-    anchor: &AbsoluteSystemPath,
-    processed_name: &AnchoredSystemPath,
-    mode: u32,
-) -> Result<(), CacheError> {
-    // Iterate through path segments by os.Separator, appending them onto
-    // current_path. Check to see if that path segment is a symlink
-    // with a target outside of anchor.
-    let mut calculated_anchor = anchor.to_owned();
-    for component in processed_name.as_path().components() {
-        calculated_anchor = check_path(
-            anchor,
-            &calculated_anchor,
-            &AnchoredSystemPath::new(Path::new(component.as_os_str()))?,
-        )?;
+pub struct CachedDirTree {
+    anchor_at_depth: Vec<AbsoluteSystemPathBuf>,
+    prefix: Vec<OsString>,
+}
+
+impl CachedDirTree {
+    pub fn new(initial_anchor: AbsoluteSystemPathBuf) -> Self {
+        CachedDirTree {
+            anchor_at_depth: vec![initial_anchor],
+            prefix: vec![],
+        }
     }
 
-    // If we have made it here we know that it is safe to call fs::create_dir_all
-    // on the join of anchor and processed_name.
-    //
-    // This could _still_ error, but we don't care.
-    let resolved_name = anchor.resolve(processed_name);
-    fs::create_dir_all(&resolved_name)?;
+    // Given a path, checks the dir cache to determine where we actually need
+    // to start restoring, i.e. which directories we can skip over because
+    // we've already created them.
+    // Returns the anchor at the depth where we need to start restoring, and
+    // the index into the path components where we need to start restoring.
+    fn get_starting_point(&mut self, path: &AnchoredSystemPath) -> (AbsoluteSystemPathBuf, usize) {
+        let mut i = 0;
+        for (idx, (path_component, prefix_component)) in path
+            .as_path()
+            .components()
+            .zip(self.prefix.iter())
+            .enumerate()
+        {
+            i = idx;
+            if path_component.as_os_str() != prefix_component.as_os_str() {
+                break;
+            }
+        }
+        let anchor = self.anchor_at_depth[i].clone();
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
+        self.anchor_at_depth.truncate(i + 1);
+        self.prefix.truncate(i);
 
-        let metadata = fs::metadata(&resolved_name)?;
-        let mut permissions = metadata.permissions();
-        permissions.set_mode(mode);
-        fs::set_permissions(&resolved_name, permissions)?;
+        (anchor, i)
     }
 
-    Ok(())
+    fn update(&mut self, anchor: AbsoluteSystemPathBuf, new_component: OsString) {
+        self.anchor_at_depth.push(anchor);
+        self.prefix.push(new_component);
+    }
+
+    pub fn safe_mkdir_all(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+        processed_name: &AnchoredSystemPath,
+        mode: u32,
+    ) -> Result<(), CacheError> {
+        // Iterate through path segments by os.Separator, appending them onto
+        // current_path. Check to see if that path segment is a symlink
+        // with a target outside of anchor.
+        let (mut calculated_anchor, start_idx) = self.get_starting_point(processed_name);
+        for component in processed_name.as_path().components().skip(start_idx) {
+            calculated_anchor = check_path(
+                anchor,
+                &calculated_anchor,
+                &AnchoredSystemPath::new(Path::new(component.as_os_str()))?,
+            )?;
+
+            self.update(
+                calculated_anchor.clone(),
+                component.as_os_str().to_os_string(),
+            );
+        }
+
+        // If we have made it here we know that it is safe to call fs::create_dir_all
+        // on the join of anchor and processed_name.
+        //
+        // This could _still_ error, but we don't care.
+        let resolved_name = anchor.resolve(processed_name);
+        fs::create_dir_all(&resolved_name)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let metadata = fs::metadata(&resolved_name)?;
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(mode);
+            fs::set_permissions(&resolved_name, permissions)?;
+        }
+
+        Ok(())
+    }
 }
 
 fn check_path(

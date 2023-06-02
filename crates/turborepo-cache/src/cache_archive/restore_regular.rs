@@ -4,11 +4,12 @@ use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
-    cache_archive::{restore::canonicalize_name, restore_directory::safe_mkdir_all},
+    cache_archive::{restore::canonicalize_name, restore_directory::CachedDirTree},
     CacheError,
 };
 
 pub fn restore_regular(
+    dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<impl Read>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
@@ -21,7 +22,7 @@ pub fn restore_regular(
     // We need to traverse `processedName` from base to root split at
     // `os.Separator` to make sure we don't end up following a symlink
     // outside of the restore path.
-    safe_mkdir_file(anchor, processed_name.as_anchored_path())?;
+    dir_cache.safe_mkdir_file(anchor, processed_name.as_anchored_path())?;
 
     let resolved_path = anchor.resolve(&processed_name);
     let mut open_options = OpenOptions::new();
@@ -39,15 +40,18 @@ pub fn restore_regular(
     Ok(processed_name)
 }
 
-pub fn safe_mkdir_file(
-    anchor: &AbsoluteSystemPath,
-    processed_name: &AnchoredSystemPath,
-) -> Result<(), CacheError> {
-    let is_root_file = processed_name.as_path().parent() == Some(Path::new("."));
-    if !is_root_file {
-        let dir = processed_name.parent().unwrap();
-        safe_mkdir_all(anchor, dir, 0o755)?;
-    }
+impl CachedDirTree {
+    pub fn safe_mkdir_file(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+        processed_name: &AnchoredSystemPath,
+    ) -> Result<(), CacheError> {
+        let is_root_file = processed_name.as_path().parent() == Some(Path::new("."));
+        if !is_root_file {
+            let dir = processed_name.parent().unwrap();
+            self.safe_mkdir_all(anchor, dir, 0o755)?;
+        }
 
-    Ok(())
+        Ok(())
+    }
 }
