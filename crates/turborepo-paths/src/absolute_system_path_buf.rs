@@ -94,11 +94,6 @@ impl AbsoluteSystemPathBuf {
         Ok(Self(std::env::current_dir()?))
     }
 
-    #[cfg(test)]
-    pub unsafe fn new_unchecked(unchecked_path: impl Into<PathBuf>) -> Self {
-        AbsoluteSystemPathBuf(unchecked_path.into())
-    }
-
     /// Anchors `path` at `self`.
     ///
     /// # Arguments
@@ -167,12 +162,6 @@ impl AbsoluteSystemPathBuf {
 
     pub fn as_path(&self) -> &Path {
         self.0.as_path()
-    }
-
-    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
-        self.0
-            .parent()
-            .map(|p| unsafe { AbsoluteSystemPath::new_unchecked(p) })
     }
 
     pub fn starts_with<P: AsRef<Path>>(&self, base: P) -> bool {

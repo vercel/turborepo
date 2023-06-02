@@ -1,12 +1,4 @@
-use std::{
-    backtrace::Backtrace,
-    collections::HashMap,
-    ffi::OsStr,
-    fs,
-    fs::OpenOptions,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::{backtrace::Backtrace, collections::HashMap, ffi::OsStr, io::Read, path::Path};
 
 use petgraph::graph::DiGraph;
 use tar::Entry;
@@ -40,17 +32,9 @@ impl CacheReader {
     }
 
     pub fn open(path: &AbsoluteSystemPathBuf) -> Result<Self, CacheError> {
-        let mut options = OpenOptions::new();
+        let file = path.open()?;
 
-        #[cfg(windows)]
-        {
-            use crate::cache_archive::create::FILE_FLAG_SEQUENTIAL_SCAN;
-            options.custom_flags(FILE_FLAG_SEQUENTIAL_SCAN);
-        }
-
-        let file = options.read(true).open(path.as_path())?;
-
-        let reader: Box<dyn Read> = if path.as_path().extension() == Some(OsStr::new("zst")) {
+        let reader: Box<dyn Read> = if path.extension() == Some(OsStr::new("zst")) {
             Box::new(zstd::Decoder::new(file)?)
         } else {
             Box::new(file)
@@ -64,7 +48,7 @@ impl CacheReader {
         anchor: &AbsoluteSystemPath,
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut restored = Vec::new();
-        fs::create_dir_all(anchor.as_path())?;
+        anchor.create_dir_all()?;
 
         // We're going to make the following two assumptions here for "fast"
         // path restoration:
@@ -87,8 +71,8 @@ impl CacheReader {
         Ok(restored)
     }
 
-    fn restore_entries<'a, T: Read>(
-        tr: &'a mut tar::Archive<T>,
+    fn restore_entries<T: Read>(
+        tr: &mut tar::Archive<T>,
         restored: &mut Vec<AnchoredSystemPathBuf>,
         mut dir_cache: CachedDirTree,
         anchor: &AbsoluteSystemPath,
@@ -114,10 +98,10 @@ impl CacheReader {
         Ok(())
     }
 
-    fn topologically_restore_symlinks<'a, T: Read>(
+    fn topologically_restore_symlinks<T: Read>(
         dir_cache: &mut CachedDirTree,
         anchor: &AbsoluteSystemPath,
-        symlinks: &[Entry<'a, T>],
+        symlinks: &[Entry<'_, T>],
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut graph = DiGraph::new();
         let mut header_lookup = HashMap::new();
@@ -204,14 +188,7 @@ pub fn canonicalize_name(name: &Path) -> Result<AnchoredSystemPathBuf, CacheErro
         }
     }
 
-    // There's no easier way to remove trailing slashes in Rust
-    // because `OsString`s are really just `Vec<u8>`s.
-    let no_trailing_slash: PathBuf = name.components().collect();
-
-    // We know this is indeed anchored because of `check_name`,
-    // and it is indeed system because we just split and combined with the
-    // system path separator above
-    Ok(unsafe { AnchoredSystemPathBuf::new_unchecked(no_trailing_slash) })
+    Ok(AnchoredSystemPathBuf::from_validated_tar_path(name))
 }
 
 #[derive(Debug, PartialEq)]
@@ -242,7 +219,7 @@ fn check_name(name: &Path) -> PathValidation {
     // - `/`
     // - `./`
     // - `../`
-    if well_formed && (name.starts_with("/") || name.starts_with("./") || name.starts_with("../")) {
+    if well_formed && (name.starts_with('/') || name.starts_with("./") || name.starts_with("../")) {
         well_formed = false;
     }
 
@@ -345,7 +322,7 @@ mod tests {
                     header.set_entry_type(tar::EntryType::Directory);
                     header.set_size(0);
                     header.set_mode(0o755);
-                    tar_writer.append_data(&mut header, &path, empty())?;
+                    tar_writer.append_data(&mut header, path, empty())?;
                 }
                 TarFile::Symlink {
                     link_path: link_file,
@@ -357,7 +334,7 @@ mod tests {
                     header.set_entry_type(tar::EntryType::Symlink);
                     header.set_size(0);
 
-                    tar_writer.append_link(&mut header, &link_file, &link_target)?;
+                    tar_writer.append_link(&mut header, link_file, link_target)?;
                 }
                 // We don't support this, but we need to add it to a tar for testing purposes
                 TarFile::Fifo { path } => {
@@ -431,7 +408,7 @@ mod tests {
         let mut cache_reader = CacheReader::new(&tar_bytes[..], false)?;
         let output_dir = tempdir()?;
         let anchor = AbsoluteSystemPath::new(output_dir.path())?;
-        let result = cache_reader.restore(&anchor);
+        let result = cache_reader.restore(anchor);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -442,7 +419,7 @@ mod tests {
         let mut cache_reader = CacheReader::new(&tar_bytes[..], true)?;
         let output_dir = tempdir()?;
         let anchor = AbsoluteSystemPath::new(output_dir.path())?;
-        let result = cache_reader.restore(&anchor);
+        let result = cache_reader.restore(anchor);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -988,7 +965,7 @@ mod tests {
 
                 let mut cache_reader = CacheReader::open(&archive_path)?;
 
-                match (cache_reader.restore(&anchor), &test.expected_output) {
+                match (cache_reader.restore(anchor), &test.expected_output) {
                     (Ok(restored_files), Err(expected_error)) => {
                         panic!(
                             "expected error: {:?}, received {:?}",
@@ -1010,7 +987,7 @@ mod tests {
                 let expected_files = &test.expected_files;
 
                 for expected_file in expected_files {
-                    assert_file_exists(anchor, &expected_file)?;
+                    assert_file_exists(anchor, expected_file)?;
                 }
             }
         }
@@ -1062,7 +1039,7 @@ mod tests {
         processed_name: AnchoredSystemPathBuf,
         linkname: &Path,
         canonical_unix: &'static str,
-        canonical_windows: &'static str,
+        _canonical_windows: &'static str,
     ) -> Result<()> {
         let anchor = unsafe { AbsoluteSystemPath::new_unchecked(Path::new("path/to/anchor")) };
 

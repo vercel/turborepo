@@ -31,7 +31,7 @@ pub fn restore_symlink(
         ));
     }
 
-    actually_restore_symlink(dir_cache, anchor, processed_name.as_anchored_path(), header)?;
+    actually_restore_symlink(dir_cache, anchor, &processed_name, header)?;
 
     Ok(processed_name)
 }
@@ -43,7 +43,7 @@ pub fn restore_symlink_allow_missing_target(
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let processed_name = canonicalize_name(&header.path()?)?;
 
-    actually_restore_symlink(dir_cache, anchor, processed_name.as_anchored_path(), header)?;
+    actually_restore_symlink(dir_cache, anchor, &processed_name, header)?;
 
     Ok(processed_name)
 }
@@ -54,7 +54,7 @@ fn actually_restore_symlink<'a>(
     processed_name: &'a AnchoredSystemPath,
     header: &tar::Header,
 ) -> Result<&'a AnchoredSystemPath, CacheError> {
-    dir_cache.safe_mkdir_file(anchor, &processed_name)?;
+    dir_cache.safe_mkdir_file(anchor, processed_name)?;
 
     let symlink_from = anchor.resolve(processed_name);
 
@@ -68,10 +68,10 @@ fn actually_restore_symlink<'a>(
         symlink_from.symlink_to_dir(symlink_to)?;
     }
 
-    #[cfg(macos)]
+    #[cfg(target_os = "macos")]
     {
         use std::os::unix::fs::PermissionsExt;
-        let metadata = symlink_from.as_absolute_path().symlink_metadata()?;
+        let metadata = symlink_from.symlink_metadata()?;
         let mut permissions = metadata.permissions();
         if let Ok(mode) = header.mode() {
             permissions.set_mode(mode);
@@ -130,7 +130,7 @@ pub fn canonicalize_linkname(
     // a link target.
     //
     let source = anchor.resolve(processed_name);
-    let canonicalized = source.parent().unwrap_or(anchor).resolve(&cleaned_linkname);
+    let canonicalized = source.parent().unwrap_or(anchor).resolve(cleaned_linkname);
 
     Ok(clean(canonicalized))
 }

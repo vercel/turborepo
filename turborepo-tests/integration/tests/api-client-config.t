@@ -5,7 +5,7 @@ Setup
 Run test run
   $ ${TURBO} run build --__test-run | jq .api_client_config
   {
-    "token": null,
+    "token": "QAMe1dWd9ifylNzga7gwpVAh",
     "team_id": null,
     "team_slug": null,
     "api_url": "https://vercel.com/api",

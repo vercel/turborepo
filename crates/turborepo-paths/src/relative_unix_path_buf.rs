@@ -2,7 +2,7 @@ use std::{borrow::Borrow, fmt::Debug, io::Write, ops::Deref};
 
 use bstr::{BStr, BString, ByteSlice};
 
-use crate::{PathError, RelativeUnixPath};
+use crate::{AnchoredSystemPath, AnchoredUnixTarPathBuf, PathError, RelativeUnixPath};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct RelativeUnixPathBuf(pub(crate) BString);
@@ -22,12 +22,12 @@ impl RelativeUnixPathBuf {
             .map_err(|_| PathError::InvalidUnicode(self.0.as_bytes().to_str_lossy().to_string()))
     }
 
-    pub unsafe fn unchecked_new(path: impl Into<Vec<u8>>) -> Self {
-        Self(BString::new(path.into()))
-    }
+    pub fn make_canonical_for_tar(mut self, is_dir: bool) -> AnchoredUnixTarPathBuf {
+        if is_dir && !self.0.ends_with(b"/") {
+            self.0.push(b'/');
+        }
 
-    pub fn into_inner(self) -> BString {
-        self.0
+        AnchoredUnixTarPathBuf(self.0)
     }
 
     // write_escaped_bytes writes this path to the given writer in the form
@@ -106,6 +106,15 @@ impl Debug for RelativeUnixPathBuf {
             Ok(s) => write!(f, "{}", s),
             Err(s) => write!(f, "Non-utf8 {:?}", s),
         }
+    }
+}
+
+impl TryFrom<&AnchoredSystemPath> for RelativeUnixPathBuf {
+    type Error = PathError;
+
+    fn try_from(path: &AnchoredSystemPath) -> Result<Self, Self::Error> {
+        let path = path.to_str()?;
+        Self::new(path)
     }
 }
 

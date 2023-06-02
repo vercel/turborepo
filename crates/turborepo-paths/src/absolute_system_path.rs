@@ -6,6 +6,7 @@ use std::os::unix::fs::symlink as symlink_dir;
 use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
     borrow::Cow,
+    ffi::OsStr,
     fmt, fs,
     fs::{File, Metadata, OpenOptions},
     io,
@@ -117,6 +118,14 @@ impl AbsoluteSystemPath {
             .map(|ancestor| unsafe { Self::new_unchecked(ancestor) })
     }
 
+    pub fn create_dir_all(&self) -> Result<(), io::Error> {
+        fs::create_dir_all(&self.0)
+    }
+
+    pub fn extension(&self) -> Option<&OsStr> {
+        self.0.extension()
+    }
+
     // intended for joining literals or obviously single-token strings
     pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
@@ -198,8 +207,14 @@ impl AbsoluteSystemPath {
         self.0.components()
     }
 
+    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
+        self.0
+            .parent()
+            .map(|p| unsafe { AbsoluteSystemPath::new_unchecked(p) })
+    }
+
     /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
-    /// help with performance. Also sets Unix file permissions.
+    /// help with performance
     pub fn open(&self) -> Result<File, io::Error> {
         let mut options = OpenOptions::new();
         options.read(true);
@@ -214,6 +229,10 @@ impl AbsoluteSystemPath {
         }
 
         options.open(&self.0)
+    }
+
+    pub fn open_with_options(&self, open_options: OpenOptions) -> Result<File, io::Error> {
+        open_options.open(&self.0)
     }
 }
 

@@ -1,4 +1,8 @@
-use std::{borrow::Cow, fmt, path::Path};
+use std::{
+    borrow::Cow,
+    fmt,
+    path::{Component, Path},
+};
 
 use path_slash::CowExt;
 
@@ -38,19 +42,23 @@ impl AnchoredSystemPath {
         unsafe { &*(path as *const Path as *const Self) }
     }
 
-    pub fn new(path: &Path) -> Result<&Self, PathError> {
-        if path.is_absolute() {
-            return Err(PathError::NotRelative(path.to_string_lossy().to_string()));
+    pub fn new<'a, T: AsRef<Path> + 'a>(path: T) -> Result<&'a Self, PathError> {
+        let path_ref = path.as_ref();
+        if path_ref.is_absolute() {
+            return Err(PathError::NotRelative(
+                path_ref.to_string_lossy().to_string(),
+            ));
         }
 
-        let path_str = path
+        let path_str = path_ref
             .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
+            .ok_or_else(|| PathError::InvalidUnicode(path_ref.to_string_lossy().to_string()))?;
 
         let system_path = Cow::from_slash(path_str);
-        match system_path {
-            Cow::Owned(path) => Err(PathError::NotSystem(path.to_string_lossy().to_string())),
-            Cow::Borrowed(path) => Ok(unsafe { AnchoredSystemPath::new_unchecked(path) }),
+        if let Cow::Owned(path) = system_path {
+            Err(PathError::NotSystem(path.to_string_lossy().to_string()))
+        } else {
+            Ok(unsafe { &*(path_ref as *const Path as *const Self) })
         }
     }
 
@@ -64,6 +72,10 @@ impl AnchoredSystemPath {
         self.0
             .parent()
             .map(|path| unsafe { AnchoredSystemPath::new_unchecked(path) })
+    }
+
+    pub fn components(&self) -> impl Iterator<Item = Component> {
+        self.0.components()
     }
 
     pub fn as_path(&self) -> &Path {

@@ -22,7 +22,7 @@ pub fn restore_regular(
     // We need to traverse `processedName` from base to root split at
     // `os.Separator` to make sure we don't end up following a symlink
     // outside of the restore path.
-    dir_cache.safe_mkdir_file(anchor, processed_name.as_anchored_path())?;
+    dir_cache.safe_mkdir_file(anchor, &processed_name)?;
 
     let resolved_path = anchor.resolve(&processed_name);
     let mut open_options = OpenOptions::new();
@@ -46,7 +46,9 @@ impl CachedDirTree {
         anchor: &AbsoluteSystemPath,
         processed_name: &AnchoredSystemPath,
     ) -> Result<(), CacheError> {
-        let is_root_file = processed_name.as_path().parent() == Some(Path::new("."));
+        let parent = processed_name.as_path().parent();
+        // Handles ./foo and foo
+        let is_root_file = parent == Some(Path::new(".")) || parent == Some(Path::new(""));
         if !is_root_file {
             let dir = processed_name.parent().unwrap();
             self.safe_mkdir_all(anchor, dir, 0o755)?;
