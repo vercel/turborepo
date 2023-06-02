@@ -20,6 +20,7 @@ import Date from "../../components/blog/Date";
   "nathanhammond",
   "tomknickman",
   "anthonyshew",
+  "mehulkar",
 ]} />
 
 Turborepo 1.10 introduces new features to improve your local development experience:
@@ -40,7 +41,7 @@ Turborepo Generators allow you to add new code to your repository in a predictab
 Previously, you would need to copy code yourself and manually add dependencies to your new workspace. With Generators,
 we've automated the process of creating new workspaces and integrating them into your repository.
 
-You can [create a blank workspace from scratch](/repo/docs/core-concepts/monorepos/code-generation#add-an-empty-workspace), [copy an existing workspace](/repo/docs/core-concepts/monorepos/code-generation#copy-an-existing-workspace), and even create custom generators
+You can [create a blank workspace from scratch](/repo/docs/core-concepts/monorepos/code-generation#add-an-empty-workspace), [copy an existing workspace](/repo/docs/core-concepts/monorepos/code-generation#copy-an-existing-workspace), or even create custom generators
 for more control. Custom generators leverage [Plop](https://plopjs.com/) configurations, a common template definition strategy used in the JavaScript ecosystem.
 
 [Custom generators](/repo/docs/core-concepts/monorepos/code-generation#custom-generators) can also be used to scaffold more granular sets of code than workspaces. You can significantly speed up tasks like:
@@ -94,7 +95,7 @@ For more, check out the [documentation](/repo/docs/core-concepts/caching/environ
 
 ### Environment Variable Wildcards
 
-Large applications can end up with many environment variables in their `turbo.json`. This can make maintaining your `turbo.json` extremely difficult to manage and maintain.
+Large applications can end up with many environment variables in their `turbo.json`. This can make your configuration difficult to manage and maintain.
 
 With wildcards, you can now specify patterns of variables to include in your hash.
 
