@@ -11,6 +11,8 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 pub struct PnpmLockfile {
     lockfile_version: LockfileVersion,
     #[serde(skip_serializing_if = "Option::is_none")]
+    settings: Option<LockfileSettings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     never_built_dependencies: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     only_built_dependencies: Option<Vec<String>>,
@@ -25,8 +27,6 @@ pub struct PnpmLockfile {
     packages: Option<Map<String, PackageSnapshot>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    settings: Option<LockfileSettings>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
