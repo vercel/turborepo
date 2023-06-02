@@ -4,7 +4,20 @@
   "pipeline": {
     "build": {
       "env": ["GO_TAG"],
-      "outputs": ["turbo", "turbo.exe"]
+      "outputs": [
+        "../target/debug/go-turbo",
+        "../target/debug/turbo",
+        "../target/debug/turbo.exe",
+        "../target/release/go-turbo",
+        "../target/release/turbo",
+        "../target/release/turbo.exe"
+      ],
+
+      "inputs": [
+        "**/*.go",
+        "**/*_test.go",
+        "../crates/turborepo*/**" // Rust crates
+      ]
     },
     "e2e": {
       "outputs": [],
