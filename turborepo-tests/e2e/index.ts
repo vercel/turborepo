@@ -509,9 +509,9 @@ function runSmokeTests<T>(
       );
       assert.ok(
         commandOnceBHasChangedOutput.findIndex((l) =>
-          l.startsWith("c:test: cache hit, replaying output")
+          l.startsWith("c:test: cache hit, replaying logs")
         ) >= 0,
-        "After running, changing source of b, and running `turbo run test` again, should print `c:test: cache hit, replaying output` since c should not be impacted by changes to b"
+        "After running, changing source of b, and running `turbo run test` again, should print `c:test: cache hit, replaying logs` since c should not be impacted by changes to b"
       );
 
       const scopeCommandOutput = getCommandOutputAsArray(

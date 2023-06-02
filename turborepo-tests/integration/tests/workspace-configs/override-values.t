@@ -34,7 +34,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache hit, replaying output 676bf15624566937
+  override-values:override-values-task: cache hit, replaying logs 676bf15624566937
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo "running override-values-task" > lib/bar.min.txt
@@ -66,7 +66,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache hit, replaying output 04f174d88e33b365
+  override-values:override-values-task: cache hit, replaying logs 04f174d88e33b365
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo "running override-values-task" > lib/bar.min.txt
@@ -96,7 +96,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task: cache hit, replaying output bb2616d0a2d6716c
+  override-values:override-values-task: cache hit, replaying logs bb2616d0a2d6716c
   override-values:override-values-task: 
   override-values:override-values-task: > override-values-task
   override-values:override-values-task: > echo "running override-values-task" > lib/bar.min.txt
