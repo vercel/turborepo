@@ -96,7 +96,7 @@ In the example above, `outputs` is customized for both apps, while `dependsOn` i
 
 In [Turborepo v1.7](/blog/turbo-1-7-0), `turbo` became globally installable, giving you the power to run your tasks from anywhere in your codebase. However, `turbo` would still run tasks from the root, running tasks in other workspaces that you may not have intended to run.
 
-With 1.8, `turbo` will automatically detect the workspace you are in and generate [the `--filter` syntax](/repo/docs/reference/command-line-reference#--filter) to scope your task to that workspace.
+With 1.8, `turbo` will automatically detect the workspace you are in and generate [the `--filter` syntax](/repo/docs/reference/command-line-reference/run#--filter) to scope your task to that workspace.
 
 As an example, if your current directory is `apps/admin` and you use the `turbo build` command, `turbo` will run `turbo build --filter=admin` under the hood, focusing on the workspace that you are working on.
 
