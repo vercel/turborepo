@@ -110,7 +110,15 @@ impl AbsoluteSystemPath {
     }
 
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
-        self.0.ancestors().map(|a| Self::new_unchecked(a))
+        self.0.ancestors().map(Self::new_unchecked)
+    }
+
+    pub fn create_dir_all(&self) -> Result<(), io::Error> {
+        fs::create_dir_all(&self.0)
+    }
+
+    pub fn extension(&self) -> Option<&str> {
+        self.0.extension()
     }
 
     // intended for joining literals or obviously single-token strings
@@ -176,9 +184,20 @@ impl AbsoluteSystemPath {
         Ok(())
     }
 
-    pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
+    pub fn resolve(&self, path: &AnchoredSystemPath) -> AbsoluteSystemPathBuf {
         let path = self.0.join(path);
         AbsoluteSystemPathBuf(path)
+    }
+
+    pub fn clean(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let cleaned_path = self
+            .0
+            .as_std_path()
+            .clean()
+            .try_into()
+            .map_err(|_| PathError::InvalidUnicode(self.0.as_str().to_owned()))?;
+
+        Ok(AbsoluteSystemPathBuf(cleaned_path))
     }
 
     // note that this is *not* lstat. If this is a symlink, it
@@ -247,8 +266,12 @@ impl AbsoluteSystemPath {
         rel.components().next() != Some(Utf8Component::ParentDir)
     }
 
+    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
+        self.0.parent().map(Self::new_unchecked)
+    }
+
     /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
-    /// help with performance. Also sets Unix file permissions.
+    /// help with performance
     pub fn open(&self) -> Result<File, io::Error> {
         let mut options = OpenOptions::new();
         options.read(true);
@@ -263,6 +286,10 @@ impl AbsoluteSystemPath {
         }
 
         options.open(&self.0)
+    }
+
+    pub fn open_with_options(&self, open_options: OpenOptions) -> Result<File, io::Error> {
+        open_options.open(&self.0)
     }
 }
 

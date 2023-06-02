@@ -1,6 +1,7 @@
 use std::{
     borrow::Borrow,
     fmt,
+    ops::Deref,
     path::{Path, PathBuf},
 };
 
@@ -33,6 +34,14 @@ impl Borrow<AnchoredSystemPath> for AnchoredSystemPathBuf {
 
 impl AsRef<AnchoredSystemPath> for AnchoredSystemPathBuf {
     fn as_ref(&self) -> &AnchoredSystemPath {
+        self.borrow()
+    }
+}
+
+impl Deref for AnchoredSystemPathBuf {
+    type Target = AnchoredSystemPath;
+
+    fn deref(&self) -> &Self::Target {
         self.borrow()
     }
 }
@@ -122,7 +131,7 @@ impl AnchoredSystemPathBuf {
         Self(path)
     }
 
-    pub fn from_raw<P: AsRef<str>>(raw: P) -> Result<Self, PathError> {
+    pub fn from_raw(raw: impl AsRef<str>) -> Result<Self, PathError> {
         let system_path = raw.as_ref();
         Ok(Self(system_path.into()))
     }
@@ -131,8 +140,23 @@ impl AnchoredSystemPathBuf {
         self.0.as_str()
     }
 
-    pub unsafe fn new_unchecked(path: impl Into<Utf8PathBuf>) -> Self {
+    pub fn new_unchecked(path: impl Into<Utf8PathBuf>) -> Self {
         AnchoredSystemPathBuf(path.into())
+    }
+
+    // Takes in a path that has already been validated as anchored
+    // via `check_name` in `turborepo-cache` and constructs an
+    // `AnchoredSystemPathBuf` with no trailing slashes.
+    pub fn from_validated_tar_path(path: &str) -> Self {
+        let path = Utf8Path::new(path);
+        // There's no easier way to remove trailing slashes in Rust
+        // because `OsString`s don't allow for manipulation.
+        let no_trailing_slash: Utf8PathBuf = path.components().collect();
+
+        // We know this is indeed anchored because of `check_name`,
+        // and it is indeed system because we just split and combined with the
+        // system path separator above
+        AnchoredSystemPathBuf::new_unchecked(no_trailing_slash)
     }
 
     pub fn as_path(&self) -> &Path {
@@ -211,5 +235,20 @@ mod tests {
             AnchoredSystemPathBuf::from_raw(expected.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
         let result = AnchoredSystemPathBuf::relative_path_between(&root, &target);
         assert_eq!(result, expected);
+    }
+
+    #[test_case("./foo/bar/", "./foo/bar", ".\\foo\\bar" ; "with trailing slash")]
+    #[test_case("foo/bar", "foo/bar", "foo\\bar" ; "no trailing slash")]
+    #[test_case("", "", "" ; "empty")]
+    fn test_from_validated_tar_path(
+        path: &str,
+        #[allow(unused_variables)] expected_unix_path: &str,
+        #[allow(unused_variables)] expected_windows_path: &str,
+    ) {
+        let path = AnchoredSystemPathBuf::from_validated_tar_path(path);
+        #[cfg(unix)]
+        assert_eq!(path.as_str(), expected_unix_path);
+        #[cfg(windows)]
+        assert_eq!(path.as_str(), expected_windows_path);
     }
 }

@@ -1,12 +1,11 @@
 #![feature(assert_matches)]
+#![feature(fs_try_exists)]
 
 /// Turborepo's path handling library
 /// Defines distinct path types for the different usecases of paths in turborepo
 ///
 /// - `AbsoluteSystemPath(Buf)`: a path that is absolute and uses the system's
 ///   path separator. Used for interacting with the filesystem
-/// - `RelativeSystemPath(Buf)`: a path that is relative and uses the system's
-///   path separator. Mostly used for appending onto `AbsoluteSystemPaths`.
 /// - `RelativeUnixPath(Buf)`: a path that is relative and uses the unix path
 ///   separator. Used when saving to a cache as a platform-independent path.
 /// - `AnchoredSystemPath(Buf)`: a path that is relative to a specific directory
@@ -33,8 +32,6 @@ mod absolute_system_path;
 mod absolute_system_path_buf;
 mod anchored_system_path;
 mod anchored_system_path_buf;
-mod anchored_unix_path_buf;
-mod anchored_unix_tar_path_buf;
 mod relative_unix_path;
 mod relative_unix_path_buf;
 
@@ -44,9 +41,7 @@ pub use absolute_system_path::AbsoluteSystemPath;
 pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
 pub use anchored_system_path::AnchoredSystemPath;
 pub use anchored_system_path_buf::AnchoredSystemPathBuf;
-pub use anchored_unix_path_buf::AnchoredUnixPathBuf;
-pub use anchored_unix_tar_path_buf::AnchoredUnixTarPathBuf;
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 pub use relative_unix_path::RelativeUnixPath;
 pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
@@ -131,6 +126,24 @@ impl<T: AsRef<str>> IntoUnix for T {
         }
 
         output
+    }
+}
+
+pub enum UnknownPathType {
+    Absolute(AbsoluteSystemPathBuf),
+    Anchored(AnchoredSystemPathBuf),
+}
+
+/// Categorizes a path as either an `AbsoluteSystemPathBuf` or
+/// an `AnchoredSystemPathBuf` depending on whether it
+/// is absolute or relative.
+pub fn categorize(path: &Utf8Path) -> UnknownPathType {
+    let path = Utf8PathBuf::try_from(path_clean::clean(path))
+        .expect("path cleaning should preserve UTF-8");
+    if path.is_absolute() {
+        UnknownPathType::Absolute(AbsoluteSystemPathBuf(path))
+    } else {
+        UnknownPathType::Anchored(AnchoredSystemPathBuf(path))
     }
 }
 

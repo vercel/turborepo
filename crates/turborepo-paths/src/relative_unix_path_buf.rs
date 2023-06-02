@@ -6,9 +6,11 @@ use std::{
     ops::Deref,
 };
 
-use crate::{PathError, RelativeUnixPath};
+use camino::Utf8Path;
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+use crate::{IntoUnix, PathError, RelativeUnixPath};
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct RelativeUnixPathBuf(pub(crate) String);
 
 impl Display for RelativeUnixPathBuf {
@@ -20,14 +22,13 @@ impl Display for RelativeUnixPathBuf {
 impl RelativeUnixPathBuf {
     pub fn new(path: impl Into<String>) -> Result<Self, PathError> {
         let path_string = path.into();
-        if path_string.starts_with('/') {
+        if path_string.starts_with('/') || Utf8Path::new(&path_string).is_absolute() {
             return Err(PathError::NotRelative(path_string));
         }
-        Ok(Self(path_string))
-    }
 
-    pub(crate) fn new_unchecked(path: impl Into<String>) -> Self {
-        Self(path.into())
+        let unix_path = path_string.into_unix();
+
+        Ok(Self(unix_path.into()))
     }
 
     pub fn into_inner(self) -> String {
@@ -36,6 +37,12 @@ impl RelativeUnixPathBuf {
 
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+
+    pub fn make_canonical_for_tar(&mut self, is_dir: bool) {
+        if is_dir && !self.0.ends_with('/') {
+            self.0.push('/');
+        }
     }
 
     pub fn strip_prefix(&self, prefix: &RelativeUnixPathBuf) -> Result<Self, PathError> {
