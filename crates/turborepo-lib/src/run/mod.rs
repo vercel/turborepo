@@ -42,8 +42,8 @@ impl Run {
     pub async fn run(&mut self) -> Result<()> {
         let _start_at = std::time::Instant::now();
         let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json = PackageJson::load(package_json_path.as_absolute_path())
-            .context("failed to read package.json")?;
+        let root_package_json =
+            PackageJson::load(&package_json_path).context("failed to read package.json")?;
         let targets = self.targets();
         let mut opts = self.opts()?;
 
@@ -78,7 +78,7 @@ impl Run {
         let g = CompleteGraph::new(
             pkg_dep_graph.workspace_graph.clone(),
             pkg_dep_graph.workspace_infos.clone(),
-            self.base.repo_root.as_absolute_path(),
+            &self.base.repo_root,
         );
 
         let is_single_package = opts.run_opts.single_package;
