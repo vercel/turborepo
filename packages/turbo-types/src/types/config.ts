@@ -232,7 +232,7 @@ export interface Pipeline {
    *
    * "none": Hides all task output
    *
-   * Documentation: https://turbo.build/repo/docs/reference/command-line-reference#--output-logs
+   * Documentation: https://turbo.build/repo/docs/reference/command-line-reference/run#--output-logs
    *
    * @default full
    */
