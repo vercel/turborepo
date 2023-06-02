@@ -40,43 +40,54 @@ impl Error {
     pub(crate) fn git_error(s: impl Into<String>) -> Self {
         Error::Git(s.into(), Backtrace::capture())
     }
-
-    fn from_git_exit_code(cmd: &str, path: &AbsoluteSystemPath, exit_code: Option<i32>) -> Error {
-        let s = format!(
-            "'{}' in {} exited with status code {}",
-            cmd,
-            path.to_string(),
-            exit_code
-                .map(|code| code.to_string())
-                .unwrap_or("unknown".to_string())
-        );
-        Error::Git(s, Backtrace::capture())
-    }
 }
 
-pub(crate) fn read_git_error<R: Read>(stderr: &mut R) -> Option<Error> {
+fn read_git_error_to_string<R: Read>(stderr: &mut R) -> Option<String> {
     let mut buf = String::new();
     let bytes_read = stderr.read_to_string(&mut buf).ok()?;
     if bytes_read > 0 {
         // something failed with git, report that error
-        Some(Error::git_error(buf))
+        Some(buf)
     } else {
         None
     }
 }
 
-pub(crate) fn wait_for_success<R: Read>(
+pub(crate) fn wait_for_success<R: Read, T>(
     mut child: Child,
     stderr: &mut R,
     command: &str,
     root_path: impl AsRef<AbsoluteSystemPath>,
-) -> Result<(), Error> {
+    parse_result: Result<T, Error>,
+) -> Result<T, Error> {
     let exit_status = child.wait()?;
-    if !exit_status.success() {
-        Err(read_git_error(stderr).unwrap_or_else(|| {
-            Error::from_git_exit_code(command, root_path.as_ref(), exit_status.code())
-        }))
-    } else {
-        Ok(())
+    if exit_status.success() {
+        if let Ok(result) = parse_result {
+            return Ok(result);
+        }
     }
+    let stderr_output = read_git_error_to_string(stderr);
+    let stderr_text = stderr_output
+        .map(|stderr| format!(" stderr: {}", stderr))
+        .unwrap_or("".to_string());
+    let exit_text = if exit_status.success() {
+        "".to_string()
+    } else {
+        let code = exit_status
+            .code()
+            .map(|code| code.to_string())
+            .unwrap_or("unknown".to_string());
+        format!(" exited with code {}", code)
+    };
+    let parse_error_text = if let Err(parse_error) = parse_result {
+        format!(" had a parse error {}", parse_error)
+    } else {
+        "".to_string()
+    };
+    let path_text = root_path.as_ref();
+    let err_text = format!(
+        "'{}' in {}{}{}{}",
+        command, path_text, parse_error_text, exit_text, stderr_text
+    );
+    Err(Error::Git(err_text, Backtrace::capture()))
 }
