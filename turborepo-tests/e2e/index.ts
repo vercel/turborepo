@@ -380,7 +380,7 @@ function runSmokeTests<T>(
 
       assert.ok(
         sinceCommandSecondRunOutput.includes(
-          `b:build: cache hit, suppressing output ${getHashFromOutput(
+          `b:build: cache hit, suppressing logs ${getHashFromOutput(
             sinceCommandSecondRunOutput,
             "b#build"
           )}`
@@ -390,7 +390,7 @@ function runSmokeTests<T>(
 
       assert.ok(
         sinceCommandSecondRunOutput.includes(
-          `a:test: cache hit, suppressing output ${getHashFromOutput(
+          `a:test: cache hit, suppressing logs ${getHashFromOutput(
             sinceCommandSecondRunOutput,
             "a#test"
           )}`
@@ -418,7 +418,7 @@ function runSmokeTests<T>(
       );
       assert.ok(
         lintOutput.includes(
-          `a:lint: cache hit, suppressing output ${getHashFromOutput(
+          `a:lint: cache hit, suppressing logs ${getHashFromOutput(
             lintOutput,
             "a#lint"
           )}`
@@ -446,7 +446,7 @@ function runSmokeTests<T>(
       );
       assert.ok(
         secondLintRun.includes(
-          `a:lint: cache hit, suppressing output ${getHashFromOutput(
+          `a:lint: cache hit, suppressing logs ${getHashFromOutput(
             secondLintRun,
             "a#lint"
           )}`
@@ -547,7 +547,7 @@ function runSmokeTests<T>(
       );
       assert.ok(
         secondPass.includes(
-          `//:special: cache hit, suppressing output ${getHashFromOutput(
+          `//:special: cache hit, suppressing logs ${getHashFromOutput(
             secondPass,
             "//#special"
           )}`

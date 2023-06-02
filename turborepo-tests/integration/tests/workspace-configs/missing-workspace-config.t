@@ -34,7 +34,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing output 3b9c040c7ac66cfd
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 3b9c040c7ac66cfd
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -63,7 +63,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing output 395c409c711b5ddd
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 395c409c711b5ddd
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total

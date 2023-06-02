@@ -49,7 +49,7 @@ Setup
   add-keys:add-keys-underlying-task: > echo "running add-keys-underlying-task"
   add-keys:add-keys-underlying-task: 
   add-keys:add-keys-underlying-task: running add-keys-underlying-task
-  add-keys:add-keys-task: cache hit, suppressing output be69dcce790fb9c2
+  add-keys:add-keys-task: cache hit, suppressing logs be69dcce790fb9c2
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
