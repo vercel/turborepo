@@ -18,6 +18,8 @@ export interface TurboIgnoreArgs {
   workspace?: string;
   // the task to run, if not build
   task?: string;
+  // A ref/head to compare against
+  since?: string;
   // A ref/head to compare against if no previously deployed SHA is available
   fallback?: string;
 }

@@ -19,6 +19,7 @@ If <workspace> is not provided, it will be inferred from the "name"
 field of the "package.json" located at the current working directory.
 
 Flags:
+  --since=<ref>       A ref/head to compare against
   --fallback=<ref>    On Vercel, if no previously deployed SHA is available to compare against,
                       fallback to comparing against the provided ref
   --help, -h          Show this help message
@@ -83,6 +84,13 @@ export default function parseArgs({
   const fallbackArg = argv.find((arg) => arg.startsWith(fallbackSentinel));
   if (fallbackArg && fallbackArg.length > fallbackSentinel.length) {
     args.fallback = fallbackArg.split("=")[1];
+  }
+
+  // set since (if provided)
+  const sinceSentinel = "--since=";
+  const sinceArg = argv.find((arg) => arg.startsWith(sinceSentinel));
+  if (sinceArg && sinceArg.length > sinceSentinel.length) {
+    args.since = fallbackArg.split("=")[1];
   }
 
   return args;

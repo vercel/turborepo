@@ -8,9 +8,15 @@ export interface GetComparisonArgs extends TurboIgnoreArgs {
 
 export function getComparison(args: GetComparisonArgs): {
   ref: string;
-  type: "previousDeploy" | "headRelative" | "customFallback";
+  type: "previousDeploy" | "headRelative" | "customFallback" | "specifiedManually";
 } | null {
-  const { fallback, workspace } = args;
+  const { fallback, since, workspace } = args;
+
+  if (since) {
+    // if user has provided a commit to compare to, we use it in the first place
+    return { ref: since, type: 'specifiedManually' };
+  }
+
   if (process.env.VERCEL === "1") {
     if (process.env.VERCEL_GIT_PREVIOUS_SHA) {
       // use the commit SHA of the last successful deployment for this project / branch
