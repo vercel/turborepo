@@ -90,7 +90,7 @@ export default function parseArgs({
   const sinceSentinel = "--since=";
   const sinceArg = argv.find((arg) => arg.startsWith(sinceSentinel));
   if (sinceArg && sinceArg.length > sinceSentinel.length) {
-    args.since = fallbackArg.split("=")[1];
+    args.since = sinceArg.split("=")[1];
   }
 
   return args;
