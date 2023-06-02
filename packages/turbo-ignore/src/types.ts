@@ -20,6 +20,6 @@ export interface TurboIgnoreArgs {
   task?: string;
   // A ref/head to compare against
   since?: string;
-  // A ref/head to compare against if no previously deployed SHA is available
+  // On Vercel, a fallback ref/head to compare against if no previously deployed SHA is available
   fallback?: string;
 }
