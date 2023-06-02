@@ -440,7 +440,8 @@ pub fn pnpm_global_change(
     Ok(prev_data.lockfile_version != curr_data.lockfile_version
         || prev_data.package_extensions_checksum != curr_data.package_extensions_checksum
         || prev_data.overrides != curr_data.overrides
-        || prev_data.patched_dependencies != curr_data.patched_dependencies)
+        || prev_data.patched_dependencies != curr_data.patched_dependencies
+        || prev_data.settings != curr_data.settings)
 }
 
 #[cfg(test)]
