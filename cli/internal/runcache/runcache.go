@@ -161,7 +161,7 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	}
 
 	// Some more context to add into the cache hit messages.
-	// This isn't the cleanest way to updat ethe log message, so we should revisit during Rust port.
+	// This isn't the cleanest way to update the log message, so we should revisit during Rust port.
 	moreContext := ""
 	if !hasChangedOutputs {
 		moreContext = " (outputs already on disk)"
