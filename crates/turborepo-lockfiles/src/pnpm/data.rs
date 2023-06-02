@@ -25,6 +25,8 @@ pub struct PnpmLockfile {
     packages: Option<Map<String, PackageSnapshot>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    settings: Option<LockfileSettings>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -123,6 +125,13 @@ pub struct PackageResolution {
     repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     commit: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+struct LockfileSettings {
+    auto_install_peer_deps: Option<bool>,
+    exclude_links_from_lockfile: Option<bool>,
 }
 
 impl PnpmLockfile {
@@ -293,6 +302,7 @@ impl PnpmLockfile {
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             time: None,
+            settings: self.settings.clone(),
         })
     }
 
@@ -441,6 +451,7 @@ mod tests {
     const PNPM6: &[u8] = include_bytes!("../../fixtures/pnpm6-workspace.yaml").as_slice();
     const PNPM7: &[u8] = include_bytes!("../../fixtures/pnpm7-workspace.yaml").as_slice();
     const PNPM8: &[u8] = include_bytes!("../../fixtures/pnpm8.yaml").as_slice();
+    const PNPM8_6: &[u8] = include_bytes!("../../fixtures/pnpm-v6.1.yaml").as_slice();
     const PNPM_ABSOLUTE: &[u8] = include_bytes!("../../fixtures/pnpm-absolute.yaml").as_slice();
     const PNPM_ABSOLUTE_V6: &[u8] =
         include_bytes!("../../fixtures/pnpm-absolute-v6.yaml").as_slice();
@@ -456,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip() {
-        for fixture in &[PNPM6, PNPM7, PNPM8] {
+        for fixture in &[PNPM6, PNPM7, PNPM8, PNPM8_6] {
             let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
             let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
             let lockfile_from_serialized =
