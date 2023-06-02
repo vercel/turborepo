@@ -79,12 +79,20 @@ func (f *fsCache) Exists(hash string) ItemStatus {
 	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
 	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
+	status := newFSTaskCacheStatus(false, 0)
 	if compressedCachePath.FileExists() || uncompressedCachePath.FileExists() {
-		// TODO: add timeSaved value in here
-		return newFSTaskCacheStatus(true, 0)
+		status.Hit = true
 	}
 
-	return newFSTaskCacheStatus(false, 0)
+	// Swallow the error
+	if meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json")); err != nil {
+		status.TimeSaved = 0
+	} else {
+		status.TimeSaved = meta.Duration
+	}
+
+	return status
+
 }
 
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {
