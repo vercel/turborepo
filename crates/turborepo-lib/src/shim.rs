@@ -445,11 +445,9 @@ impl InferInfo {
         info.has_turbo_json
     }
 
-    pub fn is_workspace_root_of(&self, target_path: &Path) -> bool {
+    pub fn is_workspace_root_of(&self, target_path: &AbsoluteSystemPath) -> bool {
         match &self.workspace_globs {
-            Some(globs) => globs
-                .test(&self.path, target_path.to_path_buf())
-                .unwrap_or(false),
+            Some(globs) => globs.test(&self.path, target_path).unwrap_or(false),
             None => false,
         }
     }
@@ -469,19 +467,10 @@ impl RepoState {
                     return None;
                 }
 
-                // FIXME: This should be based upon detecting the pacakage manager.
-                // However, we don't have that functionality implemented in Rust yet.
-                // PackageManager::detect(path).get_workspace_globs().unwrap_or(None)
-                let workspace_globs = PackageManager::get_package_manager(reference_dir, None)
-                    .and_then(|mgr| mgr.get_workspace_globs(reference_dir))
+                // FIXME: We should save this package manager that we detected
+                let workspace_globs = PackageManager::get_package_manager(path, None)
+                    .and_then(|mgr| mgr.get_workspace_globs(path))
                     .ok();
-                // let workspace_globs = PackageManager::Pnpm
-                //     .get_workspace_globs(path)
-                //     .unwrap_or_else(|_| {
-                //         PackageManager::Npm
-                //             .get_workspace_globs(path)
-                //             .unwrap_or(None)
-                //     });
 
                 Some(InferInfo {
                     path: path.to_owned(),
@@ -558,7 +547,7 @@ impl RepoState {
             // Failing that we just choose the closest.
             } else {
                 for ancestor_infer in check_roots {
-                    if ancestor_infer.is_workspace_root_of(current.path.as_path()) {
+                    if ancestor_infer.is_workspace_root_of(&current.path) {
                         let local_turbo_state =
                             LocalTurboState::infer(ancestor_infer.path.as_path());
                         return Ok(Self {

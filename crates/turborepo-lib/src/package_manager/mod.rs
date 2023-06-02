@@ -6,11 +6,10 @@ use std::{
     backtrace,
     fmt::{self, Display},
     fs,
-    path::PathBuf,
 };
 
-use anyhow::{anyhow, Result as AnyhowResult};
 use itertools::{Either, Itertools};
+use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -129,14 +128,15 @@ impl Globs {
         })
     }
 
-    pub fn test(&self, root: &AbsoluteSystemPath, target: PathBuf) -> AnyhowResult<bool> {
-        let search_value = target
-            .strip_prefix(root)?
-            .to_str()
-            .ok_or_else(|| anyhow!("The relative path is not UTF8."))?;
+    pub fn test(
+        &self,
+        root: &AbsoluteSystemPath,
+        target: &AbsoluteSystemPath,
+    ) -> Result<bool, Error> {
+        let search_value = root.anchor(target)?;
 
-        let includes = self.inclusions.is_match(search_value);
-        let excludes = self.exclusions.is_match(search_value);
+        let includes = self.inclusions.is_match(&search_value);
+        let excludes = self.exclusions.is_match(&search_value);
 
         Ok(includes && !excludes)
     }
@@ -151,6 +151,8 @@ pub struct MissingWorkspaceError {
 pub struct NoPackageManager;
 
 impl NoPackageManager {
+    // TODO: determine how to thread through user-friendly error message and apply
+    // our UI
     pub fn ui_display(&self, ui: &UI) -> String {
         let url =
             ui.apply(UNDERLINE.apply_to("https://nodejs.org/api/packages.html#packagemanager"));
@@ -223,7 +225,16 @@ pub enum Error {
     Which(#[from] which::Error),
     #[error("invalid utf8: {0}")]
     Utf8Error(#[from] std::string::FromUtf8Error),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+    #[error(
+        "We could not parse the packageManager field in package.json, expected: {0}, received: {1}"
+    )]
+    InvalidPackageManager(String, String),
 }
+
+static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
+    lazy_regex!(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
     /// Returns the set of globs for the workspace.
@@ -283,7 +294,7 @@ impl PackageManager {
     }
 
     // Attempts to read the package manager from the package.json
-    fn read_package_manager(pkg: &PackageJson) -> AnyhowResult<Option<Self>> {
+    fn read_package_manager(pkg: &PackageJson) -> Result<Option<Self>, Error> {
         let Some(package_manager) = &pkg.package_manager else {
             return Ok(None)
         };
@@ -319,19 +330,15 @@ impl PackageManager {
         }
     }
 
-    pub(crate) fn parse_package_manager_string(manager: &str) -> AnyhowResult<(&str, &str)> {
-        let package_manager_pattern =
-            Regex::new(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)")?;
-        if let Some(captures) = package_manager_pattern.captures(manager) {
+    pub(crate) fn parse_package_manager_string(manager: &str) -> Result<(&str, &str), Error> {
+        if let Some(captures) = PACKAGE_MANAGER_PATTERN.captures(manager) {
             let manager = captures.name("manager").unwrap().as_str();
             let version = captures.name("version").unwrap().as_str();
             Ok((manager, version))
         } else {
-            Err(anyhow!(
-                "We could not parse packageManager field in package.json, expected: {}, received: \
-                 {}",
-                package_manager_pattern,
-                manager
+            Err(Error::InvalidPackageManager(
+                PACKAGE_MANAGER_PATTERN.to_string(),
+                manager.to_string(),
             ))
         }
     }
@@ -435,7 +442,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_package_manager() -> AnyhowResult<()> {
+    fn test_read_package_manager() -> Result<(), Error> {
         let mut package_json = PackageJson {
             package_manager: Some("npm@8.19.4".to_string()),
         };
@@ -462,7 +469,7 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_multiple_package_managers() -> AnyhowResult<()> {
+    fn test_detect_multiple_package_managers() -> Result<(), Error> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
 
@@ -471,8 +478,7 @@ mod tests {
         let pnpm_lock_path = repo_root.path().join(pnpm::LOCKFILE);
         File::create(pnpm_lock_path)?;
 
-        let error =
-            PackageManager::detect_package_manager(repo_root_path.as_absolute_path()).unwrap_err();
+        let error = PackageManager::detect_package_manager(&repo_root_path).unwrap_err();
         assert_eq!(
             error.to_string(),
             "We detected multiple package managers in your repository: pnpm, npm. Please remove \
@@ -481,8 +487,7 @@ mod tests {
 
         fs::remove_file(&package_lock_json_path)?;
 
-        let package_manager =
-            PackageManager::detect_package_manager(repo_root_path.as_absolute_path())?;
+        let package_manager = PackageManager::detect_package_manager(&repo_root_path)?;
         assert_eq!(package_manager, PackageManager::Pnpm);
 
         Ok(())
@@ -497,9 +502,7 @@ mod tests {
             .unwrap();
         let with_yarn = repo_root.join_components(&["examples", "with-yarn"]);
         let package_manager = PackageManager::Npm;
-        let globs = package_manager
-            .get_workspace_globs(&with_yarn)
-            .unwrap();
+        let globs = package_manager.get_workspace_globs(&with_yarn).unwrap();
 
         let expected = Globs::new(vec!["apps/*", "packages/*"], vec![]).unwrap();
         assert_eq!(globs, expected);
@@ -510,8 +513,8 @@ mod tests {
         struct TestCase {
             globs: Globs,
             root: AbsoluteSystemPathBuf,
-            target: PathBuf,
-            output: AnyhowResult<bool>,
+            target: AbsoluteSystemPathBuf,
+            output: Result<bool, Error>,
         }
 
         #[cfg(unix)]
@@ -520,9 +523,9 @@ mod tests {
         let root = AbsoluteSystemPathBuf::new("C:\\a\\b\\c").unwrap();
 
         #[cfg(unix)]
-        let target = PathBuf::from("/a/b/c/d/e/f");
+        let target = AbsoluteSystemPathBuf::new("/a/b/c/d/e/f").unwrap();
         #[cfg(windows)]
-        let target = PathBuf::from("C:\\a\\b\\c\\d\\e\\f");
+        let target = AbsoluteSystemPathBuf::new("C:\\a\\b\\c\\d\\e\\f").unwrap();
 
         let tests = [TestCase {
             globs: Globs::new(vec!["d/**".to_string()], vec![]).unwrap(),
@@ -532,7 +535,7 @@ mod tests {
         }];
 
         for test in tests {
-            match test.globs.test(&test.root, test.target) {
+            match test.globs.test(&test.root, &test.target) {
                 Ok(value) => assert_eq!(value, test.output.unwrap()),
                 Err(value) => assert_eq!(value.to_string(), test.output.unwrap_err().to_string()),
             };
@@ -540,7 +543,7 @@ mod tests {
     }
 
     #[test]
-    fn test_nested_workspace_globs() -> AnyhowResult<()> {
+    fn test_nested_workspace_globs() -> Result<(), Error> {
         let top_level: PackageJsonWorkspaces =
             serde_json::from_str("{ \"workspaces\": [\"packages/**\"]}")?;
         assert_eq!(top_level.workspaces.as_ref(), vec!["packages/**"]);
