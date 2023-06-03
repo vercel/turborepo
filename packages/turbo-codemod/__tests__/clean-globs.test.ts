@@ -66,27 +66,6 @@ describe("clean-globs", () => {
     expect(fixGlobPattern("a/b/c/*", log)).toBe("a/b/c/*");
   });
 
-  test("transforms '!**/folder' to '**/[!folder]'", () => {
-    let badGlobPatterns = [
-      ["!**/dist", "**/[!dist]"],
-      ["!**/node_modules", "**/[!node_modules]"],
-      ["!**/foo/bar", "**/[!foo/bar]"],
-      ["!**/foo/bar/baz", "**/[!foo/bar/baz]"],
-      ["!**/foo/bar/baz/qux", "**/[!foo/bar/baz/qux]"],
-    ];
-
-    const { log } = getTransformerHelpers({
-      transformer: "test",
-      rootPath: ".",
-      options: { force: false, dry: false, print: false },
-    });
-
-    // Now let's test the function
-    badGlobPatterns.forEach(([input, output]) => {
-      expect(fixGlobPattern(input, log)).toBe(output);
-    });
-  });
-
   test("transforms '**ext' to '**/*ext'", () => {
     let badGlobPatterns = [
       ["cypress/integration/**.test.ts", "cypress/integration/**/*.test.ts"],

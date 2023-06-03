@@ -65,15 +65,6 @@ export function fixGlobPattern(pattern: string, log: Logger): string {
     newPattern = pattern.replace(/\*\*\/\*\*/g, "**");
   }
 
-  // For '!**/dist' and '!**/node_modules'
-  // Change '!**/dist' and '!**/node_modules' to '**/[!dist]' and '**/[!node_modules]'
-  newPattern = pattern.replace(/^!\*\*\/([a-z_\/]+)$/g, "**/[!$1]");
-  if (newPattern !== pattern) {
-    log.modified(`${pattern} to ${newPattern}`);
-    log.info("please make the previous transform is correct");
-    pattern = newPattern;
-  }
-
   // For 'cypress/integration/**.test.ts', 'scripts/**.mjs', 'scripts/**.js', 'src/types/generated/**.ts'
   // Change '**.ext' to '**/*.ext' where 'ext' is 'test.ts', 'mjs', 'js', 'ts'
   newPattern = pattern.replace(/(\*\*)([a-z\.]+)/g, "$1/*$2");
