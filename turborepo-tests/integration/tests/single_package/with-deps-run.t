@@ -25,12 +25,12 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying output fdb18de339449827
+  build: cache hit, replaying logs fdb18de339449827
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache hit, replaying output a39dd654f9f3f6a7
+  test: cache hit, replaying logs a39dd654f9f3f6a7
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]
@@ -44,8 +44,8 @@ Run with --output-logs=hash-only
   $ ${TURBO} run test --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, suppressing output fdb18de339449827
-  test: cache hit, suppressing output a39dd654f9f3f6a7
+  build: cache hit, suppressing logs fdb18de339449827
+  test: cache hit, suppressing logs a39dd654f9f3f6a7
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total

@@ -158,7 +158,13 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 			Source:    cache.CacheSourceFS,
 			TimeSaved: timeSavedFromDaemon,
 		}
-		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
+	}
+
+	// Some more context to add into the cache hit messages.
+	// This isn't the cleanest way to update the log message, so we should revisit during Rust port.
+	moreContext := ""
+	if !hasChangedOutputs {
+		moreContext = " (outputs already on disk)"
 	}
 
 	switch tc.taskOutputMode {
@@ -166,10 +172,10 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	case util.NewTaskOutput:
 		fallthrough
 	case util.HashTaskOutput:
-		prefixedUI.Info(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
+		prefixedUI.Info(fmt.Sprintf("cache hit%s, suppressing logs %s", moreContext, ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
-		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
+		prefixedUI.Info(fmt.Sprintf("cache hit%s, replaying logs %s", moreContext, ui.Dim(tc.hash)))
 		tc.ReplayLogFile(prefixedUI, progressLogger)
 	case util.ErrorTaskOutput:
 		// The task succeeded, so we don't output anything in this case
