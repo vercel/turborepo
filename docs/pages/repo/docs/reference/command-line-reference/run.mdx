@@ -57,25 +57,6 @@ Set the working directory of the command.
 turbo run build --cwd=./somewhere/else
 ```
 
-### `--deps`
-
-<Callout type="error">
-  `--deps` is deprecated in `1.2.x`. Please use
-  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependents-of-matched-workspaces)
-  instead.
-</Callout>
-
-Defaults to `true`. Include dependent workspace consumers in the execution.
-
-```sh
-turbo run build --deps
-turbo run build --no-deps
-```
-
-**Example**
-
-Let's say you have workspaces A, B, C, and D where A depends on B and C depends on D. You run `turbo run build` for the first time and everything is built and cached. Then, you change a line of code in B. With the `--deps` flag on, running `turbo run build` will execute `build` in B and then A, but not in C and D because they are not impacted by the change. If you were to run `turbo run build --no-deps` instead, turbo will only run `build` in B.
-
 ### `--dry / --dry-run`
 
 Instead of executing tasks, display details about the affected workspaces and tasks that would be run.
@@ -245,18 +226,6 @@ Just a quick overview.
 - `{}` allows for a comma-separated list of "or" expressions
 - `!` at the beginning of a pattern will negate the match
 
-### `--include-dependencies`
-
-<Callout type="error">
-  `--include-dependencies` is deprecated in `1.2.x`. Please use
-  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependencies-of-matched-workspaces)
-  instead.
-</Callout>
-
-Default `false`. When `true`, `turbo` will add any workspaces that the workspaces in the current execution _depend_ on (i.e. those declared in `dependencies` or `devDependencies`).
-
-This is useful when using `--filter` in CI as it guarantees that every dependency needed for the execution is actually executed.
-
 ### `--no-cache`
 
 Default `false`. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
@@ -339,42 +308,6 @@ turbo run build --remote-only
 ```
 
 The same behavior can also be set via the `TURBO_REMOTE_ONLY=true` environment variable.
-
-### `--scope`
-
-<Callout type="error">
-  `--scope` is deprecated in `1.2.x`. Please use
-  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-package) instead.
-</Callout>
-
-`type: string[]`
-
-Specify/filter workspaces to act as entry points for execution. Globs against `package.json` `name` field (and not the file system.)
-
-```sh
-turbo run lint --scope="@example/**"
-turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
-```
-
-### `--since`
-
-<Callout type="error">
-  `--since` is deprecated in `1.2.x`. Please use
-  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-changed-workspaces)
-  instead.
-</Callout>
-
-Filter execution based on which workspaces have changed since a merge-base.
-
-```
-turbo run build --since=origin/main
-```
-
-<Callout type="info">
-  **Important**: This uses the `git diff ${target_branch}...` mechanism to
-  identify which workspaces have changed. There is an assumption that all the
-  input files for a workspace exist inside their respective workspace folders.
-</Callout>
 
 ### `--summarize`
 
@@ -474,6 +407,84 @@ turbo run build -v
 turbo run build --verbosity=2
 turbo run build -vvv
 ```
+
+## Deprecated Options
+
+### `--include-dependencies`
+
+<Callout type="error">
+  `--include-dependencies` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependencies-of-matched-workspaces)
+  instead.
+</Callout>
+
+Default `false`. When `true`, `turbo` will add any workspaces that the
+workspaces in the current execution _depend_ on (i.e. those declared in
+`dependencies` or `devDependencies`).
+
+This is useful when using `--filter` in CI as it guarantees that every
+dependency needed for the execution is actually executed.
+
+### `--deps`
+
+<Callout type="error">
+  `--deps` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#include-dependents-of-matched-workspaces)
+  instead.
+</Callout>
+
+Defaults to `true`. Include dependent workspace consumers in the execution.
+
+```sh
+turbo run build --deps
+turbo run build --no-deps
+```
+
+**Example**
+
+Let's say you have workspaces A, B, C, and D where A depends on B and C depends
+on D. You run `turbo run build` for the first time and everything is built and
+cached. Then, you change a line of code in B. With the `--deps` flag on, running
+`turbo run build` will execute `build` in B and then A, but not in C and D
+because they are not impacted by the change. If you were to run
+`turbo run build --no-deps` instead, turbo will only run `build` in B.
+
+### `--scope`
+
+<Callout type="error">
+  `--scope` is deprecated in `1.2.x`. Please use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-package) instead.
+</Callout>
+
+`type: string[]`
+
+Specify/filter workspaces to act as entry points for execution. Globs against
+`package.json` `name` field (and not the file system.)
+
+```sh
+turbo run lint --scope="@example/**"
+turbo run dev --scope="@example/a" --scope="@example/b" --no-cache --no-deps
+```
+
+### `--since`
+
+<Callout type="error">
+  `--since` is deprecated in `1.2.x`, use
+  [`--filter`](/repo/docs/core-concepts/monorepos/filtering#filter-by-changed-workspaces)
+  instead.
+</Callout>
+
+Filter execution based on which workspaces have changed since a merge-base.
+
+```
+turbo run build --since=origin/main
+```
+
+<Callout type="info">
+  **Important**: This uses the `git diff ${target_branch}...` mechanism to
+  identify which workspaces have changed. There is an assumption that all the
+  input files for a workspace exist inside their respective workspace folders.
+</Callout>
 
 [1]: /repo/docs/reference/configuration#passThroughEnv
 [2]: /repo/docs/reference/configuration#globalPassThroughEnv
