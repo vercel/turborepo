@@ -65,16 +65,17 @@ export function fixGlobPattern(pattern: string, log: Logger): string {
     newPattern = pattern.replace(/\*\*\/\*\*/g, "**");
   }
 
-  // For 'cypress/integration/**.test.ts', 'scripts/**.mjs', 'scripts/**.js', 'src/types/generated/**.ts'
-  // Change '**.ext' to '**/*.ext' where 'ext' is 'test.ts', 'mjs', 'js', 'ts'
-  newPattern = pattern.replace(/(\*\*)([a-z\.]+)/g, "$1/*$2");
+  // For '**.ext' change to '**/*.ext'
+  // 'ext' is a filename or extension and can contain almost any character except '*' and '/'
+  newPattern = pattern.replace(/(\*\*)([^*/]+)/g, "$1/*$2");
   if (newPattern !== pattern) {
     log.modified(`${pattern} to ${newPattern}`);
     pattern = newPattern;
   }
 
-  // For 'test/prefix**' change to 'test/prefix*/**'
-  newPattern = pattern.replace(/([a-z_]+)(\*\*)/g, "$1*/$2");
+  // For 'prefix**' change to 'prefix*/**'
+  // 'prefix' is a folder name and can contain almost any character except '*' and '/'
+  newPattern = pattern.replace(/([^*/]+)(\*\*)/g, "$1*/$2");
   if (newPattern !== pattern) {
     log.modified(`${pattern} to ${newPattern}`);
     pattern = newPattern;
