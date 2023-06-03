@@ -39,7 +39,7 @@ Make sure error isn't cached
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:okay: cache hit, replaying output 9365dd2ae80cb6fb
+  my-app:okay: cache hit, replaying logs 9365dd2ae80cb6fb
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo 'working'
@@ -70,7 +70,7 @@ Make sure error code isn't swallowed with continue
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running okay2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:okay: cache hit, replaying output 9365dd2ae80cb6fb
+  my-app:okay: cache hit, replaying logs 9365dd2ae80cb6fb
   my-app:okay: 
   my-app:okay: > okay
   my-app:okay: > echo 'working'
