@@ -216,8 +216,10 @@ impl EcmascriptInputTransform {
                     module_program
                 };
 
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
                 *program = module_program.fold_with(&mut chain!(
-                    preset_env::preset_env(
+                    preset_env::preset_env::<&'_ dyn Comments>(
                         top_level_mark,
                         Some(comments.clone()),
                         config,
