@@ -4,7 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use swc_core::{
     base::SwcComments,
-    common::{chain, util::take::Take, Mark, SourceMap},
+    common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program, Script},
         preset_env::{self, Targets},
@@ -221,7 +221,7 @@ impl EcmascriptInputTransform {
                 *program = module_program.fold_with(&mut chain!(
                     preset_env::preset_env::<&'_ dyn Comments>(
                         top_level_mark,
-                        Some(comments.clone()),
+                        Some(&comments),
                         config,
                         Assumptions::default(),
                         &mut FeatureFlag::empty(),
