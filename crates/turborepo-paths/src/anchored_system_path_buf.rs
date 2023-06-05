@@ -20,6 +20,13 @@ impl TryFrom<&Path> for AnchoredSystemPathBuf {
     }
 }
 
+// TODO: perhaps we ought to be converting to a unix path?
+impl<'a> Into<wax::CandidatePath<'a>> for &'a AnchoredSystemPathBuf {
+    fn into(self) -> wax::CandidatePath<'a> {
+        self.as_path().into()
+    }
+}
+
 impl AnchoredSystemPathBuf {
     pub fn new(
         root: impl AsRef<AbsoluteSystemPath>,
