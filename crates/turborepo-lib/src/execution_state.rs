@@ -32,7 +32,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
             PackageJson::load(&base.repo_root.join_component("package.json")).ok();
 
         let package_manager =
-            PackageManager::get_package_manager(base, root_package_json.as_ref())?;
+            PackageManager::get_package_manager(&base.repo_root, root_package_json.as_ref())?;
         trace!("Found {} as package manager", package_manager);
 
         let repo_config = base.repo_config()?;

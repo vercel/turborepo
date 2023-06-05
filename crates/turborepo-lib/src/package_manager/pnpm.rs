@@ -1,25 +1,24 @@
-use anyhow::Result;
 use node_semver::{Range, Version};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::AbsoluteSystemPath;
 
-use crate::package_manager::PackageManager;
+use crate::package_manager::{Error, PackageManager};
 
 pub const LOCKFILE: &str = "pnpm-lock.yaml";
 
 pub struct PnpmDetector<'a> {
     found: bool,
-    repo_root: &'a AbsoluteSystemPathBuf,
+    repo_root: &'a AbsoluteSystemPath,
 }
 
 impl<'a> PnpmDetector<'a> {
-    pub fn new(repo_root: &'a AbsoluteSystemPathBuf) -> Self {
+    pub fn new(repo_root: &'a AbsoluteSystemPath) -> Self {
         Self {
             repo_root,
             found: false,
         }
     }
 
-    pub fn detect_pnpm6_or_pnpm(version: &Version) -> Result<PackageManager> {
+    pub fn detect_pnpm6_or_pnpm(version: &Version) -> Result<PackageManager, Error> {
         let pnpm6_constraint: Range = "<7.0.0".parse()?;
         if pnpm6_constraint.satisfies(version) {
             Ok(PackageManager::Pnpm6)
@@ -30,7 +29,7 @@ impl<'a> PnpmDetector<'a> {
 }
 
 impl<'a> Iterator for PnpmDetector<'a> {
-    type Item = Result<PackageManager>;
+    type Item = Result<PackageManager, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.found {
@@ -53,24 +52,15 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::LOCKFILE;
-    use crate::{
-        commands::CommandBase, get_version, package_manager::PackageManager, ui::UI, Args,
-    };
+    use crate::package_manager::PackageManager;
 
     #[test]
     fn test_detect_pnpm() -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
-        let mut base = CommandBase::new(
-            Args::default(),
-            repo_root_path,
-            get_version(),
-            UI::new(true),
-        )?;
-
         let lockfile_path = repo_root.path().join(LOCKFILE);
         File::create(&lockfile_path)?;
-        let package_manager = PackageManager::detect_package_manager(&mut base)?;
+        let package_manager = PackageManager::detect_package_manager(&repo_root_path)?;
         assert_eq!(package_manager, PackageManager::Pnpm);
 
         Ok(())
