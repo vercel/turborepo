@@ -1052,6 +1052,30 @@ jobs:
         if: always()
         run: critcmp --export base > raw.json
 
+      - name: Upload results to datadog
+        if: always()
+        continue-on-error: true
+        env:
+          DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
+        run: |
+          npm install -g @datadog/datadog-ci
+          # Query raw benchmark output, create key:value pairs for each benchmark entries.
+          # The generated key name is compact format the path of the benchmark entry, i.e
+          # `base.hmr_to_commit.CSR.1000.mean`
+          # [TODO]: datadog-ci sometimes return 400 without detail, need to investigate further. For now accept the flaky uploads.
+          for item in $(cat raw.json | jq -r ".benchmarks[] | { name: .fullname, mean: .criterion_estimates_v1.mean.point_estimate, std: .criterion_estimates_v1.std_dev.point_estimate } | @base64"); do
+              _jq() {
+                echo ${item} | base64 --decode | jq -r ${1}
+              }
+
+              export METRICS_MEAN+=" --metrics $(echo ${{ matrix.bench.name }} | sed -e 's/turbopack-//g').$(_jq ".name" | sed -e 's/\/bench_/\//g' | sed -e 's/\/Turbopack /\//g' | sed -e 's/ modules//g'| sed -e 's/ /./g' | sed -e 's/\//./g').mean:$(printf "%0.2f" $(_jq ".mean"))"
+              export METRICS_STD+=" --metrics $(echo ${{ matrix.bench.name }} | sed -e 's/turbopack-//g').$(_jq ".name" | sed -e 's/\/bench_/\//g' | sed -e 's/\/Turbopack /\//g' | sed -e 's/ modules//g'| sed -e 's/ /./g' | sed -e 's/\//./g').std:$(printf "%0.2f" $(_jq ".std"))"
+          done
+          echo "Sending metrics $METRICS_MEAN"
+          datadog-ci metric --level pipeline --no-fail $METRICS_MEAN
+          echo "Sending metrics $METRICS_STD"
+          datadog-ci metric --level pipeline --no-fail $METRICS_STD
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v3
