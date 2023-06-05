@@ -169,9 +169,11 @@ impl EcmascriptInputTransform {
                     ..Default::default()
                 };
 
-                program.visit_mut_with(&mut react(
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
+                program.visit_mut_with(&mut react::<&dyn Comments>(
                     source_map.clone(),
-                    Some(comments.clone()),
+                    Some(&comments),
                     config,
                     top_level_mark,
                     unresolved_mark,
