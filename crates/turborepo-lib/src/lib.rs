@@ -1,5 +1,7 @@
 #![feature(assert_matches)]
 #![feature(box_patterns)]
+#![feature(error_generic_member_access)]
+#![feature(provide_any)]
 
 mod child;
 mod cli;
