@@ -2,6 +2,7 @@ use std::process::{Command, Stdio};
 
 use anyhow::Result;
 use tracing::debug;
+use which::which;
 
 use crate::{
     child::spawn_child,
@@ -9,15 +10,23 @@ use crate::{
 };
 
 fn verify_requirements() -> Result<()> {
-    let output = Command::new("npx")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    // find npx path
+    let npx_path = which("npx");
+    match npx_path {
+        Ok(npx) => {
+            // make sure we can call npx
+            let output = Command::new(npx)
+                .arg("--version")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
 
-    match output {
-        Ok(result) if result.success() => Ok(()),
-        _ => Err(anyhow::anyhow!(
+            match output {
+                Ok(result) if result.success() => Ok(()),
+                _ => Err(anyhow::anyhow!("Unable to run generate - cannot call npx")),
+            }
+        }
+        Err(_) => Err(anyhow::anyhow!(
             "Unable to run generate - missing requirements (npx)"
         )),
     }
