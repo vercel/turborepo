@@ -144,7 +144,11 @@ func (cache *httpCache) exists(hash string) (bool, int, error) {
 		return false, 0, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
 	}
 
-	duration := getDurationFromResponse(resp)
+	duration, err := getDurationFromResponse(resp)
+	if err != nil {
+		return false, 0, err
+	}
+
 	return true, duration, err
 }
 
@@ -161,7 +165,10 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 		return false, nil, 0, fmt.Errorf("%s", string(b))
 	}
 
-	duration := getDurationFromResponse(resp)
+	duration, err := getDurationFromResponse(resp)
+	if err != nil {
+		return false, nil, 0, err
+	}
 
 	var tarReader io.Reader
 
@@ -197,16 +204,18 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 }
 
 // getDurationFromResponse extracts the duration from the response header
-func getDurationFromResponse(resp *http.Response) int {
+func getDurationFromResponse(resp *http.Response) (int, error) {
 	duration := 0
 	if resp.Header.Get("x-artifact-duration") != "" {
 		// If we had an error reading the duration header, just swallow it for now.
-		if intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration")); err == nil {
-			duration = intVar
+		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
+		if err != nil {
+			return 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
 		}
+		duration = intVar
 	}
 
-	return duration
+	return duration, nil
 }
 
 func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
