@@ -1173,7 +1173,7 @@ function getFirstModuleChunk(moduleId: ModuleId) {
 
 /**
  * Removes a module from a chunk.
- * Returns `true` if there are no remaining chunks, including this module.
+ * Returns `true` if there are no remaining chunks including this module.
  */
 function removeModuleFromChunk(
   moduleId: ModuleId,
