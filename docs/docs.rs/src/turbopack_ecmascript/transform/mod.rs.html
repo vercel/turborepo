@@ -307,13 +307,21 @@
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, hash::Hash, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>swc_core::{
     base::SwcComments,
-    common::{chain, util::take::Take, Mark, SourceMap},
+    common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program, Script},
         preset_env::{<span class="self">self</span>, Targets},
@@ -478,16 +486,22 @@
                     ..Default::default()
                 };
 
-                program.visit_mut_with(<span class="kw-2">&amp;mut </span>react(
+                <span class="comment">// Explicit type annotation to ensure that we don&#39;t duplicate transforms in the
+                // final binary
+                </span>program.visit_mut_with(<span class="kw-2">&amp;mut </span>react::&lt;<span class="kw-2">&amp;</span><span class="kw">dyn </span>Comments&gt;(
                     source_map.clone(),
-                    <span class="prelude-val">Some</span>(comments.clone()),
+                    <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>comments),
                     config,
                     top_level_mark,
                     unresolved_mark,
                 ));
             }
             EcmascriptInputTransform::CommonJs =&gt; {
-                program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::module::common_js(
+                <span class="comment">// Explicit type annotation to ensure that we don&#39;t duplicate transforms in the
+                // final binary
+                </span>program.visit_mut_with(<span class="kw-2">&amp;mut </span>swc_core::ecma::transforms::module::common_js::&lt;
+                    <span class="kw-2">&amp;</span><span class="kw">dyn </span>Comments,
+                &gt;(
                     unresolved_mark,
                     swc_core::ecma::transforms::module::util::Config {
                         allow_top_level_this: <span class="bool-val">true</span>,
@@ -497,7 +511,7 @@
                         ..Default::default()
                     },
                     swc_core::ecma::transforms::base::feature::FeatureFlag::all(),
-                    <span class="prelude-val">Some</span>(comments.clone()),
+                    <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>comments),
                 ));
             }
             EcmascriptInputTransform::PresetEnv(env) =&gt; {
@@ -525,10 +539,12 @@
                     module_program
                 };
 
-                <span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span><span class="macro">chain!</span>(
-                    preset_env::preset_env(
+                <span class="comment">// Explicit type annotation to ensure that we don&#39;t duplicate transforms in the
+                // final binary
+                </span><span class="kw-2">*</span>program = module_program.fold_with(<span class="kw-2">&amp;mut </span><span class="macro">chain!</span>(
+                    preset_env::preset_env::&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="kw">dyn </span>Comments&gt;(
                         top_level_mark,
-                        <span class="prelude-val">Some</span>(comments.clone()),
+                        <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>comments),
                         config,
                         Assumptions::default(),
                         <span class="kw-2">&amp;mut </span>FeatureFlag::empty(),
