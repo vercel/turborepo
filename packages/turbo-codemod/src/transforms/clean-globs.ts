@@ -10,7 +10,7 @@ import Logger from "../utils/logger";
 // transformer details
 const TRANSFORMER = "clean-globs";
 const DESCRIPTION =
-  "Automatically clean up invalid globs from your &#x60;turbo.json&#x60; file";
+  "Automatically clean up invalid globs from your 'turbo.json' file";
 const INTRODUCED_IN = "1.11.0";
 
 export function transformer({
@@ -60,7 +60,6 @@ export function fixGlobPattern(pattern: string, log: Logger): string {
   // Collapse back-to-back doublestars '**/**' to a single doublestar '**'
   let newPattern = pattern.replace(/\*\*\/\*\*/g, "**");
   while (newPattern !== pattern) {
-    log.modified(`${pattern} to ${newPattern}`);
     pattern = newPattern;
     newPattern = pattern.replace(/\*\*\/\*\*/g, "**");
   }
@@ -69,7 +68,6 @@ export function fixGlobPattern(pattern: string, log: Logger): string {
   // 'ext' is a filename or extension and can contain almost any character except '*' and '/'
   newPattern = pattern.replace(/(\*\*)([^*/]+)/g, "$1/*$2");
   if (newPattern !== pattern) {
-    log.modified(`${pattern} to ${newPattern}`);
     pattern = newPattern;
   }
 
@@ -77,12 +75,7 @@ export function fixGlobPattern(pattern: string, log: Logger): string {
   // 'prefix' is a folder name and can contain almost any character except '*' and '/'
   newPattern = pattern.replace(/([^*/]+)(\*\*)/g, "$1*/$2");
   if (newPattern !== pattern) {
-    log.modified(`${pattern} to ${newPattern}`);
     pattern = newPattern;
-  }
-
-  if (oldPattern === pattern) {
-    log.unchanged(pattern);
   }
 
   return pattern;
