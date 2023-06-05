@@ -78,32 +78,29 @@ impl Introspectable for StaticAssetsContentSource {
     #[turbo_tasks::function]
     async fn children(&self) -> Result<IntrospectableChildrenVc> {
         let dir = self.dir.read_dir().await?;
-        let children = match &*dir {
-            DirectoryContent::NotFound => Default::default(),
-            DirectoryContent::Entries(entries) => {
-                let prefix = self.prefix.await?;
-                entries
-                    .iter()
-                    .map(|(name, entry)| {
-                        let child = match entry {
-                            DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) => {
-                                IntrospectableAssetVc::new(SourceAssetVc::new(*path).as_asset())
-                            }
-                            DirectoryEntry::Directory(path) => {
-                                StaticAssetsContentSourceVc::with_prefix(
-                                    StringVc::cell(format!("{}{name}/", &*prefix)),
-                                    *path,
-                                )
-                                .into()
-                            }
-                            DirectoryEntry::Other(_) => todo!("what's DirectoryContent::Other?"),
-                            DirectoryEntry::Error => todo!(),
-                        };
-                        (StringVc::cell(name.clone()), child)
-                    })
-                    .collect()
-            }
+        let DirectoryContent::Entries(entries) = &*dir else {
+            return Ok(IntrospectableChildrenVc::cell(Default::default()));
         };
+
+        let prefix = self.prefix.await?;
+        let children = entries
+            .iter()
+            .map(|(name, entry)| {
+                let child = match entry {
+                    DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) => {
+                        IntrospectableAssetVc::new(SourceAssetVc::new(*path).as_asset())
+                    }
+                    DirectoryEntry::Directory(path) => StaticAssetsContentSourceVc::with_prefix(
+                        StringVc::cell(format!("{}{name}/", &*prefix)),
+                        *path,
+                    )
+                    .into(),
+                    DirectoryEntry::Other(_) => todo!("what's DirectoryContent::Other?"),
+                    DirectoryEntry::Error => todo!(),
+                };
+                (StringVc::cell(name.clone()), child)
+            })
+            .collect();
         Ok(IntrospectableChildrenVc::cell(children))
     }
 }
