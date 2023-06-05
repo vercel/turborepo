@@ -194,6 +194,7 @@ mod test {
     use std::io::Write;
 
     use tempfile::NamedTempFile;
+    use test_case::test_case;
 
     use super::*;
 
@@ -211,11 +212,14 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn test_repo_config_with_camel_case() -> Result<()> {
+    #[test_case("teamSlug" ; "lowerCamelCase")]
+    #[test_case("teamslug" ; "lowercase")]
+    #[test_case("TeamSlug" ; "CamelCase")]
+    #[test_case("TEAMSLUG" ; "ALLCAPS")]
+    fn test_repo_config_with_different_cases(field_name: &str) -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
-        writeln!(&mut config_file, "{{\"teamSlug\": \"123\"}}")?;
+        writeln!(&mut config_file, "{{\"{}\": \"123\"}}", field_name)?;
 
         let config = RepoConfigLoader::new(config_path).load()?;
 
