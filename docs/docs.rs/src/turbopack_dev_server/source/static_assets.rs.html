@@ -93,6 +93,17 @@
 <a href="#93" id="93">93</a>
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc};
@@ -111,7 +122,7 @@
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>StaticAssetsContentSource {
-    <span class="kw">pub </span>prefix: String,
+    <span class="kw">pub </span>prefix: StringVc,
     <span class="kw">pub </span>dir: FileSystemPathVc,
 }
 
@@ -119,11 +130,19 @@
 </span><span class="kw">impl </span>StaticAssetsContentSourceVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(prefix: String, dir: FileSystemPathVc) -&gt; StaticAssetsContentSourceVc {
-        <span class="kw">let </span><span class="kw-2">mut </span>prefix = prefix;
-        <span class="kw">if </span>!prefix.is_empty() &amp;&amp; !prefix.ends_with(<span class="string">&#39;/&#39;</span>) {
-            prefix.push(<span class="string">&#39;/&#39;</span>);
+        StaticAssetsContentSourceVc::with_prefix(StringVc::cell(prefix), dir)
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub async fn </span>with_prefix(
+        prefix: StringVc,
+        dir: FileSystemPathVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;StaticAssetsContentSourceVc&gt; {
+        <span class="kw">if </span><span class="macro">cfg!</span>(debug_assertions) {
+            <span class="kw">let </span>prefix_string = prefix.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="macro">debug_assert!</span>(prefix_string.is_empty() || prefix_string.ends_with(<span class="string">&#39;/&#39;</span>));
         }
-        StaticAssetsContentSource { prefix, dir }.cell()
+        <span class="prelude-val">Ok</span>(StaticAssetsContentSource { prefix, dir }.cell())
     }
 }
 
@@ -136,7 +155,8 @@
         _data: Value&lt;ContentSourceData&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
         <span class="kw">if </span>!path.is_empty() {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = path.strip_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix) {
+            <span class="kw">let </span>prefix = <span class="self">self</span>.prefix.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = path.strip_prefix(<span class="kw-2">&amp;*</span>prefix) {
                 <span class="kw">let </span>path = <span class="self">self</span>.dir.join(path);
                 <span class="kw">let </span>ty = path.get_type().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">if </span><span class="macro">matches!</span>(
@@ -164,27 +184,29 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
         <span class="kw">let </span>dir = <span class="self">self</span>.dir.read_dir().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>children = <span class="kw">match </span><span class="kw-2">&amp;*</span>dir {
-            DirectoryContent::NotFound =&gt; Default::default(),
-            DirectoryContent::Entries(entries) =&gt; entries
-                .iter()
-                .map(|(name, entry)| {
-                    <span class="kw">let </span>child = <span class="kw">match </span>entry {
-                        DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) =&gt; {
-                            IntrospectableAssetVc::new(SourceAssetVc::new(<span class="kw-2">*</span>path).as_asset())
-                        }
-                        DirectoryEntry::Directory(path) =&gt; StaticAssetsContentSourceVc::new(
-                            <span class="macro">format!</span>(<span class="string">&quot;{prefix}{name}&quot;</span>, prefix = <span class="self">self</span>.prefix),
-                            <span class="kw-2">*</span>path,
-                        )
-                        .into(),
-                        DirectoryEntry::Other(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(<span class="string">&quot;what&#39;s DirectoryContent::Other?&quot;</span>),
-                        DirectoryEntry::Error =&gt; <span class="macro">todo!</span>(),
-                    };
-                    (StringVc::cell(name.clone()), child)
-                })
-                .collect(),
+        <span class="kw">let </span>DirectoryContent::Entries(entries) = <span class="kw-2">&amp;*</span>dir <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(Default::default()));
         };
+
+        <span class="kw">let </span>prefix = <span class="self">self</span>.prefix.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>children = entries
+            .iter()
+            .map(|(name, entry)| {
+                <span class="kw">let </span>child = <span class="kw">match </span>entry {
+                    DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) =&gt; {
+                        IntrospectableAssetVc::new(SourceAssetVc::new(<span class="kw-2">*</span>path).as_asset())
+                    }
+                    DirectoryEntry::Directory(path) =&gt; StaticAssetsContentSourceVc::with_prefix(
+                        StringVc::cell(<span class="macro">format!</span>(<span class="string">&quot;{}{name}/&quot;</span>, <span class="kw-2">&amp;*</span>prefix)),
+                        <span class="kw-2">*</span>path,
+                    )
+                    .into(),
+                    DirectoryEntry::Other(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(<span class="string">&quot;what&#39;s DirectoryContent::Other?&quot;</span>),
+                    DirectoryEntry::Error =&gt; <span class="macro">todo!</span>(),
+                };
+                (StringVc::cell(name.clone()), child)
+            })
+            .collect();
         <span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(children))
     }
 }
