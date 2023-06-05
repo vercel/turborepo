@@ -180,7 +180,7 @@ impl Display for MissingWorkspaceError {
                  thus packages to be defined in the root pnpm-workspace.yaml"
             }
             PackageManager::Yarn | PackageManager::Berry => {
-                "package.json: no workspaces found. Turborepo requires Yarn workspaces to be \
+                "package.json: no workspaces found. Turborepo requires yarn workspaces to be \
                  defined in the root package.json"
             }
             PackageManager::Npm => {
