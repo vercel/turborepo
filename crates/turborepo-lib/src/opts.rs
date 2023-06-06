@@ -37,7 +37,7 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
     }
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RemoteCacheOpts {
     team_id: String,
     signature: bool,

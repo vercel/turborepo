@@ -193,6 +193,7 @@ impl RepoConfigLoader {
 mod test {
     use std::io::Write;
 
+    use anyhow::Result;
     use tempfile::NamedTempFile;
     use test_case::test_case;
 

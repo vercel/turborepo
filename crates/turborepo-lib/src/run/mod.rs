@@ -12,13 +12,9 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
 
 use crate::{
-    commands::CommandBase,
-    daemon::DaemonConnector,
-    manager::Manager,
-    opts::Opts,
-    package_graph::PackageGraph,
-    package_json::PackageJson,
-    run::{global_hash::get_global_hash_inputs, task_id::ROOT_PKG_NAME},
+    commands::CommandBase, config::RawTurboJson, daemon::DaemonConnector, manager::Manager,
+    opts::Opts, package_graph::PackageGraph, package_json::PackageJson,
+    run::global_hash::get_global_hash_inputs,
 };
 
 #[derive(Debug)]
@@ -56,7 +52,6 @@ impl Run {
             .build()?;
 
         // There's some warning handling code in Go that I'm ignoring
-
         if self.base.ui.is_ci() && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
@@ -79,9 +74,10 @@ impl Run {
         let g = CompleteGraph::new(&pkg_dep_graph, &self.base.repo_root);
 
         let is_single_package = opts.run_opts.single_package;
-        let turbo_json = g.get_turbo_config_from_workspace(ROOT_PKG_NAME, is_single_package)?;
+        let turbo_json =
+            RawTurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_opts.clone();
+        opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_options.clone();
 
         if opts.run_opts.experimental_space_id.is_none() {
             opts.run_opts.experimental_space_id = turbo_json.space_id.clone();

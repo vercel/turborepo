@@ -21,7 +21,7 @@ pub use env::MappedEnvironment;
 pub use repo::{get_repo_config_path, RepoConfig, RepoConfigLoader};
 use serde::Serialize;
 use thiserror::Error;
-pub use turbo::{SpacesJson, TurboJson};
+pub use turbo::{RawTurboJson, SpacesJson};
 pub use user::{UserConfig, UserConfigLoader};
 
 #[derive(Debug, Error)]

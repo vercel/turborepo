@@ -4,32 +4,36 @@ use serde::{Deserialize, Serialize};
 
 pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct BookkeepingTaskDefinition {
-    pub defined_fields: HashSet<String>,
+    #[serde(default)]
+    pub defined_fields: HashSet<&'static str>,
+    #[serde(default)]
     pub experimental_fields: HashSet<String>,
+    #[serde(default)]
     pub experimental: TaskDefinitionExperiments,
+    #[serde(flatten)]
     pub task_definition: TaskDefinitionHashable,
 }
 
 // A list of config fields in a task definition that are considered
 // experimental. We keep these separated so we can compute a global hash without
 // these.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct TaskDefinitionExperiments {
     passthrough_env: Vec<String>,
 }
 
 // TaskOutputs represents the patterns for including and excluding files from
 // outputs
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct TaskOutputs {
-    inclusions: Vec<String>,
-    exclusions: Vec<String>,
+    pub inclusions: Vec<String>,
+    pub exclusions: Vec<String>,
 }
 
 // TaskOutputMode defines the ways turbo can display task output during a run
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub enum TaskOutputMode {
     // FullTaskOutput will show all task output
     #[default]
@@ -50,10 +54,10 @@ pub enum TaskOutputMode {
 // used downstream for calculating the global hash. We want to exclude
 // experimental fields here because we don't want experimental fields to be part
 // of the global hash.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct TaskDefinitionHashable {
     pub(crate) outputs: TaskOutputs,
-    pub(crate) should_cache: bool,
+    pub(crate) cache: bool,
     pub(crate) env_var_dependencies: Vec<String>,
     pub(crate) topological_dependencies: Vec<String>,
     pub(crate) task_dependencies: Vec<String>,
@@ -64,10 +68,10 @@ pub struct TaskDefinitionHashable {
 
 // task_definition is a representation of the configFile pipeline for further
 // computation.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct TaskDefinition {
     outputs: TaskOutputs,
-    should_cache: bool,
+    cache: bool,
 
     // This field is custom-marshalled from rawTask.Env and rawTask.DependsOn
     env_var_dependencies: Vec<String>,

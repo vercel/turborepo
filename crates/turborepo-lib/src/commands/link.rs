@@ -23,7 +23,7 @@ use crate::ui::CYAN;
 use crate::{
     cli::LinkTarget,
     commands::CommandBase,
-    config::{SpacesJson, TurboJson},
+    config::{RawTurboJson, SpacesJson},
     ui::{BOLD, GREY, UNDERLINE},
 };
 
@@ -426,7 +426,7 @@ fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> 
     }
 
     let turbo_json_file = File::open(&turbo_json_path)?;
-    let mut turbo_json: TurboJson = serde_json::from_reader(turbo_json_file)?;
+    let mut turbo_json: RawTurboJson = serde_json::from_reader(turbo_json_file)?;
     match turbo_json.experimental_spaces {
         Some(mut spaces_config) => {
             spaces_config.id = Some(space_id.to_string());
@@ -460,7 +460,7 @@ mod test {
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
-        config::{ClientConfigLoader, RepoConfigLoader, TurboJson, UserConfigLoader},
+        config::{ClientConfigLoader, RawTurboJson, RepoConfigLoader, UserConfigLoader},
         ui::UI,
         Args,
     };
@@ -573,7 +573,7 @@ mod test {
 
         // verify space id is added to turbo.json
         let turbo_json_file = fs::File::open(&turbo_json_file).unwrap();
-        let turbo_json: TurboJson = serde_json::from_reader(turbo_json_file).unwrap();
+        let turbo_json: RawTurboJson = serde_json::from_reader(turbo_json_file).unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
             vercel_api_mock::EXPECTED_SPACE_ID

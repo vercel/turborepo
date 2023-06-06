@@ -201,7 +201,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		RepoRoot:        r.base.RepoRoot,
 	}
 
-	turboJSON, err := g.GetTurboConfigFromWorkspace(util.RootPkgName, r.opts.runOpts.SinglePackage)
+	turboJSON := executionState.RootTurboJSON
 	if err != nil {
 		return err
 	}
@@ -394,7 +394,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			engine,
 			taskHashTracker,
 			turboCache,
-			turboJSON,
 			globalEnvMode,
 			globalHashInputs.resolvedEnvVars.All,
 			resolvedPassThroughEnvVars,
@@ -411,7 +410,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		engine,
 		taskHashTracker,
 		turboCache,
-		turboJSON,
 		globalEnvMode,
 		globalHashInputs.resolvedEnvVars.All,
 		resolvedPassThroughEnvVars,
