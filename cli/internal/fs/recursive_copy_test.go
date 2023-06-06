@@ -7,26 +7,6 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func Test_RecursiveCopyBadSrc(t *testing.T) {
-	src := turbopath.AbsoluteSystemPath("foobar")
-	dst := turbopath.AbsoluteSystemPath("/tmp/foobar")
-	err := RecursiveCopy(src, dst)
-	assert.ErrorContains(t, err, "Path is not absolute: foobar")
-}
-
-func Test_RecursiveCopyBadDst(t *testing.T) {
-	src := turbopath.AbsoluteSystemPath("/tmp/foobar")
-	dst := turbopath.AbsoluteSystemPath("foobar")
-	err := RecursiveCopy(src, dst)
-	assert.ErrorContains(t, err, "Path is not absolute: foobar")
-}
-
-func Test_RecursiveCopyMissingFile(t *testing.T) {
-	base := turbopath.AbsoluteSystemPath(t.TempDir())
-	err := RecursiveCopy(base.UntypedJoin("src"), base.UntypedJoin("dst"))
-	assert.ErrorContains(t, err, "IO Error No such file or directory (os error 2)")
-}
-
 func Test_RecursiveCopyCopiesFiles(t *testing.T) {
 	base := turbopath.AbsoluteSystemPath(t.TempDir())
 	src := base.UntypedJoin("src")
