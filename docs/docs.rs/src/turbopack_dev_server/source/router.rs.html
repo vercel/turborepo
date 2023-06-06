@@ -204,7 +204,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>PrefixedRouterContentSourceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>new(
+    </span><span class="kw">pub async fn </span>new(
         prefix: StringVc,
         routes: Vec&lt;(String, ContentSourceVc)&gt;,
         fallback: ContentSourceVc,
