@@ -728,6 +728,15 @@
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::HashMap,
@@ -756,7 +765,7 @@
     sync::{OwnedSemaphorePermit, Semaphore},
     time::{sleep, timeout},
 };
-<span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
+<span class="kw">use </span>turbo_tasks_fs::{json::parse_json_with_source_context, FileSystemPathVc};
 <span class="kw">use </span>turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
 <span class="kw">use crate</span>::{source_map::apply_source_mapping, AssetsForSourceMappingVc};
@@ -818,6 +827,7 @@
     project_dir: FileSystemPathVc,
     stdout_handler: OutputStreamHandler&lt;ChildStdout, Stdout&gt;,
     stderr_handler: OutputStreamHandler&lt;ChildStderr, Stderr&gt;,
+    debug: bool,
 }
 
 <span class="kw">impl </span>RunningNodeJsPoolProcess {
@@ -1198,6 +1208,7 @@
                     project_dir,
                     stdout_handler,
                     stderr_handler,
+                    debug,
                 }
             }
             NodeJsPoolProcess::Running(running) =&gt; running,
@@ -1209,21 +1220,27 @@
     <span class="kw">async fn </span>recv(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;&gt; {
         <span class="kw">let </span>connection = <span class="kw-2">&amp;mut </span><span class="self">self</span>.connection;
         <span class="kw">async fn </span>with_timeout&lt;T, E: Into&lt;anyhow::Error&gt;&gt;(
+            debug: bool,
             future: <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T, E&gt;&gt; + Send,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
-            timeout(Duration::from_secs(<span class="number">60</span>), future)
-                .<span class="kw">await
-                </span>.context(<span class="string">&quot;timeout while receiving message from process&quot;</span>)<span class="question-mark">?
-                </span>.map_err(Into::into)
+            <span class="kw">if </span>debug {
+                future.<span class="kw">await</span>.map_err(Into::into)
+            } <span class="kw">else </span>{
+                timeout(Duration::from_secs(<span class="number">60</span>), future)
+                    .<span class="kw">await
+                    </span>.context(<span class="string">&quot;timeout while receiving message from process&quot;</span>)<span class="question-mark">?
+                    </span>.map_err(Into::into)
+            }
         }
+        <span class="kw">let </span>debug = <span class="self">self</span>.debug;
         <span class="kw">let </span>recv_future = <span class="kw">async move </span>{
-            <span class="kw">let </span>packet_len = with_timeout(connection.read_u32())
+            <span class="kw">let </span>packet_len = with_timeout(debug, connection.read_u32())
                 .<span class="kw">await
                 </span>.context(<span class="string">&quot;reading packet length&quot;</span>)<span class="question-mark">?
                 </span>.try_into()
                 .context(<span class="string">&quot;storing packet length&quot;</span>)<span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>packet_data = <span class="macro">vec!</span>[<span class="number">0</span>; packet_len];
-            with_timeout(connection.read_exact(<span class="kw-2">&amp;mut </span>packet_data))
+            with_timeout(debug, connection.read_exact(<span class="kw-2">&amp;mut </span>packet_data))
                 .<span class="kw">await
                 </span>.context(<span class="string">&quot;reading packet data&quot;</span>)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(packet_data)
@@ -1390,7 +1407,8 @@
                 process.recv().<span class="kw">await</span>.context(<span class="string">&quot;failed to receive message&quot;</span>)
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        serde_json::from_slice(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;failed to deserialize message&quot;</span>)
+        <span class="kw">let </span>message = std::str::from_utf8(<span class="kw-2">&amp;</span>message).context(<span class="string">&quot;message is not valid UTF-8&quot;</span>)<span class="question-mark">?</span>;
+        parse_json_with_source_context(message).context(<span class="string">&quot;failed to deserialize message&quot;</span>)
     }
 
     <span class="kw">pub async fn </span>send&lt;M&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: M) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
