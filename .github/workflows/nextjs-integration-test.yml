@@ -38,6 +38,10 @@ env:
   NEXT_DEV_TEST_GLOB: "*"
   # pnpm version should match to what upstream next.js uses
   PNPM_VERSION: 7.24.3
+  DATADOG_TRACE_NEXTJS_TEST: "true"
+  DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+  DD_ENV: "ci"
+  DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
 
 jobs:
   # First, build next-dev and Next.js both to execute across tests.
@@ -46,6 +50,18 @@ jobs:
     uses: ./.github/workflows/setup-nextjs-build.yml
     with:
       version: ${{ inputs.version }}
+
+  check_datadog_api_key:
+    runs-on: ubuntu-latest
+    name: Check datadog api key is defined
+    steps:
+      - run: |
+          if [ -z "$DATADOG_API_KEY" ]
+          then
+              echo "not defined"
+          else
+              echo "defined"
+          fi
 
   # Actual test scheduling. These jobs mimic the same jobs in Next.js repo,
   # which we do allow some of duplications to make it easier to update if upstream changes.
@@ -74,7 +90,7 @@ jobs:
       # Sets `NEXT_TEST_SKIP_RETRY_MANIFEST`, `NEXT_TEST_CONTINUE_ON_ERROR` to continue on error but do not retry on the known failed tests.
       # Do not set --timings flag
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-jammy /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_NEXT_DEV_TEST_TURBO_DEV=TRUE __INTERNAL_CUSTOM_TURBOPACK_BINDINGS=${NEXT_BINDINGS_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development -g ${{ matrix.group }}/5 -c 1 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-jammy /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && DD_CIVISIBILITY_AGENTLESS_ENABLED=${DD_CIVISIBILITY_AGENTLESS_ENABLED} DD_ENV=${DD_ENV} DATADOG_API_KEY=${DATADOG_API_KEY} DATADOG_TRACE_NEXTJS_TEST='true' __INTERNAL_NEXT_DEV_TEST_TURBO_DEV=TRUE __INTERNAL_CUSTOM_TURBOPACK_BINDINGS=${NEXT_BINDINGS_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type development -g ${{ matrix.group }}/5 -c 1 >> /proc/1/fd/1"
         name: Run test/development
         # It is currently expected to fail some of next.js integration test, do not fail CI check.
         continue-on-error: true
@@ -103,7 +119,7 @@ jobs:
           fail-on-cache-miss: true
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-jammy /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_NEXT_DEV_TEST_TURBO_DEV=TRUE __INTERNAL_CUSTOM_TURBOPACK_BINDINGS=${NEXT_BINDINGS_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type e2e -g ${{ matrix.group }}/7 -c 1 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-jammy /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v${{ matrix.node }} | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} &&DD_CIVISIBILITY_AGENTLESS_ENABLED=${DD_CIVISIBILITY_AGENTLESS_ENABLED} DD_ENV=${DD_ENV} DATADOG_API_KEY=${DATADOG_API_KEY} DATADOG_TRACE_NEXTJS_TEST='true' __INTERNAL_NEXT_DEV_TEST_TURBO_DEV=TRUE __INTERNAL_CUSTOM_TURBOPACK_BINDINGS=${NEXT_BINDINGS_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 NEXT_TEST_MODE=dev xvfb-run node run-tests.js --type e2e -g ${{ matrix.group }}/7 -c 1 >> /proc/1/fd/1"
         name: Run test/e2e (dev)
         continue-on-error: true
         env:
@@ -189,7 +205,7 @@ jobs:
           fail-on-cache-miss: true
 
       - run: |
-          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-jammy /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v16 | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && __INTERNAL_NEXT_DEV_TEST_TURBO_DEV=TRUE __INTERNAL_CUSTOM_TURBOPACK_BINDINGS=${NEXT_BINDINGS_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 xvfb-run node run-tests.js -g ${{ matrix.group }}/28 -c 1 >> /proc/1/fd/1"
+          docker run --rm -v $(pwd):/work mcr.microsoft.com/playwright:v1.28.1-jammy /bin/bash -c "cd /work && ls && curl https://install-node.vercel.app/v16 | FORCE=1 bash && node -v && npm i -g pnpm@${PNPM_VERSION} && DD_CIVISIBILITY_AGENTLESS_ENABLED=${DD_CIVISIBILITY_AGENTLESS_ENABLED} DD_ENV=${DD_ENV} DATADOG_API_KEY=${DATADOG_API_KEY} DATADOG_TRACE_NEXTJS_TEST='true' __INTERNAL_NEXT_DEV_TEST_TURBO_DEV=TRUE __INTERNAL_CUSTOM_TURBOPACK_BINDINGS=${NEXT_BINDINGS_BIN} __INTERNAL_NEXT_DEV_TEST_TURBO_GLOB_MATCH=${NEXT_DEV_TEST_GLOB} NEXT_TEST_SKIP_RETRY_MANIFEST=${FAILED_TEST_LIST_PATH} NEXT_TEST_CONTINUE_ON_ERROR=TRUE NEXT_E2E_TEST_TIMEOUT=240000 NEXT_TEST_JOB=1 xvfb-run node run-tests.js -g ${{ matrix.group }}/28 -c 1 >> /proc/1/fd/1"
         name: Test Integration
         continue-on-error: true
         env:
