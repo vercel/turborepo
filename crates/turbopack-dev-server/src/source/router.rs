@@ -7,7 +7,7 @@ use crate::source::ContentSourcesVc;
 
 /// Binds different ContentSources to different subpaths. A fallback
 /// ContentSource will serve all other subpaths.
-// TODO: Remove this and migrate all users to PrefixedRouterContentSource.
+// TODO(WEB-1151): Remove this and migrate all users to PrefixedRouterContentSource.
 #[turbo_tasks::value(shared)]
 pub struct RouterContentSource {
     pub routes: Vec<(String, ContentSourceVc)>,
@@ -48,9 +48,9 @@ impl PrefixedRouterContentSourceVc {
 }
 
 /// If the `path` starts with `prefix`, then it will search each route to see if
-/// any subpath matches. If so, then then remaining path (after removing the
-/// prefix and subpath) is used to query the matching ContentSource. If no match
-/// is found, then the fallback is queried with the original path.
+/// any subpath matches. If so, the remaining path (after removing the prefix
+/// and subpath) is used to query the matching ContentSource. If no match is
+/// found, then the fallback is queried with the original path.
 async fn get(
     routes: &[(String, ContentSourceVc)],
     fallback: &ContentSourceVc,
@@ -77,12 +77,13 @@ fn get_children(
     routes: &[(String, ContentSourceVc)],
     fallback: &ContentSourceVc,
 ) -> ContentSourcesVc {
-    let mut sources = Vec::with_capacity(routes.len() + 1);
-
-    sources.extend(routes.iter().map(|r| r.1));
-    sources.push(*fallback);
-
-    ContentSourcesVc::cell(sources)
+    ContentSourcesVc::cell(
+        routes
+            .iter()
+            .map(|r| r.1)
+            .chain(std::iter::once(*fallback))
+            .collect(),
+    )
 }
 
 async fn get_introspection_children(

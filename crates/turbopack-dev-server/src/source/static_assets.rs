@@ -22,7 +22,7 @@ pub struct StaticAssetsContentSource {
 
 #[turbo_tasks::value_impl]
 impl StaticAssetsContentSourceVc {
-    // TODO: Remove this method and migrate users to `with_prefix`.
+    // TODO(WEB-1151): Remove this method and migrate users to `with_prefix`.
     #[turbo_tasks::function]
     pub fn new(prefix: String, dir: FileSystemPathVc) -> StaticAssetsContentSourceVc {
         StaticAssetsContentSourceVc::with_prefix(StringVc::cell(prefix), dir)
