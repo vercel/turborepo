@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{opts::RemoteCacheOpts, task_graph::Pipeline};
+use crate::{config::Error, opts::RemoteCacheOpts, task_graph::Pipeline};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -21,4 +21,8 @@ pub struct TurboJson {
     pub pipeline: Pipeline,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental_spaces: Option<SpacesJson>,
+}
+
+fn get_root_turbo_json() -> Result<TurboJson, Error> {
+    todo!()
 }

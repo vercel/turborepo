@@ -1,11 +1,11 @@
 use std::{collections::HashMap, env};
 
-use anyhow::Result;
 use config::Config;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::{write_to_disk, MappedEnvironment};
+use crate::config::Error;
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
@@ -80,7 +80,7 @@ impl RepoConfig {
     /// Sets the team id and clears the team slug, since it may have been from
     /// an old team
     #[allow(dead_code)]
-    pub fn set_team_id(&mut self, team_id: Option<String>) -> Result<()> {
+    pub fn set_team_id(&mut self, team_id: Option<String>) -> Result<(), Error> {
         self.disk_config.team_slug = None;
         self.config.team_slug = None;
         self.disk_config.team_id = team_id.clone();
@@ -88,8 +88,8 @@ impl RepoConfig {
         self.write_to_disk()
     }
 
-    fn write_to_disk(&self) -> Result<()> {
-        write_to_disk(self.path.as_path(), &self.disk_config)
+    fn write_to_disk(&self) -> Result<(), Error> {
+        write_to_disk(&self.path.as_path(), &self.disk_config)
     }
 }
 
@@ -134,7 +134,7 @@ impl RepoConfigLoader {
     }
 
     #[allow(dead_code)]
-    pub fn load(self) -> Result<RepoConfig> {
+    pub fn load(self) -> Result<RepoConfig, Error> {
         let Self {
             path,
             api,
