@@ -14,6 +14,10 @@ pub struct PackageJson {
     pub dev_dependencies: Option<BTreeMap<String, String>>,
     pub optional_dependencies: Option<BTreeMap<String, String>>,
     pub peer_dependencies: Option<BTreeMap<String, String>>,
+    #[serde(rename = "turbo")]
+    pub legacy_turbo_config: Option<()>,
+    #[serde(default)]
+    pub scripts: BTreeMap<String, String>,
 }
 
 #[derive(Debug, thiserror::Error)]

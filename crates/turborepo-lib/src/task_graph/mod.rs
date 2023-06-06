@@ -6,31 +6,31 @@ pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct BookkeepingTaskDefinition {
-    defined_fields: HashSet<String>,
-    experimental_fields: HashSet<String>,
-    experimental: TaskDefinitionExperiments,
-    task_definition: TaskDefinitionHashable,
+    pub defined_fields: HashSet<String>,
+    pub experimental_fields: HashSet<String>,
+    pub experimental: TaskDefinitionExperiments,
+    pub task_definition: TaskDefinitionHashable,
 }
 
 // A list of config fields in a task definition that are considered
 // experimental. We keep these separated so we can compute a global hash without
 // these.
 #[derive(Debug, Default, Serialize, Deserialize)]
-struct TaskDefinitionExperiments {
+pub struct TaskDefinitionExperiments {
     passthrough_env: Vec<String>,
 }
 
 // TaskOutputs represents the patterns for including and excluding files from
 // outputs
 #[derive(Debug, Default, Serialize, Deserialize)]
-struct TaskOutputs {
+pub struct TaskOutputs {
     inclusions: Vec<String>,
     exclusions: Vec<String>,
 }
 
 // TaskOutputMode defines the ways turbo can display task output during a run
 #[derive(Debug, Default, Serialize, Deserialize)]
-enum TaskOutputMode {
+pub enum TaskOutputMode {
     // FullTaskOutput will show all task output
     #[default]
     Full,
@@ -51,15 +51,15 @@ enum TaskOutputMode {
 // experimental fields here because we don't want experimental fields to be part
 // of the global hash.
 #[derive(Debug, Default, Serialize, Deserialize)]
-struct TaskDefinitionHashable {
-    outputs: TaskOutputs,
-    should_cache: bool,
-    env_var_dependencies: Vec<String>,
-    topological_dependencies: Vec<String>,
-    task_dependencies: Vec<String>,
-    inputs: Vec<String>,
-    output_mode: TaskOutputMode,
-    persistent: bool,
+pub struct TaskDefinitionHashable {
+    pub(crate) outputs: TaskOutputs,
+    pub(crate) should_cache: bool,
+    pub(crate) env_var_dependencies: Vec<String>,
+    pub(crate) topological_dependencies: Vec<String>,
+    pub(crate) task_dependencies: Vec<String>,
+    pub(crate) inputs: Vec<String>,
+    pub(crate) output_mode: TaskOutputMode,
+    pub(crate) persistent: bool,
 }
 
 // task_definition is a representation of the configFile pipeline for further

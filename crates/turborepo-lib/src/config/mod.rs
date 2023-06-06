@@ -29,6 +29,13 @@ pub enum Error {
     #[error("default config path not found")]
     NoDefaultConfigPath,
     #[error(transparent)]
+    PackageJson(#[from] crate::package_json::Error),
+    #[error(
+        "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create \
+         one"
+    )]
+    NoTurboJson,
+    #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
     Config(#[from] ConfigError),
@@ -36,6 +43,13 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Camino(#[from] camino::FromPathBufError),
+    #[error(
+        "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
+         {task_id}"
+    )]
+    PackageTaskInSinglePackageMode { task_id: String },
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 }
 
 pub fn default_user_config_path() -> Result<Utf8PathBuf, Error> {
