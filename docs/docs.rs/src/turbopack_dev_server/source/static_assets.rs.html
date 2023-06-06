@@ -104,6 +104,8 @@
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc};
@@ -128,7 +130,8 @@
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>StaticAssetsContentSourceVc {
-    <span class="attr">#[turbo_tasks::function]
+    <span class="comment">// TODO(WEB-1151): Remove this method and migrate users to `with_prefix`.
+    </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(prefix: String, dir: FileSystemPathVc) -&gt; StaticAssetsContentSourceVc {
         StaticAssetsContentSourceVc::with_prefix(StringVc::cell(prefix), dir)
     }
@@ -141,6 +144,7 @@
         <span class="kw">if </span><span class="macro">cfg!</span>(debug_assertions) {
             <span class="kw">let </span>prefix_string = prefix.<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">debug_assert!</span>(prefix_string.is_empty() || prefix_string.ends_with(<span class="string">&#39;/&#39;</span>));
+            <span class="macro">debug_assert!</span>(!prefix_string.starts_with(<span class="string">&#39;/&#39;</span>));
         }
         <span class="prelude-val">Ok</span>(StaticAssetsContentSource { prefix, dir }.cell())
     }
