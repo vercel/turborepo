@@ -10,6 +10,7 @@ ogImage: /images/blog/turbo-1-10-0/twitter-card.png
 
 import { Authors } from '../../components/Authors'
 import Callout from '../../components/Callout'
+import ThemeAwareImage from '../../components/ThemeAwareImage'
 import Date from "../../components/blog/Date";
 
 <Date>
@@ -36,6 +37,26 @@ npx @turbo/codemod migrate
 ```
 
 ## Code Generators
+
+<ThemeAwareImage
+  className="my-4 p-4 border-[#f3f7fd] dark:border-[#1c2428] border-2 rounded-xl"
+  light={{
+    alt: 'turbo-gen',
+    src: '/images/blog/turbo-1-10-0/turbo-gen-light.gif',
+    props: {
+      width: 600,
+      height: 205
+    }
+  }}
+  dark={{
+    alt: 'turbo-gen',
+    src: '/images/blog/turbo-1-10-0/turbo-gen-dark.gif',
+    props: {
+      width: 600,
+      height: 215
+    }
+  }}
+/>
 
 Turborepo Generators allow you to add new code to your repository in a predictable, structured way.
 Previously, you would need to copy code yourself and manually add dependencies to your new workspace. With Generators,
