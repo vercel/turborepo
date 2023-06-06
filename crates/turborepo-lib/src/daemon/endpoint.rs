@@ -45,6 +45,7 @@ pub async fn listen_socket(
 
     trace!("acquiring pidlock");
     // this will fail if the pid is already owned
+    // todo: make sure we fall back and handle this
     lock.acquire()?;
     std::fs::remove_file(&sock_path).ok();
 
@@ -204,6 +205,9 @@ mod test {
         let result = listen_socket(pid_path, running).await;
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
+
+        // todo: update this test to gracefully connect if the lock file exists but has
+        // no process
         if let Err(err) = result {
             assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
         } else {
@@ -231,6 +235,10 @@ mod test {
         let result = listen_socket(pid_path, running).await;
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
+
+        // todo: update this test. we should delete the socket file first, remove the
+        // pid file, and start a new daemon. the old one should just time
+        // out, and this should not error.
         if let Err(err) = result {
             assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
         } else {

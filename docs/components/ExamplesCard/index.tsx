@@ -73,10 +73,8 @@ export function ExampleCard({
         target="_blank"
         rel="noreferrer"
       >
-        <h3 className="text-lg font-semibold leading-6 tracking-tight">
-          <span className="bg-gradient-to-r from-[#a44e9c] to-[#ff1e57] bg-clip-text text-transparent">
-            {name}
-          </span>
+        <h3 className="text-lg text-black dark:text-white font-semibold leading-6 tracking-tight">
+          {name}
         </h3>
         <span className="flex-1 text-base font-medium leading-7 text-gray-500 dark:text-gray-400">
           {description}

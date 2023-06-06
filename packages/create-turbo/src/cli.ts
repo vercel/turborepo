@@ -28,6 +28,10 @@ createTurboCli
     false
   )
   .option(
+    "--turbo-version <version>",
+    "Use a specific version of turbo (default: latest)"
+  )
+  .option(
     "-e, --example [name]|[github-url]",
     `
   An example to bootstrap the app with. You can use an example name
@@ -44,8 +48,8 @@ createTurboCli
   --example-path foo/bar
 `
   )
-  .version(cliPkg.version, "-v, --version", "output the current version")
-  .helpOption()
+  .version(cliPkg.version, "-v, --version", "Output the current version")
+  .helpOption("-h, --help", "Display help for command")
   .action(create);
 
 createTurboCli

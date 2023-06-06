@@ -74,10 +74,15 @@ type ConnectionError struct {
 }
 
 func (ce *ConnectionError) Error() string {
-	return fmt.Sprintf(`connection to turbo daemon process failed. Please ensure the following:
+	return fmt.Sprintf(`connection to turbo daemon process failed.
+	To quickly resolve the issue, try running:
+	- $ turbo daemon clean
+
+	To debug further - please ensure the following:
 	- the process identified by the pid in the file at %v is not running, and remove %v
 	- check the logs at %v
 	- the unix domain socket at %v has been removed
+
 	You can also run without the daemon process by passing --no-daemon`, ce.PidPath, ce.PidPath, ce.LogPath, ce.SockPath)
 }
 
@@ -329,6 +334,8 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	switch status.Code() {
 	case codes.OK:
 		return nil
+	case codes.Unimplemented:
+		fallthrough // some versions of the rust daemon return Unimplemented rather than FailedPrecondition
 	case codes.FailedPrecondition:
 		return ErrVersionMismatch
 	case codes.Unavailable:
@@ -358,9 +365,17 @@ func (c *Connector) waitForSocket() error {
 	// Note that we don't care if this is our daemon
 	// or not. We started a process, but someone else could beat
 	// use to listening. That's fine, we'll check the version
-	// later.
+	// later. However, we need to ensure that _some_ pid file
+	// exists to protect against stale .sock files
+	if err := waitForFile(c.PidPath); err != nil {
+		return err
+	}
+	return waitForFile(c.SockPath)
+}
+
+func waitForFile(file turbopath.AbsoluteSystemPath) error {
 	err := backoff.Retry(func() error {
-		if !c.SockPath.FileExists() {
+		if !file.FileExists() {
 			return errNeedsRetry
 		}
 		return nil

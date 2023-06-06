@@ -103,8 +103,18 @@ impl AbsoluteSystemPath {
         }
     }
 
+    pub(crate) fn new_unchecked(path: &Path) -> &Self {
+        unsafe { &*(path as *const Path as *const Self) }
+    }
+
     pub fn as_path(&self) -> &Path {
         &self.0
+    }
+
+    pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
+        self.0
+            .ancestors()
+            .map(|ancestor| Self::new_unchecked(ancestor))
     }
 
     // intended for joining literals or obviously single-token strings
@@ -127,9 +137,9 @@ impl AbsoluteSystemPath {
 
     pub fn join_unix_path(
         &self,
-        unix_path: &RelativeUnixPath,
+        unix_path: impl AsRef<RelativeUnixPath>,
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let tail = unix_path.to_system_path_buf()?;
+        let tail = unix_path.as_ref().to_system_path_buf()?;
         Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path()).clean()))
     }
 

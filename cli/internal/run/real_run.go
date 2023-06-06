@@ -264,19 +264,19 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		WarnPrefix:   prettyPrefix,
 	}
 
-	cacheStatus, timeSaved, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
+	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
 
 	// It's safe to set the CacheStatus even if there's an error, because if there's
 	// an error, the 0 values are actually what we want. We save cacheStatus and timeSaved
 	// for the task, so that even if there's an error, we have those values for the taskSummary.
 	ec.taskHashTracker.SetCacheStatus(
 		packageTask.TaskID,
-		runsummary.NewTaskCacheSummary(cacheStatus, &timeSaved),
+		runsummary.NewTaskCacheSummary(cacheStatus),
 	)
 
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-	} else if cacheStatus.Local || cacheStatus.Remote { // If there was a cache hit
+	} else if cacheStatus.Hit { // If there was a cache hit
 		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		// We only cache successful executions, so we can assume this is a successExitCode exit.
 		tracer(runsummary.TargetCached, nil, &successExitCode)

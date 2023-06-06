@@ -20,6 +20,10 @@ struct Buffer recursive_copy(struct Buffer buffer);
 
 struct Buffer verify_signature(struct Buffer buffer);
 
+struct Buffer get_package_file_hashes_from_git_index(struct Buffer buffer);
+
+struct Buffer glob(struct Buffer buffer);
+
 struct Buffer transitive_closure(struct Buffer buf);
 
 struct Buffer subgraph(struct Buffer buf);

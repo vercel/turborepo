@@ -1,23 +1,22 @@
 use std::process::Command;
 
-use anyhow::Result;
 use node_semver::{Range, Version};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::AbsoluteSystemPath;
 use which::which;
 
-use crate::package_manager::PackageManager;
+use crate::package_manager::{Error, PackageManager};
 
 pub const LOCKFILE: &str = "yarn.lock";
 
 pub struct YarnDetector<'a> {
-    repo_root: &'a AbsoluteSystemPathBuf,
+    repo_root: &'a AbsoluteSystemPath,
     // For testing purposes
     version_override: Option<Version>,
     found: bool,
 }
 
 impl<'a> YarnDetector<'a> {
-    pub fn new(repo_root: &'a AbsoluteSystemPathBuf) -> Self {
+    pub fn new(repo_root: &'a AbsoluteSystemPath) -> Self {
         Self {
             repo_root,
             version_override: None,
@@ -30,7 +29,7 @@ impl<'a> YarnDetector<'a> {
         self.version_override = Some(version);
     }
 
-    fn get_yarn_version(&self) -> Result<Version> {
+    fn get_yarn_version(&self) -> Result<Version, Error> {
         if let Some(version) = &self.version_override {
             return Ok(version.clone());
         }
@@ -44,7 +43,7 @@ impl<'a> YarnDetector<'a> {
         Ok(yarn_version_output.trim().parse()?)
     }
 
-    pub fn detect_berry_or_yarn(version: &Version) -> Result<PackageManager> {
+    pub fn detect_berry_or_yarn(version: &Version) -> Result<PackageManager, Error> {
         let berry_constraint: Range = ">=2.0.0-0".parse()?;
         if berry_constraint.satisfies(version) {
             Ok(PackageManager::Berry)
@@ -55,7 +54,7 @@ impl<'a> YarnDetector<'a> {
 }
 
 impl<'a> Iterator for YarnDetector<'a> {
-    type Item = Result<PackageManager>;
+    type Item = Result<PackageManager, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.found {
@@ -85,35 +84,22 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::LOCKFILE;
-    use crate::{
-        commands::CommandBase,
-        get_version,
-        package_manager::{yarn::YarnDetector, PackageManager},
-        ui::UI,
-        Args,
-    };
+    use crate::package_manager::{yarn::YarnDetector, PackageManager};
 
     #[test]
     fn test_detect_yarn() -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
-        let base = CommandBase::new(
-            Args::default(),
-            repo_root_path,
-            get_version(),
-            UI::new(true),
-        )?;
 
         let yarn_lock_path = repo_root.path().join(LOCKFILE);
         File::create(&yarn_lock_path)?;
 
-        let absolute_repo_root = AbsoluteSystemPathBuf::new(base.repo_root)?;
-        let mut detector = YarnDetector::new(&absolute_repo_root);
+        let mut detector = YarnDetector::new(&repo_root_path);
         detector.set_version_override("1.22.10".parse()?);
         let package_manager = detector.next().unwrap()?;
         assert_eq!(package_manager, PackageManager::Yarn);
 
-        let mut detector = YarnDetector::new(&absolute_repo_root);
+        let mut detector = YarnDetector::new(&repo_root_path);
         detector.set_version_override("2.22.10".parse()?);
         let package_manager = detector.next().unwrap()?;
         assert_eq!(package_manager, PackageManager::Berry);

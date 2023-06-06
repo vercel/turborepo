@@ -111,21 +111,23 @@ importers:
     specifiers:
       '@next/react-refresh-utils': ^13.0.6
       '@types/node': ^18.11.11
-      '@vercel/turbopack-dev': '*'
+      '@vercel/turbopack-ecmascript-runtime': '*'
     dependencies:
       '@next/react-refresh-utils': 13.0.6_react-refresh@0.12.0
-      '@vercel/turbopack-dev': link:../../turbopack-dev/js
+      '@vercel/turbopack-ecmascript-runtime': link:../../turbopack-ecmascript-runtime/js
     devDependencies:
       '@types/node': 18.13.0
 
-  crates/turbopack-dev/js:
+  crates/turbopack-ecmascript-runtime/js:
     specifiers:
       '@next/react-refresh-utils': ^13.0.6
       '@types/node': ^18.11.11
+      npm-run-all: ^4.1.5
     dependencies:
       '@next/react-refresh-utils': 13.0.6_react-refresh@0.12.0
-    devDependencies:
       '@types/node': 18.13.0
+    devDependencies:
+      npm-run-all: 4.1.5
 
   crates/turbopack-node/js:
     specifiers:
@@ -2758,7 +2760,7 @@ packages:
     resolution: {integrity: sha512-ZUxbzKl0IfJILTS6t7ip5fQQM/J3TJYubDm3nMbgubNNYS62eXeUpoLUC8/7fJNiFYHTrGPQn7hspDUzIHX3UA==}
     dependencies:
       '@types/minimatch': 5.1.1
-      '@types/node': 16.11.56
+      '@types/node': 18.13.0
 
   /@types/graceful-fs/4.1.6:
     resolution: {integrity: sha512-Sig0SNORX9fdW+bQuTEovKj3uHcUL6LQKbCrrqb1X7J6/ReAbhCXRAhc+SMejhLELFj2QcyuxmUooZ4bt5ReSw==}
