@@ -567,6 +567,18 @@
 <a href="#567" id="567">567</a>
 <a href="#568" id="568">568</a>
 <a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -1100,6 +1112,10 @@
     <span class="doccomment">/// A [Headers] which will be appended to the eventual, fully resolved
     /// content result. This overwrites any previous matching headers.
     </span><span class="kw">pub </span>response_headers: <span class="prelude-ty">Option</span>&lt;HeaderListVc&gt;,
+
+    <span class="doccomment">/// A [HeaderList] which will overwrite the values used during the lookup
+    /// process. All headers not present in this list will be deleted.
+    </span><span class="kw">pub </span>request_headers: <span class="prelude-ty">Option</span>&lt;HeaderListVc&gt;,
 }
 
 <span class="kw">pub struct </span>RewriteBuilder {
@@ -1113,6 +1129,7 @@
                 path_and_query,
                 source: <span class="prelude-val">None</span>,
                 response_headers: <span class="prelude-val">None</span>,
+                request_headers: <span class="prelude-val">None</span>,
             },
         }
     }
@@ -1129,6 +1146,13 @@
     /// result.
     </span><span class="kw">pub fn </span>response_headers(<span class="kw-2">mut </span><span class="self">self</span>, headers: HeaderListVc) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.rewrite.response_headers = <span class="prelude-val">Some</span>(headers);
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Sets request headers to overwrite the headers used during the lookup
+    /// process.
+    </span><span class="kw">pub fn </span>request_headers(<span class="kw-2">mut </span><span class="self">self</span>, headers: HeaderListVc) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.rewrite.request_headers = <span class="prelude-val">Some</span>(headers);
         <span class="self">self
     </span>}
 

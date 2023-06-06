@@ -163,6 +163,7 @@
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, iter::once};
 
 <span class="kw">use </span>anyhow::Result;
@@ -320,6 +321,7 @@
                         .into(),
                     ),
                     response_headers: rewrite.response_headers,
+                    request_headers: rewrite.request_headers,
                 }
                 .cell(),
             )

@@ -165,13 +165,28 @@
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::btree_map::Entry,
     sync::atomic::{AtomicU64, Ordering},
 };
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>hyper::Uri;
+<span class="kw">use </span>hyper::{
+    header::{HeaderName <span class="kw">as </span>HyperHeaderName, HeaderValue <span class="kw">as </span>HyperHeaderValue},
+    Uri,
+};
 <span class="kw">use </span>turbo_tasks::{TransientInstance, Value};
 
 <span class="kw">use super</span>::{
@@ -237,6 +252,15 @@
                         request_overwrites.uri = new_uri;
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = <span class="kw-2">&amp;</span>rewrite.response_headers {
                             response_header_overwrites.extend(headers.<span class="kw">await</span><span class="question-mark">?</span>.iter().cloned());
+                        }
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = <span class="kw-2">&amp;</span>rewrite.request_headers {
+                            request_overwrites.headers.clear();
+                            <span class="kw">for </span>(name, value) <span class="kw">in </span><span class="kw-2">&amp;*</span>headers.<span class="kw">await</span><span class="question-mark">? </span>{
+                                request_overwrites.headers.insert(
+                                    HyperHeaderName::try_from(name)<span class="question-mark">?</span>,
+                                    HyperHeaderValue::try_from(value)<span class="question-mark">?</span>,
+                                );
+                            }
                         }
                         current_asset_path = new_asset_path;
                         data = ContentSourceData::default();

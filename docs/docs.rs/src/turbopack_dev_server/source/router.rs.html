@@ -212,7 +212,7 @@
         <span class="kw">if </span><span class="macro">cfg!</span>(debug_assertions) {
             <span class="kw">let </span>prefix_string = prefix.<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">debug_assert!</span>(prefix_string.is_empty() || prefix_string.ends_with(<span class="string">&#39;/&#39;</span>));
-            <span class="macro">debug_assert!</span>(prefix_string.starts_with(<span class="string">&#39;/&#39;</span>));
+            <span class="macro">debug_assert!</span>(!prefix_string.starts_with(<span class="string">&#39;/&#39;</span>));
         }
         <span class="prelude-val">Ok</span>(PrefixedRouterContentSource {
             prefix,
