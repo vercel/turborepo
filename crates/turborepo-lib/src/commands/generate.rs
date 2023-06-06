@@ -9,29 +9,13 @@ use crate::{
     cli::{GenerateCommand, GeneratorCustomArgs},
 };
 
-fn verify_requirements() -> Result<()> {
-    // find npx path
-    let npx = which("npx").context("Unable to run generate - missing requirements (npx)")?;
-
-    // make sure we can call npx
-    let output = Command::new(npx)
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-
-    match output {
-        Ok(result) if result.success() => Ok(()),
-        _ => Err(anyhow::anyhow!("Unable to run generate - cannot call npx")),
-    }
-}
-
 fn call_turbo_gen(command: &str, tag: &String, raw_args: &str) -> Result<i32> {
     debug!(
         "Running @turbo/gen@{} with command `{}` and args {:?}",
         tag, command, raw_args
     );
-    let mut npx = Command::new("npx");
+    let npx_path = which("npx").context("Unable to run generate - missing requirements (npx)")?;
+    let mut npx = Command::new(npx_path);
     npx.arg("--yes")
         .arg(format!("@turbo/gen@{}", tag))
         .arg("raw")
@@ -50,9 +34,6 @@ pub fn run(
     command: &Option<GenerateCommand>,
     args: &GeneratorCustomArgs,
 ) -> Result<()> {
-    // ensure npx is available
-    verify_requirements()?;
-
     match command {
         // check if a subcommand was passed
         Some(command) => {
