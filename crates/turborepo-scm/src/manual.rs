@@ -68,6 +68,7 @@ fn get_package_file_hashes_from_processing_gitignore(
         .follow_links(false)
         .git_ignore(true)
         .require_git(false)
+        .hidden(false)
         .build();
     for dirent in walker {
         let dirent = dirent?;
@@ -99,7 +100,7 @@ fn get_package_file_hashes_from_processing_gitignore(
 
 #[cfg(test)]
 mod tests {
-    use turbopath::RelativeUnixPath;
+    use turbopath::{RelativeUnixPath, RelativeUnixPathBuf};
 
     use super::*;
 
@@ -172,6 +173,10 @@ mod tests {
                 expected.insert(unix_pkg_file_path, (*hash).to_owned());
             }
         }
+        expected.insert(
+            RelativeUnixPathBuf::new(".gitignore").unwrap(),
+            "3237694bc3312ded18386964a855074af7b066af".to_owned(),
+        );
 
         let hashes =
             get_package_file_hashes_from_processing_gitignore(&turbo_root, &pkg_path, &[]).unwrap();
