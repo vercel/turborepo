@@ -33,9 +33,16 @@ pub extern "C" fn free_buffer(buffer: Buffer) {
 
 impl<T: prost::Message> From<T> for Buffer {
     fn from(value: T) -> Self {
-        let mut bytes = ManuallyDrop::new(value.encode_to_vec());
-        let data = bytes.as_mut_ptr();
-        let len = bytes.len() as u32;
+        let len = value.encoded_len() as u32;
+        let data = match len {
+            // Check if the message will have a non-zero length to avoid returning
+            // a dangling pointer to Go.
+            0 => std::ptr::null_mut(),
+            _ => {
+                let mut bytes = ManuallyDrop::new(value.encode_to_vec());
+                bytes.as_mut_ptr()
+            }
+        };
         Buffer { len, data }
     }
 }
@@ -340,4 +347,17 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         })),
     }
     .into()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_empty_message_has_null_ptr() {
+        let message = proto::RecursiveCopyResponse { error: None };
+        let buffer = Buffer::from(message);
+        assert_eq!(buffer.len, 0);
+        assert_eq!(buffer.data, std::ptr::null_mut());
+    }
 }
