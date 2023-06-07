@@ -11,17 +11,16 @@ impl RelativeUnixPathBuf {
     pub fn new(path: impl Into<Vec<u8>>) -> Result<Self, PathError> {
         let bytes: Vec<u8> = path.into();
         if bytes.first() == Some(&b'/') {
-            return Err(PathError::not_relative_error(&bytes).into());
+            return Err(PathError::not_relative_error(&bytes));
         }
         Ok(Self(BString::new(bytes)))
     }
 
     pub fn as_str(&self) -> Result<&str, PathError> {
-        let s = self.0.to_str().or_else(|_| {
-            Err(PathError::InvalidUnicode(
-                self.0.as_bytes().to_str_lossy().to_string(),
-            ))
-        })?;
+        let s = self
+            .0
+            .to_str()
+            .map_err(|_| PathError::InvalidUnicode(self.0.as_bytes().to_str_lossy().to_string()))?;
         Ok(s)
     }
 
@@ -76,7 +75,7 @@ impl RelativeUnixPathBufTestExt for RelativeUnixPathBuf {
 
 impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
     fn borrow(&self) -> &RelativeUnixPath {
-        let inner: &BStr = &self.0.borrow();
+        let inner: &BStr = self.0.borrow();
         unsafe { &*(inner as *const BStr as *const RelativeUnixPath) }
     }
 }
@@ -137,7 +136,7 @@ mod tests {
         let combined = RelativeUnixPathBuf::new("some/path/child/leaf").unwrap();
         let head = RelativeUnixPathBuf::new("some/path").unwrap();
         let expected = RelativeUnixPathBuf::new("child/leaf").unwrap();
-        let tail = combined.strip_prefix(&head).unwrap();
+        let tail = combined.strip_prefix(head).unwrap();
         assert_eq!(tail, expected);
     }
 
@@ -146,7 +145,7 @@ mod tests {
         let combined = RelativeUnixPathBuf::new("some/path").unwrap();
         let head = combined.clone();
         let expected = RelativeUnixPathBuf::new("").unwrap();
-        let tail = combined.strip_prefix(&head).unwrap();
+        let tail = combined.strip_prefix(head).unwrap();
         assert_eq!(tail, expected);
     }
 
@@ -154,7 +153,7 @@ mod tests {
     fn test_strip_empty_prefix() {
         let combined = RelativeUnixPathBuf::new("some/path").unwrap();
         let tail = combined
-            .strip_prefix(&RelativeUnixPathBuf::new("").unwrap())
+            .strip_prefix(RelativeUnixPathBuf::new("").unwrap())
             .unwrap();
         assert_eq!(tail, combined);
     }

@@ -11,7 +11,7 @@ impl RelativeUnixPath {
     pub fn new<P: AsRef<BStr>>(value: &P) -> Result<&Self, PathError> {
         let path = value.as_ref();
         if path.first() == Some(&b'/') {
-            return Err(PathError::not_relative_error(path).into());
+            return Err(PathError::not_relative_error(path));
         }
         // copied from stdlib path.rs: relies on the representation of
         // RelativeUnixPath being just a BStr, the same way Path relies on
