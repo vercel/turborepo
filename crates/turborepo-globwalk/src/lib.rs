@@ -160,7 +160,8 @@ fn preprocess_paths_and_globs(
     let base_path_slash = base_path
         .as_path()
         .to_slash()
-        .map(|s| s.replace(':', "\\:")) // Windows drive paths need to be escaped
+        // Windows drive paths need to be escaped, and ':' is a valid token in unix paths
+        .map(|s| s.replace(':', "\\:"))
         .ok_or(WalkError::InvalidPath)?;
     let (include_paths, lowest_segment) = include
         .iter()
