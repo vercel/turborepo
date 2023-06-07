@@ -552,9 +552,9 @@ function applyInternal(outdatedModules, disposedModules, newModuleFactories) {
     const outdatedSelfAcceptedModules = computeOutdatedSelfAcceptedModules(outdatedModules);
     const { outdatedModuleParents  } = disposePhase(outdatedModules, disposedModules);
     let error;
-    var reportError = function(err) {
+    function reportError(err) {
         if (!error) error = err;
-    };
+    }
     applyPhase(outdatedSelfAcceptedModules, newModuleFactories, outdatedModuleParents, reportError);
     if (error) {
         throw error;
