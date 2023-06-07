@@ -261,7 +261,7 @@ impl PackageManager {
         if *self == PackageManager::Yarn {
             inclusions
                 .iter_mut()
-                .for_each(|inclusion| exclusions.push(inclusion.clone() + "/node_modules/**"));
+                .for_each(|inclusion| exclusions.push(format!("{inclusion}/node_modules/**")));
         }
         let globs = WorkspaceGlobs::new(inclusions, exclusions)?;
         Ok(globs)
