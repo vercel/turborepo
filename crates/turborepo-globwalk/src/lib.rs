@@ -205,9 +205,6 @@ fn preprocess_paths_and_globs(
                 exclude_paths.push(format!("{}/**", split));
                 exclude_paths.push(split);
             }
-        } else {
-            continue;
-        }
     }
 
     Ok((base_path, include_paths, exclude_paths))
