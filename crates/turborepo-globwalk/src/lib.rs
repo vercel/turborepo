@@ -188,25 +188,26 @@ fn preprocess_paths_and_globs(
     for split in exclude
         .iter()
         .map(|s| join_unix_like_paths(&base_path_slash, s))
-        .filter_map(|g| collapse_path(&g).map(|s| s.to_string())) {
-            let split = split.to_string();
-            // if the glob ends with a slash, then we need to add a double star,
-            // unless it already ends with a double star
-            if split.ends_with('/') {
-                if split.ends_with("**/") {
-                    exclude_paths.push(split[..split.len() - 1].to_string());
-                } else {
-                    exclude_paths.push(format!("{}**", split));
-                }
-            } else if split.ends_with("/**") {
-                exclude_paths.push(split);
+        .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
+    {
+        let split = split.to_string();
+        // if the glob ends with a slash, then we need to add a double star,
+        // unless it already ends with a double star
+        if split.ends_with('/') {
+            if split.ends_with("**/") {
+                exclude_paths.push(split[..split.len() - 1].to_string());
             } else {
-                // Match Go globby behavior. If the glob doesn't already end in /**, add it
-                // TODO: The Go version uses system separator. Are we forcing all globs to unix
-                // paths?
-                exclude_paths.push(format!("{}/**", split));
-                exclude_paths.push(split);
+                exclude_paths.push(format!("{}**", split));
             }
+        } else if split.ends_with("/**") {
+            exclude_paths.push(split);
+        } else {
+            // Match Go globby behavior. If the glob doesn't already end in /**, add it
+            // TODO: The Go version uses system separator. Are we forcing all globs to unix
+            // paths?
+            exclude_paths.push(format!("{}/**", split));
+            exclude_paths.push(split);
+        }
     }
 
     Ok((base_path, include_paths, exclude_paths))
