@@ -267,16 +267,16 @@ impl PackageManager {
         Ok(globs)
     }
 
-    fn get_default_exclusions(&self) -> Vec<String> {
+    fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
         let ignores = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                vec!["**/node_modules/**", "**/bower_components/**"]
+                ["**/node_modules/**", "**/bower_components/**"].as_slice()
             }
-            PackageManager::Npm => vec!["**/node_modules/**"],
-            PackageManager::Berry => vec!["**/node_modules", "**/.git", "**/.yarn"],
-            PackageManager::Yarn => vec![], // yarn does its own handling above
+            PackageManager::Npm => ["**/node_modules/**"].as_slice(),
+            PackageManager::Berry => ["**/node_modules", "**/.git", "**/.yarn"].as_slice(),
+            PackageManager::Yarn => [].as_slice(), // yarn does its own handling above
         };
-        ignores.into_iter().map(|s| s.to_string()).collect()
+        ignores.iter().map(|s| s.to_string())
     }
 
     fn get_configured_workspace_globs(
