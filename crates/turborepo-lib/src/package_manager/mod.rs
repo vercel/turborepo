@@ -84,16 +84,17 @@ impl fmt::Display for PackageManager {
 // WorkspaceGlobs is suitable for finding package.json files via globwalk
 #[derive(Debug)]
 pub struct WorkspaceGlobs {
-    inclusions: Any<'static>,
-    exclusions: Any<'static>,
-    raw_inclusions: Vec<String>,
+    directory_inclusions: Any<'static>,
+    directory_exclusions: Any<'static>,
+    package_json_inclusions: Vec<String>,
     raw_exclusions: Vec<String>,
 }
 
 impl PartialEq for WorkspaceGlobs {
     fn eq(&self, other: &Self) -> bool {
         // Use the literals for comparison, not the compiled globs
-        self.raw_inclusions == other.raw_inclusions && self.raw_exclusions == other.raw_exclusions
+        self.package_json_inclusions == other.package_json_inclusions
+            && self.raw_exclusions == other.raw_exclusions
     }
 }
 
@@ -109,12 +110,20 @@ impl WorkspaceGlobs {
             .into_iter()
             .map(|s| s.into())
             .collect::<Vec<String>>();
+        let package_json_inclusions = raw_inclusions
+            .iter()
+            .map(|s| {
+                let mut s: String = s.clone();
+                s.push_str("/package.json");
+                s
+            })
+            .collect::<Vec<_>>();
         let raw_exclusions: Vec<String> = exclusions
             .into_iter()
             .map(|s| s.into())
             .collect::<Vec<String>>();
         let inclusion_globs = raw_inclusions
-            .iter()
+            .into_iter()
             .map(|s| Glob::new(s.as_ref()).map(|g| g.into_owned()))
             .collect::<Result<Vec<_>, _>>()?;
         let exclusion_globs = raw_exclusions
@@ -122,22 +131,22 @@ impl WorkspaceGlobs {
             .map(|s| Glob::new(s.as_ref()).map(|g| g.into_owned()))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            inclusions: wax::any(inclusion_globs)?,
-            exclusions: wax::any(exclusion_globs)?,
-            raw_inclusions,
+            directory_inclusions: wax::any(inclusion_globs)?,
+            directory_exclusions: wax::any(exclusion_globs)?,
+            package_json_inclusions,
             raw_exclusions,
         })
     }
 
-    pub fn test(
+    pub fn target_is_workspace(
         &self,
         root: &AbsoluteSystemPath,
         target: &AbsoluteSystemPath,
     ) -> Result<bool, Error> {
         let search_value = root.anchor(target)?;
 
-        let includes = self.inclusions.is_match(&search_value);
-        let excludes = self.exclusions.is_match(&search_value);
+        let includes = self.directory_inclusions.is_match(&search_value);
+        let excludes = self.directory_exclusions.is_match(&search_value);
 
         Ok(includes && !excludes)
     }
@@ -248,13 +257,12 @@ impl PackageManager {
         let (mut inclusions, mut exclusions) = self.get_configured_workspace_globs(root_path)?;
         exclusions.extend(self.get_default_exclusions().into_iter());
 
-        inclusions.iter_mut().for_each(|inclusion| {
-            // Yarn appends node_modules to every other glob specified
-            if *self == PackageManager::Yarn {
-                exclusions.push(inclusion.clone() + "/node_modules/**")
-            }
-            inclusion.push_str("/package.json");
-        });
+        // Yarn appends node_modules to every other glob specified
+        if *self == PackageManager::Yarn {
+            inclusions
+                .iter_mut()
+                .for_each(|inclusion| exclusions.push(inclusion.clone() + "/node_modules/**"));
+        }
         let globs = WorkspaceGlobs::new(inclusions, exclusions)?;
         Ok(globs)
     }
@@ -300,8 +308,8 @@ impl PackageManager {
         };
 
         let (inclusions, exclusions) = globs.into_iter().partition_map(|glob| {
-            if glob.starts_with('!') {
-                Either::Right(glob[1..].to_string())
+            if let Some(exclusion) = glob.strip_prefix('!') {
+                Either::Right(exclusion.to_string())
             } else {
                 Either::Left(glob)
             }
@@ -383,7 +391,7 @@ impl PackageManager {
 
         let walker = globwalk::globwalk(
             repo_root,
-            &globs.raw_inclusions,
+            &globs.package_json_inclusions,
             &globs.raw_exclusions,
             globwalk::WalkType::Files,
         )?;
@@ -495,7 +503,7 @@ mod tests {
                 ],
             };
             let expected: HashSet<String> =
-                HashSet::from_iter(expected.into_iter().map(|s| s.to_string()));
+                HashSet::from_iter(expected.iter().map(|s| s.to_string()));
             assert_eq!(ignores, expected);
         }
     }
@@ -659,7 +667,7 @@ mod tests {
         }];
 
         for test in tests {
-            match test.globs.test(&test.root, &test.target) {
+            match test.globs.target_is_workspace(&test.root, &test.target) {
                 Ok(value) => assert_eq!(value, test.output.unwrap()),
                 Err(value) => assert_eq!(value.to_string(), test.output.unwrap_err().to_string()),
             };

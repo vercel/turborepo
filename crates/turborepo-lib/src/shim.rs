@@ -447,7 +447,9 @@ impl InferInfo {
 
     pub fn is_workspace_root_of(&self, target_path: &AbsoluteSystemPath) -> bool {
         match &self.workspace_globs {
-            Some(globs) => globs.test(&self.path, target_path).unwrap_or(false),
+            Some(globs) => globs
+                .target_is_workspace(&self.path, target_path)
+                .unwrap_or(false),
             None => false,
         }
     }
@@ -1007,7 +1009,7 @@ mod test {
                         ),
                     },
                     InferInfo {
-                        path: root_one.clone(),
+                        path: root_one,
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: Some(

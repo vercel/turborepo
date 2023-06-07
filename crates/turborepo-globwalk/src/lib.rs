@@ -160,7 +160,7 @@ fn preprocess_paths_and_globs(
     let base_path_slash = base_path
         .as_path()
         .to_slash()
-        .map(|s| s.replace(":", "\\:")) // Windows drive paths need to be escaped
+        .map(|s| s.replace(':', "\\:")) // Windows drive paths need to be escaped
         .ok_or(WalkError::InvalidPath)?;
     let (include_paths, lowest_segment) = include
         .iter()
@@ -1127,7 +1127,6 @@ mod test {
             let (success, _): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
                 super::globwalk(&path, &include, &exclude, walk_type)
                     .unwrap()
-                    .into_iter()
                     .partition_result();
 
             let success = success

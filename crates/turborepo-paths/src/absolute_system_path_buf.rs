@@ -4,7 +4,7 @@ use std::{
     fmt, fs,
     io::{self, Write},
     ops::Deref,
-    path::{Components, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use path_clean::PathClean;
