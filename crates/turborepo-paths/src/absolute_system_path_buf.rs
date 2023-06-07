@@ -4,7 +4,7 @@ use std::{
     fmt, fs,
     io::{self, Write},
     ops::Deref,
-    path::{Components, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use path_clean::PathClean;
@@ -162,10 +162,6 @@ impl AbsoluteSystemPathBuf {
 
     pub fn as_path(&self) -> &Path {
         self.0.as_path()
-    }
-
-    pub fn components(&self) -> Components<'_> {
-        self.0.components()
     }
 
     pub fn parent(&self) -> Option<Self> {

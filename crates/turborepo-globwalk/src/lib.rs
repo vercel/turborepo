@@ -11,7 +11,7 @@ use std::{
 use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use wax::{Any, BuildError, Glob, Pattern};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -39,6 +39,8 @@ impl WalkType {
     }
 }
 
+pub use walkdir::Error as WalkDirError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError {
     // note: wax 0.5 has a lifetime in the BuildError, so we can't use it here
@@ -61,7 +63,7 @@ pub enum WalkError {
 ///         the longest common prefix of all the includes
 ///       - traversing above the root of the base_path is not allowed
 pub fn globwalk(
-    base_path: &AbsoluteSystemPathBuf,
+    base_path: &AbsoluteSystemPath,
     include: &[String],
     exclude: &[String],
     walk_type: WalkType,
@@ -151,13 +153,15 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
 }
 
 fn preprocess_paths_and_globs(
-    base_path: &AbsoluteSystemPathBuf,
+    base_path: &AbsoluteSystemPath,
     include: &[String],
     exclude: &[String],
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
     let base_path_slash = base_path
         .as_path()
         .to_slash()
+        // Windows drive paths need to be escaped, and ':' is a valid token in unix paths
+        .map(|s| s.replace(':', "\\:"))
         .ok_or(WalkError::InvalidPath)?;
     let (include_paths, lowest_segment) = include
         .iter()
@@ -174,25 +178,37 @@ fn preprocess_paths_and_globs(
 
     let base_path = base_path
         .components()
-        .take(lowest_segment + 1)
+        .take(
+            // this can be usize::MAX if there are no include paths
+            lowest_segment.saturating_add(1),
+        )
         .collect::<PathBuf>();
 
-    let exclude_paths = exclude
+    let mut exclude_paths = vec![];
+    for split in exclude
         .iter()
         .map(|s| join_unix_like_paths(&base_path_slash, s))
-        .filter_map(|g| {
-            let (split, _) = collapse_path(&g)?;
-            let split = split.to_string();
-
-            // if the glob ends with a slash, then we need to add a double star,
-            // unless it already ends with a double star
-            if split.ends_with('/') && !split.ends_with("**/") {
-                Some(format!("{}**", split))
+        .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
+    {
+        let split = split.to_string();
+        // if the glob ends with a slash, then we need to add a double star,
+        // unless it already ends with a double star
+        if split.ends_with('/') {
+            if split.ends_with("**/") {
+                exclude_paths.push(split[..split.len() - 1].to_string());
             } else {
-                Some(split)
+                exclude_paths.push(format!("{}**", split));
             }
-        })
-        .collect::<Vec<_>>();
+        } else if split.ends_with("/**") {
+            exclude_paths.push(split);
+        } else {
+            // Match Go globby behavior. If the glob doesn't already end in /**, add it
+            // TODO: The Go version uses system separator. Are we forcing all globs to unix
+            // paths?
+            exclude_paths.push(format!("{}/**", split));
+            exclude_paths.push(split);
+        }
+    }
 
     Ok((base_path, include_paths, exclude_paths))
 }
@@ -259,14 +275,16 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, path::Path};
+    use std::{collections::HashSet, path::Path};
 
     use itertools::Itertools;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use wax::Glob;
 
-    use crate::{collapse_path, empty_glob::InclusiveEmptyAny, MatchType, WalkError};
+    use crate::{
+        collapse_path, empty_glob::InclusiveEmptyAny, globwalk, MatchType, WalkError, WalkType,
+    };
 
     #[test_case("a/./././b", "a/b", 1 ; "test path with dot segments")]
     #[test_case("a/../b", "b", 0 ; "test path with dotdot segments")]
@@ -302,8 +320,9 @@ mod test {
     #[test_case("/a/b/c/d", &["e/../../../f"], &[], "/a/b", None, None ; "can handle no slash on either")]
     #[test_case("/a/b/c/d", &["/e/f/../g"], &[], "/a/b/c/d", None, None ; "can handle no collapse")]
     #[test_case("/a/b/c/d", &["./././../.."], &[], "/a/b", None, None ; "can handle dot followed by dotdot")]
-    #[test_case("/a/b/c/d", &["**"], &["**/"], "/a/b/c/d", None, Some(&["/a/b/c/d/**/"]) ; "can handle dot followed by dotdot and dot")]
+    #[test_case("/a/b/c/d", &["**"], &["**/"], "/a/b/c/d", None, Some(&["/a/b/c/d/**"]) ; "can handle dot followed by dotdot and dot")]
     #[test_case("/a/b/c", &["**"], &["d/"], "/a/b/c", None, Some(&["/a/b/c/d/**"]) ; "will exclude all subfolders")]
+    #[test_case("/a/b/c", &["**"], &["d"], "/a/b/c", None, Some(&["/a/b/c/d/**", "/a/b/c/d"]) ; "will exclude all subfolders and file")]
     fn preprocess_paths_and_globs(
         base_path: &str,
         include: &[&str],
@@ -1108,7 +1127,6 @@ mod test {
             let (success, _): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
                 super::globwalk(&path, &include, &exclude, walk_type)
                     .unwrap()
-                    .into_iter()
                     .partition_result();
 
             let success = success
@@ -1188,5 +1206,40 @@ mod test {
             std::fs::File::create(path).unwrap();
         }
         tmp
+    }
+
+    #[test]
+    fn workspace_globbing() {
+        let files = &[
+            "package.json",
+            "docs/package.json",
+            "apps/some-app/package.json",
+            "apps/ignored/package.json",
+            "node_modules/dep/package.json",
+            "apps/some-app/node_modules/dep/package.json",
+        ];
+        let tmp = setup_files(files);
+        let root = AbsoluteSystemPathBuf::new(tmp.path()).unwrap();
+        let include = &[
+            "apps/*/package.json".to_string(),
+            "docs/package.json".to_string(),
+        ];
+        let exclude = &["apps/ignored".to_string(), "**/node_modules/**".to_string()];
+        let iter = globwalk(&root, include, exclude, WalkType::Files).unwrap();
+        let paths = iter
+            .map(|path| {
+                let path = path.unwrap();
+                let relative = root.anchor(path).unwrap();
+                relative.to_str().unwrap().to_string()
+            })
+            .collect::<HashSet<_>>();
+        let expected: HashSet<String> = HashSet::from_iter(
+            [
+                "docs/package.json".to_string(),
+                "apps/some-app/package.json".to_string(),
+            ]
+            .into_iter(),
+        );
+        assert_eq!(paths, expected);
     }
 }
