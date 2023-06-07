@@ -153,7 +153,7 @@ pub fn previous_content(
     // Note that we assume any relative file path is relative to the git root
     let anchored_file_path = if file_path.is_absolute() {
         let absolute_file_path = AbsoluteSystemPathBuf::new(file_path)?;
-        git_root.anchor(&absolute_file_path)?
+        git_root.anchor(absolute_file_path)?
     } else {
         file_path.as_path().try_into()?
     };

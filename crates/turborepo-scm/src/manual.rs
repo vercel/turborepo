@@ -16,7 +16,7 @@ fn git_like_hash_file(path: &AbsoluteSystemPathBuf, metadata: &Metadata) -> Resu
     f.read_to_end(&mut buffer)?;
     hasher.update("blob ".as_bytes());
     hasher.update(metadata.len().to_string().as_bytes());
-    hasher.update(&[b'\0']);
+    hasher.update([b'\0']);
     hasher.update(buffer.as_slice());
     let result = hasher.finalize();
     Ok(result.encode_hex::<String>())
@@ -35,10 +35,10 @@ pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     let mut excludes = Vec::new();
     for pattern in inputs {
         let pattern = pattern.as_ref();
-        if pattern.starts_with("!") {
-            let glob = Path::new(&pattern[1..])
+        if let Some(exclusion) = pattern.strip_prefix('!') {
+            let glob = Path::new(exclusion)
                 .to_slash()
-                .ok_or_else(|| PathError::invalid_utf8_error(pattern[1..].as_bytes()))?
+                .ok_or_else(|| PathError::invalid_utf8_error(exclusion.as_bytes()))?
                 .into_owned();
             let g = Glob::new(glob.as_str())
                 .map(|g| g.into_owned())

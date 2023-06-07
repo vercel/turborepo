@@ -21,9 +21,9 @@ impl TryFrom<&Path> for AnchoredSystemPathBuf {
 }
 
 // TODO: perhaps we ought to be converting to a unix path?
-impl<'a> Into<wax::CandidatePath<'a>> for &'a AnchoredSystemPathBuf {
-    fn into(self) -> wax::CandidatePath<'a> {
-        self.as_path().into()
+impl<'a> From<&'a AnchoredSystemPathBuf> for wax::CandidatePath<'a> {
+    fn from(value: &'a AnchoredSystemPathBuf) -> wax::CandidatePath<'a> {
+        value.as_path().into()
     }
 }
 
@@ -56,7 +56,7 @@ impl AnchoredSystemPathBuf {
     pub fn to_str(&self) -> Result<&str, PathError> {
         self.0
             .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(self.0.to_string_lossy().to_string()).into())
+            .ok_or_else(|| PathError::InvalidUnicode(self.0.to_string_lossy().to_string()))
     }
 
     pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
@@ -64,7 +64,7 @@ impl AnchoredSystemPathBuf {
         {
             use std::os::unix::ffi::OsStrExt;
             let bytes = self.0.as_os_str().as_bytes();
-            return RelativeUnixPathBuf::new(bytes);
+            RelativeUnixPathBuf::new(bytes)
         }
         #[cfg(not(unix))]
         {
@@ -73,7 +73,7 @@ impl AnchoredSystemPathBuf {
             let unix_str = unix_buf
                 .to_str()
                 .ok_or_else(|| PathError::InvalidUnicode(unix_buf.to_string_lossy().to_string()))?;
-            return RelativeUnixPathBuf::new(unix_str.as_bytes());
+            RelativeUnixPathBuf::new(unix_str.as_bytes())
         }
     }
 }
