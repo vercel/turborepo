@@ -262,9 +262,11 @@ async function loadChunkPath(
       `Failed to load chunk ${chunkPath} ${loadReason}${
         error ? `: ${error}` : ""
       }`,
-      error ? {
-        cause: error
-      } : undefined
+      error
+        ? {
+            cause: error,
+          }
+        : undefined
     );
   }
 }
@@ -691,7 +693,7 @@ function applyPhase(
   }[],
   newModuleFactories: Map<ModuleId, ModuleFactory>,
   outdatedModuleParents: Map<ModuleId, Array<ModuleId>>,
-  reportError: (err: any) => void,
+  reportError: (err: any) => void
 ) {
   // Update module factories.
   for (const [moduleId, factory] of newModuleFactories.entries()) {
@@ -714,11 +716,11 @@ function applyPhase(
         try {
           errorHandler(err, { moduleId, module: moduleCache[moduleId] });
         } catch (err2) {
-          reportError(err2)
-          reportError(err)
+          reportError(err2);
+          reportError(err);
         }
       } else {
-        reportError(err)
+        reportError(err);
       }
     }
   }
@@ -830,10 +832,11 @@ function applyInternal(
     disposedModules
   );
 
+  // we want to continue on error and only throw the error after we tried applying all updates
   let error: any;
-  var reportError = function (err: any) {
+  function reportError(err: any) {
     if (!error) error = err;
-  };
+  }
 
   applyPhase(
     outdatedSelfAcceptedModules,
