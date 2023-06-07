@@ -184,9 +184,10 @@ fn preprocess_paths_and_globs(
         .collect::<PathBuf>();
 
     let mut exclude_paths = vec![];
-    for exclude_path in exclude {
-        let exclude = join_unix_like_paths(&base_path_slash, exclude_path);
-        if let Some((split, _)) = collapse_path(&exclude) {
+    for split in exclude
+        .iter()
+        .map(|s| join_unix_like_paths(&base_path_slash, s))
+        .filter_map(|g| collapse_path(&g).map(|s| s.to_string())) {
             let split = split.to_string();
             // if the glob ends with a slash, then we need to add a double star,
             // unless it already ends with a double star
