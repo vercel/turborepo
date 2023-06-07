@@ -6,10 +6,12 @@ package hashing
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 
 	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/encoding/gitoutput"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -199,4 +201,43 @@ func getPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSyst
 		return nil, err
 	}
 	return result, nil
+}
+
+// gitLsTree returns a map of paths to their SHA hashes starting at a particular directory
+// that are present in the `git` index at a particular revision.
+func gitLsTree(rootPath turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	cmd := exec.Command(
+		"git",     // Using `git` from $PATH,
+		"ls-tree", // list the contents of the git index,
+		"-r",      // recursively,
+		"-z",      // with each file path relative to the invocation directory and \000-terminated,
+		"HEAD",    // at this specified version.
+	)
+	cmd.Dir = rootPath.ToString() // Include files only from this directory.
+
+	entries, err := runGitCommand(cmd, "ls-tree", gitoutput.NewLSTreeReader)
+	if err != nil {
+		return nil, err
+	}
+
+	output := make(map[turbopath.AnchoredUnixPath]string, len(entries))
+
+	for _, entry := range entries {
+		lsTreeEntry := gitoutput.LsTreeEntry(entry)
+		output[turbopath.AnchoredUnixPathFromUpstream(lsTreeEntry.GetField(gitoutput.Path))] = lsTreeEntry[2]
+	}
+
+	return output, nil
+}
+
+// statusCode represents the two-letter status code from `git status` with two "named" fields, x & y.
+// They have different meanings based upon the actual state of the working tree. Using x & y maps
+// to upstream behavior.
+type statusCode struct {
+	x string
+	y string
+}
+
+func (s statusCode) isDelete() bool {
+	return s.x == "D" || s.y == "D"
 }
