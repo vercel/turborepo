@@ -72,10 +72,7 @@ impl From<std::string::FromUtf8Error> for PathError {
 
 impl PathError {
     pub fn is_io_error(&self, kind: io::ErrorKind) -> bool {
-        match self {
-            PathError::IO(err) => err.kind() == kind,
-            _ => false,
-        }
+        matches!(self, PathError::IO(err) if err.kind() == kind)
     }
 
     pub fn invalid_utf8_error(bytes: impl Into<Vec<u8>>) -> Self {

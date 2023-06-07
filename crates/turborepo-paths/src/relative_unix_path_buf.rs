@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, fmt::Debug, io::Write};
+use std::{borrow::Borrow, fmt::Debug, io::Write, ops::Deref};
 
 use bstr::{BStr, BString, ByteSlice};
 
@@ -52,16 +52,6 @@ impl RelativeUnixPathBuf {
         writer.write_all(&[b'\"'])?;
         Ok(())
     }
-
-    pub fn strip_prefix(&self, prefix: impl AsRef<RelativeUnixPath>) -> Result<Self, PathError> {
-        //let prefix = prefix.as_ref();
-        let combined: &RelativeUnixPath = self.as_ref();
-        combined.strip_prefix(prefix)
-    }
-
-    pub fn ends_with(&self, suffix: impl AsRef<[u8]>) -> bool {
-        self.0.ends_with(suffix.as_ref())
-    }
 }
 
 pub trait RelativeUnixPathBufTestExt {
@@ -93,6 +83,14 @@ impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
 
 impl AsRef<RelativeUnixPath> for RelativeUnixPathBuf {
     fn as_ref(&self) -> &RelativeUnixPath {
+        self.borrow()
+    }
+}
+
+impl Deref for RelativeUnixPathBuf {
+    type Target = RelativeUnixPath;
+
+    fn deref(&self) -> &Self::Target {
         self.borrow()
     }
 }

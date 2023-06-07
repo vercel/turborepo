@@ -68,7 +68,7 @@ fn get_package_file_hashes_from_processing_gitignore(
         .follow_links(false)
         .git_ignore(true)
         .require_git(false)
-        .hidden(false)
+        .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
         .build();
     for dirent in walker {
         let dirent = dirent?;
@@ -82,7 +82,6 @@ fn get_package_file_hashes_from_processing_gitignore(
         let relative_path = full_package_path.anchor(&path)?;
         let relative_path = relative_path.to_unix()?;
         if let Some(include_pattern) = include_pattern.as_ref() {
-            //if !glob_match(include_pattern, relative_path.as_str()?).unwrap_or(false) {
             if !include_pattern.is_match(relative_path.as_str()?) {
                 continue;
             }
