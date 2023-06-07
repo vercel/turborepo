@@ -255,7 +255,7 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
     ) -> Result<WorkspaceGlobs, Error> {
         let (mut inclusions, mut exclusions) = self.get_configured_workspace_globs(root_path)?;
-        exclusions.extend(self.get_default_exclusions().into_iter());
+        exclusions.extend(self.get_default_exclusions());
 
         // Yarn appends node_modules to every other glob specified
         if *self == PackageManager::Yarn {
