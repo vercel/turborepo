@@ -363,3 +363,27 @@ func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[
 	hashes := resp.GetHashes()
 	return hashes.GetHashes(), nil
 }
+
+// GetPackageFileHashesFromProcessingGitIgnore proces to rust to walk the filesystem and produce a hash similar to
+// what git would do
+func GetPackageFileHashesFromProcessingGitIgnore(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesFromProcessingGitIgnoreRequest{
+		TurboRoot:   rootPath,
+		PackagePath: packagePath,
+		Inputs:      inputs,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_package_file_hashes_from_processing_git_ignore(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetPackageFileHashesFromProcessingGitIgnoreResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}

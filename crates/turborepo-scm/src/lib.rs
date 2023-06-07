@@ -14,7 +14,7 @@ use turbopath::{AbsoluteSystemPath, PathError};
 pub mod git;
 mod hash_object;
 mod ls_tree;
-mod manual;
+pub mod manual;
 pub mod package_deps;
 mod status;
 

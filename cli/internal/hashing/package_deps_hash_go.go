@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 
+	gitignore "github.com/sabhiram/go-gitignore"
+	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/encoding/gitoutput"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -109,4 +111,92 @@ func gitStatus(rootPath turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUni
 	}
 
 	return output, nil
+}
+
+func safeCompileIgnoreFile(filepath turbopath.AbsoluteSystemPath) (*gitignore.GitIgnore, error) {
+	if filepath.FileExists() {
+		return gitignore.CompileIgnoreFile(filepath.ToString())
+	}
+	// no op
+	return gitignore.CompileIgnoreLines([]string{}...), nil
+}
+
+func getPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+	result := make(map[turbopath.AnchoredUnixPath]string)
+	absolutePackagePath := packagePath.RestoreAnchor(rootPath)
+
+	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
+	// the directory of a package.
+	ignore, err := safeCompileIgnoreFile(rootPath.UntypedJoin(".gitignore"))
+	if err != nil {
+		return nil, err
+	}
+
+	ignorePkg, err := safeCompileIgnoreFile(absolutePackagePath.UntypedJoin(".gitignore"))
+	if err != nil {
+		return nil, err
+	}
+
+	includePattern := ""
+	excludePattern := ""
+	if len(inputs) > 0 {
+		var includePatterns []string
+		var excludePatterns []string
+		for _, pattern := range inputs {
+			if len(pattern) > 0 && pattern[0] == '!' {
+				excludePatterns = append(excludePatterns, absolutePackagePath.UntypedJoin(pattern[1:]).ToString())
+			} else {
+				includePatterns = append(includePatterns, absolutePackagePath.UntypedJoin(pattern).ToString())
+			}
+		}
+		if len(includePatterns) > 0 {
+			includePattern = "{" + strings.Join(includePatterns, ",") + "}"
+		}
+		if len(excludePatterns) > 0 {
+			excludePattern = "{" + strings.Join(excludePatterns, ",") + "}"
+		}
+	}
+
+	err = fs.Walk(absolutePackagePath.ToStringDuringMigration(), func(name string, isDir bool) error {
+		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
+		rootMatch := ignore.MatchesPath(convertedName.ToString())
+		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
+		if !rootMatch && !otherMatch {
+			if !isDir {
+				if includePattern != "" {
+					val, err := doublestar.PathMatch(includePattern, convertedName.ToString())
+					if err != nil {
+						return err
+					}
+					if !val {
+						return nil
+					}
+				}
+				if excludePattern != "" {
+					val, err := doublestar.PathMatch(excludePattern, convertedName.ToString())
+					if err != nil {
+						return err
+					}
+					if val {
+						return nil
+					}
+				}
+				hash, err := fs.GitLikeHashFile(convertedName)
+				if err != nil {
+					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
+				}
+
+				relativePath, err := convertedName.RelativeTo(absolutePackagePath)
+				if err != nil {
+					return fmt.Errorf("File path cannot be made relative: %w", err)
+				}
+				result[relativePath.ToUnixPath()] = hash
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

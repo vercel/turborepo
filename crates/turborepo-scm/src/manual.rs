@@ -22,10 +22,10 @@ fn git_like_hash_file(path: &AbsoluteSystemPathBuf, metadata: &Metadata) -> Resu
     Ok(result.encode_hex::<String>())
 }
 
-fn get_package_file_hashes_from_processing_gitignore(
+pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPathBuf,
     package_path: &AnchoredSystemPathBuf,
-    inputs: &[&str],
+    inputs: &[S],
 ) -> Result<GitHashes, Error> {
     let full_package_path = turbo_root.resolve(package_path);
     let mut hashes = GitHashes::new();
@@ -34,6 +34,7 @@ fn get_package_file_hashes_from_processing_gitignore(
     let mut includes = Vec::new();
     let mut excludes = Vec::new();
     for pattern in inputs {
+        let pattern = pattern.as_ref();
         if pattern.starts_with("!") {
             let glob = Path::new(&pattern[1..])
                 .to_slash()
@@ -178,7 +179,8 @@ mod tests {
         );
 
         let hashes =
-            get_package_file_hashes_from_processing_gitignore(&turbo_root, &pkg_path, &[]).unwrap();
+            get_package_file_hashes_from_processing_gitignore::<&str>(&turbo_root, &pkg_path, &[])
+                .unwrap();
         assert_eq!(hashes, expected);
 
         expected = GitHashes::new();
