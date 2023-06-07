@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{AbsoluteSystemPath, IntoSystem, PathError, RelativeUnixPathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
-pub struct AnchoredSystemPathBuf(PathBuf);
+pub struct AnchoredSystemPathBuf(pub(crate) PathBuf);
 
 impl TryFrom<&Path> for AnchoredSystemPathBuf {
     type Error = PathError;

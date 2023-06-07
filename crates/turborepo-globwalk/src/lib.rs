@@ -244,8 +244,8 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
     for segment in path.trim_start_matches('/').split('/') {
         match segment {
             ".." => {
-                lowest_index.get_or_insert(stack.len());
                 stack.pop()?;
+                lowest_index.get_or_insert(stack.len());
                 changed = true;
             }
             "." => {
