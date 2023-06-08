@@ -45,7 +45,7 @@ pub fn hash_files(
 }
 
 pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
-    turbo_root: &AbsoluteSystemPathBuf,
+    turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPathBuf,
     inputs: &[S],
 ) -> Result<GitHashes, Error> {
