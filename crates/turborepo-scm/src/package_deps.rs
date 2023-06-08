@@ -1,5 +1,6 @@
 use std::{collections::HashMap, process::Command};
 
+use bstr::io::BufReadExt;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{hash_object::hash_objects, ls_tree::git_ls_tree, status::append_git_status, Error};
@@ -29,13 +30,31 @@ pub(crate) fn find_git_root(
         .args(["rev-parse", "--show-cdup"])
         .current_dir(turbo_root)
         .output()?;
-    let root = String::from_utf8(rev_parse.stdout)?;
-    Ok(turbo_root.join_literal(root.trim_end()).to_realpath()?)
+    if !rev_parse.status.success() {
+        let stderr = String::from_utf8_lossy(&rev_parse.stderr);
+        return Err(Error::git_error(format!(
+            "git rev-parse --show-cdup error: {}",
+            stderr
+        )));
+    }
+    let cursor = std::io::Cursor::new(rev_parse.stdout);
+    let mut lines = cursor.byte_lines();
+    if let Some(line) = lines.next() {
+        let line = line?;
+        let tail = RelativeUnixPathBuf::new(line)?;
+        turbo_root.join_unix_path(tail).map_err(|e| e.into())
+    } else {
+        let stderr = String::from_utf8_lossy(&rev_parse.stderr);
+        Err(Error::git_error(format!(
+            "git rev-parse --show-cdup error: no values on stdout. stderr: {}",
+            stderr
+        )))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::process::Command;
+    use std::{assert_matches::assert_matches, process::Command};
 
     use super::*;
 
@@ -73,6 +92,28 @@ mod tests {
     }
 
     #[test]
+    fn test_symlinked_git_root() {
+        let (_, tmp_root) = tmp_dir();
+        let git_root = tmp_root.join_component("actual_repo");
+        git_root.create_dir_all().unwrap();
+        setup_repository(&git_root);
+        git_root.join_component("inside").create_dir_all().unwrap();
+        let link = tmp_root.join_component("link");
+        link.symlink_to_dir("actual_repo").unwrap();
+        let turbo_root = link.join_component("inside");
+        let result = find_git_root(&turbo_root).unwrap();
+        assert_eq!(result, link);
+    }
+
+    #[test]
+    fn test_no_git_root() {
+        let (_, tmp_root) = tmp_dir();
+        tmp_root.create_dir_all().unwrap();
+        let result = find_git_root(&tmp_root);
+        assert_matches!(result, Err(Error::Git(_, _)));
+    }
+
+    #[test]
     fn test_get_package_deps() -> Result<(), Error> {
         // Directory structure:
         // <root>/
@@ -84,24 +125,24 @@ mod tests {
         //     dir/
         //       nested-file
         let (_repo_root_tmp, repo_root) = tmp_dir();
-        let my_pkg_dir = repo_root.join_literal("my-pkg");
+        let my_pkg_dir = repo_root.join_component("my-pkg");
         my_pkg_dir.create_dir_all()?;
 
         // create file 1
-        let committed_file_path = my_pkg_dir.join_literal("committed-file");
+        let committed_file_path = my_pkg_dir.join_component("committed-file");
         committed_file_path.create_with_contents("committed bytes")?;
 
         // create file 2
-        let deleted_file_path = my_pkg_dir.join_literal("deleted-file");
+        let deleted_file_path = my_pkg_dir.join_component("deleted-file");
         deleted_file_path.create_with_contents("delete-me")?;
 
         // create file 3
-        let nested_file_path = my_pkg_dir.join_literal("dir/nested-file");
+        let nested_file_path = my_pkg_dir.join_components(&["dir", "nested-file"]);
         nested_file_path.ensure_dir()?;
         nested_file_path.create_with_contents("nested")?;
 
         // create a package.json
-        let pkg_json_path = my_pkg_dir.join_literal("package.json");
+        let pkg_json_path = my_pkg_dir.join_component("package.json");
         pkg_json_path.create_with_contents("{}")?;
 
         setup_repository(&repo_root);
@@ -111,11 +152,11 @@ mod tests {
         deleted_file_path.remove()?;
 
         // create another untracked file in git
-        let uncommitted_file_path = my_pkg_dir.join_literal("uncommitted-file");
+        let uncommitted_file_path = my_pkg_dir.join_component("uncommitted-file");
         uncommitted_file_path.create_with_contents("uncommitted bytes")?;
 
         // create an untracked file in git up a level
-        let root_file_path = repo_root.join_literal("new-root-file");
+        let root_file_path = repo_root.join_component("new-root-file");
         root_file_path.create_with_contents("new-root bytes")?;
 
         let package_path = AnchoredSystemPathBuf::from_raw("my-pkg")?;

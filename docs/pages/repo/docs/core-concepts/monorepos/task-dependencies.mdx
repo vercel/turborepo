@@ -122,15 +122,11 @@ finished.
 
 ## Dependencies outside of a task
 
-When your task has topological dependencies that are outside of that given task,
-you'll still want to enjoy the parallelism of Turborepo and ensure that your
-caching behavior is reflects code changes.
-
-To demonstrate how to do this, let's say you have a set of packages (modeled as
-workspaces in your codebase) to define some math functions: `add`, `subtract`, and
-`multiply`. `subtract` is implemented by calling `add` with a negative number
-and your `multiply` works by calling `add` in a loop. So, `add` is a dependency
-of both `subtract` and `multiply`.
+Let's say you have a set of packages modeled as workspaces in your codebase to
+define some math functions: `add`, `subtract`, and `multiply`. `subtract` is
+implemented by calling `add` with a negative number and `multiply` works by
+calling `add` in a loop. So, `add` is a dependency of both `subtract` and
+`multiply`.
 
 ```bash
 packages/
@@ -157,7 +153,7 @@ To accomplish this, we can set up a pipeline like this:
        "dependsOn": ["^topo"]
      },
      "test": {
-       "dependsOn": ["^topo"]
+       "dependsOn": ["topo"]
      }
    }
  }
@@ -166,12 +162,27 @@ To accomplish this, we can set up a pipeline like this:
 ![](/images/docs/task-graph-with-placeholder-task.png)
 
 In this pipeline, we declare a "synthetic" task called `topo`. Since we don't
-have a `topo` script in any of our `package.json` files, on `turbo test` the
-pipeline will go straight to running `test` scripts in parallel, meeting our first requirement.
+have a `topo` script in any of our `package.json` files, the `turbo test`
+pipeline will go straight to running all `test` scripts in parallel, meeting our first requirement.
 
 But this `topo` task also creates a "synthetic" workspace-task dependency from `multiple` -> `add`,
 and from `subtract` -> `add`. This means that when you change code in `add`, you will also get
 a cache miss for the workspaces in `multiply` and `subtract`, meeting the second requirement.
+
+The pipeline declares that `test` depends on the `topo` task, and `topo` dependsOn `^topo`. In
+English, this means that the `topo` task of the _same_ workspace must run before all `test` tasks,
+and the `topo` task of all _package dependencies_ must run before the `topo` task itself.
+
+Why doesn't `test` directly depend on `^topo`, you ask? Because we want our workspaces to _recursively_
+wire up package dependencies via synthetic tasks. If `test` depends on `^topo`, turbo will stop
+adding to the graph after the first level of dependencies. In this example, if the `add` package
+installed a `numbers` package, for example, changes to the `numbers` package would not trickle
+all the way up to `multiply` and `subtract`.
+
+<Callout type="idea">
+  The name `topo` here is not a special name. It is short for "topological", so it helps indicate
+  why it exists, but you can call this task anything you want.
+</Callout>
 
 ## No dependencies
 

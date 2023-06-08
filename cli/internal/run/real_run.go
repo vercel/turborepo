@@ -43,6 +43,8 @@ func RealRun(
 	turboCache cache.Cache,
 	turboJSON *fs.TurboJSON,
 	globalEnvMode util.EnvMode,
+	globalEnv env.EnvironmentVariableMap,
+	globalPassThroughEnv env.EnvironmentVariableMap,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	runSummary runsummary.Meta,
@@ -79,8 +81,8 @@ func RealRun(
 		rs:              rs,
 		ui:              &cli.ConcurrentUi{Ui: base.UI},
 		runCache:        runCache,
-		env:             turboJSON.GlobalEnv,
-		passthroughEnv:  turboJSON.GlobalPassthroughEnv,
+		env:             globalEnv,
+		passThroughEnv:  globalPassThroughEnv,
 		logger:          base.Logger,
 		packageManager:  packageManager,
 		processes:       processes,
@@ -113,6 +115,8 @@ func RealRun(
 			taskSummaries = append(taskSummaries, taskSummary)
 			// not using defer, just release the lock
 			mu.Unlock()
+
+			runSummary.CloseTask(taskSummary)
 		}
 
 		// Return the error when there is one
@@ -192,8 +196,8 @@ type execContext struct {
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
-	env             []string
-	passthroughEnv  []string
+	env             env.EnvironmentVariableMap
+	passThroughEnv  env.EnvironmentVariableMap
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
 	processes       *process.Manager
@@ -260,19 +264,19 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		WarnPrefix:   prettyPrefix,
 	}
 
-	cacheStatus, timeSaved, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
+	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
 
 	// It's safe to set the CacheStatus even if there's an error, because if there's
 	// an error, the 0 values are actually what we want. We save cacheStatus and timeSaved
 	// for the task, so that even if there's an error, we have those values for the taskSummary.
 	ec.taskHashTracker.SetCacheStatus(
 		packageTask.TaskID,
-		runsummary.NewTaskCacheSummary(cacheStatus, &timeSaved),
+		runsummary.NewTaskCacheSummary(cacheStatus),
 	)
 
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-	} else if cacheStatus.Local || cacheStatus.Remote { // If there was a cache hit
+	} else if cacheStatus.Hit { // If there was a cache hit
 		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
 		// We only cache successful executions, so we can assume this is a successExitCode exit.
 		tracer(runsummary.TargetCached, nil, &successExitCode)
@@ -290,29 +294,36 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	cmd := exec.Command(ec.packageManager.Command, argsactual...)
 	cmd.Dir = packageTask.Pkg.Dir.ToSystemPath().RestoreAnchor(ec.repoRoot).ToString()
 
-	currentState := env.GetEnvMap()
-	passthroughEnv := env.EnvironmentVariableMap{}
+	passThroughEnv := env.EnvironmentVariableMap{}
 
 	if packageTask.EnvMode == util.Strict {
-		defaultPassthrough := []string{
+		defaultPassThroughEnvVarMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards([]string{
 			"PATH",
 			"SHELL",
 			"SYSTEMROOT", // Go will always include this on Windows, but we're being explicit here
+		})
+		if err != nil {
+			return nil, err
 		}
 
-		passthroughEnv.Merge(env.FromKeys(currentState, defaultPassthrough))
-		passthroughEnv.Merge(env.FromKeys(currentState, ec.env))
-		passthroughEnv.Merge(env.FromKeys(currentState, ec.passthroughEnv))
-		passthroughEnv.Merge(env.FromKeys(currentState, packageTask.TaskDefinition.EnvVarDependencies))
-		passthroughEnv.Merge(env.FromKeys(currentState, packageTask.TaskDefinition.PassthroughEnv))
+		envVarPassThroughMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.PassThroughEnv)
+		if err != nil {
+			return nil, err
+		}
+
+		passThroughEnv.Union(defaultPassThroughEnvVarMap)
+		passThroughEnv.Union(ec.env)
+		passThroughEnv.Union(ec.passThroughEnv)
+		passThroughEnv.Union(ec.taskHashTracker.GetEnvVars(packageTask.TaskID).All)
+		passThroughEnv.Union(envVarPassThroughMap)
 	} else {
-		passthroughEnv.Merge(currentState)
+		passThroughEnv.Union(ec.taskHashTracker.EnvAtExecutionStart)
 	}
 
 	// Always last to make sure it clobbers.
-	passthroughEnv.Add("TURBO_HASH", hash)
+	passThroughEnv.Add("TURBO_HASH", hash)
 
-	cmd.Env = passthroughEnv.ToHashable()
+	cmd.Env = passThroughEnv.ToHashable()
 
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk

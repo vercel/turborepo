@@ -1,0 +1,9 @@
+{
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "experimentalPassThroughEnv": ["EXPERIMENTAL_WEBSITE_TASK_PASSTHROUGH"],
+      "passThroughEnv": ["WEBSITE_TASK_PASSTHROUGH"]
+    }
+  }
+}

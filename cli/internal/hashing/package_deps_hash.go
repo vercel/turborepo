@@ -4,14 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
-	gitignore "github.com/sabhiram/go-gitignore"
-	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/encoding/gitoutput"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
@@ -26,94 +25,6 @@ type PackageDepsOptions struct {
 	PackagePath turbopath.AnchoredSystemPath
 
 	InputPatterns []string
-}
-
-func safeCompileIgnoreFile(filepath turbopath.AbsoluteSystemPath) (*gitignore.GitIgnore, error) {
-	if filepath.FileExists() {
-		return gitignore.CompileIgnoreFile(filepath.ToString())
-	}
-	// no op
-	return gitignore.CompileIgnoreLines([]string{}...), nil
-}
-
-func getPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
-	result := make(map[turbopath.AnchoredUnixPath]string)
-	absolutePackagePath := packagePath.RestoreAnchor(rootPath)
-
-	// Instead of implementing all gitignore properly, we hack it. We only respect .gitignore in the root and in
-	// the directory of a package.
-	ignore, err := safeCompileIgnoreFile(rootPath.UntypedJoin(".gitignore"))
-	if err != nil {
-		return nil, err
-	}
-
-	ignorePkg, err := safeCompileIgnoreFile(absolutePackagePath.UntypedJoin(".gitignore"))
-	if err != nil {
-		return nil, err
-	}
-
-	includePattern := ""
-	excludePattern := ""
-	if len(inputs) > 0 {
-		var includePatterns []string
-		var excludePatterns []string
-		for _, pattern := range inputs {
-			if len(pattern) > 0 && pattern[0] == '!' {
-				excludePatterns = append(excludePatterns, absolutePackagePath.UntypedJoin(pattern[1:]).ToString())
-			} else {
-				includePatterns = append(includePatterns, absolutePackagePath.UntypedJoin(pattern).ToString())
-			}
-		}
-		if len(includePatterns) > 0 {
-			includePattern = "{" + strings.Join(includePatterns, ",") + "}"
-		}
-		if len(excludePatterns) > 0 {
-			excludePattern = "{" + strings.Join(excludePatterns, ",") + "}"
-		}
-	}
-
-	err = fs.Walk(absolutePackagePath.ToStringDuringMigration(), func(name string, isDir bool) error {
-		convertedName := turbopath.AbsoluteSystemPathFromUpstream(name)
-		rootMatch := ignore.MatchesPath(convertedName.ToString())
-		otherMatch := ignorePkg.MatchesPath(convertedName.ToString())
-		if !rootMatch && !otherMatch {
-			if !isDir {
-				if includePattern != "" {
-					val, err := doublestar.PathMatch(includePattern, convertedName.ToString())
-					if err != nil {
-						return err
-					}
-					if !val {
-						return nil
-					}
-				}
-				if excludePattern != "" {
-					val, err := doublestar.PathMatch(excludePattern, convertedName.ToString())
-					if err != nil {
-						return err
-					}
-					if val {
-						return nil
-					}
-				}
-				hash, err := fs.GitLikeHashFile(convertedName)
-				if err != nil {
-					return fmt.Errorf("could not hash file %v. \n%w", convertedName.ToString(), err)
-				}
-
-				relativePath, err := convertedName.RelativeTo(absolutePackagePath)
-				if err != nil {
-					return fmt.Errorf("File path cannot be made relative: %w", err)
-				}
-				result[relativePath.ToUnixPath()] = hash
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
@@ -209,7 +120,15 @@ func GetHashesForFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.
 	}
 
 	// Fall back to manual hashing.
-	return manuallyHashFiles(rootPath, files)
+	return manuallyHashFiles(rootPath, files, false)
+}
+
+// GetHashesForExistingFiles hashes the list of given files,
+// does not error if a file does not exist, then
+// returns a map of normalized path to hash.
+// This map is suitable for cross-platform caching.
+func GetHashesForExistingFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	return manuallyHashFiles(rootPath, files, true)
 }
 
 // gitHashObject returns a map of paths to their SHA hashes calculated by passing the paths to `git hash-object`.
@@ -329,10 +248,13 @@ func gitHashObject(anchor turbopath.AbsoluteSystemPath, filesToHash []turbopath.
 	return output, nil
 }
 
-func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	hashObject := make(map[turbopath.AnchoredUnixPath]string)
+func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath, allowMissing bool) (map[turbopath.AnchoredUnixPath]string, error) {
+	hashObject := make(map[turbopath.AnchoredUnixPath]string, len(files))
 	for _, file := range files {
 		hash, err := fs.GitLikeHashFile(file.RestoreAnchor(rootPath))
+		if allowMissing && errors.Is(err, os.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("could not hash file %v. \n%w", file.ToString(), err)
 		}
@@ -367,33 +289,6 @@ func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *g
 	}
 
 	return entries, nil
-}
-
-// gitLsTree returns a map of paths to their SHA hashes starting at a particular directory
-// that are present in the `git` index at a particular revision.
-func gitLsTree(rootPath turbopath.AbsoluteSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	cmd := exec.Command(
-		"git",     // Using `git` from $PATH,
-		"ls-tree", // list the contents of the git index,
-		"-r",      // recursively,
-		"-z",      // with each file path relative to the invocation directory and \000-terminated,
-		"HEAD",    // at this specified version.
-	)
-	cmd.Dir = rootPath.ToString() // Include files only from this directory.
-
-	entries, err := runGitCommand(cmd, "ls-tree", gitoutput.NewLSTreeReader)
-	if err != nil {
-		return nil, err
-	}
-
-	output := make(map[turbopath.AnchoredUnixPath]string, len(entries))
-
-	for _, entry := range entries {
-		lsTreeEntry := gitoutput.LsTreeEntry(entry)
-		output[turbopath.AnchoredUnixPathFromUpstream(lsTreeEntry.GetField(gitoutput.Path))] = lsTreeEntry[2]
-	}
-
-	return output, nil
 }
 
 // getTraversePath gets the distance of the current working directory to the repository root.
@@ -442,15 +337,3 @@ func memoizeGetTraversePath() func(turbopath.AbsoluteSystemPath) (turbopath.Rela
 }
 
 var memoizedGetTraversePath = memoizeGetTraversePath()
-
-// statusCode represents the two-letter status code from `git status` with two "named" fields, x & y.
-// They have different meanings based upon the actual state of the working tree. Using x & y maps
-// to upstream behavior.
-type statusCode struct {
-	x string
-	y string
-}
-
-func (s statusCode) isDelete() bool {
-	return s.x == "D" || s.y == "D"
-}

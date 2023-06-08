@@ -553,4 +553,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://chotot.com/",
     pinned: true,
   },
+  {
+    caption: "SLIIT FOSS",
+    image: "/images/logos/sliit-foss.svg",
+    infoLink: "https://sliitfoss.org",
+    pinned: true,
+  },
 ];

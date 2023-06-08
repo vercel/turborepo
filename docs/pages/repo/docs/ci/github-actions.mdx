@@ -62,7 +62,7 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
           # To use Remote Caching, uncomment the next lines and follow the steps below.
           # env:
           #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
           #  TURBO_REMOTE_ONLY: true
 
           steps:
@@ -106,7 +106,7 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
           # To use Remote Caching, uncomment the next lines and follow the steps below.
           # env:
           #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
           steps:
             - name: Check out code
@@ -149,7 +149,7 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
           # To use Remote Caching, uncomment the next lines and follow the steps below.
           # env:
           #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+          #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
           steps:
             - name: Check out code
@@ -223,7 +223,7 @@ jobs:
     # To use Turborepo Remote Caching, set the following environment variables for the job.
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
     steps:
       - name: Check out code

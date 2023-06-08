@@ -3,7 +3,7 @@ use std::{collections::HashMap, env};
 use anyhow::Result;
 use config::Config;
 use serde::{Deserialize, Serialize};
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::{write_to_disk, MappedEnvironment};
 
@@ -18,15 +18,30 @@ pub struct RepoConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
-struct RepoConfigValue {
+pub struct RepoConfigValue {
+    #[serde(alias = "apiUrl")]
+    #[serde(alias = "ApiUrl")]
+    #[serde(alias = "APIURL")]
     #[serde(rename = "apiurl")]
-    api_url: Option<String>,
+    pub(crate) api_url: Option<String>,
+
+    #[serde(alias = "loginUrl")]
+    #[serde(alias = "LoginUrl")]
+    #[serde(alias = "LOGINURL")]
     #[serde(rename = "loginurl")]
-    login_url: Option<String>,
+    pub(crate) login_url: Option<String>,
+
+    #[serde(alias = "teamSlug")]
+    #[serde(alias = "TeamSlug")]
+    #[serde(alias = "TEAMSLUG")]
     #[serde(rename = "teamslug")]
-    team_slug: Option<String>,
+    pub(crate) team_slug: Option<String>,
+
+    #[serde(alias = "teamId")]
+    #[serde(alias = "TeamId")]
+    #[serde(alias = "TEAMID")]
     #[serde(rename = "teamid")]
-    team_id: Option<String>,
+    pub(crate) team_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -78,9 +93,8 @@ impl RepoConfig {
     }
 }
 
-pub fn get_repo_config_path(repo_root: &AbsoluteSystemPathBuf) -> AbsoluteSystemPathBuf {
-    let config = RelativeSystemPathBuf::new(".turbo/config.json").expect("is relative");
-    repo_root.join_relative(config)
+pub fn get_repo_config_path(repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+    repo_root.join_components(&[".turbo", "config.json"])
 }
 
 impl RepoConfigLoader {
@@ -180,6 +194,7 @@ mod test {
     use std::io::Write;
 
     use tempfile::NamedTempFile;
+    use test_case::test_case;
 
     use super::*;
 
@@ -193,6 +208,22 @@ mod test {
 
         let config = RepoConfigLoader::new(AbsoluteSystemPathBuf::new(path).unwrap()).load();
         assert!(config.is_ok());
+
+        Ok(())
+    }
+
+    #[test_case("teamSlug" ; "lowerCamelCase")]
+    #[test_case("teamslug" ; "lowercase")]
+    #[test_case("TeamSlug" ; "CamelCase")]
+    #[test_case("TEAMSLUG" ; "ALLCAPS")]
+    fn test_repo_config_with_different_cases(field_name: &str) -> Result<()> {
+        let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        writeln!(&mut config_file, "{{\"{}\": \"123\"}}", field_name)?;
+
+        let config = RepoConfigLoader::new(config_path).load()?;
+
+        assert_eq!(config.team_slug(), Some("123"));
 
         Ok(())
     }

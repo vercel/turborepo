@@ -21,6 +21,9 @@ type Vendor struct {
 
 	// The name of the environment variable that contains the current checked out branch
 	BranchEnvVar string
+
+	// The name of the environment variable that contains the user using turbo
+	UsernameEnvVar string
 }
 
 // Vendors is a list of common CI/CD vendors (from https://github.com/watson/ci-info/blob/master/vendors.json)
@@ -112,12 +115,14 @@ var Vendors = []Vendor{
 		Constant: "EAS",
 		Env:      vendorEnvs{Any: []string{"EAS_BUILD"}},
 	},
+	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
 	{
-		Name:         "GitHub Actions",
-		Constant:     "GITHUB_ACTIONS",
-		Env:          vendorEnvs{Any: []string{"GITHUB_ACTIONS"}},
-		ShaEnvVar:    "GITHUB_SHA",
-		BranchEnvVar: "GITHUB_REF_NAME",
+		Name:           "GitHub Actions",
+		Constant:       "GITHUB_ACTIONS",
+		Env:            vendorEnvs{Any: []string{"GITHUB_ACTIONS"}},
+		ShaEnvVar:      "GITHUB_SHA",
+		BranchEnvVar:   "GITHUB_REF_NAME",
+		UsernameEnvVar: "GITHUB_ACTOR",
 	},
 	{
 		Name:     "GitLab CI",
@@ -231,12 +236,14 @@ var Vendors = []Vendor{
 		Constant: "TRAVIS",
 		Env:      vendorEnvs{Any: []string{"TRAVIS"}},
 	},
+	// https://vercel.com/docs/concepts/projects/environment-variables/system-environment-variables
 	{
-		Name:         "Vercel",
-		Constant:     "VERCEL",
-		Env:          vendorEnvs{Any: []string{"NOW_BUILDER", "VERCEL"}},
-		ShaEnvVar:    "VERCEL_GIT_COMMIT_SHA",
-		BranchEnvVar: "VERCEL_GIT_COMMIT_REF",
+		Name:           "Vercel",
+		Constant:       "VERCEL",
+		Env:            vendorEnvs{Any: []string{"NOW_BUILDER", "VERCEL"}},
+		ShaEnvVar:      "VERCEL_GIT_COMMIT_SHA",
+		BranchEnvVar:   "VERCEL_GIT_COMMIT_REF",
+		UsernameEnvVar: "VERCEL_GIT_COMMIT_AUTHOR_LOGIN",
 	},
 	{
 		Name:     "Visual Studio App Center",

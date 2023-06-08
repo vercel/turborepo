@@ -42,9 +42,15 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
 	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Files\t=\t%d${RESET}", fileCount))
 	fmt.Fprintln(w1, util.Sprintf("  ${GREY}External Dependencies Hash\t=\t%s${RESET}", summary.GlobalHashSummary.RootExternalDepsHash))
 	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Cache Key\t=\t%s${RESET}", summary.GlobalHashSummary.GlobalCacheKey))
-	if bytes, err := json.Marshal(summary.GlobalHashSummary.Pipeline); err == nil {
-		fmt.Fprintln(w1, util.Sprintf("  ${GREY}Root pipeline\t=\t%s${RESET}", bytes))
-	}
+
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global .env Files Considered\t=\t%d${RESET}", len(summary.GlobalHashSummary.DotEnv)))
+
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Env Vars\t=\t%s${RESET}", strings.Join(summary.GlobalHashSummary.EnvVars.Specified.Env, ", ")))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Env Vars Values\t=\t%s${RESET}", strings.Join(summary.GlobalHashSummary.EnvVars.Configured, ", ")))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Inferred Global Env Vars Values\t=\t%s${RESET}", strings.Join(summary.GlobalHashSummary.EnvVars.Inferred, ", ")))
+
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Passed Through Env Vars\t=\t%s${RESET}", strings.Join(summary.GlobalHashSummary.EnvVars.Specified.PassThroughEnv, ", ")))
+	fmt.Fprintln(w1, util.Sprintf("  ${GREY}Global Passed Through Env Vars Values\t=\t%s${RESET}", strings.Join(summary.GlobalHashSummary.EnvVars.PassThrough, ", ")))
 	if err := w1.Flush(); err != nil {
 		return err
 	}
@@ -80,10 +86,14 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}.env Files Considered\t=\t%d\t${RESET}", len(task.DotEnv)))
 
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Configured Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Configured, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inferred Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Inferred, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Global Environment Variables\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Global, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Env Vars\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Specified.Env, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Env Vars Values\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Configured, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inferred Env Vars Values\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Inferred, ", ")))
+
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Passed Through Env Vars\t=\t%s\t${RESET}", strings.Join(task.EnvVars.Specified.PassThroughEnv, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Passed Through Env Vars Values\t=\t%s\t${RESET}", strings.Join(task.EnvVars.PassThrough, ", ")))
 
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.

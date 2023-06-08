@@ -11,7 +11,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
-	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/runsummary"
@@ -81,16 +80,12 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 
 		// Task env mode is only independent when global env mode is `infer`.
 		taskEnvMode := globalEnvMode
-		useOldTaskHashable := false
 		if taskEnvMode == util.Infer {
-			if taskDefinition.PassthroughEnv != nil {
+			if taskDefinition.PassThroughEnv != nil {
 				taskEnvMode = util.Strict
 			} else {
 				// If we're in infer mode we have just detected non-usage of strict env vars.
-				// Since we haven't stabilized this we don't want to break their cache.
-				useOldTaskHashable = true
-
-				// But our old behavior's actual meaning of this state is `loose`.
+				// But our behavior's actual meaning of this state is `loose`.
 				taskEnvMode = util.Loose
 			}
 		}
@@ -115,7 +110,6 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			taskGraph.DownEdges(taskID),
 			frameworkInference,
 			passThruArgs,
-			useOldTaskHashable,
 		)
 
 		// Not being able to construct the task hash is a hard error
@@ -133,11 +127,14 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		packageTask.LogFile = logFile
 		packageTask.Command = command
 
-		var envVarPassthroughMap env.EnvironmentVariableMap
-		if taskDefinition.PassthroughEnv != nil {
-			if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(taskDefinition.PassthroughEnv, nil, ""); err == nil {
-				envVarPassthroughMap = envVarPassthroughDetailedMap.BySource.Explicit
-			}
+		envVarPassThroughMap, err := g.TaskHashTracker.EnvAtExecutionStart.FromWildcards(taskDefinition.PassThroughEnv)
+		if err != nil {
+			return err
+		}
+
+		specifiedEnvVarsPresentation := []string{}
+		if taskDefinition.Env != nil {
+			specifiedEnvVarsPresentation = taskDefinition.Env
 		}
 
 		summary := &runsummary.TaskSummary{
@@ -157,10 +154,15 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			Framework:              framework,
 			EnvMode:                taskEnvMode,
 			EnvVars: runsummary.TaskEnvVarSummary{
+				Specified: runsummary.TaskEnvConfiguration{
+					Env:            specifiedEnvVarsPresentation,
+					PassThroughEnv: taskDefinition.PassThroughEnv,
+				},
 				Configured:  envVars.BySource.Explicit.ToSecretHashable(),
 				Inferred:    envVars.BySource.Matching.ToSecretHashable(),
-				Passthrough: envVarPassthroughMap.ToSecretHashable(),
+				PassThrough: envVarPassThroughMap.ToSecretHashable(),
 			},
+			DotEnv:           taskDefinition.DotEnv,
 			ExternalDepsHash: pkg.ExternalDepsHash,
 		}
 

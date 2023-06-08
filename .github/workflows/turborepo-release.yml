@@ -61,7 +61,8 @@ jobs:
     outputs:
       stage-branch: "${{ steps.stage.outputs.STAGE_BRANCH }}"
 
-  smoke-test:
+  go-smoke-test:
+    name: Go Unit Tests
     runs-on: ubuntu-latest
     needs: [stage]
     steps:
@@ -75,13 +76,49 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
-      - name: Run Unit Tests
+      - name: Run Go Unit Tests
         run: turbo run test --filter=cli --color
+
+  rust-smoke-test:
+    name: Rust Unit Tests
+    runs-on: ubuntu-latest
+    needs: [stage]
+    steps:
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
+      - name: Run Rust Unit Tests
+        run: cargo tr-test
+
+  js-smoke-test:
+    name: JS Package Tests
+    runs-on: ubuntu-latest
+    needs: [stage]
+    steps:
+      - name: Show Stage Commit
+        run: echo "${{ needs.stage.outputs.stage-branch }}"
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          target: ${{ matrix.os.name }}
+      - name: Run JS Package Tests
+        run: turbo run check-types test --filter="./packages/*" --color
 
   build-go-darwin:
     name: "Build Go for macOS"
     runs-on: macos-latest
-    needs: [stage, smoke-test]
+    needs: [stage, go-smoke-test, rust-smoke-test, js-smoke-test]
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
@@ -118,7 +155,7 @@ jobs:
   build-go-cross:
     name: "Build Go for Windows and Linux"
     runs-on: ubuntu-latest
-    needs: [stage, smoke-test]
+    needs: [stage, go-smoke-test, rust-smoke-test, js-smoke-test]
     container:
       image: docker://ghcr.io/vercel/turbo-cross:v1.18.5
     steps:
@@ -165,7 +202,7 @@ jobs:
 
   build-rust:
     name: "Build Rust"
-    needs: [stage, smoke-test]
+    needs: [stage, go-smoke-test, rust-smoke-test, js-smoke-test]
     strategy:
       fail-fast: false
       matrix:
@@ -186,7 +223,7 @@ jobs:
             container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
             rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
-            setup: "sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
             setup: "rustup set default-host x86_64-pc-windows-gnu"
@@ -208,7 +245,7 @@ jobs:
         run: ${{ matrix.settings.container-setup }}
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v1.2.0
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 

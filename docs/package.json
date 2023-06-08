@@ -9,7 +9,8 @@
     "build": "next build ",
     "lint": "next lint",
     "rss": "node scripts/generate-rss.js",
-    "schema": "turbo-types-generate ./public/schema.json"
+    "schema": "turbo-types-generate ./public/schema.json",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../.prettierignore"
   },
   "author": "Jared Palmer",
   "license": "MPL-2.0",
@@ -30,6 +31,7 @@
     "next-themes": "^0.2.0",
     "nextra": "^2.1.0",
     "nextra-theme-docs": "^2.1.0",
+    "node-fetch": "^2.6.8",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "sharp": "^0.32.1",
@@ -37,6 +39,7 @@
   },
   "devDependencies": {
     "@babel/core": "7.20.12",
+    "@turbo/gen": "workspace:*",
     "@turbo/types": "workspace:*",
     "@types/node": "^16.11.12",
     "@types/react": "18.2.0",

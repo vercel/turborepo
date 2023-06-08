@@ -4,12 +4,12 @@ use std::{
 };
 
 use nom::Finish;
-use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, Error};
+use crate::{package_deps::GitHashes, wait_for_success, Error};
 
 pub(crate) fn append_git_status(
-    root_path: &AbsoluteSystemPathBuf,
+    root_path: &AbsoluteSystemPath,
     pkg_prefix: &RelativeUnixPathBuf,
     hashes: &mut GitHashes,
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
@@ -26,28 +26,17 @@ pub(crate) fn append_git_status(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
-    let to_hash = {
-        let stdout = git
-            .stdout
-            .as_mut()
-            .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
-        let mut stderr = git
-            .stderr
-            .take()
-            .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
-        let result = read_status(stdout, pkg_prefix, hashes);
-        if result.is_err() {
-            let mut buf = String::new();
-            let bytes_read = stderr.read_to_string(&mut buf)?;
-            if bytes_read > 0 {
-                // something failed with git, report that error
-                return Err(Error::git_error(buf));
-            }
-        }
-        result?
-    };
-    git.wait()?;
-    Ok(to_hash)
+
+    let stdout = git
+        .stdout
+        .as_mut()
+        .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
+    let mut stderr = git
+        .stderr
+        .take()
+        .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
+    let parse_result = read_status(stdout, pkg_prefix, hashes);
+    wait_for_success(git, &mut stderr, "git status", root_path, parse_result)
 }
 
 fn read_status<R: Read>(
@@ -58,24 +47,16 @@ fn read_status<R: Read>(
     let mut to_hash = Vec::new();
     let mut reader = BufReader::new(reader);
     let mut buffer = Vec::new();
-    loop {
-        buffer.clear();
-        {
-            let bytes_read = reader.read_until(b'\0', &mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-            {
-                let entry = parse_status(&buffer)?;
-                let path = RelativeUnixPathBuf::new(entry.filename)?;
-                if entry.is_delete {
-                    let path = path.strip_prefix(pkg_prefix)?;
-                    hashes.remove(&path);
-                } else {
-                    to_hash.push(path);
-                }
-            }
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        let entry = parse_status(&buffer)?;
+        let path = RelativeUnixPathBuf::new(entry.filename)?;
+        if entry.is_delete {
+            let path = path.strip_prefix(pkg_prefix)?;
+            hashes.remove(&path);
+        } else {
+            to_hash.push(path);
         }
+        buffer.clear();
     }
     Ok(to_hash)
 }
@@ -86,7 +67,7 @@ struct StatusEntry<'a> {
 }
 
 fn parse_status(i: &[u8]) -> Result<StatusEntry<'_>, Error> {
-    match nom_parse_status(i).finish() {
+    match nom::combinator::all_consuming(nom_parse_status)(i).finish() {
         Ok((_, tup)) => Ok(tup),
         Err(e) => Err(Error::git_error(format!(
             "failed to parse git-status: {}",
@@ -100,6 +81,8 @@ fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
     let (i, y) = nom::bytes::complete::take(1usize)(i)?;
     let (i, _) = nom::character::complete::space1(i)?;
     let (i, filename) = nom::bytes::complete::is_not(" \0")(i)?;
+    // We explicitly support a missing terminator
+    let (i, _) = nom::combinator::opt(nom::bytes::complete::tag(&[b'\0']))(i)?;
     Ok((
         i,
         StatusEntry {
@@ -113,7 +96,7 @@ fn nom_parse_status(i: &[u8]) -> nom::IResult<&[u8], StatusEntry<'_>> {
 mod tests {
     use std::collections::HashMap;
 
-    use turbopath::RelativeUnixPathBuf;
+    use turbopath::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::read_status;
     use crate::package_deps::GitHashes;

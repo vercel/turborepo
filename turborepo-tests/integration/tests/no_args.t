@@ -12,6 +12,7 @@ Make sure exit code is 2 when no args are passed
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     link        Link your local directory to a Vercel organization and enable remote caching
+    generate    Generate a new app / package
     login       Login to your Vercel account
     logout      Logout to your Vercel account
     prune       Prepare a subset of your monorepo
@@ -44,7 +45,7 @@ Make sure exit code is 2 when no args are passed
         --continue                       Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]            [possible values: text, json]
         --single-package                 Run turbo in single-package mode
-    -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+    -F, --filter <FILTER>                Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         --force [<FORCE>]                Ignore the existing cache (to force execution) [env: TURBO_FORCE=] [possible values: true, false]
         --framework-inference [<BOOL>]   Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files

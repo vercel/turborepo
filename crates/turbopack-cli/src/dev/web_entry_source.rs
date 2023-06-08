@@ -6,10 +6,10 @@ use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::EcmascriptModuleAssetVc,
+    ecmascript::{EcmascriptModuleAssetVc, TransformPluginVc},
     module_options::{
-        JsxTransformOptions, ModuleOptionsContext, ModuleOptionsContextVc,
-        StyledComponentsTransformConfigVc,
+        CustomEcmascriptTransformPlugins, CustomEcmascriptTransformPluginsVc, JsxTransformOptions,
+        ModuleOptionsContext, ModuleOptionsContextVc,
     },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
@@ -17,7 +17,7 @@ use turbopack::{
 };
 use turbopack_cli_utils::runtime_entry::{RuntimeEntriesVc, RuntimeEntry};
 use turbopack_core::{
-    chunk::{ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc},
+    chunk::{ChunkableAssetVc, ChunkingContextVc},
     compile_time_defines,
     compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     context::AssetContextVc,
@@ -35,7 +35,11 @@ use turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc},
 };
-use turbopack_ecmascript_plugins::transform::emotion::EmotionTransformConfigVc;
+use turbopack_ecmascript_plugins::transform::{
+    emotion::{EmotionTransformConfig, EmotionTransformer},
+    styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
+    styled_jsx::StyledJsxTransformer,
+};
 use turbopack_node::execution_context::ExecutionContextVc;
 
 use crate::embed_js::embed_file_path;
@@ -54,10 +58,10 @@ pub async fn get_client_import_map(project_path: FileSystemPathVc) -> Result<Imp
     import_map.insert_singleton_alias("react-dom", project_path);
 
     import_map.insert_wildcard_alias(
-        "@vercel/turbopack-dev/",
+        "@vercel/turbopack-ecmascript-runtime/",
         ImportMapping::PrimaryAlternative(
             "./*".to_string(),
-            Some(turbopack_dev::embed_js::embed_fs().root()),
+            Some(turbopack_ecmascript_runtime::embed_fs().root()),
         )
         .cell(),
     );
@@ -109,18 +113,39 @@ async fn get_client_module_options_context(
             .await?
             .is_found();
 
+    let enable_jsx = Some(
+        JsxTransformOptions {
+            react_refresh: enable_react_refresh,
+            ..Default::default()
+        }
+        .cell(),
+    );
+
+    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPluginsVc::cell(
+        CustomEcmascriptTransformPlugins {
+            source_transforms: vec![
+                TransformPluginVc::cell(Box::new(
+                    EmotionTransformer::new(&EmotionTransformConfig::default())
+                        .expect("Should be able to create emotion transformer"),
+                )),
+                TransformPluginVc::cell(Box::new(StyledComponentsTransformer::new(
+                    &StyledComponentsTransformConfig::default(),
+                ))),
+                TransformPluginVc::cell(Box::new(StyledJsxTransformer::new())),
+            ],
+            output_transforms: vec![],
+        },
+    ));
+
     let module_options_context = ModuleOptionsContext {
-        enable_jsx: Some(JsxTransformOptions::default().cell()),
-        enable_emotion: Some(EmotionTransformConfigVc::default()),
-        enable_react_refresh,
-        enable_styled_components: Some(StyledComponentsTransformConfigVc::default()),
-        enable_styled_jsx: true,
+        enable_jsx,
         enable_postcss_transform: Some(Default::default()),
         enable_typescript_transform: Some(Default::default()),
         rules: vec![(
             foreign_code_context_condition().await?,
             module_options_context.clone().cell(),
         )],
+        custom_ecma_transform_plugins,
         ..module_options_context
     }
     .cell();

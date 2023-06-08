@@ -3,10 +3,8 @@ package run
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
@@ -17,7 +15,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-const _globalCacheKey = "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo"
+const _globalCacheKey = "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am."
 
 // Variables that we always include
 var _defaultEnvVars = []string{
@@ -26,62 +24,45 @@ var _defaultEnvVars = []string{
 
 // GlobalHashableInputs represents all the things that we use to create the global hash
 type GlobalHashableInputs struct {
+	globalCacheKey       string
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
-	envVars              env.DetailedMap
-	globalCacheKey       string
-	pipeline             fs.PristinePipeline
-	envVarPassthroughs   []string
+	env                  []string
+	resolvedEnvVars      env.DetailedMap
+	passThroughEnv       []string
 	envMode              util.EnvMode
 	frameworkInference   bool
+	dotEnv               turbopath.AnchoredUnixPathArray
 }
 
-type newGlobalHashable struct {
+type globalHashable struct {
+	globalCacheKey       string
 	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
 	rootExternalDepsHash string
-	envVars              env.EnvironmentVariablePairs
-	globalCacheKey       string
-	pipeline             fs.PristinePipeline
-	envVarPassthroughs   []string
+	env                  []string
+	resolvedEnvVars      env.EnvironmentVariablePairs
+	passThroughEnv       []string
 	envMode              util.EnvMode
 	frameworkInference   bool
+
+	// NOTE! This field is _explicitly_ ordered and should not be sorted.
+	dotEnv turbopath.AnchoredUnixPathArray
 }
 
-// newGlobalHash is a transformation of GlobalHashableInputs.
+// calculateGlobalHash is a transformation of GlobalHashableInputs.
 // It's used for the situations where we have an `EnvMode` specified
 // as that is not compatible with existing global hashes.
-func newGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashObject(newGlobalHashable{
+func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
+	return fs.HashObject(globalHashable{
+		globalCacheKey:       full.globalCacheKey,
 		globalFileHashMap:    full.globalFileHashMap,
 		rootExternalDepsHash: full.rootExternalDepsHash,
-		envVars:              full.envVars.All.ToHashable(),
-		globalCacheKey:       full.globalCacheKey,
-		pipeline:             full.pipeline,
-		envVarPassthroughs:   full.envVarPassthroughs,
+		env:                  full.env,
+		resolvedEnvVars:      full.resolvedEnvVars.All.ToHashable(),
+		passThroughEnv:       full.passThroughEnv,
 		envMode:              full.envMode,
 		frameworkInference:   full.frameworkInference,
-	})
-}
-
-type oldGlobalHashable struct {
-	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	rootExternalDepsHash string
-	envVars              env.EnvironmentVariablePairs
-	globalCacheKey       string
-	pipeline             fs.PristinePipeline
-}
-
-// oldGlobalHash is a transformation of GlobalHashableInputs.
-// This exists because the existing global hashes are still usable
-// in some configurations that do not include a specified `EnvMode`.
-// We can remove this whenever we want to migrate users.
-func oldGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashObject(oldGlobalHashable{
-		globalFileHashMap:    full.globalFileHashMap,
-		rootExternalDepsHash: full.rootExternalDepsHash,
-		envVars:              full.envVars.All.ToHashable(),
-		globalCacheKey:       full.globalCacheKey,
-		pipeline:             full.pipeline,
+		dotEnv:               full.dotEnv,
 	})
 }
 
@@ -89,68 +70,78 @@ func oldGlobalHash(full GlobalHashableInputs) (string, error) {
 func calculateGlobalHashFromHashableInputs(full GlobalHashableInputs) (string, error) {
 	switch full.envMode {
 	case util.Infer:
-		if full.envVarPassthroughs != nil {
+		if full.passThroughEnv != nil {
 			// In infer mode, if there is any passThru config (even if it is an empty array)
 			// we'll hash the whole object, so we can detect changes to that config
 			// Further, resolve the envMode to the concrete value.
 			full.envMode = util.Strict
-			return newGlobalHash(full)
 		}
 
-		// If you tell us not to infer framework you get the new hash.
-		if !full.frameworkInference {
-			return newGlobalHash(full)
-		}
-
-		// If we're in infer mode, and there is no global pass through config,
-		// we use the old struct layout. this will be true for everyone not using the strict env
-		// feature, and we don't want to break their cache.
-		return oldGlobalHash(full)
+		return calculateGlobalHash(full)
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
-		full.envVarPassthroughs = nil
-		return newGlobalHash(full)
+		full.passThroughEnv = nil
+		return calculateGlobalHash(full)
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
-		if full.envVarPassthroughs == nil {
-			full.envVarPassthroughs = make([]string, 0)
+		if full.passThroughEnv == nil {
+			full.passThroughEnv = make([]string, 0)
 		}
-		return newGlobalHash(full)
+		return calculateGlobalHash(full)
 	default:
 		panic("unimplemented environment mode")
 	}
 }
 
 func getGlobalHashInputs(
+	logger hclog.Logger,
 	rootpath turbopath.AbsoluteSystemPath,
 	rootPackageJSON *fs.PackageJSON,
-	pipeline fs.Pipeline,
-	envVarDependencies []string,
-	globalFileDependencies []string,
 	packageManager *packagemanager.PackageManager,
 	lockFile lockfile.Lockfile,
-	envVarPassthroughs []string,
+	globalFileDependencies []string,
+	envAtExecutionStart env.EnvironmentVariableMap,
+	globalEnv []string,
+	globalPassThroughEnv []string,
 	envMode util.EnvMode,
 	frameworkInference bool,
-	logger hclog.Logger,
-	ui cli.Ui,
-	isStructuredOutput bool,
+	dotEnv turbopath.AnchoredUnixPathArray,
 ) (GlobalHashableInputs, error) {
 	// Calculate env var dependencies
-	envVars := []string{}
-	envVars = append(envVars, envVarDependencies...)
-	envVars = append(envVars, _defaultEnvVars...)
-	globalHashableEnvVars, err := env.GetHashableEnvVars(envVars, []string{".*THASH.*"}, "")
+
+	// Our "inferred" env var maps
+	defaultEnvVarMap, err := envAtExecutionStart.FromWildcards(_defaultEnvVars)
+	if err != nil {
+		return GlobalHashableInputs{}, err
+	}
+	userEnvVarSet, err := envAtExecutionStart.FromWildcardsUnresolved(globalEnv)
 	if err != nil {
 		return GlobalHashableInputs{}, err
 	}
 
-	// The only way we can add env vars into the hash via matching is via THASH,
-	// so we only do a simple check here for entries in `BySource.Matching`.
-	// If we enable globalEnv to accept wildcard characters, we'll need to update this
-	// check.
-	if !isStructuredOutput && len(globalHashableEnvVars.BySource.Matching) > 0 {
-		ui.Warn(fmt.Sprintf("[DEPRECATED] Using .*THASH.* to specify an environment variable for inclusion into the hash is deprecated. You specified: %s.", strings.Join(globalHashableEnvVars.BySource.Matching.Names(), ", ")))
+	allEnvVarMap := env.EnvironmentVariableMap{}
+	allEnvVarMap.Union(userEnvVarSet.Inclusions)
+	allEnvVarMap.Union(defaultEnvVarMap)
+	allEnvVarMap.Difference(userEnvVarSet.Exclusions)
+
+	explicitEnvVarMap := env.EnvironmentVariableMap{}
+	explicitEnvVarMap.Union(userEnvVarSet.Inclusions)
+	explicitEnvVarMap.Difference(userEnvVarSet.Exclusions)
+
+	matchingEnvVarMap := env.EnvironmentVariableMap{}
+	matchingEnvVarMap.Union(defaultEnvVarMap)
+	matchingEnvVarMap.Difference(userEnvVarSet.Exclusions)
+
+	globalHashableEnvVars := env.DetailedMap{
+		All: allEnvVarMap,
+		BySource: env.BySource{
+			Explicit: explicitEnvVarMap,
+			Matching: matchingEnvVarMap,
+		},
+	}
+
+	if err != nil {
+		return GlobalHashableInputs{}, err
 	}
 
 	logger.Debug("global hash env vars", "vars", globalHashableEnvVars.All.Names())
@@ -176,7 +167,9 @@ func getGlobalHashInputs(
 	if lockFile == nil {
 		// If we don't have lockfile information available, add the specfile and lockfile to global deps
 		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Specfile))
-		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Lockfile))
+		if rootpath.UntypedJoin(packageManager.Lockfile).Exists() {
+			globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Lockfile))
+		}
 	}
 
 	// No prefix, global deps already have full paths
@@ -197,14 +190,29 @@ func getGlobalHashInputs(
 		return GlobalHashableInputs{}, fmt.Errorf("error hashing files: %w", err)
 	}
 
+	// Make sure we include specified .env files in the file hash.
+	// Handled separately because these are not globs!
+	if len(dotEnv) > 0 {
+		dotEnvObject, err := hashing.GetHashesForExistingFiles(rootpath, dotEnv.ToSystemPathArray())
+		if err != nil {
+			return GlobalHashableInputs{}, fmt.Errorf("error hashing files: %w", err)
+		}
+
+		// Add the dotEnv files into the file hash object.
+		for key, value := range dotEnvObject {
+			globalFileHashMap[key] = value
+		}
+	}
+
 	return GlobalHashableInputs{
+		globalCacheKey:       _globalCacheKey,
 		globalFileHashMap:    globalFileHashMap,
 		rootExternalDepsHash: rootPackageJSON.ExternalDepsHash,
-		envVars:              globalHashableEnvVars,
-		globalCacheKey:       _globalCacheKey,
-		pipeline:             pipeline.Pristine(),
-		envVarPassthroughs:   envVarPassthroughs,
+		env:                  globalEnv,
+		resolvedEnvVars:      globalHashableEnvVars,
+		passThroughEnv:       globalPassThroughEnv,
 		envMode:              envMode,
 		frameworkInference:   frameworkInference,
+		dotEnv:               dotEnv,
 	}, nil
 }

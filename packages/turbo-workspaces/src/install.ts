@@ -40,7 +40,7 @@ export const PACKAGE_MANAGERS: Record<
       name: "pnpm",
       template: "pnpm",
       command: "pnpm",
-      installArgs: ["install"],
+      installArgs: ["install", "--fix-lockfile"],
       version: "latest",
       executable: "pnpm dlx",
       semver: ">=7",

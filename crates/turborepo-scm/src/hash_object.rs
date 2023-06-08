@@ -8,7 +8,7 @@ use std::{
 use nom::{Finish, IResult};
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, Error};
+use crate::{package_deps::GitHashes, wait_for_success, Error};
 
 pub(crate) fn hash_objects(
     pkg_path: &AbsoluteSystemPathBuf,
@@ -26,34 +26,23 @@ pub(crate) fn hash_objects(
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
         .spawn()?;
-    {
-        let stdout = git
-            .stdout
-            .as_mut()
-            .ok_or_else(|| Error::git_error("failed to get stdout for git hash-object"))?;
-        // We take, rather than borrow, stdin so that we can drop it and force the
-        // underlying file descriptor to close, signalling the end of input.
-        let stdin: std::process::ChildStdin = git
-            .stdin
-            .take()
-            .ok_or_else(|| Error::git_error("failed to get stdin for git hash-object"))?;
-        let mut stderr = git
-            .stderr
-            .take()
-            .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
-        let result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes);
-        if let Err(err) = result {
-            let mut buf = String::new();
-            let bytes_read = stderr.read_to_string(&mut buf)?;
-            if bytes_read > 0 {
-                // something failed with git, report that error
-                return Err(Error::git_error(buf));
-            }
-            return Err(err);
-        }
-    }
-    git.wait()?;
-    Ok(())
+
+    let stdout = git
+        .stdout
+        .as_mut()
+        .ok_or_else(|| Error::git_error("failed to get stdout for git hash-object"))?;
+    // We take, rather than borrow, stdin so that we can drop it and force the
+    // underlying file descriptor to close, signalling the end of input.
+    let stdin: std::process::ChildStdin = git
+        .stdin
+        .take()
+        .ok_or_else(|| Error::git_error("failed to get stdin for git hash-object"))?;
+    let mut stderr = git
+        .stderr
+        .take()
+        .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
+    let parse_result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes);
+    wait_for_success(git, &mut stderr, "git hash-object", pkg_path, parse_result)
 }
 
 const HASH_LEN: usize = 40;
@@ -78,17 +67,12 @@ fn read_object_hashes<R: Read, W: Write + Send>(
         });
         // Buffer size is HASH_LEN + 1 to account for the trailing \n
         let mut buffer: [u8; HASH_LEN + 1] = [0; HASH_LEN + 1];
-        for (i, filename) in to_hash.iter().enumerate() {
-            if i == to_hash.len() {
-                break;
-            }
+        for filename in to_hash.iter() {
             reader.read_exact(&mut buffer)?;
-            {
-                let hash = parse_hash_object(&buffer)?;
-                let hash = String::from_utf8(hash.to_vec())?;
-                let path = filename.strip_prefix(pkg_prefix)?;
-                hashes.insert(path, hash);
-            }
+            let hash = parse_hash_object(&buffer)?;
+            let hash = String::from_utf8(hash.to_vec())?;
+            let path = filename.strip_prefix(pkg_prefix)?;
+            hashes.insert(path, hash);
         }
         match write_thread.join() {
             // the error case is if the thread panic'd. In that case, we propagate
@@ -101,7 +85,7 @@ fn read_object_hashes<R: Read, W: Write + Send>(
 }
 
 fn parse_hash_object(i: &[u8]) -> Result<&[u8], Error> {
-    match nom_parse_hash_object(i).finish() {
+    match nom::combinator::all_consuming(nom_parse_hash_object)(i).finish() {
         Ok((_, hash)) => Ok(hash),
         Err(e) => Err(Error::git_error(format!(
             "failed to parse git-hash-object {}",
@@ -118,7 +102,7 @@ fn nom_parse_hash_object(i: &[u8]) -> IResult<&[u8], &[u8]> {
 
 #[cfg(test)]
 mod test {
-    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::hash_objects;
     use crate::package_deps::{find_git_root, GitHashes};
@@ -130,11 +114,14 @@ mod test {
         let cwd = std::env::current_dir().unwrap();
         let cwd = AbsoluteSystemPathBuf::new(cwd).unwrap();
         let git_root = find_git_root(&cwd).unwrap();
-        let fixture_path = git_root
-            .join_unix_path_literal("crates/turborepo-scm/fixtures/01-git-hash-object")
-            .unwrap();
+        let fixture_path = git_root.join_components(&[
+            "crates",
+            "turborepo-scm",
+            "fixtures",
+            "01-git-hash-object",
+        ]);
 
-        let fixture_child_path = fixture_path.join_literal("child");
+        let fixture_child_path = fixture_path.join_component("child");
         let git_root = find_git_root(&fixture_path).unwrap();
 
         // paths for files here are relative to the package path.

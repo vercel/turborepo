@@ -4,13 +4,16 @@
 # Default to both teams
 * @vercel/turbo-oss @vercel/web-tooling
 
+# Shared docs (team specific overrides below)
+/docs @vercel/web-tooling @vercel/turbo-oss @anthonyshew
+
 # Turborepo-specific things
 
 /cli @vercel/turbo-oss
 /benchmark @vercel/turbo-oss
 /buildcontainer @vercel/turbo-oss
 /examples @vercel/turbo-oss
-/docs/pages/repo @vercel/turbo-oss
+/docs/pages/repo @vercel/turbo-oss @anthonyshew
 .github/workflows/pr-go-*.yml @vercel/turbo-oss
 .github/workflows/pr-js-tests-*.yml @vercel/turbo-oss
 /version.txt @vercel/turbo-oss
@@ -35,17 +38,7 @@ pnpm-lock.yaml
 /crates
 
 # overrides for crates that are owned by turbo-oss
-/crates/globwatch @vercel/turbo-oss
-/crates/pidlock @vercel/turbo-oss
-/crates/turbopath @vercel/turbo-oss
-/crates/turborepo @vercel/turbo-oss
-/crates/turborepo-api-client @vercel/turbo-oss
-/crates/turborepo-ffi @vercel/turbo-oss
-/crates/turborepo-lib @vercel/turbo-oss
-/crates/turborepo-lockfiles @vercel/turbo-oss
-/crates/turborepo-scm @vercel/turbo-oss
-/crates/turborepo-vercel-api-mock @vercel/turbo-oss
-/crates/turbo-updater @vercel/turbo-oss
+/crates/turborepo* @vercel/turbo-oss
 
 # overrides for crates that are owned by web-tooling
 /crates/turbo-tasks* @vercel/web-tooling
@@ -60,10 +53,12 @@ pnpm-lock.yaml
 /packages/eslint-config-turbo			@vercel/turbo-oss
 /packages/eslint-plugin-turbo			@vercel/turbo-oss
 /packages/node-module-trace				@vercel/web-tooling
-/packages/turbo							@vercel/turbo-oss
 /packages/turbo-codemod					@vercel/turbo-oss
+/packages/turbo-gen							@vercel/turbo-oss
 /packages/turbo-ignore					@vercel/turbo-oss
 /packages/turbo-tracing-next-plugin		@vercel/web-tooling
 /packages/turbo-types					@vercel/turbo-oss
 /packages/turbo-utils					@vercel/turbo-oss
+/packages/turbo-workspaces					@vercel/turbo-oss
+/packages/turbo							@vercel/turbo-oss
 /packages/webpack-nmt					@vercel/web-tooling

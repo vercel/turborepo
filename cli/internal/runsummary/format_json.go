@@ -29,11 +29,6 @@ func (rsm *Meta) FormatJSON() ([]byte, error) {
 }
 
 func (rsm *Meta) normalize() {
-	for _, t := range rsm.RunSummary.Tasks {
-		t.EnvVars.Global = rsm.RunSummary.GlobalHashSummary.envVars
-		t.EnvVars.GlobalPassthrough = rsm.RunSummary.GlobalHashSummary.passthroughEnvVars
-	}
-
 	// Remove execution summary for dry runs
 	if rsm.runType == runTypeDryJSON {
 		rsm.RunSummary.ExecutionSummary = nil
@@ -67,11 +62,13 @@ type nonMonorepoRunSummary struct {
 	ID                 ksuid.KSUID        `json:"id"`
 	Version            string             `json:"version"`
 	TurboVersion       string             `json:"turboVersion"`
+	Monorepo           bool               `json:"monorepo"`
 	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages           []string           `json:"-"`
 	EnvMode            util.EnvMode       `json:"envMode"`
 	FrameworkInference bool               `json:"frameworkInference"`
 	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
 	Tasks              []*TaskSummary     `json:"tasks"`
+	User               string             `json:"user"`
 	SCM                *scmState          `json:"scm"`
 }

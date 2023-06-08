@@ -1,4 +1,7 @@
 #![feature(assert_matches)]
+#![feature(box_patterns)]
+#![feature(error_generic_member_access)]
+#![feature(provide_any)]
 
 mod child;
 mod cli;
@@ -7,8 +10,11 @@ mod config;
 mod daemon;
 mod execution_state;
 pub(crate) mod globwatcher;
+mod manager;
+mod opts;
 mod package_json;
 mod package_manager;
+mod run;
 mod shim;
 mod tracing;
 mod ui;

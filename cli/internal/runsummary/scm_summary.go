@@ -16,16 +16,15 @@ type scmState struct {
 // getSCMState returns the sha and branch when in a git repo
 // Otherwise it should return empty strings right now.
 // We my add handling of other scms and non-git tracking in the future.
-func getSCMState(dir turbopath.AbsoluteSystemPath) *scmState {
-	allEnvVars := env.GetEnvMap()
+func getSCMState(envVars env.EnvironmentVariableMap, dir turbopath.AbsoluteSystemPath) *scmState {
 
 	state := &scmState{Type: "git"}
 
 	// If we're in CI, try to get the values we need from environment variables
 	if ci.IsCi() {
 		vendor := ci.Info()
-		state.Sha = allEnvVars[vendor.ShaEnvVar]
-		state.Branch = allEnvVars[vendor.BranchEnvVar]
+		state.Sha = envVars[vendor.ShaEnvVar]
+		state.Branch = envVars[vendor.BranchEnvVar]
 	}
 
 	// Otherwise fallback to using `git`
