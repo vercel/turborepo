@@ -57,6 +57,7 @@ message PreviousContentResp {
 enum PackageManager {
   NPM = 0;
   BERRY = 1;
+  PNPM = 2;
 }
 
 message PackageDependency {
@@ -161,6 +162,22 @@ message VerifySignatureRequest {
 message VerifySignatureResponse {
   oneof response {
     bool verified = 1;
+    string error = 2;
+  }
+}
+
+message GetPackageFileHashesFromGitIndexRequest {
+  string turbo_root = 1;
+  string package_path = 2;
+}
+
+message FileHashes {
+  map<string, string> hashes = 1;
+}
+
+message GetPackageFileHashesFromGitIndexResponse {
+  oneof response {
+    FileHashes hashes = 1;
     string error = 2;
   }
 }

@@ -56,6 +56,8 @@ export function tryGitInit(root: string, message: string): boolean {
     }
 
     execSync("git init", { stdio: "ignore" });
+    execSync("git add -A", { stdio: "ignore" });
+
     didInit = true;
 
     execSync("git checkout -b main", { stdio: "ignore" });

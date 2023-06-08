@@ -1,5 +1,5 @@
-import { workspace, type TurboGeneratorOptions } from "../workspace";
-import { run, type CustomGeneratorOptions } from "../run";
+import { workspace, type TurboGeneratorCLIOptions } from "../workspace";
+import { run, type CustomGeneratorCLIOptions } from "../run";
 import { convertCase } from "@turbo/utils";
 
 interface MinimalOptions {
@@ -27,15 +27,32 @@ export async function raw(command: string, options: { json: string }) {
 
   switch (command) {
     case "workspace":
-      await workspace(incomingOptions as TurboGeneratorOptions);
+      // copy and empty needs to get massaged a bit when coming from rust
+      let copy = false;
+      let empty = incomingOptions.empty || true;
+
+      // arg was passed with no value or as bool (explicitly)
+      if (incomingOptions.copy === "" || incomingOptions.copy === true) {
+        copy = true;
+        empty = false;
+        // arg was passed with a value
+      } else if (incomingOptions.copy && incomingOptions.copy.length > 0) {
+        copy = incomingOptions.copy;
+        empty = false;
+      }
+
+      // update options values
+      incomingOptions.copy = copy;
+      incomingOptions.empty = empty;
+      await workspace(incomingOptions as TurboGeneratorCLIOptions);
       break;
     case "run":
       const { generatorName, ...options } = incomingOptions;
-      await run(generatorName, options as CustomGeneratorOptions);
+      await run(generatorName, options as CustomGeneratorCLIOptions);
       break;
     default:
       console.error(
-        `Received unknown command - "${command}" (must be one of "add" | "generate")`
+        `Received unknown command - "${command}" (must be one of "workspace" | "run")`
       );
       process.exit(1);
   }

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 TARGET_DIR=$1
-
 # If a second parameter isn't passed, default to true
 SHOULD_INSTALL=${2:-true}
 
@@ -14,6 +13,5 @@ echo "script-shell=$(which bash)" > ${TARGET_DIR}/.npmrc
 if [ $SHOULD_INSTALL == "true" ]; then
   npm --prefix=${TARGET_DIR} install --silent
 fi
-
 git ${GIT_ARGS} add .
 git ${GIT_ARGS} commit -m "Initial" --quiet

@@ -4,6 +4,9 @@
 # Default to both teams
 * @vercel/turbo-oss @vercel/web-tooling
 
+# Shared docs (team specific overrides below)
+/docs @vercel/web-tooling @vercel/turbo-oss @anthonyshew
+
 # Turborepo-specific things
 
 /cli @vercel/turbo-oss
@@ -50,10 +53,12 @@ pnpm-lock.yaml
 /packages/eslint-config-turbo			@vercel/turbo-oss
 /packages/eslint-plugin-turbo			@vercel/turbo-oss
 /packages/node-module-trace				@vercel/web-tooling
-/packages/turbo							@vercel/turbo-oss
 /packages/turbo-codemod					@vercel/turbo-oss
+/packages/turbo-gen							@vercel/turbo-oss
 /packages/turbo-ignore					@vercel/turbo-oss
 /packages/turbo-tracing-next-plugin		@vercel/web-tooling
 /packages/turbo-types					@vercel/turbo-oss
 /packages/turbo-utils					@vercel/turbo-oss
+/packages/turbo-workspaces					@vercel/turbo-oss
+/packages/turbo							@vercel/turbo-oss
 /packages/webpack-nmt					@vercel/web-tooling

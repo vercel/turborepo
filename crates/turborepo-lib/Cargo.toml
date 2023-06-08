@@ -7,12 +7,15 @@ license = "MPL-2.0"
 [features]
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
-default = ["rustls-tls"]
+default = ["rustls-tls", "go-daemon"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
+run-stub = []
 
 # serve the daemon over a port (useful for testing)
 http = ["tonic-reflection"]
+
+go-daemon = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
@@ -46,7 +49,6 @@ directories = "4.0.1"
 dirs-next = "2.0.0"
 dunce = { workspace = true }
 futures = "0.3.26"
-glob-match = "0.2.1"
 globwatch = { path = "../turborepo-globwatch" }
 hex = "0.4.3"
 hostname = "0.3.1"
@@ -56,6 +58,7 @@ itertools = { workspace = true }
 lazy_static = { workspace = true }
 libc = "0.2.140"
 notify = "5.1"
+petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
 prost = "0.11.6"
 reqwest = { workspace = true, default_features = false, features = ["json"] }
@@ -80,9 +83,12 @@ uds_windows = "1.0.2"
 url = "2.3.1"
 
 const_format = "0.2.30"
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 go-parse-duration = "0.1.1"
 is-terminal = "0.4.7"
+lazy-regex = "2.5.0"
 node-semver = "2.1.0"
+num_cpus = "1.15.0"
 owo-colors.workspace = true
 regex.workspace = true
 tracing-appender = "0.2.2"
@@ -92,6 +98,7 @@ tracing.workspace = true
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }
+wax.workspace = true
 webbrowser = { workspace = true }
 which = { workspace = true }
 

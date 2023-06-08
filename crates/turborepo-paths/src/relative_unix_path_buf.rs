@@ -1,8 +1,8 @@
-use std::{fmt::Debug, io::Write};
+use std::{borrow::Borrow, fmt::Debug, io::Write};
 
-use bstr::{BString, ByteSlice};
+use bstr::{BStr, BString, ByteSlice};
 
-use crate::{PathError, PathValidationError};
+use crate::{PathError, RelativeUnixPath};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct RelativeUnixPathBuf(BString);
@@ -11,16 +11,17 @@ impl RelativeUnixPathBuf {
     pub fn new(path: impl Into<Vec<u8>>) -> Result<Self, PathError> {
         let bytes: Vec<u8> = path.into();
         if bytes.first() == Some(&b'/') {
-            return Err(PathValidationError::not_relative_error(&bytes).into());
+            return Err(PathError::not_relative_error(&bytes).into());
         }
         Ok(Self(BString::new(bytes)))
     }
 
     pub fn as_str(&self) -> Result<&str, PathError> {
-        let s = self
-            .0
-            .to_str()
-            .or_else(|_| Err(PathError::Utf8Error(self.0.as_bytes().to_owned())))?;
+        let s = self.0.to_str().or_else(|_| {
+            Err(PathError::InvalidUnicode(
+                self.0.as_bytes().to_str_lossy().to_string(),
+            ))
+        })?;
         Ok(s)
     }
 
@@ -58,8 +59,9 @@ impl RelativeUnixPathBuf {
             return Ok(self.clone());
         }
         if !self.0.starts_with(&prefix.0) {
-            return Err(PathError::PathValidationError(
-                PathValidationError::NotParent(prefix.0.to_string(), self.0.to_string()),
+            return Err(PathError::NotParent(
+                prefix.0.to_string(),
+                self.0.to_string(),
             ));
         }
 
@@ -73,20 +75,23 @@ impl RelativeUnixPathBuf {
         if self.0[prefix_len] != b'/' {
             let prefix_str = prefix.0.to_str_lossy().into_owned();
             let this = self.0.to_str_lossy().into_owned();
-            return Err(PathError::PathValidationError(
-                PathValidationError::PrefixError(prefix_str, this),
-            ));
+            return Err(PathError::PrefixError(prefix_str, this));
         }
 
         let tail_slice = &self.0[(prefix_len + 1)..];
         Self::new(tail_slice)
     }
+}
 
+pub trait RelativeUnixPathBufTestExt {
+    fn join(&self, tail: &RelativeUnixPathBuf) -> Self;
+}
+
+impl RelativeUnixPathBufTestExt for RelativeUnixPathBuf {
     // Marked as test-only because it doesn't automatically clean the resulting
     // path. *If* we end up needing or wanting this method outside of tests, we
     // will need to implement .clean() for the result.
-    #[cfg(test)]
-    pub fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
+    fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
         let buffer = Vec::with_capacity(self.0.len() + 1 + tail.0.len());
         let mut path = BString::new(buffer);
         if self.0.len() > 0 {
@@ -95,6 +100,19 @@ impl RelativeUnixPathBuf {
         }
         path.extend_from_slice(&tail.0);
         Self(path)
+    }
+}
+
+impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
+    fn borrow(&self) -> &RelativeUnixPath {
+        let inner: &BStr = &self.0.borrow();
+        unsafe { &*(inner as *const BStr as *const RelativeUnixPath) }
+    }
+}
+
+impl AsRef<RelativeUnixPath> for RelativeUnixPathBuf {
+    fn as_ref(&self) -> &RelativeUnixPath {
+        self.borrow()
     }
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -29,6 +30,8 @@ func DryRun(
 	turboCache cache.Cache,
 	_ *fs.TurboJSON, // unused, but keep here for parity with RealRun method signature
 	globalEnvMode util.EnvMode,
+	_ env.EnvironmentVariableMap,
+	_ env.EnvironmentVariableMap,
 	base *cmdutil.CmdBase,
 	summary runsummary.Meta,
 ) error {
@@ -113,7 +116,7 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.Task
 			for index := range queue {
 				task := taskSummaries[index]
 				itemStatus := turboCache.Exists(task.Hash)
-				task.CacheSummary = runsummary.NewTaskCacheSummary(itemStatus, nil)
+				task.CacheSummary = runsummary.NewTaskCacheSummary(itemStatus)
 			}
 		}()
 	}

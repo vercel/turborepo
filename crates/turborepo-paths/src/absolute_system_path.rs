@@ -9,15 +9,14 @@ use std::{
     fmt, fs,
     fs::Metadata,
     io,
-    path::{Path, PathBuf},
+    path::{Components, Path, PathBuf},
 };
 
 use path_clean::PathClean;
 use path_slash::CowExt;
 
 use crate::{
-    AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
-    RelativeUnixPath,
+    AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError, RelativeUnixPath,
 };
 
 pub struct AbsoluteSystemPath(Path);
@@ -81,17 +80,17 @@ impl AbsoluteSystemPath {
     pub fn new<P: AsRef<Path> + ?Sized>(value: &P) -> Result<&Self, PathError> {
         let path = value.as_ref();
         if path.is_relative() {
-            return Err(PathValidationError::NotAbsolute(path.to_owned()).into());
+            return Err(PathError::NotAbsolute(path.to_owned()).into());
         }
-        let path_str = path.to_str().ok_or_else(|| {
-            PathError::PathValidationError(PathValidationError::InvalidUnicode(path.to_owned()))
-        })?;
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
 
         let system_path = Cow::from_slash(path_str);
 
         match system_path {
             Cow::Owned(path) => {
-                Err(PathValidationError::NotSystem(path.to_string_lossy().to_string()).into())
+                Err(PathError::NotSystem(path.to_string_lossy().to_string()).into())
             }
             Cow::Borrowed(path) => {
                 let path = Path::new(path);
@@ -104,8 +103,18 @@ impl AbsoluteSystemPath {
         }
     }
 
+    pub(crate) fn new_unchecked(path: &Path) -> &Self {
+        unsafe { &*(path as *const Path as *const Self) }
+    }
+
     pub fn as_path(&self) -> &Path {
         &self.0
+    }
+
+    pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
+        self.0
+            .ancestors()
+            .map(|ancestor| Self::new_unchecked(ancestor))
     }
 
     // intended for joining literals or obviously single-token strings
@@ -128,9 +137,9 @@ impl AbsoluteSystemPath {
 
     pub fn join_unix_path(
         &self,
-        unix_path: &RelativeUnixPath,
+        unix_path: impl AsRef<RelativeUnixPath>,
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let tail = unix_path.to_system_path_buf()?;
+        let tail = unix_path.as_ref().to_system_path_buf()?;
         Ok(AbsoluteSystemPathBuf(self.0.join(tail.as_path()).clean()))
     }
 
@@ -171,6 +180,8 @@ impl AbsoluteSystemPath {
         Ok(fs::metadata(&self.0)?)
     }
 
+    // The equivalent of lstat. Returns the metadata for this file,
+    // even if it is a symlink
     pub fn symlink_metadata(&self) -> Result<Metadata, PathError> {
         Ok(fs::symlink_metadata(&self.0)?)
     }
@@ -181,6 +192,10 @@ impl AbsoluteSystemPath {
 
     pub fn remove_file(&self) -> Result<(), io::Error> {
         fs::remove_file(&self.0)
+    }
+
+    pub fn components(&self) -> Components<'_> {
+        self.0.components()
     }
 }
 

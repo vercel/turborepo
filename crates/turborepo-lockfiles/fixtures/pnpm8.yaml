@@ -1,0 +1,107 @@
+lockfileVersion: "6.0"
+
+patchedDependencies:
+  is-even@1.0.0:
+    hash: trwuddosrpxsvtoqztvint6pca
+    path: patches/is-even@1.0.0.patch
+
+importers:
+  .: {}
+
+  packages/a:
+    dependencies:
+      c:
+        specifier: workspace:*
+        version: link:../c
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+
+  packages/b:
+    dependencies:
+      c:
+        specifier: workspace:*
+        version: link:../c
+      is-even:
+        specifier: ^1.0.0
+        version: 1.0.0_trwuddosrpxsvtoqztvint6pca
+
+  packages/c:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
+
+packages:
+  /is-buffer@1.1.6:
+    resolution:
+      {
+        integrity: sha512-NcdALwpXkTm5Zvvbk7owOUSvVvBKDgKP5/ewfXEznmQFfs4ZRmanOeKBTjRVjka3QFoN6XJ+9F3USqfHqTaU5w==,
+      }
+    dev: false
+
+  /is-even@1.0.0_trwuddosrpxsvtoqztvint6pca:
+    resolution:
+      {
+        integrity: sha512-LEhnkAdJqic4Dbqn58A0y52IXoHWlsueqQkKfMfdEnIYG8A1sm/GHidKkS6yvXlMoRrkM34csHnXQtOqcb+Jzg==,
+      }
+    engines: { node: ">=0.10.0" }
+    dependencies:
+      is-odd: 0.1.2
+    dev: false
+    patched: true
+
+  /is-number@3.0.0:
+    resolution:
+      {
+        integrity: sha512-4cboCqIpliH+mAvFNegjZQ4kgKc3ZUhQVr3HvWbSh5q3WH2v82ct+T2Y1hdU5Gdtorx/cLifQjqCbL7bpznLTg==,
+      }
+    engines: { node: ">=0.10.0" }
+    dependencies:
+      kind-of: 3.2.2
+    dev: false
+
+  /is-number@6.0.0:
+    resolution:
+      {
+        integrity: sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg==,
+      }
+    engines: { node: ">=0.10.0" }
+    dev: false
+
+  /is-odd@0.1.2:
+    resolution:
+      {
+        integrity: sha512-Ri7C2K7o5IrUU9UEI8losXJCCD/UtsaIrkR5sxIcFg4xQ9cRJXlWA5DQvTE0yDc0krvSNLsRGXN11UPS6KyfBw==,
+      }
+    engines: { node: ">=0.10.0" }
+    dependencies:
+      is-number: 3.0.0
+    dev: false
+
+  /is-odd@3.0.1:
+    resolution:
+      {
+        integrity: sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA==,
+      }
+    engines: { node: ">=4" }
+    dependencies:
+      is-number: 6.0.0
+    dev: false
+
+  /kind-of@3.2.2:
+    resolution:
+      {
+        integrity: sha512-NOW9QQXMoZGg/oqnVNoNTTIFEIid1627WCffUBJEdMxYApq7mNE7CpzucIPc+ZQg25Phej7IJSmX3hO+oblOtQ==,
+      }
+    engines: { node: ">=0.10.0" }
+    dependencies:
+      is-buffer: 1.1.6
+    dev: false
+
+  /lodash@4.17.21:
+    resolution:
+      {
+        integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==,
+      }
+    dev: false

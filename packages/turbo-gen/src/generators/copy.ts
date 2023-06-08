@@ -17,7 +17,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
   const newPackageJsonPath = path.join(location.absolute, "package.json");
 
   // copying from a remote example
-  if (opts.example) {
+  if (opts.copy.type === "external") {
     console.log();
     logger.warn("Some manual modifications may be required.");
     logger.dimmed(
@@ -25,7 +25,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     );
     await createProject({
       appPath: location.absolute,
-      example: opts.example,
+      example: opts.copy.source,
       examplePath: opts.examplePath,
     });
 

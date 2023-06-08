@@ -223,7 +223,7 @@ jobs:
             container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
             rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
-            setup: "sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+            setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-gnu
             setup: "rustup set default-host x86_64-pc-windows-gnu"
@@ -245,7 +245,7 @@ jobs:
         run: ${{ matrix.settings.container-setup }}
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v1.2.0
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 

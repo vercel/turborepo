@@ -140,6 +140,7 @@ describe("git", () => {
       const calls = [
         "git init",
         "git checkout -b main",
+        "git add -A",
         'git commit --author="Turbobot <turbobot@vercel.com>" -am "test commit"',
       ];
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length + 2);
@@ -227,9 +228,9 @@ describe("git", () => {
       expect(result).toBe(false);
 
       const calls = [
+        "git rev-parse --is-inside-work-tree",
+        "hg --cwd . root",
         "git init",
-        "git checkout -b main",
-        'git commit --author="Turbobot <turbobot@vercel.com>" -am "test commit"',
       ];
 
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length + 2);

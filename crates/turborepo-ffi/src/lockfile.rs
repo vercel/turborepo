@@ -4,7 +4,7 @@ use std::{
 };
 
 use thiserror::Error;
-use turborepo_lockfiles::{self, BerryLockfile, LockfileData, NpmLockfile, Package};
+use turborepo_lockfiles::{self, BerryLockfile, LockfileData, NpmLockfile, Package, PnpmLockfile};
 
 use super::{proto, Buffer};
 
@@ -50,6 +50,7 @@ fn transitive_closure_inner(buf: Buffer) -> Result<proto::WorkspaceDependencies,
     match request.package_manager() {
         proto::PackageManager::Npm => npm_transitive_closure_inner(request),
         proto::PackageManager::Berry => berry_transitive_closure_inner(request),
+        proto::PackageManager::Pnpm => pnpm_transitive_closure_inner(request),
     }
 }
 
@@ -89,6 +90,22 @@ fn berry_transitive_closure_inner(
     Ok(dependencies.into())
 }
 
+fn pnpm_transitive_closure_inner(
+    request: proto::TransitiveDepsRequest,
+) -> Result<proto::WorkspaceDependencies, Error> {
+    let proto::TransitiveDepsRequest {
+        contents,
+        workspaces,
+        ..
+    } = request;
+    let lockfile = PnpmLockfile::from_bytes(contents.as_slice())?;
+    let dependencies = turborepo_lockfiles::all_transitive_closures(
+        &lockfile,
+        workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),
+    )?;
+    Ok(dependencies.into())
+}
+
 #[no_mangle]
 pub extern "C" fn subgraph(buf: Buffer) -> Buffer {
     use proto::subgraph_response::Response;
@@ -121,6 +138,9 @@ fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
             &packages,
             resolutions.map(|res| res.resolutions),
         )?,
+        proto::PackageManager::Pnpm => {
+            turborepo_lockfiles::pnpm_subgraph(&contents, &workspaces, &packages)?
+        }
     };
     Ok(contents)
 }
@@ -153,6 +173,10 @@ fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
                 })
                 .collect::<Vec<_>>())
         }
+        proto::PackageManager::Pnpm => {
+            let lockfile = PnpmLockfile::from_bytes(&request.contents)?;
+            Ok(lockfile.patches())
+        }
         pm => Err(Error::UnsupportedPackageManager(pm)),
     }?;
     Ok(proto::Patches { patches })
@@ -174,6 +198,10 @@ fn global_change_inner(buf: Buffer) -> Result<bool, Error> {
             &request.curr_contents,
         )?),
         proto::PackageManager::Berry => Ok(turborepo_lockfiles::berry_global_change(
+            &request.prev_contents,
+            &request.curr_contents,
+        )?),
+        proto::PackageManager::Pnpm => Ok(turborepo_lockfiles::pnpm_global_change(
             &request.prev_contents,
             &request.curr_contents,
         )?),
@@ -219,6 +247,7 @@ impl fmt::Display for proto::PackageManager {
         f.write_str(match self {
             proto::PackageManager::Npm => "npm",
             proto::PackageManager::Berry => "berry",
+            proto::PackageManager::Pnpm => "pnpm",
         })
     }
 }

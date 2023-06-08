@@ -33,6 +33,9 @@ function set_package_manager() {
   cat package.json | jq ".packageManager=\"$1\"" | sponge package.json
 }
 
+# Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
+corepack enable
+
 # Set the packageManger version
 NPM_PACKAGE_MANAGER_VALUE="npm@8.1.2"
 PNPM_PACKAGE_MANAGER_VALUE="pnpm@6.26.1"

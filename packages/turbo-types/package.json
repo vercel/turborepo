@@ -1,19 +1,36 @@
 {
   "name": "@turbo/types",
+  "version": "1.10.2",
+  "description": "Turborepo types",
+  "homepage": "https://turbo.build/repo",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turbo",
+    "directory": "packages/turbo-types"
+  },
+  "bugs": {
+    "url": "https://github.com/vercel/turbo/issues"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "version": "0.0.0",
   "bin": {
     "turbo-types-generate": "./src/scripts/codegen.js"
   },
-  "private": true,
+  "scripts": {
+    "lint": "eslint src/**/*.ts",
+    "lint:prettier": "prettier -c . --cache"
+  },
   "dependencies": {
     "ts-json-schema-generator": "1.1.2"
   },
-  "scripts": {
-    "lint": "eslint src/**/*.ts"
-  },
   "devDependencies": {
     "@turbo/tsconfig": "workspace:^0.0.0"
+  },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

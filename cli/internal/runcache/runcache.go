@@ -110,15 +110,16 @@ type TaskCache struct {
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
 // Returns the cacheStatus, the timeSaved, and error values, so the consumer can understand
 // what happened in here.
-func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (cache.ItemStatus, int, error) {
+func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (cache.ItemStatus, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
 		}
-		return cache.ItemStatus{Local: false, Remote: false}, 0, nil
+		return cache.NewCacheMiss(), nil
 	}
 
-	changedOutputGlobs, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
+	changedOutputGlobs, timeSavedFromDaemon, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
+
 	if err != nil {
 		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
 		prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
@@ -127,36 +128,43 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 
 	hasChangedOutputs := len(changedOutputGlobs) > 0
 	var cacheStatus cache.ItemStatus
-	var timeSaved int
 	if hasChangedOutputs {
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O. We also need to pass along the exclusion
 		// globs as well.
-		itemStatus, restoredFiles, duration, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
-		hit := itemStatus.Local || itemStatus.Remote
-		timeSaved = duration
-		tc.ExpandedOutputs = restoredFiles
+		itemStatus, restoredFiles, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
 		// Assign to this variable outside this closure so we can return at the end of the function
 		cacheStatus = itemStatus
+		tc.ExpandedOutputs = restoredFiles
 		if err != nil {
 			// If there was an error fetching from cache, we'll say there was no cache hit
-			return cache.ItemStatus{Local: false, Remote: false}, 0, err
-		} else if !hit {
+			return cache.NewCacheMiss(), err
+		} else if !itemStatus.Hit {
 			if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 				prefixedUI.Output(fmt.Sprintf("cache miss, executing %s", ui.Dim(tc.hash)))
 			}
 			// If there was no hit, we can also say there was no hit
-			return cache.ItemStatus{Local: false, Remote: false}, 0, nil
+			return cache.NewCacheMiss(), nil
 		}
 
-		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs); err != nil {
+		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs, cacheStatus.TimeSaved); err != nil {
 			// Don't fail the whole operation just because we failed to watch the outputs
 			prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
 		}
 	} else {
 		// If no outputs have changed, that means we have a local cache hit.
-		cacheStatus.Local = true
-		prefixedUI.Warn(fmt.Sprintf("Skipping cache check for %v, outputs have not changed since previous run.", tc.pt.TaskID))
+		cacheStatus = cache.ItemStatus{
+			Hit:       true,
+			Source:    cache.CacheSourceFS,
+			TimeSaved: timeSavedFromDaemon,
+		}
+	}
+
+	// Some more context to add into the cache hit messages.
+	// This isn't the cleanest way to update the log message, so we should revisit during Rust port.
+	moreContext := ""
+	if !hasChangedOutputs {
+		moreContext = " (outputs already on disk)"
 	}
 
 	switch tc.taskOutputMode {
@@ -164,19 +172,18 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	case util.NewTaskOutput:
 		fallthrough
 	case util.HashTaskOutput:
-		prefixedUI.Info(fmt.Sprintf("cache hit, suppressing output %s", ui.Dim(tc.hash)))
+		prefixedUI.Info(fmt.Sprintf("cache hit%s, suppressing logs %s", moreContext, ui.Dim(tc.hash)))
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
-		prefixedUI.Info(fmt.Sprintf("cache hit, replaying output %s", ui.Dim(tc.hash)))
+		prefixedUI.Info(fmt.Sprintf("cache hit%s, replaying logs %s", moreContext, ui.Dim(tc.hash)))
 		tc.ReplayLogFile(prefixedUI, progressLogger)
 	case util.ErrorTaskOutput:
 		// The task succeeded, so we don't output anything in this case
 	default:
 		// NoLogs, do not output anything
 	}
-	// TODO: timeSaved could be part of cacheStatus, so we don't have to make a new struct
-	// downstream, but this would be a more invasive change right now.
-	return cacheStatus, timeSaved, nil
+
+	return cacheStatus, nil
 }
 
 // ReplayLogFile writes out the stored logfile to the terminal
@@ -279,7 +286,7 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 	if err = tc.rc.cache.Put(tc.rc.repoRoot, tc.hash, duration, relativePaths); err != nil {
 		return err
 	}
-	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs)
+	err = tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs, duration)
 	if err != nil {
 		// Don't fail the cache write because we also failed to record it, we will just do
 		// extra I/O in the future restoring files that haven't changed from cache
@@ -321,7 +328,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		hash:              hash,
 		pt:                pt,
 		taskOutputMode:    taskOutputMode,
-		cachingDisabled:   !pt.TaskDefinition.ShouldCache,
+		cachingDisabled:   !pt.TaskDefinition.Cache,
 		LogFileName:       logFileName,
 	}
 }

@@ -3,14 +3,14 @@ use std::{
     ffi::OsStr,
     fmt, fs,
     io::{self, Write},
-    path::{Components, Path, PathBuf},
+    ops::Deref,
+    path::{Path, PathBuf},
 };
 
+use path_clean::PathClean;
 use serde::Serialize;
 
-use crate::{
-    AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, PathValidationError,
-};
+use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub struct AbsoluteSystemPathBuf(pub(crate) PathBuf);
@@ -24,6 +24,14 @@ impl Borrow<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
 
 impl AsRef<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
     fn as_ref(&self) -> &AbsoluteSystemPath {
+        self
+    }
+}
+
+impl Deref for AbsoluteSystemPathBuf {
+    type Target = AbsoluteSystemPath;
+
+    fn deref(&self) -> &Self::Target {
         self.borrow()
     }
 }
@@ -38,7 +46,7 @@ impl AbsoluteSystemPathBuf {
     /// * `unchecked_path`: The path to be validated and converted to an
     ///   `AbsoluteSystemPathBuf`.
     ///
-    /// returns: Result<AbsoluteSystemPathBuf, PathValidationError>
+    /// returns: Result<AbsoluteSystemPathBuf, PathError>
     ///
     /// # Examples
     ///
@@ -60,11 +68,30 @@ impl AbsoluteSystemPathBuf {
     pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathError> {
         let unchecked_path = unchecked_path.into();
         if !unchecked_path.is_absolute() {
-            return Err(PathValidationError::NotAbsolute(unchecked_path).into());
+            return Err(PathError::NotAbsolute(unchecked_path).into());
         }
 
         let system_path = unchecked_path.into_system()?;
         Ok(AbsoluteSystemPathBuf(system_path))
+    }
+
+    pub fn from_unknown(base: &AbsoluteSystemPath, unknown: impl Into<PathBuf>) -> Self {
+        // we have an absolute system path and an unknown kind of system path.
+        let unknown: PathBuf = unknown.into();
+        if unknown.is_absolute() {
+            Self(unknown)
+        } else {
+            Self(base.as_path().join(unknown).clean())
+        }
+    }
+
+    pub fn from_cwd(unknown: impl Into<PathBuf>) -> Result<Self, PathError> {
+        let cwd = Self::cwd()?;
+        Ok(Self::from_unknown(&cwd, unknown))
+    }
+
+    pub fn cwd() -> Result<Self, PathError> {
+        Ok(Self(std::env::current_dir()?))
     }
 
     /// Anchors `path` at `self`.
@@ -73,7 +100,7 @@ impl AbsoluteSystemPathBuf {
     ///
     /// * `path`: The path to be anchored at `self`
     ///
-    /// returns: Result<AnchoredSystemPathBuf, PathValidationError>
+    /// returns: Result<AnchoredSystemPathBuf, PathError>
     ///
     /// # Examples
     ///
@@ -137,14 +164,6 @@ impl AbsoluteSystemPathBuf {
         self.0.as_path()
     }
 
-    pub fn as_absolute_path(&self) -> &AbsoluteSystemPath {
-        self.borrow()
-    }
-
-    pub fn components(&self) -> Components<'_> {
-        self.0.components()
-    }
-
     pub fn parent(&self) -> Option<Self> {
         self.0
             .parent()
@@ -157,10 +176,6 @@ impl AbsoluteSystemPathBuf {
 
     pub fn ends_with<P: AsRef<Path>>(&self, child: P) -> bool {
         self.0.ends_with(child.as_ref())
-    }
-
-    pub fn join_component(&self, segment: &str) -> Self {
-        self.as_absolute_path().join_component(segment)
     }
 
     pub fn ensure_dir(&self) -> Result<(), io::Error> {
@@ -197,10 +212,10 @@ impl AbsoluteSystemPathBuf {
         Ok(())
     }
 
-    pub fn to_str(&self) -> Result<&str, PathValidationError> {
+    pub fn to_str(&self) -> Result<&str, PathError> {
         self.0
             .to_str()
-            .ok_or_else(|| PathValidationError::InvalidUnicode(self.0.clone()))
+            .ok_or_else(|| PathError::InvalidUnicode(self.0.to_string_lossy().to_string()))
     }
 
     pub fn to_string_lossy(&self) -> Cow<'_, str> {
@@ -224,16 +239,8 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn to_realpath(&self) -> Result<Self, PathError> {
-        let realpath = fs::canonicalize(&self.0)?;
+        let realpath = dunce::canonicalize(&self.0)?;
         Ok(Self(realpath))
-    }
-
-    pub fn symlink_to_file(&self, target: impl AsRef<Path>) -> Result<(), PathError> {
-        self.as_absolute_path().symlink_to_file(target)
-    }
-
-    pub fn symlink_to_dir(&self, target: impl AsRef<Path>) -> Result<(), PathError> {
-        self.as_absolute_path().symlink_to_dir(target)
     }
 }
 
@@ -259,7 +266,7 @@ impl AsRef<Path> for AbsoluteSystemPathBuf {
 mod tests {
     use std::assert_matches::assert_matches;
 
-    use crate::{AbsoluteSystemPathBuf, PathError, PathValidationError};
+    use crate::{AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
     #[cfg(not(windows))]
     #[test]
@@ -267,16 +274,22 @@ mod tests {
         assert!(AbsoluteSystemPathBuf::new("/Users/user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new("./Users/user/"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
         );
 
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
+        );
+
+        let tail = RelativeUnixPathBuf::new("../other").unwrap();
+
+        assert_eq!(
+            AbsoluteSystemPathBuf::new("/some/dir")
+                .unwrap()
+                .join_unix_path(&tail)
+                .unwrap(),
+            AbsoluteSystemPathBuf::new("/some/other").unwrap(),
         );
     }
 
@@ -286,21 +299,25 @@ mod tests {
         assert!(AbsoluteSystemPathBuf::new("C:\\Users\\user").is_ok());
         assert_matches!(
             AbsoluteSystemPathBuf::new(".\\Users\\user\\"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
         );
         assert_matches!(
             AbsoluteSystemPathBuf::new("Users"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
+            Err(PathError::NotAbsolute(_))
         );
         assert_matches!(
             AbsoluteSystemPathBuf::new("/Users/home"),
-            Err(PathError::PathValidationError(
-                PathValidationError::NotAbsolute(_)
-            ))
-        )
+            Err(PathError::NotAbsolute(_))
+        );
+
+        let tail = RelativeUnixPathBuf::new("../other").unwrap();
+
+        assert_eq!(
+            AbsoluteSystemPathBuf::new("C:\\some\\dir")
+                .unwrap()
+                .join_unix_path(&tail)
+                .unwrap(),
+            AbsoluteSystemPathBuf::new("C:\\some\\other").unwrap(),
+        );
     }
 }

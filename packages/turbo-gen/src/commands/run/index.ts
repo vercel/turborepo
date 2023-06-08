@@ -2,7 +2,7 @@ import { logger } from "@turbo/utils";
 import { getProject } from "../../utils/getProject";
 import { custom } from "../../generators";
 
-export interface CustomGeneratorOptions {
+export interface CustomGeneratorCLIOptions {
   config?: string;
   root?: string;
   args?: Array<string>;
@@ -13,7 +13,7 @@ export interface CustomGeneratorOptions {
  */
 export async function run(
   generator: string | undefined,
-  opts: CustomGeneratorOptions
+  opts: CustomGeneratorCLIOptions
 ) {
   const project = await getProject(opts);
 

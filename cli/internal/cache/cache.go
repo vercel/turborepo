@@ -20,7 +20,7 @@ import (
 type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
-	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error)
+	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, error)
 	Exists(hash string) ItemStatus
 	// Put caches files for a given hash
 	Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error
@@ -32,8 +32,35 @@ type Cache interface {
 // ItemStatus holds whether artifacts exists for a given hash on local
 // and/or remote caching server
 type ItemStatus struct {
-	Local  bool `json:"local"`
-	Remote bool `json:"remote"`
+	Hit       bool
+	Source    string // only relevant if Hit is true
+	TimeSaved int    // will be 0 if Hit is false
+}
+
+// NewCacheMiss returns an ItemStatus with the fields set to indicate a cache miss
+func NewCacheMiss() ItemStatus {
+	return ItemStatus{
+		Source:    CacheSourceNone,
+		Hit:       false,
+		TimeSaved: 0,
+	}
+}
+
+// newFSTaskCacheStatus returns an ItemStatus with the fields set to indicate a local cache hit
+func newFSTaskCacheStatus(hit bool, timeSaved int) ItemStatus {
+	return ItemStatus{
+		Source:    CacheSourceFS,
+		Hit:       hit,
+		TimeSaved: timeSaved,
+	}
+}
+
+func newRemoteTaskCacheStatus(hit bool, timeSaved int) ItemStatus {
+	return ItemStatus{
+		Source:    CacheSourceRemote,
+		Hit:       hit,
+		TimeSaved: timeSaved,
+	}
 }
 
 const (
@@ -41,6 +68,8 @@ const (
 	CacheSourceFS = "LOCAL"
 	// CacheSourceRemote is a constant to indicate remote cache hit
 	CacheSourceRemote = "REMOTE"
+	// CacheSourceNone is an empty string because there is no source for a cache miss
+	CacheSourceNone = ""
 	// CacheEventHit is a constant to indicate a cache hit
 	CacheEventHit = "HIT"
 	// CacheEventMiss is a constant to indicate a cache miss
@@ -240,24 +269,17 @@ func (mplex *cacheMultiplexer) removeCache(removal *cacheRemoval) {
 	}
 }
 
-func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
+func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
 	// Make a shallow copy of the caches, since storeUntil can call removeCache
 	mplex.mu.RLock()
 	caches := make([]Cache, len(mplex.caches))
 	copy(caches, mplex.caches)
 	mplex.mu.RUnlock()
 
-	// We need to return a composite cache status from multiple caches
-	// Initialize the empty struct so we can assign values to it. This is similar
-	// to how the Exists() method works.
-	combinedCacheState := ItemStatus{}
-
 	// Retrieve from caches sequentially; if we did them simultaneously we could
 	// easily write the same file from two goroutines at once.
 	for i, cache := range caches {
-		itemStatus, actualFiles, duration, err := cache.Fetch(anchor, key, files)
-		ok := itemStatus.Local || itemStatus.Remote
-
+		itemStatus, actualFiles, err := cache.Fetch(anchor, key, files)
 		if err != nil {
 			cd := &util.CacheDisabledError{}
 			if errors.As(err, &cd) {
@@ -271,31 +293,31 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 			// the operation. Future work that plumbs UI / Logging into the cache system
 			// should probably log this at least.
 		}
-		if ok {
+
+		if itemStatus.Hit {
 			// Store this into other caches. We can ignore errors here because we know
 			// we have previously successfully stored in a higher-priority cache, and so the overall
 			// result is a success at fetching. Storing in lower-priority caches is an optimization.
-			_ = mplex.storeUntil(anchor, key, duration, actualFiles, i)
+			_ = mplex.storeUntil(anchor, key, itemStatus.TimeSaved, actualFiles, i)
 
-			// If another cache had already set this to true, we don't need to set it again from this cache
-			combinedCacheState.Local = combinedCacheState.Local || itemStatus.Local
-			combinedCacheState.Remote = combinedCacheState.Remote || itemStatus.Remote
-			return combinedCacheState, actualFiles, duration, err
+			// Return this cache, and exit the for loop, since we don't need to keep looking.
+			return itemStatus, actualFiles, nil
 		}
 	}
 
-	return ItemStatus{Local: false, Remote: false}, nil, 0, nil
+	return NewCacheMiss(), nil, nil
 }
 
+// Exists check each cache sequentially and return the first one that has a cache hit
 func (mplex *cacheMultiplexer) Exists(target string) ItemStatus {
-	syncCacheState := ItemStatus{}
 	for _, cache := range mplex.caches {
 		itemStatus := cache.Exists(target)
-		syncCacheState.Local = syncCacheState.Local || itemStatus.Local
-		syncCacheState.Remote = syncCacheState.Remote || itemStatus.Remote
+		if itemStatus.Hit {
+			return itemStatus
+		}
 	}
 
-	return syncCacheState
+	return NewCacheMiss()
 }
 
 func (mplex *cacheMultiplexer) Clean(anchor turbopath.AbsoluteSystemPath) {

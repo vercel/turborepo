@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use bstr::BStr;
 
-use crate::{PathError, PathValidationError};
+use crate::PathError;
 
 #[repr(transparent)]
 pub struct RelativeUnixPath {
@@ -13,7 +13,7 @@ impl RelativeUnixPath {
     pub fn new<P: AsRef<BStr>>(value: &P) -> Result<&Self, PathError> {
         let path = value.as_ref();
         if path.first() == Some(&b'/') {
-            return Err(PathValidationError::not_relative_error(path).into());
+            return Err(PathError::not_relative_error(path).into());
         }
         // copied from stdlib path.rs: relies on the representation of
         // RelativeUnixPath being just a BStr, the same way Path relies on
@@ -37,8 +37,16 @@ impl RelativeUnixPath {
                 .iter()
                 .map(|byte| if *byte == b'/' { b'\\' } else { *byte })
                 .collect::<Vec<u8>>();
-            let system_path_string = String::from_utf8(system_path_bytes)?;
+            let system_path_string = String::from_utf8(system_path_bytes).map_err(|err| {
+                PathError::InvalidUnicode(String::from_utf8_lossy(err.as_bytes()).to_string())
+            })?;
             Ok(PathBuf::from(system_path_string))
         }
+    }
+}
+
+impl AsRef<RelativeUnixPath> for RelativeUnixPath {
+    fn as_ref(&self) -> &RelativeUnixPath {
+        self
     }
 }

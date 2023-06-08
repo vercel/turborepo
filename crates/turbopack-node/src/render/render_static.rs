@@ -13,14 +13,13 @@ use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc},
-    chunk::{ChunkingContextVc, EvaluatableAssetsVc},
+    chunk::{ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc},
     error::PrettyPrintError,
 };
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{Body, HeaderListVc, RewriteBuilder, RewriteVc},
 };
-use turbopack_ecmascript::EcmascriptModuleAssetVc;
 
 use super::{
     issue::RenderingIssue, RenderDataVc, RenderStaticIncomingMessage, RenderStaticOutgoingMessage,
@@ -70,7 +69,7 @@ pub async fn render_static(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
@@ -78,6 +77,7 @@ pub async fn render_static(
     output_root: FileSystemPathVc,
     project_dir: FileSystemPathVc,
     data: RenderDataVc,
+    debug: bool,
 ) -> Result<StaticResultVc> {
     let render = render_stream(
         cwd,
@@ -91,6 +91,7 @@ pub async fn render_static(
         output_root,
         project_dir,
         data,
+        debug,
     )
     .await?;
 
@@ -195,7 +196,7 @@ fn render_stream(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
@@ -203,6 +204,7 @@ fn render_stream(
     output_root: FileSystemPathVc,
     project_dir: FileSystemPathVc,
     data: RenderDataVc,
+    debug: bool,
 ) -> RenderStreamVc {
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
@@ -244,6 +246,7 @@ fn render_stream(
             }),
         }
         .cell(),
+        debug,
     );
 
     let raw: RawVc = cell.into();
@@ -255,7 +258,7 @@ async fn render_stream_internal(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     path: FileSystemPathVc,
-    module: EcmascriptModuleAssetVc,
+    module: EvaluatableAssetVc,
     runtime_entries: EvaluatableAssetsVc,
     fallback_page: DevHtmlAssetVc,
     chunking_context: ChunkingContextVc,
@@ -264,6 +267,7 @@ async fn render_stream_internal(
     project_dir: FileSystemPathVc,
     data: RenderDataVc,
     sender: RenderStreamSenderVc,
+    debug: bool,
 ) {
     mark_finished();
     let Ok(sender) = sender.await else {
@@ -274,7 +278,7 @@ async fn render_stream_internal(
     let stream = generator! {
         let intermediate_asset = get_intermediate_asset(
             chunking_context,
-            module.into(),
+            module,
             runtime_entries,
         );
         let renderer_pool = get_renderer_pool(
@@ -284,7 +288,7 @@ async fn render_stream_internal(
             intermediate_output_path,
             output_root,
             project_dir,
-            /* debug */ false,
+            debug,
         );
 
         // Read this strongly consistent, since we don't want to run inconsistent

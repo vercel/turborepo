@@ -4,7 +4,7 @@ import inquirer from "inquirer";
 import { minimatch } from "minimatch";
 import validName from "validate-npm-package-name";
 import type { Project, Workspace } from "@turbo/workspaces";
-import { validateDirectory } from "@turbo/utils";
+import { validateDirectory, logger } from "@turbo/utils";
 import { getWorkspaceStructure } from "../../utils/getWorkspaceStructure";
 import type { WorkspaceType } from "../../generators/types";
 import { getWorkspaceList } from "../../utils/getWorkspaceList";
@@ -37,8 +37,10 @@ export async function name({
 
 export async function type({
   override,
+  message,
 }: {
   override?: WorkspaceType;
+  message?: string;
 }): Promise<{ answer: WorkspaceType }> {
   if (override) {
     return { answer: override };
@@ -47,7 +49,7 @@ export async function type({
   return inquirer.prompt<{ answer: WorkspaceType }>({
     type: "list",
     name: "answer",
-    message: `What type of workspace should be added?`,
+    message: message ?? `What type of workspace should be added?`,
     choices: [
       {
         name: "app",
@@ -131,12 +133,28 @@ export async function location({
 }
 
 export async function source({
+  override,
   workspaces,
   name,
 }: {
+  override?: string;
   workspaces: Array<Workspace | inquirer.Separator>;
   name: string;
 }) {
+  if (override) {
+    const source = workspaces.find((workspace) => {
+      if (workspace instanceof inquirer.Separator) {
+        return false;
+      }
+      return workspace.name === override;
+    }) as Workspace | undefined;
+    if (source) {
+      return { answer: source };
+    }
+    logger.warn(`Workspace "${override}" not found`);
+    console.log();
+  }
+
   const sourceAnswer = await inquirer.prompt<{
     answer: Workspace;
   }>({

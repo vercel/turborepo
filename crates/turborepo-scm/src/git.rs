@@ -192,7 +192,7 @@ mod tests {
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
-    use turbopath::{PathError, PathValidationError};
+    use turbopath::PathError;
     use which::which;
 
     use super::previous_content;
@@ -625,10 +625,7 @@ mod tests {
 
         assert_matches!(
             turbo_root_is_not_subdir_of_git_root,
-            Err(Error::Path(
-                PathError::PathValidationError(PathValidationError::NotParent(_, _)),
-                _
-            ))
+            Err(Error::Path(PathError::NotParent(_, _), _))
         );
 
         Ok(())

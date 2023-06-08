@@ -237,18 +237,21 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		}
 	}
 
+	envAtExecutionStart := env.GetEnvMap()
+
 	globalHashInputs, err := getGlobalHashInputs(
+		r.base.Logger,
 		r.base.RepoRoot,
 		rootPackageJSON,
-		turboJSON.GlobalEnv,
-		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
-		turboJSON.GlobalPassthroughEnv,
+		turboJSON.GlobalDeps,
+		envAtExecutionStart,
+		turboJSON.GlobalEnv,
+		turboJSON.GlobalPassThroughEnv,
 		r.opts.runOpts.EnvMode,
 		r.opts.runOpts.FrameworkInference,
 		turboJSON.GlobalDotEnv,
-		r.base.Logger,
 	)
 
 	if err != nil {
@@ -284,6 +287,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	taskHashTracker := taskhash.NewTracker(
 		g.RootNode,
 		g.GlobalHash,
+		envAtExecutionStart,
 		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
 		g.Pipeline,
 	)
@@ -342,15 +346,13 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		}
 	}
 
-	var envVarPassthroughMap env.EnvironmentVariableMap
-	if globalHashInputs.envVarPassthroughs != nil {
-		if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(globalHashInputs.envVarPassthroughs, nil, ""); err == nil {
-			envVarPassthroughMap = envVarPassthroughDetailedMap.BySource.Explicit
-		}
+	resolvedPassThroughEnvVars, err := envAtExecutionStart.FromWildcards(globalHashInputs.passThroughEnv)
+	if err != nil {
+		return err
 	}
 
 	globalEnvMode := rs.Opts.runOpts.EnvMode
-	if globalEnvMode == util.Infer && turboJSON.GlobalPassthroughEnv != nil {
+	if globalEnvMode == util.Infer && turboJSON.GlobalPassThroughEnv != nil {
 		globalEnvMode = util.Strict
 	}
 
@@ -366,13 +368,16 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,
+		envAtExecutionStart,
 		runsummary.NewGlobalHashSummary(
+			globalHashInputs.globalCacheKey,
 			globalHashInputs.globalFileHashMap,
 			globalHashInputs.rootExternalDepsHash,
-			globalHashInputs.envVars,
-			envVarPassthroughMap,
-			globalHashInputs.globalCacheKey,
+			globalHashInputs.env,
+			globalHashInputs.passThroughEnv,
 			globalHashInputs.dotEnv,
+			globalHashInputs.resolvedEnvVars,
+			resolvedPassThroughEnvVars,
 		),
 		rs.Opts.SynthesizeCommand(rs.Targets),
 	)
@@ -388,6 +393,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			turboCache,
 			turboJSON,
 			globalEnvMode,
+			globalHashInputs.resolvedEnvVars.All,
+			resolvedPassThroughEnvVars,
 			r.base,
 			summary,
 		)
@@ -403,6 +410,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		turboCache,
 		turboJSON,
 		globalEnvMode,
+		globalHashInputs.resolvedEnvVars.All,
+		resolvedPassThroughEnvVars,
 		packagesInScope,
 		r.base,
 		summary,
@@ -465,9 +474,13 @@ func buildTaskGraphEngine(
 		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
 	}
 
-	// Check that no tasks would be blocked by a persistent task
-	if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.Concurrency); err != nil {
-		return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
+	// Check that no tasks would be blocked by a persistent task. Note that the
+	// parallel flag ignores both concurrency and dependencies, so in that scenario
+	// we don't need to validate.
+	if !rs.Opts.runOpts.Parallel {
+		if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.Concurrency); err != nil {
+			return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
+		}
 	}
 
 	return engine, nil
