@@ -21,7 +21,7 @@ fn git_like_hash_file(path: &AbsoluteSystemPath, metadata: &Metadata) -> Result<
     Ok(result.encode_hex::<String>())
 }
 
-pub fn hash_files(
+pub(crate) fn hash_files(
     root_path: &AbsoluteSystemPath,
     files: impl Iterator<Item = AnchoredSystemPathBuf>,
     allow_missing: bool,
@@ -44,7 +44,7 @@ pub fn hash_files(
     Ok(hashes)
 }
 
-pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
+pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPathBuf,
     inputs: &[S],

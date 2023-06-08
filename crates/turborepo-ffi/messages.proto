@@ -167,48 +167,35 @@ message VerifySignatureResponse {
   }
 }
 
-message GetPackageFileHashesFromGitIndexRequest {
+message GetPackageFileHashesRequest {
   string turbo_root = 1;
   string package_path = 2;
+  repeated string inputs = 3;
+}
+
+message GetPackageFileHashesResponse {
+  oneof response {
+    FileHashes hashes = 1;
+    string error = 2;
+  }
+}
+
+message GetHashesForFilesRequest {
+  string turbo_root = 1;
+  repeated string files = 2;
+  bool allow_missing = 3;
+}
+
+message GetHashesForFilesResponse {
+  oneof response {
+    FileHashes hashes = 1;
+    string error = 2;
+  }
 }
 
 message FileHashes {
   map<string, string> hashes = 1;
 }
-
-message GetPackageFileHashesFromGitIndexResponse {
-  oneof response {
-    FileHashes hashes = 1;
-    string error = 2;
-  }
-}
-
-message GetPackageFileHashesFromProcessingGitIgnoreRequest {
-  string turbo_root = 1;
-  string package_path = 2;
-  repeated string inputs = 3;
-}
-
-message GetPackageFileHashesFromProcessingGitIgnoreResponse {
-  oneof response {
-    FileHashes hashes = 1;
-    string error = 2;
-  }
-}
-
-message GetPackageFileHashesFromInputsRequest {
-  string turbo_root = 1;
-  string package_path = 2;
-  repeated string inputs = 3;
-}
-
-message GetPackageFileHashesFromInputsResponse {
-  oneof response {
-    FileHashes hashes = 1;
-    string error = 2;
-  }
-}
-
 
 message FromWildcardsRequest {
   EnvVarMap env_vars = 1;

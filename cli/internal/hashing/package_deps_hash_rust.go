@@ -8,8 +8,8 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
-func getPackageFileHashesFromGitIndex(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
-	rawHashes, err := ffi.GetPackageFileHashesFromGitIndex(rootPath.ToString(), packagePath.ToString())
+func GetPackageFileHashes(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
+	rawHashes, err := ffi.GetPackageFileHashes(rootPath.ToString(), packagePath.ToString(), inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -21,8 +21,12 @@ func getPackageFileHashesFromGitIndex(rootPath turbopath.AbsoluteSystemPath, pac
 	return hashes, nil
 }
 
-func getPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
-	rawHashes, err := ffi.GetPackageFileHashesFromProcessingGitIgnore(rootPath.ToString(), packagePath.ToString(), inputs)
+func GetHashesForFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	rawFiles := make([]string, len(files))
+	for i, file := range files {
+		rawFiles[i] = file.ToString()
+	}
+	rawHashes, err := ffi.GetHashesForFiles(rootPath.ToString(), rawFiles, false)
 	if err != nil {
 		return nil, err
 	}
@@ -34,8 +38,12 @@ func getPackageFileHashesFromProcessingGitIgnore(rootPath turbopath.AbsoluteSyst
 	return hashes, nil
 }
 
-func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
-	rawHashes, err := ffi.GetPackageFileHashesFromInputs(rootPath.ToString(), packagePath.ToString(), inputs)
+func GetHashesForExistingFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath) (map[turbopath.AnchoredUnixPath]string, error) {
+	rawFiles := make([]string, len(files))
+	for i, file := range files {
+		rawFiles[i] = file.ToString()
+	}
+	rawHashes, err := ffi.GetHashesForFiles(rootPath.ToString(), rawFiles, true)
 	if err != nil {
 		return nil, err
 	}

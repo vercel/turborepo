@@ -47,8 +47,12 @@ impl RelativeUnixPathBuf {
             .enumerate()
             .filter(|(_, byte)| *byte == b'\"' || *byte == b'\n')
         {
-            writer.write_all(self.0[i..to_escaped_index].as_bytes())?;
-            writer.write_all(&[b'\\', byte])?;
+            writer.write_all(&self.0[i..to_escaped_index].as_bytes())?;
+            if byte == b'\n' {
+                writer.write_all(&[b'\\', b'n'])?;
+            } else {
+                writer.write_all(&[b'\\', byte])?;
+            }
             i = to_escaped_index + 1;
         }
         if i < self.0.len() {

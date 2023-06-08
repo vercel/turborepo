@@ -154,15 +154,15 @@ impl Git {
                     Either::Left([package_unix_path, raw_glob.as_ref()].join("/"))
                 }
             });
-        let iter = globwalk::globwalk(
+        let files = globwalk::globwalk(
             turbo_root,
             &inclusions,
             &exclusions,
             globwalk::WalkType::Files,
         )?;
-        let to_hash = iter
+        let to_hash = files
+            .iter()
             .map(|entry| {
-                let entry = entry?;
                 let path = self.root.anchor(entry)?.to_unix()?;
                 Ok(path)
             })
@@ -171,79 +171,6 @@ impl Git {
         hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
         Ok(hashes)
     }
-}
-
-pub fn get_package_file_hashes_from_git_index(
-    turbo_root: &AbsoluteSystemPath,
-    package_path: &AnchoredSystemPathBuf,
-) -> Result<GitHashes, Error> {
-    // TODO: memoize git root -> turbo root calculation once we aren't crossing ffi
-    let git_root = find_git_root(turbo_root)?;
-    let full_pkg_path = turbo_root.resolve(package_path);
-    let git_to_pkg_path = git_root.anchor(&full_pkg_path)?;
-    let pkg_prefix = git_to_pkg_path.to_unix()?;
-    let mut hashes = git_ls_tree(&full_pkg_path)?;
-    // Note: to_hash is *git repo relative*
-    let to_hash = append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
-    hash_objects(&git_root, &full_pkg_path, to_hash, &mut hashes)?;
-    Ok(hashes)
-}
-
-pub fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
-    turbo_root: &AbsoluteSystemPath,
-    package_path: &AnchoredSystemPathBuf,
-    inputs: &[S],
-) -> Result<GitHashes, Error> {
-    // TODO: memoize git root -> turbo root calculation once we aren't crossing ffi
-    let git_root = find_git_root(turbo_root)?;
-    let full_pkg_path = turbo_root.resolve(package_path);
-    let package_unix_path_buf = package_path.to_unix()?;
-    let package_unix_path = package_unix_path_buf.as_str();
-
-    let mut inputs = inputs
-        .iter()
-        .map(|s| s.as_ref().to_string())
-        .collect::<Vec<String>>();
-    // Add in package.json and turbo.json to input patterns. Both file paths are
-    // relative to pkgPath
-    //
-    // - package.json is an input because if the `scripts` in the package.json
-    //   change (i.e. the tasks that turbo executes), we want a cache miss, since
-    //   any existing cache could be invalid.
-    // - turbo.json because it's the definition of the tasks themselves. The root
-    //   turbo.json is similarly included in the global hash. This file may not
-    //   exist in the workspace, but that is ok, because it will get ignored
-    //   downstream.
-    inputs.push("package.json".to_string());
-    inputs.push("turbo.json".to_string());
-
-    // The input patterns are relative to the package.
-    // However, we need to change the globbing to be relative to the repo root.
-    // Prepend the package path to each of the input patterns.
-    let (inclusions, exclusions): (Vec<String>, Vec<String>) =
-        inputs.into_iter().partition_map(|raw_glob| {
-            if let Some(exclusion) = raw_glob.strip_prefix('!') {
-                Either::Right([package_unix_path, exclusion].join("/"))
-            } else {
-                Either::Left([package_unix_path, raw_glob.as_ref()].join("/"))
-            }
-        });
-    let files = globwalk::globwalk(
-        turbo_root,
-        &inclusions,
-        &exclusions,
-        globwalk::WalkType::Files,
-    )?;
-    let to_hash = files
-        .iter()
-        .map(|entry| {
-            let path = git_root.anchor(entry)?.to_unix()?;
-            Ok(path)
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-    let mut hashes = GitHashes::new();
-    hash_objects(&git_root, &full_pkg_path, to_hash, &mut hashes)?;
-    Ok(hashes)
 }
 
 pub(crate) fn find_git_root(

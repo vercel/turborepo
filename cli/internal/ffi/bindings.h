@@ -20,11 +20,9 @@ struct Buffer recursive_copy(struct Buffer buffer);
 
 struct Buffer verify_signature(struct Buffer buffer);
 
-struct Buffer get_package_file_hashes_from_git_index(struct Buffer buffer);
+struct Buffer get_package_file_hashes(struct Buffer buffer);
 
-struct Buffer get_package_file_hashes_from_processing_git_ignore(struct Buffer buffer);
-
-struct Buffer get_package_file_hashes_from_inputs(struct Buffer buffer);
+struct Buffer get_hashes_for_files(struct Buffer buffer);
 
 struct Buffer glob(struct Buffer buffer);
 
