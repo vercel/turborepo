@@ -273,14 +273,14 @@ pub extern "C" fn get_package_file_hashes_from_git_index(buffer: Buffer) -> Buff
                 to_return.insert(filename, hash);
             }
             let file_hashes = proto::FileHashes { hashes: to_return };
-            let resp = proto::GetPackageFileHashesFromGitIndexResponse {
+
+            proto::GetPackageFileHashesFromGitIndexResponse {
                 response: Some(
                     proto::get_package_file_hashes_from_git_index_response::Response::Hashes(
                         file_hashes,
                     ),
                 ),
-            };
-            resp
+            }
         }
         Err(err) => {
             let resp = proto::GetPackageFileHashesFromGitIndexResponse {
@@ -397,7 +397,7 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         false => globwalk::WalkType::All,
     };
 
-    let mut iter = match globwalk(
+    let iter = match globwalk(
         &AbsoluteSystemPathBuf::new(req.base_path).expect("absolute"),
         &req.include_patterns,
         &req.exclude_patterns,
