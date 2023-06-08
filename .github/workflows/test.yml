@@ -391,6 +391,8 @@ jobs:
         run: |
           mkdir -p `pnpm store path`
 
+      # Disable corepack, actions/setup-node invokes other package managers and
+      # that causes corepack to throw an error, so we disable it first.
       - name: Disable corepack
         shell: bash
         run: corepack disable
@@ -404,12 +406,17 @@ jobs:
 
       - name: Check \"${{ matrix.example }}\" example with \"${{ matrix.manager }}\"
         shell: bash
-        env:
-          FORCE_COLOR: true
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_REMOTE_ONLY: true
-        run: turbo run test --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        # Note: using CLI flags instead of env vars because
+        # envs var would apply to the actual tests that exercise turbo also,
+        # making test output non-deterministic.
+        run: turbo run test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
+
+      # Re-enable corepack, actions/setup-node invokes other package managers and
+      # that causes corepack to throw an error, so we disable it here. The "Post" step
+      # for actions/setup-node will run at the end of this job, so we need to prep for it.
+      - name: Disable corepack again
+        shell: bash
+        run: corepack disable
 
   js_packages:
     name: JS Package Tests
