@@ -21,6 +21,29 @@ fn git_like_hash_file(path: &AbsoluteSystemPath, metadata: &Metadata) -> Result<
     Ok(result.encode_hex::<String>())
 }
 
+pub fn hash_files(
+    root_path: &AbsoluteSystemPath,
+    files: impl Iterator<Item = AnchoredSystemPathBuf>,
+    allow_missing: bool,
+) -> Result<GitHashes, Error> {
+    let mut hashes = GitHashes::new();
+    for file in files.into_iter() {
+        let path = root_path.resolve(&file);
+        let metadata = match path.symlink_metadata() {
+            Ok(metadata) => metadata,
+            Err(e) => {
+                if allow_missing && e.is_io_error(std::io::ErrorKind::NotFound) {
+                    continue;
+                }
+                return Err(e.into());
+            }
+        };
+        let hash = git_like_hash_file(&path, &metadata)?;
+        hashes.insert(file.to_unix()?, hash);
+    }
+    Ok(hashes)
+}
+
 pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPathBuf,
     package_path: &AnchoredSystemPathBuf,
@@ -93,6 +116,7 @@ pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
 
 #[cfg(test)]
 mod tests {
+    use test_case::test_case;
     use turbopath::{RelativeUnixPath, RelativeUnixPathBuf};
 
     use super::*;
@@ -104,6 +128,37 @@ mod tests {
             .to_realpath()
             .unwrap();
         (tmp_dir, dir)
+    }
+
+    #[test_case(&["non-existent-file.txt"], true, false ; "allow_missing, all missing")]
+    #[test_case(&["non-existent-file.txt", "existing-file.txt"], true, false ; "allow_missing, some missing, some not")]
+    #[test_case(&["existing-file.txt"], true, false ; "allow_missing, none missing")]
+    #[test_case(&["non-existent-file.txt"], false, true ; "don't allow_missing, all missing")]
+    #[test_case(&["non-existent-file.txt", "existing-file.txt"], false, true ; "don't allow_missing, some missing, some not")]
+    #[test_case(&["existing-file.txt"], false, false ; "don't allow_missing, none missing")]
+    fn test_hash_files(files: &[&str], allow_missing: bool, want_err: bool) {
+        let (_tmp, turbo_root) = tmp_dir();
+        let test_file = turbo_root.join_component("existing-file.txt");
+        test_file.create_with_contents("").unwrap();
+
+        let expected = {
+            let mut expected = GitHashes::new();
+            if files.contains(&"existing-file.txt") {
+                expected.insert(
+                    RelativeUnixPathBuf::new("existing-file.txt").unwrap(),
+                    "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".to_string(),
+                );
+            }
+            expected
+        };
+
+        let files = files
+            .iter()
+            .map(|s| AnchoredSystemPathBuf::from_raw(s).unwrap());
+        match hash_files(&turbo_root, files, allow_missing) {
+            Err(e) => assert!(want_err, "unexpected error {}", e),
+            Ok(hashes) => assert_eq!(hashes, expected),
+        }
     }
 
     #[test]
