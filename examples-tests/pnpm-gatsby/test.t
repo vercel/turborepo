@@ -1,4 +1,4 @@
-  $ . ${TESTDIR}/setup.sh with-gatsby pnpm
+  $ . ${TESTDIR}/../setup.sh with-gatsby pnpm
   6.26.1
 # run twice and make sure it works
   $ pnpm run build lint -- --output-logs=none
