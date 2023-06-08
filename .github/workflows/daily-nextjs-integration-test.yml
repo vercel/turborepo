@@ -24,6 +24,7 @@ jobs:
     permissions:
       pull-requests: write
     uses: ./.github/workflows/nextjs-integration-test.yml
+    secrets: inherit
     with:
       diff_base: "none"
       version: ${{ inputs.version || 'canary' }}
