@@ -22,6 +22,8 @@ struct Buffer verify_signature(struct Buffer buffer);
 
 struct Buffer get_package_file_hashes_from_git_index(struct Buffer buffer);
 
+struct Buffer get_package_file_hashes_from_processing_git_ignore(struct Buffer buffer);
+
 struct Buffer glob(struct Buffer buffer);
 
 struct Buffer transitive_closure(struct Buffer buf);
