@@ -1,275 +1,333 @@
-use pest::{
-    iterators::{Pair, Pairs},
-    Parser,
+use std::{borrow::Cow, sync::OnceLock};
+
+use nom::{
+    branch::alt,
+    bytes::complete::{escaped_transform, is_a, is_not, tag, take_till},
+    character::complete::{
+        anychar, char as nom_char, crlf, multispace1, newline, none_of, one_of, satisfy, space1,
+    },
+    combinator::{map, not, opt, peek, recognize, value},
+    multi::{count, many0, many1},
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
+    Finish, IResult,
 };
-use pest_derive::Parser;
+use regex::Regex;
+use serde_json::Value;
 
-#[derive(Parser)]
-#[grammar = "./yarn1/syml.pest"]
-pub struct SymlParser;
-
-#[derive(Debug)]
-pub struct Resolution<'a> {
-    pub names: Vec<&'a str>,
-    pub version: &'a str,
-    pub metadata: Vec<&'a str>,
-}
-
-/// Syml is a simplified version of yaml that is used in yarn v1.
-enum Syml {
-    Bool(bool),
-    String(String),
-    Object(Vec<(String, Syml)>),
-}
-
-impl Resolution<'_> {
-    pub fn new<'a>(name: &'a str, version: &'a str, metadata: Vec<&'a str>) -> Resolution<'a> {
-        Resolution {
-            names: vec![name],
-            version,
-            metadata,
-        }
-    }
-
-    fn parse<'a>(pair: Pair<'a, Rule>) -> Resolution<'a> {
-        match pair.as_rule() {
-            Rule::samedent_property => {
-                let mut inner = pair.into_inner();
-                let _samedent = inner.next().unwrap(); // todo(arlyon): intendation
-                let name = inner.next().unwrap().as_str();
-                let mut expression = inner.next().unwrap().into_inner();
-                let version = Self::parse_metadata(&mut expression);
-                Resolution::new(name, version, vec![])
-            }
-            Rule::legacy_property => {
-                let mut inner = pair.into_inner();
-                let _samedent = inner.next().unwrap(); // todo: indentation
-                let name = Resolution::parse_legacy_name(&mut inner);
-                let mut expression = inner.next().unwrap().into_inner();
-                let version = Self::parse_metadata(&mut expression);
-
-                Resolution::new(name, version, vec![])
-            }
-            Rule::legacy_multiple_property => {
-                let mut inner = pair.into_inner();
-                let _samedent = inner.next().unwrap(); // todo(arlyon): intendation
-
-                let mut names = vec![];
-                let mut expression = loop {
-                    match inner.peek().unwrap().as_rule() {
-                        Rule::legacy_name => {
-                            names.push(Resolution::parse_legacy_name(&mut inner));
-                        }
-                        Rule::expression => break inner.next().unwrap().into_inner(),
-                        _ => unreachable!(),
-                    }
-                };
-
-                let version = Self::parse_metadata(&mut expression);
-
-                Resolution {
-                    names,
-                    version,
-                    metadata: vec![],
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    /// in the case of an expression it is either a version,
-    /// or an object with a number of fields
-    fn parse_metadata<'a>(pairs: &mut Pairs<'a, Rule>) -> &'a str {
-        match (pairs.next(), pairs.next()) {
-            (Some(r1), Some(r2))
-                if r1.as_rule() == Rule::eol && r2.as_rule() == Rule::extradent =>
-            {
-                Self::parse_item_statements(&mut pairs.next().unwrap().into_inner());
-                ""
-            }
-            (Some(r1), Some(r2)) if r1.as_rule() == Rule::literal && r2.as_rule() == Rule::eol => {
-                r1.as_str()
-            }
-            (Some(r1), Some(r2))
-                if r1.as_rule() == Rule::eol && r2.as_rule() == Rule::property_statements =>
-            {
-                let (version, _, _) =
-                    Self::parse_metadata_from_property_statements(&mut r2.into_inner());
-                version.unwrap()
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    fn parse_item_statements<'a>(pairs: &mut Pairs<'a, Rule>) {
-        println!("{:#?}", pairs);
-    }
-
-    fn parse_metadata_from_property_statements<'a>(
-        pairs: &mut Pairs<'a, Rule>,
-    ) -> (Option<&'a str>, Option<&'a str>, Option<&'a str>) {
-        let mut version = None;
-        let mut resolved = None;
-        let mut integrity = None;
-
-        for pair in pairs {
-            let pair = pair.into_inner().next().unwrap();
-            match pair.as_rule() {
-                Rule::samedent_property => {
-                    let mut inner = pair.into_inner();
-                    let _samedent = inner.next().unwrap(); // todo(arlyon): intendation
-                    let name = inner.next().unwrap().as_str();
-                    let mut expression = inner.next().unwrap().into_inner();
-                    println!("{:#?}", expression);
-                    let value = match expression.next() {
-                        Some(r) if r.as_rule() == Rule::literal => r.as_str(),
-                        _ => panic!(),
-                    };
-
-                    match name {
-                        "version" => version.replace(value),
-                        "resolved" => resolved.replace(value),
-                        "integrity" => integrity.replace(value),
-                        _ => panic!(),
-                    };
-                }
-                Rule::legacy_property | Rule::legacy_multiple_property => {} // ignored
-                Rule::comment_line | Rule::version_spec => {}
-                r => unreachable!("{:?}", r),
-            };
-        }
-
-        (version, resolved, integrity)
-    }
-
-    fn parse_legacy_name<'a>(inner: &mut Pairs<'a, Rule>) -> &'a str {
-        let name = inner.next().unwrap().into_inner().next().unwrap();
-        match name.as_rule() {
-            Rule::string => {
-                let name = name.as_str();
-                // this is guaranteed to have quotes
-                &name[1..name.len() - 1]
-            }
-            Rule::legacy_pseudostring => name.as_str(),
-            x => unreachable!("{:?}", x),
-        }
+pub fn parse_syml(input: &str) -> Result<Value, super::Error> {
+    match property_statements(0)(input) {
+        Ok(("", value)) => Ok(value),
+        Ok((rest, _)) => Err(super::Error::SymlParse(format!(
+            "not all input was consumed: {rest}"
+        ))),
+        Err(e) => Err(super::Error::SymlParse(e.to_string())),
     }
 }
 
-fn get_packages<'a>(lockfile: &'a str) -> Result<Vec<Resolution<'a>>, pest::error::Error<Rule>> {
-    let mut property_statements = SymlParser::parse(Rule::grammar, lockfile)?
-        .next()
-        .expect("one grammar")
-        .into_inner()
-        .next()
-        .expect("one set of property statements")
-        .into_inner();
+const INDENT_STEP: usize = 2;
 
-    let version = loop {
-        match property_statements
-            .peek()
-            .map(|r| r.into_inner().next().expect("exactly one inner").as_rule())
-        {
-            Some(Rule::comment_line) => {
-                property_statements.next();
-            }
-            Some(Rule::version_spec) => {
-                property_statements.next();
-                break Some(1);
-            }
-            // if it is not a comment line or a version spec, or there are no lines,
-            // then we are done
-            _ => break None,
-        }
+// regex for trimming spaces from start and end
+fn pseudostring_replace() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^ *| *$").unwrap())
+}
+
+// Array and map types
+
+fn item_statements(level: usize) -> impl Fn(&str) -> IResult<&str, Value> {
+    move |i: &str| map(many0(item_statement(level)), Value::Array)(i)
+}
+
+fn item_statement(level: usize) -> impl Fn(&str) -> IResult<&str, Value> {
+    move |i: &str| {
+        let (i, _) = indent(level)(i)?;
+        let (i, _) = nom_char('-')(i)?;
+        let (i, _) = blankspace(i)?;
+        expression(level)(i)
     }
-    .ok_or(pest::error::Error::new_from_span(
-        pest::error::ErrorVariant::CustomError {
-            message: "Unsupported yarn version".to_string(),
-        },
-        property_statements.peek().unwrap().as_span(),
-    ))?;
+}
 
-    Ok(property_statements
-        .flat_map(|r| r.into_inner()) // a property statement is a comment line or a property
-        .filter_map(|record| match record.as_rule() {
-            Rule::samedent_property | Rule::legacy_property | Rule::legacy_multiple_property => {
-                Some(Resolution::parse(record))
-            }
-            Rule::comment_line => None,
-            Rule::version_spec => None,
-            _ => unreachable!(),
-        })
-        .collect())
+fn property_statements(level: usize) -> impl Fn(&str) -> IResult<&str, Value> {
+    move |i: &str| {
+        let (i, properties) = many0(property_statement(level))(i)?;
+        let mut map = serde_json::Map::new();
+        for (key, value) in properties.into_iter().flatten() {
+            map.insert(key, value);
+        }
+        Ok((i, Value::Object(map)))
+    }
+}
+
+fn property_statement(level: usize) -> impl Fn(&str) -> IResult<&str, Vec<(String, Value)>> {
+    move |i: &str| {
+        alt((
+            value(
+                vec![],
+                tuple((
+                    opt(blankspace),
+                    opt(pair(nom_char('#'), many1(pair(not(eol), anychar)))),
+                    many1(eol_any),
+                )),
+            ),
+            map(
+                preceded(
+                    indent(level),
+                    separated_pair(name, wrapped_colon, expression(level)),
+                ),
+                |entry| vec![entry],
+            ),
+            // legacy names
+            map(
+                preceded(
+                    indent(level),
+                    separated_pair(legacy_name, wrapped_colon, expression(level)),
+                ),
+                |entry| vec![entry],
+            ),
+            // legacy prop without colon
+            map(
+                preceded(
+                    indent(level),
+                    separated_pair(
+                        legacy_name,
+                        blankspace,
+                        terminated(legacy_literal, many1(eol_any)),
+                    ),
+                ),
+                |entry| vec![entry],
+            ),
+            multikey_property_statement(level),
+        ))(i)
+    }
+}
+
+fn multikey_property_statement(
+    level: usize,
+) -> impl Fn(&str) -> IResult<&str, Vec<(String, Value)>> {
+    move |i: &str| {
+        let (i, ()) = indent(level)(i)?;
+        let (i, property) = legacy_name(i)?;
+        let (i, others) = many1(preceded(
+            delimited(opt(blankspace), nom_char(','), opt(blankspace)),
+            legacy_name,
+        ))(i)?;
+        let (i, _) = wrapped_colon(i)?;
+        let (i, value) = expression(level)(i)?;
+
+        Ok((
+            i,
+            std::iter::once(property)
+                .chain(others.into_iter())
+                .map(|key| (key, value.clone()))
+                .collect(),
+        ))
+    }
+}
+
+fn wrapped_colon(i: &str) -> IResult<&str, char> {
+    delimited(opt(blankspace), nom_char(':'), opt(blankspace))(i)
+}
+
+fn expression(level: usize) -> impl Fn(&str) -> IResult<&str, Value> {
+    move |i: &str| {
+        alt((
+            preceded(
+                tuple((
+                    peek(tuple((eol, indent(level + 1), nom_char('-'), blankspace))),
+                    eol_any,
+                )),
+                item_statements(level + 1),
+            ),
+            preceded(eol, property_statements(level + 1)),
+            terminated(literal, many1(eol_any)),
+        ))(i)
+    }
+}
+
+fn indent(level: usize) -> impl Fn(&str) -> IResult<&str, ()> {
+    move |i: &str| {
+        let (i, _) = count(nom_char(' '), level * 2)(i)?;
+        Ok((i, ()))
+    }
+}
+
+// Simple types
+
+fn name(i: &str) -> IResult<&str, String> {
+    alt((string, pseudostring))(i)
+}
+
+fn legacy_name(i: &str) -> IResult<&str, String> {
+    alt((
+        string,
+        map(recognize(many1(pseudostring_legacy)), |s| s.to_string()),
+    ))(i)
+}
+
+fn literal(i: &str) -> IResult<&str, Value> {
+    alt((
+        value(Value::Null, null),
+        map(boolean, Value::Bool),
+        map(string, Value::String),
+        map(pseudostring, Value::String),
+    ))(i)
+}
+
+fn legacy_literal(i: &str) -> IResult<&str, Value> {
+    alt((
+        value(Value::Null, null),
+        map(string, Value::String),
+        map(pseudostring_legacy, Value::String),
+    ))(i)
+}
+
+fn pseudostring(i: &str) -> IResult<&str, String> {
+    let (i, pseudo) = recognize(pseudostring_inner)(i)?;
+    Ok((
+        i,
+        pseudostring_replace().replace_all(pseudo, "").into_owned(),
+    ))
+}
+
+fn pseudostring_inner(i: &str) -> IResult<&str, ()> {
+    let (i, _) = none_of("\r\n\t ?:,][{}#&*!|>'\"%@`-")(i)?;
+    let (i, _) = many0(tuple((opt(blankspace), none_of("\r\n\t ,][{}:#\"'"))))(i)?;
+    Ok((i, ()))
+}
+
+fn pseudostring_legacy(i: &str) -> IResult<&str, String> {
+    let (i, pseudo) = recognize(pseudostring_legacy_inner)(i)?;
+    let replaced = pseudostring_replace().replace_all(pseudo, "");
+    Ok((i, replaced.to_string()))
+}
+
+fn pseudostring_legacy_inner(i: &str) -> IResult<&str, ()> {
+    let (i, _) = opt(tag("--"))(i)?;
+    let (i, _) = satisfy(|c| c.is_ascii_alphanumeric() || c == '/')(i)?;
+    let (i, _) = take_till(|c| "\r\n\t :,".contains(c))(i)?;
+    Ok((i, ()))
+}
+
+// String parsing
+
+fn null(i: &str) -> IResult<&str, &str> {
+    tag("null")(i)
+}
+
+fn boolean(i: &str) -> IResult<&str, bool> {
+    alt((value(true, tag("true")), value(false, tag("false"))))(i)
+}
+
+fn string(i: &str) -> IResult<&str, String> {
+    alt((empty_string, delimited(tag("\""), syml_chars, tag("\""))))(i)
+}
+
+fn empty_string(i: &str) -> IResult<&str, String> {
+    let (i, _) = tag(r#""""#)(i)?;
+    Ok((i, "".to_string()))
+}
+
+fn syml_chars(i: &str) -> IResult<&str, String> {
+    // The SYML grammar provided by Yarn2+ includes escape sequences that weren't
+    // supported by the yarn1 parser. We diverge from the Yarn2+ provided
+    // grammar to match the actual parser used by yarn1.
+    escaped_transform(
+        is_not("\"\\"),
+        '\\',
+        alt((
+            value("\"", tag("\"")),
+            value("\\", tag("\\")),
+            value("/", tag("/")),
+            value("\n", tag("n")),
+            value("\r", tag("r")),
+            value("\t", tag("t")),
+        )),
+    )(i)
+}
+
+fn hex_digit(i: &str) -> IResult<&str, char> {
+    satisfy(|c| c.is_ascii_hexdigit())(i)
+}
+
+// Spaces
+fn blankspace(i: &str) -> IResult<&str, &str> {
+    space1(i)
+}
+
+fn whitespace(i: &str) -> IResult<&str, &str> {
+    multispace1(i)
+}
+
+fn eol_any(i: &str) -> IResult<&str, &str> {
+    recognize(tuple((eol, many0(tuple((opt(blankspace), eol))))))(i)
+}
+
+fn eol(i: &str) -> IResult<&str, &str> {
+    alt((crlf, value("\n", newline), value("\r", nom_char('\r'))))(i)
 }
 
 #[cfg(test)]
 mod test {
+    use serde_json::json;
     use test_case::test_case;
 
     use super::*;
 
-    #[test]
-    fn test_semver() {
-        let input = "# yarn lockfile v1
-foo: 1.2.3
-bar: 2
-baz: latest
-";
-
-        let packages = get_packages(input).unwrap();
-
-        assert_eq!(packages.len(), 3);
-        assert_eq!(
-            packages.iter().map(|p| p.version).collect::<Vec<_>>(),
-            vec!["1.2.3", "2", "latest"]
-        );
+    #[test_case("null", Value::Null ; "null")]
+    #[test_case("false", Value::Bool(false) ; "literal false")]
+    #[test_case("true", Value::Bool(true) ; "literal true")]
+    #[test_case("\"\"", Value::String("".into()) ; "empty string literal")]
+    #[test_case("\"foo\"", Value::String("foo".into()) ; "quoted string literal")]
+    #[test_case("foo", Value::String("foo".into()) ; "unquoted string literal")]
+    fn test_literal(input: &str, expected: Value) {
+        let (_, actual) = literal(input).unwrap();
+        assert_eq!(actual, expected);
     }
 
-    #[test]
-    fn test_metadata() {
-        let input = r#"# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.
-# yarn lockfile v1
-package-1@^1.0.0:
-  version "1.0.3"
-  resolved "https://registry.npmjs.org/package-1/-/package-1-1.0.3.tgz#a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"
-package-2@^2.0.0:
-  version "2.0.1"
-  resolved "https://registry.npmjs.org/package-2/-/package-2-2.0.1.tgz#a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"
-  dependencies:
-    package-4 "^4.0.0"
-package-3@^3.0.0:
-  version "3.1.9"
-  resolved "https://registry.npmjs.org/package-3/-/package-3-3.1.9.tgz#a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"
-  dependencies:
-    package-4 "^4.5.0"
-"#;
-
-        let packages = get_packages(input);
-        println!("{:#?}", packages);
-        assert_eq!(packages.unwrap().len(), 4);
+    #[test_case("name: foo", "name" ; "basic")]
+    #[test_case("technically a name: foo", "technically a name" ; "multiword name")]
+    fn test_name(input: &str, expected: &str) {
+        let (_, actual) = name(input).unwrap();
+        assert_eq!(actual, expected);
     }
 
-    #[test_case(r#"# yarn lockfile v1
-package-4@^4.0.0, package-4@^4.5.0:
-  version "4.6.3"
-"# ; "comma separated key")]
-    #[test_case(r#"# yarn lockfile v1
-lodash@^4.17.21:
-  version "4.17.21"
-  resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.21.tgz#679591c564c3bffaae8454cf0b3df370c3d6911c"
-  integrity sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==
-"# ; "basic yarn1 lockfile")]
-    #[test_case(r#"# yarn lockfile v1
-"@babel/code-frame@7.8.3", "@babel/code-frame@^7.0.0", "@babel/code-frame@^7.8.3":
-  version "7.8.3"
-  resolved "https://registry.yarnpkg.com/@babel/code-frame/-/code-frame-7.8.3.tgz#33e25903d7481181534e12ec0a25f16b6fcf419e"
-  integrity sha512-a9gxpmdXtZEInkCSHUJDLHZVBgb1QS0jhss4cPP93EW7s+uC5bikET2twEF3KV+7rDblJcmNvTR7VJejqd2C2g==
-  dependencies:
-    "@babel/highlight" "^7.8.3"
-"# ; "comma separated quoted key")]
-    fn parse(input: &str) {
-        let packages = get_packages(input);
-        println!("{:#?}", packages);
-        assert_eq!(packages.unwrap().len(), 1);
+    #[test_case("foo@1:", "foo@1" ; "name with colon terminator")]
+    #[test_case("\"foo@1\":", "foo@1" ; "qutoed name with colon terminator")]
+    #[test_case("name foo", "name" ; "name without colon terminator")]
+    fn test_legacy_name(input: &str, expected: &str) {
+        let (_, actual) = legacy_name(input).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case("null\n", Value::Null ; "null")]
+    #[test_case("\"foo\"\n", json!("foo") ; "basic string")]
+    #[test_case("\n  name: foo\n", json!({ "name": "foo" }) ; "basic object")]
+    fn test_expression(input: &str, expected: Value) {
+        let (_, actual) = expression(0)(input).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case("# a comment\n", vec![] ; "comment")]
+    #[test_case("foo: null\n", vec![("foo".into(), Value::Null)] ; "single property")]
+    #[test_case("name foo\n", vec![("name".into(), json!("foo"))] ; "legacy property")]
+    fn test_property_statement(input: &str, expected: Vec<(String, Value)>) {
+        let (_, actual) = property_statement(0)(input).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case("name: foo\n", json!({"name": "foo"}) ; "single property object")]
+    #[test_case("\"name\": foo\n", json!({"name": "foo"}) ; "single quoted property object")]
+    #[test_case("name foo\n", json!({"name": "foo"}) ; "single property without colon object")]
+    #[test_case("# comment\nname: foo\n", json!({"name": "foo"}) ; "comment doesn't affect object")]
+    #[test_case("name foo\nversion \"1.2.3\"\n", json!({"name": "foo", "version": "1.2.3"}) ; "multi-property object")]
+    #[test_case("foo:\n  version \"1.2.3\"\n", json!({"foo": {"version": "1.2.3"}}) ; "nested object")]
+    #[test_case("foo, bar, baz:\n  version \"1.2.3\"\n", json!({
+        "foo": {"version": "1.2.3"},
+        "bar": {"version": "1.2.3"},
+        "baz": {"version": "1.2.3"},
+    }) ; "multi-key object")]
+    fn test_property_statements(input: &str, expected: Value) {
+        let (_, actual) = property_statements(0)(input).unwrap();
+        assert_eq!(actual, expected);
     }
 }
