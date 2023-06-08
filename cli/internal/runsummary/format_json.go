@@ -62,6 +62,7 @@ type nonMonorepoRunSummary struct {
 	ID                 ksuid.KSUID        `json:"id"`
 	Version            string             `json:"version"`
 	TurboVersion       string             `json:"turboVersion"`
+	Monorepo           bool               `json:"monorepo"`
 	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages           []string           `json:"-"`
 	EnvMode            util.EnvMode       `json:"envMode"`

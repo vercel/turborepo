@@ -60,6 +60,7 @@ type RunSummary struct {
 	ID                 ksuid.KSUID        `json:"id"`
 	Version            string             `json:"version"`
 	TurboVersion       string             `json:"turboVersion"`
+	Monorepo           bool               `json:"monorepo"`
 	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages           []string           `json:"packages"`
 	EnvMode            util.EnvMode       `json:"envMode"`
@@ -113,6 +114,7 @@ func NewRunSummary(
 			GlobalHashSummary:  globalHashSummary,
 			SCM:                getSCMState(envAtExecutionStart, repoRoot),
 			User:               getUser(envAtExecutionStart, repoRoot),
+			Monorepo:           !singlePackage,
 		},
 		ui:                 ui,
 		runType:            runType,
