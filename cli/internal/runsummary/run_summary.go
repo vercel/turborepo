@@ -101,11 +101,6 @@ func NewRunSummary(
 
 	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
-	isMonorepo := true
-	if singlePackage {
-		isMonorepo = false
-	}
-
 	rsm := Meta{
 		RunSummary: &RunSummary{
 			ID:                 ksuid.New(),
@@ -119,7 +114,7 @@ func NewRunSummary(
 			GlobalHashSummary:  globalHashSummary,
 			SCM:                getSCMState(envAtExecutionStart, repoRoot),
 			User:               getUser(envAtExecutionStart, repoRoot),
-			Monorepo:           isMonorepo,
+			Monorepo:           !singlePackage,
 		},
 		ui:                 ui,
 		runType:            runType,
