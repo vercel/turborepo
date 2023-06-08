@@ -1,5 +1,5 @@
   $ . ${TESTDIR}/../setup.sh with-npm npm
-  8\.\d+\.\d (re)
+  \d+\.\d+\.\d+ (re)
 # run twice and make sure it works
   $ TURBO_TEAM="" TURBO_REMOTE_ONLY=false npm run build lint -- --output-logs=none
   

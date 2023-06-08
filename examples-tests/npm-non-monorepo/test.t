@@ -1,5 +1,5 @@
   $ . ${TESTDIR}/../setup.sh non-monorepo npm
-  8\.\d+\.\d (re)
+  \d+\.\d+\.\d+ (re)
 # run twice and make sure it works
   $ TURBO_TEAM="" TURBO_REMOTE_ONLY=false npx turbo build lint --output-logs=none
   \xe2\x80\xa2 Running build, lint (esc)
