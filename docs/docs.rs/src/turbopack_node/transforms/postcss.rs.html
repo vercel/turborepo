@@ -254,6 +254,7 @@
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -280,6 +281,7 @@
 
 <span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 <span class="kw">use crate</span>::{
+    debug::should_debug,
     embed_js::embed_file,
     evaluate::evaluate,
     execution_context::{ExecutionContext, ExecutionContextVc},
@@ -489,7 +491,7 @@
                 JsonValueVc::cell(css_path.into()),
             ],
             extra_configs_changed,
-            <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
+            should_debug(<span class="string">&quot;postcss_transform&quot;</span>),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 

@@ -29,7 +29,7 @@ var sourcesIndex = JSON.parse('{\
 "turbopack_env":["",[],["asset.rs","dotenv.rs","embeddable.rs","issue.rs","lib.rs","try_env.rs"]],\
 "turbopack_json":["",[],["lib.rs"]],\
 "turbopack_mdx":["",[],["lib.rs"]],\
-"turbopack_node":["",[["render",[],["error_page.rs","issue.rs","mod.rs","node_api_source.rs","render_proxy.rs","render_static.rs","rendered_source.rs"]],["source_map",[],["content_source.rs","mod.rs","trace.rs"]],["transforms",[],["mod.rs","postcss.rs","util.rs","webpack.rs"]]],["bootstrap.rs","embed_js.rs","evaluate.rs","execution_context.rs","lib.rs","node_entry.rs","pool.rs","route_matcher.rs"]],\
+"turbopack_node":["",[["render",[],["error_page.rs","issue.rs","mod.rs","node_api_source.rs","render_proxy.rs","render_static.rs","rendered_source.rs"]],["source_map",[],["content_source.rs","mod.rs","trace.rs"]],["transforms",[],["mod.rs","postcss.rs","util.rs","webpack.rs"]]],["bootstrap.rs","debug.rs","embed_js.rs","evaluate.rs","execution_context.rs","lib.rs","node_entry.rs","pool.rs","route_matcher.rs"]],\
 "turbopack_static":["",[],["fixed.rs","lib.rs"]],\
 "turbopack_swc_utils":["",[],["emitter.rs","lib.rs"]],\
 "turbopack_test_utils":["",[],["lib.rs","snapshot.rs"]],\

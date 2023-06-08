@@ -309,6 +309,12 @@
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
@@ -366,6 +372,7 @@
     entry: NodeEntryVc,
     fallback_page: DevHtmlAssetVc,
     render_data: JsonValueVc,
+    debug: bool,
 ) -&gt; ContentSourceVc {
     <span class="kw">let </span>source = NodeRenderContentSource {
         cwd,
@@ -377,6 +384,7 @@
         entry,
         fallback_page,
         render_data,
+        debug,
     }
     .cell();
     ConditionalContentSourceVc::new(
@@ -402,6 +410,7 @@
     entry: NodeEntryVc,
     fallback_page: DevHtmlAssetVc,
     render_data: JsonValueVc,
+    debug: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -473,6 +482,7 @@
                     source: self_vc,
                     render_data: this.render_data,
                     path: path.to_string(),
+                    debug: this.debug,
                 }
                 .cell()
                 .into(),
@@ -488,6 +498,7 @@
     source: NodeRenderContentSourceVc,
     render_data: JsonValueVc,
     path: String,
+    debug: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -544,6 +555,7 @@
                 data: <span class="prelude-val">Some</span>(<span class="self">self</span>.render_data.<span class="kw">await</span><span class="question-mark">?</span>),
             }
             .cell(),
+            <span class="self">self</span>.debug,
         )
         .issue_context(
             entry.module.ident().path(),

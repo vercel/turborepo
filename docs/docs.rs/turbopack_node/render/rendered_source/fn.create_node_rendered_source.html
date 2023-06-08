@@ -7,7 +7,8 @@
     pathname: StringVc,
     entry: <a class="struct" href="../../struct.NodeEntryVc.html" title="struct turbopack_node::NodeEntryVc">NodeEntryVc</a>,
     fallback_page: DevHtmlAssetVc,
-    render_data: JsonValueVc
+    render_data: JsonValueVc,
+    debug: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>
 ) -&gt; ContentSourceVc</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Creates a content source that renders something in Node.js with the passed
 <code>entry</code> when it matches a <code>path_regex</code>. Once rendered it serves
 all assets referenced by the <code>entry</code> that are within the <code>server_root</code>.

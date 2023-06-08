@@ -386,6 +386,11 @@
 <a href="#386" id="386">386</a>
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
 <span class="kw">use </span>futures::{
@@ -465,6 +470,7 @@
     output_root: FileSystemPathVc,
     project_dir: FileSystemPathVc,
     data: RenderDataVc,
+    debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;StaticResultVc&gt; {
     <span class="kw">let </span>render = render_stream(
         cwd,
@@ -478,6 +484,7 @@
         output_root,
         project_dir,
         data,
+        debug,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -590,6 +597,7 @@
     output_root: FileSystemPathVc,
     project_dir: FileSystemPathVc,
     data: RenderDataVc,
+    debug: bool,
 ) -&gt; RenderStreamVc {
     <span class="comment">// Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
@@ -631,6 +639,7 @@
             }),
         }
         .cell(),
+        debug,
     );
 
     <span class="kw">let </span>raw: RawVc = cell.into();
@@ -651,6 +660,7 @@
     project_dir: FileSystemPathVc,
     data: RenderDataVc,
     sender: RenderStreamSenderVc,
+    debug: bool,
 ) {
     mark_finished();
     <span class="kw">let </span><span class="prelude-val">Ok</span>(sender) = sender.<span class="kw">await else </span>{
@@ -671,7 +681,7 @@
             intermediate_output_path,
             output_root,
             project_dir,
-            <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
+            debug,
         );
 
         <span class="comment">// Read this strongly consistent, since we don&#39;t want to run inconsistent

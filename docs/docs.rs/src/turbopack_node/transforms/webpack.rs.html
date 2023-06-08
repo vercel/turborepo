@@ -189,6 +189,7 @@
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -207,6 +208,7 @@
 
 <span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 <span class="kw">use crate</span>::{
+    debug::should_debug,
     embed_js::embed_file_path,
     evaluate::evaluate,
     execution_context::{ExecutionContext, ExecutionContextVc},
@@ -357,7 +359,7 @@
                 JsonValueVc::cell(<span class="macro">json!</span>(<span class="kw-2">*</span>loaders)),
             ],
             CompletionVc::immutable(),
-            <span class="comment">/* debug */ </span><span class="bool-val">false</span>,
+            should_debug(<span class="string">&quot;webpack_loader&quot;</span>),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 

@@ -214,6 +214,13 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
@@ -249,6 +256,7 @@
     pathname: StringVc,
     entry: NodeEntryVc,
     render_data: JsonValueVc,
+    debug: bool,
 ) -&gt; ContentSourceVc {
     NodeApiContentSource {
         cwd,
@@ -259,6 +267,7 @@
         route_match,
         entry,
         render_data,
+        debug,
     }
     .cell()
     .into()
@@ -280,6 +289,7 @@
     route_match: RouteMatcherVc,
     entry: NodeEntryVc,
     render_data: JsonValueVc,
+    debug: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -306,6 +316,7 @@
                     source: self_vc,
                     render_data: this.render_data,
                     path: path.to_string(),
+                    debug: this.debug,
                 }
                 .cell()
                 .into(),
@@ -321,6 +332,7 @@
     source: NodeApiContentSourceVc,
     render_data: JsonValueVc,
     path: String,
+    debug: bool,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -339,6 +351,7 @@
         }
         .cell()
     }
+
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
         <span class="kw">let </span>source = <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>;
@@ -379,6 +392,7 @@
             }
             .cell(),
             <span class="kw-2">*</span>body,
+            <span class="self">self</span>.debug,
         ))
         .cell())
     }
