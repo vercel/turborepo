@@ -1,18 +1,24 @@
-use std::{borrow::Cow, sync::OnceLock};
+use std::sync::OnceLock;
 
 use nom::{
     branch::alt,
-    bytes::complete::{escaped_transform, is_a, is_not, tag, take_till},
+    bytes::complete::{escaped_transform, is_not, tag, take_till},
     character::complete::{
-        anychar, char as nom_char, crlf, multispace1, newline, none_of, one_of, satisfy, space1,
+        anychar, char as nom_char, crlf, multispace1, newline, none_of, satisfy, space1,
     },
     combinator::{map, not, opt, peek, recognize, value},
     multi::{count, many0, many1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
-    Finish, IResult,
+    IResult,
 };
 use regex::Regex;
 use serde_json::Value;
+
+// regex for trimming spaces from start and end
+fn pseudostring_replace() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"^ *| *$").unwrap())
+}
 
 pub fn parse_syml(input: &str) -> Result<Value, super::Error> {
     match property_statements(0)(input) {
@@ -24,16 +30,7 @@ pub fn parse_syml(input: &str) -> Result<Value, super::Error> {
     }
 }
 
-const INDENT_STEP: usize = 2;
-
-// regex for trimming spaces from start and end
-fn pseudostring_replace() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^ *| *$").unwrap())
-}
-
 // Array and map types
-
 fn item_statements(level: usize) -> impl Fn(&str) -> IResult<&str, Value> {
     move |i: &str| map(many0(item_statement(level)), Value::Array)(i)
 }

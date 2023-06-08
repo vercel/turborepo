@@ -2,7 +2,6 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt,
-    rc::Rc,
 };
 
 use super::{Entry, Yarn1Lockfile};
@@ -60,13 +59,11 @@ impl fmt::Display for Entry {
                 maybe_wrap(name)
             ))?;
         }
-        if let Some(version) = &self.version {
-            f.write_fmt(format_args!(
-                "{}{INDENT}version {}",
-                leading.leading(),
-                maybe_wrap(version)
-            ))?;
-        }
+        f.write_fmt(format_args!(
+            "{}{INDENT}version {}",
+            leading.leading(),
+            maybe_wrap(&self.version)
+        ))?;
         if let Some(uid) = &self.uid {
             f.write_fmt(format_args!(
                 "{}{INDENT}uid {}",
@@ -191,7 +188,7 @@ mod test {
     #[test]
     fn test_basic_serialization() {
         let entry = Entry {
-            version: Some("12.2.5".into()),
+            version: "12.2.5".into(),
             resolved: Some("https://registry.yarnpkg.com/next/-/next-12.2.5.tgz#14fb5975e8841fad09553b8ef41fe1393602b717".into()),
             integrity: Some("sha512-tBdjqX5XC/oFs/6gxrZhjmiq90YWizUYU6qOWAfat7zJwrwapJ+BYgX2PmiacunXMaRpeVT4vz5MSPSLgNkrpA==".into()),
             dependencies: Some(vec![

@@ -1,5 +1,3 @@
-use std::{borrow::Cow, rc::Rc};
-
 use serde::Deserialize;
 
 use crate::Lockfile;
@@ -15,6 +13,8 @@ pub enum Error {
     SymlParse(String),
     #[error("unable to convert to structured syml: {0}")]
     SymlStructure(#[from] serde_json::Error),
+    #[error("unexpected non-utf8 yarn.lock")]
+    NonUTF8(#[from] std::str::Utf8Error),
 }
 
 pub struct Yarn1Lockfile {
@@ -25,7 +25,7 @@ pub struct Yarn1Lockfile {
 #[serde(rename_all = "camelCase")]
 struct Entry {
     name: Option<String>,
-    version: Option<String>,
+    version: String,
     uid: Option<String>,
     resolved: Option<String>,
     integrity: Option<String>,
@@ -35,9 +35,27 @@ struct Entry {
 }
 
 impl Yarn1Lockfile {
+    pub fn from_bytes(input: &[u8]) -> Result<Self, Error> {
+        let input = std::str::from_utf8(input)?;
+        Self::from_str(input)
+    }
+
     pub fn from_str(input: &str) -> Result<Self, Error> {
         let value = de::parse_syml(input)?;
         let inner = serde_json::from_value(value)?;
+        Ok(Self { inner })
+    }
+
+    pub fn subgraph(&self, packages: &[String]) -> Result<Self, Error> {
+        let mut inner = Map::new();
+
+        for (key, entry) in packages.iter().filter_map(|key| {
+            let entry = self.inner.get(key)?;
+            Some((key, entry))
+        }) {
+            inner.insert(key.clone(), entry.clone());
+        }
+
         Ok(Self { inner })
     }
 }
@@ -45,19 +63,55 @@ impl Yarn1Lockfile {
 impl Lockfile for Yarn1Lockfile {
     fn resolve_package(
         &self,
-        workspace_path: &str,
+        _workspace_path: &str,
         name: &str,
         version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
-        todo!()
+        for key in possible_keys(name, version) {
+            if let Some(entry) = self.inner.get(&key) {
+                return Ok(Some(crate::Package {
+                    key,
+                    version: entry.version.clone(),
+                }));
+            }
+        }
+
+        Ok(None)
     }
 
     fn all_dependencies(
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        todo!()
+        let Some(entry) = self.inner.get(key) else {
+            return Ok(None);
+        };
+
+        let all_deps: std::collections::HashMap<_, _> = entry.dependency_entries().collect();
+        Ok(match all_deps.is_empty() {
+            false => Some(all_deps),
+            true => None,
+        })
     }
+}
+
+impl Entry {
+    fn dependency_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        self.dependencies
+            .iter()
+            .flatten()
+            .chain(self.optional_dependencies.iter().flatten())
+            .map(|(k, v)| (k.clone(), v.clone()))
+    }
+}
+
+const PROTOCOLS: &[&str] = ["", "npm:", "file:", "workspace:", "yarn:"].as_slice();
+
+fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = String> + 'a {
+    PROTOCOLS
+        .iter()
+        .copied()
+        .map(move |protocol| format!("{name}@{protocol}{version}"))
 }
 
 #[cfg(test)]
