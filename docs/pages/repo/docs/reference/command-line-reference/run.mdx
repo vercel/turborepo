@@ -131,9 +131,11 @@ for execution.
 
 Multiple filters can be combined to select distinct sets of targets. Additionally, filters
 can also exclude targets. A target that matches any filter and is not explicitly excluded will
-be in the final entrypoint selection.
+be in the final entrypoint selection. In other words, the final list of targets is an _union_
+of all the targets matching the filters provided, not an intersection.
 
-For more detailed information about the `--filter` flag and filtering, refer to the [dedicated page in our documentation](/repo/docs/core-concepts/monorepos/filtering).
+For more detailed information about the `--filter` flag and filtering, refer to
+the [dedicated page in our documentation][3].
 
 ```sh
 turbo run build --filter=my-pkg
@@ -488,3 +490,4 @@ turbo run build --since=origin/main
 
 [1]: /repo/docs/reference/configuration#passThroughEnv
 [2]: /repo/docs/reference/configuration#globalPassThroughEnv
+[3]: /repo/docs/core-concepts/monorepos/filtering
