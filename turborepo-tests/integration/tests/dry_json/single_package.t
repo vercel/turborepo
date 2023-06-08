@@ -7,6 +7,7 @@ Setup
     "id": "[a-zA-Z0-9]+", (re)
     "version": "1",
     "turboVersion": "[a-z0-9\.-]+", (re)
+    "monorepo": false,
     "globalCacheInputs": {
       "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
       "files": {
