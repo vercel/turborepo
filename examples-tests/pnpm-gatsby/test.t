@@ -3,7 +3,7 @@
 # run twice and make sure it works
   $ pnpm run build lint -- --output-logs=none
   
-  \> with-gatsby@0.0.0 build (.*)/pnpm-gatsby.t (re)
+  \> with-gatsby@0.0.0 build (.*)/test.t (re)
   \> turbo build "lint" "--output-logs=none" (re)
   
   \xe2\x80\xa2 Packages in scope: docs, eslint-config-custom, tsconfig, ui, web (esc)
@@ -17,7 +17,7 @@
 
   $ pnpm run build lint -- --output-logs=none
   
-  \> with-gatsby@0.0.0 build (.*)/pnpm-gatsby.t (re)
+  \> with-gatsby@0.0.0 build (.*)/test.t (re)
   \> turbo build "lint" "--output-logs=none" (re)
   
   \xe2\x80\xa2 Packages in scope: docs, eslint-config-custom, tsconfig, ui, web (esc)
