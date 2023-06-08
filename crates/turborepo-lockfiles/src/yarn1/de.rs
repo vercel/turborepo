@@ -3,9 +3,7 @@ use std::sync::OnceLock;
 use nom::{
     branch::alt,
     bytes::complete::{escaped_transform, is_not, tag, take_till},
-    character::complete::{
-        anychar, char as nom_char, crlf, multispace1, newline, none_of, satisfy, space1,
-    },
+    character::complete::{anychar, char as nom_char, crlf, newline, none_of, satisfy, space1},
     combinator::{map, not, opt, peek, recognize, value},
     multi::{count, many0, many1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
@@ -242,17 +240,9 @@ fn syml_chars(i: &str) -> IResult<&str, String> {
     )(i)
 }
 
-fn hex_digit(i: &str) -> IResult<&str, char> {
-    satisfy(|c| c.is_ascii_hexdigit())(i)
-}
-
 // Spaces
 fn blankspace(i: &str) -> IResult<&str, &str> {
     space1(i)
-}
-
-fn whitespace(i: &str) -> IResult<&str, &str> {
-    multispace1(i)
 }
 
 fn eol_any(i: &str) -> IResult<&str, &str> {
