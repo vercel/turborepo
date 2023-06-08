@@ -156,7 +156,7 @@ func RealRun(
 		// taskExecutionSummary will be nil if the task never executed
 		// (i.e. if the workspace didn't implement the script corresponding to the task)
 		// We don't need to collect any of the outputs or execution if the task didn't execute.
-		if err == nil && taskExecutionSummary != nil {
+		if taskExecutionSummary != nil {
 			taskSummary.ExpandedOutputs = taskHashTracker.GetExpandedOutputs(taskSummary.TaskID)
 			taskSummary.Execution = taskExecutionSummary
 			taskSummary.CacheSummary = taskHashTracker.GetCacheStatus(taskSummary.TaskID)
