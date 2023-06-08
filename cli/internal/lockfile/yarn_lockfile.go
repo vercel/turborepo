@@ -1,7 +1,6 @@
 package lockfile
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/vercel/turbo/cli/internal/ffi"
@@ -39,8 +38,7 @@ func (l *YarnLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath
 	if err != nil {
 		return nil, err
 	}
-	return &NpmLockfile{contents: contents}, nil
-
+	return &YarnLockfile{contents: contents}, nil
 }
 
 // Encode encode the lockfile representation and write it to the given writer
@@ -64,14 +62,4 @@ func DecodeYarnLockfile(contents []byte) (*YarnLockfile, error) {
 func (l *YarnLockfile) GlobalChange(other Lockfile) bool {
 	_, ok := other.(*YarnLockfile)
 	return !ok
-}
-
-func yarnPossibleKeys(name string, version string) []string {
-	return []string{
-		fmt.Sprintf("%v@%v", name, version),
-		fmt.Sprintf("%v@npm:%v", name, version),
-		fmt.Sprintf("%v@file:%v", name, version),
-		fmt.Sprintf("%v@workspace:%v", name, version),
-		fmt.Sprintf("%v@yarn:%v", name, version),
-	}
 }
