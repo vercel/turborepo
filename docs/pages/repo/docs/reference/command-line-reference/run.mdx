@@ -131,8 +131,8 @@ for execution.
 
 Multiple filters can be combined to select distinct sets of targets. Additionally, filters
 can also exclude targets. A target that matches any filter and is not explicitly excluded will
-be in the final entrypoint selection. In other words, the final list of targets is an _union_
-of all the targets matching the filters provided, not an intersection.
+be in the final entrypoint selection. In other words, the final list of targets is a _union_
+of all the targets matching the filters provided, minus the union of targets that have been excluded.
 
 For more detailed information about the `--filter` flag and filtering, refer to
 the [dedicated page in our documentation][3].
