@@ -60,6 +60,7 @@ type RunSummary struct {
 	ID                 ksuid.KSUID        `json:"id"`
 	Version            string             `json:"version"`
 	TurboVersion       string             `json:"turboVersion"`
+	Monorepo           bool               `json:"monorepo"`
 	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages           []string           `json:"packages"`
 	EnvMode            util.EnvMode       `json:"envMode"`
@@ -100,6 +101,11 @@ func NewRunSummary(
 
 	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
+	isMonorepo := true
+	if singlePackage {
+		isMonorepo = false
+	}
+
 	rsm := Meta{
 		RunSummary: &RunSummary{
 			ID:                 ksuid.New(),
@@ -113,6 +119,7 @@ func NewRunSummary(
 			GlobalHashSummary:  globalHashSummary,
 			SCM:                getSCMState(envAtExecutionStart, repoRoot),
 			User:               getUser(envAtExecutionStart, repoRoot),
+			Monorepo:           isMonorepo,
 		},
 		ui:                 ui,
 		runType:            runType,
