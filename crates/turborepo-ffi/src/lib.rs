@@ -6,6 +6,7 @@ mod lockfile;
 
 use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
 
+use globwalk::{globwalk, WalkError};
 pub use lockfile::{patches, subgraph, transitive_closure};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -32,9 +33,16 @@ pub extern "C" fn free_buffer(buffer: Buffer) {
 
 impl<T: prost::Message> From<T> for Buffer {
     fn from(value: T) -> Self {
-        let mut bytes = ManuallyDrop::new(value.encode_to_vec());
-        let data = bytes.as_mut_ptr();
-        let len = bytes.len() as u32;
+        let len = value.encoded_len() as u32;
+        let data = match len {
+            // Check if the message will have a non-zero length to avoid returning
+            // a dangling pointer to Go.
+            0 => std::ptr::null_mut(),
+            _ => {
+                let mut bytes = ManuallyDrop::new(value.encode_to_vec());
+                bytes.as_mut_ptr()
+            }
+        };
         Buffer { len, data }
     }
 }
@@ -286,4 +294,70 @@ pub extern "C" fn get_package_file_hashes_from_git_index(buffer: Buffer) -> Buff
         }
     };
     response.into()
+}
+
+#[no_mangle]
+pub extern "C" fn glob(buffer: Buffer) -> Buffer {
+    let req: proto::GlobReq = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::GlobResp {
+                response: Some(proto::glob_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
+    let walk_type = match req.files_only {
+        true => globwalk::WalkType::Files,
+        false => globwalk::WalkType::All,
+    };
+
+    let mut iter = match globwalk(
+        &AbsoluteSystemPathBuf::new(req.base_path).expect("absolute"),
+        &req.include_patterns,
+        &req.exclude_patterns,
+        walk_type,
+    ) {
+        Ok(iter) => iter,
+        Err(err) => {
+            let resp = proto::GlobResp {
+                response: Some(proto::glob_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
+
+    let paths = match iter.collect::<Result<Vec<_>, WalkError>>() {
+        Ok(paths) => paths,
+        Err(err) => {
+            let resp = proto::GlobResp {
+                response: Some(proto::glob_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
+    // TODO: is to_string_lossy the right thing to do here? We could error...
+    let files: Vec<_> = paths
+        .into_iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect();
+    proto::GlobResp {
+        response: Some(proto::glob_resp::Response::Files(proto::GlobRespList {
+            files,
+        })),
+    }
+    .into()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_empty_message_has_null_ptr() {
+        let message = proto::RecursiveCopyResponse { error: None };
+        let buffer = Buffer::from(message);
+        assert_eq!(buffer.len, 0);
+        assert_eq!(buffer.data, std::ptr::null_mut());
+    }
 }

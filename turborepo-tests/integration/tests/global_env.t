@@ -20,7 +20,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache hit, suppressing output 76ab904c7ecb2d51
+  util:build: cache hit, suppressing logs 76ab904c7ecb2d51
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -42,7 +42,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache hit, suppressing output 76ab904c7ecb2d51
+  util:build: cache hit, suppressing logs 76ab904c7ecb2d51
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total

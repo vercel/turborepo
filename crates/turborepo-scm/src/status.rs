@@ -6,7 +6,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, read_git_error, wait_for_success, Error};
+use crate::{package_deps::GitHashes, wait_for_success, Error};
 
 pub(crate) fn append_git_status(
     root_path: &AbsoluteSystemPathBuf,
@@ -35,10 +35,8 @@ pub(crate) fn append_git_status(
         .stderr
         .take()
         .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
-    let to_hash = read_status(stdout, pkg_prefix, hashes)
-        .map_err(|err| read_git_error(&mut stderr).unwrap_or(err))?;
-    wait_for_success(git, &mut stderr, "git status", &root_path)?;
-    Ok(to_hash)
+    let parse_result = read_status(stdout, pkg_prefix, hashes);
+    wait_for_success(git, &mut stderr, "git status", &root_path, parse_result)
 }
 
 fn read_status<R: Read>(

@@ -14,7 +14,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/client"
-	"github.com/vercel/turbo/cli/internal/config"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/turbostate"
@@ -37,11 +36,6 @@ type Helper struct {
 	verbosity int
 
 	rawRepoRoot string
-
-	// UserConfigPath is the path to where we expect to find
-	// a user-specific config file, if one is present. Public
-	// to allow overrides in tests
-	UserConfigPath turbopath.AbsoluteSystemPath
 
 	cleanupsMu sync.Mutex
 	cleanups   []io.Closer
@@ -131,9 +125,8 @@ func (h *Helper) getLogger() (hclog.Logger, error) {
 // turbo command.
 func NewHelper(turboVersion string, args *turbostate.ParsedArgsFromRust) *Helper {
 	return &Helper{
-		TurboVersion:   turboVersion,
-		UserConfigPath: config.DefaultUserConfigPath(),
-		verbosity:      args.Verbosity,
+		TurboVersion: turboVersion,
+		verbosity:    args.Verbosity,
 	}
 }
 

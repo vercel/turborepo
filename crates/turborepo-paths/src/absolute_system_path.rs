@@ -9,7 +9,7 @@ use std::{
     fmt, fs,
     fs::Metadata,
     io,
-    path::{Path, PathBuf},
+    path::{Components, Path, PathBuf},
 };
 
 use path_clean::PathClean;
@@ -103,8 +103,18 @@ impl AbsoluteSystemPath {
         }
     }
 
+    pub(crate) fn new_unchecked(path: &Path) -> &Self {
+        unsafe { &*(path as *const Path as *const Self) }
+    }
+
     pub fn as_path(&self) -> &Path {
         &self.0
+    }
+
+    pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
+        self.0
+            .ancestors()
+            .map(|ancestor| Self::new_unchecked(ancestor))
     }
 
     // intended for joining literals or obviously single-token strings
@@ -182,6 +192,10 @@ impl AbsoluteSystemPath {
 
     pub fn remove_file(&self) -> Result<(), io::Error> {
         fs::remove_file(&self.0)
+    }
+
+    pub fn components(&self) -> Components<'_> {
+        self.0.components()
     }
 }
 

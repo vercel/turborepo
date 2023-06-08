@@ -29,6 +29,8 @@ const NoFrameworkDetected = "<NO FRAMEWORK DETECTED>"
 // FrameworkDetectionSkipped is a string to identify when framework detection was skipped
 const FrameworkDetectionSkipped = "<FRAMEWORK DETECTION SKIPPED>"
 
+// NOTE: When changing this, please ensure that the server side is updated to handle the new version on vercel.com
+// this is required to ensure safe handling of env vars (unknown run summary versions will be ignored on the server)
 const runSummarySchemaVersion = "1"
 
 type runType int
@@ -58,6 +60,7 @@ type RunSummary struct {
 	ID                 ksuid.KSUID        `json:"id"`
 	Version            string             `json:"version"`
 	TurboVersion       string             `json:"turboVersion"`
+	Monorepo           bool               `json:"monorepo"`
 	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
 	Packages           []string           `json:"packages"`
 	EnvMode            util.EnvMode       `json:"envMode"`
@@ -111,6 +114,7 @@ func NewRunSummary(
 			GlobalHashSummary:  globalHashSummary,
 			SCM:                getSCMState(envAtExecutionStart, repoRoot),
 			User:               getUser(envAtExecutionStart, repoRoot),
+			Monorepo:           !singlePackage,
 		},
 		ui:                 ui,
 		runType:            runType,

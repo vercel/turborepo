@@ -65,10 +65,10 @@ mdxjs = { version = "0.1.12" }
 modularize_imports = { version = "0.30.0" }
 styled_components = { version = "0.57.0" }
 styled_jsx = { version = "0.34.0" }
-swc_core = { version = "0.76.21" }
+swc_core = { version = "0.76.41" }
 swc_emotion = { version = "0.33.0" }
 swc_relay = { version = "0.5.0" }
-testing = { version = "0.33.11" }
+testing = { version = "0.33.13" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -121,6 +121,7 @@ turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib" }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-scm = { path = "crates/turborepo-scm" }
+wax = { path = "crates/turborepo-wax" }
 vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 
 # Be careful when selecting tls backend, including change default tls backend.

@@ -8,7 +8,7 @@ use std::{
 use nom::{Finish, IResult};
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, read_git_error, wait_for_success, Error};
+use crate::{package_deps::GitHashes, wait_for_success, Error};
 
 pub(crate) fn hash_objects(
     pkg_path: &AbsoluteSystemPathBuf,
@@ -41,10 +41,8 @@ pub(crate) fn hash_objects(
         .stderr
         .take()
         .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
-    read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes)
-        .map_err(|err| read_git_error(&mut stderr).unwrap_or(err))?;
-    wait_for_success(git, &mut stderr, "git hash-object", pkg_path)?;
-    Ok(())
+    let parse_result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes);
+    wait_for_success(git, &mut stderr, "git hash-object", pkg_path, parse_result)
 }
 
 const HASH_LEN: usize = 40;

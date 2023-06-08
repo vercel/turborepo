@@ -1,6 +1,6 @@
 {
   "name": "@turbo/codemod",
-  "version": "1.10.0-canary.0",
+  "version": "1.10.3-canary.0",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
@@ -18,7 +18,8 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "check-types": "tsc --noEmit",
-    "add-transformer": "plop"
+    "add-transformer": "plop",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
     "axios": "0.27.2",
