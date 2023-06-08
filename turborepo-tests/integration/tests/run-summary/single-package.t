@@ -36,6 +36,7 @@ Check
     "frameworkInference",
     "globalCacheInputs",
     "id",
+    "monorepo",
     "scm",
     "tasks",
     "turboVersion",
