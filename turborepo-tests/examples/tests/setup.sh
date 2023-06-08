@@ -30,18 +30,24 @@ function set_package_manager() {
   cat package.json | jq ".packageManager=\"$1\"" | sponge package.json
 }
 
+# Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
+corepack enable
+
 # Set the packageManger version
 NPM_PACKAGE_MANAGER_VALUE="npm@8.1.2"
 PNPM_PACKAGE_MANAGER_VALUE="pnpm@6.26.1"
 YARN_PACKAGE_MANAGER_VALUE="yarn@1.22.17"
 if [ "$pkgManager" == "npm" ]; then
   set_package_manager "$NPM_PACKAGE_MANAGER_VALUE"
+  npm --version
   npm install > /dev/null
 elif [ "$pkgManager" == "pnpm" ]; then
   set_package_manager "$PNPM_PACKAGE_MANAGER_VALUE"
+  pnpm --version
   pnpm install > /dev/null
 elif [ "$pkgManager" == "yarn" ]; then
   set_package_manager "$YARN_PACKAGE_MANAGER_VALUE"
+  yarn --version
   yarn install > /dev/null
 fi
 
