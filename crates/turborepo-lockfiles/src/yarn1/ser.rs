@@ -171,7 +171,10 @@ fn should_wrap_key(s: &str) -> bool {
     // Wrap if it doesn't start with a-zA-Z
     s.chars().next().map_or(false, |c| !c.is_ascii_alphabetic()) ||
     // Wrap if it contains any unwanted chars
-    s.chars().any(|c| matches!(c, ':' | '\t' | '\r' | '\u{000B}' | '\u{000C}' | '\n' | '\\' | '"' | ',' | '[' | ']' ))
+    s.chars().any(|c| matches!(
+        c,
+        ' ' | ':' | '\t' | '\r' | '\u{000B}' | '\u{000C}' | '\n' | '\\' | '"' | ',' | '[' | ']'
+    ))
 }
 
 #[cfg(test)]
@@ -179,6 +182,11 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
+
+    #[test]
+    fn test_should_wrap() {
+        assert!(should_wrap_key("jsx-ast-utils@^2.4.1 || ^3.0.0"))
+    }
 
     #[test]
     fn test_basic_serialization() {
