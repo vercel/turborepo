@@ -1,7 +1,7 @@
   $ . ${TESTDIR}/../setup.sh with-yarn npm
   \d+\.\d+\.\d+ (re)
 # run twice and make sure it works
-  $ TURBO_TEAM="" TURBO_REMOTE_ONLY=false npm run build lint -- --output-logs=none
+  $ npm run build lint -- --output-logs=none
   
   \> build (re)
   \> turbo build lint --output-logs=none (re)
@@ -14,7 +14,7 @@
   Cached:    0 cached, 5 total
     Time:\s*[\.0-9ms]+  (re)
   
-  $ TURBO_TEAM="" TURBO_REMOTE_ONLY=false npm run build lint -- --output-logs=none
+  $ npm run build lint -- --output-logs=none
   
   \> build (re)
   \> turbo build lint --output-logs=none (re)

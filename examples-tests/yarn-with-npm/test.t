@@ -2,7 +2,7 @@
   1.22.17
 
 # run twice and make sure it works
-  $ TURBO_TEAM="" TURBO_REMOTE_ONLY=false yarn turbo build lint --output-logs=none
+  $ yarn turbo build lint --output-logs=none
   yarn run v1.22.17
   \$ (.*)node_modules/.bin/turbo build lint --output-logs=none (re)
   \xe2\x80\xa2 Packages in scope: docs, eslint-config-custom, tsconfig, ui, web (esc)
@@ -15,7 +15,7 @@
   
   Done in [\.0-9]+m?s\. (re)
 
-  $ TURBO_TEAM="" TURBO_REMOTE_ONLY=false yarn turbo build lint --output-logs=none
+  $ yarn turbo build lint --output-logs=none
   yarn run v1.22.17
   \$ (.*)node_modules/.bin/turbo build lint --output-logs=none (re)
   \xe2\x80\xa2 Packages in scope: docs, eslint-config-custom, tsconfig, ui, web (esc)

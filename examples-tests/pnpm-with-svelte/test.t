@@ -1,7 +1,7 @@
   $ . ${TESTDIR}/../setup.sh with-svelte pnpm
   6.26.1
 # run twice and make sure it works
-  $ TURBO_TEAM="" TURBO_REMOTE_ONLY=false pnpm run build lint -- --output-logs=none
+  $ pnpm run build lint -- --output-logs=none
   
   \> @ build (.*)/test.t (re)
   \> turbo run build "lint" "--output-logs=none" (re)
@@ -14,7 +14,7 @@
   Cached:    0 cached, 5 total
     Time:\s*[\.0-9ms]+  (re)
   
-  $ TURBO_TEAM="" TURBO_REMOTE_ONLY=false pnpm run build lint -- --output-logs=none
+  $ pnpm run build lint -- --output-logs=none
   
   \> @ build (.*)/test.t (re)
   \> turbo run build "lint" "--output-logs=none" (re)
