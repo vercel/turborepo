@@ -12,7 +12,7 @@ TEST_FILE="tests/$2-$1.t"
 
 if [ -f "$TEST_FILE" ]; then
   echo "Running $TEST_FILE"
-  .cram_env/bin/prysk --shell="$(which bash)" "$TEST_FILE"
+  .cram_env/bin/prysk --shell="$(which bash)" "$TEST_FILE" --keep-tmpdir
 else
   echo "Could not find $TEST_FILE"
   exit 1
