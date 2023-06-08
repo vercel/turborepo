@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serde::Deserialize;
 
 use crate::Lockfile;
@@ -40,12 +42,6 @@ impl Yarn1Lockfile {
         Self::from_str(input)
     }
 
-    pub fn from_str(input: &str) -> Result<Self, Error> {
-        let value = de::parse_syml(input)?;
-        let inner = serde_json::from_value(value)?;
-        Ok(Self { inner })
-    }
-
     pub fn subgraph(&self, packages: &[String]) -> Result<Self, Error> {
         let mut inner = Map::new();
 
@@ -56,6 +52,16 @@ impl Yarn1Lockfile {
             inner.insert(key.clone(), entry.clone());
         }
 
+        Ok(Self { inner })
+    }
+}
+
+impl FromStr for Yarn1Lockfile {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = de::parse_syml(s)?;
+        let inner = serde_json::from_value(value)?;
         Ok(Self { inner })
     }
 }
@@ -93,6 +99,12 @@ impl Lockfile for Yarn1Lockfile {
             true => None,
         })
     }
+}
+
+pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {
+    let lockfile = Yarn1Lockfile::from_bytes(contents)?;
+    let pruned_lockfile = lockfile.subgraph(packages)?;
+    Ok(pruned_lockfile.to_string().into_bytes())
 }
 
 impl Entry {

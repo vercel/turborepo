@@ -13,7 +13,7 @@ pub use error::Error;
 pub use npm::*;
 pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
 use serde::Serialize;
-pub use yarn1::Yarn1Lockfile;
+pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
