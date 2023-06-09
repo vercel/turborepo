@@ -65,7 +65,7 @@ export const PRODUCT_MENU_ITEMS = ({
   {
     name: "vercel",
     "aria-label": "Open Vercel Home in New Tab",
-    children: "Next.js",
+    children: "Vercel",
     prefix: <VercelLogo className="mr-3 h-4 w-4" />,
     type: "external",
     href: "https://vercel.com",
