@@ -389,6 +389,30 @@ func GetPackageFileHashesFromProcessingGitIgnore(rootPath string, packagePath st
 	return hashes.GetHashes(), nil
 }
 
+// GetPackageFileHashesFromInputs proxies to rust to walk the filesystem and use git to hash the resulting
+// files
+func GetPackageFileHashesFromInputs(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesFromInputsRequest{
+		TurboRoot:   rootPath,
+		PackagePath: packagePath,
+		Inputs:      inputs,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_package_file_hashes_from_inputs(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetPackageFileHashesFromInputsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}
+
 // FromWildcards returns an EnvironmentVariableMap containing the variables
 // in the environment which match an array of wildcard patterns.
 func FromWildcards(environmentMap map[string]string, wildcardPatterns []string) (map[string]string, error) {

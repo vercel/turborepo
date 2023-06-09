@@ -217,4 +217,12 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_resolve_empty() {
+        let root = AbsoluteSystemPathBuf::cwd().unwrap();
+        let empty = AnchoredSystemPathBuf::from_raw("").unwrap();
+        let result = root.resolve(&empty);
+        assert_eq!(result, root);
+    }
 }
