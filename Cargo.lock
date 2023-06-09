@@ -1863,6 +1863,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "daggy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91a9304e55e9d601a39ae4deaba85406d5c0980e106f65afcf0460e9af1e7602"
+dependencies = [
+ "petgraph",
+]
+
+[[package]]
 name = "darling"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9567,6 +9576,7 @@ dependencies = [
  "console",
  "const_format",
  "ctrlc",
+ "daggy",
  "dialoguer",
  "directories 4.0.1",
  "dirs-next",

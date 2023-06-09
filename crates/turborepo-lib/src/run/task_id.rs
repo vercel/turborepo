@@ -1,6 +1,12 @@
 pub const TASK_DELIMITER: &str = "#";
 pub const ROOT_PKG_NAME: &str = "//";
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum TaskId {
+    Package { package: String, task: String },
+    Root(String),
+}
+
 pub fn get_task_id(pkg_name: impl std::fmt::Display, target: &str) -> String {
     if is_package_task(target) {
         return target.to_owned();
