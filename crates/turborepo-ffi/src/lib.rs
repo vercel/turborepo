@@ -359,14 +359,14 @@ pub extern "C" fn get_package_file_hashes_from_processing_git_ignore(buffer: Buf
                 to_return.insert(filename, hash);
             }
             let file_hashes = proto::FileHashes { hashes: to_return };
-            let resp = proto::GetPackageFileHashesFromProcessingGitIgnoreResponse {
+
+            proto::GetPackageFileHashesFromProcessingGitIgnoreResponse {
                 response: Some(
                     proto::get_package_file_hashes_from_processing_git_ignore_response::Response::Hashes(
                         file_hashes,
                     ),
                 ),
-            };
-            resp
+            }
         }
         Err(err) => {
             let resp = proto::GetPackageFileHashesFromProcessingGitIgnoreResponse {
