@@ -74,10 +74,8 @@ fn read_object_hashes<R: Read, W: Write + Send>(
             reader.read_exact(&mut buffer)?;
             let hash = parse_hash_object(&buffer)?;
             let hash = String::from_utf8(hash.to_vec())?;
-            // TODO: filename.make_relative_to(pkg_prefix)
             let full_file_path = git_prefix.join_unix_path(filename)?;
             let path = pkg_path.relative_path_to(&full_file_path).to_unix()?;
-            //let path = filename.strip_prefix(pkg_prefix)?;
             hashes.insert(path, hash);
         }
         match write_thread.join() {
