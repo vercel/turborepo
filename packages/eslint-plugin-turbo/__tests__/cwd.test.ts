@@ -29,7 +29,7 @@ describe("eslint settings check", () => {
             dotEnv: {
               filePaths: [".env", "missing.env"],
               hashes: {
-                ".env": "58970a9a72aacd0216f8e3687b21c55d0d4e2e1e",
+                ".env": "9ad6c5fd4d5bbe7c00e1f2b358ac7ef2aa3521d0",
               },
             },
           },
@@ -89,7 +89,7 @@ describe("eslint settings check", () => {
             dotEnv: {
               filePaths: [".env", "missing.env"],
               hashes: {
-                ".env": "58970a9a72aacd0216f8e3687b21c55d0d4e2e1e",
+                ".env": "9ad6c5fd4d5bbe7c00e1f2b358ac7ef2aa3521d0",
               },
             },
           },
