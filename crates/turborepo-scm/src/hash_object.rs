@@ -6,7 +6,7 @@ use std::{
 };
 
 use nom::{Finish, IResult};
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, wait_for_success, Error};
 
@@ -75,7 +75,8 @@ fn read_object_hashes<R: Read, W: Write + Send>(
             let hash = parse_hash_object(&buffer)?;
             let hash = String::from_utf8(hash.to_vec())?;
             let full_file_path = git_prefix.join_unix_path(filename)?;
-            let path = pkg_path.relative_path_to(&full_file_path).to_unix()?;
+            let path = AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
+                .to_unix()?;
             hashes.insert(path, hash);
         }
         match write_thread.join() {
