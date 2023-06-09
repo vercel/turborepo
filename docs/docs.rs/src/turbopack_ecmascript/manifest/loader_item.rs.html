@@ -273,7 +273,7 @@
 </span><span class="kw">impl </span>EcmascriptChunkItem <span class="kw">for </span>ManifestLoaderItem {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>chunking_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;EcmascriptChunkingContextVc&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.manifest.<span class="kw">await</span><span class="question-mark">?</span>.chunking_context.into())
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.manifest.<span class="kw">await</span><span class="question-mark">?</span>.chunking_context)
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -294,7 +294,7 @@
         // exports a promise for all of the necessary chunk loads.
         </span><span class="kw">let </span>item_id = <span class="kw-2">&amp;*</span>this
             .manifest
-            .as_chunk_item(manifest.chunking_context.into())
+            .as_chunk_item(manifest.chunking_context)
             .id()
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -304,7 +304,7 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or_else(|| <span class="macro">anyhow!</span>(<span class="string">&quot;asset is not placeable in ecmascript chunk&quot;</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>dynamic_id = <span class="kw-2">&amp;*</span>placeable
-            .as_chunk_item(manifest.chunking_context.into())
+            .as_chunk_item(manifest.chunking_context)
             .id()
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -330,7 +330,7 @@
             chunks_server_data = StringifyJs(
                 <span class="kw-2">&amp;</span>chunks_server_data
                     .iter()
-                    .map(|chunk_data| EcmascriptChunkData::new(<span class="kw-2">&amp;</span>chunk_data))
+                    .map(|chunk_data| EcmascriptChunkData::new(chunk_data))
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             ),
             item_id = StringifyJs(item_id),

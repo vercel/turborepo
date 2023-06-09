@@ -443,8 +443,6 @@
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
 <a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Chunk optimization for Ecmascript chunks.
 
 </span><span class="kw">use </span>std::{cmp::Ordering, collections::HashSet};
@@ -485,14 +483,12 @@
     <span class="kw">let </span>optimized_chunks = chunks_by_chunking_context
         .into_values()
         .map(|chunks| <span class="kw">async move </span>{
-            <span class="prelude-val">Ok</span>(
-                optimize_by_common_parent(<span class="kw-2">&amp;</span>chunks, get_common_parent, |local, children| {
-                    optimize_ecmascript(local.map(EcmascriptChunksVc::cell), children)
-                })
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.<span class="kw">await</span><span class="question-mark">?</span>,
-            )
-        })
+            optimize_by_common_parent(<span class="kw-2">&amp;</span>chunks, get_common_parent, |local, children| {
+                optimize_ecmascript(local.map(EcmascriptChunksVc::cell), children)
+            })
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.<span class="kw">await
+        </span>})
         .try_join()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_iter()

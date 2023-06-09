@@ -228,7 +228,6 @@
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
@@ -282,7 +281,6 @@
                 this.chunking_context.evaluated_chunk_group(
                     ecma.as_root_chunk(this.chunking_context),
                     this.runtime_entries
-                        .clone()
                         .unwrap_or_else(EvaluatableAssetsVc::empty)
                         .with_entry(ecma.into()),
                 )
@@ -451,7 +449,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>children = IndexSet::new();
         <span class="kw">let </span>chunk_ty = StringVc::cell(<span class="string">&quot;chunk&quot;</span>.to_string());
         <span class="kw">for </span><span class="kw-2">&amp;</span>chunk <span class="kw">in </span>self_vc.chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-            children.insert((chunk_ty, IntrospectableAssetVc::new(chunk.into())));
+            children.insert((chunk_ty, IntrospectableAssetVc::new(chunk)));
         }
         children.insert((
             StringVc::cell(<span class="string">&quot;inner asset&quot;</span>.to_string()),

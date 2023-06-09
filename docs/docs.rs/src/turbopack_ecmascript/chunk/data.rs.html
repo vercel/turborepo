@@ -66,13 +66,13 @@
             references: <span class="kw">_</span>,
         } = chunk_data;
         <span class="kw">if </span>included.is_empty() &amp;&amp; excluded.is_empty() &amp;&amp; module_chunks.is_empty() {
-            <span class="kw">return </span>EcmascriptChunkData::Simple(<span class="kw-2">&amp;</span>path);
+            <span class="kw">return </span>EcmascriptChunkData::Simple(path);
         }
         EcmascriptChunkData::WithRuntimeInfo {
             path,
-            included: <span class="kw-2">&amp;</span>included,
-            excluded: <span class="kw-2">&amp;</span>excluded,
-            module_chunks: <span class="kw-2">&amp;</span>module_chunks,
+            included,
+            excluded,
+            module_chunks,
         }
     }
 }

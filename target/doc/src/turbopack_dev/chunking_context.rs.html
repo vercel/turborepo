@@ -704,11 +704,11 @@
             .iter()
             .map({
                 <span class="kw">move </span>|evaluatable_asset| <span class="kw">async move </span>{
-                    <span class="prelude-val">Ok</span>(evaluatable_asset
+                    evaluatable_asset
                         .as_root_chunk(self_vc.into())
                         .resolve()
-                        .<span class="kw">await</span><span class="question-mark">?</span>)
-                }
+                        .<span class="kw">await
+                </span>}
             })
             .try_join()
             .<span class="kw">await</span><span class="question-mark">?

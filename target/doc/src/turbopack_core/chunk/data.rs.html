@@ -192,7 +192,7 @@
         <span class="comment">// The &quot;path&quot; in this case is the chunk&#39;s path, not the chunk item&#39;s path.
         // The difference is a chunk is a file served by the dev server, and an
         // item is one of several that are contained in that chunk file.
-        </span><span class="kw">let </span><span class="prelude-val">Some</span>(path) = output_root.get_path_to(<span class="kw-2">&amp;*</span>path) <span class="kw">else </span>{
+        </span><span class="kw">let </span><span class="prelude-val">Some</span>(path) = output_root.get_path_to(<span class="kw-2">&amp;</span>path) <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(ChunkDataOptionVc::cell(<span class="prelude-val">None</span>));
         };
         <span class="kw">let </span>path = path.to_string();
@@ -236,7 +236,7 @@
 
                     <span class="kw">async move </span>{
                         <span class="kw">let </span>chunk_path = chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="prelude-val">Ok</span>(output_root.get_path_to(<span class="kw-2">&amp;*</span>chunk_path).map(|path| {
+                        <span class="prelude-val">Ok</span>(output_root.get_path_to(<span class="kw-2">&amp;</span>chunk_path).map(|path| {
                             (
                                 path.to_owned(),
                                 SingleAssetReferenceVc::new(
@@ -262,7 +262,7 @@
                 path,
                 included,
                 excluded,
-                module_chunks: module_chunks,
+                module_chunks,
                 references: AssetReferencesVc::cell(module_chunks_references),
             }
             .cell(),

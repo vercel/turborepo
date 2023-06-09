@@ -353,9 +353,9 @@
                 <span class="kw">let </span>(fields_destructuring, try_from_expansion, from_expansion) = expand_fields(
                     <span class="kw-2">&amp;</span>variant.ident,
                     <span class="kw-2">&amp;</span>variant.fields,
-                    <span class="kw-2">&amp;</span>expand_named,
-                    <span class="kw-2">&amp;</span>expand_unnamed,
-                    <span class="kw-2">&amp;</span>expand_unit,
+                    expand_named,
+                    expand_unnamed,
+                    expand_unit,
                 );
                 variants_idents.push(variant_ident);
                 variants_fields_len.push(variant.fields.len());
@@ -378,7 +378,7 @@
             };
 
             <span class="kw">let </span>variants_discriminants: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..variants_idents.len())
-                .map(|i| Literal::usize_unsuffixed(i))
+                .map(Literal::usize_unsuffixed)
                 .collect();
 
             (
@@ -421,7 +421,7 @@
         }
         Data::Struct(DataStruct { fields, .. }) =&gt; {
             <span class="kw">let </span>(destructuring, try_from_expansion, from_expansion) =
-                expand_fields(ident, fields, <span class="kw-2">&amp;</span>expand_named, <span class="kw-2">&amp;</span>expand_unnamed, <span class="kw-2">&amp;</span>expand_unit);
+                expand_fields(ident, fields, expand_named, expand_unnamed, expand_unit);
             <span class="kw">let </span>fields_len = fields.len();
 
             (

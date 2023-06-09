@@ -251,10 +251,6 @@
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
-<a href="#254" id="254">254</a>
-<a href="#255" id="255">255</a>
-<a href="#256" id="256">256</a>
-<a href="#257" id="257">257</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -400,14 +396,10 @@
         .map(|path| <span class="kw">async move </span>{
             <span class="prelude-val">Ok</span>(
                 <span class="macro">matches!</span>(<span class="kw-2">&amp;*</span>path.get_type().<span class="kw">await</span><span class="question-mark">?</span>, FileSystemEntryType::File).then(|| {
-                    any_content_changed(
-                        context
-                            .process(
-                                SourceAssetVc::new(path).into(),
-                                Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
-                            )
-                            .into(),
-                    )
+                    any_content_changed(context.process(
+                        SourceAssetVc::new(path).into(),
+                        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+                    ))
                 }),
             )
         })

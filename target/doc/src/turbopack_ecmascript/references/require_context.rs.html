@@ -1023,7 +1023,7 @@
             },
             cm: source_map.clone(),
             comments: <span class="prelude-val">None</span>,
-            wr: JsWriter::new(source_map.clone(), <span class="string">&quot;\n&quot;</span>, <span class="kw-2">&amp;mut </span>bytes, <span class="prelude-val">None</span>),
+            wr: JsWriter::new(source_map, <span class="string">&quot;\n&quot;</span>, <span class="kw-2">&amp;mut </span>bytes, <span class="prelude-val">None</span>),
         };
 
         emitter.emit_module(<span class="kw-2">&amp;</span>module)<span class="question-mark">?</span>;

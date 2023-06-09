@@ -436,7 +436,7 @@
                 StringVc::cell(<span class="string">&quot;intermediate asset&quot;</span>.to_string()),
                 IntrospectableAssetVc::new(get_intermediate_asset(
                     entry.chunking_context,
-                    entry.module.into(),
+                    entry.module,
                     entry.runtime_entries,
                 )),
             ));

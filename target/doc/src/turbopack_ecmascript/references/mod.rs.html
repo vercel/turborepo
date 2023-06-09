@@ -2675,8 +2675,6 @@
 <a href="#2675" id="2675">2675</a>
 <a href="#2676" id="2676">2676</a>
 <a href="#2677" id="2677">2677</a>
-<a href="#2678" id="2678">2678</a>
-<a href="#2679" id="2679">2679</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2838,7 +2836,7 @@
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">true</span>));
             }
         }
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">false</span>));
+        <span class="prelude-val">Ok</span>(BoolVc::cell(<span class="bool-val">false</span>))
     }
 }
 
@@ -3989,12 +3987,11 @@
                             <span class="kw">if </span>it.next().unwrap() != Cow::Borrowed(prop) {
                                 <span class="kw">continue</span>;
                             }
-                            <span class="kw">if </span>obj.iter_defineable_name_rev().eq(it) {
-                                <span class="kw">if </span>handle_free_var_reference(ast_path, value, state, analysis)
+                            <span class="kw">if </span>obj.iter_defineable_name_rev().eq(it)
+                                &amp;&amp; handle_free_var_reference(ast_path, value, state, analysis)
                                     .<span class="kw">await</span><span class="question-mark">?
-                                </span>{
-                                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                                }
+                            </span>{
+                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                             }
                         }
                     }
@@ -4033,10 +4030,9 @@
                         <span class="kw">if </span>var
                             .iter_defineable_name_rev()
                             .eq(name.iter().map(Cow::Borrowed).rev())
-                        {
-                            <span class="kw">if </span>handle_free_var_reference(ast_path, value, state, analysis).<span class="kw">await</span><span class="question-mark">? </span>{
-                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                            }
+                            &amp;&amp; handle_free_var_reference(ast_path, value, state, analysis).<span class="kw">await</span><span class="question-mark">?
+                        </span>{
+                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                         }
                     }
                 }
@@ -4052,7 +4048,7 @@
             ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
                 <span class="comment">// We don&#39;t want to replace assignments as this would lead to invalid code.
                 </span><span class="kw">if </span><span class="macro">matches!</span>(
-                    <span class="kw-2">&amp;</span>ast_path[..],
+                    ast_path,
                     [
                         ..,
                         AstParentKind::AssignExpr(AssignExprField::Left),

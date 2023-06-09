@@ -292,7 +292,7 @@
         <span class="kw">let </span>root = <span class="self">self</span>.path.root();
         <span class="kw">let </span>path = <span class="self">self</span>.path.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.path = root
-            .join(<span class="kw-2">&amp;</span>pattern.replace(<span class="string">&quot;*&quot;</span>, <span class="kw-2">&amp;</span>path.path))
+            .join(<span class="kw-2">&amp;</span>pattern.replace(<span class="string">&#39;*&#39;</span>, <span class="kw-2">&amp;</span>path.path))
             .resolve()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())

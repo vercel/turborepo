@@ -414,9 +414,6 @@
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -817,13 +814,10 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>description(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
-        StringVc::cell(
-            <span class="macro">format!</span>(
-                <span class="string">&quot;An unexpected error happened while trying to read the source code to parse: {}&quot;</span>,
-                <span class="self">self</span>.error
-            )
-            .into(),
-        )
+        StringVc::cell(<span class="macro">format!</span>(
+            <span class="string">&quot;An unexpected error happened while trying to read the source code to parse: {}&quot;</span>,
+            <span class="self">self</span>.error
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]

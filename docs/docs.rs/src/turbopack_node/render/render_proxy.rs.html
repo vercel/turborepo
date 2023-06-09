@@ -571,7 +571,7 @@
     <span class="kw">let </span>stream = <span class="macro">generator! </span>{
         <span class="kw">let </span>intermediate_asset = get_intermediate_asset(
             chunking_context,
-            module.into(),
+            module,
             runtime_entries,
         );
         <span class="kw">let </span>pool = get_renderer_pool(

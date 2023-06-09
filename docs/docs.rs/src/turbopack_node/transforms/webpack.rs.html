@@ -188,8 +188,6 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -308,12 +306,10 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>webpack_loaders_executor(context: AssetContextVc) -&gt; AssetVc {
-    context
-        .process(
-            SourceAssetVc::new(embed_file_path(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).into(),
-            Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
-        )
-        .into()
+    context.process(
+        SourceAssetVc::new(embed_file_path(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).into(),
+        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+    )
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
