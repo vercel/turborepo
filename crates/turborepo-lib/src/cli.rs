@@ -1287,6 +1287,18 @@ mod test {
         );
 
         assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_order: LogOrder::Stream,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--parallel"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
