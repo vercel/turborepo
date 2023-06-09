@@ -245,6 +245,10 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
         match segment {
             ".." => {
                 stack.pop()?;
+                // Set this value post-pop so that we capture
+                // the remaining prefix, and not the segment we're
+                // about to remove. Note that this gets papered over
+                // below when we compare against the current stack length.
                 lowest_index.get_or_insert(stack.len());
                 changed = true;
             }
@@ -1206,6 +1210,25 @@ mod test {
             std::fs::File::create(path).unwrap();
         }
         tmp
+    }
+
+    #[test]
+    fn test_directory_traversal() {
+        let files = &["root-file", "child/some-file"];
+        let tmp = setup_files(files);
+        let root = AbsoluteSystemPathBuf::new(tmp.path()).unwrap();
+        let child = root.join_component("child");
+        let include = &["../*-file".to_string()];
+        let exclude = &[];
+        let iter = globwalk(&child, include, exclude, WalkType::Files).unwrap();
+        let results = iter
+            .map(|entry| {
+                let entry = entry.unwrap();
+                root.anchor(entry).unwrap().to_str().unwrap().to_string()
+            })
+            .collect::<Vec<_>>();
+        let expected = vec!["root-file".to_string()];
+        assert_eq!(results, expected);
     }
 
     #[test]
