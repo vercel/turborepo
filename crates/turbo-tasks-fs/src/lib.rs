@@ -1,5 +1,5 @@
 #![feature(trivial_bounds)]
-#![feature(hash_drain_filter)]
+#![feature(hash_extract_if)]
 #![feature(min_specialization)]
 #![feature(iter_advance_by)]
 #![feature(io_error_more)]
@@ -408,7 +408,7 @@ impl DiskFileSystem {
                     for path in paths {
                         let path_key = path_to_key(&path);
                         for (_, invalidators) in
-                            invalidator_map.drain_filter(|key, _| key.starts_with(&path_key))
+                            invalidator_map.extract_if(|key, _| key.starts_with(&path_key))
                         {
                             invalidators
                                 .into_iter()
