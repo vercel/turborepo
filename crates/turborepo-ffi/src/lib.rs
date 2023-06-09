@@ -274,6 +274,7 @@ pub extern "C" fn get_package_file_hashes_from_git_index(buffer: Buffer) -> Buff
                 to_return.insert(filename, hash);
             }
             let file_hashes = proto::FileHashes { hashes: to_return };
+
             proto::GetPackageFileHashesFromGitIndexResponse {
                 response: Some(
                     proto::get_package_file_hashes_from_git_index_response::Response::Hashes(

@@ -552,7 +552,7 @@ mod test {
         let dir = setup();
 
         let path = AbsoluteSystemPathBuf::new(dir.path()).unwrap();
-        let (success, error): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
+        let (success, _error): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
             match super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All) {
                 Ok(e) => e.into_iter().partition_result(),
                 Err(e) => return Some(e),
@@ -1186,13 +1186,13 @@ mod test {
     )]
     fn glob_walk_err(
         files: &[&str],
-        base_path: &str,
-        include: &[&str],
-        exclude: &[&str],
-        expected: &[&str],
-        expected_files: &[&str],
+        _base_path: &str,
+        _include: &[&str],
+        _exclude: &[&str],
+        _expected: &[&str],
+        _expected_files: &[&str],
     ) {
-        let dir = setup_files(files);
+        let _dir = setup_files(files);
     }
 
     fn setup_files(files: &[&str]) -> tempdir::TempDir {

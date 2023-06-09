@@ -254,7 +254,7 @@ fn encode<'t, A, T>(
                     } else {
                         pattern.push_str(nsepexpr!("&&{0}"));
                     }
-                    pattern.push_str("]");
+                    pattern.push(']');
                     // Compile the character class sub-expression. This may fail
                     // if the subtraction of the separator pattern yields an
                     // empty character class (meaning that the glob expression
