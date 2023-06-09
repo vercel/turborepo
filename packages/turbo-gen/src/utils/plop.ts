@@ -26,11 +26,6 @@ export type Generator = PlopGenerator & {
   name: string;
 };
 
-// init ts-node for plop to support ts configs
-register({
-  transpileOnly: true,
-});
-
 export function getPlop({
   project,
   configPath,
@@ -38,23 +33,43 @@ export function getPlop({
   project: Project;
   configPath?: string;
 }): NodePlopAPI | undefined {
+  // init ts-node for plop to support ts configs
+  register({
+    transpileOnly: true,
+    cwd: project.paths.root,
+    compilerOptions: {
+      module: "nodenext",
+      moduleResolution: "nodenext",
+    },
+  });
+
   // fetch all the workspace generator configs
   const workspaceConfigs = getWorkspaceGeneratorConfigs({ project });
   let plop: NodePlopAPI | undefined = undefined;
 
   if (configPath) {
+    if (!fs.existsSync(configPath)) {
+      throw new GeneratorError(`No config at "${configPath}"`, {
+        type: "plop_no_config",
+      });
+    }
+
     try {
       plop = nodePlop(configPath, {
         destBasePath: configPath,
         force: false,
       });
     } catch (e) {
-      // skip
+      console.error(e);
     }
   } else {
     // look for a root config
     for (const configPath of SUPPORTED_ROOT_GENERATOR_CONFIGS) {
       const plopFile = path.join(project.paths.root, configPath);
+      if (!fs.existsSync(plopFile)) {
+        continue;
+      }
+
       try {
         plop = nodePlop(plopFile, {
           destBasePath: project.paths.root,
@@ -62,7 +77,7 @@ export function getPlop({
         });
         break;
       } catch (e) {
-        // skip
+        console.error(e);
       }
     }
 
