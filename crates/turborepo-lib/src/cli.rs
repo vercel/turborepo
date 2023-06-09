@@ -299,7 +299,7 @@ pub enum Command {
 
         #[clap(subcommand)]
         #[serde(skip)]
-        command: Option<GenerateCommand>,
+        command: Option<Box<GenerateCommand>>,
     },
     /// Login to your Vercel account
     Login {
@@ -538,7 +538,7 @@ pub enum LogPrefix {
 #[tokio::main]
 pub async fn run(
     repo_state: Option<RepoState>,
-    logger: &TurboSubscriber,
+    _logger: &TurboSubscriber,
     ui: UI,
 ) -> Result<Payload> {
     let mut cli_args = Args::new()?;
@@ -675,7 +675,10 @@ pub async fn run(
             generate::run(tag, command, &args)?;
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon { command, idle_time } => {
+        Command::Daemon {
+            command,
+            idle_time: _,
+        } => {
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
 
             match command {

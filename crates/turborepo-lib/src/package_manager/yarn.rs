@@ -92,7 +92,7 @@ mod tests {
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
 
         let yarn_lock_path = repo_root.path().join(LOCKFILE);
-        File::create(&yarn_lock_path)?;
+        File::create(yarn_lock_path)?;
 
         let mut detector = YarnDetector::new(&repo_root_path);
         detector.set_version_override("1.22.10".parse()?);

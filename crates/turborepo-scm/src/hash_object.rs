@@ -152,7 +152,7 @@ mod test {
             let expected_hashes = GitHashes::from_iter(file_hashes.into_iter());
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&pkg_path, to_hash, &pkg_prefix, &mut hashes).unwrap();
+            hash_objects(pkg_path, to_hash, &pkg_prefix, &mut hashes).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
 
@@ -172,8 +172,8 @@ mod test {
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&pkg_path, to_hash, &pkg_prefix, &mut hashes);
-            assert_eq!(result.is_err(), true);
+            let result = hash_objects(pkg_path, to_hash, &pkg_prefix, &mut hashes);
+            assert!(result.is_err());
         }
     }
 }

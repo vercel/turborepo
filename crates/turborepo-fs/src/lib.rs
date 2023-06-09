@@ -45,13 +45,13 @@ pub fn recursive_copy(
                         false
                     };
 
-                    let suffix = AnchoredSystemPathBuf::new(src, &path)?;
+                    let suffix = AnchoredSystemPathBuf::new(src, path)?;
                     let target = dst.resolve(&suffix);
                     if is_dir_or_symlink_to_dir {
                         let src_metadata = entry.metadata()?;
                         make_dir_copy(&target, &src_metadata)?;
                     } else {
-                        copy_file_with_type(&path, file_type, &target)?;
+                        copy_file_with_type(path, file_type, &target)?;
                     }
                 }
             }
@@ -130,7 +130,7 @@ mod tests {
 
         let err = copy_file(src_file, dst_file).unwrap_err();
         let err = err.downcast::<PathError>()?;
-        assert_eq!(err.is_io_error(io::ErrorKind::NotFound), true);
+        assert!(err.is_io_error(io::ErrorKind::NotFound));
         Ok(())
     }
 
@@ -184,7 +184,7 @@ mod tests {
 
         copy_file(&src_file, &dst_file)?;
         assert_file_matches(&src_file, &dst_file);
-        assert_eq!(dst_file.is_readonly()?, true);
+        assert!(dst_file.is_readonly()?);
         Ok(())
     }
 
@@ -226,25 +226,25 @@ mod tests {
 
         let dst_child_path = dst_dir.join_component("child");
         let dst_a_path = dst_child_path.join_component("a");
-        assert_file_matches(&a_path, &dst_a_path);
+        assert_file_matches(&a_path, dst_a_path);
 
         let dst_b_path = dst_dir.join_component("b");
-        assert_file_matches(&b_path, &dst_b_path);
+        assert_file_matches(&b_path, dst_b_path);
 
         let dst_link_path = dst_child_path.join_component("link");
-        assert_target_matches(&dst_link_path, "../b");
+        assert_target_matches(dst_link_path, "../b");
 
         let dst_broken_path = dst_child_path.join_component("broken");
-        assert_eq!(dst_broken_path.as_path().exists(), false);
+        assert!(!dst_broken_path.as_path().exists());
 
         // Currently, we convert symlink-to-directory to empty-directory
         // This is very likely not ideal behavior, but leaving this test here to verify
         // that it is what we expect at this point in time.
         let dst_circle_path = dst_child_path.join_component("circle");
         let dst_circle_metadata = fs::symlink_metadata(&dst_circle_path)?;
-        assert_eq!(dst_circle_metadata.is_dir(), true);
+        assert!(dst_circle_metadata.is_dir());
 
-        let num_files = fs::read_dir(dst_circle_path.as_path())?.into_iter().count();
+        let num_files = fs::read_dir(dst_circle_path.as_path())?.count();
         assert_eq!(num_files, 0);
 
         Ok(())

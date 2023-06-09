@@ -36,7 +36,7 @@ impl Run {
     }
 
     fn opts(&self) -> Result<Opts> {
-        Ok(self.base.args().try_into()?)
+        self.base.args().try_into()
     }
 
     pub async fn run(&mut self) -> Result<()> {

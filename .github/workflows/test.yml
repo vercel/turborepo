@@ -156,7 +156,7 @@ jobs:
         with:
           PATTERNS: |
             examples/**
-            turborepo-tests/examples/**
+            examples-tests/**
             !**.md
             !**.mdx
 
@@ -306,8 +306,8 @@ jobs:
       - name: E2E Tests
         run: turbo run test --filter=turborepo-tests-e2e
 
-  go_examples:
-    name: Go Cli Examples
+  turborepo_examples:
+    name: Turborepo Examples
     needs: determine_jobs
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 30
@@ -320,43 +320,9 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
-        manager: [yarn, npm]
-        example: [with-yarn, with-npm, non-monorepo]
-        include:
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: basic
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: basic
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: kitchen-sink
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: kitchen-sink
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: with-svelte
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: with-svelte
-
     runs-on: ${{ matrix.os.runner }}
     steps:
-      # Used by scripts/check-examples.sh
+      # Used by examples-tests/setup.sh
       - name: Install Sponge
         shell: bash
         run: |
@@ -404,12 +370,12 @@ jobs:
           cache: ${{ matrix.manager }}
           cache-dependency-path: package.json
 
-      - name: Check \"${{ matrix.example }}\" example with \"${{ matrix.manager }}\"
+      - name: Check examples
         shell: bash
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: turbo run example-test --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --filter="!@turborepo-examples-tests/pnpm-gatsby"
 
       # Re-enable corepack, actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it here. The "Post" step
@@ -1059,6 +1025,30 @@ jobs:
         if: always()
         run: critcmp --export base > raw.json
 
+      - name: Upload results to datadog
+        if: always()
+        continue-on-error: true
+        env:
+          DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
+        run: |
+          npm install -g @datadog/datadog-ci
+          # Query raw benchmark output, create key:value pairs for each benchmark entries.
+          # The generated key name is compact format the path of the benchmark entry, i.e
+          # `base.hmr_to_commit.CSR.1000.mean`
+          # [TODO]: datadog-ci sometimes return 400 without detail, need to investigate further. For now accept the flaky uploads.
+          for item in $(cat raw.json | jq -r ".benchmarks[] | { name: .fullname, mean: .criterion_estimates_v1.mean.point_estimate, std: .criterion_estimates_v1.std_dev.point_estimate } | @base64"); do
+              _jq() {
+                echo ${item} | base64 --decode | jq -r ${1}
+              }
+
+              export METRICS_MEAN+=" --metrics $(echo ${{ matrix.bench.name }} | sed -e 's/turbopack-//g').$(_jq ".name" | sed -e 's/\/bench_/\//g' | sed -e 's/\/Turbopack /\//g' | sed -e 's/ modules//g'| sed -e 's/ /./g' | sed -e 's/\//./g').mean:$(printf "%0.2f" $(_jq ".mean"))"
+              export METRICS_STD+=" --metrics $(echo ${{ matrix.bench.name }} | sed -e 's/turbopack-//g').$(_jq ".name" | sed -e 's/\/bench_/\//g' | sed -e 's/\/Turbopack /\//g' | sed -e 's/ modules//g'| sed -e 's/ /./g' | sed -e 's/\//./g').std:$(printf "%0.2f" $(_jq ".std"))"
+          done
+          echo "Sending metrics $METRICS_MEAN"
+          datadog-ci metric --level pipeline --no-fail $METRICS_MEAN
+          echo "Sending metrics $METRICS_STD"
+          datadog-ci metric --level pipeline --no-fail $METRICS_STD
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v3
@@ -1265,7 +1255,7 @@ jobs:
       - determine_jobs
       - go_lint
       - go_unit
-      - go_examples
+      - turborepo_examples
       - go_e2e
       - go_integration
       - js_packages
@@ -1303,7 +1293,7 @@ jobs:
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.go_examples.result}} "Go examples"
+          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.go_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.js_packages.result}} "JS Package tests"
@@ -1417,7 +1407,7 @@ jobs:
       - determine_jobs
       - go_lint
       - go_unit
-      - go_examples
+      - turborepo_examples
       - go_e2e
       - go_integration
       - rust_prepare
@@ -1458,7 +1448,7 @@ jobs:
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.go_examples.result}} "Go examples"
+          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.go_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.rust_prepare.result}} "Rust prepare"

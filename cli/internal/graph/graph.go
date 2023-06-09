@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/runsummary"
@@ -158,8 +159,8 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 					Env:            specifiedEnvVarsPresentation,
 					PassThroughEnv: taskDefinition.PassThroughEnv,
 				},
-				Configured:  envVars.BySource.Explicit.ToSecretHashable(),
-				Inferred:    envVars.BySource.Matching.ToSecretHashable(),
+				Configured:  env.EnvironmentVariableMap(envVars.BySource.Explicit).ToSecretHashable(),
+				Inferred:    env.EnvironmentVariableMap(envVars.BySource.Matching).ToSecretHashable(),
 				PassThrough: envVarPassThroughMap.ToSecretHashable(),
 			},
 			DotEnv:           taskDefinition.DotEnv,
