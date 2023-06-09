@@ -107,27 +107,30 @@ func RealRun(
 	taskCount := len(engine.TaskGraph.Vertices())
 	logChan := make(chan taskLogContext, taskCount)
 	logWaitGroup := sync.WaitGroup{}
-	grouped := rs.Opts.runOpts.LogOrder == "grouped"
+	isGrouped := rs.Opts.runOpts.LogOrder == "grouped"
 
-	outputLogs := func() {
-		for i := 1; i < taskCount; i++ {
-			logContext := <-logChan
+	var outputLogs func()
 
-			outBytes := logContext.outBuf.Bytes()
-			errBytes := logContext.errBuf.Bytes()
+	if isGrouped {
+		outputLogs = func() {
+			for i := 1; i < taskCount; i++ {
+				logContext := <-logChan
 
-			_, errOut := os.Stdout.Write(outBytes)
-			_, errErr := os.Stderr.Write(errBytes)
+				outBytes := logContext.outBuf.Bytes()
+				errBytes := logContext.errBuf.Bytes()
 
-			if errOut != nil || errErr != nil {
-				ec.ui.Error("Failed to output some of the logs.")
+				_, errOut := os.Stdout.Write(outBytes)
+				_, errErr := os.Stderr.Write(errBytes)
+
+				if errOut != nil || errErr != nil {
+					ec.ui.Error("Failed to output some of the logs.")
+				}
+
+				logWaitGroup.Done()
 			}
-
-			logWaitGroup.Done()
 		}
 	}
-
-	if grouped {
+	if isGrouped {
 		go outputLogs()
 	}
 
@@ -138,15 +141,12 @@ func RealRun(
 		outBuf := &bytes.Buffer{}
 		errBuf := &bytes.Buffer{}
 
-		var outWriter io.Writer
-		var errWriter io.Writer
+		var outWriter io.Writer = os.Stdout
+		var errWriter io.Writer = os.Stderr
 
-		if grouped {
+		if isGrouped {
 			outWriter = outBuf
 			errWriter = errBuf
-		} else {
-			outWriter = os.Stdout
-			errWriter = os.Stderr
 		}
 
 		ui := concurrentUIFactory.Build(os.Stdin, outWriter, errWriter)
@@ -169,7 +169,7 @@ func RealRun(
 
 			runSummary.CloseTask(taskSummary)
 		}
-		if grouped {
+		if isGrouped {
 			logChan <- taskLogContext{
 				outBuf: outBuf,
 				errBuf: errBuf,
@@ -233,7 +233,7 @@ func RealRun(
 		}
 	}
 
-	if grouped {
+	if isGrouped {
 		logWaitGroup.Wait()
 	}
 
