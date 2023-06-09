@@ -68,8 +68,7 @@ func (factory *ConcurrentUIFactory) Build(in io.Reader, out io.Writer, err io.Wr
 
 // PrefixedUIFactory provides a method for creating a cli.PrefixedUi from input, output and error IOs
 type PrefixedUIFactory struct {
-	Base Factory
-
+	Base            Factory
 	AskPrefix       string
 	AskSecretPrefix string
 	OutputPrefix    string
