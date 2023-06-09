@@ -53,9 +53,10 @@ impl Asset for TsConfigModuleAsset {
         let configs = read_tsconfigs(
             self.source.content().file_content(),
             self.source,
-            apply_cjs_specific_options(self.origin.resolve_options(Value::new(
-                ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined),
-            ))),
+            apply_cjs_specific_options(
+                self.origin
+                    .resolve_options(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined)),
+            ),
         )
         .await?;
         for (_, config_asset) in configs[1..].iter() {

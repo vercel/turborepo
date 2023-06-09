@@ -342,7 +342,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
     let modules = entry_paths.into_iter().map(SourceAssetVc::new).map(|p| {
         context.process(
             p.into(),
-            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+            ReferenceType::Entry(EntryReferenceSubType::Undefined),
         )
     });
 

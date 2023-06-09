@@ -3,7 +3,7 @@ use swc_core::{
     ecma::ast::{Expr, ExprOrSpread, NewExpr},
     quote,
 };
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
     chunk::{
         ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
@@ -83,7 +83,7 @@ impl AssetReference for UrlAssetReference {
         url_resolve(
             self.origin,
             self.request,
-            Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
+            UrlReferenceSubType::EcmaScriptNewUrl,
             self.issue_source,
             try_to_severity(self.in_try),
         )

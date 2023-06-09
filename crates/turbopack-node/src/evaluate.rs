@@ -15,7 +15,7 @@ use turbo_tasks::{
     duration_span, mark_finished,
     primitives::{JsonValueVc, StringVc},
     util::SharedError,
-    CompletionVc, RawVc, TryJoinIterExt, Value, ValueToString,
+    CompletionVc, RawVc, TryJoinIterExt, ValueToString,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
@@ -109,7 +109,7 @@ pub async fn get_evaluate_pool(
 ) -> Result<NodeJsPoolVc> {
     let runtime_asset = context.process(
         SourceAssetVc::new(embed_file_path("ipc/evaluate.ts")).into(),
-        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+        ReferenceType::Internal(InnerAssetsVc::empty()),
     );
 
     let module_path = module_asset.ident().path().await?;
@@ -132,10 +132,10 @@ pub async fn get_evaluate_pool(
             .into(),
         )
         .into(),
-        Value::new(ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
+        ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
             "INNER".to_string() => module_asset,
             "RUNTIME".to_string() => runtime_asset
-        }))),
+        })),
     );
 
     let Some(entry_module) = EvaluatableAssetVc::resolve_from(entry_module).await? else {
@@ -149,7 +149,7 @@ pub async fn get_evaluate_pool(
     let runtime_entries = {
         let globals_module = context.process(
             SourceAssetVc::new(embed_file_path("globals.ts")).into(),
-            Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+            ReferenceType::Internal(InnerAssetsVc::empty()),
         );
 
         let Some(globals_module) = EvaluatableAssetVc::resolve_from(globals_module).await? else {

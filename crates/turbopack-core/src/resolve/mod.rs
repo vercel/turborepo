@@ -1387,7 +1387,7 @@ impl ValueToString for AffectingResolvingAssetReference {
 
 pub async fn handle_resolve_error(
     result: ResolveResultVc,
-    reference_type: Value<ReferenceType>,
+    reference_type: ReferenceType,
     origin_path: FileSystemPathVc,
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
@@ -1400,7 +1400,7 @@ pub async fn handle_resolve_error(
                 let issue: ResolvingIssueVc = ResolvingIssue {
                     severity,
                     context: origin_path,
-                    request_type: format!("{} request", reference_type.into_value()),
+                    request_type: format!("{} request", reference_type),
                     request,
                     resolve_options,
                     error_message: None,
@@ -1415,7 +1415,7 @@ pub async fn handle_resolve_error(
             let issue: ResolvingIssueVc = ResolvingIssue {
                 severity,
                 context: origin_path,
-                request_type: format!("{} request", reference_type.into_value()),
+                request_type: format!("{} request", reference_type),
                 request,
                 resolve_options,
                 error_message: Some(err.to_string()),

@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{Value, ValueToString};
+use turbo_tasks::ValueToString;
 
 use super::{ChunkableAsset, ChunkableAssetVc};
 use crate::{
@@ -19,10 +19,7 @@ pub trait EvaluatableAsset: Asset + ChunkableAsset {}
 impl EvaluatableAssetVc {
     #[turbo_tasks::function]
     pub async fn from_asset(asset: AssetVc, context: AssetContextVc) -> Result<EvaluatableAssetVc> {
-        let asset = context.process(
-            asset,
-            Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)),
-        );
+        let asset = context.process(asset, ReferenceType::Entry(EntryReferenceSubType::Runtime));
         let Some(entry) = EvaluatableAssetVc::resolve_from(asset).await? else {
             bail!("{} is not a valid evaluated entry", asset.ident().to_string().await?)
         };

@@ -3,7 +3,7 @@ use swc_core::{
     common::DUMMY_SP,
     css::ast::{Str, UrlValue},
 };
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{ChunkingContext, ChunkingContextVc},
@@ -81,7 +81,7 @@ impl AssetReference for UrlAssetReference {
         url_resolve(
             self.origin,
             self.request,
-            Value::new(UrlReferenceSubType::CssUrl),
+            UrlReferenceSubType::CssUrl,
             self.issue_source,
             IssueSeverity::Error.cell(),
         )

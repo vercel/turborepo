@@ -1,6 +1,6 @@
 use anyhow::Result;
 use swc_core::ecma::ast::Lit;
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
@@ -158,7 +158,7 @@ pub struct WebpackRuntimeAssetReference {
 impl AssetReference for WebpackRuntimeAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Result<ResolveResultVc> {
-        let ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
+        let ty = ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined);
         let options = self.origin.resolve_options(ty.clone());
 
         let options = apply_cjs_specific_options(options);

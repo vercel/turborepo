@@ -216,7 +216,7 @@ async fn add_glob_results(
             let source = SourceAssetVc::new(*path).into();
             list.push(context.process(
                 source,
-                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+                turbopack_core::reference_type::ReferenceType::Undefined,
             ));
         }
     }
@@ -258,7 +258,7 @@ async fn input_to_modules<'a>(
             let source = SourceAssetVc::new(root.join(input)).into();
             list.push(context.process(
                 source,
-                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+                turbopack_core::reference_type::ReferenceType::Undefined,
             ));
         } else {
             let glob = GlobVc::new(input);

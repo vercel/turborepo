@@ -3,7 +3,7 @@ use indexmap::indexmap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::{JsonValueVc, StringsVc},
-    CompletionVc, CompletionsVc, TryJoinIterExt, Value,
+    CompletionVc, CompletionsVc, TryJoinIterExt,
 };
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_fs::{
@@ -145,7 +145,7 @@ async fn extra_configs(
                 matches!(&*path.get_type().await?, FileSystemEntryType::File).then(|| {
                     any_content_changed(context.process(
                         SourceAssetVc::new(path).into(),
-                        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+                        ReferenceType::Internal(InnerAssetsVc::empty()),
                     ))
                 }),
             )
@@ -163,7 +163,7 @@ async fn extra_configs(
 fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPathVc) -> AssetVc {
     let config_asset = context.process(
         SourceAssetVc::new(postcss_config_path).into(),
-        Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+        ReferenceType::Entry(EntryReferenceSubType::Undefined),
     );
 
     context.process(
@@ -172,9 +172,9 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
             AssetContent::File(embed_file("transforms/postcss.ts")).cell(),
         )
         .into(),
-        Value::new(ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
+        ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
-        }))),
+        })),
     )
 }
 

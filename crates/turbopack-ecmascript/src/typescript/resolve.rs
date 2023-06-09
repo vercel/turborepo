@@ -327,9 +327,7 @@ pub async fn apply_tsconfig_resolve_options(
 
 #[turbo_tasks::function]
 pub async fn type_resolve(origin: ResolveOriginVc, request: RequestVc) -> Result<ResolveResultVc> {
-    let ty = Value::new(ReferenceType::TypeScript(
-        TypeScriptReferenceSubType::Undefined,
-    ));
+    let ty = ReferenceType::TypeScript(TypeScriptReferenceSubType::Undefined);
     let context_path = origin.origin_path().parent();
     let options = origin.resolve_options(ty.clone());
     let options = apply_typescript_types_options(options);

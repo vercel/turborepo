@@ -105,7 +105,7 @@ impl CodeGenerateableWithAvailabilityInfo for EsmAsyncAssetReference {
             esm_resolve(
                 self.origin,
                 self.request,
-                Value::new(EcmaScriptModulesReferenceSubType::Undefined),
+                EcmaScriptModulesReferenceSubType::Undefined,
                 OptionIssueSourceVc::some(self.issue_source),
                 try_to_severity(self.in_try),
             ),

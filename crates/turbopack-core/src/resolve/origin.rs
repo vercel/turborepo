@@ -1,5 +1,4 @@
 use anyhow::Result;
-use turbo_tasks::Value;
 use turbo_tasks_fs::FileSystemPathVc;
 
 use super::{options::ResolveOptionsVc, parse::RequestVc, ResolveResult, ResolveResultVc};
@@ -43,7 +42,7 @@ impl ResolveOriginVc {
         self,
         request: RequestVc,
         options: ResolveOptionsVc,
-        reference_type: Value<ReferenceType>,
+        reference_type: ReferenceType,
     ) -> Result<ResolveResultVc> {
         if let Some(asset) = *self.get_inner_asset(request).await? {
             return Ok(ResolveResult::asset(asset).cell());
@@ -55,7 +54,7 @@ impl ResolveOriginVc {
 
     /// Get the resolve options that apply for this origin.
     #[turbo_tasks::function]
-    pub fn resolve_options(self, reference_type: Value<ReferenceType>) -> ResolveOptionsVc {
+    pub fn resolve_options(self, reference_type: ReferenceType) -> ResolveOptionsVc {
         self.context()
             .resolve_options(self.origin_path(), reference_type)
     }

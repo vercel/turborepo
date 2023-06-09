@@ -181,10 +181,10 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
 pub async fn css_resolve(
     origin: ResolveOriginVc,
     request: RequestVc,
-    ty: Value<CssReferenceSubType>,
+    ty: CssReferenceSubType,
     issue_source: OptionIssueSourceVc,
 ) -> Result<ResolveResultVc> {
-    let ty = Value::new(ReferenceType::Css(ty.into_value()));
+    let ty = ReferenceType::Css(ty);
     let options = origin.resolve_options(ty.clone());
     let result = origin.resolve_asset(request, options, ty.clone());
 

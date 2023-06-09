@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use turbo_tasks::Value;
 use turbopack_core::{
     asset::AssetVc, compile_time_info::CompileTimeInfoVc, reference_type::ReferenceType,
 };
@@ -66,7 +65,7 @@ pub trait Transition {
         self_vc: TransitionVc,
         asset: AssetVc,
         context: ModuleAssetContextVc,
-        reference_type: Value<ReferenceType>,
+        reference_type: ReferenceType,
     ) -> AssetVc {
         let asset = self_vc.process_source(asset);
         let context = self_vc.process_context(context);

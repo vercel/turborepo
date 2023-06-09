@@ -9,7 +9,7 @@ use swc_core::{
         },
     },
 };
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
     issue::{IssueSourceVc, OptionIssueSourceVc},
@@ -221,7 +221,7 @@ impl AssetReference for ImportAssetReference {
         css_resolve(
             self.origin,
             self.request,
-            Value::new(CssReferenceSubType::AtImport),
+            CssReferenceSubType::AtImport,
             OptionIssueSourceVc::some(self.issue_source),
         )
     }

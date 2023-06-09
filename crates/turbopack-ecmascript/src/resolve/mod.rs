@@ -1,7 +1,6 @@
 pub mod node_native_binding;
 
 use anyhow::Result;
-use turbo_tasks::Value;
 use turbopack_core::{
     context::AssetContext,
     issue::{IssueSeverity, IssueSeverityVc, IssueSourceVc, OptionIssueSourceVc},
@@ -64,11 +63,11 @@ pub async fn apply_cjs_specific_options(options: ResolveOptionsVc) -> Result<Res
 pub async fn esm_resolve(
     origin: ResolveOriginVc,
     request: RequestVc,
-    ty: Value<EcmaScriptModulesReferenceSubType>,
+    ty: EcmaScriptModulesReferenceSubType,
     issue_source: OptionIssueSourceVc,
     issue_severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {
-    let ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
+    let ty = ReferenceType::EcmaScriptModules(ty);
     let options = apply_esm_specific_options(origin.resolve_options(ty.clone()));
     specific_resolve(origin, request, options, ty, issue_source, issue_severity).await
 }
@@ -81,7 +80,7 @@ pub async fn cjs_resolve(
     issue_severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {
     // TODO pass CommonJsReferenceSubType
-    let ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
+    let ty = ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined);
     let options = apply_cjs_specific_options(origin.resolve_options(ty.clone()));
     specific_resolve(origin, request, options, ty, issue_source, issue_severity).await
 }
@@ -90,11 +89,11 @@ pub async fn cjs_resolve(
 pub async fn url_resolve(
     origin: ResolveOriginVc,
     request: RequestVc,
-    ty: Value<UrlReferenceSubType>,
+    ty: UrlReferenceSubType,
     issue_source: IssueSourceVc,
     issue_severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {
-    let ty = Value::new(ReferenceType::Url(ty.into_value()));
+    let ty = ReferenceType::Url(ty);
     let resolve_options = origin.resolve_options(ty.clone());
     let rel_request = request.as_relative();
     let rel_result = resolve(origin.origin_path().parent(), rel_request, resolve_options);
@@ -122,7 +121,7 @@ async fn specific_resolve(
     origin: ResolveOriginVc,
     request: RequestVc,
     options: ResolveOptionsVc,
-    reference_type: Value<ReferenceType>,
+    reference_type: ReferenceType,
     issue_source: OptionIssueSourceVc,
     issue_severity: IssueSeverityVc,
 ) -> Result<ResolveResultVc> {

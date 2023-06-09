@@ -1,5 +1,4 @@
 use anyhow::{bail, Result};
-use turbo_tasks::Value;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     code_builder::{CodeBuilder, CodeVc},
@@ -27,7 +26,7 @@ impl StaticEcmascriptCodeVc {
     pub async fn new(asset_context: AssetContextVc, asset_path: FileSystemPathVc) -> Result<Self> {
         let asset = asset_context.process(
             SourceAssetVc::new(asset_path).into(),
-            Value::new(ReferenceType::Undefined),
+            ReferenceType::Undefined,
         );
         let Some(asset) = EcmascriptModuleAssetVc::resolve_from(&asset).await? else {
             bail!("asset is not an Ecmascript module")

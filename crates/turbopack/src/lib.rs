@@ -25,7 +25,7 @@ use module_options::{
 pub use resolve::resolve_options;
 use turbo_tasks::{
     primitives::{BoolVc, StringVc},
-    CompletionVc, Value,
+    CompletionVc,
 };
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -263,7 +263,7 @@ impl ModuleAssetContextVc {
     fn process_default(
         self_vc: ModuleAssetContextVc,
         source: AssetVc,
-        reference_type: Value<ReferenceType>,
+        reference_type: ReferenceType,
     ) -> AssetVc {
         process_default(self_vc, source, reference_type, Vec::new())
     }
@@ -273,21 +273,20 @@ impl ModuleAssetContextVc {
 async fn process_default(
     context: ModuleAssetContextVc,
     source: AssetVc,
-    reference_type: Value<ReferenceType>,
+    reference_type: ReferenceType,
     processed_rules: Vec<usize>,
 ) -> Result<AssetVc> {
     let ident = source.ident().resolve().await?;
     let options = ModuleOptionsVc::new(ident.path().parent(), context.module_options_context());
 
-    let reference_type = reference_type.into_value();
-    let part: Option<ModulePartVc> = match &reference_type {
+    let part: Option<ModulePartVc> = match reference_type {
         ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportPart(part)) => {
-            Some(*part)
+            Some(part)
         }
         _ => None,
     };
-    let inner_assets = match &reference_type {
-        ReferenceType::Internal(inner_assets) => Some(*inner_assets),
+    let inner_assets = match reference_type {
+        ReferenceType::Internal(inner_assets) => Some(inner_assets),
         _ => None,
     };
     let mut current_source = source;
@@ -311,7 +310,7 @@ async fn process_default(
                             return Ok(process_default(
                                 context,
                                 current_source,
-                                Value::new(reference_type),
+                                reference_type,
                                 processed_rules,
                             ));
                         }
@@ -401,7 +400,7 @@ impl AssetContext for ModuleAssetContext {
     async fn resolve_options(
         self_vc: ModuleAssetContextVc,
         origin_path: FileSystemPathVc,
-        _reference_type: Value<ReferenceType>,
+        _reference_type: ReferenceType,
     ) -> Result<ResolveOptionsVc> {
         let this = self_vc.await?;
         let context = if let Some(transition) = this.transition {
@@ -422,7 +421,7 @@ impl AssetContext for ModuleAssetContext {
         origin_path: FileSystemPathVc,
         request: RequestVc,
         resolve_options: ResolveOptionsVc,
-        reference_type: Value<ReferenceType>,
+        reference_type: ReferenceType,
     ) -> Result<ResolveResultVc> {
         let context_path = origin_path.parent().resolve().await?;
 
@@ -445,7 +444,7 @@ impl AssetContext for ModuleAssetContext {
     async fn process_resolve_result(
         self_vc: ModuleAssetContextVc,
         result: ResolveResultVc,
-        reference_type: Value<ReferenceType>,
+        reference_type: ReferenceType,
     ) -> Result<ResolveResultVc> {
         Ok(result
             .await?
@@ -460,7 +459,7 @@ impl AssetContext for ModuleAssetContext {
     async fn process(
         self_vc: ModuleAssetContextVc,
         asset: AssetVc,
-        reference_type: Value<ReferenceType>,
+        reference_type: ReferenceType,
     ) -> Result<AssetVc> {
         let this = self_vc.await?;
         if let Some(transition) = this.transition {

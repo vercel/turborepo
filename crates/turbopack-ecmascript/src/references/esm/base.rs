@@ -146,10 +146,10 @@ impl EsmAssetReferenceVc {
 impl AssetReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        let ty = Value::new(match &self.export_name {
+        let ty = match &self.export_name {
             Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
             None => EcmaScriptModulesReferenceSubType::Undefined,
-        });
+        };
 
         esm_resolve(
             self.get_origin(),

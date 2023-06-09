@@ -83,9 +83,7 @@ impl AssetReference for TsReferencePathAssetReference {
             {
                 ResolveResult::asset(self.origin.context().process(
                     SourceAssetVc::new(*path).into(),
-                    Value::new(ReferenceType::TypeScript(
-                        TypeScriptReferenceSubType::Undefined,
-                    )),
+                    ReferenceType::TypeScript(TypeScriptReferenceSubType::Undefined),
                 ))
                 .into()
             } else {

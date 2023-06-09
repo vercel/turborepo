@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
             );
             let module = context.process(
                 source.into(),
-                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+                turbopack_core::reference_type::ReferenceType::Undefined,
             );
             let rebased = RebasedAssetVc::new(module, input, output);
             emit_with_completion(rebased.into(), output).await?;

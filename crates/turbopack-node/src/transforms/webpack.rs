@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, CompletionVc, Value};
+use turbo_tasks::{primitives::JsonValueVc, trace::TraceRawVcs, CompletionVc};
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 use turbopack_core::{
@@ -118,7 +118,7 @@ struct ProcessWebpackLoadersResult {
 fn webpack_loaders_executor(context: AssetContextVc) -> AssetVc {
     context.process(
         SourceAssetVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
-        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+        ReferenceType::Internal(InnerAssetsVc::empty()),
     )
 }
 

@@ -101,7 +101,7 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
                     }
                     .cell(),
                 );
-                let module = context.process(source.into(), Value::new(ReferenceType::Undefined));
+                let module = context.process(source.into(), ReferenceType::Undefined);
                 let rebased = RebasedAssetVc::new(module, input_dir, output_dir);
 
                 emit_with_completion(rebased.into(), output_dir).await?;

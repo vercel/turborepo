@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
 use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
+use turbo_tasks::{trace::TraceRawVcs, TaskInput};
 
 use crate::{asset::AssetVc, resolve::ModulePartVc};
 
@@ -24,15 +26,13 @@ impl InnerAssetsVc {
 // TODO when plugins are supported, replace u8 with a trait that defines the
 // behavior.
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, TraceRawVcs, Serialize, Deserialize, TaskInput)]
 pub enum CommonJsReferenceSubType {
     Custom(u8),
     Undefined,
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Default, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, TraceRawVcs, Serialize, Deserialize, TaskInput)]
 pub enum EcmaScriptModulesReferenceSubType {
     ImportPart(ModulePartVc),
     Custom(u8),
@@ -40,8 +40,7 @@ pub enum EcmaScriptModulesReferenceSubType {
     Undefined,
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, TraceRawVcs, Serialize, Deserialize, TaskInput)]
 pub enum CssReferenceSubType {
     AtImport,
     Compose,
@@ -49,8 +48,7 @@ pub enum CssReferenceSubType {
     Undefined,
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, TraceRawVcs, Serialize, Deserialize, TaskInput)]
 pub enum UrlReferenceSubType {
     EcmaScriptNewUrl,
     CssUrl,
@@ -58,15 +56,13 @@ pub enum UrlReferenceSubType {
     Undefined,
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, TraceRawVcs, Serialize, Deserialize, TaskInput)]
 pub enum TypeScriptReferenceSubType {
     Custom(u8),
     Undefined,
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, TraceRawVcs, Serialize, Deserialize, TaskInput)]
 pub enum EntryReferenceSubType {
     Web,
     Page,
@@ -79,8 +75,7 @@ pub enum EntryReferenceSubType {
     Undefined,
 }
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, TraceRawVcs, Serialize, Deserialize, TaskInput)]
 pub enum ReferenceType {
     CommonJs(CommonJsReferenceSubType),
     EcmaScriptModules(EcmaScriptModulesReferenceSubType),

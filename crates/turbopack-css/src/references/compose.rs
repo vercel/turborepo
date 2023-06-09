@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
     issue::OptionIssueSourceVc,
@@ -34,7 +34,7 @@ impl AssetReference for CssModuleComposeReference {
         css_resolve(
             self.origin,
             self.request,
-            Value::new(CssReferenceSubType::Compose),
+            CssReferenceSubType::Compose,
             // TODO: add real issue source, currently impossible because `CssClassName` doesn't
             // contain the source span
             // https://docs.rs/swc_css_modules/0.21.16/swc_css_modules/enum.CssClassName.html
