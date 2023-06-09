@@ -1,22 +1,23 @@
 #![allow(dead_code)]
 
-mod graph;
-mod package_graph;
-pub mod pipeline;
+mod global_hash;
+pub mod graph;
 mod scope;
 mod task_id;
 
 use anyhow::{Context as ErrorContext, Result};
 use graph::CompleteGraph;
 use tracing::{debug, info};
+use turborepo_env::EnvironmentVariableMap;
 
 use crate::{
     commands::CommandBase,
     daemon::DaemonConnector,
     manager::Manager,
     opts::Opts,
+    package_graph::PackageGraph,
     package_json::PackageJson,
-    run::{package_graph::PackageGraph, task_id::ROOT_PKG_NAME},
+    run::{global_hash::get_global_hash_inputs, task_id::ROOT_PKG_NAME},
 };
 
 #[derive(Debug)]
@@ -50,7 +51,7 @@ impl Run {
         let _is_structured_output = opts.run_opts.graph_dot || opts.run_opts.dry_run_json;
 
         let pkg_dep_graph = if opts.run_opts.single_package {
-            PackageGraph::build_single_package_graph(root_package_json)?
+            PackageGraph::build_single_package_graph(&root_package_json)?
         } else {
             PackageGraph::build_multi_package_graph(&self.base.repo_root, &root_package_json)?
         };
@@ -104,6 +105,24 @@ impl Run {
                 }
             }
         }
+
+        let env_at_execution_start = EnvironmentVariableMap::infer();
+
+        let _global_hash_inputs = get_global_hash_inputs(
+            &self.base.ui,
+            &self.base.repo_root,
+            &root_package_json,
+            pkg_dep_graph.package_manager,
+            pkg_dep_graph.lockfile,
+            // TODO: Fill in these vec![] once turbo.json is ported
+            vec![],
+            &env_at_execution_start,
+            vec![],
+            vec![],
+            opts.run_opts.env_mode,
+            opts.run_opts.framework_inference,
+            vec![],
+        )?;
 
         Ok(())
     }

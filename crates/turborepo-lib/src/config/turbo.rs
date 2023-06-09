@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{opts::RemoteCacheOpts, run::pipeline::Pipeline};
+use crate::{opts::RemoteCacheOpts, task_graph::Pipeline};
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +17,7 @@ pub struct TurboJson {
     other: serde_json::Value,
     pub(crate) remote_cache_opts: Option<RemoteCacheOpts>,
     pub space_id: Option<String>,
+    #[allow(dead_code)]
     pub pipeline: Pipeline,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental_spaces: Option<SpacesJson>,
