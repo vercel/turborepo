@@ -14,6 +14,7 @@ use super::bump_timeout::BumpTimeout;
 pub struct BumpTimeoutLayer(Arc<BumpTimeout>);
 
 impl BumpTimeoutLayer {
+    #[allow(dead_code)]
     pub fn new(timeout: Arc<BumpTimeout>) -> Self {
         Self(timeout)
     }

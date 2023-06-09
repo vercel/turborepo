@@ -4,7 +4,7 @@ use std::{
     fmt, fs,
     io::{self, Write},
     ops::Deref,
-    path::{Components, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use path_clean::PathClean;
@@ -68,7 +68,7 @@ impl AbsoluteSystemPathBuf {
     pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathError> {
         let unchecked_path = unchecked_path.into();
         if !unchecked_path.is_absolute() {
-            return Err(PathError::NotAbsolute(unchecked_path).into());
+            return Err(PathError::NotAbsolute(unchecked_path));
         }
 
         let system_path = unchecked_path.into_system()?;
@@ -162,10 +162,6 @@ impl AbsoluteSystemPathBuf {
 
     pub fn as_path(&self) -> &Path {
         self.0.as_path()
-    }
-
-    pub fn components(&self) -> Components<'_> {
-        self.0.components()
     }
 
     pub fn parent(&self) -> Option<Self> {
@@ -291,7 +287,7 @@ mod tests {
         assert_eq!(
             AbsoluteSystemPathBuf::new("/some/dir")
                 .unwrap()
-                .join_unix_path(&tail)
+                .join_unix_path(tail)
                 .unwrap(),
             AbsoluteSystemPathBuf::new("/some/other").unwrap(),
         );

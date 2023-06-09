@@ -9,7 +9,7 @@ use std::{
     fmt, fs,
     fs::Metadata,
     io,
-    path::{Path, PathBuf},
+    path::{Components, Path, PathBuf},
 };
 
 use path_clean::PathClean;
@@ -80,7 +80,7 @@ impl AbsoluteSystemPath {
     pub fn new<P: AsRef<Path> + ?Sized>(value: &P) -> Result<&Self, PathError> {
         let path = value.as_ref();
         if path.is_relative() {
-            return Err(PathError::NotAbsolute(path.to_owned()).into());
+            return Err(PathError::NotAbsolute(path.to_owned()));
         }
         let path_str = path
             .to_str()
@@ -89,9 +89,7 @@ impl AbsoluteSystemPath {
         let system_path = Cow::from_slash(path_str);
 
         match system_path {
-            Cow::Owned(path) => {
-                Err(PathError::NotSystem(path.to_string_lossy().to_string()).into())
-            }
+            Cow::Owned(path) => Err(PathError::NotSystem(path.to_string_lossy().to_string())),
             Cow::Borrowed(path) => {
                 let path = Path::new(path);
                 // copied from stdlib path.rs: relies on the representation of
@@ -112,9 +110,7 @@ impl AbsoluteSystemPath {
     }
 
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
-        self.0
-            .ancestors()
-            .map(|ancestor| Self::new_unchecked(ancestor))
+        self.0.ancestors().map(Self::new_unchecked)
     }
 
     // intended for joining literals or obviously single-token strings
@@ -165,7 +161,7 @@ impl AbsoluteSystemPath {
     pub fn symlink_to_dir<P: AsRef<Path>>(&self, to: P) -> Result<(), PathError> {
         let system_path = to.as_ref();
         let system_path = system_path.into_system()?;
-        symlink_dir(&system_path, &self.0)?;
+        symlink_dir(system_path, &self.0)?;
         Ok(())
     }
 
@@ -192,6 +188,10 @@ impl AbsoluteSystemPath {
 
     pub fn remove_file(&self) -> Result<(), io::Error> {
         fs::remove_file(&self.0)
+    }
+
+    pub fn components(&self) -> Components<'_> {
+        self.0.components()
     }
 }
 

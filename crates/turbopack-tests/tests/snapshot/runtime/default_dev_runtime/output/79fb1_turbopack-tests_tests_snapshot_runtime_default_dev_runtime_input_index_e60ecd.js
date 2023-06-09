@@ -197,7 +197,9 @@ async function loadChunkPath(source, chunkPath) {
                 loadReason = "from an HMR update";
                 break;
         }
-        throw new Error(`Failed to load chunk ${chunkPath} ${loadReason}${error ? `: ${error}` : ""}`);
+        throw new Error(`Failed to load chunk ${chunkPath} ${loadReason}${error ? `: ${error}` : ""}`, error ? {
+            cause: error
+        } : undefined);
     }
 }
 function instantiateModule(id, source) {
@@ -218,7 +220,7 @@ function instantiateModule(id, source) {
         throw new Error(`Module ${id} was instantiated ${instantiationReason}, but the module factory is not available. It might have been deleted in an HMR update.`);
     }
     const hotData = moduleHotData.get(id);
-    const { hot , hotState  } = createModuleHot(id, hotData);
+    const { hot, hotState } = createModuleHot(id, hotData);
     let parents;
     switch(source.type){
         case SourceType.Runtime:
@@ -456,11 +458,11 @@ function disposeModule(moduleId, mode) {
             invariant(mode, (mode)=>`invalid mode: ${mode}`);
     }
 }
-function applyPhase(outdatedSelfAcceptedModules, newModuleFactories, outdatedModuleParents) {
+function applyPhase(outdatedSelfAcceptedModules, newModuleFactories, outdatedModuleParents, reportError) {
     for (const [moduleId, factory] of newModuleFactories.entries()){
         moduleFactories[moduleId] = factory;
     }
-    for (const { moduleId , errorHandler  } of outdatedSelfAcceptedModules){
+    for (const { moduleId, errorHandler } of outdatedSelfAcceptedModules){
         try {
             instantiateModule(moduleId, {
                 type: SourceType.Update,
@@ -473,7 +475,12 @@ function applyPhase(outdatedSelfAcceptedModules, newModuleFactories, outdatedMod
                         moduleId,
                         module: moduleCache[moduleId]
                     });
-                } catch (_) {}
+                } catch (err2) {
+                    reportError(err2);
+                    reportError(err);
+                }
+            } else {
+                reportError(err);
             }
         }
     }
@@ -525,10 +532,10 @@ function applyChunkListUpdate(chunkListPath, update) {
     }
 }
 function applyEcmascriptMergedUpdate(chunkPath, update) {
-    const { entries ={} , chunks ={}  } = update;
-    const { added , modified , chunksAdded , chunksDeleted  } = computeChangedModules(entries, chunks);
-    const { outdatedModules , newModuleFactories  } = computeOutdatedModules(added, modified);
-    const { disposedModules  } = updateChunksPhase(chunksAdded, chunksDeleted);
+    const { entries = {}, chunks = {} } = update;
+    const { added, modified, chunksAdded, chunksDeleted } = computeChangedModules(entries, chunks);
+    const { outdatedModules, newModuleFactories } = computeOutdatedModules(added, modified);
+    const { disposedModules } = updateChunksPhase(chunksAdded, chunksDeleted);
     applyInternal(outdatedModules, disposedModules, newModuleFactories);
 }
 function applyInvalidatedModules(outdatedModules) {
@@ -543,8 +550,15 @@ function applyInvalidatedModules(outdatedModules) {
 function applyInternal(outdatedModules, disposedModules, newModuleFactories) {
     outdatedModules = applyInvalidatedModules(outdatedModules);
     const outdatedSelfAcceptedModules = computeOutdatedSelfAcceptedModules(outdatedModules);
-    const { outdatedModuleParents  } = disposePhase(outdatedModules, disposedModules);
-    applyPhase(outdatedSelfAcceptedModules, newModuleFactories, outdatedModuleParents);
+    const { outdatedModuleParents } = disposePhase(outdatedModules, disposedModules);
+    let error;
+    function reportError(err) {
+        if (!error) error = err;
+    }
+    applyPhase(outdatedSelfAcceptedModules, newModuleFactories, outdatedModuleParents, reportError);
+    if (error) {
+        throw error;
+    }
     if (queuedInvalidatedModules.size > 0) {
         applyInternal(new Set(), [], new Map());
     }
@@ -622,7 +636,7 @@ function getAffectedModuleEffects(moduleId) {
     ];
     let nextItem;
     while(nextItem = queue.shift()){
-        const { moduleId , dependencyChain  } = nextItem;
+        const { moduleId, dependencyChain } = nextItem;
         if (moduleId != null) {
             outdatedModules.add(moduleId);
         }
@@ -1029,7 +1043,7 @@ function commonJsRequireContext(entry1, sourceModule1) {
         return resolver1.promise;
     }
 })();
-function _eval({ code , url , map  }) {
+function _eval({ code, url, map }) {
     code += `\n\n//# sourceURL=${location.origin}${url}`;
     if (map) code += `\n//# sourceMappingURL=${map}`;
     return eval(code);

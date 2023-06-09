@@ -24,6 +24,7 @@ use turbopack_core::{
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 use crate::{
+    debug::should_debug,
     embed_js::embed_file,
     evaluate::evaluate,
     execution_context::{ExecutionContext, ExecutionContextVc},
@@ -142,14 +143,10 @@ async fn extra_configs(
         .map(|path| async move {
             Ok(
                 matches!(&*path.get_type().await?, FileSystemEntryType::File).then(|| {
-                    any_content_changed(
-                        context
-                            .process(
-                                SourceAssetVc::new(path).into(),
-                                Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
-                            )
-                            .into(),
-                    )
+                    any_content_changed(context.process(
+                        SourceAssetVc::new(path).into(),
+                        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+                    ))
                 }),
             )
         })
@@ -233,7 +230,7 @@ impl PostCssTransformedAssetVc {
                 JsonValueVc::cell(css_path.into()),
             ],
             extra_configs_changed,
-            /* debug */ false,
+            should_debug("postcss_transform"),
         )
         .await?;
 

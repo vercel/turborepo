@@ -47,14 +47,17 @@ use crate::{
 };
 
 pub struct DaemonServer<T: Watcher> {
+    #[allow(dead_code)]
     daemon_root: AbsoluteSystemPathBuf,
     log_file: AbsoluteSystemPathBuf,
 
     start_time: Instant,
+    #[allow(dead_code)]
     timeout: Arc<BumpTimeout>,
 
     watcher: Arc<HashGlobWatcher<T>>,
     shutdown: Mutex<Option<Sender<()>>>,
+    #[allow(dead_code)]
     shutdown_rx: Option<Receiver<()>>,
 
     running: Arc<AtomicBool>,
@@ -63,6 +66,7 @@ pub struct DaemonServer<T: Watcher> {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum CloseReason {
     Timeout,
     Shutdown,
@@ -305,7 +309,7 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         match changed {
             Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
                 changed_output_globs: changed.into_iter().collect(),
-                time_saved: time_saved,
+                time_saved,
             })),
             Err(e) => {
                 error!("flush directory operation failed: {:?}", e);

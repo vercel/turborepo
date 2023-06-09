@@ -16,6 +16,7 @@ use turbopack_core::{
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 use crate::{
+    debug::should_debug,
     embed_js::embed_file_path,
     evaluate::evaluate,
     execution_context::{ExecutionContext, ExecutionContextVc},
@@ -115,12 +116,10 @@ struct ProcessWebpackLoadersResult {
 
 #[turbo_tasks::function]
 fn webpack_loaders_executor(context: AssetContextVc) -> AssetVc {
-    context
-        .process(
-            SourceAssetVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
-            Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
-        )
-        .into()
+    context.process(
+        SourceAssetVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
+        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+    )
 }
 
 #[turbo_tasks::value_impl]
@@ -166,7 +165,7 @@ impl WebpackLoadersProcessedAssetVc {
                 JsonValueVc::cell(json!(*loaders)),
             ],
             CompletionVc::immutable(),
-            /* debug */ false,
+            should_debug("webpack_loader"),
         )
         .await?;
 

@@ -54,7 +54,7 @@ mod tests {
         let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
 
         let lockfile_path = repo_root.path().join(LOCKFILE);
-        File::create(&lockfile_path)?;
+        File::create(lockfile_path)?;
         let package_manager = PackageManager::detect_package_manager(&repo_root_path)?;
         assert_eq!(package_manager, PackageManager::Npm);
 

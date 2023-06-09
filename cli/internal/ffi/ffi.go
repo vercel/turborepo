@@ -363,3 +363,88 @@ func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[
 	hashes := resp.GetHashes()
 	return hashes.GetHashes(), nil
 }
+
+// GetPackageFileHashesFromProcessingGitIgnore proces to rust to walk the filesystem and produce a hash similar to
+// what git would do
+func GetPackageFileHashesFromProcessingGitIgnore(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesFromProcessingGitIgnoreRequest{
+		TurboRoot:   rootPath,
+		PackagePath: packagePath,
+		Inputs:      inputs,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_package_file_hashes_from_processing_git_ignore(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetPackageFileHashesFromProcessingGitIgnoreResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}
+
+// FromWildcards returns an EnvironmentVariableMap containing the variables
+// in the environment which match an array of wildcard patterns.
+func FromWildcards(environmentMap map[string]string, wildcardPatterns []string) (map[string]string, error) {
+	if wildcardPatterns == nil {
+		return nil, nil
+	}
+	req := ffi_proto.FromWildcardsRequest{
+		EnvVars: &ffi_proto.EnvVarMap{
+			Map: environmentMap,
+		},
+		WildcardPatterns: wildcardPatterns,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.from_wildcards(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.FromWildcardsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	envVarMap := resp.GetEnvVars().GetMap()
+	// If the map is nil, return an empty map instead of nil
+	// to match with existing Go code.
+	if envVarMap == nil {
+		return map[string]string{}, nil
+	}
+	return envVarMap, nil
+}
+
+// GetGlobalHashableEnvVars calculates env var dependencies
+func GetGlobalHashableEnvVars(envAtExecutionStart map[string]string, globalEnv []string) (*ffi_proto.DetailedMap, error) {
+	req := ffi_proto.GetGlobalHashableEnvVarsRequest{
+		EnvAtExecutionStart: &ffi_proto.EnvVarMap{Map: envAtExecutionStart},
+		GlobalEnv:           globalEnv,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_global_hashable_env_vars(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetGlobalHashableEnvVarsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	respDetailedMap := resp.GetDetailedMap()
+	if respDetailedMap == nil {
+		return nil, nil
+	}
+
+	return respDetailedMap, nil
+}

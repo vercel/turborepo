@@ -14,6 +14,7 @@ use turbopath::{AbsoluteSystemPath, PathError};
 pub mod git;
 mod hash_object;
 mod ls_tree;
+pub mod manual;
 pub mod package_deps;
 mod status;
 
@@ -34,6 +35,16 @@ pub enum Error {
         #[from] std::string::FromUtf8Error,
         #[backtrace] backtrace::Backtrace,
     ),
+    #[error("package traversal error: {0}")]
+    Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
+    #[error("invalid glob: {0}")]
+    Glob(Box<wax::BuildError<'static>>, backtrace::Backtrace),
+}
+
+impl From<wax::BuildError<'static>> for Error {
+    fn from(value: wax::BuildError<'static>) -> Self {
+        Error::Glob(Box::new(value), Backtrace::capture())
+    }
 }
 
 impl Error {
