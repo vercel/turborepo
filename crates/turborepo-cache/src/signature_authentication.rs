@@ -110,7 +110,6 @@ impl ArtifactSignatureAuthenticator {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use os_str_bytes::OsStrBytes;
 
     use super::*;
 

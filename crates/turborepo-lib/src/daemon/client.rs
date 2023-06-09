@@ -147,6 +147,7 @@ pub enum DaemonError {
     DaemonConnect(#[from] DaemonConnectorError),
     /// The timeout specified was invalid.
     #[error("invalid timeout specified ({0})")]
+    #[allow(dead_code)]
     InvalidTimeout(String),
     /// The server is unable to start file watching.
     #[error("unable to start file watching")]

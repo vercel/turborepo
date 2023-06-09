@@ -31,26 +31,18 @@ fn call_turbo_gen(command: &str, tag: &String, raw_args: &str) -> Result<i32> {
 
 pub fn run(
     tag: &String,
-    command: &Option<GenerateCommand>,
+    command: &Option<Box<GenerateCommand>>,
     args: &GeneratorCustomArgs,
 ) -> Result<()> {
-    match command {
-        // check if a subcommand was passed
-        Some(command) => {
-            if let GenerateCommand::Workspace(workspace_args) = command {
-                let raw_args = serde_json::to_string(&workspace_args)?;
-                call_turbo_gen("workspace", tag, &raw_args)?;
-            } else {
-                let raw_args = serde_json::to_string(&args)?;
-                call_turbo_gen("run", tag, &raw_args)?;
-            }
-        }
+    // check if a subcommand was passed
+    if let Some(box GenerateCommand::Workspace(workspace_args)) = command {
+        let raw_args = serde_json::to_string(&workspace_args)?;
+        call_turbo_gen("workspace", tag, &raw_args)?;
+    } else {
         // if no subcommand was passed, run the generate command as default
-        None => {
-            let raw_args = serde_json::to_string(&args)?;
-            call_turbo_gen("run", tag, &raw_args)?;
-        }
-    };
+        let raw_args = serde_json::to_string(&args)?;
+        call_turbo_gen("run", tag, &raw_args)?;
+    }
 
     Ok(())
 }
