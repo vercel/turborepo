@@ -65,6 +65,7 @@ pub fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
                 Either::Left([package_unix_path, raw_glob.as_ref()].join("/"))
             }
         });
+    println!("glob start");
     let iter = globwalk::globwalk(
         turbo_root,
         &inclusions,
@@ -78,7 +79,9 @@ pub fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
             Ok(path)
         })
         .collect::<Result<Vec<_>, Error>>()?;
+    println!("glob end");
     let mut hashes = GitHashes::new();
+    println!("hashing {} files", to_hash.len());
     hash_objects(&git_root, &full_pkg_path, to_hash, &mut hashes)?;
     Ok(hashes)
 }
