@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 pub const TASK_DELIMITER: &str = "#";
 pub const ROOT_PKG_NAME: &str = "//";
 
@@ -5,6 +7,16 @@ pub const ROOT_PKG_NAME: &str = "//";
 pub enum TaskId {
     Package { package: String, task: String },
     Root(String),
+}
+
+impl Display for TaskId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (pkg, task) = match self {
+            Self::Root(task) => (ROOT_PKG_NAME, task.as_str()),
+            Self::Package { package, task } => (package.as_str(), task.as_str()),
+        };
+        write!(f, "{}{}{}", pkg, TASK_DELIMITER, task)
+    }
 }
 
 pub fn get_task_id(pkg_name: impl std::fmt::Display, target: &str) -> String {
