@@ -985,6 +985,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - uses: datadog/agent-github-action@v1.3
+        with:
+          api_key: ${{ secrets.DD_KEY_TURBOPACK }}
+
       - name: Setup Go
         uses: ./.github/actions/setup-go
         with:
