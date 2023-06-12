@@ -14,9 +14,10 @@
       ],
 
       "inputs": [
-        "**/*.go",
+        "{internal,cmd}/**/*.go",
         "!**/*_test.go",
         "../crates/turborepo*/**/*.rs", // Rust crates
+        "../crates/turborepo*/Cargo.toml",
         "!../crates/**/target"
       ]
     },
