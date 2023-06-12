@@ -15,4 +15,5 @@ module.exports = {
       statements: 89,
     },
   },
+  verbose: process.env.RUNNER_DEBUG === "1",
 };
