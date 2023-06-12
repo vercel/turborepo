@@ -309,8 +309,10 @@ pub fn globwalk(
                 // We're either going to return this path or nothing. Check if it's a directory
                 // and if we want directories
                 match AbsoluteSystemPathBuf::new(prefix)
-                    .map_err(|e| e.into())
-                    .and_then(|path| path.symlink_metadata().map(|md| (path, md)))
+                    .and_then(|path| {
+                        let metadata = path.symlink_metadata()?;
+                        Ok((path, metadata))
+                    })
                 {
                     Err(e) => {
                         // If the file doesn't exist, it's not an error, there's just nothing to
