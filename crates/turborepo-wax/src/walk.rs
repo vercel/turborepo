@@ -143,17 +143,12 @@ macro_rules! walk {
                 .strip_prefix(&$state.prefix)
                 .expect("path is not in tree");
             let depth = entry.depth().saturating_sub(1);
-            // Globs don't include the root token, but absolute paths on unix do.
-            // If we have an absolute path and are on unix, skip that token so that
-            // matching up components will work below.
-            let to_skip_in_path = if cfg!(unix) && path.is_absolute() {
-                depth + 1
-            } else {
-                depth
-            };
+            // Globs don't include the root token, but absolute paths do.
+            // Skip that token so that matching up components will work below.
             for candidate in path
                 .components()
-                .skip(to_skip_in_path)
+                .filter(|c| !matches!(c, Component::RootDir))
+                .skip(depth)
                 .filter_map(|component| match component {
                     Component::Normal(component) => Some(CandidatePath::from(component)),
                     _ => None,
