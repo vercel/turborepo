@@ -7,7 +7,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use itertools::Itertools as _;
+use itertools::{FoldWhile, Itertools as _};
 use regex::Regex;
 use thiserror::Error;
 use walkdir::{self, DirEntry, WalkDir};
@@ -578,9 +578,22 @@ pub struct Walk<'g> {
     root: PathBuf,
     prefix: PathBuf,
     walk: walkdir::IntoIter,
+    // This is a hack to express an empty iterator
+    is_empty: bool,
 }
 
 impl<'g> Walk<'g> {
+    fn empty() -> Self {
+        Self {
+            pattern: Cow::Owned(Regex::new("").unwrap()),
+            components: vec![],
+            root: PathBuf::new(),
+            prefix: PathBuf::new(),
+            walk: walkdir::WalkDir::new(PathBuf::new()).into_iter(),
+            is_empty: true,
+        }
+    }
+
     fn compile<'t, I>(tokens: I) -> Result<Vec<Regex>, CompileError>
     where
         I: IntoIterator<Item = &'t Token<'t>>,
@@ -610,6 +623,7 @@ impl<'g> Walk<'g> {
             root,
             prefix,
             walk,
+            is_empty,
         } = self;
         Walk {
             pattern: Cow::Owned(pattern.into_owned()),
@@ -617,6 +631,7 @@ impl<'g> Walk<'g> {
             root,
             prefix,
             walk,
+            is_empty,
         }
     }
 
@@ -712,6 +727,9 @@ impl Iterator for Walk<'_> {
     type Item = WalkItem<'static>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.is_empty {
+            return None;
+        }
         walk!(self => |entry| {
             return Some(entry.map(WalkEntry::into_owned));
         });
@@ -915,6 +933,24 @@ pub fn walk<'g>(
             }
         },
     );
+    if matches!(link, LinkBehavior::ReadFile) {
+        if let Ok(tail) = root.strip_prefix(directory) {
+            let found = tail
+                .components()
+                .try_fold(directory.to_path_buf(), |accum, c| {
+                    let candidate = accum.join(c);
+                    if candidate.is_symlink() {
+                        None
+                    } else {
+                        Some(candidate)
+                    }
+                })
+                .is_none();
+            if found {
+                return Walk::empty();
+            }
+        }
+    }
     let components =
         Walk::compile(glob.tree.as_ref().tokens()).expect("failed to compile glob sub-expressions");
     Walk {
@@ -929,6 +965,7 @@ pub fn walk<'g>(
             })
             .max_depth(depth)
             .into_iter(),
+        is_empty: false,
     }
 }
 

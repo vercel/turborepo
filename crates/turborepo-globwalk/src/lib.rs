@@ -4,6 +4,7 @@ mod empty_glob;
 
 use std::{
     borrow::Cow,
+    collections::HashSet,
     io::ErrorKind,
     path::{Path, PathBuf},
 };
@@ -286,7 +287,7 @@ pub fn globwalk(
     include: &[String],
     exclude: &[String],
     walk_type: WalkType,
-) -> Result<Vec<Result<AbsoluteSystemPathBuf, WalkError>>, WalkError> {
+) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
     let inc_patterns = include_paths
@@ -350,7 +351,7 @@ pub fn globwalk(
                     .collect::<Vec<_>>()
             }
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<HashSet<_>, WalkError>>()?;
     Ok(result)
 }
 
@@ -656,11 +657,10 @@ mod test {
         let dir = setup();
 
         let path = AbsoluteSystemPathBuf::new(dir.path()).unwrap();
-        let (success, _error): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
-            match super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All) {
-                Ok(e) => e.into_iter().partition_result(),
-                Err(e) => return Some(e),
-            };
+        let success = match super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All) {
+            Ok(e) => e.into_iter(),
+            Err(e) => return Some(e),
+        };
 
         assert_eq!(
             success.len(),
@@ -1228,11 +1228,7 @@ mod test {
             (crate::WalkType::Files, expected_files),
             (crate::WalkType::All, expected),
         ] {
-            let (success, _): (Vec<AbsoluteSystemPathBuf>, Vec<_>) =
-                super::globwalk(&path, &include, &exclude, walk_type)
-                    .unwrap()
-                    .into_iter()
-                    .partition_result();
+            let success = super::globwalk(&path, &include, &exclude, walk_type).unwrap();
 
             let success = success
                 .iter()
@@ -1325,10 +1321,7 @@ mod test {
             .unwrap()
             .into_iter();
         let results = iter
-            .map(|entry| {
-                let entry = entry.unwrap();
-                root.anchor(entry).unwrap().to_str().unwrap().to_string()
-            })
+            .map(|entry| root.anchor(entry).unwrap().to_str().unwrap().to_string())
             .collect::<Vec<_>>();
         let expected = vec!["root-file".to_string()];
         assert_eq!(results, expected);
@@ -1355,7 +1348,6 @@ mod test {
         let paths = iter
             .into_iter()
             .map(|path| {
-                let path = path.unwrap();
                 let relative = root.anchor(path).unwrap();
                 relative.to_str().unwrap().to_string()
             })
