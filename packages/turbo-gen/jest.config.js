@@ -8,4 +8,5 @@ module.exports = {
   modulePathIgnorePatterns: ["<rootDir>/node_modules", "<rootDir>/dist"],
   collectCoverage: true,
   verbose: process.env.RUNNER_DEBUG === "1",
+  silent: process.env.RUNNER_DEBUG !== "1",
 };
