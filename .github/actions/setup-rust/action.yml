@@ -69,5 +69,10 @@ runs:
       with:
         crate: cargo-sweep
 
+    - name: "Install cargo-groups"
+      uses: baptiste0928/cargo-install@v1
+      with:
+        crate: cargo-groups
+
     - name: "Run cargo-sweep"
       uses: ./.github/actions/cargo-sweep

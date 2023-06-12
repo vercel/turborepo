@@ -95,7 +95,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           target: ${{ matrix.os.name }}
       - name: Run Rust Unit Tests
-        run: cargo tr-test
+        run: cargo groups test turborepo
 
   js-smoke-test:
     name: JS Package Tests
