@@ -330,9 +330,10 @@ pub fn globwalk(
                     .not(ex_patterns.iter().map(|g| g.to_owned()))
                     // Per docs, only fails if exclusion list is too large, since we're using
                     // pre-compiled globs
-                    .expect(&format!(
-                        "Failed to compile exclusion globs: {:?}",
-                        ex_patterns
+                    .unwrap_or_else(|e| panic!(
+                        "Failed to compile exclusion globs: {:?}: {}",
+                        ex_patterns,
+                        e,
                     ))
                     .filter_map(|entry| match entry {
                         Ok(entry) => {
