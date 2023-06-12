@@ -49,10 +49,6 @@ default-members = [
   "xtask",
 ]
 
-[workspace.metadata.groups]
-turborepo = ["path:crates/turborepo*"]
-turbopack = ["path:crates/turbopack*", "path:crates/turbo-tasks*", "path:crates/node-file-trace"]
-
 [profile.dev.package.turbo-tasks-macros]
 opt-level = 3
 
