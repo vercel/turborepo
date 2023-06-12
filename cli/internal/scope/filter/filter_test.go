@@ -604,12 +604,12 @@ func Test_SCM(t *testing.T) {
 			"match dependency subtree",
 			[]*TargetSelector{
 				{
-					fromRef:           "HEAD~2",
-					parentDir:         "./packages/*",
+					fromRef:           "HEAD~1",
+					parentDir:         "package-*",
 					matchDependencies: true,
 				},
 			},
-			[]string{"package-3"},
+			[]string{"package-1", "package-2"},
 		},
 	}
 
