@@ -131,12 +131,12 @@ vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 # and some aren't buildable with rustls.
 reqwest = { version = "0.11.14", default-features = false }
 
-chromiumoxide = { version = "0.4.0", features = [
+chromiumoxide = { version = "0.5.0", features = [
   "tokio-runtime",
 ], default-features = false }
 # For matching on errors from chromiumoxide. Keep in
 # sync with chromiumoxide's tungstenite requirement.
-tungstenite = "0.17.3"
+tungstenite = "0.18.0"
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
