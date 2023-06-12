@@ -314,22 +314,16 @@ pub fn globwalk(
                         Ok((path, metadata))
                     })
                 {
-                    Err(e) => {
+                    Err(e) => if e.is_io_error(ErrorKind::NotFound) {
                         // If the file doesn't exist, it's not an error, there's just nothing to
                         // glob
-                        if e.is_io_error(ErrorKind::NotFound) {
-                            vec![]
-                        } else {
-                            vec![Err(e.into())]
-                        }
+                        vec![]
                     }
-                    Ok((path, md)) => {
-                        if walk_type == WalkType::Files && md.is_dir() {
-                            vec![]
-                        } else {
-                            vec![Ok(path)]
-                        }
+                    Err(e) => vec![Err(e.into())],
+                    Ok((_, md)) => if walk_type == WalkType::Files && md.is_dir() {
+                         vec![]
                     }
+                    Ok((path, _)) => vec![Ok(path)],
                 }
             } else {
                 glob.walk(&base_path_new)
