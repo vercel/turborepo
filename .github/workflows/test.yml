@@ -505,9 +505,9 @@ jobs:
         with:
           command: check licenses
 
-  rust_check:
+  turborepo_rust_check:
     needs: [determine_jobs, rust_prepare]
-    if: needs.determine_jobs.outputs.rust == 'true'
+    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turborepo_rust == 'true'
     name: Rust check / clippy
     runs-on: ubuntu-latest-16-core-oss
     steps:
@@ -527,62 +527,39 @@ jobs:
 
       - name: Run cargo check release
         run: |
-          cargo check --workspace --all-targets --release --features rustls-tls
+          cargo groups check turborepo --features rustls-tls
 
       - name: Run cargo clippy
         run: |
-          cargo clippy --workspace --all-targets --features rustls-tls
+          cargo groups clippy turborepo --features rustls-tls
 
-      - name: Count clippy warnings
-        run: |
-          count="0"
-          clippy_output="$(cargo clippy --workspace --all-targets --features rustls-tls 2>&1)"
+  turbopack_rust_check:
+    needs: [determine_jobs, rust_prepare]
+    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turbopack == 'true'
+    name: Rust check / clippy
+    runs-on: ubuntu-latest-16-core-oss
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
-          # Clippy will be invoked and report on each crate individually. We need to sum manually.
-          for warnings in $(echo "$clippy_output" | sed -n 's/.*generated \([0-9]*\) warning.*/\1/p'); do
-            count=$((count + warnings))
-          done
-
-          echo "$count" > clippy-warnings
-          echo "$count clippy warnings"
-
-          echo "$clippy_output" > clippy-warnings-raw
-
-      - name: Cache clippy warnings
-        id: expected-clippy-warnings
-        uses: actions/cache@v3
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          path: |
-            expected-clippy-warnings
-            expected-clippy-warnings-raw
-          key: expected-clippy-warnings-${{ github.sha }}
-          restore-keys: |
-            expected-clippy-warnings
+          components: clippy
+          targets: wasm32-unknown-unknown
 
-      - name: Update expected Clippy warnings on main
-        if: github.ref == 'refs/heads/main'
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Run cargo check release
         run: |
-          mv clippy-warnings expected-clippy-warnings
-          mv clippy-warnings-raw expected-clippy-warnings-raw
+          cargo groups check turbopack --features rustls-tls
 
-      - name: Check the number of Clippy warnings is ever decreasing
-        if: github.ref != 'refs/heads/main'
+      - name: Run cargo clippy
         run: |
-          if [[ -f "expected-clippy-warnings" ]]; then
-            clippy_warnings=$(cat clippy-warnings)
-            expected_clippy_warnings=$(cat expected-clippy-warnings)
-
-            if [[ "$clippy_warnings" -gt "$expected_clippy_warnings" ]]; then
-              echo "Clippy reported $clippy_warnings warnings, which is higher than the upstream number of $expected_clippy_warnings warnings."
-              echo "Please make sure you've run \`cargo clippy\` on the Rust files you've modified."
-
-              if [[ -f "expected-clippy-warnings-raw" ]]; then
-                diff clippy-warnings-raw expected-clippy-warnings-raw
-              fi
-
-              exit 1
-            fi
-          fi
+          cargo groups clippy turbopack --features rustls-tls
 
   next_dev_check:
     needs: [determine_jobs]
@@ -699,7 +676,7 @@ jobs:
       - name: Run tests
         timeout-minutes: 120
         run: |
-          cargo tr-test
+          cargo groups test turborepo
 
   turbopack_rust_test1:
     needs: [determine_jobs, rust_prepare]

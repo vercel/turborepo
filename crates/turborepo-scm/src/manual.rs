@@ -40,30 +40,26 @@ pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
                 .to_slash()
                 .ok_or_else(|| PathError::invalid_utf8_error(exclusion.as_bytes()))?
                 .into_owned();
-            let g = Glob::new(glob.as_str())
-                .map(|g| g.into_owned())
-                .map_err(|e| e.into_owned())?;
+            let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
             excludes.push(g);
         } else {
             let glob = Path::new(pattern)
                 .to_slash()
                 .ok_or_else(|| PathError::invalid_utf8_error(pattern.as_bytes()))?
                 .into_owned();
-            let g = Glob::new(glob.as_str())
-                .map(|g| g.into_owned())
-                .map_err(|e| e.into_owned())?;
+            let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
             includes.push(g);
         }
     }
     let include_pattern = if includes.is_empty() {
         None
     } else {
-        Some(any::<Glob<'static>, _>(includes)?)
+        Some(any(includes)?)
     };
     let exclude_pattern = if excludes.is_empty() {
         None
     } else {
-        Some(wax::any::<Glob<'static>, _>(excludes.into_iter())?)
+        Some(any(excludes.into_iter())?)
     };
     let walker = walker_builder
         .follow_links(false)
