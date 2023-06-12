@@ -55,6 +55,8 @@ pub enum WalkError {
     Path(#[from] PathError),
     #[error(transparent)]
     WaxWalk(#[from] wax::WalkError),
+    #[error("Internal error on glob {glob}: {error}")]
+    InternalError { glob: String, error: String },
 }
 
 /// Performs a glob walk, yielding paths that _are_ included in the include list
@@ -292,8 +294,19 @@ pub fn globwalk(
         preprocess_paths_and_globs(base_path, include, exclude)?;
     let inc_patterns = include_paths
         .iter()
-        .map(|g| Glob::new(g.as_str()))
-        .collect::<Result<Vec<_>, BuildError>>()?;
+        .map(|g| {
+            Glob::new(g.as_str()).map_err(|e| e.into()).and_then(|g| {
+                if g.has_root() {
+                    Ok(g)
+                } else {
+                    Err(WalkError::InternalError {
+                        glob: g.to_string(),
+                        error: "expected glob to have a root".to_string(),
+                    })
+                }
+            })
+        })
+        .collect::<Result<Vec<_>, WalkError>>()?;
     let ex_patterns = exclude_paths
         .iter()
         .map(|g| Glob::new(g.as_str()))
@@ -304,7 +317,7 @@ pub fn globwalk(
         .flat_map(|glob| {
             // Check if the glob specifies an exact filename with no meta characters.
             if let Some(prefix) = glob.variance().path() {
-                // We expect all of our globs to be absolute paths
+                // We expect all of our globs to be absolute paths (asserted above)
                 debug_assert!(glob.has_root());
                 // We're either going to return this path or nothing. Check if it's a directory
                 // and if we want directories
