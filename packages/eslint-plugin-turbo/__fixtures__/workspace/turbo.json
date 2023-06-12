@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": ["UNORDERED", "CI"],
+  "globalDotEnv": [".env", "missing.env"],
   "pipeline": {
     "build": {
       // A workspace's `build` task depends on that workspace's

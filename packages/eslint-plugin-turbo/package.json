@@ -30,6 +30,9 @@
     "lint": "eslint lib/**/*.ts",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
+  "dependencies": {
+    "dotenv": "16.0.3"
+  },
   "devDependencies": {
     "@types/eslint": "^8.4.5",
     "@types/estree": "^1.0.0",

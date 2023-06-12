@@ -425,7 +425,7 @@ jobs:
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter="./packages/*" --color
+          turbo run check-types test --filter=...{./packages/*}[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color
 
   turbopack_typescript:
     name: Turbopack TypeScript files

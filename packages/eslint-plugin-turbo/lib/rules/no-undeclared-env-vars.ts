@@ -2,7 +2,7 @@ import type { Rule } from "eslint";
 import path from "path";
 import { Node, MemberExpression } from "estree";
 import { RULES } from "../constants";
-import getEnvVarDependencies from "../utils/getEnvVarDependencies";
+import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
 
 const meta: Rule.RuleMetaData = {
   type: "problem",
@@ -61,6 +61,7 @@ function normalizeCwd(
 
 function create(context: Rule.RuleContext): Rule.RuleListener {
   const { options, getPhysicalFilename } = context;
+
   const allowList: Array<string> = options?.[0]?.allowList || [];
   const regexAllowList: Array<RegExp> = [];
   allowList.forEach((allowed) => {
@@ -76,64 +77,55 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
     context.getCwd ? context.getCwd() : undefined,
     options
   );
-  const filePath = getPhysicalFilename();
-  const allTurboVars = getEnvVarDependencies({
-    cwd,
-  });
 
-  // if allTurboVars is null, something went wrong reading from the turbo config
-  // (this is different from finding a config with no env vars present, which would
-  // return an empty set) - so there is no point continuing if we have nothing to check against
-  if (!allTurboVars) {
-    // return of {} bails early from a rule check
+  const project = new Project(cwd);
+  if (!project.valid()) {
     return {};
   }
 
-  const globalTurboVars = allTurboVars["//"];
-  const hasWorkspaceConfigs = Object.keys(allTurboVars).length > 1;
-
-  // find any workspace configs that match the current file path
-  // find workspace config (if any) that match the current file path
-  const workspaceKey = Object.keys(allTurboVars).find(
-    (workspacePath) => filePath !== "//" && filePath.startsWith(workspacePath)
+  const filePath = getPhysicalFilename();
+  const hasWorkspaceConfigs = project.projectWorkspaces.some(
+    (workspaceConfig) => !!workspaceConfig.turboConfig
+  );
+  const workspaceConfig = getWorkspaceFromFilePath(
+    project.projectWorkspaces,
+    filePath
   );
 
-  let workspaceTurboVars: Set<string> | null = null;
-  if (workspaceKey) {
-    workspaceTurboVars = allTurboVars[workspaceKey];
-  }
-
   const checkKey = (node: Node, envKey?: string) => {
-    if (
-      envKey &&
-      !globalTurboVars.has(envKey) &&
-      !regexAllowList.some((regex) => regex.test(envKey))
-    ) {
-      // if we have a workspace config, check that too
-      if (workspaceTurboVars && workspaceTurboVars.has(envKey)) {
-        return {};
-      } else {
-        let message = `{{ envKey }} is not listed as a dependency in ${
-          hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
-        }`;
-        if (workspaceKey && workspaceTurboVars) {
-          if (cwd) {
-            // if we have a cwd, we can provide a relative path to the workspace config
-            message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
-              cwd,
-              workspaceKey
-            )}) turbo.json`;
-          } else {
-            message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
-          }
-        }
+    if (!envKey) {
+      return {};
+    }
 
-        context.report({
-          node,
-          message,
-          data: { envKey },
-        });
+    if (regexAllowList.some((regex) => regex.test(envKey))) {
+      return {};
+    }
+
+    let configured = project.test(workspaceConfig?.workspaceName, envKey);
+
+    if (configured) {
+      return {};
+    } else {
+      let message = `{{ envKey }} is not listed as a dependency in ${
+        hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
+      }`;
+      if (workspaceConfig && workspaceConfig.turboConfig) {
+        if (cwd) {
+          // if we have a cwd, we can provide a relative path to the workspace config
+          message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
+            cwd,
+            workspaceConfig.workspacePath
+          )}) turbo.json`;
+        } else {
+          message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
+        }
       }
+
+      context.report({
+        node,
+        message,
+        data: { envKey },
+      });
     }
   };
 
