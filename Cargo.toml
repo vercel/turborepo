@@ -116,6 +116,7 @@ turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-cache = { path = "crates/turborepo-cache" }
+turborepo-env = { path = "crates/turborepo-env" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib" }
@@ -130,12 +131,12 @@ vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 # and some aren't buildable with rustls.
 reqwest = { version = "0.11.14", default-features = false }
 
-chromiumoxide = { version = "0.4.0", features = [
+chromiumoxide = { version = "0.5.0", features = [
   "tokio-runtime",
 ], default-features = false }
 # For matching on errors from chromiumoxide. Keep in
 # sync with chromiumoxide's tungstenite requirement.
-tungstenite = "0.17.3"
+tungstenite = "0.18.0"
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
@@ -193,8 +194,10 @@ serde_json = "1.0.93"
 serde_qs = "0.11.0"
 serde_with = "2.3.2"
 serde_yaml = "0.9.17"
+sha2 = "0.10.6"
 syn = "1.0.107"
 tempfile = "3.3.0"
+test-case = "3.0.0"
 thiserror = "1.0.38"
 tiny-gradient = "0.1.0"
 tokio = "1.25.0"

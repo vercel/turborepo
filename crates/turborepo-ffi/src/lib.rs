@@ -9,6 +9,7 @@ use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
 use globwalk::{globwalk, WalkError};
 pub use lockfile::{patches, subgraph, transitive_closure};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turborepo_env::EnvironmentVariableMap;
 
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/_.rs"));
@@ -358,9 +359,94 @@ pub extern "C" fn get_package_file_hashes_from_processing_git_ignore(buffer: Buf
                 to_return.insert(filename, hash);
             }
             let file_hashes = proto::FileHashes { hashes: to_return };
-            let resp = proto::GetPackageFileHashesFromProcessingGitIgnoreResponse {
+
+            proto::GetPackageFileHashesFromProcessingGitIgnoreResponse {
                 response: Some(
                     proto::get_package_file_hashes_from_processing_git_ignore_response::Response::Hashes(
+                        file_hashes,
+                    ),
+                ),
+            }
+        }
+        Err(err) => {
+            let resp = proto::GetPackageFileHashesFromProcessingGitIgnoreResponse {
+                response: Some(
+                    proto::get_package_file_hashes_from_processing_git_ignore_response::Response::Error(
+                        err.to_string(),
+                    ),
+                ),
+            };
+            return resp.into();
+        }
+    };
+    response.into()
+}
+
+#[no_mangle]
+pub extern "C" fn get_package_file_hashes_from_inputs(buffer: Buffer) -> Buffer {
+    let req: proto::GetPackageFileHashesFromInputsRequest = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::GetPackageFileHashesFromInputsResponse {
+                response: Some(
+                    proto::get_package_file_hashes_from_inputs_response::Response::Error(
+                        err.to_string(),
+                    ),
+                ),
+            };
+            return resp.into();
+        }
+    };
+    let turbo_root = match AbsoluteSystemPathBuf::new(req.turbo_root) {
+        Ok(turbo_root) => turbo_root,
+        Err(err) => {
+            let resp = proto::GetPackageFileHashesFromInputsResponse {
+                response: Some(
+                    proto::get_package_file_hashes_from_inputs_response::Response::Error(
+                        err.to_string(),
+                    ),
+                ),
+            };
+            return resp.into();
+        }
+    };
+    let package_path = match AnchoredSystemPathBuf::from_raw(req.package_path) {
+        Ok(package_path) => package_path,
+        Err(err) => {
+            let resp = proto::GetPackageFileHashesFromInputsResponse {
+                response: Some(
+                    proto::get_package_file_hashes_from_inputs_response::Response::Error(
+                        err.to_string(),
+                    ),
+                ),
+            };
+            return resp.into();
+        }
+    };
+    let inputs = req.inputs.as_slice();
+    let response = match turborepo_scm::package_deps::get_package_file_hashes_from_inputs(
+        &turbo_root,
+        &package_path,
+        inputs,
+    ) {
+        Ok(hashes) => {
+            let mut to_return = HashMap::new();
+            for (filename, hash) in hashes {
+                let filename = match filename.as_str() {
+                    Ok(s) => s.to_owned(),
+                    Err(err) => {
+                        let resp = proto::GetPackageFileHashesFromInputsResponse {
+                            response: Some(proto::get_package_file_hashes_from_inputs_response::Response::Error(err.to_string()))
+                        };
+                        return resp.into();
+                    }
+                };
+                to_return.insert(filename, hash);
+            }
+            let file_hashes = proto::FileHashes { hashes: to_return };
+            let resp = proto::GetPackageFileHashesFromInputsResponse {
+                response: Some(
+                    proto::get_package_file_hashes_from_inputs_response::Response::Hashes(
                         file_hashes,
                     ),
                 ),
@@ -368,9 +454,9 @@ pub extern "C" fn get_package_file_hashes_from_processing_git_ignore(buffer: Buf
             resp
         }
         Err(err) => {
-            let resp = proto::GetPackageFileHashesFromProcessingGitIgnoreResponse {
+            let resp = proto::GetPackageFileHashesFromInputsResponse {
                 response: Some(
-                    proto::get_package_file_hashes_from_processing_git_ignore_response::Response::Error(
+                    proto::get_package_file_hashes_from_inputs_response::Response::Error(
                         err.to_string(),
                     ),
                 ),
@@ -432,6 +518,88 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         })),
     }
     .into()
+}
+
+#[no_mangle]
+pub extern "C" fn from_wildcards(buffer: Buffer) -> Buffer {
+    let req: proto::FromWildcardsRequest = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::FromWildcardsResponse {
+                response: Some(proto::from_wildcards_response::Response::Error(
+                    err.to_string(),
+                )),
+            };
+            return resp.into();
+        }
+    };
+
+    let env_var_map: EnvironmentVariableMap = req.env_vars.unwrap().map.into();
+    match env_var_map.from_wildcards(&req.wildcard_patterns) {
+        Ok(map) => {
+            let resp = proto::FromWildcardsResponse {
+                response: Some(proto::from_wildcards_response::Response::EnvVars(
+                    proto::EnvVarMap {
+                        map: map.into_inner(),
+                    },
+                )),
+            };
+            resp.into()
+        }
+        Err(err) => {
+            let resp = proto::FromWildcardsResponse {
+                response: Some(proto::from_wildcards_response::Response::Error(
+                    err.to_string(),
+                )),
+            };
+            resp.into()
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn get_global_hashable_env_vars(buffer: Buffer) -> Buffer {
+    let req: proto::GetGlobalHashableEnvVarsRequest = match buffer.into_proto() {
+        Ok(req) => req,
+        Err(err) => {
+            let resp = proto::GetGlobalHashableEnvVarsResponse {
+                response: Some(
+                    proto::get_global_hashable_env_vars_response::Response::Error(err.to_string()),
+                ),
+            };
+            return resp.into();
+        }
+    };
+
+    match turborepo_env::get_global_hashable_env_vars(
+        req.env_at_execution_start.unwrap().map.into(),
+        &req.global_env,
+    ) {
+        Ok(map) => {
+            let resp = proto::GetGlobalHashableEnvVarsResponse {
+                response: Some(
+                    proto::get_global_hashable_env_vars_response::Response::DetailedMap(
+                        proto::DetailedMap {
+                            all: map.all.into_inner(),
+                            by_source: Some(proto::BySource {
+                                explicit: map.by_source.explicit.into_inner(),
+                                matching: map.by_source.matching.into_inner(),
+                            }),
+                        },
+                    ),
+                ),
+            };
+            resp.into()
+        }
+        Err(err) => {
+            let resp = proto::GetGlobalHashableEnvVarsResponse {
+                response: Some(
+                    proto::get_global_hashable_env_vars_response::Response::Error(err.to_string()),
+                ),
+            };
+            resp.into()
+        }
+    }
 }
 
 #[cfg(test)]

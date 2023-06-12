@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/encoding/gitoutput"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
@@ -25,72 +24,6 @@ type PackageDepsOptions struct {
 	PackagePath turbopath.AnchoredSystemPath
 
 	InputPatterns []string
-}
-
-func getPackageFileHashesFromInputs(rootPath turbopath.AbsoluteSystemPath, packagePath turbopath.AnchoredSystemPath, inputs []string) (map[turbopath.AnchoredUnixPath]string, error) {
-	absolutePackagePath := packagePath.RestoreAnchor(rootPath)
-	// Add all the checked in hashes.
-
-	// make a copy of the inputPatterns array, because we may be appending to it later.
-	calculatedInputs := make([]string, len(inputs))
-	copy(calculatedInputs, inputs)
-
-	// Add in package.json and turbo.json to input patterns. Both file paths are relative to pkgPath
-	//
-	// - package.json is an input because if the `scripts` in
-	// 		the package.json change (i.e. the tasks that turbo executes), we want
-	// 		a cache miss, since any existing cache could be invalid.
-	// - turbo.json because it's the definition of the tasks themselves. The root turbo.json
-	// 		is similarly included in the global hash. This file may not exist in the workspace, but
-	// 		that is ok, because it will get ignored downstream.
-	calculatedInputs = append(calculatedInputs, "package.json")
-	calculatedInputs = append(calculatedInputs, "turbo.json")
-
-	// The input patterns are relative to the package.
-	// However, we need to change the globbing to be relative to the repo root.
-	// Prepend the package path to each of the input patterns.
-	prefixedInputPatterns := []string{}
-	prefixedExcludePatterns := []string{}
-	for _, pattern := range calculatedInputs {
-		if len(pattern) > 0 && pattern[0] == '!' {
-			rerooted, err := rootPath.PathTo(absolutePackagePath.UntypedJoin(pattern[1:]))
-			if err != nil {
-				return nil, err
-			}
-			prefixedExcludePatterns = append(prefixedExcludePatterns, rerooted)
-		} else {
-			rerooted, err := rootPath.PathTo(absolutePackagePath.UntypedJoin(pattern))
-			if err != nil {
-				return nil, err
-			}
-			prefixedInputPatterns = append(prefixedInputPatterns, rerooted)
-		}
-	}
-	absoluteFilesToHash, err := globby.GlobFiles(rootPath.ToStringDuringMigration(), prefixedInputPatterns, prefixedExcludePatterns)
-
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to resolve input globs %v", calculatedInputs)
-	}
-
-	filesToHash := make([]turbopath.AnchoredSystemPath, len(absoluteFilesToHash))
-	for i, rawPath := range absoluteFilesToHash {
-		relativePathString, err := absolutePackagePath.RelativePathString(rawPath)
-
-		if err != nil {
-			return nil, errors.Wrapf(err, "not relative to package: %v", rawPath)
-		}
-
-		filesToHash[i] = turbopath.AnchoredSystemPathFromUpstream(relativePathString)
-	}
-
-	// Note that in this scenario, we don't need to check git status.
-	// We're hashing the current state, not state at a commit.
-	result, err := GetHashesForFiles(absolutePackagePath, filesToHash)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed hashing resolved inputs globs")
-	}
-
-	return result, nil
 }
 
 // GetPackageFileHashes Builds an object containing git hashes for the files under the specified `packagePath` folder.
@@ -262,33 +195,6 @@ func manuallyHashFiles(rootPath turbopath.AbsoluteSystemPath, files []turbopath.
 		hashObject[file.ToUnixPath()] = hash
 	}
 	return hashObject, nil
-}
-
-// runGitCommand provides boilerplate command handling for `ls-tree`, `ls-files`, and `status`
-// Rather than doing string processing, it does stream processing of `stdout`.
-func runGitCommand(cmd *exec.Cmd, commandName string, handler func(io.Reader) *gitoutput.Reader) ([][]string, error) {
-	stdoutPipe, pipeError := cmd.StdoutPipe()
-	if pipeError != nil {
-		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, pipeError)
-	}
-
-	startError := cmd.Start()
-	if startError != nil {
-		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, startError)
-	}
-
-	reader := handler(stdoutPipe)
-	entries, readErr := reader.ReadAll()
-	if readErr != nil {
-		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, readErr)
-	}
-
-	waitErr := cmd.Wait()
-	if waitErr != nil {
-		return nil, fmt.Errorf("failed to read `git %s`: %w", commandName, waitErr)
-	}
-
-	return entries, nil
 }
 
 // getTraversePath gets the distance of the current working directory to the repository root.

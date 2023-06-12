@@ -39,6 +39,8 @@ pub enum Error {
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
     #[error("invalid glob: {0}")]
     Glob(Box<wax::BuildError<'static>>, backtrace::Backtrace),
+    #[error(transparent)]
+    Walk(#[from] globwalk::WalkError),
 }
 
 impl From<wax::BuildError<'static>> for Error {

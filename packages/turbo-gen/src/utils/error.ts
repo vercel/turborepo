@@ -3,6 +3,7 @@ export type GenerateErrorType =
   | "plop_error_running_generator"
   | "plop_unable_to_load_config"
   | "plop_generator_not_found"
+  | "plop_no_config"
   | "config_directory_already_exists"
   // default
   | "unknown";
