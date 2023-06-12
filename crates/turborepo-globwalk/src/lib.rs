@@ -296,7 +296,7 @@ pub fn globwalk(
         .collect::<Result<Vec<_>, BuildError>>()?;
     let ex_patterns = exclude_paths
         .iter()
-        .map(|g| Glob::new(g.as_str()).map(|g| g.into_owned()))
+        .map(|g| Glob::new(g.as_str()))
         .collect::<Result<Vec<_>, _>>()?;
 
     let result = inc_patterns
