@@ -587,7 +587,8 @@ mod test {
     #[test_case("**/【*", 1, 1 => matches None)]
     // in the go implementation, broken-symlink is yielded,
     // however in symlink mode, walkdir yields broken symlinks as errors.
-    // Note that walkdir _always_ follows root symlinks.
+    // Note that walkdir _always_ follows root symlinks. We handle this in the layer
+    // above wax.
     #[test_case("broken-symlink", 1, 1 => matches None ; "broken symlinks should be yielded")]
     // globs that match across a symlink should not follow the symlink
     #[test_case("working-symlink/c/*", 0, 0 => matches None ; "working symlink should not be followed")]
