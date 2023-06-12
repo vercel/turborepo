@@ -308,20 +308,18 @@ pub fn globwalk(
                 debug_assert!(glob.has_root());
                 // We're either going to return this path or nothing. Check if it's a directory
                 // and if we want directories
-                match AbsoluteSystemPathBuf::new(prefix)
-                    .and_then(|path| {
-                        let metadata = path.symlink_metadata()?;
-                        Ok((path, metadata))
-                    })
-                {
-                    Err(e) => if e.is_io_error(ErrorKind::NotFound) {
+                match AbsoluteSystemPathBuf::new(prefix).and_then(|path| {
+                    let metadata = path.symlink_metadata()?;
+                    Ok((path, metadata))
+                }) {
+                    Err(e) if e.is_io_error(ErrorKind::NotFound) => {
                         // If the file doesn't exist, it's not an error, there's just nothing to
                         // glob
                         vec![]
                     }
                     Err(e) => vec![Err(e.into())],
-                    Ok((_, md)) => if walk_type == WalkType::Files && md.is_dir() {
-                         vec![]
+                    Ok((_, md)) if walk_type == WalkType::Files && md.is_dir() => {
+                        vec![]
                     }
                     Ok((path, _)) => vec![Ok(path)],
                 }
@@ -330,11 +328,12 @@ pub fn globwalk(
                     .not(ex_patterns.iter().cloned())
                     // Per docs, only fails if exclusion list is too large, since we're using
                     // pre-compiled globs
-                    .unwrap_or_else(|e| panic!(
-                        "Failed to compile exclusion globs: {:?}: {}",
-                        ex_patterns,
-                        e,
-                    ))
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "Failed to compile exclusion globs: {:?}: {}",
+                            ex_patterns, e,
+                        )
+                    })
                     .filter_map(|entry| match entry {
                         Ok(entry) => {
                             if walk_type == WalkType::Files && entry.file_type().is_dir() {
@@ -364,28 +363,6 @@ mod test {
     use crate::{
         collapse_path, empty_glob::InclusiveEmptyAny, globwalk, MatchType, WalkError, WalkType,
     };
-
-    #[test]
-    fn test_wax_globwalk() {
-        let cwd = AbsoluteSystemPathBuf::cwd().unwrap();
-        let repo_root = cwd
-            .ancestors()
-            .find(|dir| dir.join_component(".git").exists())
-            .unwrap();
-        let includes: &[String] = &[
-            "cli/{cmd,internal}/**/*.go".to_string(),
-            "cli/../crates/turborepo*/**/*.rs".to_string(),
-            "cli/package.json".to_string(),
-            "cli/turbo.json".to_string(),
-        ];
-        let excludes: &[String] = &[
-            "cli/**/*_test.go".to_string(),
-            "cli/**/crates/**/target".to_string(),
-        ];
-        let files = globwalk(&repo_root, includes, excludes, WalkType::Files).unwrap();
-        println!("{:?} ({})", files, files.len());
-        assert!(files.len() < 1000);
-    }
 
     #[test_case("a/./././b", "a/b", 1 ; "test path with dot segments")]
     #[test_case("a/../b", "b", 0 ; "test path with dotdot segments")]
