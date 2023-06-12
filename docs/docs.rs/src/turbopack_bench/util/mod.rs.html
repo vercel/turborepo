@@ -267,6 +267,7 @@
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     io::{<span class="self">self</span>, BufRead, BufReader, Read, Write},
     panic::UnwindSafe,
@@ -357,6 +358,7 @@
     <span class="kw">let </span>with_head = read_env_bool(<span class="string">&quot;TURBOPACK_BENCH_WITH_HEAD&quot;</span>);
     <span class="kw">let </span>with_devtools = read_env_bool(<span class="string">&quot;TURBOPACK_BENCH_DEVTOOLS&quot;</span>);
     <span class="kw">let </span><span class="kw-2">mut </span>builder = BrowserConfig::builder();
+    builder = builder.no_sandbox();
     <span class="kw">if </span>with_head {
         builder = builder.with_head();
     }
