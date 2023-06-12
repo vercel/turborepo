@@ -327,7 +327,7 @@ pub fn globwalk(
                 }
             } else {
                 glob.walk(&base_path_new)
-                    .not(ex_patterns.iter().map(|g| g.to_owned()))
+                    .not(ex_patterns.iter().cloned())
                     // Per docs, only fails if exclusion list is too large, since we're using
                     // pre-compiled globs
                     .unwrap_or_else(|e| panic!(
