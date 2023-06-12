@@ -7,7 +7,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use itertools::{FoldWhile, Itertools as _};
+use itertools::Itertools as _;
 use regex::Regex;
 use thiserror::Error;
 use walkdir::{self, DirEntry, WalkDir};

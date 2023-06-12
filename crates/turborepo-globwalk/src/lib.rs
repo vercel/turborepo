@@ -13,7 +13,7 @@ use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
-use wax::{Any, BuildError, Glob, Pattern, WalkBehavior, WalkEntry};
+use wax::{Any, BuildError, Glob, Pattern};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {

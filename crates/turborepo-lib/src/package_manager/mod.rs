@@ -394,19 +394,16 @@ impl PackageManager {
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
-    ) -> Result<Vec<AbsoluteSystemPathBuf>, Error> {
+    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf>, Error> {
         let globs = self.get_workspace_globs(repo_root)?;
 
-        let walker = globwalk::globwalk(
+        let files = globwalk::globwalk(
             repo_root,
             &globs.package_json_inclusions,
             &globs.raw_exclusions,
             globwalk::WalkType::Files,
         )?;
-        let items = walker
-            .map(|result| result.map_err(|e| e.into()))
-            .collect::<Result<Vec<_>, Error>>()?;
-        Ok(items)
+        Ok(files.into_iter())
     }
 }
 

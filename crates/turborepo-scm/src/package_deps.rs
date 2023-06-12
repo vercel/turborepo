@@ -66,15 +66,15 @@ pub fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
             }
         });
     println!("glob start");
-    let iter = globwalk::globwalk(
+    let files = globwalk::globwalk(
         turbo_root,
         &inclusions,
         &exclusions,
         globwalk::WalkType::Files,
     )?;
-    let to_hash = iter
+    let to_hash = files
+        .iter()
         .map(|entry| {
-            let entry = entry?;
             let path = git_root.anchor(entry)?.to_unix()?;
             Ok(path)
         })
