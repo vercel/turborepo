@@ -6,7 +6,7 @@ mod lockfile;
 
 use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
 
-use globwalk::{globwalk, WalkError};
+use globwalk::globwalk;
 pub use lockfile::{patches, subgraph, transitive_closure};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_env::EnvironmentVariableMap;
@@ -483,13 +483,13 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         false => globwalk::WalkType::All,
     };
 
-    let iter = match globwalk(
+    let files = match globwalk(
         &AbsoluteSystemPathBuf::new(req.base_path).expect("absolute"),
         &req.include_patterns,
         &req.exclude_patterns,
         walk_type,
     ) {
-        Ok(iter) => iter,
+        Ok(files) => files,
         Err(err) => {
             let resp = proto::GlobResp {
                 response: Some(proto::glob_resp::Response::Error(err.to_string())),
@@ -498,17 +498,8 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         }
     };
 
-    let paths = match iter.collect::<Result<Vec<_>, WalkError>>() {
-        Ok(paths) => paths,
-        Err(err) => {
-            let resp = proto::GlobResp {
-                response: Some(proto::glob_resp::Response::Error(err.to_string())),
-            };
-            return resp.into();
-        }
-    };
     // TODO: is to_string_lossy the right thing to do here? We could error...
-    let files: Vec<_> = paths
+    let files: Vec<_> = files
         .into_iter()
         .map(|path| path.to_string_lossy().to_string())
         .collect();
