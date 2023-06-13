@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs::File,
     path::Path,
 };
@@ -13,8 +13,8 @@ use crate::{
     package_json::PackageJson,
     run::{
         pipeline::{
-            BookkeepingTaskDefinition, Pipeline, TaskDefinition, TaskDefinitionHashable,
-            TaskOutputMode, TaskOutputs,
+            BookkeepingTaskDefinition, Pipeline, RawPipeline, RawTaskDefinition,
+            TaskDefinitionHashable, TaskOutputs,
         },
         task_id::{get_package_task_from_id, is_package_task, root_task_id},
     },
@@ -29,22 +29,37 @@ pub struct SpacesJson {
     pub other: Option<serde_json::Value>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+// The processed TurboJSON ready for use by Turborepo.
+pub struct TurboJSON {
+    global_deps: Vec<String>,
+    global_env: Vec<String>,
+    global_pass_through_env: Vec<String>,
+    global_dot_env: Vec<RelativeUnixPathBuf>,
+    pub(crate) pipeline: Pipeline,
+    pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
+    extends: Vec<String>,
+    pub(crate) space_id: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
-pub struct RawTurboJson {
-    #[serde(default)]
+pub struct RawTurboJSON {
     // Global root filesystem dependencies
-    global_deps: Vec<String>,
+    #[serde(default)]
+    global_dependencies: Vec<String>,
     #[serde(default)]
     global_env: Vec<String>,
     #[serde(default)]
-    global_pass_through_env: Vec<String>,
-    #[serde(default)]
+    global_pass_through_env: Option<Vec<String>>,
     // .env files to consider, in order.
-    global_dot_env: Vec<RelativeUnixPathBuf>,
+    #[serde(default)]
+    global_dot_env: Option<Vec<String>>,
     // Pipeline is a map of Turbo pipeline entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
+    #[serde(default)]
     pipeline: RawPipeline,
     // Configuration options when interfacing with the remote cache
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
@@ -78,10 +93,11 @@ const CONFIG_FILE: &str = "turbo.json";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
-impl From<RawTaskDefinition> for BookkeepingTaskDefinition {
-    fn from(raw_task: RawTaskDefinition) -> Self {
-        let mut defined_fields: HashSet<&'static str> = HashSet::new();
-        let mut experimental_fields = HashSet::new();
+impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
+    type Error = Error;
+
+    fn try_from(raw_task: RawTaskDefinition) -> Result<Self, Error> {
+        let mut defined_fields = HashSet::new();
 
         let outputs = raw_task
             .outputs
@@ -90,7 +106,7 @@ impl From<RawTaskDefinition> for BookkeepingTaskDefinition {
                 let mut exclusions = Vec::new();
                 // Assign a bookkeeping field so we know that there really were
                 // outputs configured in the underlying config file.
-                defined_fields.insert("outputs");
+                defined_fields.insert("Outputs".to_string());
 
                 for glob in outputs {
                     if let Some(glob) = glob.strip_prefix('!') {
@@ -127,43 +143,223 @@ impl From<RawTaskDefinition> for BookkeepingTaskDefinition {
             .unwrap_or_default();
 
         let cache = raw_task.cache.map_or(true, |cache| {
-            defined_fields.insert("cache");
+            defined_fields.insert("Cache".to_string());
 
             cache
         });
 
-        let mut env_var_dependencies = Vec::new();
+        let mut topological_dependencies = Vec::new();
+        let mut task_dependencies = Vec::new();
 
-        if let Some(depends_on) = raw_task.depends_on.is_some() {
-            defined_fields.insert("dependsOn");
+        let mut env_var_dependencies = HashSet::new();
+        if let Some(depends_on) = raw_task.depends_on {
+            // If there was a dependsOn field, add the bookkeeping
+            // we don't care what's in the field, just that it was there
+            // We'll use this marker to overwrite while merging TaskDefinitions.
+            defined_fields.insert("DependsOn".to_string());
 
-            for dependency in depends_on {}
+            for dependency in depends_on {
+                if let Some(dependency) = dependency.strip_prefix(ENV_PIPELINE_DELIMITER) {
+                    println!(
+                        "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
+                         deprecated, found {}. Use the \"env\" key or use `npx @turbo/codemod \
+                         migrate-env-var-dependencies`.\n",
+                        dependency
+                    );
+                    defined_fields.insert("Env".to_string());
+                    env_var_dependencies.insert(dependency.to_string());
+                } else if let Some(topo_dependency) =
+                    dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
+                {
+                    topological_dependencies.push(topo_dependency.to_string());
+                } else {
+                    task_dependencies.push(dependency);
+                }
+            }
         }
 
-        BookkeepingTaskDefinition {
+        task_dependencies.sort();
+        topological_dependencies.sort();
+
+        let env = raw_task
+            .env
+            .map(|env| -> Result<Vec<String>, Error> {
+                defined_fields.insert("Env".to_string());
+                gather_env_vars(env, "env", &mut env_var_dependencies)?;
+                let mut env_var_dependencies: Vec<String> =
+                    env_var_dependencies.into_iter().collect();
+                env_var_dependencies.sort();
+                Ok(env_var_dependencies)
+            })
+            .transpose()?
+            .unwrap_or_default();
+
+        let inputs = raw_task
+            .inputs
+            .map(|inputs| {
+                defined_fields.insert("Inputs".to_string());
+                for input in &inputs {
+                    if Path::new(&input).is_absolute() {
+                        println!(
+                            "[WARNING] Using an absolute path in \"inputs\" ({}) will not work \
+                             and will be an error in a future version",
+                            input
+                        )
+                    }
+                }
+
+                inputs
+            })
+            .unwrap_or_default();
+
+        let pass_through_env = raw_task
+            .pass_through_env
+            .map(|env| -> Result<Vec<String>, Error> {
+                defined_fields.insert("PassThroughEnv".to_string());
+                let mut pass_through_env = HashSet::new();
+                gather_env_vars(env, "passThroughEnv", &mut pass_through_env)?;
+                let mut pass_through_env: Vec<String> = pass_through_env.into_iter().collect();
+                pass_through_env.sort();
+                Ok(pass_through_env)
+            })
+            .transpose()?
+            .unwrap_or_default();
+
+        let dot_env = raw_task
+            .dot_env
+            .map(|env| -> Result<Vec<RelativeUnixPathBuf>, Error> {
+                defined_fields.insert("DotEnv".to_string());
+                // Going to _at least_ be an empty array.
+                let mut dot_env = Vec::new();
+                for dot_env_path in env {
+                    let type_checked_path = RelativeUnixPathBuf::new(dot_env_path)?;
+                    // These are _explicitly_ not sorted.
+                    dot_env.push(type_checked_path);
+                }
+
+                Ok(dot_env)
+            })
+            .transpose()?
+            .unwrap_or_default();
+
+        if raw_task.output_mode.is_some() {
+            defined_fields.insert("OutputMode".to_string());
+        }
+        if raw_task.persistent.is_some() {
+            defined_fields.insert("Persistent".to_string());
+        }
+
+        Ok(BookkeepingTaskDefinition {
             defined_fields,
             experimental_fields: Default::default(),
             experimental: Default::default(),
             task_definition: TaskDefinitionHashable {
                 outputs,
                 cache,
-                env_var_dependencies: vec![],
-                topological_dependencies: vec![],
-                task_dependencies: vec![],
-                inputs: vec![],
-                output_mode: Default::default(),
-                persistent: false,
+                topological_dependencies,
+                task_dependencies,
+                env,
+                inputs,
+                pass_through_env,
+                dot_env,
+                output_mode: raw_task.output_mode.unwrap_or_default(),
+                persistent: raw_task.persistent.unwrap_or_default(),
             },
-        }
+        })
     }
 }
 
-impl RawTurboJson {
+impl TryFrom<RawTurboJSON> for TurboJSON {
+    type Error = Error;
+
+    fn try_from(raw_turbo: RawTurboJSON) -> Result<Self, Error> {
+        let mut global_env = HashSet::new();
+        let mut global_file_dependencies = HashSet::new();
+
+        gather_env_vars(raw_turbo.global_env, "globalEnv", &mut global_env)?;
+
+        // TODO: In the rust port, warnings should be refactored to a post-parse
+        // validation step
+        for value in raw_turbo.global_dependencies {
+            if let Some(env_var) = value.strip_prefix(ENV_PIPELINE_DELIMITER) {
+                println!(
+                    "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
+                     deprecated, found {}. Use the \"env\" key or use `npx @turbo/codemod \
+                     migrate-env-var-dependencies`.\n",
+                    env_var
+                );
+
+                global_env.insert(env_var.to_string());
+            } else {
+                if Path::new(&value).is_absolute() {
+                    println!(
+                        "[WARNING] Using an absolute path in \"globalDependencies\" ({}) will not \
+                         work and will be an error in a future version",
+                        value
+                    )
+                }
+
+                global_file_dependencies.insert(value);
+            }
+        }
+
+        Ok(TurboJSON {
+            global_env: {
+                let mut global_env: Vec<_> = global_env.into_iter().collect();
+                global_env.sort();
+                global_env
+            },
+            global_pass_through_env: raw_turbo
+                .global_pass_through_env
+                .map(|env| -> Result<Vec<String>, Error> {
+                    let mut global_pass_through_env = HashSet::new();
+                    gather_env_vars(env, "globalPassThroughEnv", &mut global_pass_through_env)?;
+                    let mut global_pass_through_env: Vec<String> =
+                        global_pass_through_env.into_iter().collect();
+                    global_pass_through_env.sort();
+                    Ok(global_pass_through_env)
+                })
+                .transpose()?
+                .unwrap_or_default(),
+            global_deps: {
+                let mut global_deps: Vec<_> = global_file_dependencies.into_iter().collect();
+                global_deps.sort();
+                global_deps
+            },
+            global_dot_env: raw_turbo
+                .global_dot_env
+                .map(|env| -> Result<Vec<RelativeUnixPathBuf>, Error> {
+                    let mut global_dot_env = Vec::new();
+                    for dot_env_path in env {
+                        let type_checked_path = RelativeUnixPathBuf::new(dot_env_path)?;
+                        // These are _explicitly_ not sorted.
+                        global_dot_env.push(type_checked_path);
+                    }
+
+                    Ok(global_dot_env)
+                })
+                .transpose()?
+                .unwrap_or_default(),
+            pipeline: raw_turbo
+                .pipeline
+                .into_iter()
+                .map(|(task_name, task_definition)| Ok((task_name, task_definition.try_into()?)))
+                .collect::<Result<HashMap<_, _>, Error>>()?,
+            // copy these over, we don't need any changes here.
+            remote_cache_options: raw_turbo.remote_cache_options,
+            extends: raw_turbo.extends,
+            // Directly to space_id, we don't need to keep the struct
+            space_id: raw_turbo.experimental_spaces.and_then(|s| s.id),
+        })
+    }
+}
+
+impl TurboJSON {
     pub fn load(
         dir: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
-    ) -> Result<RawTurboJson, Error> {
+    ) -> Result<TurboJSON, Error> {
         if root_package_json.legacy_turbo_config.is_some() {
             println!(
                 "[WARNING] \"turbo\" in package.json is no longer supported. Migrate to {} by \
@@ -176,14 +372,14 @@ impl RawTurboJson {
 
         let mut turbo_json = match (include_synthesized_from_root_package_json, turbo_from_files) {
             // If the file didn't exist, throw a custom error here instead of propagating
-            (false, Err(Error::Io(_))) => return Err(Error::NoTurboJson),
+            (false, Err(Error::Io(_))) => return Err(Error::NoTurboJSON),
             // There was an error, and we don't have any chance of recovering
             // because we aren't synthesizing anything
             (false, Err(e)) => return Err(e),
             // We're not synthesizing anything and there was no error, we're done
             (false, Ok(turbo)) => return Ok(turbo),
             // turbo.json doesn't exist, but we're going try to synthesize something
-            (true, Err(Error::Io(_))) => RawTurboJson::default(),
+            (true, Err(Error::Io(_))) => TurboJSON::default(),
             // some other happened, we can't recover
             (true, Err(e)) => return Err(e),
             // we're synthesizing, but we have a starting point
@@ -221,7 +417,7 @@ impl RawTurboJson {
                             set
                         },
                         task_definition: TaskDefinitionHashable {
-                            should_cache: false,
+                            cache: false,
                             ..TaskDefinitionHashable::default()
                         },
                         ..BookkeepingTaskDefinition::default()
@@ -249,11 +445,30 @@ impl RawTurboJson {
         false
     }
 
-    fn read(path: &AbsoluteSystemPath) -> Result<RawTurboJson, Error> {
+    fn read(path: &AbsoluteSystemPath) -> Result<TurboJSON, Error> {
         let file = File::open(path)?;
-        let turbo_json: RawTurboJson = serde_json::from_reader(&file)?;
-        Ok(turbo_json)
+        let turbo_json: RawTurboJSON = serde_json::from_reader(&file)?;
+
+        turbo_json.try_into()
     }
+}
+
+fn gather_env_vars(vars: Vec<String>, key: &str, into: &mut HashSet<String>) -> Result<(), Error> {
+    for value in vars {
+        if value.starts_with(ENV_PIPELINE_DELIMITER) {
+            // Hard error to help people specify this correctly during migration.
+            // TODO: Remove this error after we have run summary.
+            return Err(Error::InvalidEnvPrefix {
+                key: key.to_string(),
+                value: value.to_string(),
+                env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
+            });
+        }
+
+        into.insert(value);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -261,24 +476,23 @@ mod tests {
     use std::fs;
 
     use anyhow::Result;
-    use serde_json::{Map, Value};
     use tempfile::tempdir;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPath;
 
-    use crate::config::RawTurboJson;
+    use crate::config::TurboJSON;
 
-    #[test_case(r"{}", TurboJson::default() ; "empty")]
+    #[test_case(r"{}", TurboJSON::default() ; "empty")]
     fn test_get_root_turbo_no_synthesizing(
         turbo_json_content: &str,
-        expected_turbo_json: RawTurboJson,
+        expected_turbo_json: TurboJSON,
     ) -> Result<()> {
         let root_dir = tempdir()?;
         let root_package_json = crate::package_json::PackageJson::default();
         let repo_root = AbsoluteSystemPath::new(root_dir.path())?;
         fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
 
-        let turbo_json = RawTurboJson::load(repo_root, &root_package_json, false)?;
+        let turbo_json = TurboJSON::load(repo_root, &root_package_json, false)?;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())

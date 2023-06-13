@@ -1,13 +1,32 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
+use turbopath::RelativeUnixPathBuf;
+
+// Pipeline as directly deserialized from turbo.json file
+pub type RawPipeline = HashMap<String, RawTaskDefinition>;
+
+// Task definition as directly deserialized from turbo.json file
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RawTaskDefinition {
+    pub(crate) outputs: Option<Vec<String>>,
+    pub(crate) cache: Option<bool>,
+    pub(crate) depends_on: Option<Vec<String>>,
+    pub(crate) inputs: Option<Vec<String>>,
+    pub(crate) output_mode: Option<TaskOutputMode>,
+    pub(crate) persistent: Option<bool>,
+    pub(crate) env: Option<Vec<String>>,
+    pub(crate) pass_through_env: Option<Vec<String>>,
+    pub(crate) dot_env: Option<Vec<String>>,
+}
 
 pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct BookkeepingTaskDefinition {
     #[serde(default)]
-    pub defined_fields: HashSet<&'static str>,
+    pub defined_fields: HashSet<String>,
     #[serde(default)]
     pub experimental_fields: HashSet<String>,
     #[serde(default)]
@@ -58,12 +77,14 @@ pub enum TaskOutputMode {
 pub struct TaskDefinitionHashable {
     pub(crate) outputs: TaskOutputs,
     pub(crate) cache: bool,
-    pub(crate) env_var_dependencies: Vec<String>,
     pub(crate) topological_dependencies: Vec<String>,
     pub(crate) task_dependencies: Vec<String>,
     pub(crate) inputs: Vec<String>,
     pub(crate) output_mode: TaskOutputMode,
     pub(crate) persistent: bool,
+    pub(crate) env: Vec<String>,
+    pub(crate) pass_through_env: Vec<String>,
+    pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
 }
 
 // task_definition is a representation of the configFile pipeline for further

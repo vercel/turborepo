@@ -39,9 +39,9 @@ impl<'run> CompleteGraph<'run> {
         &self,
         _workspace_name: &str,
         _is_single_package: bool,
-    ) -> Result<RawTurboJson> {
+    ) -> Result<RawTurboJSON> {
         // TODO
-        Ok(RawTurboJson::default())
+        Ok(RawTurboJSON::default())
     }
 }
 

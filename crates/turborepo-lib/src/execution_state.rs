@@ -5,7 +5,7 @@ use tracing::trace;
 use crate::{
     cli::{Args, Command},
     commands::CommandBase,
-    config::RawTurboJson,
+    config::TurboJSON,
     package_json::PackageJson,
     package_manager::PackageManager,
 };
@@ -16,7 +16,7 @@ pub struct ExecutionState<'a> {
     package_manager: PackageManager,
     pub cli_args: &'a Args,
     root_package_json: PackageJson,
-    root_turbo_json: RawTurboJson,
+    root_turbo_json: TurboJSON,
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -41,7 +41,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         };
 
         let root_turbo_json =
-            RawTurboJson::load(&base.repo_root, &root_package_json, run_args.single_package)?;
+            TurboJSON::load(&base.repo_root, &root_package_json, run_args.single_package)?;
 
         let package_manager =
             PackageManager::get_package_manager(&base.repo_root, Some(&root_package_json))?;
