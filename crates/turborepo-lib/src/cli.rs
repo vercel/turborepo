@@ -11,7 +11,7 @@ use turbopath::AbsoluteSystemPathBuf;
 #[cfg(feature = "run-stub")]
 use crate::commands::run;
 use crate::{
-    commands::{bin, daemon, generate, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, generate, info, link, login, logout, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
@@ -270,7 +270,9 @@ pub enum Command {
     Bin {},
     /// Generate the autocompletion script for the specified shell
     #[serde(skip)]
-    Completion { shell: Shell },
+    Completion {
+        shell: Shell,
+    },
     /// Runs the Turborepo background daemon
     Daemon {
         /// Set the idle timeout for turbod
@@ -279,17 +281,6 @@ pub enum Command {
         #[clap(subcommand)]
         #[serde(flatten)]
         command: Option<DaemonCommand>,
-    },
-    /// Link your local directory to a Vercel organization and enable remote
-    /// caching.
-    Link {
-        /// Do not create or modify .gitignore (default false)
-        #[clap(long)]
-        no_gitignore: bool,
-
-        /// Specify what should be linked (default "remote cache")
-        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
-        target: LinkTarget,
     },
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
@@ -313,6 +304,18 @@ pub enum Command {
         #[clap(subcommand)]
         #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
+    },
+    Info,
+    /// Link your local directory to a Vercel organization and enable remote
+    /// caching.
+    Link {
+        /// Do not create or modify .gitignore (default false)
+        #[clap(long)]
+        no_gitignore: bool,
+
+        /// Specify what should be linked (default "remote cache")
+        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
+        target: LinkTarget,
     },
     /// Login to your Vercel account
     Login {
@@ -654,6 +657,68 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
+        Command::Daemon {
+            command,
+            idle_time: _,
+        } => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
+
+            match command {
+                Some(command) => daemon::daemon_client(command, &base).await,
+                #[cfg(not(feature = "go-daemon"))]
+                None => daemon::daemon_server(&base, idle_time, logger).await,
+                #[cfg(feature = "go-daemon")]
+                None => {
+                    return Ok(Payload::Go(Box::new(base)));
+                }
+            }?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Generate {
+            tag,
+            generator_name,
+            config,
+            root,
+            args,
+            command,
+        } => {
+            // build GeneratorCustomArgs struct
+            let args = GeneratorCustomArgs {
+                generator_name: generator_name.clone(),
+                config: config.clone(),
+                root: root.clone(),
+                args: args.clone(),
+            };
+
+            generate::run(tag, command, &args)?;
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Info => {
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            info::run(&mut base)?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Link {
+            no_gitignore,
+            target,
+        } => {
+            if cli_args.test_run {
+                println!("Link test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+
+            let modify_gitignore = !*no_gitignore;
+            let to = *target;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+
+            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
+                error!("error: {}", err.to_string())
+            }
+
+            Ok(Payload::Rust(Ok(0)))
+        }
         Command::Logout { .. } => {
             let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
             logout::logout(&mut base)?;
@@ -678,25 +743,6 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Link {
-            no_gitignore,
-            target,
-        } => {
-            if cli_args.test_run {
-                println!("Link test run successful");
-                return Ok(Payload::Rust(Ok(0)));
-            }
-
-            let modify_gitignore = !*no_gitignore;
-            let to = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
-
-            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
-                error!("error: {}", err.to_string())
-            }
-
-            Ok(Payload::Rust(Ok(0)))
-        }
         Command::Unlink { target } => {
             if cli_args.test_run {
                 println!("Unlink test run successful");
@@ -707,43 +753,6 @@ pub async fn run(
             let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
 
             unlink::unlink(&mut base, from)?;
-
-            Ok(Payload::Rust(Ok(0)))
-        }
-        Command::Generate {
-            tag,
-            generator_name,
-            config,
-            root,
-            args,
-            command,
-        } => {
-            // build GeneratorCustomArgs struct
-            let args = GeneratorCustomArgs {
-                generator_name: generator_name.clone(),
-                config: config.clone(),
-                root: root.clone(),
-                args: args.clone(),
-            };
-
-            generate::run(tag, command, &args)?;
-            Ok(Payload::Rust(Ok(0)))
-        }
-        Command::Daemon {
-            command,
-            idle_time: _,
-        } => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
-
-            match command {
-                Some(command) => daemon::daemon_client(command, &base).await,
-                #[cfg(not(feature = "go-daemon"))]
-                None => daemon::daemon_server(&base, idle_time, logger).await,
-                #[cfg(feature = "go-daemon")]
-                None => {
-                    return Ok(Payload::Go(Box::new(base)));
-                }
-            }?;
 
             Ok(Payload::Rust(Ok(0)))
         }
