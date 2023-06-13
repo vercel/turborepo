@@ -33,7 +33,7 @@ async function convert({
     project,
     to: {
       name: to,
-      version: availablePackageManagers[to].version as PackageManager,
+      version: availablePackageManagers[to],
     },
     logger,
     options,

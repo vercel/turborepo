@@ -6,7 +6,7 @@ function exec(
   fallback?: string
 ): string | undefined {
   try {
-    const rawResult = execSync(command, opts);
+    const rawResult = execSync(command, { stdio: "pipe", ...opts });
     return rawResult.toString("utf8").trim();
   } catch (err) {
     return fallback || undefined;
