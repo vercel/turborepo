@@ -294,18 +294,7 @@ pub fn globwalk(
         preprocess_paths_and_globs(base_path, include, exclude)?;
     let inc_patterns = include_paths
         .iter()
-        .map(|g| {
-            Glob::new(g.as_str()).map_err(|e| e.into()).and_then(|g| {
-                if g.has_root() {
-                    Ok(g)
-                } else {
-                    Err(WalkError::InternalError {
-                        glob: g.to_string(),
-                        error: "expected glob to have a root".to_string(),
-                    })
-                }
-            })
-        })
+        .map(|g| Glob::new(g.as_str()).map_err(|e| e.into()))
         .collect::<Result<Vec<_>, WalkError>>()?;
     let ex_patterns = exclude_paths
         .iter()
@@ -318,7 +307,7 @@ pub fn globwalk(
             // Check if the glob specifies an exact filename with no meta characters.
             if let Some(prefix) = glob.variance().path() {
                 // We expect all of our globs to be absolute paths (asserted above)
-                debug_assert!(glob.has_root());
+                assert!(prefix.is_absolute());
                 // We're either going to return this path or nothing. Check if it's a directory
                 // and if we want directories
                 match AbsoluteSystemPathBuf::new(prefix).and_then(|path| {
