@@ -307,7 +307,7 @@ pub fn globwalk(
             // Check if the glob specifies an exact filename with no meta characters.
             if let Some(prefix) = glob.variance().path() {
                 // We expect all of our globs to be absolute paths (asserted above)
-                assert!(prefix.is_absolute());
+                assert!(prefix.is_absolute(), "Found relative glob path {}", glob);
                 // We're either going to return this path or nothing. Check if it's a directory
                 // and if we want directories
                 match AbsoluteSystemPathBuf::new(prefix).and_then(|path| {
