@@ -27,7 +27,7 @@ pretty_assertions = { workspace = true }
 rand = { workspace = true }
 tempdir = "0.3.7"
 tempfile = { workspace = true }
-test-case = "3.0.0"
+test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
 vercel-api-mock = { workspace = true }
@@ -67,7 +67,7 @@ semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-sha2 = "0.10.6"
+sha2 = { workspace = true }
 shared_child = "1.0.0"
 sysinfo = "0.27.7"
 thiserror = "1.0.38"
@@ -98,7 +98,9 @@ tracing.workspace = true
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }
-wax.workspace = true
+turborepo-env = { workspace = true }
+turborepo-lockfiles = { workspace = true }
+wax = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
 

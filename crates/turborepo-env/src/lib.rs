@@ -160,7 +160,7 @@ impl EnvironmentVariableMap {
     // FromWildcardsUnresolved returns a wildcardSet specifying the inclusions and
     // exclusions discovered from a set of wildcard patterns. This is used to ensure
     // that user exclusions have primacy over inferred inclusions.
-    fn from_wildcards_unresolved(
+    pub fn from_wildcards_unresolved(
         &self,
         wildcard_patterns: &[String],
     ) -> Result<WildcardMaps, regex::Error> {
