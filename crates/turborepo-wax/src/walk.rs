@@ -151,6 +151,7 @@ macro_rules! walk {
                 .skip(depth)
                 .filter_map(|component| match component {
                     Component::Normal(component) => Some(CandidatePath::from(component)),
+                    Component::Prefix(component) => Some(CandidatePath::from(component.as_os_str())),
                     _ => None,
                 })
                 .zip_longest($state.components.iter().skip(depth))
