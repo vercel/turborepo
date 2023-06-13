@@ -16,4 +16,6 @@ pub enum Error {
     UnsupportedNpmVersion,
     #[error(transparent)]
     Pnpm(#[from] crate::pnpm::Error),
+    #[error(transparent)]
+    Yarn1(#[from] crate::yarn1::Error),
 }
