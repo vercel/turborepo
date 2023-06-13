@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped_transform, is_not, tag, take_till},
     character::complete::{anychar, char as nom_char, crlf, newline, none_of, satisfy, space1},
-    combinator::{map, not, opt, peek, recognize, value},
+    combinator::{all_consuming, map, not, opt, peek, recognize, value},
     multi::{count, many0, many1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult,
@@ -19,11 +19,8 @@ fn pseudostring_replace() -> &'static Regex {
 }
 
 pub fn parse_syml(input: &str) -> Result<Value, super::Error> {
-    match property_statements(0)(input) {
-        Ok(("", value)) => Ok(value),
-        Ok((rest, _)) => Err(super::Error::SymlParse(format!(
-            "not all input was consumed: {rest}"
-        ))),
+    match all_consuming(property_statements(0))(input) {
+        Ok((_, value)) => Ok(value),
         Err(e) => Err(super::Error::SymlParse(e.to_string())),
     }
 }
