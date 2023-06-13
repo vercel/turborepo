@@ -1050,7 +1050,7 @@ mod test {
                 description: "Nested non-monorepo packages, turbo.json primacy.",
                 infer_infos: vec![
                     InferInfo {
-                        path: project_two.clone(),
+                        path: project_two,
                         has_package_json: true,
                         has_turbo_json: false,
                         workspace_globs: None,

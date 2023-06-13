@@ -129,7 +129,7 @@ mod tests {
     }
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(pairs.into_iter().map(|(path, hash)| {
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
             (
                 RelativeUnixPathBuf::new(path.as_bytes()).unwrap(),
                 hash.to_string(),

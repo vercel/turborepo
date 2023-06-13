@@ -107,39 +107,7 @@ func getGlobalHashInputs(
 	frameworkInference bool,
 	dotEnv turbopath.AnchoredUnixPathArray,
 ) (GlobalHashableInputs, error) {
-	// Calculate env var dependencies
-
-	// Our "inferred" env var maps
-	defaultEnvVarMap, err := envAtExecutionStart.FromWildcards(_defaultEnvVars)
-	if err != nil {
-		return GlobalHashableInputs{}, err
-	}
-	userEnvVarSet, err := envAtExecutionStart.FromWildcardsUnresolved(globalEnv)
-	if err != nil {
-		return GlobalHashableInputs{}, err
-	}
-
-	allEnvVarMap := env.EnvironmentVariableMap{}
-	allEnvVarMap.Union(userEnvVarSet.Inclusions)
-	allEnvVarMap.Union(defaultEnvVarMap)
-	allEnvVarMap.Difference(userEnvVarSet.Exclusions)
-
-	explicitEnvVarMap := env.EnvironmentVariableMap{}
-	explicitEnvVarMap.Union(userEnvVarSet.Inclusions)
-	explicitEnvVarMap.Difference(userEnvVarSet.Exclusions)
-
-	matchingEnvVarMap := env.EnvironmentVariableMap{}
-	matchingEnvVarMap.Union(defaultEnvVarMap)
-	matchingEnvVarMap.Difference(userEnvVarSet.Exclusions)
-
-	globalHashableEnvVars := env.DetailedMap{
-		All: allEnvVarMap,
-		BySource: env.BySource{
-			Explicit: explicitEnvVarMap,
-			Matching: matchingEnvVarMap,
-		},
-	}
-
+	globalHashableEnvVars, err := getGlobalHashableEnvVars(envAtExecutionStart, globalEnv)
 	if err != nil {
 		return GlobalHashableInputs{}, err
 	}

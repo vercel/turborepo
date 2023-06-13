@@ -33,17 +33,17 @@ struct TaskOutputs {
 enum TaskOutputMode {
     // FullTaskOutput will show all task output
     #[default]
-    FullTaskOutput,
-    // NoTaskOutput will hide all task output
-    NoTaskOutput,
-    // HashTaskOutput will display turbo-computed task hashes
-    HashTaskOutput,
-    // NewTaskOutput will show all new task output and turbo-computed task hashes for cached
+    Full,
+    // None will hide all task output
+    None,
+    // Hash will display turbo-computed task hashes
+    Hash,
+    // New will show all new task output and turbo-computed task hashes for cached
     // output
-    NewTaskOutput,
-    // ErrorTaskOutput will show task output for failures only; no cache miss/hit messages are
+    New,
+    // Error will show task output for failures only; no cache miss/hit messages are
     // emitted
-    ErrorTaskOutput,
+    Error,
 }
 
 // taskDefinitionHashable exists as a definition for PristinePipeline, which is
