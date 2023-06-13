@@ -10,7 +10,7 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 // we change graph traversal now
 // resolve_package should only be used now for converting initial contents
 // of workspace package.json into a set of node ids
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct NpmLockfile {
     #[serde(rename = "lockfileVersion")]
     lockfile_version: i32,

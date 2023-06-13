@@ -16,8 +16,6 @@ pub struct PackageGraph {
     pub lockfile: Box<dyn Lockfile>,
 }
 
-const MOCK_NPM_LOCKFILE: &[u8] = b"{ lockfileVersion: 1, packages: {}, dependencies: {} }";
-
 impl PackageGraph {
     pub fn build_single_package_graph(_root_package_json: &PackageJson) -> Result<PackageGraph> {
         // TODO
@@ -25,7 +23,7 @@ impl PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
             workspace_infos: Rc::new(WorkspaceCatalog::default()),
             package_manager: PackageManager::Npm,
-            lockfile: Box::new(turborepo_lockfiles::NpmLockfile::load(MOCK_NPM_LOCKFILE)?),
+            lockfile: Box::new(turborepo_lockfiles::NpmLockfile::default()),
         })
     }
 
@@ -38,7 +36,7 @@ impl PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
             workspace_infos: Rc::new(WorkspaceCatalog::default()),
             package_manager: PackageManager::Npm,
-            lockfile: Box::new(turborepo_lockfiles::NpmLockfile::load(MOCK_NPM_LOCKFILE)?),
+            lockfile: Box::new(turborepo_lockfiles::NpmLockfile::default()),
         })
     }
 
