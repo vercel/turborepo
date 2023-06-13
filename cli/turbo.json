@@ -3,24 +3,43 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
+      "dependsOn": ["build:go-copy", "build:go", "build:rust"],
+      "inputs": []
+    },
+    "build:go": {
+      "env": ["GO_TAG"],
+      "inputs": [
+        "{internal,cmd}/**/*.go",
+        "!**/*_test.go"
+      ],
+      "outputs": [
+        "go-turbo",
+        "go-turbo.exe"
+      ]
+    },
+    "build:rust": {
       "env": ["GO_TAG"],
       "outputs": [
-        "../target/debug/go-turbo",
         "../target/debug/turbo",
         "../target/debug/turbo.exe",
-        "../target/release/go-turbo",
         "../target/release/turbo",
         "../target/release/turbo.exe"
       ],
-
       "inputs": [
-        "{internal,cmd}/**/*.go",
-        "!**/*_test.go",
         "../crates/turborepo*/**/*.rs", // Rust crates
         "../crates/turborepo*/Cargo.toml",
         "!../crates/**/target"
       ]
     },
+    "build:go-copy": {
+      "dependsOn": ["build:go", "build:rust"],
+      "inputs": [],
+      "outputs": [
+        "../target/debug/go-turbo",
+        "../target/release/go-turbo"
+      ]
+    },
+
     "e2e": {
       "outputs": [],
       "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
