@@ -67,7 +67,8 @@ type TaskSummary struct {
 	CommandArguments       []string                              `json:"cliArguments"`
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
-	LogFile                string                                `json:"logFile"`
+	LogFileRelativePath    string                                `json:"logFile"`
+	LogFileAbsolutePath    turbopath.AbsoluteSystemPath          `json:"-"`
 	Dir                    string                                `json:"directory,omitempty"`
 	Dependencies           []string                              `json:"dependencies"`
 	Dependents             []string                              `json:"dependents"`
@@ -80,9 +81,9 @@ type TaskSummary struct {
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
 }
 
-// GetLogs reads the Logfile and returns the data
+// GetLogs reads the log file and returns the data
 func (ts *TaskSummary) GetLogs() []byte {
-	bytes, err := os.ReadFile(ts.LogFile)
+	bytes, err := os.ReadFile(ts.LogFileAbsolutePath.ToString())
 	if err != nil {
 		return []byte{}
 	}
