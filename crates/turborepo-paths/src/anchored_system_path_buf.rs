@@ -151,7 +151,11 @@ mod tests {
 
     use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
+    #[test_case(&["a", "b", "c", "..", "c"], &[] ; "re-entry self")]
+    #[test_case(&["a", "b", "c", "d", "..", "d"], &["d"] ; "re-entry child")]
+    // TODO reorder
     #[test_case(&["a"], &["..", ".."] ; "parent")]
+    #[test_case(&["a", "b", "c"], &[] ; "empty self")]
     #[test_case(&["a", "b", "d"], &["..", "d"] ; "sibling")]
     #[test_case(&["a", "b", "c", "d"], &["d"] ; "child")]
     #[test_case(&["e", "f"], &["..", "..", "..", "e", "f"] ; "ancestor sibling")]

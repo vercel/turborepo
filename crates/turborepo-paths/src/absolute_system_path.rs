@@ -249,6 +249,19 @@ impl AbsoluteSystemPath {
         AbsoluteSystemPathBuf::new(stack.into_iter().collect::<Utf8PathBuf>())
             .expect("collapsed path should be absolute")
     }
+
+    pub fn contains(&self, other: &Self) -> bool {
+        // On windows, trying to get a relative path between files on different volumes
+        // is an error. We don't care about the error, it's good enough for us to say
+        // that one path doesn't contain the other if they're on different volumes.
+        if cfg!(windows) && self.components().next() != other.components().next() {
+            return false;
+        }
+        let this = self.collapse();
+        let other = other.collapse();
+        let rel = AnchoredSystemPathBuf::relative_path_between(&this, &other);
+        rel.components().next() != Some(Utf8Component::ParentDir)
+    }
 }
 
 #[cfg(test)]
@@ -299,5 +312,33 @@ mod tests {
             .join_components(expected);
 
         assert_eq!(path.collapse(), expected);
+    }
+
+    #[test_case(&["elsewhere"], false ; "no shared prefix")]
+    #[test_case(&["some", "sibling"], false ; "sibling")]
+    #[test_case(&["some", "path"], true ; "reflexive")]
+    #[test_case(&["some", "path", "..", "path", "inside", "parent"], true ; "re-enters base")]
+    #[test_case(&["some", "path", "inside", "..", "inside", "parent"], true ; "re-enters child")]
+    #[test_case(&["some", "path", "inside", "..", "..", "outside", "parent"], false ; "exits base")]
+    #[test_case(&["some", "path2"], false ; "lexical prefix match")]
+    fn test_contains(other: &[&str], expected: bool) {
+        let root_token = match cfg!(windows) {
+            true => "C:\\",
+            false => "/",
+        };
+
+        let base = AbsoluteSystemPathBuf::new(
+            [root_token, "some", "path"].join(std::path::MAIN_SEPARATOR_STR),
+        )
+        .unwrap();
+        let other = AbsoluteSystemPathBuf::new(
+            std::iter::once(root_token)
+                .chain(other.iter().copied())
+                .collect::<Vec<_>>()
+                .join(std::path::MAIN_SEPARATOR_STR),
+        )
+        .unwrap();
+
+        assert_eq!(base.contains(&other), expected);
     }
 }

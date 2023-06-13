@@ -1,7 +1,7 @@
 use std::{fmt, rc::Rc};
 
 use anyhow::Result;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{package_json::PackageJson, package_manager::PackageManager};
@@ -96,10 +96,17 @@ impl<'a> DependencyVersion<'a> {
         root: &AbsoluteSystemPath,
     ) -> bool {
         match self.protocol {
-            Some("workspace") => true,
+            Some("workspace") => {
+                // TODO: Since support at the moment is non-existent for workspaces that contain
+                // multiple versions of the same package name, just assume its a
+                // match and don't check the range for an exact match.
+                true
+            }
             Some("file") | Some("link") => {
-                let dependency_path = cwd.join_component(&self.to_string());
-                root.contains(&dependency_path)
+                // Default to internal if we have the package but somehow cannot get the path
+                RelativeUnixPathBuf::new(self.version)
+                    .and_then(|file_path| cwd.join_unix_path(file_path))
+                    .map_or(true, |dep_path| root.contains(&dep_path))
             }
             Some(_) if self.is_external() => {
                 // Other protocols are assumed to be external references ("github:", etc)
