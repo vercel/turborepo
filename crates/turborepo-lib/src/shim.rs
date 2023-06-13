@@ -684,7 +684,21 @@ impl RepoState {
 
         let child = spawn_child(command)?;
 
-        let exit_code = child.wait()?.code().unwrap_or(2);
+        let exit_status = child.wait()?;
+        let exit_code = exit_status.code().unwrap_or_else(|| {
+            debug!("go-turbo failed to report exit code");
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::ExitStatusExt;
+                let signal = exit_status.signal();
+                let core_dumped = exit_status.core_dumped();
+                debug!(
+                    "go-turbo caught signal {:?}. Core dumped? {}",
+                    signal, core_dumped
+                );
+            }
+            2
+        });
 
         Ok(exit_code)
     }
