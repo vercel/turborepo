@@ -503,11 +503,11 @@ jobs:
 
       - name: Run cargo check
         run: |
-          cargo groups check turborepo --features rustls-tls
+          cargo groups check turborepo-libraries --features rustls-tls
 
       - name: Run cargo clippy
         run: |
-          cargo groups clippy turborepo --features rustls-tls
+          cargo groups clippy turborepo-libraries --features rustls-tls
 
   turbopack_rust_check:
     needs: [determine_jobs, rust_pre_check]
@@ -652,7 +652,7 @@ jobs:
       - name: Run tests
         timeout-minutes: 120
         run: |
-          IS_CI_TEST=true cargo groups test turborepo
+          cargo groups test turborepo-libraries
 
   turbopack_rust_test1:
     needs: [determine_jobs, turbopack_rust_check]

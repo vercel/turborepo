@@ -6,11 +6,7 @@ fn main() {
     let is_ci_release =
         &profile == "release" && matches!(env::var("RELEASE_TURBO_CLI"), Ok(v) if v == "true");
 
-    // We don't run the build script when running tests in CI
-    // to avoid having to install a Go toolchain to test Rust code.
-    let is_ci_test = env::var("IS_CI_TEST").is_ok();
-
-    if !is_ci_release && !is_ci_test {
+    if !is_ci_release {
         build_local_go_binary(profile);
     }
 }
