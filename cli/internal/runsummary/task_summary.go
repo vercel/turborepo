@@ -1,8 +1,6 @@
 package runsummary
 
 import (
-	"os"
-
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -83,7 +81,7 @@ type TaskSummary struct {
 
 // GetLogs reads the log file and returns the data
 func (ts *TaskSummary) GetLogs() []byte {
-	bytes, err := os.ReadFile(ts.LogFileAbsolutePath.ToString())
+	bytes, err := ts.LogFileAbsolutePath.ReadFile()
 	if err != nil {
 		return []byte{}
 	}

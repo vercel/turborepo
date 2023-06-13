@@ -239,8 +239,7 @@ func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.P
 // taskLogFile returns the path to the log file for this task execution as an absolute path
 func taskLogFile(root turbopath.AbsoluteSystemPath, dir turbopath.AnchoredSystemPath, taskName string) turbopath.AbsoluteSystemPath {
 	pkgDir := dir.RestoreAnchor(root)
-	filename := fmt.Sprintf("turbo-%v.log", taskName)
-	return pkgDir.Join(".turbo", turbopath.RelativeSystemPath(filename))
+	return pkgDir.UntypedJoin(".turbo", fmt.Sprintf("turbo-%v.log", taskName))
 }
 
 // getTaskGraphAncestors gets all the ancestors for a given task in the graph.
