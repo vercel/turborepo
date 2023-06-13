@@ -11,6 +11,7 @@ func TestSynthesizeCommand(t *testing.T) {
 	testCases := []struct {
 		filterPatterns  []string
 		legacyFilter    scope.LegacyFilter
+		only            bool
 		passThroughArgs []string
 		parallel        bool
 		continueOnError bool
@@ -23,6 +24,17 @@ func TestSynthesizeCommand(t *testing.T) {
 			filterPatterns: []string{"my-app"},
 			tasks:          []string{"build"},
 			expected:       "turbo run build --filter=my-app",
+		},
+		{
+			tasks:    []string{"build"},
+			only:     true,
+			expected: "turbo run build --only",
+		},
+		{
+			filterPatterns: []string{"my-app"},
+			tasks:          []string{"build"},
+
+			expected: "turbo run build --filter=my-app",
 		},
 		{
 			filterPatterns:  []string{"my-app"},
@@ -95,6 +107,7 @@ func TestSynthesizeCommand(t *testing.T) {
 					ContinueOnError: testCase.continueOnError,
 					DryRun:          testCase.dryRun,
 					DryRunJSON:      testCase.dryRunJSON,
+					Only:            testCase.only,
 				},
 			}
 			cmd := o.SynthesizeCommand(testCase.tasks)
