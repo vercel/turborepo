@@ -11,7 +11,7 @@ use std::{
     path::Path,
 };
 
-use camino::{Utf8Components, Utf8Path, Utf8PathBuf};
+use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use path_clean::PathClean;
 
 use crate::{
@@ -221,11 +221,40 @@ impl AbsoluteSystemPath {
     pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
     }
+
+    pub fn collapse(&self) -> AbsoluteSystemPathBuf {
+        let mut stack = vec![];
+        for segment in self.0.components() {
+            match segment {
+                // skip over prefix/root dir
+                // we can ignore this
+                Utf8Component::CurDir => {
+                    continue;
+                }
+                Utf8Component::ParentDir => {
+                    // should error if there's nothing popped
+                    stack.pop();
+                }
+                c => stack.push(c),
+            }
+        }
+        debug_assert!(
+            matches!(
+                stack.first(),
+                Some(Utf8Component::RootDir) | Some(Utf8Component::Prefix(_))
+            ),
+            "expected absolute path to start with root/prefix"
+        );
+
+        AbsoluteSystemPathBuf::new(stack.into_iter().collect::<Utf8PathBuf>())
+            .expect("collapsed path should be absolute")
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
+    use test_case::test_case;
 
     use super::*;
 
@@ -252,5 +281,23 @@ mod tests {
         let empty = AnchoredSystemPathBuf::from_raw("").unwrap();
         let result = root.resolve(&empty);
         assert_eq!(result, root);
+    }
+
+    #[test_case(&["foo", "bar"], &["foo", "bar"] ; "no collapse")]
+    #[test_case(&["foo", "..", "bar"], &["bar"] ; "parent traversal")]
+    #[test_case(&["foo", ".", "bar"], &["foo", "bar"] ; "current dir")]
+    #[test_case(&["foo", "bar", "..", "bar"], &["foo", "bar"] ; "re-entry")]
+    fn test_collapse(input: &[&str], expected: &[&str]) {
+        let root = if cfg!(windows) { "C:\\" } else { "/" };
+
+        let path = AbsoluteSystemPathBuf::new(root)
+            .unwrap()
+            .join_components(input);
+
+        let expected = AbsoluteSystemPathBuf::new(root)
+            .unwrap()
+            .join_components(expected);
+
+        assert_eq!(path.collapse(), expected);
     }
 }

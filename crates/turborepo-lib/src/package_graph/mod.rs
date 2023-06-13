@@ -1,7 +1,7 @@
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use anyhow::Result;
-use turbopath::{AbsoluteSystemPathBuf, AbsoluteSystemPath};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{package_json::PackageJson, package_manager::PackageManager};

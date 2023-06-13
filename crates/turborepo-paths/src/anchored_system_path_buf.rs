@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
+use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::{AbsoluteSystemPath, IntoSystem, PathError, RelativeUnixPathBuf};
@@ -128,7 +128,7 @@ impl AnchoredSystemPathBuf {
         }
     }
 
-    pub fn components(&self) -> std::path::Components {
+    pub fn components(&self) -> Utf8Components {
         self.0.components()
     }
 }
