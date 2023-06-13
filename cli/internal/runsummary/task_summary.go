@@ -1,8 +1,6 @@
 package runsummary
 
 import (
-	"os"
-
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -67,7 +65,8 @@ type TaskSummary struct {
 	CommandArguments       []string                              `json:"cliArguments"`
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
-	LogFile                string                                `json:"logFile"`
+	LogFileRelativePath    string                                `json:"logFile"`
+	LogFileAbsolutePath    turbopath.AbsoluteSystemPath          `json:"-"`
 	Dir                    string                                `json:"directory,omitempty"`
 	Dependencies           []string                              `json:"dependencies"`
 	Dependents             []string                              `json:"dependents"`
@@ -80,9 +79,9 @@ type TaskSummary struct {
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
 }
 
-// GetLogs reads the Logfile and returns the data
+// GetLogs reads the log file and returns the data
 func (ts *TaskSummary) GetLogs() []byte {
-	bytes, err := os.ReadFile(ts.LogFile)
+	bytes, err := ts.LogFileAbsolutePath.ReadFile()
 	if err != nil {
 		return []byte{}
 	}
