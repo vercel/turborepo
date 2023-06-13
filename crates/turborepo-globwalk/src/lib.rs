@@ -337,13 +337,8 @@ pub fn globwalk(
                         )
                     })
                     .filter_map(|entry| match entry {
-                        Ok(entry) => {
-                            if walk_type == WalkType::Files && entry.file_type().is_dir() {
-                                None
-                            } else {
-                                Some(AbsoluteSystemPathBuf::new(entry.path()).map_err(|e| e.into()))
-                            }
-                        }
+                        Ok(entry) if walk_type == WalkType::Files && entry.file_type().is_dir() => None, 
+                        Ok(entry) => Some(AbsoluteSystemPathBuf::new(entry.path()).map_err(|e| e.into()))
                         Err(e) => Some(Err(e.into())),
                     })
                     .collect::<Vec<_>>()
