@@ -180,6 +180,9 @@
     "//#build:ts": {
       "outputs": ["packages/**/dist"]
     },
+    "build:ts": {
+      "outputs": ["dist/**/*"]
+    },
     "build": {
       "outputs": ["dist/**/*", ".next/**/*"],
       "dependsOn": ["^build"]
