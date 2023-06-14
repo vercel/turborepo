@@ -731,8 +731,16 @@ async fn resolve_internal(
         let result_ref = import_map.lookup(context, request).await?;
         let result = &*result_ref;
         if !matches!(result, ImportMapResult::NoEntry) {
+            // Prevent alias recursively applied infinitely, i.e
+            // paths: { "*": ["node_modules/*"] }
+            let resolve_op = ResolveOptions {
+                import_map: None,
+                ..options_value.clone()
+            };
+
             let resolved_result =
-                resolve_import_map_result(result, context, context, request, options).await?;
+                resolve_import_map_result(result, context, context, request, resolve_op.cell())
+                    .await?;
             // We might have matched an alias in the import map, but there is no guarantee
             // the alias actually resolves to something. For instance, a tsconfig.json
             // `compilerOptions.paths` option might alias "@*" to "./*", which
