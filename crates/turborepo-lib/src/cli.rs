@@ -576,14 +576,13 @@ pub async fn run(
         }
     }
 
-    let (single_package, cwd) = match (&repo_state, &command) {
-        (Some(repo_state), Command::Run(_)) => (
-            matches!(repo_state.mode, RepoMode::SinglePackage),
-            cli_args.cwd.as_deref(),
-        ),
-        (Some(repo_state), _) => (false, Some(repo_state.root.as_path())),
-        (None, _) => (false, cli_args.cwd.as_deref()),
-    };
+    let single_package =
+        matches!(&repo_state, Some(repo_state) if repo_state.mode == RepoMode::SinglePackage);
+
+    let cwd = repo_state
+        .as_ref()
+        .map(|state| state.root.as_path())
+        .or(cli_args.cwd.as_deref());
 
     let repo_root = if let Some(cwd) = cwd {
         AbsoluteSystemPathBuf::from_cwd(cwd)?
