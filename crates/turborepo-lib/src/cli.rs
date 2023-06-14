@@ -544,14 +544,14 @@ pub async fn run(
     let mut cli_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
-    if cli_args.command.is_none() {
-        if let Some(run_args) = mem::take(&mut cli_args.run_args) {
-            cli_args.command = Some(Command::Run(Box::new(run_args)));
-        } else {
-            return Err(anyhow!("No command specified"));
-        }
+    let command = if let Some(command) = cli_args.command {
+        command
+    } else {
+        let run_args = mem::take(&mut cli_args.run_args).ok_or(anyhow!("No command specified"))?;
+        Some(Command::Run(Box::new(run_args)))
     };
 
+    let mut pkg_inference_root = None;
     // If this is a run command, and we know the actual invocation path, set the
     // inference root, as long as the user hasn't overridden the cwd
     if cli_args.cwd.is_none() {
@@ -560,9 +560,9 @@ pub async fn run(
                 let invocation_path = Path::new(&invocation_dir);
 
                 // If repo state doesn't exist, we're either local turbo running at the root
-                // (cwd), or inference failed If repo state does exist,
-                // we're global turbo, and want to calculate package inference based on the repo
-                // root
+                // (cwd), or inference failed.
+                // If repo state does exist, we're global turbo, and want to calculate
+                // package inference based on the repo root
                 let this_dir = AbsoluteSystemPathBuf::cwd()?;
                 let repo_root = repo_state.as_ref().map(|r| &r.root).unwrap_or(&this_dir);
                 if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
@@ -570,7 +570,7 @@ pub async fn run(
                     let utf8_path = relative_path
                         .to_str()
                         .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
-                    run_args.pkg_inference_root = Some(utf8_path.to_owned());
+                    pkg_inference_root = Some(utf8_path.to_owned());
                 }
             } else {
                 debug!("{} not set", INVOCATION_DIR_ENV_VAR);
@@ -578,15 +578,16 @@ pub async fn run(
         }
     }
 
-    // Do this after the above, since we're now always setting cwd.
-    if let Some(repo_state) = repo_state {
-        if let Some(Command::Run(run_args)) = &mut cli_args.command {
-            run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
-        }
-        cli_args.cwd = Some(repo_state.root.as_path().to_owned());
-    }
+    let (single_package, cwd) = match (repo_state, &cli_args.command) {
+        (Some(repo_state), Some(Command::Run(run_args))) => (
+            matches!(repo_state.mode, RepoMode::SinglePackage),
+            cli_args.cwd,
+        ),
+        (Some(repo_state), _) => (false, Some(repo_state.root.as_path().to_owned())),
+        (None, _) => (false, cli_args.cwd),
+    };
 
-    let repo_root = if let Some(cwd) = &cli_args.cwd {
+    let repo_root = if let Some(cwd) = cwd {
         AbsoluteSystemPathBuf::from_cwd(cwd)?
     } else {
         AbsoluteSystemPathBuf::cwd()?
