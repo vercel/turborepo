@@ -9,6 +9,14 @@ export interface Command {
   kill(): Promise<void>;
   end(): Promise<number>;
   waitForOutput(regex: RegExp): Promise<RegExpMatchArray>;
+  reportMemUsage(
+    metricName: string,
+    options: {
+      relativeTo?: string | typeof PREVIOUS;
+      scenario?: string;
+      props?: Record<string, string | number | null>;
+    }
+  ): Promise<void>;
   stdout: string;
   stderr: string;
   output: string;

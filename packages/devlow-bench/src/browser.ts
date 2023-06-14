@@ -12,6 +12,8 @@ import { resolve } from "path";
 interface BrowserSession {
   close(): Promise<void>;
   hardNavigation(url: string, metricName?: string): Promise<Page>;
+  softNavigationByClick(metricName: string, selector: string): Promise<void>;
+  reload(metricName: string): Promise<void>;
 }
 
 async function withRequestMetrics(
