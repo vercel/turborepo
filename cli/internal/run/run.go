@@ -34,10 +34,10 @@ import (
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.ExecutionState) error {
 	base, err := helper.GetCmdBase(executionState)
-	LogTag(base.Logger)
 	if err != nil {
 		return err
 	}
+	LogTag(base.Logger)
 	tasks := executionState.CLIArgs.Command.Run.Tasks
 	passThroughArgs := executionState.CLIArgs.Command.Run.PassThroughArgs
 	opts, err := optsFromArgs(&executionState.CLIArgs)
