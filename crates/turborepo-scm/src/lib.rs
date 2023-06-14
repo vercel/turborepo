@@ -38,11 +38,13 @@ pub enum Error {
     #[error("package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
     #[error("invalid glob: {0}")]
-    Glob(Box<wax::BuildError<'static>>, backtrace::Backtrace),
+    Glob(Box<wax::BuildError>, backtrace::Backtrace),
+    #[error(transparent)]
+    Walk(#[from] globwalk::WalkError),
 }
 
-impl From<wax::BuildError<'static>> for Error {
-    fn from(value: wax::BuildError<'static>) -> Self {
+impl From<wax::BuildError> for Error {
+    fn from(value: wax::BuildError) -> Self {
         Error::Glob(Box::new(value), Backtrace::capture())
     }
 }

@@ -156,7 +156,7 @@ jobs:
         with:
           PATTERNS: |
             examples/**
-            turborepo-tests/examples/**
+            examples-tests/**
             !**.md
             !**.mdx
 
@@ -306,8 +306,8 @@ jobs:
       - name: E2E Tests
         run: turbo run test --filter=turborepo-tests-e2e
 
-  go_examples:
-    name: Go Cli Examples
+  turborepo_examples:
+    name: Turborepo Examples
     needs: determine_jobs
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 30
@@ -320,43 +320,9 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
-        manager: [yarn, npm]
-        example: [with-yarn, with-npm, non-monorepo]
-        include:
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: basic
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: basic
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: kitchen-sink
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: kitchen-sink
-          - os:
-              name: ubuntu
-              runner: ubuntu-latest
-            manager: pnpm
-            example: with-svelte
-          - os:
-              name: macos
-              runner: macos-latest
-            manager: pnpm
-            example: with-svelte
-
     runs-on: ${{ matrix.os.runner }}
     steps:
-      # Used by scripts/check-examples.sh
+      # Used by examples-tests/setup.sh
       - name: Install Sponge
         shell: bash
         run: |
@@ -404,12 +370,12 @@ jobs:
           cache: ${{ matrix.manager }}
           cache-dependency-path: package.json
 
-      - name: Check \"${{ matrix.example }}\" example with \"${{ matrix.manager }}\"
+      - name: Check examples
         shell: bash
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --filter="turborepo-tests-examples" -- "${{ matrix.example }}" "${{ matrix.manager }}"
+        run: turbo run example-test --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --filter="!@turborepo-examples-tests/pnpm-gatsby"
 
       # Re-enable corepack, actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it here. The "Post" step
@@ -459,7 +425,7 @@ jobs:
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter=...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --filter="./packages/*" --color
+          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color
 
   turbopack_typescript:
     name: Turbopack TypeScript files
@@ -1289,7 +1255,7 @@ jobs:
       - determine_jobs
       - go_lint
       - go_unit
-      - go_examples
+      - turborepo_examples
       - go_e2e
       - go_integration
       - js_packages
@@ -1327,7 +1293,7 @@ jobs:
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.go_examples.result}} "Go examples"
+          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.go_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.js_packages.result}} "JS Package tests"
@@ -1441,7 +1407,7 @@ jobs:
       - determine_jobs
       - go_lint
       - go_unit
-      - go_examples
+      - turborepo_examples
       - go_e2e
       - go_integration
       - rust_prepare
@@ -1482,7 +1448,7 @@ jobs:
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.go_examples.result}} "Go examples"
+          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.go_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.rust_prepare.result}} "Rust prepare"

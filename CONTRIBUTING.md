@@ -264,6 +264,10 @@ Install `cargo-nextest` (https://nexte.st/):
 
 `cargo install cargo-nextest`
 
+Then, install dependencies for testcases:
+
+`pnpm install -r --side-effects-cache -C crates/turbopack/tests/node-file-trace`
+
 Run via:
 
 ```shell

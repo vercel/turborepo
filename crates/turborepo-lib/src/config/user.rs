@@ -145,7 +145,7 @@ mod test {
         Ok(())
     }
 
-    static TOKEN_ENV_VARS: [&'static str; 2] = ["TURBO_TOKEN", "VERCEL_ARTIFACTS_TOKEN"];
+    static TOKEN_ENV_VARS: [&str; 2] = ["TURBO_TOKEN", "VERCEL_ARTIFACTS_TOKEN"];
 
     #[test]
     fn test_env_var_trumps_disk() -> Result<()> {

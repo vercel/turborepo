@@ -36,6 +36,7 @@ pub struct HashGlobWatcher<T: Watcher> {
     /// maps a glob to the hashes for which this glob hasn't changed
     glob_statuses: Arc<Mutex<HashMap<Glob, HashSet<Hash>>>>,
 
+    #[allow(dead_code)]
     watcher: Arc<Mutex<Option<GlobWatcher>>>,
     config: WatchConfig<T>,
 }
@@ -269,6 +270,8 @@ impl<T: Watcher> HashGlobWatcher<T> {
 ///
 /// note: we take a mutex guard to make sure that the mutex is dropped
 ///       when the function returns
+#[allow(dead_code)]
+#[allow(clippy::type_complexity)]
 fn populate_hash_globs<'a>(
     glob_statuses: &MutexGuard<HashMap<Glob, HashSet<Hash>>>,
     repo_relative_paths: impl Iterator<Item = &'a Path> + Clone,

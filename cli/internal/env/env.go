@@ -20,7 +20,7 @@ type BySource struct {
 
 // DetailedMap contains the composite and the detailed maps of environment variables
 // All is used as a taskhash input (taskhash.CalculateTaskHash)
-// BySoure is used to print out a Dry Run Summary
+// BySource is used to print out a Dry Run Summary
 type DetailedMap struct {
 	All      EnvironmentVariableMap
 	BySource BySource

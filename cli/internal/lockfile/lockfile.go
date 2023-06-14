@@ -82,6 +82,9 @@ func AllTransitiveClosures(
 	if lf, ok := lockFile.(*PnpmLockfile); ok {
 		return rustTransitiveDeps(lf.contents, "pnpm", workspaces, nil)
 	}
+	if lf, ok := lockFile.(*YarnLockfile); ok {
+		return rustTransitiveDeps(lf.contents, "yarn", workspaces, nil)
+	}
 
 	g := new(errgroup.Group)
 	c := make(chan closureMsg, len(workspaces))
