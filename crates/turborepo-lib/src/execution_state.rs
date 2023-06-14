@@ -1,25 +1,15 @@
 use serde::Serialize;
 use tracing::trace;
-use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
-    cli::Args, commands::CommandBase, opts::Opts, package_json::PackageJson,
-    package_manager::PackageManager,
+    cli::Args, commands::CommandBase, package_json::PackageJson, package_manager::PackageManager,
 };
 
 #[derive(Debug, Serialize)]
 pub struct ExecutionState<'a> {
     pub api_client_config: APIClientConfig<'a>,
     package_manager: PackageManager,
-    verbosity: u32,
-    trace_file: Option<String>,
-    heap_file: Option<String>,
-    cpu_profile_file: Option<String>,
-    color: bool,
-    no_color: bool,
-    opts: Opts<'a>,
-    repo_root: AbsoluteSystemPathBuf,
-    args: Args,
+    pub cli_args: &'a Args,
 }
 
 #[derive(Debug, Serialize, Default)]
