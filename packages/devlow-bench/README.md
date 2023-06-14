@@ -86,7 +86,7 @@ describe(
 import { measureTime, reportMeasurement } from "devlow-bench";
 
 // Measure a time
-meassureTime("name of the timing", {
+measureTime("name of the timing", {
   /* optional options */
 });
 

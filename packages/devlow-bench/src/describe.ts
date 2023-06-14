@@ -86,7 +86,7 @@ export function withCurrent(
 
 export const PREVIOUS = Symbol("previous measurement with that unit");
 
-export function meassureTime(
+export function measureTime(
   name: string,
   options: {
     relativeTo?: string | typeof PREVIOUS;

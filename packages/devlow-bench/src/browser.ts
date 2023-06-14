@@ -6,7 +6,7 @@ import type {
   Response,
 } from "playwright-chromium";
 import { chromium } from "playwright-chromium";
-import { meassureTime, reportMeasurement } from "./index.js";
+import { measureTime, reportMeasurement } from "./index.js";
 import { resolve } from "path";
 
 interface BrowserSession {
@@ -128,23 +128,23 @@ class BrowserSessionImpl implements BrowserSession {
   async hardNavigation(metricName: string, url: string) {
     const page = (this.page = this.page ?? (await this.context.newPage()));
     await withRequestMetrics(metricName, page, async () => {
-      meassureTime(`${metricName}/start`);
+      measureTime(`${metricName}/start`);
       await page.goto(url, {
         waitUntil: "commit",
       });
-      meassureTime(`${metricName}/html`, {
+      measureTime(`${metricName}/html`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("domcontentloaded");
-      meassureTime(`${metricName}/dom`, {
+      measureTime(`${metricName}/dom`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("load");
-      meassureTime(`${metricName}/load`, {
+      measureTime(`${metricName}/load`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("networkidle");
-      meassureTime(`${metricName}`, {
+      measureTime(`${metricName}`, {
         relativeTo: `${metricName}/start`,
       });
     });
@@ -159,18 +159,18 @@ class BrowserSessionImpl implements BrowserSession {
       );
     }
     await withRequestMetrics(metricName, page, async () => {
-      meassureTime(`${metricName}/start`);
+      measureTime(`${metricName}/start`);
       const firstResponse = new Promise<void>((resolve) =>
         page.once("response", () => resolve())
       );
       const idle = networkIdle(page);
       await page.click(selector);
       await firstResponse;
-      meassureTime(`${metricName}/firstResponse`, {
+      measureTime(`${metricName}/firstResponse`, {
         relativeTo: `${metricName}/start`,
       });
       await idle;
-      meassureTime(`${metricName}`, {
+      measureTime(`${metricName}`, {
         relativeTo: `${metricName}/start`,
       });
     });
@@ -182,23 +182,23 @@ class BrowserSessionImpl implements BrowserSession {
       throw new Error("reload() must be called after hardNavigation()");
     }
     await withRequestMetrics(metricName, page, async () => {
-      meassureTime(`${metricName}/start`);
+      measureTime(`${metricName}/start`);
       await page.reload({
         waitUntil: "commit",
       });
-      meassureTime(`${metricName}/html`, {
+      measureTime(`${metricName}/html`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("domcontentloaded");
-      meassureTime(`${metricName}/dom`, {
+      measureTime(`${metricName}/dom`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("load");
-      meassureTime(`${metricName}/load`, {
+      measureTime(`${metricName}/load`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("networkidle");
-      meassureTime(`${metricName}`, {
+      measureTime(`${metricName}`, {
         relativeTo: `${metricName}/start`,
       });
     });

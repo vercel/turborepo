@@ -82,7 +82,7 @@ export function intoFullInterface(iface: Interface): FullInterface {
 
 export {
   describe,
-  meassureTime,
+  measureTime,
   reportMeasurement,
   PREVIOUS,
 } from "./describe.js";
