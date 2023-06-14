@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "bin": "dist/cli.js",
   "scripts": {
+    "prerelease": "pnpm run build",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -29,7 +30,6 @@
     "@types/inquirer": "^9.0.3",
     "@types/minimist": "^1.2.2",
     "@types/node": "^20.3.0",
-    "@types/pidusage": "^2.0.2",
     "@types/split2": "^4.2.0"
   },
   "dependencies": {
@@ -37,7 +37,7 @@
     "chalk": "2.4.2",
     "inquirer": "^9.2.7",
     "minimist": "^1.2.8",
-    "pidusage": "^3.0.2",
+    "pidusage-tree": "^2.0.5",
     "playwright-chromium": "^1.35.0",
     "split2": "^4.2.0",
     "tree-kill": "^1.2.2"

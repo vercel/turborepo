@@ -61,7 +61,8 @@ export default function createInterface({
           .map(
             ([key, value]) =>
               `${toIdentifier(key)}:${toIdentifier(value!.toString())}`
-          ),
+          )
+          .concat(commonTags),
         points: [[ts, [value]]],
       });
     },

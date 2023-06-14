@@ -1,7 +1,7 @@
 import { ChildProcess, spawn } from "child_process";
 import split2 from "split2";
 import treeKill from "tree-kill";
-import pidusage from "pidusage";
+import pidusage from "pidusage-tree";
 import { PREVIOUS, reportMeasurement } from "./describe.js";
 
 export interface Command {
@@ -114,7 +114,11 @@ class CommandImpl {
   ) {
     try {
       const pid = this.process.pid!;
-      const memUsage = (await pidusage(pid)).memory;
+      const report = await pidusage(pid);
+      const memUsage = Object.values(report)
+        .filter((x) => x)
+        .map((x) => (x as any).memory)
+        .reduce((a, b) => a + b, 0);
       reportMeasurement(metricName, memUsage, "bytes", options);
     } catch (e) {
       // ignore

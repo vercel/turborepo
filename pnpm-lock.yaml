@@ -378,12 +378,11 @@ importers:
       '@types/inquirer': ^9.0.3
       '@types/minimist': ^1.2.2
       '@types/node': ^20.3.0
-      '@types/pidusage': ^2.0.2
       '@types/split2': ^4.2.0
       chalk: 2.4.2
       inquirer: ^9.2.7
       minimist: ^1.2.8
-      pidusage: ^3.0.2
+      pidusage-tree: ^2.0.5
       playwright-chromium: ^1.35.0
       split2: ^4.2.0
       tree-kill: ^1.2.2
@@ -392,7 +391,7 @@ importers:
       chalk: 2.4.2
       inquirer: 9.2.7
       minimist: 1.2.8
-      pidusage: 3.0.2
+      pidusage-tree: 2.0.5
       playwright-chromium: 1.35.0
       split2: 4.2.0
       tree-kill: 1.2.2
@@ -400,7 +399,6 @@ importers:
       '@types/inquirer': 9.0.3
       '@types/minimist': 1.2.2
       '@types/node': 20.3.0
-      '@types/pidusage': 2.0.2
       '@types/split2': 4.2.0
 
   packages/eslint-config-turbo:
@@ -3069,10 +3067,6 @@ packages:
   /@types/pako/1.0.4:
     resolution: {integrity: sha512-Z+5bJSm28EXBSUJEgx29ioWeEEHUh6TiMkZHDhLwjc9wVFH+ressbkmX6waUZc5R3Gobn4Qu5llGxaoflZ+yhA==}
     dev: false
-
-  /@types/pidusage/2.0.2:
-    resolution: {integrity: sha512-lHgpGZjXDfjggZDLkgp4zQTYkvXq4S7RxjBjrDcPe1MBU72hESWxubutx8+AM4QkJdRxAhrQyxSA6pzHKJKlsQ==}
-    dev: true
 
   /@types/prettier/2.7.2:
     resolution: {integrity: sha512-KufADq8uQqo1pYKVIYzfKbJfBAc0sOeXqGbFaSpv8MRmC/zXgowNZmFcbngndGk922QDmOASEXUZCaY48gs4cg==}
@@ -10765,7 +10759,6 @@ packages:
     resolution: {integrity: sha512-qQbW94hLHEqCg7nhby4yRC7G2+jYHY4Rguc2bjw7Uug4GIJuu1tvf2uHaZv5Q8zdt+WKJ6qK1FOI6amaWUo5FA==}
     engines: {node: '>=0.10'}
     hasBin: true
-    dev: true
 
   /pidtree/0.6.0:
     resolution: {integrity: sha512-eG2dWTVw5bzqGRztnHExczNxt5VGsE6OwTeCG3fdUf9KBsZzO3R5OIIIzWR+iZA0NtZ+RDVdaoE2dK1cn6jH4g==}
@@ -10773,9 +10766,16 @@ packages:
     hasBin: true
     dev: true
 
-  /pidusage/3.0.2:
-    resolution: {integrity: sha512-g0VU+y08pKw5M8EZ2rIGiEBaB8wrQMjYGFfW2QVIfyT8V+fq8YFLkvlz4bz5ljvFDJYNFCWT3PWqcRr2FKO81w==}
-    engines: {node: '>=10'}
+  /pidusage-tree/2.0.5:
+    resolution: {integrity: sha512-4J9SkX1IorF9srgzbTrXpfO2xA4JHESDn5AGGDtCHXvVAGNvP4KzZpWwXhLDKlB+dC5rcERIKS5Z7JktjzCcCA==}
+    dependencies:
+      pidtree: 0.3.1
+      pidusage: 2.0.21
+    dev: false
+
+  /pidusage/2.0.21:
+    resolution: {integrity: sha512-cv3xAQos+pugVX+BfXpHsbyz/dLzX+lr44zNMsYiGxUw+kV5sgQCIcLd1z+0vq+KyC7dJ+/ts2PsfgWfSC3WXA==}
+    engines: {node: '>=8'}
     dependencies:
       safe-buffer: 5.2.1
     dev: false
