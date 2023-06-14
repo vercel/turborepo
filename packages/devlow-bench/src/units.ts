@@ -21,5 +21,5 @@ export function formatUnit(value: number, unit: string) {
       }
     }
   }
-  return `${value.toFixed(2)} ${unit}`;
+  return `${value.toFixed(2).replace(/\.00$/, "")} ${unit}`;
 }

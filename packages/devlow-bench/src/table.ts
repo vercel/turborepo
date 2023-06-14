@@ -94,17 +94,19 @@ import minimist from "minimist";
 
   // Header
   {
-    let row = "";
-    let sepRow = "";
+    let row = "| ";
+    let sepRow = "|:";
     row += " ".repeat(firstColumnSize);
-    sepRow += "=".repeat(firstColumnSize);
+    sepRow += "-".repeat(firstColumnSize);
     const allColumnsArray = [...allColumns];
     for (let i = 0; i < columnSizes.length; i++) {
       row += " | ";
       row += pad(allColumnsArray[i], columnSizes[i]);
-      sepRow += "=|=";
-      sepRow += "=".repeat(columnSizes[i]);
+      sepRow += ":|-";
+      sepRow += "-".repeat(columnSizes[i]);
     }
+    row += " |";
+    sepRow += ":|";
     console.log(row);
     console.log(sepRow);
   }
@@ -112,12 +114,13 @@ import minimist from "minimist";
   // Separator
   let r = 0;
   for (const rowName of allRows) {
-    let row = "";
+    let row = "| ";
     row += pad(rowName, firstColumnSize);
     for (let i = 0; i < columnSizes.length; i++) {
       row += " | ";
       row += pad(table[r][i], columnSizes[i]);
     }
+    row += " |";
     console.log(row);
     r++;
   }

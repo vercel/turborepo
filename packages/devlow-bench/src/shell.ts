@@ -1,6 +1,8 @@
 import { ChildProcess, spawn } from "child_process";
 import split2 from "split2";
 import treeKill from "tree-kill";
+import pidusage from "pidusage";
+import { PREVIOUS, reportMeasurement } from "./describe.js";
 
 export interface Command {
   ok(): Promise<void>;
@@ -101,6 +103,23 @@ class CommandImpl {
       }
     }
   }
+
+  async reportMemUsage(
+    metricName: string,
+    options: {
+      relativeTo?: string | typeof PREVIOUS;
+      scenario?: string;
+      props?: Record<string, string | number | null>;
+    } = {}
+  ) {
+    try {
+      const pid = this.process.pid!;
+      const memUsage = (await pidusage(pid)).memory;
+      reportMeasurement(metricName, memUsage, "bytes", options);
+    } catch (e) {
+      // ignore
+    }
+  }
 }
 
 export function command(
@@ -112,6 +131,7 @@ export function command(
   } = {}
 ): Command {
   const process = spawn(command, args, {
+    shell: true,
     ...options,
     stdio: ["ignore", "pipe", "pipe"],
   });

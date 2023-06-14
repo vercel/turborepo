@@ -3,6 +3,7 @@ import { setCurrentScenarios } from "./describe.js";
 import { join } from "path";
 import { Scenario, ScenarioVariant, runScenarios } from "./index.js";
 import compose from "./interfaces/compose.js";
+import { pathToFileURL } from "url";
 
 (async () => {
   const knownArgs = new Set([
@@ -11,6 +12,7 @@ import compose from "./interfaces/compose.js";
     "json",
     "j",
     "console",
+    "datadog",
     "interactive",
     "i",
     "help",
@@ -35,6 +37,9 @@ import compose from "./interfaces/compose.js";
       "  --scenario=<filter>, -s=<filter>   Only run the scenario with the given name"
     );
     console.log(
+      "  --interactive, -i                  Select scenarios and variants interactively"
+    );
+    console.log(
       "  --<prop>=<value>                   Filter by any variant property defined in scenarios"
     );
     console.log("## Output");
@@ -45,7 +50,10 @@ import compose from "./interfaces/compose.js";
       "  --console                          Print the results to the console"
     );
     console.log(
-      "  --interactive, -i                  Select scenarios and variants interactively"
+      "  --datadog[=<hostname>]             Upload the results to Datadog"
+    );
+    console.log(
+      "                                     (requires DATADOG_API_KEY environment variables)"
     );
     console.log("## Help");
     console.log("  --help, -h, -?                     Show this help");
@@ -55,7 +63,7 @@ import compose from "./interfaces/compose.js";
   setCurrentScenarios(scenarios);
 
   for (const path of args._) {
-    await import(join(process.cwd(), path));
+    await import(pathToFileURL(join(process.cwd(), path)).toString());
   }
 
   setCurrentScenarios(null);
@@ -93,6 +101,10 @@ import compose from "./interfaces/compose.js";
     cliIface,
     args.interactive && (await import("./interfaces/interactive.js")).default(),
     args.json && (await import("./interfaces/json.js")).default(args.json),
+    args.datadog &&
+      (await import("./interfaces/datadog.js")).default(
+        typeof args.datadog === "string" ? { host: args.datadog } : undefined
+      ),
     args.console !== false &&
       (await import("./interfaces/console.js")).default(),
   ].filter((x) => x);

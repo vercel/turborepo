@@ -128,9 +128,13 @@ class BrowserSessionImpl implements BrowserSession {
     await withRequestMetrics(metricName, page, async () => {
       meassureTime(`${metricName}/start`);
       await page.goto(url, {
-        waitUntil: "domcontentloaded",
+        waitUntil: "commit",
       });
       meassureTime(`${metricName}/html`, {
+        relativeTo: `${metricName}/start`,
+      });
+      await page.waitForLoadState("domcontentloaded");
+      meassureTime(`${metricName}/dom`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("load");
@@ -178,9 +182,13 @@ class BrowserSessionImpl implements BrowserSession {
     await withRequestMetrics(metricName, page, async () => {
       meassureTime(`${metricName}/start`);
       await page.reload({
-        waitUntil: "domcontentloaded",
+        waitUntil: "commit",
       });
       meassureTime(`${metricName}/html`, {
+        relativeTo: `${metricName}/start`,
+      });
+      await page.waitForLoadState("domcontentloaded");
+      meassureTime(`${metricName}/dom`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("load");
@@ -208,6 +216,8 @@ export async function newBrowserSession(options: {
     baseURL: options.baseURL ?? "http://localhost:3000",
     viewport: { width: 1280, height: 720 },
   });
+  context.setDefaultTimeout(120000);
+  context.setDefaultNavigationTimeout(120000);
   return new BrowserSessionImpl(browser, context);
 }
 
