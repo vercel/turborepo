@@ -146,9 +146,11 @@ mod test {
         let dir = tempdir()?;
         let repo_root = AbsoluteSystemPathBuf::new(dir.path())?;
         let mut args = Args::default();
-        let mut run_args = RunArgs::default();
         // Daemon does not work with run stub yet
-        run_args.no_daemon = true;
+        let run_args = RunArgs {
+            no_daemon: true,
+            ..Default::default()
+        };
         args.command = Some(Command::Run(Box::new(run_args)));
 
         let ui = UI::infer();
