@@ -304,7 +304,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
-        run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color
 
   turborepo_examples:
     name: Turborepo Examples
