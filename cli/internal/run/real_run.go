@@ -109,12 +109,10 @@ func RealRun(
 	logWaitGroup := sync.WaitGroup{}
 	isGrouped := rs.Opts.runOpts.LogOrder == "grouped"
 
-	var outputLogs func()
-
 	if isGrouped {
-		outputLogs = func() {
-			for i := 1; i < taskCount; i++ {
-				logContext := <-logChan
+		logWaitGroup.Add(1)
+		go func() {
+			for logContext := range logChan {
 
 				outBytes := logContext.outBuf.Bytes()
 				errBytes := logContext.errBuf.Bytes()
@@ -126,18 +124,14 @@ func RealRun(
 					ec.ui.Error("Failed to output some of the logs.")
 				}
 
-				logWaitGroup.Done()
 			}
-		}
-	}
-	if isGrouped {
-		go outputLogs()
+			logWaitGroup.Done()
+		}()
 	}
 
 	taskSummaryMutex := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		logWaitGroup.Add(1)
 		outBuf := &bytes.Buffer{}
 		errBuf := &bytes.Buffer{}
 
@@ -234,6 +228,7 @@ func RealRun(
 	}
 
 	if isGrouped {
+		close(logChan)
 		logWaitGroup.Wait()
 	}
 
