@@ -27,9 +27,7 @@ Make sure we prune tasks that reference a pruned workspace
         "dotEnv": null
       }
     },
-    "remoteCache": {
-      "enabled": true
-    }
+    "remoteCache": {}
   }
 
 Verify turbo can read the produced turbo.json
