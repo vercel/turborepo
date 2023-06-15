@@ -544,7 +544,7 @@ pub async fn run(
     let mut cli_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
-    let command = if let Some(command) = mem::take(&mut cli_args.command) {
+    let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
         command
     } else {
         let run_args = mem::take(&mut cli_args.run_args).ok_or(anyhow!("No command specified"))?;
@@ -563,7 +563,7 @@ pub async fn run(
             // If repo state does exist, we're global turbo, and want to calculate
             // package inference based on the repo root
             let this_dir = AbsoluteSystemPathBuf::cwd()?;
-            let repo_root = repo_state.as_ref().map(|r| &r.root).unwrap_or(&this_dir);
+            let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
             if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
                 debug!("pkg_inference_root set to \"{}\"", relative_path.display());
                 let utf8_path = relative_path
@@ -595,14 +595,14 @@ pub async fn run(
     // Save all the mutation for the end. In the future, we should refactor this
     // into a "parse don't validate" scheme where we construct a config struct
     // that is contains all of the normalized, validated, and defaulted values.
-    cli_args.command = Some(command);
-    cli_args.cwd = Some(repo_root.clone().into());
-    if let Some(run_args) = cli_args.run_args.as_mut() {
+    if let Command::Run(run_args) = &mut command {
         if let Some(pkg_inference_root) = pkg_inference_root {
             run_args.pkg_inference_root = Some(pkg_inference_root);
         }
         run_args.single_package = single_package;
     }
+    cli_args.command = Some(command);
+    cli_args.cwd = Some(repo_root.clone().into());
 
     match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
