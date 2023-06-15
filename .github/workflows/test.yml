@@ -375,7 +375,7 @@ jobs:
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run example-test --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --filter="!@turborepo-examples-tests/pnpm-gatsby"
+        run: turbo run example-test --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
       # Re-enable corepack, actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it here. The "Post" step
