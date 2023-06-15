@@ -26,11 +26,13 @@ TURBO_VERSION_FILE="${MONOREPO_ROOT_DIR}/version.txt"
 # Change package.json in the example directory to point to @canary if our branch is currently at that version
 TURBO_TAG=$(cat "$TURBO_VERSION_FILE" | sed -n '2 p')
 if [ "$TURBO_TAG" == "canary" ]; then
-  cat package.json | jq '.devDependencies.turbo = "canary"' | sponge package.json
+  jq --arg version "canary" '.devDependencies.turbo = $version' package.json > package.json.new
+  mv package.json.new package.json
 fi
 
 function set_package_manager() {
-  cat package.json | jq ".packageManager=\"$1\"" | sponge package.json
+  jq --arg pm "$1" '.packageManager = $pm' package.json > package.json.new
+  mv package.json.new package.json
 }
 
 # Enable corepack so that when we set the packageManager in package.json it actually makes a diference.

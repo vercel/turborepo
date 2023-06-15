@@ -5,7 +5,7 @@ Thanks for your interest in contributing to Turbo!
 **Important note**: At the moment, Turbo is made up of two tools, Turborepo and Turbopack, built with different languages and toolchains. In the future, Turbo will become a single toolchain built on Rust and the Turbo engine. In the meantime, please follow the respective guide when contributing to each tool:
 
 - [Contributing to Turbo](#contributing-to-turbo)
-  - [General Dependencies](#general-dependencies)]
+  - [General Dependencies](#general-dependencies)
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
     - [TLS Implementation](#tls-implementation)
@@ -61,7 +61,7 @@ Install dependencies
 On macOS:
 
 ```bash
-brew install moreutils jq zstd # (moreutils is for sponge)
+brew install jq zstd
 ```
 
 #### Turborepo Tests
