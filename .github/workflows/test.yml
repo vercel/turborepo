@@ -856,6 +856,10 @@ jobs:
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
+          # Did not spend too much time investigating so it could be an easy fix.
+          node-version: 16
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
@@ -920,6 +924,10 @@ jobs:
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
+          # Did not spend too much time investigating so it could be an easy fix.
+          node-version: 16
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
