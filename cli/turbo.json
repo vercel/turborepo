@@ -20,13 +20,6 @@
         "../crates/turborepo*/Cargo.toml",
         "!../crates/**/target"
       ]
-    },
-    "e2e": {
-      "outputs": [],
-      "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
-    },
-    "e2e-prebuilt": {
-      "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
     }
   }
 }
