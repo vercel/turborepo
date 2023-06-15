@@ -1,3 +1,3 @@
 (function() {var implementors = {
-"turbopack_cli_utils":[["impl&lt;S: <a class=\"trait\" href=\"https://docs.rs/tracing-core/0.1.22/tracing_core/subscriber/trait.Subscriber.html\" title=\"trait tracing_core::subscriber::Subscriber\">Subscriber</a> + for&lt;'a&gt; LookupSpan&lt;'a&gt;&gt; Layer&lt;S&gt; for <a class=\"struct\" href=\"turbopack_cli_utils/raw_trace/struct.RawTraceLayer.html\" title=\"struct turbopack_cli_utils::raw_trace::RawTraceLayer\">RawTraceLayer</a>&lt;S&gt;"]]
+"turbopack_cli_utils":[["impl&lt;S: Subscriber + for&lt;'a&gt; LookupSpan&lt;'a&gt;&gt; Layer&lt;S&gt; for <a class=\"struct\" href=\"turbopack_cli_utils/raw_trace/struct.RawTraceLayer.html\" title=\"struct turbopack_cli_utils::raw_trace::RawTraceLayer\">RawTraceLayer</a>&lt;S&gt;"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
