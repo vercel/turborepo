@@ -483,7 +483,7 @@ pub struct RunArgs {
     /// Set type of process output order. Use "stream" to show
     /// output as soon as it is available. Use "grouped" to
     /// show output when a command has finished execution. (default stream)
-    #[clap(long, value_enum, default_value_t = LogOrder::Stream)]
+    #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Stream)]
     pub log_order: LogOrder,
     #[clap(long, hide = true)]
     pub only: bool,
