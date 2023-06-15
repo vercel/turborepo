@@ -6,7 +6,6 @@ Setup
   $ ${TURBO} run build --filter="[main]"
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
@@ -21,7 +20,6 @@ Setup
   $ ${TURBO} run build --filter="[main]"
   \xe2\x80\xa2 Packages in scope: // (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.

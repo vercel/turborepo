@@ -7,7 +7,6 @@ Verbosity level 1
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache bypass, force executing 76ab904c7ecb2d51
   util:build: 
@@ -24,7 +23,6 @@ Verbosity level 1
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache bypass, force executing 76ab904c7ecb2d51
   util:build: 
@@ -54,11 +52,10 @@ Verbosity level 2
   [-0-9:.TWZ+]+ |[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  2023-06-15T00:05:49.064Z [DEBUG] turbo: task hash env vars for util:build: vars=[]
-  2023-06-15T00:05:49.064Z [DEBUG] turbo.: start
-  2023-06-15T00:05:49.064Z [DEBUG] turbo: task hash: value=76ab904c7ecb2d51
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hash env vars for util:build: vars=\[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo.: start (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hash: value=76ab904c7ecb2d51 (re)
   util:build: cache bypass, force executing 76ab904c7ecb2d51
   util:build: 
   util:build: > build
@@ -87,11 +84,10 @@ Verbosity level 2
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  2023-06-15T00:05:49.321Z [DEBUG] turbo: task hash env vars for util:build: vars=[]
-  2023-06-15T00:05:49.321Z [DEBUG] turbo.: start
-  2023-06-15T00:05:49.321Z [DEBUG] turbo: task hash: value=76ab904c7ecb2d51
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hash env vars for util:build: vars=\[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo.: start (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hash: value=76ab904c7ecb2d51 (re)
   util:build: cache bypass, force executing 76ab904c7ecb2d51
   util:build: 
   util:build: > build

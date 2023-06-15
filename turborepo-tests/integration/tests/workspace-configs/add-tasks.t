@@ -5,7 +5,6 @@ Setup
   $ ${TURBO} run added-task --filter=add-tasks
   \xe2\x80\xa2 Packages in scope: add-tasks (esc)
   \xe2\x80\xa2 Running added-task in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   add-tasks:added-task: cache miss, executing 968a5fa46f3ecb61
   add-tasks:added-task: 

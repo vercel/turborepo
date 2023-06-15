@@ -31,7 +31,6 @@ Setup
   $ ${TURBO} run something
   \xe2\x80\xa2 Packages in scope: //, another, my-app, util (esc)
   \xe2\x80\xa2 Running something in 4 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   root task something (turbo run build) looks like it invokes turbo and might cause a loop
   

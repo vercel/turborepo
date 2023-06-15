@@ -7,8 +7,6 @@ package cache
 
 import (
 	"errors"
-	"sort"
-	"strings"
 	"sync"
 
 	"github.com/vercel/turbo/cli/internal/analytics"
@@ -27,7 +25,6 @@ type Cache interface {
 	// Put caches files for a given hash
 	Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error
 	Clean(anchor turbopath.AbsoluteSystemPath)
-	GetName() string
 	CleanAll()
 	Shutdown()
 }
@@ -191,7 +188,6 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client clien
 	if isNoopCache {
 		return implementation, ErrNoCachesEnabled
 	}
-
 	return implementation, nil
 }
 
@@ -340,15 +336,4 @@ func (mplex *cacheMultiplexer) Shutdown() {
 	for _, cache := range mplex.caches {
 		cache.Shutdown()
 	}
-}
-
-func (mplex *cacheMultiplexer) GetName() string {
-	cacheNames := []string{}
-	sort.Strings(cacheNames)
-
-	for _, c := range mplex.caches {
-		cacheNames = append(cacheNames, c.GetName())
-	}
-
-	return strings.Join(cacheNames, ", ")
 }

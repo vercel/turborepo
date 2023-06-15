@@ -6,9 +6,8 @@ Populate cache
   $ ${TURBO} build --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache miss, executing 8fac031d9e78b44a
+  a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: yarn run v1.22.19
   a:build: warning package.json: No license field
   a:build: $ echo 'building'
@@ -22,9 +21,8 @@ Populate cache
   $ ${TURBO} build --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing 1fa9f85dd9b86307
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: yarn run v1.22.19
   b:build: warning package.json: No license field
   b:build: $ echo 'building'
@@ -43,9 +41,8 @@ Only b should have a cache miss
   $ ${TURBO} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache hit, replaying logs 8fac031d9e78b44a
+  a:build: cache hit, replaying logs [0-9a-f]+ (re)
   a:build: yarn run v1.22.19
   a:build: warning package.json: No license field
   a:build: $ echo 'building'
@@ -60,9 +57,8 @@ Only b should have a cache miss
   $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing 65412d8d7e5c59fd
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: yarn run v1.22.19
   b:build: warning package.json: No license field
   b:build: $ echo 'building'
@@ -88,7 +84,6 @@ Bump of root workspace invalidates all packages
   $ ${TURBO} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: yarn run v1.22.19
@@ -104,9 +99,8 @@ Bump of root workspace invalidates all packages
   $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing 12a3f09a51107b13
+  b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: yarn run v1.22.19
   b:build: warning package.json: No license field
   b:build: $ echo 'building'

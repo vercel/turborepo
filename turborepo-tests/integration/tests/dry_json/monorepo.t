@@ -7,7 +7,7 @@ Setup
 
 # test with a regex that captures what release we usually have (1.x.y or 1.a.b-canary.c)
   $ cat tmpjson.log | jq .turboVersion
-  "1.10.4-canary.2"
+  "[a-z0-9\.-]+" (re)
 
   $ cat tmpjson.log | jq .globalCacheInputs
   {

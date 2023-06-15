@@ -6,7 +6,6 @@ Setup
   $ ${TURBO} run build --log-prefix=none
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   cache miss, executing 906851cd5c1e12d4
   
@@ -31,7 +30,6 @@ Setup
   $ ${TURBO} run build --log-prefix=none
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   cache hit, replaying logs 906851cd5c1e12d4
   
@@ -48,7 +46,6 @@ Setup
   $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   app-a:build: cache hit, replaying logs 906851cd5c1e12d4
   app-a:build: 

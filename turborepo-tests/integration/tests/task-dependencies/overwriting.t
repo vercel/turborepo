@@ -8,7 +8,7 @@ Test
   $ cat tmp.log | grep "Packages in scope" -A2
   \xe2\x80\xa2 Packages in scope: workspace-a, workspace-b (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
 
 # workspace-a#generate ran
   $ cat tmp.log | grep "workspace-a:generate"

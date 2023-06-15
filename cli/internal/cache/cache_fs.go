@@ -16,7 +16,6 @@ import (
 
 // fsCache is a local filesystem cache
 type fsCache struct {
-	name           string
 	cacheDirectory turbopath.AbsoluteSystemPath
 	recorder       analytics.Recorder
 }
@@ -94,10 +93,6 @@ func (f *fsCache) Exists(hash string) ItemStatus {
 
 	return status
 
-}
-
-func (cache *fsCache) GetName() string {
-	return CacheSourceFS
 }
 
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {

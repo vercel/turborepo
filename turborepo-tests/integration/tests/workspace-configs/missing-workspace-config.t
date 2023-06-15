@@ -11,7 +11,6 @@ Setup
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   missing-workspace-config:missing-workspace-config-task: cache miss, executing 3b9c040c7ac66cfd
   missing-workspace-config:missing-workspace-config-task: 
@@ -34,7 +33,6 @@ Setup
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 3b9c040c7ac66cfd
   
@@ -47,7 +45,6 @@ Setup
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   missing-workspace-config:missing-workspace-config-task: cache miss, executing 395c409c711b5ddd
   missing-workspace-config:missing-workspace-config-task: 
@@ -65,7 +62,6 @@ Setup
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 395c409c711b5ddd
   
@@ -77,7 +73,6 @@ Setup
   $ SOME_VAR=somevalue ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   missing-workspace-config:missing-workspace-config-task: cache miss, executing fa4ab59ed5ad6d27
   missing-workspace-config:missing-workspace-config-task: 
@@ -94,7 +89,6 @@ Setup
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   missing-workspace-config:cached-task-4: cache bypass, force executing c8da5a74f0fc7fdf
   missing-workspace-config:cached-task-4: 

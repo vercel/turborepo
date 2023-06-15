@@ -17,14 +17,13 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
    Tasks:    0 successful, 0 total
   Cached:    0 cached, 0 total
-    Time:    15ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
   $ cd $TARGET_DIR/outer/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
@@ -42,14 +41,13 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
    Tasks:    0 successful, 0 total
   Cached:    0 cached, 0 total
-    Time:    18ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
   $ cd $TARGET_DIR/outer/inner && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
@@ -66,14 +64,13 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
    Tasks:    0 successful, 0 total
   Cached:    0 cached, 0 total
-    Time:    14ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
   $ cd $TARGET_DIR/outer/inner/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
@@ -91,14 +88,13 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
    Tasks:    0 successful, 0 total
   Cached:    0 cached, 0 total
-    Time:    13ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
   $ cd $TARGET_DIR/outer/inner-no-turbo && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
@@ -116,14 +112,13 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
    Tasks:    0 successful, 0 total
   Cached:    0 cached, 0 total
-    Time:    15ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
   $ cd $TARGET_DIR/outer/inner-no-turbo/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
@@ -141,14 +136,13 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
    Tasks:    0 successful, 0 total
   Cached:    0 cached, 0 total
-    Time:    14ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
   $ cd $TARGET_DIR/outer-no-turbo && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
@@ -195,14 +189,13 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
    Tasks:    0 successful, 0 total
   Cached:    0 cached, 0 total
-    Time:    13ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
   $ cd $TARGET_DIR/outer-no-turbo/inner/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
@@ -220,14 +213,13 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
   
    Tasks:    0 successful, 0 total
   Cached:    0 cached, 0 total
-    Time:    15ms 
+    Time:\s*[\.0-9]+m?s  (re)
   
   $ cd $TARGET_DIR/outer-no-turbo/inner-no-turbo && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)

@@ -5,7 +5,6 @@ Setup
 Check
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing d6b8b065382193a4
   build: 
@@ -25,7 +24,6 @@ Check
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying logs d6b8b065382193a4
   build: 
@@ -45,7 +43,6 @@ Run a second time, verify caching works because there is a config
 Run with --output-logs=hash-only
   $ ${TURBO} run test --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, suppressing logs d6b8b065382193a4
   test: cache hit, suppressing logs 1dca8c4431a90e36
@@ -57,7 +54,6 @@ Run with --output-logs=hash-only
 Run with --output-logs=errors-only
   $ ${TURBO} run test --output-logs=errors-only
   \xe2\x80\xa2 Running test (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
    Tasks:    2 successful, 2 total
@@ -67,7 +63,6 @@ Run with --output-logs=errors-only
 Run with --output-logs=none
   $ ${TURBO} run test --output-logs=none
   \xe2\x80\xa2 Running test (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
    Tasks:    2 successful, 2 total

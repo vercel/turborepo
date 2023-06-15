@@ -63,8 +63,6 @@ func RealRun(
 		base.UI.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 	}
 
-	base.UI.Output(fmt.Sprintf(ui.Dim("• Using caches: %v"), turboCache.GetName()))
-
 	// Log whether remote cache is enabled
 	useHTTPCache := !rs.Opts.cacheOpts.SkipRemote
 	if useHTTPCache {

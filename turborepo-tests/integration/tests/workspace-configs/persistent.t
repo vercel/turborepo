@@ -22,7 +22,6 @@ This test covers:
   $ ${TURBO} run persistent-task-2-parent --filter=persistent
   \xe2\x80\xa2 Packages in scope: persistent (esc)
   \xe2\x80\xa2 Running persistent-task-2-parent in 1 packages (esc)
-  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   persistent:persistent-task-2: cache miss, executing a0b42f53924052be
   persistent:persistent-task-2: 
