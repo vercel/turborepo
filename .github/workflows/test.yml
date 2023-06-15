@@ -322,16 +322,6 @@ jobs:
             runner: macos-latest
     runs-on: ${{ matrix.os.runner }}
     steps:
-      # Used by examples-tests/setup.sh
-      - name: Install Sponge
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt-get install -y moreutils
-          else
-            brew install moreutils
-          fi
-
       - name: Checkout
         uses: actions/checkout@v3
 
