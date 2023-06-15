@@ -17,6 +17,7 @@
   $ ${TURBO} run dev
   \xe2\x80\xa2 Packages in scope: app-a, pkg-a (esc)
   \xe2\x80\xa2 Running dev in 2 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   app-a:dev: cache miss, executing 330b88bf8320c036
   app-a:dev: 

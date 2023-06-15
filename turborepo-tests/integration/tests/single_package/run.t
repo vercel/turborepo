@@ -5,6 +5,7 @@ Setup
 Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing d2295def33764d46
   build: 
@@ -22,6 +23,7 @@ Check
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying logs d2295def33764d46
   build: 

@@ -8,6 +8,7 @@ Setup
   $ ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache miss, executing 76ab904c7ecb2d51
   
@@ -19,6 +20,7 @@ Setup
   $ ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache hit, suppressing logs 76ab904c7ecb2d51
   
@@ -30,6 +32,7 @@ Setup
   $ SOME_ENV_VAR=hi ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache miss, executing 113a16522caeab3d
   
@@ -41,6 +44,7 @@ Setup
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache hit, suppressing logs 76ab904c7ecb2d51
   
@@ -52,6 +56,7 @@ Setup
   $ VERCEL_ANALYTICS_ID=hi ${TURBO} run build --filter=util --output-logs=hash-only
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache miss, executing effc9042679b97c6
   

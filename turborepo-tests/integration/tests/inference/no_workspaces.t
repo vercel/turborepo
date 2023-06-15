@@ -13,9 +13,10 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=b3dc914d74316433 (re)
+  2023-06-15T00:05:09.130Z [DEBUG] turbo: global hash: value=d497c4d703917bce
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
@@ -35,9 +36,10 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=b76f12ffa66eaf29 (re)
+  2023-06-15T00:05:09.174Z [DEBUG] turbo: global hash: value=99aadb0cc485750b
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
@@ -57,9 +59,10 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=cdaabfe0ec87db4e (re)
+  2023-06-15T00:05:09.226Z [DEBUG] turbo: global hash: value=674ae109880f14ca
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.

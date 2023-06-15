@@ -6,8 +6,9 @@ Populate cache
   $ ${TURBO} build --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache miss, executing [0-9a-f]+ (re)
+  a:build: cache miss, executing e38b2ff93d219a9f
   a:build: building
   
    Tasks:    1 successful, 1 total
@@ -17,8 +18,9 @@ Populate cache
   $ ${TURBO} build --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing [0-9a-f]+ (re)
+  b:build: cache miss, executing 43b32aaf6cf9ca27
   b:build: building
   
    Tasks:    1 successful, 1 total
@@ -33,8 +35,9 @@ Only b should have a cache miss
   $ ${TURBO} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache hit, replaying logs [0-9a-f]+ (re)
+  a:build: cache hit, replaying logs e38b2ff93d219a9f
   a:build: building
   
    Tasks:    1 successful, 1 total
@@ -45,8 +48,9 @@ Only b should have a cache miss
   $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing [0-9a-f]+ (re)
+  b:build: cache miss, executing ae0328570d6bcc40
   b:build: building
   
    Tasks:    1 successful, 1 total
@@ -68,6 +72,7 @@ Bump of root workspace invalidates all packages
   $ ${TURBO} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: building
@@ -79,8 +84,9 @@ Bump of root workspace invalidates all packages
   $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing [0-9a-f]+ (re)
+  b:build: cache miss, executing bc9fbe001c26f921
   b:build: building
   
    Tasks:    1 successful, 1 total

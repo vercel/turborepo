@@ -6,6 +6,7 @@ Check my-app#build output
   $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: //, my-app, util (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   util:build: cache miss, executing 15afa8f5e464aba7
   util:build: 

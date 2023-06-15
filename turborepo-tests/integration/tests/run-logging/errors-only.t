@@ -8,6 +8,7 @@ Setup
   $ ${TURBO} run build --output-logs=errors-only
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
    Tasks:    1 successful, 1 total
@@ -23,6 +24,7 @@ Setup
   $ ${TURBO} run buildsuccess
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running buildsuccess in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
    Tasks:    1 successful, 1 total
@@ -37,6 +39,7 @@ Setup
   $ ${TURBO} run builderror --output-logs=errors-only
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   app-a:builderror: cache miss, executing 8dbe2bf2bd05c8d6
   app-a:builderror: 
@@ -47,9 +50,9 @@ Setup
   app-a:builderror: npm ERR! Lifecycle script `builderror` failed with error: 
   app-a:builderror: npm ERR! Error: command failed 
   app-a:builderror: npm ERR!   in workspace: app-a 
-  app-a:builderror: npm ERR!   at location: .* (re)
-  app-a:builderror: ERROR: command finished with error: command .* npm run builderror exited \(1\) (re)
-  command .* npm run builderror exited \(1\) (re)
+  app-a:builderror: npm ERR!   at location: /private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-9t72_bp8/errors-only.t/app-a 
+  app-a:builderror: ERROR: command finished with error: command (/private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-9t72_bp8/errors-only.t/app-a) npm run builderror exited (1)
+  command (/private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-9t72_bp8/errors-only.t/app-a) npm run builderror exited (1)
   
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
@@ -67,6 +70,7 @@ Setup
   $ ${TURBO} run builderror2
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror2 in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   app-a:builderror2: cache miss, executing c4bbc2a5b473fe4f
   app-a:builderror2: 
@@ -77,9 +81,9 @@ Setup
   app-a:builderror2: npm ERR! Lifecycle script `builderror2` failed with error: 
   app-a:builderror2: npm ERR! Error: command failed 
   app-a:builderror2: npm ERR!   in workspace: app-a 
-  app-a:builderror2: npm ERR!   at location: .* (re)
-  app-a:builderror2: ERROR: command finished with error: command .* npm run builderror2 exited \(1\) (re)
-  command .* npm run builderror2 exited \(1\) (re)
+  app-a:builderror2: npm ERR!   at location: /private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-9t72_bp8/errors-only.t/app-a 
+  app-a:builderror2: ERROR: command finished with error: command (/private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-9t72_bp8/errors-only.t/app-a) npm run builderror2 exited (1)
+  command (/private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-9t72_bp8/errors-only.t/app-a) npm run builderror2 exited (1)
   
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total

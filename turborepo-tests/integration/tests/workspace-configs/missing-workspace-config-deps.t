@@ -13,7 +13,7 @@ Setup
   $ cat tmp.log | grep "in scope" -A 2
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task-with-deps in 1 packages (esc)
-  \xe2\x80\xa2 Remote caching disabled (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
 
   $ cat tmp.log | grep "missing-workspace-config:missing-workspace-config-task-with-deps"
   missing-workspace-config:missing-workspace-config-task-with-deps: cache miss, executing dd477065e764a9de

@@ -25,6 +25,7 @@ type client interface {
 }
 
 type httpCache struct {
+	name           string
 	writable       bool
 	client         client
 	requestLimiter limiter
@@ -112,6 +113,10 @@ func (cache *httpCache) Exists(key string) ItemStatus {
 		return newRemoteTaskCacheStatus(false, 0)
 	}
 	return newRemoteTaskCacheStatus(hit, timeSaved)
+}
+
+func (cache *httpCache) GetName() string {
+	return CacheSourceRemote
 }
 
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {

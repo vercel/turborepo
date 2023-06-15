@@ -8,6 +8,7 @@ Setup
 Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing 95dd1b2d0d9ded60
   build: yarn run v1.22.17
@@ -22,6 +23,7 @@ Check
 
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying logs 95dd1b2d0d9ded60
   build: yarn run v1.22.17

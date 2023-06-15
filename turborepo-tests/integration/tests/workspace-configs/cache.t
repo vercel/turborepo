@@ -13,6 +13,7 @@ This test covers:
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-1 in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   cached:cached-task-1: cache miss, executing c7b2eeeeebe882f4
   cached:cached-task-1: 
@@ -38,6 +39,7 @@ This test covers:
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-2 in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   cached:cached-task-2: cache bypass, force executing e47823a61c0194fe
   cached:cached-task-2: 
@@ -60,6 +62,7 @@ no `cache` config in root, cache:false in workspace
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-3 in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   cached:cached-task-3: cache bypass, force executing 8284eb185db66911
   cached:cached-task-3: 
@@ -84,6 +87,7 @@ we already have a workspace that doesn't have a config
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   missing-workspace-config:cached-task-4: cache bypass, force executing 632c5a434e281d13
   missing-workspace-config:cached-task-4: 

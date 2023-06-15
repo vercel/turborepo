@@ -14,6 +14,7 @@ Setup
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   add-keys:add-keys-underlying-task: cache miss, executing 247f839d50093833
   add-keys:add-keys-underlying-task: 
@@ -42,6 +43,7 @@ Setup
   $ ${TURBO} run add-keys-task --filter=add-keys
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   add-keys:add-keys-underlying-task: cache hit, replaying logs 247f839d50093833
   add-keys:add-keys-underlying-task: 
@@ -60,6 +62,7 @@ Setup
   $ ${TURBO} run add-keys-task --filter=add-keys
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   add-keys:add-keys-underlying-task: cache miss, executing ba66b7cb11224e10
   add-keys:add-keys-underlying-task: 
@@ -81,6 +84,7 @@ Setup
   $ SOME_VAR=somevalue ${TURBO} run add-keys-task --filter=add-keys
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   add-keys:add-keys-underlying-task: cache hit, replaying logs ba66b7cb11224e10
   add-keys:add-keys-underlying-task: 

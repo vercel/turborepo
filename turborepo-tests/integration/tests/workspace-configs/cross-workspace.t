@@ -4,6 +4,7 @@ Setup
   $ ${TURBO} run cross-workspace-task --filter=cross-workspace
   \xe2\x80\xa2 Packages in scope: cross-workspace (esc)
   \xe2\x80\xa2 Running cross-workspace-task in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   blank-pkg:cross-workspace-underlying-task: cache miss, executing fa5501f81cccc6c0
   blank-pkg:cross-workspace-underlying-task: 

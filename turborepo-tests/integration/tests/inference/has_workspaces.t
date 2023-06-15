@@ -17,6 +17,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
@@ -41,6 +42,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
@@ -65,6 +67,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
@@ -89,6 +92,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.
@@ -113,6 +117,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
   No tasks were executed as part of this run.

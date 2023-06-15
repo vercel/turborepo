@@ -6,6 +6,7 @@ Running build for my-app succeeds
   $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache miss, executing ba39dbae281ef72a
   my-app:build: 
@@ -23,6 +24,7 @@ Update exluded file and try again
   $ ${TURBO} run build
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache hit, replaying logs ba39dbae281ef72a
   my-app:build: 

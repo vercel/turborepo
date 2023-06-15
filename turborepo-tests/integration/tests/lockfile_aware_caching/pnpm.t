@@ -6,8 +6,9 @@ Populate cache
   $ ${TURBO} build --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache miss, executing [0-9a-f]+ (re)
+  a:build: cache miss, executing f507cf01ca8f3930
   a:build: 
   a:build: > a@ build .*/apps/a (re)
   a:build: > echo 'building'
@@ -21,8 +22,9 @@ Populate cache
   $ ${TURBO} build --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing [0-9a-f]+ (re)
+  b:build: cache miss, executing 48378ccc5a64c198
   b:build: 
   b:build: > b@ build .*/apps/b (re)
   b:build: > echo 'building'
@@ -41,8 +43,9 @@ Only b should have a cache miss
   $ ${TURBO} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache hit, replaying logs [0-9a-f]+ (re)
+  a:build: cache hit, replaying logs f507cf01ca8f3930
   a:build: 
   a:build: > a@ build .*/apps/a (re)
   a:build: > echo 'building'
@@ -57,8 +60,9 @@ Only b should have a cache miss
   $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing [0-9a-f]+ (re)
+  b:build: cache miss, executing 2ce40b98ec4c624b
   b:build: 
   b:build: > b@ build .*/apps/b (re)
   b:build: > echo 'building'
@@ -84,6 +88,7 @@ Bump of root workspace invalidates all packages
   $ ${TURBO} build  --filter=a
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: 
@@ -99,8 +104,9 @@ Bump of root workspace invalidates all packages
   $ ${TURBO} build  --filter=b
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  b:build: cache miss, executing [0-9a-f]+ (re)
+  b:build: cache miss, executing f79aca2e55f2a86f
   b:build: 
   b:build: > b@ build .*/apps/b (re)
   b:build: > echo 'building'

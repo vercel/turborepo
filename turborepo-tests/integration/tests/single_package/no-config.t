@@ -52,6 +52,7 @@ Check
 Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache bypass, force executing a6461c1683e4f102
   build: 
@@ -66,6 +67,7 @@ Run real once
 Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Using caches: LOCAL (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache bypass, force executing a6461c1683e4f102
   build: 

@@ -80,7 +80,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     "execution": {
       "startTime": [0-9]+, (re)
       "endTime": [0-9]+, (re)
-      "error": "command .* npm run maybefails exited \(1\)", (re)
+      "error": "command (/private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-9t72_bp8/error.t/apps/my-app) npm run maybefails exited (1)",
       "exitCode": 1
     }
   }
@@ -117,6 +117,6 @@ success should be 1, and attempted should be 2
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "error": "command .* npm run maybefails exited \(1\)", (re)
+    "error": "command (/private/var/folders/vg/sr4krlws0k12g21phhjwy4z40000gn/T/prysk-tests-9t72_bp8/error.t/apps/my-app) npm run maybefails exited (1)",
     "exitCode": 1
   }

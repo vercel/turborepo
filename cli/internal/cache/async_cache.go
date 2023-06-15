@@ -58,6 +58,10 @@ func (c *asyncCache) Exists(key string) ItemStatus {
 	return c.realCache.Exists(key)
 }
 
+func (c *asyncCache) GetName() string {
+	return c.realCache.GetName()
+}
+
 func (c *asyncCache) Clean(anchor turbopath.AbsoluteSystemPath) {
 	c.realCache.Clean(anchor)
 }

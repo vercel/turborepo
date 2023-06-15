@@ -19,6 +19,10 @@ func (c *noopCache) Exists(_ string) ItemStatus {
 	return NewCacheMiss()
 }
 
+func (cache *noopCache) GetName() string {
+	return CacheSourceNone
+}
+
 func (c *noopCache) Clean(_ turbopath.AbsoluteSystemPath) {}
 func (c *noopCache) CleanAll()                            {}
 func (c *noopCache) Shutdown()                            {}
