@@ -41,10 +41,12 @@ type DaemonLog = tracing_subscriber::fmt::Layer<
 type Layered = tracing_subscriber::layer::Layered<StdOutLog, Registry>;
 
 pub struct TurboSubscriber {
+    #[allow(dead_code)]
     update: Handle<Option<DaemonLog>, Layered>,
 
     /// The non-blocking file logger only continues to log while this guard is
     /// held. We keep it here so that it doesn't get dropped.
+    #[allow(dead_code)]
     guard: Mutex<Option<WorkerGuard>>,
 
     #[cfg(feature = "tracing-chrome")]

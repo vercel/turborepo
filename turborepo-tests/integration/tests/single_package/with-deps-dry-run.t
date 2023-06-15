@@ -19,7 +19,7 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                           
-    Hash                           = fdb18de339449827                                                                                                                                
+    Hash                           = d6b8b065382193a4                                                                                                                                
     Cached (Local)                 = false                                                                                                                                           
     Cached (Remote)                = false                                                                                                                                           
     Command                        = echo 'building' > foo                                                                                                                           
@@ -38,7 +38,7 @@ Check
     Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                         
   test
     Task                           = test                                                                                                                                              
-    Hash                           = a39dd654f9f3f6a7                                                                                                                                  
+    Hash                           = 1dca8c4431a90e36                                                                                                                                  
     Cached (Local)                 = false                                                                                                                                             
     Cached (Remote)                = false                                                                                                                                             
     Command                        = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                                                      

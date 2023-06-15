@@ -30,9 +30,9 @@ pub struct SwcPluginModule(
 
 impl SwcPluginModule {
     pub fn new(plugin_name: &str, plugin_bytes: Vec<u8>) -> Self {
-        Self {
-            #[cfg(feature = "swc_ecma_transform_plugin")]
-            0: {
+        #[cfg(feature = "swc_ecma_transform_plugin")]
+        {
+            Self({
                 use swc_core::plugin_runner::plugin_module_bytes::{
                     CompiledPluginModuleBytes, RawPluginModuleBytes,
                 };
@@ -40,9 +40,12 @@ impl SwcPluginModule {
                     plugin_name.to_string(),
                     plugin_bytes,
                 ))
-            },
-            #[cfg(not(feature = "swc_ecma_transform_plugin"))]
-            0: (),
+            })
+        }
+
+        #[cfg(not(feature = "swc_ecma_transform_plugin"))]
+        {
+            Self(())
         }
     }
 }
@@ -66,9 +69,9 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
 
     #[turbo_tasks::function]
     async fn title(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "Unsupported SWC EcmaScript transform plugins on this platform."
-        )))
+        Ok(StringVc::cell(
+            "Unsupported SWC EcmaScript transform plugins on this platform.".to_string(),
+        ))
     }
 
     #[turbo_tasks::function]
@@ -193,6 +196,8 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
                     // still have to construct from raw bytes internally to perform actual
                     // transform.
                     for (_plugin_name, plugin_config, plugin_module) in plugins.drain(..) {
+                        let runtime =
+                            swc_core::plugin_runner::wasix_runtime::build_wasi_runtime(None);
                         let mut transform_plugin_executor =
                             swc_core::plugin_runner::create_plugin_transform_executor(
                                 &ctx.source_map,
@@ -200,6 +205,7 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
                                 &transform_metadata_context,
                                 plugin_module,
                                 Some(plugin_config),
+                                runtime,
                             );
 
                         serialized_program = transform_plugin_executor

@@ -5,6 +5,7 @@ Thanks for your interest in contributing to Turbo!
 **Important note**: At the moment, Turbo is made up of two tools, Turborepo and Turbopack, built with different languages and toolchains. In the future, Turbo will become a single toolchain built on Rust and the Turbo engine. In the meantime, please follow the respective guide when contributing to each tool:
 
 - [Contributing to Turbo](#contributing-to-turbo)
+  - [General Dependencies](#general-dependencies)]
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
     - [TLS Implementation](#tls-implementation)
@@ -23,6 +24,11 @@ Thanks for your interest in contributing to Turbo!
     - [Benchmarking Turbopack](#benchmarking-turbopack)
     - [Profiling Turbopack](#profiling-turbopack)
   - [Troubleshooting](#troubleshooting)
+
+## General Dependencies
+
+- [Rust](https://www.rust-lang.org/tools/install)
+- [cargo-groups](https://github.com/nicholaslyang/cargo-groups) (used to group crates into Turborepo-specific ones and Turbopack-specific ones)
 
 ## Contributing to Turborepo
 
@@ -263,6 +269,10 @@ A high-level introduction to Turbopack's architecture, workspace crates, and Tur
 Install `cargo-nextest` (https://nexte.st/):
 
 `cargo install cargo-nextest`
+
+Then, install dependencies for testcases:
+
+`pnpm install -r --side-effects-cache -C crates/turbopack/tests/node-file-trace`
 
 Run via:
 

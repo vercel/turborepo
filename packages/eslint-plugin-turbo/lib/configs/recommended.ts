@@ -1,17 +1,12 @@
 import { RULES } from "../constants";
-import getEnvVarDependencies from "../utils/getEnvVarDependencies";
+import { Project } from "../utils/calculate-inputs";
 
-// Add the environment variables into the ESLint incremental cache key.
-const envVars = getEnvVarDependencies({
-  cwd: process.cwd(),
-});
+const project = new Project(process.cwd());
+const cacheKey = project.valid() ? project.key() : Math.random();
+
 const settings = {
   turbo: {
-    envVars: envVars
-      ? Object.values(envVars)
-          .flatMap((s) => Array.from(s))
-          .sort()
-      : [],
+    cacheKey,
   },
 };
 

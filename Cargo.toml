@@ -49,6 +49,17 @@ default-members = [
   "xtask",
 ]
 
+[workspace.metadata.groups]
+# Only the libraries, does not include the turborepo binary.
+# That way we don't have to build the Go code
+turborepo-libraries = ["path:crates/turborepo-*"]
+turborepo = ["path:crates/turborepo*"]
+turbopack = [
+  "path:crates/turbopack*",
+  "path:crates/turbo-tasks*",
+  "path:crates/node-file-trace",
+]
+
 [profile.dev.package.turbo-tasks-macros]
 opt-level = 3
 
@@ -65,7 +76,7 @@ mdxjs = { version = "0.1.12" }
 modularize_imports = { version = "0.30.0" }
 styled_components = { version = "0.57.0" }
 styled_jsx = { version = "0.34.0" }
-swc_core = { version = "0.76.41" }
+swc_core = { version = "0.76.46" }
 swc_emotion = { version = "0.33.0" }
 swc_relay = { version = "0.5.0" }
 testing = { version = "0.33.13" }
@@ -116,6 +127,7 @@ turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-cache = { path = "crates/turborepo-cache" }
+turborepo-env = { path = "crates/turborepo-env" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib" }
@@ -130,12 +142,12 @@ vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 # and some aren't buildable with rustls.
 reqwest = { version = "0.11.14", default-features = false }
 
-chromiumoxide = { version = "0.4.0", features = [
+chromiumoxide = { version = "0.5.0", features = [
   "tokio-runtime",
 ], default-features = false }
 # For matching on errors from chromiumoxide. Keep in
 # sync with chromiumoxide's tungstenite requirement.
-tungstenite = "0.17.3"
+tungstenite = "0.18.0"
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
@@ -193,8 +205,10 @@ serde_json = "1.0.93"
 serde_qs = "0.11.0"
 serde_with = "2.3.2"
 serde_yaml = "0.9.17"
+sha2 = "0.10.6"
 syn = "1.0.107"
 tempfile = "3.3.0"
+test-case = "3.0.0"
 thiserror = "1.0.38"
 tiny-gradient = "0.1.0"
 tokio = "1.25.0"

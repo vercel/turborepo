@@ -71,7 +71,9 @@ pub struct RunOpts<'a> {
     tasks: &'a [String],
     concurrency: u32,
     parallel: bool,
-    env_mode: EnvMode,
+    pub(crate) env_mode: EnvMode,
+    // Whether or not to infer the framework for each workspace.
+    pub(crate) framework_inference: bool,
     profile: Option<&'a str>,
     continue_on_error: bool,
     passthrough_args: &'a [String],
@@ -111,6 +113,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             log_prefix: args.log_prefix,
             summarize: args.summarize,
             experimental_space_id: args.experimental_space_id.clone(),
+            framework_inference: args.framework_inference,
             env_mode: args.env_mode,
             concurrency,
             parallel: args.parallel,

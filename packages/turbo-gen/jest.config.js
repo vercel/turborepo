@@ -7,5 +7,6 @@ module.exports = {
   transformIgnorePatterns: ["/node_modules/(?!(ansi-regex)/)"],
   modulePathIgnorePatterns: ["<rootDir>/node_modules", "<rootDir>/dist"],
   collectCoverage: true,
-  verbose: true,
+  verbose: process.env.RUNNER_DEBUG === "1",
+  silent: process.env.RUNNER_DEBUG !== "1",
 };

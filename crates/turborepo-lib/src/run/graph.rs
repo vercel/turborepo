@@ -5,7 +5,8 @@ use turbopath::AbsoluteSystemPath;
 
 use crate::{
     config::TurboJson,
-    run::pipeline::{Pipeline, TaskDefinition},
+    package_graph::WorkspaceCatalog,
+    task_graph::{Pipeline, TaskDefinition},
 };
 
 pub struct CompleteGraph<'run> {
@@ -51,9 +52,6 @@ impl<'run> CompleteGraph<'run> {
         Ok(TurboJson::default())
     }
 }
-
-#[derive(Default)]
-pub struct WorkspaceCatalog {}
 
 #[derive(Default)]
 pub struct TaskHashTracker {}

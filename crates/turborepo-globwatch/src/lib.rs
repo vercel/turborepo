@@ -9,6 +9,7 @@
 //! watch for a full round trip through the filesystem to ensure the watcher is
 //! up to date.
 
+#![allow(clippy::all)]
 #![deny(
     missing_docs,
     missing_debug_implementations,
@@ -294,7 +295,7 @@ impl<T: Watcher> WatchConfig<T> {
     pub async fn include(&self, relative_to: &Path, glob: &str) -> Result<(), ConfigError> {
         trace!("including {:?}", glob);
 
-        glob_to_paths(&glob)
+        glob_to_paths(glob)
             .iter()
             .map(|p| relative_to.join(p))
             .map(|p| {
@@ -361,7 +362,7 @@ impl<T: Watcher> WatchConfig<T> {
     pub async fn exclude(&self, relative_to: &Path, glob: &str) {
         trace!("excluding {:?}", glob);
 
-        for p in glob_to_paths(&glob).iter().map(|p| relative_to.join(p)) {
+        for p in glob_to_paths(glob).iter().map(|p| relative_to.join(p)) {
             // we don't care if this fails, it's just a best-effort
             self.watcher
                 .lock()
@@ -442,7 +443,7 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     let chunks = glob_to_symbols(glob).group_by(|s| s != &GlobSymbol::PathSeperator);
     let chunks = chunks
         .into_iter()
-        .filter_map(|(not_sep, chunk)| (not_sep).then(|| chunk));
+        .filter_map(|(not_sep, chunk)| (not_sep).then_some(chunk));
 
     // multi cartisian product allows us to get all the possible combinations
     // of path components for each chunk. for example, if we have a glob
@@ -455,10 +456,10 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     chunks
         .map(symbols_to_combinations) // yield all the possible segments for each glob chunk
         .take_while(|c| c.is_some()) // if any segment has no possible paths, we can stop
-        .filter_map(|chunk| chunk)
+        .flatten()
         .multi_cartesian_product() // get all the possible combinations of path segments
         .map(|chunks| {
-            let prefix = if glob.starts_with("/") { "/" } else { "" };
+            let prefix = if glob.starts_with('/') { "/" } else { "" };
             std::iter::once(prefix)
                 .chain(chunks.iter().map(|s| s.as_str()))
                 .collect::<PathBuf>()

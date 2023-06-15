@@ -3,7 +3,7 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
-      "env": ["GO_TAG"],
+      "env": ["GO_TAG", "RUNNER_OS"],
       "outputs": [
         "../target/debug/go-turbo",
         "../target/debug/turbo",
@@ -14,17 +14,12 @@
       ],
 
       "inputs": [
-        "**/*.go",
-        "**/*_test.go",
-        "../crates/turborepo*/**" // Rust crates
+        "{internal,cmd}/**/*.go",
+        "!**/*_test.go",
+        "../crates/turborepo*/**/*.rs", // Rust crates
+        "../crates/turborepo*/Cargo.toml",
+        "!../crates/**/target"
       ]
-    },
-    "e2e": {
-      "outputs": [],
-      "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
-    },
-    "e2e-prebuilt": {
-      "inputs": ["**/*.go", "go.mod", "go.sum", "scripts/e2e/e2e.ts"]
     }
   }
 }

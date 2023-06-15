@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"gotest.tools/v3/assert"
 )
 
@@ -200,7 +201,12 @@ func TestGetEnvVarsFromWildcards(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.self.FromWildcards(tt.wildcardPatterns)
+			var rustResult EnvironmentVariableMap
+			rustResult, rustErr := ffi.FromWildcards(tt.self, tt.wildcardPatterns)
+			assert.NilError(t, rustErr, "Rust implementation failed.")
 			assert.NilError(t, err, "Did not fail regexp compile.")
+
+			assert.DeepEqual(t, got, rustResult)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetEnvVarsFromWildcards() = %v, want %v", got, tt.want)
 			}

@@ -4,12 +4,12 @@ use std::{
 };
 
 use nom::Finish;
-use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, wait_for_success, Error};
 
 pub(crate) fn append_git_status(
-    root_path: &AbsoluteSystemPathBuf,
+    root_path: &AbsoluteSystemPath,
     pkg_prefix: &RelativeUnixPathBuf,
     hashes: &mut GitHashes,
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
@@ -36,7 +36,7 @@ pub(crate) fn append_git_status(
         .take()
         .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
     let parse_result = read_status(stdout, pkg_prefix, hashes);
-    wait_for_success(git, &mut stderr, "git status", &root_path, parse_result)
+    wait_for_success(git, &mut stderr, "git status", root_path, parse_result)
 }
 
 fn read_status<R: Read>(
@@ -129,7 +129,7 @@ mod tests {
     }
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(pairs.into_iter().map(|(path, hash)| {
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
             (
                 RelativeUnixPathBuf::new(path.as_bytes()).unwrap(),
                 hash.to_string(),

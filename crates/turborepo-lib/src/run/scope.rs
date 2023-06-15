@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use anyhow::Result;
 use tracing::warn;
 
-use crate::{commands::CommandBase, opts::ScopeOpts, run::package_graph};
+use crate::{commands::CommandBase, opts::ScopeOpts, package_graph};
 
 pub fn resolve_packages(
     _opts: &ScopeOpts,

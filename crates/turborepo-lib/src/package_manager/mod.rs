@@ -163,6 +163,7 @@ pub struct NoPackageManager;
 impl NoPackageManager {
     // TODO: determine how to thread through user-friendly error message and apply
     // our UI
+    #[allow(dead_code)]
     pub fn ui_display(&self, ui: &UI) -> String {
         let url =
             ui.apply(UNDERLINE.apply_to("https://nodejs.org/api/packages.html#packagemanager"));
@@ -210,6 +211,12 @@ impl From<&PackageManager> for MissingWorkspaceError {
     }
 }
 
+impl From<wax::BuildError> for Error {
+    fn from(value: wax::BuildError) -> Self {
+        Self::Wax(Box::new(value), backtrace::Backtrace::capture())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("io error: {0}")]
@@ -221,7 +228,7 @@ pub enum Error {
     #[error("json parsing error: {0}")]
     ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
     #[error("globbing error: {0}")]
-    Wax(#[from] wax::BuildError, #[backtrace] backtrace::Backtrace),
+    Wax(Box<wax::BuildError>, #[backtrace] backtrace::Backtrace),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
     #[error(transparent)]
@@ -383,22 +390,20 @@ impl PackageManager {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
-    ) -> Result<Vec<AbsoluteSystemPathBuf>, Error> {
+    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf>, Error> {
         let globs = self.get_workspace_globs(repo_root)?;
 
-        let walker = globwalk::globwalk(
+        let files = globwalk::globwalk(
             repo_root,
             &globs.package_json_inclusions,
             &globs.raw_exclusions,
             globwalk::WalkType::Files,
         )?;
-        let items = walker
-            .map(|result| result.map_err(|e| e.into()))
-            .collect::<Result<Vec<_>, Error>>()?;
-        Ok(items)
+        Ok(files.into_iter())
     }
 }
 

@@ -6,14 +6,14 @@ use std::{
 };
 
 use nom::{Finish, IResult};
-use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, wait_for_success, Error};
 
 pub(crate) fn hash_objects(
-    pkg_path: &AbsoluteSystemPathBuf,
+    git_root: &AbsoluteSystemPath,
+    pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
-    pkg_prefix: &RelativeUnixPathBuf,
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
     if to_hash.is_empty() {
@@ -21,7 +21,9 @@ pub(crate) fn hash_objects(
     }
     let mut git = Command::new("git")
         .args(["hash-object", "--stdin-paths"])
-        .current_dir(pkg_path)
+        // Note that the directory is irrelevant as long as it is within the git repo.
+        // --stdin-paths processes all paths as relative to the root of the _git_ repository.
+        .current_dir(git_root)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
@@ -41,7 +43,7 @@ pub(crate) fn hash_objects(
         .stderr
         .take()
         .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
-    let parse_result = read_object_hashes(stdout, stdin, &to_hash, pkg_prefix, hashes);
+    let parse_result = read_object_hashes(stdout, stdin, &to_hash, git_root, pkg_path, hashes);
     wait_for_success(git, &mut stderr, "git hash-object", pkg_path, parse_result)
 }
 
@@ -51,7 +53,8 @@ fn read_object_hashes<R: Read, W: Write + Send>(
     mut reader: R,
     writer: W,
     to_hash: &Vec<RelativeUnixPathBuf>,
-    pkg_prefix: &RelativeUnixPathBuf,
+    git_prefix: &AbsoluteSystemPath,
+    pkg_path: &AbsoluteSystemPath,
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
     thread::scope(move |scope| -> Result<(), Error> {
@@ -71,7 +74,9 @@ fn read_object_hashes<R: Read, W: Write + Send>(
             reader.read_exact(&mut buffer)?;
             let hash = parse_hash_object(&buffer)?;
             let hash = String::from_utf8(hash.to_vec())?;
-            let path = filename.strip_prefix(pkg_prefix)?;
+            let full_file_path = git_prefix.join_unix_path(filename)?;
+            let path = AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
+                .to_unix()?;
             hashes.insert(path, hash);
         }
         match write_thread.join() {
@@ -152,7 +157,7 @@ mod test {
             let expected_hashes = GitHashes::from_iter(file_hashes.into_iter());
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&pkg_path, to_hash, &pkg_prefix, &mut hashes).unwrap();
+            hash_objects(&git_root, pkg_path, to_hash, &mut hashes).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
 
@@ -172,7 +177,7 @@ mod test {
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&pkg_path, to_hash, &pkg_prefix, &mut hashes);
+            let result = hash_objects(&git_root, &pkg_path, to_hash, &mut hashes);
             assert_eq!(result.is_err(), true);
         }
     }
