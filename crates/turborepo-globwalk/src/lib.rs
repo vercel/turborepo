@@ -426,7 +426,11 @@ mod test {
         let (result_path, include, exclude) =
             super::preprocess_paths_and_globs(&base_path, &include, &exclude).unwrap();
 
-        let expected = format!("{}{}", ROOT, base_path_exp.replace("/", std::path::MAIN_SEPARATOR_STR));
+        let expected = format!(
+            "{}{}",
+            ROOT,
+            base_path_exp.replace("/", std::path::MAIN_SEPARATOR_STR)
+        );
         assert_eq!(result_path.to_string_lossy(), expected);
 
         if let Some(include_exp) = include_exp {
@@ -481,7 +485,11 @@ mod test {
         let any = wax::any(patterns).unwrap();
         let any_empty = InclusiveEmptyAny::new::<Glob, _>(patterns).unwrap();
         assert_eq!(
-            super::do_match(Path::new(&format!("{}{}", ROOT, "/a/b/c/d")), &any_empty, &any),
+            super::do_match(
+                Path::new(&format!("{}{}", ROOT, "/a/b/c/d")),
+                &any_empty,
+                &any
+            ),
             MatchType::Match
         )
     }
@@ -1225,7 +1233,10 @@ mod test {
 
             let expected = expected
                 .iter()
-                .map(|p| p.trim_start_matches('/').replace("/", std::path::MAIN_SEPARATOR_STR))
+                .map(|p| {
+                    p.trim_start_matches('/')
+                        .replace("/", std::path::MAIN_SEPARATOR_STR)
+                })
                 .sorted()
                 .collect::<Vec<_>>();
 
@@ -1336,8 +1347,12 @@ mod test {
             .collect::<HashSet<_>>();
         let expected: HashSet<String> = HashSet::from_iter(
             [
-                "docs/package.json".replace("/", std::path::MAIN_SEPARATOR_STR).to_string(),
-                "apps/some-app/package.json".replace("/", std::path::MAIN_SEPARATOR_STR).to_string(),
+                "docs/package.json"
+                    .replace("/", std::path::MAIN_SEPARATOR_STR)
+                    .to_string(),
+                "apps/some-app/package.json"
+                    .replace("/", std::path::MAIN_SEPARATOR_STR)
+                    .to_string(),
             ]
             .into_iter(),
         );
