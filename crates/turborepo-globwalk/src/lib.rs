@@ -655,7 +655,6 @@ mod test {
         None
     }
 
-    #[cfg(unix)]
     #[test_case(
         &["/test.txt"],
         "/",
@@ -1226,7 +1225,7 @@ mod test {
 
             let expected = expected
                 .iter()
-                .map(|p| p.trim_start_matches('/'))
+                .map(|p| p.trim_start_matches('/').replace("/", std::path::MAIN_SEPARATOR_STR))
                 .sorted()
                 .collect::<Vec<_>>();
 
@@ -1238,7 +1237,6 @@ mod test {
         }
     }
 
-    #[cfg(unix)]
     #[test_case(&[
             "/repos/spanish-inquisition/index.html",
             "/repos/some-app/dist/index.html",
@@ -1277,6 +1275,7 @@ mod test {
         _expected_files: &[&str],
     ) {
         let _dir = setup_files(files);
+        // TODO: this test needs to be implemented...
     }
 
     fn setup_files(files: &[&str]) -> tempdir::TempDir {
@@ -1292,26 +1291,24 @@ mod test {
         tmp
     }
 
-    #[cfg(unix)]
     #[test]
     fn test_directory_traversal() {
         let files = &["root-file", "child/some-file"];
         let tmp = setup_files(files);
         let root = AbsoluteSystemPathBuf::new(tmp.path()).unwrap();
-        let child = ROOT.join_component("child");
+        let child = root.join_component("child");
         let include = &["../*-file".to_string()];
         let exclude = &[];
         let iter = globwalk(&child, include, exclude, WalkType::Files)
             .unwrap()
             .into_iter();
         let results = iter
-            .map(|entry| ROOT.anchor(entry).unwrap().to_str().unwrap().to_string())
+            .map(|entry| root.anchor(entry).unwrap().to_str().unwrap().to_string())
             .collect::<Vec<_>>();
         let expected = vec!["root-file".to_string()];
         assert_eq!(results, expected);
     }
 
-    #[cfg(unix)]
     #[test]
     fn workspace_globbing() {
         let files = &[
@@ -1329,18 +1326,18 @@ mod test {
             "docs/package.json".to_string(),
         ];
         let exclude = &["apps/ignored".to_string(), "**/node_modules/**".to_string()];
-        let iter = globwalk(&ROOT, include, exclude, WalkType::Files).unwrap();
+        let iter = globwalk(&root, include, exclude, WalkType::Files).unwrap();
         let paths = iter
             .into_iter()
             .map(|path| {
-                let relative = ROOT.anchor(path).unwrap();
+                let relative = root.anchor(path).unwrap();
                 relative.to_str().unwrap().to_string()
             })
             .collect::<HashSet<_>>();
         let expected: HashSet<String> = HashSet::from_iter(
             [
-                "docs/package.json".to_string(),
-                "apps/some-app/package.json".to_string(),
+                "docs/package.json".replace("/", std::path::MAIN_SEPARATOR_STR).to_string(),
+                "apps/some-app/package.json".replace("/", std::path::MAIN_SEPARATOR_STR).to_string(),
             ]
             .into_iter(),
         );
