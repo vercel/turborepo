@@ -25,6 +25,7 @@
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
+  
 
 # We can get the same behavior with an env var
   $ TURBO_LOG_ORDER=grouped ${TURBO} run build --force
