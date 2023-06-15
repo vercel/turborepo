@@ -37,7 +37,7 @@ impl AsRef<Path> for AnchoredSystemPath {
 }
 
 impl AnchoredSystemPath {
-    pub unsafe fn new_unchecked<'a>(path: impl AsRef<Path> + 'a) -> &'a Self {
+    pub(crate) unsafe fn new_unchecked<'a>(path: impl AsRef<Path> + 'a) -> &'a Self {
         let path = path.as_ref();
         unsafe { &*(path as *const Path as *const Self) }
     }

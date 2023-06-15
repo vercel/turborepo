@@ -126,7 +126,7 @@ impl AnchoredSystemPathBuf {
         unsafe { AnchoredSystemPathBuf::new_unchecked(no_trailing_slash) }
     }
 
-    pub unsafe fn new_unchecked(path: impl Into<PathBuf>) -> Self {
+    pub(crate) unsafe fn new_unchecked(path: impl Into<PathBuf>) -> Self {
         AnchoredSystemPathBuf(path.into())
     }
 
