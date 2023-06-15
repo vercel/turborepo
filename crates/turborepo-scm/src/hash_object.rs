@@ -1,14 +1,6 @@
-use std::{
-    io::{BufWriter, Read, Write},
-    panic,
-    process::{Command, Stdio},
-    thread,
-};
-
-use nom::{Finish, IResult};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error};
+use crate::{package_deps::GitHashes, Error};
 
 pub(crate) fn hash_objects(
     git_root: &AbsoluteSystemPath,
@@ -16,93 +8,14 @@ pub(crate) fn hash_objects(
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
-    if to_hash.is_empty() {
-        return Ok(());
+    for filename in to_hash {
+        let full_file_path = git_root.join_unix_path(filename)?;
+        let hash = git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path)?;
+        let package_relative_path =
+            AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path).to_unix()?;
+        hashes.insert(package_relative_path, hash.to_string());
     }
-    let mut git = Command::new("git")
-        .args(["hash-object", "--stdin-paths"])
-        // Note that the directory is irrelevant as long as it is within the git repo.
-        // --stdin-paths processes all paths as relative to the root of the _git_ repository.
-        .current_dir(git_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .stdin(Stdio::piped())
-        .spawn()?;
-
-    let stdout = git
-        .stdout
-        .as_mut()
-        .ok_or_else(|| Error::git_error("failed to get stdout for git hash-object"))?;
-    // We take, rather than borrow, stdin so that we can drop it and force the
-    // underlying file descriptor to close, signalling the end of input.
-    let stdin: std::process::ChildStdin = git
-        .stdin
-        .take()
-        .ok_or_else(|| Error::git_error("failed to get stdin for git hash-object"))?;
-    let mut stderr = git
-        .stderr
-        .take()
-        .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
-    let parse_result = read_object_hashes(stdout, stdin, &to_hash, git_root, pkg_path, hashes);
-    wait_for_success(git, &mut stderr, "git hash-object", pkg_path, parse_result)
-}
-
-const HASH_LEN: usize = 40;
-
-fn read_object_hashes<R: Read, W: Write + Send>(
-    mut reader: R,
-    writer: W,
-    to_hash: &Vec<RelativeUnixPathBuf>,
-    git_prefix: &AbsoluteSystemPath,
-    pkg_path: &AbsoluteSystemPath,
-    hashes: &mut GitHashes,
-) -> Result<(), Error> {
-    thread::scope(move |scope| -> Result<(), Error> {
-        let write_thread = scope.spawn(move || -> Result<(), Error> {
-            let mut writer = BufWriter::new(writer);
-            for path in to_hash {
-                path.write_escaped_bytes(&mut writer)?;
-                writer.write_all(&[b'\n'])?;
-                writer.flush()?;
-            }
-            // writer is dropped here, closing stdin
-            Ok(())
-        });
-        // Buffer size is HASH_LEN + 1 to account for the trailing \n
-        let mut buffer: [u8; HASH_LEN + 1] = [0; HASH_LEN + 1];
-        for filename in to_hash.iter() {
-            reader.read_exact(&mut buffer)?;
-            let hash = parse_hash_object(&buffer)?;
-            let hash = String::from_utf8(hash.to_vec())?;
-            let full_file_path = git_prefix.join_unix_path(filename)?;
-            let path = AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
-                .to_unix()?;
-            hashes.insert(path, hash);
-        }
-        match write_thread.join() {
-            // the error case is if the thread panic'd. In that case, we propagate
-            // the panic, since we aren't going to handle it.
-            Err(e) => panic::resume_unwind(e),
-            Ok(result) => result,
-        }
-    })?;
     Ok(())
-}
-
-fn parse_hash_object(i: &[u8]) -> Result<&[u8], Error> {
-    match nom::combinator::all_consuming(nom_parse_hash_object)(i).finish() {
-        Ok((_, hash)) => Ok(hash),
-        Err(e) => Err(Error::git_error(format!(
-            "failed to parse git-hash-object {}",
-            String::from_utf8_lossy(e.input)
-        ))),
-    }
-}
-
-fn nom_parse_hash_object(i: &[u8]) -> IResult<&[u8], &[u8]> {
-    let (i, hash) = nom::bytes::complete::take(HASH_LEN)(i)?;
-    let (i, _) = nom::bytes::complete::tag(&[b'\n'])(i)?;
-    Ok((i, hash))
 }
 
 #[cfg(test)]
