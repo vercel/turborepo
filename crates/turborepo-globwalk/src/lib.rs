@@ -366,6 +366,14 @@ mod test {
     };
 
     #[cfg(unix)]
+    const ROOT: &str = "/";
+    #[cfg(windows)]
+    const ROOT: &str = "C:\\";
+    #[cfg(unix)]
+    const GLOB_ROOT: &str = "/";
+    #[cfg(windows)]
+    const GLOB_ROOT: &str = "C\\:/"; // in globs, expect an escaped ':' token
+
     #[test_case("a/./././b", "a/b", 1 ; "test path with dot segments")]
     #[test_case("a/../b", "b", 0 ; "test path with dotdot segments")]
     #[test_case("a/./../b", "b", 0 ; "test path with mixed dot and dotdot segments")]
@@ -387,23 +395,21 @@ mod test {
         assert_eq!(segment, earliest_collapsed_segement);
     }
 
-    #[cfg(unix)]
     #[test_case("../a/b" ; "test path starting with ../ segment should return None")]
     #[test_case("/../a" ; "test path with leading dotdotdot segment should return None")]
     fn test_collapse_path_not(glob: &str) {
         assert_eq!(collapse_path(glob), None);
     }
 
-    #[cfg(unix)]
-    #[test_case("/a/b/c/d", &["/e/../../../f"], &[], "/a/b", None, None ; "can traverse beyond the root")]
-    #[test_case("/a/b/c/d/", &["/e/../../../f"], &[], "/a/b", None, None ; "can handle slash-trailing base path")]
-    #[test_case("/a/b/c/d/", &["e/../../../f"], &[], "/a/b", None, None ; "can handle no slash on glob")]
-    #[test_case("/a/b/c/d", &["e/../../../f"], &[], "/a/b", None, None ; "can handle no slash on either")]
-    #[test_case("/a/b/c/d", &["/e/f/../g"], &[], "/a/b/c/d", None, None ; "can handle no collapse")]
-    #[test_case("/a/b/c/d", &["./././../.."], &[], "/a/b", None, None ; "can handle dot followed by dotdot")]
-    #[test_case("/a/b/c/d", &["**"], &["**/"], "/a/b/c/d", None, Some(&["/a/b/c/d/**"]) ; "can handle dot followed by dotdot and dot")]
-    #[test_case("/a/b/c", &["**"], &["d/"], "/a/b/c", None, Some(&["/a/b/c/d/**"]) ; "will exclude all subfolders")]
-    #[test_case("/a/b/c", &["**"], &["d"], "/a/b/c", None, Some(&["/a/b/c/d/**", "/a/b/c/d"]) ; "will exclude all subfolders and file")]
+    #[test_case("a/b/c/d", &["/e/../../../f"], &[], "a/b", None, None ; "can traverse beyond the root")]
+    #[test_case("a/b/c/d/", &["/e/../../../f"], &[], "a/b", None, None ; "can handle slash-trailing base path")]
+    #[test_case("a/b/c/d/", &["e/../../../f"], &[], "a/b", None, None ; "can handle no slash on glob")]
+    #[test_case("a/b/c/d", &["e/../../../f"], &[], "a/b", None, None ; "can handle no slash on either")]
+    #[test_case("a/b/c/d", &["/e/f/../g"], &[], "a/b/c/d", None, None ; "can handle no collapse")]
+    #[test_case("a/b/c/d", &["./././../.."], &[], "a/b", None, None ; "can handle dot followed by dotdot")]
+    #[test_case("a/b/c/d", &["**"], &["**/"], "a/b/c/d", None, Some(&["a/b/c/d/**"]) ; "can handle dot followed by dotdot and dot")]
+    #[test_case("a/b/c", &["**"], &["d/"], "a/b/c", None, Some(&["a/b/c/d/**"]) ; "will exclude all subfolders")]
+    #[test_case("a/b/c", &["**"], &["d"], "a/b/c", None, Some(&["a/b/c/d/**", "a/b/c/d"]) ; "will exclude all subfolders and file")]
     fn preprocess_paths_and_globs(
         base_path: &str,
         include: &[&str],
@@ -412,21 +418,23 @@ mod test {
         include_exp: Option<&[&str]>,
         exclude_exp: Option<&[&str]>,
     ) {
-        let base_path = AbsoluteSystemPathBuf::new(base_path).unwrap();
+        let raw_path = format!("{}{}", ROOT, base_path);
+        let base_path = AbsoluteSystemPathBuf::new(raw_path).unwrap();
         let include = include.iter().map(|s| s.to_string()).collect_vec();
         let exclude = exclude.iter().map(|s| s.to_string()).collect_vec();
 
-        let (base_expected, include, exclude) =
+        let (result_path, include, exclude) =
             super::preprocess_paths_and_globs(&base_path, &include, &exclude).unwrap();
 
-        assert_eq!(base_expected.to_string_lossy(), base_path_exp);
+        let expected = format!("{}{}", ROOT, base_path_exp.replace("/", std::path::MAIN_SEPARATOR_STR));
+        assert_eq!(result_path.to_string_lossy(), expected);
 
         if let Some(include_exp) = include_exp {
             assert_eq!(
                 include,
                 include_exp
                     .iter()
-                    .map(|s| s.to_string())
+                    .map(|s| format!("{}{}", GLOB_ROOT, s))
                     .collect_vec()
                     .as_slice()
             );
@@ -437,17 +445,16 @@ mod test {
                 exclude,
                 exclude_exp
                     .iter()
-                    .map(|s| s.to_string())
+                    .map(|s| format!("{}{}", GLOB_ROOT, s))
                     .collect_vec()
                     .as_slice()
             );
         }
     }
 
-    #[cfg(unix)]
-    #[test_case("/a/b/c", "dist/**", "dist/js/**")]
+    #[test_case("a/b/c", "dist/**", "dist/js/**")]
     fn exclude_prunes_subfolder(base_path: &str, include: &str, exclude: &str) {
-        let base_path = AbsoluteSystemPathBuf::new(base_path).unwrap();
+        let base_path = AbsoluteSystemPathBuf::new(format!("{}{}", ROOT, base_path)).unwrap();
         let include = vec![include.to_string()];
         let exclude = vec![exclude.to_string()];
 
@@ -460,7 +467,7 @@ mod test {
 
         assert_eq!(
             super::do_match(
-                Path::new("/a/b/c/dist/js/test.js"),
+                Path::new(&format!("{}{}", ROOT, "a/b/c/dist/js/test.js")),
                 &include_glob,
                 &exclude_glob
             ),
@@ -468,14 +475,13 @@ mod test {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn do_match_empty_include() {
         let patterns: [&str; 0] = [];
         let any = wax::any(patterns).unwrap();
         let any_empty = InclusiveEmptyAny::new::<Glob, _>(patterns).unwrap();
         assert_eq!(
-            super::do_match(Path::new("/a/b/c/d"), &any_empty, &any),
+            super::do_match(Path::new(&format!("{}{}", ROOT, "/a/b/c/d")), &any_empty, &any),
             MatchType::Match
         )
     }
@@ -531,14 +537,9 @@ mod test {
             .unwrap();
             std::os::unix::fs::symlink("a/b", tmp.path().join("working-symlink")).unwrap();
         }
-
-        // filesystem needs to propagate changes
-        // std::thread::sleep(Duration::from_millis(100));
-
         tmp
     }
 
-    #[cfg(unix)]
     #[test_case("abc", 1, 1 => matches None ; "exact match")]
     #[test_case("*", 19, 15 => matches None ; "single star match")]
     #[test_case("*c", 2, 2 => matches None ; "single star suffix match")]
@@ -550,9 +551,7 @@ mod test {
     #[test_case("ab[c]", 1, 1 => matches None ; "character class match")]
     #[test_case("ab[b-d]", 1, 1 => matches None ; "character class range match")]
     #[test_case("ab[e-g]", 0, 0 => matches None ; "character class range mismatch")]
-    #[test_case("a\\*b", 0, 0 => matches None ; "escaped star mismatch")]
     #[test_case("a?b", 1, 1 => matches None ; "question mark unicode match")]
-    // this is disabled until a fix is available upstream
     #[test_case("a[!a]b", 1, 1 => matches None ; "negated character class unicode match 2")]
     #[test_case("a???b", 0, 0 => matches None ; "insufficient question marks mismatch")]
     #[test_case("a[^a][^a][^a]b", 0, 0 => matches None ; "multiple negated character classes mismatch")]
@@ -590,14 +589,6 @@ mod test {
     #[test_case("**/abc", 2, 2 => matches None)]
     #[test_case("**/*.txt", 1, 1 => matches None)]
     #[test_case("**/【*", 1, 1 => matches None)]
-    // in the go implementation, broken-symlink is yielded,
-    // however in symlink mode, walkdir yields broken symlinks as errors.
-    // Note that walkdir _always_ follows root symlinks. We handle this in the layer
-    // above wax.
-    #[test_case("broken-symlink", 1, 1 => matches None ; "broken symlinks should be yielded")]
-    // globs that match across a symlink should not follow the symlink
-    #[test_case("working-symlink/c/*", 0, 0 => matches None ; "working symlink should not be followed")]
-    #[test_case("working-sym*/*", 0, 0 => matches None ; "working symlink should not be followed 2")]
     #[test_case("b/**/f", 0, 0 => matches None)]
     fn glob_walk(
         pattern: &str,
@@ -616,6 +607,8 @@ mod test {
 
     // these tests were configured to only run on unix, and not on windows
     #[cfg(unix)]
+    // cannot use * as a path token on windows
+    #[test_case("a\\*b", 0 => matches None ; "escaped star mismatch")]
     #[test_case("[\\]a]", 2 => matches None ; "escaped bracket match")]
     #[test_case("[\\-]", 1  => matches None; "escaped dash match")]
     #[test_case("[x\\-]", 2  => matches None; "escaped dash in character class match")]
@@ -629,6 +622,14 @@ mod test {
     // Some(WalkError::BadPattern("\\".into())), 0 ; "single backslash error")]
     #[test_case("a/\\**", 0  => matches None; "a followed by escaped double star and subdirectories mismatch")]
     #[test_case("a/\\[*\\]", 0  => matches None; "a followed by escaped character class and pattern mismatch")]
+    // in the go implementation, broken-symlink is yielded,
+    // however in symlink mode, walkdir yields broken symlinks as errors.
+    // Note that walkdir _always_ follows root symlinks. We handle this in the layer
+    // above wax.
+    #[test_case("broken-symlink", 1 => matches None ; "broken symlinks should be yielded")]
+    // globs that match across a symlink should not follow the symlink
+    #[test_case("working-symlink/c/*", 0 => matches None ; "working symlink should not be followed")]
+    #[test_case("working-sym*/*", 0 => matches None ; "working symlink should not be followed 2")]
     fn glob_walk_unix(pattern: &str, result_count: usize) -> Option<WalkError> {
         glob_walk_inner(pattern, result_count)
     }
@@ -1297,14 +1298,14 @@ mod test {
         let files = &["root-file", "child/some-file"];
         let tmp = setup_files(files);
         let root = AbsoluteSystemPathBuf::new(tmp.path()).unwrap();
-        let child = root.join_component("child");
+        let child = ROOT.join_component("child");
         let include = &["../*-file".to_string()];
         let exclude = &[];
         let iter = globwalk(&child, include, exclude, WalkType::Files)
             .unwrap()
             .into_iter();
         let results = iter
-            .map(|entry| root.anchor(entry).unwrap().to_str().unwrap().to_string())
+            .map(|entry| ROOT.anchor(entry).unwrap().to_str().unwrap().to_string())
             .collect::<Vec<_>>();
         let expected = vec!["root-file".to_string()];
         assert_eq!(results, expected);
@@ -1328,11 +1329,11 @@ mod test {
             "docs/package.json".to_string(),
         ];
         let exclude = &["apps/ignored".to_string(), "**/node_modules/**".to_string()];
-        let iter = globwalk(&root, include, exclude, WalkType::Files).unwrap();
+        let iter = globwalk(&ROOT, include, exclude, WalkType::Files).unwrap();
         let paths = iter
             .into_iter()
             .map(|path| {
-                let relative = root.anchor(path).unwrap();
+                let relative = ROOT.anchor(path).unwrap();
                 relative.to_str().unwrap().to_string()
             })
             .collect::<HashSet<_>>();
