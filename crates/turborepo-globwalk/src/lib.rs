@@ -365,6 +365,7 @@ mod test {
         collapse_path, empty_glob::InclusiveEmptyAny, globwalk, MatchType, WalkError, WalkType,
     };
 
+    #[cfg(unix)]
     #[test_case("a/./././b", "a/b", 1 ; "test path with dot segments")]
     #[test_case("a/../b", "b", 0 ; "test path with dotdot segments")]
     #[test_case("a/./../b", "b", 0 ; "test path with mixed dot and dotdot segments")]
@@ -386,6 +387,7 @@ mod test {
         assert_eq!(segment, earliest_collapsed_segement);
     }
 
+    #[cfg(unix)]
     #[test_case("../a/b" ; "test path starting with ../ segment should return None")]
     #[test_case("/../a" ; "test path with leading dotdotdot segment should return None")]
     fn test_collapse_path_not(glob: &str) {
@@ -466,6 +468,7 @@ mod test {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn do_match_empty_include() {
         let patterns: [&str; 0] = [];
@@ -535,6 +538,7 @@ mod test {
         tmp
     }
 
+    #[cfg(unix)]
     #[test_case("abc", 1, 1 => matches None ; "exact match")]
     #[test_case("*", 19, 15 => matches None ; "single star match")]
     #[test_case("*c", 2, 2 => matches None ; "single star suffix match")]
@@ -650,6 +654,7 @@ mod test {
         None
     }
 
+    #[cfg(unix)]
     #[test_case(
         &["/test.txt"],
         "/",
@@ -1232,6 +1237,7 @@ mod test {
         }
     }
 
+    #[cfg(unix)]
     #[test_case(&[
             "/repos/spanish-inquisition/index.html",
             "/repos/some-app/dist/index.html",
@@ -1285,6 +1291,7 @@ mod test {
         tmp
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_directory_traversal() {
         let files = &["root-file", "child/some-file"];
@@ -1303,6 +1310,7 @@ mod test {
         assert_eq!(results, expected);
     }
 
+    #[cfg(unix)]
     #[test]
     fn workspace_globbing() {
         let files = &[

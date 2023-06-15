@@ -444,14 +444,14 @@ pub extern "C" fn get_package_file_hashes_from_inputs(buffer: Buffer) -> Buffer 
                 to_return.insert(filename, hash);
             }
             let file_hashes = proto::FileHashes { hashes: to_return };
-            let resp = proto::GetPackageFileHashesFromInputsResponse {
+
+            proto::GetPackageFileHashesFromInputsResponse {
                 response: Some(
                     proto::get_package_file_hashes_from_inputs_response::Response::Hashes(
                         file_hashes,
                     ),
                 ),
-            };
-            resp
+            }
         }
         Err(err) => {
             let resp = proto::GetPackageFileHashesFromInputsResponse {

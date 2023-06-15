@@ -39,7 +39,8 @@ pub fn get_global_hash_inputs(
 ) -> Result<GlobalHashableInputs> {
     let default_env_var_map = env_at_execution_start.from_wildcards(&DEFAULT_ENV_VARS[..])?;
 
-    let user_env_var_set = env_at_execution_start.from_wildcards_unresolved(&global_env)?;
+    let user_env_var_set =
+        env_at_execution_start.wildcard_map_from_wildcards_unresolved(&global_env)?;
 
     let mut all_env_var_map = EnvironmentVariableMap::default();
     all_env_var_map.union(&user_env_var_set.inclusions);

@@ -69,5 +69,9 @@ runs:
       with:
         crate: cargo-sweep
 
+    - name: "Install cargo-groups"
+      shell: bash
+      run: cargo install cargo-groups
+
     - name: "Run cargo-sweep"
       uses: ./.github/actions/cargo-sweep

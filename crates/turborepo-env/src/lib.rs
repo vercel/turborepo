@@ -160,7 +160,7 @@ impl EnvironmentVariableMap {
     // FromWildcardsUnresolved returns a wildcardSet specifying the inclusions and
     // exclusions discovered from a set of wildcard patterns. This is used to ensure
     // that user exclusions have primacy over inferred inclusions.
-    pub fn from_wildcards_unresolved(
+    pub fn wildcard_map_from_wildcards_unresolved(
         &self,
         wildcard_patterns: &[String],
     ) -> Result<WildcardMaps, regex::Error> {
@@ -224,7 +224,8 @@ pub fn get_global_hashable_env_vars(
 ) -> Result<DetailedMap, Error> {
     let default_env_var_map = env_at_execution_start.from_wildcards(&DEFAULT_ENV_VARS[..])?;
 
-    let user_env_var_set = env_at_execution_start.from_wildcards_unresolved(global_env)?;
+    let user_env_var_set =
+        env_at_execution_start.wildcard_map_from_wildcards_unresolved(global_env)?;
 
     let mut all_env_var_map = EnvironmentVariableMap::default();
     all_env_var_map.union(&user_env_var_set.inclusions);
