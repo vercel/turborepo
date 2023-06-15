@@ -93,12 +93,14 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 		}
 		opts.runOpts.Concurrency = concurrency
 	}
+
 	opts.runOpts.Parallel = runPayload.Parallel
 	opts.runOpts.Profile = runPayload.Profile
 	opts.runOpts.ContinueOnError = runPayload.ContinueExecution
 	opts.runOpts.Only = runPayload.Only
 	opts.runOpts.NoDaemon = runPayload.NoDaemon
 	opts.runOpts.SinglePackage = args.Command.Run.SinglePackage
+	opts.runOpts.LogOrder = args.Command.Run.LogOrder
 
 	// See comment on Graph in turbostate.go for an explanation on Graph's representation.
 	// If flag is passed...

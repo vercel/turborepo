@@ -47,6 +47,7 @@ type RunPayload struct {
 	NoDeps              bool     `json:"no_deps"`
 	Only                bool     `json:"only"`
 	OutputLogs          string   `json:"output_logs"`
+	LogOrder            string   `json:"log_order"`
 	PassThroughArgs     []string `json:"pass_through_args"`
 	Parallel            bool     `json:"parallel"`
 	Profile             string   `json:"profile"`

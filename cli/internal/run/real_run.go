@@ -1,9 +1,12 @@
 package run
 
 import (
+	"bytes"
 	gocontext "context"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -75,11 +78,15 @@ func RealRun(
 
 	runCache := runcache.New(turboCache, base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
 
+	concurrentUIFactory := ui.ConcurrentUIFactory{
+		Base: base.UIFactory,
+	}
+
 	ec := &execContext{
 		colorCache:      colorCache,
 		runSummary:      runSummary,
 		rs:              rs,
-		ui:              &cli.ConcurrentUi{Ui: base.UI},
+		ui:              concurrentUIFactory.Build(os.Stdin, os.Stdout, os.Stderr),
 		runCache:        runCache,
 		env:             globalEnv,
 		passThroughEnv:  globalPassThroughEnv,
@@ -97,10 +104,54 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.Concurrency,
 	}
 
-	mu := sync.Mutex{}
+	taskCount := len(engine.TaskGraph.Vertices())
+	logChan := make(chan taskLogContext, taskCount)
+	logWaitGroup := sync.WaitGroup{}
+	isGrouped := rs.Opts.runOpts.LogOrder == "grouped"
+
+	var outputLogs func()
+
+	if isGrouped {
+		outputLogs = func() {
+			for i := 1; i < taskCount; i++ {
+				logContext := <-logChan
+
+				outBytes := logContext.outBuf.Bytes()
+				errBytes := logContext.errBuf.Bytes()
+
+				_, errOut := os.Stdout.Write(outBytes)
+				_, errErr := os.Stderr.Write(errBytes)
+
+				if errOut != nil || errErr != nil {
+					ec.ui.Error("Failed to output some of the logs.")
+				}
+
+				logWaitGroup.Done()
+			}
+		}
+	}
+	if isGrouped {
+		go outputLogs()
+	}
+
+	taskSummaryMutex := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		taskExecutionSummary, err := ec.exec(ctx, packageTask)
+		logWaitGroup.Add(1)
+		outBuf := &bytes.Buffer{}
+		errBuf := &bytes.Buffer{}
+
+		var outWriter io.Writer = os.Stdout
+		var errWriter io.Writer = os.Stderr
+
+		if isGrouped {
+			outWriter = outBuf
+			errWriter = errBuf
+		}
+
+		ui := concurrentUIFactory.Build(os.Stdin, outWriter, errWriter)
+
+		taskExecutionSummary, err := ec.exec(ctx, packageTask, ui, outWriter)
 
 		// taskExecutionSummary will be nil if the task never executed
 		// (i.e. if the workspace didn't implement the script corresponding to the task)
@@ -111,12 +162,18 @@ func RealRun(
 			taskSummary.CacheSummary = taskHashTracker.GetCacheStatus(taskSummary.TaskID)
 
 			// lock since multiple things to be appending to this array at the same time
-			mu.Lock()
+			taskSummaryMutex.Lock()
 			taskSummaries = append(taskSummaries, taskSummary)
 			// not using defer, just release the lock
-			mu.Unlock()
+			taskSummaryMutex.Unlock()
 
 			runSummary.CloseTask(taskSummary)
+		}
+		if isGrouped {
+			logChan <- taskLogContext{
+				outBuf: outBuf,
+				errBuf: errBuf,
+			}
 		}
 
 		// Return the error when there is one
@@ -176,6 +233,10 @@ func RealRun(
 		}
 	}
 
+	if isGrouped {
+		logWaitGroup.Wait()
+	}
+
 	if err := runSummary.Close(ctx, exitCode, g.WorkspaceInfos); err != nil {
 		// We don't need to throw an error, but we can warn on this.
 		// Note: this method doesn't actually return an error for Real Runs at the time of writing.
@@ -188,6 +249,11 @@ func RealRun(
 		}
 	}
 	return nil
+}
+
+type taskLogContext struct {
+	outBuf *bytes.Buffer
+	errBuf *bytes.Buffer
 }
 
 type execContext struct {
@@ -216,7 +282,7 @@ func (ec *execContext) logError(prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask) (*runsummary.TaskExecutionSummary, error) {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, ui cli.Ui, outWriter io.Writer) (*runsummary.TaskExecutionSummary, error) {
 	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
 	// So make sure to call it before returning.
 	successExitCode := 0 // We won't use this till later
@@ -257,7 +323,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	taskCache := ec.runCache.TaskCache(packageTask, hash)
 	// Create a logger for replaying
 	prefixedUI := &cli.PrefixedUi{
-		Ui:           ec.ui,
+		Ui:           ui,
 		OutputPrefix: prettyPrefix,
 		InfoPrefix:   prettyPrefix,
 		ErrorPrefix:  prettyPrefix,
@@ -328,7 +394,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prettyPrefix)
+	writer, err := taskCache.OutputWriter(prettyPrefix, outWriter)
 	if err != nil {
 		tracer(runsummary.TargetBuildFailed, err, nil)
 

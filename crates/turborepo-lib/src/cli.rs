@@ -46,6 +46,20 @@ impl Default for OutputLogsMode {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum LogOrder {
+    #[serde(rename = "stream")]
+    Stream,
+    #[serde(rename = "grouped")]
+    Grouped,
+}
+
+impl Default for LogOrder {
+    fn default() -> Self {
+        Self::Stream
+    }
+}
+
 // NOTE: These *must* be kept in sync with the `_dryRunJSONValue`
 // and `_dryRunTextValue` constants in run.go.
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
@@ -466,6 +480,11 @@ pub struct RunArgs {
     /// output. (default full)
     #[clap(long, value_enum)]
     pub output_logs: Option<OutputLogsMode>,
+    /// Set type of process output order. Use "stream" to show
+    /// output as soon as it is available. Use "grouped" to
+    /// show output when a command has finished execution. (default stream)
+    #[clap(long, value_enum, default_value_t = LogOrder::Stream)]
+    pub log_order: LogOrder,
     #[clap(long, hide = true)]
     pub only: bool,
     /// Execute all tasks in parallel.
@@ -778,7 +797,9 @@ mod test {
 
     use anyhow::Result;
 
-    use crate::cli::{Args, Command, DryRunMode, EnvMode, OutputLogsMode, RunArgs, Verbosity};
+    use crate::cli::{
+        Args, Command, DryRunMode, EnvMode, LogOrder, OutputLogsMode, RunArgs, Verbosity,
+    };
 
     #[test]
     fn test_parse_run() -> Result<()> {
@@ -1238,6 +1259,42 @@ mod test {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     output_logs: Some(OutputLogsMode::HashOnly),
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-order", "stream"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_order: LogOrder::Stream,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-order", "grouped"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_order: LogOrder::Grouped,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_order: LogOrder::Stream,
                     ..get_default_run_args()
                 }))),
                 ..Args::default()

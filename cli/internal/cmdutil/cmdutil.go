@@ -66,6 +66,11 @@ func (h *Helper) Cleanup(cliConfig *turbostate.ParsedArgsFromRust) {
 }
 
 func (h *Helper) getUI(cliArgs *turbostate.ParsedArgsFromRust) cli.Ui {
+	factory := h.getUIFactory(cliArgs)
+	return factory.Build(os.Stdout, os.Stdin, os.Stderr)
+}
+
+func (h *Helper) getUIFactory(cliArgs *turbostate.ParsedArgsFromRust) ui.Factory {
 	colorMode := ui.GetColorModeFromEnv()
 	if cliArgs.NoColor {
 		colorMode = ui.ColorModeSuppressed
@@ -73,7 +78,10 @@ func (h *Helper) getUI(cliArgs *turbostate.ParsedArgsFromRust) cli.Ui {
 	if cliArgs.Color {
 		colorMode = ui.ColorModeForced
 	}
-	return ui.BuildColoredUi(colorMode)
+	return &ui.ColoredUIFactory{
+		ColorMode: colorMode,
+		Base:      &ui.BasicUIFactory{},
+	}
 }
 
 func (h *Helper) getLogger() (hclog.Logger, error) {
@@ -126,7 +134,8 @@ func NewHelper(turboVersion string, args *turbostate.ParsedArgsFromRust) *Helper
 // It additionally returns a mechanism to set an error, so
 func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase, error) {
 	// terminal is for color/no-color output
-	terminal := h.getUI(&executionState.CLIArgs)
+	uiFactory := h.getUIFactory(&executionState.CLIArgs)
+	terminal := uiFactory.Build(os.Stdin, os.Stdout, os.Stderr)
 	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
 	if err != nil {
@@ -155,6 +164,7 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 
 	return &CmdBase{
 		UI:           terminal,
+		UIFactory:    uiFactory,
 		Logger:       logger,
 		RepoRoot:     repoRoot,
 		APIClient:    apiClient,
@@ -165,6 +175,7 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 // CmdBase encompasses configured components common to all turbo commands.
 type CmdBase struct {
 	UI           cli.Ui
+	UIFactory    ui.Factory
 	Logger       hclog.Logger
 	RepoRoot     turbopath.AbsoluteSystemPath
 	APIClient    *client.APIClient
