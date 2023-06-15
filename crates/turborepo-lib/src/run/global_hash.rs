@@ -29,7 +29,7 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
     _root_path: &AbsoluteSystemPath,
     _root_package_json: &PackageJson,
     _package_manager: &PackageManager,
-    _lockfile: &L,
+    _lockfile: Option<&L>,
     _global_file_dependencies: Vec<String>,
     env_at_execution_start: &EnvironmentVariableMap,
     global_env: Vec<String>,

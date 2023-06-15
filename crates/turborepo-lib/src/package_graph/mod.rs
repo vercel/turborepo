@@ -1,44 +1,44 @@
-use std::{fmt, rc::Rc};
+use std::{collections::HashMap, fmt};
 
 use anyhow::Result;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{package_json::PackageJson, package_manager::PackageManager};
+
+mod builder;
+
+pub use builder::PackageGraphBuilder;
 
 #[derive(Default)]
 pub struct WorkspaceCatalog {}
 
 pub struct PackageGraph {
-    workspace_graph: Rc<petgraph::Graph<String, String>>,
-    #[allow(dead_code)]
-    workspace_infos: Rc<WorkspaceCatalog>,
+    workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
+    package_jsons: HashMap<WorkspaceName, PackageJson>,
     package_manager: PackageManager,
-    lockfile: Box<dyn Lockfile>,
+    lockfile: Option<Box<dyn Lockfile>>,
+}
+
+/// Name of workspaces with a special marker for the workspace root
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+pub enum WorkspaceName {
+    Root,
+    Other(String),
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+pub enum WorkspaceNode {
+    Root,
+    Workspace(WorkspaceName),
 }
 
 impl PackageGraph {
-    pub fn build_single_package_graph(_root_package_json: &PackageJson) -> Result<PackageGraph> {
-        // TODO
-        Ok(PackageGraph {
-            workspace_graph: Rc::new(petgraph::Graph::new()),
-            workspace_infos: Rc::new(WorkspaceCatalog::default()),
-            package_manager: PackageManager::Npm,
-            lockfile: Box::<turborepo_lockfiles::NpmLockfile>::default(),
-        })
-    }
-
-    pub fn build_multi_package_graph(
-        _repo_root: &AbsoluteSystemPathBuf,
-        _root_package_json: &PackageJson,
-    ) -> Result<PackageGraph> {
-        // TODO
-        Ok(PackageGraph {
-            workspace_graph: Rc::new(petgraph::Graph::new()),
-            workspace_infos: Rc::new(WorkspaceCatalog::default()),
-            package_manager: PackageManager::Npm,
-            lockfile: Box::<turborepo_lockfiles::NpmLockfile>::default(),
-        })
+    pub fn builder(
+        repo_root: &AbsoluteSystemPath,
+        root_package_json: PackageJson,
+    ) -> PackageGraphBuilder {
+        PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -54,8 +54,17 @@ impl PackageGraph {
         &self.package_manager
     }
 
-    pub fn lockfile(&self) -> &dyn Lockfile {
-        self.lockfile.as_ref()
+    pub fn lockfile(&self) -> Option<&dyn Lockfile> {
+        self.lockfile.as_deref()
+    }
+
+    pub fn package_json(&self, workspace: &WorkspaceName) -> Option<&PackageJson> {
+        self.package_jsons.get(workspace)
+    }
+
+    pub fn root_package_json(&self) -> &PackageJson {
+        self.package_json(&WorkspaceName::Root)
+            .expect("package graph was built without root package.json")
     }
 }
 
@@ -146,7 +155,11 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashSet;
+
+    use petgraph::visit::Control;
     use test_case::test_case;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
 

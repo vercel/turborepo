@@ -50,11 +50,10 @@ impl Run {
 
         let _is_structured_output = opts.run_opts.graph_dot || opts.run_opts.dry_run_json;
 
-        let pkg_dep_graph = if opts.run_opts.single_package {
-            PackageGraph::build_single_package_graph(&root_package_json)?
-        } else {
-            PackageGraph::build_multi_package_graph(&self.base.repo_root, &root_package_json)?
-        };
+        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json)
+            .with_single_package_mode(opts.run_opts.single_package)
+            .build()?;
+
         // There's some warning handling code in Go that I'm ignoring
 
         if self.base.ui.is_ci() && !opts.run_opts.no_daemon {
@@ -107,7 +106,7 @@ impl Run {
         let _global_hash_inputs = get_global_hash_inputs(
             &self.base.ui,
             &self.base.repo_root,
-            &root_package_json,
+            pkg_dep_graph.root_package_json(),
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
             // TODO: Fill in these vec![] once turbo.json is ported

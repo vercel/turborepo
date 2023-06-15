@@ -254,7 +254,8 @@ impl AbsoluteSystemPath {
         // On windows, trying to get a relative path between files on different volumes
         // is an error. We don't care about the error, it's good enough for us to say
         // that one path doesn't contain the other if they're on different volumes.
-        if cfg!(windows) && self.components().next() != other.components().next() {
+        #[cfg(windows)]
+        if self.components().next() != other.components().next() {
             return false;
         }
         let this = self.collapse();
