@@ -424,12 +424,20 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 	apiClient := r.base.APIClient
 	var analyticsSink analytics.Sink
+
 	if apiClient.IsLinked() {
 		analyticsSink = apiClient
 	} else {
 		r.opts.cacheOpts.SkipRemote = true
 		analyticsSink = analytics.NullSink
 	}
+
+	// After we know if its _possible_ to enable remote cache, check the config
+	// and dsiable it if wanted.
+	if !r.opts.cacheOpts.RemoteCacheOpts.Enabled {
+		r.opts.cacheOpts.SkipRemote = true
+	}
+
 	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
 	return analyticsClient
 }

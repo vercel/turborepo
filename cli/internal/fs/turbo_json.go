@@ -44,7 +44,7 @@ type rawTurboJSON struct {
 	// and cache behavior on a per task or per package-task basis.
 	Pipeline Pipeline `json:"pipeline"`
 	// Configuration options when interfacing with the remote cache
-	RemoteCacheOptions RemoteCacheOptions `json:"remoteCache,omitempty"`
+	RemoteCacheOptions *RemoteCacheOptions `json:"remoteCache,omitempty"`
 
 	// Extends can be the name of another workspace
 	Extends []string `json:"extends,omitempty"`
@@ -83,6 +83,7 @@ type TurboJSON struct {
 type RemoteCacheOptions struct {
 	TeamID    string `json:"teamId,omitempty"`
 	Signature bool   `json:"signature,omitempty"`
+	Enabled   bool   `json:"enabled,omitempty"`
 }
 
 // rawTaskWithDefaults exists to Marshal (i.e. turn a TaskDefinition into json).
@@ -705,11 +706,41 @@ func (tj *TurboJSON) UnmarshalJSON(data []byte) error {
 
 	// copy these over, we don't need any changes here.
 	tj.Pipeline = raw.Pipeline
-	tj.RemoteCacheOptions = raw.RemoteCacheOptions
 	tj.Extends = raw.Extends
 	// Directly to SpaceID, we don't need to keep the struct
 	if raw.Space != nil {
 		tj.SpaceID = raw.Space.ID
+	}
+
+	if raw.RemoteCacheOptions == nil {
+		tj.RemoteCacheOptions = RemoteCacheOptions{
+			Enabled: true,
+		}
+	} else {
+		tj.RemoteCacheOptions = *raw.RemoteCacheOptions
+	}
+
+	return nil
+}
+
+func (rc *RemoteCacheOptions) UnmarshalJSON(data []byte) error {
+	type Alias RemoteCacheOptions // alias type to prevent infinite recursion
+
+	// tmp struct with the same fields, but replacing the field we care about (Enabled) with a pointer
+	type Tmp struct {
+		*Alias
+		Enabled *bool `json:"enabled"`
+	}
+	// initialize this tmp struct with the rc options we have
+	tmp := Tmp{Alias: (*Alias)(rc)}
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	// If the Enabled field is missing in the JSON, set it to true
+	if tmp.Enabled == nil {
+		rc.Enabled = true
 	}
 
 	return nil
