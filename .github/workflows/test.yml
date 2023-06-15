@@ -183,7 +183,7 @@ jobs:
       turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
       go: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' }}
-      go_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
+      turborepo_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
       go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
@@ -280,10 +280,10 @@ jobs:
         env:
           GO_TAG: rust
 
-  go_e2e:
-    name: Go E2E Tests
+  turborepo_e2e:
+    name: Turborepo E2E Tests
     needs: determine_jobs
-    if: needs.determine_jobs.outputs.go_e2e == 'true'
+    if: needs.determine_jobs.outputs.turborepo_e2e == 'true'
     timeout-minutes: 60
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -304,7 +304,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
-        run: turbo run test --filter=turborepo-tests-e2e
+        run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color
 
   turborepo_examples:
     name: Turborepo Examples
@@ -1221,7 +1221,7 @@ jobs:
       - go_lint
       - go_unit
       - turborepo_examples
-      - go_e2e
+      - turborepo_e2e
       - go_integration
       - js_packages
       - rust_pre_check
@@ -1259,7 +1259,7 @@ jobs:
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.go_e2e.result}} "Go e2e tests"
+          subjob ${{needs.turborepo_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_pre_check.result}} "Rust pre-checks"
@@ -1373,7 +1373,7 @@ jobs:
       - go_lint
       - go_unit
       - turborepo_examples
-      - go_e2e
+      - turborepo_e2e
       - go_integration
       - rust_pre_check
       - turborepo_rust_check
@@ -1414,7 +1414,7 @@ jobs:
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.go_e2e.result}} "Go e2e tests"
+          subjob ${{needs.turborepo_e2e.result}} "Turborepo e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.rust_pre_check.result}} "Rust pre-checks"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
