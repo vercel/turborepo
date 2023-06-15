@@ -11,11 +11,12 @@ use turbopath::{
 use turborepo_lockfiles::Lockfile;
 
 use super::{Entry, Package, PackageGraph, WorkspaceName, WorkspaceNode};
-use crate::{package_json::PackageJson, package_manager::PackageManager};
+use crate::{config::TurboJson, package_json::PackageJson, package_manager::PackageManager};
 
 pub struct PackageGraphBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
     root_package_json: PackageJson,
+    root_turbo_json: TurboJson,
     is_single_package: bool,
     package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
@@ -48,10 +49,15 @@ pub enum Error {
 }
 
 impl<'a> PackageGraphBuilder<'a> {
-    pub fn new(repo_root: &'a AbsoluteSystemPath, root_package_json: PackageJson) -> Self {
+    pub fn new(
+        repo_root: &'a AbsoluteSystemPath,
+        root_package_json: PackageJson,
+        root_turbo_json: TurboJson,
+    ) -> Self {
         Self {
             repo_root,
             root_package_json,
+            root_turbo_json,
             is_single_package: false,
             package_manager: None,
             package_jsons: None,
@@ -142,6 +148,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let PackageGraphBuilder {
             repo_root,
             root_package_json,
+            root_turbo_json,
             is_single_package: single,
             package_manager,
             package_jsons,
@@ -156,6 +163,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
             WorkspaceName::Root,
             Entry {
                 package_json: root_package_json,
+                turbo_json: root_turbo_json,
                 ..Default::default()
             },
         );
@@ -615,6 +623,7 @@ mod test {
                 name: Some("root".into()),
                 ..Default::default()
             },
+            TurboJson::default(),
         )
         .with_package_manger(Some(PackageManager::Npm))
         .with_package_jsons(Some({

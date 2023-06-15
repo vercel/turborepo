@@ -1,13 +1,8 @@
-use anyhow::anyhow;
 use serde::Serialize;
 use tracing::trace;
 
 use crate::{
-    cli::{Args, Command},
-    commands::CommandBase,
-    config::TurboJSON,
-    package_json::PackageJson,
-    package_manager::PackageManager,
+    cli::Args, commands::CommandBase, package_json::PackageJson, package_manager::PackageManager,
 };
 
 #[derive(Debug, Serialize)]
@@ -15,8 +10,6 @@ pub struct ExecutionState<'a> {
     pub api_client_config: APIClientConfig<'a>,
     package_manager: PackageManager,
     pub cli_args: &'a Args,
-    root_package_json: PackageJson,
-    root_turbo_json: TurboJSON,
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -36,12 +29,6 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
 
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
         let root_package_json = PackageJson::load(&base.repo_root.join_component("package.json"))?;
-        let Some(Command::Run(run_args)) = base.args().command.as_ref() else {
-            return Err(anyhow!("Expected run command"))
-        };
-
-        let root_turbo_json =
-            TurboJSON::load(&base.repo_root, &root_package_json, run_args.single_package)?;
 
         let package_manager =
             PackageManager::get_package_manager(&base.repo_root, Some(&root_package_json))?;
@@ -65,8 +52,6 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
             api_client_config,
             package_manager,
             cli_args: base.args(),
-            root_package_json,
-            root_turbo_json,
         })
     }
 }

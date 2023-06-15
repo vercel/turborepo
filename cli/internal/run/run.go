@@ -201,7 +201,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		RepoRoot:        r.base.RepoRoot,
 	}
 
-	turboJSON := executionState.RootTurboJSON
+	turboJSON, err := g.GetTurboConfigFromWorkspace(util.RootPkgName, r.opts.runOpts.SinglePackage)
 	if err != nil {
 		return err
 	}

@@ -11,14 +11,10 @@ use crate::{
     config::Error,
     opts::RemoteCacheOpts,
     package_json::PackageJson,
-    run::{
-        pipeline::{
-            BookkeepingTaskDefinition, Pipeline, RawPipeline, RawTaskDefinition,
-            TaskDefinitionHashable, TaskOutputs,
-        },
-        task_id::{get_package_task_from_id, is_package_task, root_task_id},
+    run::task_id::{get_package_task_from_id, is_package_task, root_task_id},
+    task_graph::{
+        BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable, TaskOutputMode, TaskOutputs,
     },
-    task_graph::{BookkeepingTaskDefinition, TaskOutputMode},
 };
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -29,10 +25,9 @@ pub struct SpacesJson {
     pub other: Option<serde_json::Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 // The processed TurboJSON ready for use by Turborepo.
-pub struct TurboJSON {
+pub struct TurboJson {
     global_deps: Vec<String>,
     global_env: Vec<String>,
     global_pass_through_env: Vec<String>,
@@ -71,9 +66,9 @@ pub struct RawTurboJSON {
     pub experimental_spaces: Option<SpacesJson>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 #[serde(transparent)]
-struct RawPipeline(BTreeMap<String, RawTask>);
+struct RawPipeline(BTreeMap<String, RawTaskDefinition>);
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -269,7 +264,7 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
     }
 }
 
-impl TryFrom<RawTurboJSON> for TurboJSON {
+impl TryFrom<RawTurboJSON> for TurboJson {
     type Error = Error;
 
     fn try_from(raw_turbo: RawTurboJSON) -> Result<Self, Error> {
@@ -303,7 +298,7 @@ impl TryFrom<RawTurboJSON> for TurboJSON {
             }
         }
 
-        Ok(TurboJSON {
+        Ok(TurboJson {
             global_env: {
                 let mut global_env: Vec<_> = global_env.into_iter().collect();
                 global_env.sort();
@@ -342,6 +337,7 @@ impl TryFrom<RawTurboJSON> for TurboJSON {
                 .unwrap_or_default(),
             pipeline: raw_turbo
                 .pipeline
+                .0
                 .into_iter()
                 .map(|(task_name, task_definition)| Ok((task_name, task_definition.try_into()?)))
                 .collect::<Result<HashMap<_, _>, Error>>()?,
@@ -354,12 +350,12 @@ impl TryFrom<RawTurboJSON> for TurboJSON {
     }
 }
 
-impl TurboJSON {
+impl TurboJson {
     pub fn load(
         dir: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
-    ) -> Result<TurboJSON, Error> {
+    ) -> Result<TurboJson, Error> {
         if root_package_json.legacy_turbo_config.is_some() {
             println!(
                 "[WARNING] \"turbo\" in package.json is no longer supported. Migrate to {} by \
@@ -379,7 +375,7 @@ impl TurboJSON {
             // We're not synthesizing anything and there was no error, we're done
             (false, Ok(turbo)) => return Ok(turbo),
             // turbo.json doesn't exist, but we're going try to synthesize something
-            (true, Err(Error::Io(_))) => TurboJSON::default(),
+            (true, Err(Error::Io(_))) => TurboJson::default(),
             // some other happened, we can't recover
             (true, Err(e)) => return Err(e),
             // we're synthesizing, but we have a starting point
@@ -401,9 +397,9 @@ impl TurboJSON {
             }
         };
 
-        for (script_name, _) in &root_package_json.scripts {
+        for script_name in root_package_json.scripts.keys() {
             if !turbo_json.has_task(script_name) {
-                let task_name = root_task_id(&script_name);
+                let task_name = root_task_id(script_name);
                 // Explicitly set Cache to false in this definition and add the bookkeeping
                 // fields so downstream we can pretend that it was set on
                 // purpose (as if read from a config file) rather than
@@ -445,7 +441,7 @@ impl TurboJSON {
         false
     }
 
-    fn read(path: &AbsoluteSystemPath) -> Result<TurboJSON, Error> {
+    fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
         let file = File::open(path)?;
         let turbo_json: RawTurboJSON = serde_json::from_reader(&file)?;
 
@@ -460,7 +456,7 @@ fn gather_env_vars(vars: Vec<String>, key: &str, into: &mut HashSet<String>) -> 
             // TODO: Remove this error after we have run summary.
             return Err(Error::InvalidEnvPrefix {
                 key: key.to_string(),
-                value: value.to_string(),
+                value,
                 env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
             });
         }
@@ -480,19 +476,19 @@ mod tests {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPath;
 
-    use crate::config::TurboJSON;
+    use crate::config::TurboJson;
 
-    #[test_case(r"{}", TurboJSON::default() ; "empty")]
+    #[test_case(r"{}", TurboJson::default() ; "empty")]
     fn test_get_root_turbo_no_synthesizing(
         turbo_json_content: &str,
-        expected_turbo_json: TurboJSON,
+        expected_turbo_json: TurboJson,
     ) -> Result<()> {
         let root_dir = tempdir()?;
         let root_package_json = crate::package_json::PackageJson::default();
-        let repo_root = AbsoluteSystemPath::new(root_dir.path())?;
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
 
-        let turbo_json = TurboJSON::load(repo_root, &root_package_json, false)?;
+        let turbo_json = TurboJson::load(repo_root, &root_package_json, false)?;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())

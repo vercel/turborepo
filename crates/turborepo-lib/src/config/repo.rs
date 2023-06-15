@@ -89,7 +89,7 @@ impl RepoConfig {
     }
 
     fn write_to_disk(&self) -> Result<(), Error> {
-        write_to_disk(&self.path.as_path(), &self.disk_config)
+        write_to_disk(self.path.as_path(), &self.disk_config)
     }
 }
 

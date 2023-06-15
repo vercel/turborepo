@@ -3,27 +3,9 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
-// Pipeline as directly deserialized from turbo.json file
-pub type RawPipeline = HashMap<String, RawTaskDefinition>;
-
-// Task definition as directly deserialized from turbo.json file
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct RawTaskDefinition {
-    pub(crate) outputs: Option<Vec<String>>,
-    pub(crate) cache: Option<bool>,
-    pub(crate) depends_on: Option<Vec<String>>,
-    pub(crate) inputs: Option<Vec<String>>,
-    pub(crate) output_mode: Option<TaskOutputMode>,
-    pub(crate) persistent: Option<bool>,
-    pub(crate) env: Option<Vec<String>>,
-    pub(crate) pass_through_env: Option<Vec<String>>,
-    pub(crate) dot_env: Option<Vec<String>>,
-}
-
 pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, PartialEq, Eq)]
 pub struct BookkeepingTaskDefinition {
     #[serde(default)]
     pub defined_fields: HashSet<String>,
@@ -38,21 +20,21 @@ pub struct BookkeepingTaskDefinition {
 // A list of config fields in a task definition that are considered
 // experimental. We keep these separated so we can compute a global hash without
 // these.
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskDefinitionExperiments {
     passthrough_env: Vec<String>,
 }
 
 // TaskOutputs represents the patterns for including and excluding files from
 // outputs
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskOutputs {
     pub inclusions: Vec<String>,
     pub exclusions: Vec<String>,
 }
 
 // TaskOutputMode defines the ways turbo can display task output during a run
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TaskOutputMode {
     // FullTaskOutput will show all task output
     #[default]
@@ -73,7 +55,7 @@ pub enum TaskOutputMode {
 // used downstream for calculating the global hash. We want to exclude
 // experimental fields here because we don't want experimental fields to be part
 // of the global hash.
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, PartialEq, Eq)]
 pub struct TaskDefinitionHashable {
     pub(crate) outputs: TaskOutputs,
     pub(crate) cache: bool,
