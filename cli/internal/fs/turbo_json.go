@@ -723,6 +723,7 @@ func (tj *TurboJSON) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON deserializes the remoteCache key from turbo.json into an in-memory struct
 func (rc *RemoteCacheOptions) UnmarshalJSON(data []byte) error {
 	type Alias RemoteCacheOptions // alias type to prevent infinite recursion
 
