@@ -5,14 +5,14 @@ use turbopath::AbsoluteSystemPath;
 
 use crate::{
     config::TurboJson,
-    package_graph::WorkspaceCatalog,
+    package_graph::{self, PackageGraph, WorkspaceCatalog},
     task_graph::{Pipeline, TaskDefinition},
 };
 
 pub struct CompleteGraph<'run> {
     // TODO: This should actually be an acyclic graph type
     // Expresses the dependencies between packages
-    workspace_graph: Rc<petgraph::Graph<String, String>>,
+    package_graph: &'run PackageGraph,
     // Config from turbo.json
     pipeline: Pipeline,
     // Stores the package.json contents by package name
@@ -27,15 +27,12 @@ pub struct CompleteGraph<'run> {
 }
 
 impl<'run> CompleteGraph<'run> {
-    pub fn new(
-        workspace_graph: Rc<petgraph::Graph<String, String>>,
-        workspace_infos: Rc<WorkspaceCatalog>,
-        repo_root: &'run AbsoluteSystemPath,
-    ) -> Self {
+    pub fn new(package_graph: &'run PackageGraph, repo_root: &'run AbsoluteSystemPath) -> Self {
         Self {
-            workspace_graph,
+            package_graph,
             pipeline: Pipeline::default(),
-            workspace_infos,
+            // TODO: build during construction by querying package graph
+            workspace_infos: Default::default(),
             repo_root,
             global_hash: None,
             task_definitions: BTreeMap::new(),

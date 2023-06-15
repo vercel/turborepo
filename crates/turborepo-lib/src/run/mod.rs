@@ -76,11 +76,7 @@ impl Run {
             .validate()
             .context("Invalid package dependency graph")?;
 
-        let g = CompleteGraph::new(
-            pkg_dep_graph.workspace_graph.clone(),
-            pkg_dep_graph.workspace_infos.clone(),
-            &self.base.repo_root,
-        );
+        let g = CompleteGraph::new(&pkg_dep_graph, &self.base.repo_root);
 
         let is_single_package = opts.run_opts.single_package;
         let turbo_json = g.get_turbo_config_from_workspace(ROOT_PKG_NAME, is_single_package)?;
@@ -112,8 +108,8 @@ impl Run {
             &self.base.ui,
             &self.base.repo_root,
             &root_package_json,
-            pkg_dep_graph.package_manager,
-            pkg_dep_graph.lockfile,
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
             // TODO: Fill in these vec![] once turbo.json is ported
             vec![],
             &env_at_execution_start,
@@ -150,9 +146,11 @@ mod test {
         let dir = tempdir()?;
         let repo_root = AbsoluteSystemPathBuf::new(dir.path())?;
         let mut args = Args::default();
-        let mut run_args = RunArgs::default();
         // Daemon does not work with run stub yet
-        run_args.no_daemon = true;
+        let run_args = RunArgs {
+            no_daemon: true,
+            ..Default::default()
+        };
         args.command = Some(Command::Run(Box::new(run_args)));
 
         let ui = UI::infer();

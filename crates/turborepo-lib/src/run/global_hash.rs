@@ -23,12 +23,12 @@ pub struct GlobalHashableInputs {
     dot_env: Vec<RelativeUnixPathBuf>,
 }
 
-pub fn get_global_hash_inputs(
+pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
     _ui: &UI,
     _root_path: &AbsoluteSystemPath,
     _root_package_json: &PackageJson,
-    _package_manager: PackageManager,
-    _lockfile: Box<dyn Lockfile>,
+    _package_manager: &PackageManager,
+    _lockfile: &L,
     _global_file_dependencies: Vec<String>,
     env_at_execution_start: &EnvironmentVariableMap,
     global_env: Vec<String>,

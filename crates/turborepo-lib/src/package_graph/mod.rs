@@ -10,10 +10,10 @@ use crate::{package_json::PackageJson, package_manager::PackageManager};
 pub struct WorkspaceCatalog {}
 
 pub struct PackageGraph {
-    pub workspace_graph: Rc<petgraph::Graph<String, String>>,
-    pub workspace_infos: Rc<WorkspaceCatalog>,
-    pub package_manager: PackageManager,
-    pub lockfile: Box<dyn Lockfile>,
+    workspace_graph: Rc<petgraph::Graph<String, String>>,
+    workspace_infos: Rc<WorkspaceCatalog>,
+    package_manager: PackageManager,
+    lockfile: Box<dyn Lockfile>,
 }
 
 impl PackageGraph {
@@ -23,7 +23,7 @@ impl PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
             workspace_infos: Rc::new(WorkspaceCatalog::default()),
             package_manager: PackageManager::Npm,
-            lockfile: Box::new(turborepo_lockfiles::NpmLockfile::default()),
+            lockfile: Box::<turborepo_lockfiles::NpmLockfile>::default(),
         })
     }
 
@@ -36,7 +36,7 @@ impl PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
             workspace_infos: Rc::new(WorkspaceCatalog::default()),
             package_manager: PackageManager::Npm,
-            lockfile: Box::new(turborepo_lockfiles::NpmLockfile::default()),
+            lockfile: Box::<turborepo_lockfiles::NpmLockfile>::default(),
         })
     }
 
@@ -47,5 +47,13 @@ impl PackageGraph {
 
     pub fn len(&self) -> usize {
         self.workspace_graph.node_count()
+    }
+
+    pub fn package_manager(&self) -> &PackageManager {
+        &self.package_manager
+    }
+
+    pub fn lockfile(&self) -> &dyn Lockfile {
+        self.lockfile.as_ref()
     }
 }
