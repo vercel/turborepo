@@ -19,7 +19,7 @@ impl RelativeUnixPath {
         Ok(unsafe { &*(path as *const BStr as *const Self) })
     }
 
-    pub(crate) fn to_system_path_buf(&self) -> Result<PathBuf, PathError> {
+    pub fn to_system_path_buf(&self) -> Result<PathBuf, PathError> {
         #[cfg(unix)]
         {
             // On unix, unix paths are already system paths. Copy the bytes

@@ -19,32 +19,52 @@ pub(crate) fn hash_objects(
     if to_hash.is_empty() {
         return Ok(());
     }
-    let mut git = Command::new("git")
-        .args(["hash-object", "--stdin-paths"])
-        // Note that the directory is irrelevant as long as it is within the git repo.
-        // --stdin-paths processes all paths as relative to the root of the _git_ repository.
-        .current_dir(git_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .stdin(Stdio::piped())
-        .spawn()?;
+    libgit2_hash(git_root, pkg_path, to_hash, hashes)?;
+    Ok(())
+    // let mut git = Command::new("git")
+    //     .args(["hash-object", "--stdin-paths"])
+    //     // Note that the directory is irrelevant as long as it is within the
+    // git repo.     // --stdin-paths processes all paths as relative to the
+    // root of the _git_ repository.     .current_dir(git_root)
+    //     .stdout(Stdio::piped())
+    //     .stderr(Stdio::piped())
+    //     .stdin(Stdio::piped())
+    //     .spawn()?;
 
-    let stdout = git
-        .stdout
-        .as_mut()
-        .ok_or_else(|| Error::git_error("failed to get stdout for git hash-object"))?;
-    // We take, rather than borrow, stdin so that we can drop it and force the
-    // underlying file descriptor to close, signalling the end of input.
-    let stdin: std::process::ChildStdin = git
-        .stdin
-        .take()
-        .ok_or_else(|| Error::git_error("failed to get stdin for git hash-object"))?;
-    let mut stderr = git
-        .stderr
-        .take()
-        .ok_or_else(|| Error::git_error("failed to get stderr for git hash-object"))?;
-    let parse_result = read_object_hashes(stdout, stdin, &to_hash, git_root, pkg_path, hashes);
-    wait_for_success(git, &mut stderr, "git hash-object", pkg_path, parse_result)
+    // let stdout = git
+    //     .stdout
+    //     .as_mut()
+    //     .ok_or_else(|| Error::git_error("failed to get stdout for git
+    // hash-object"))?; // We take, rather than borrow, stdin so that we can
+    // drop it and force the // underlying file descriptor to close,
+    // signalling the end of input. let stdin: std::process::ChildStdin =
+    // git     .stdin
+    //     .take()
+    //     .ok_or_else(|| Error::git_error("failed to get stdin for git
+    // hash-object"))?; let mut stderr = git
+    //     .stderr
+    //     .take()
+    //     .ok_or_else(|| Error::git_error("failed to get stderr for git
+    // hash-object"))?; let parse_result = read_object_hashes(stdout, stdin,
+    // &to_hash, git_root, pkg_path, hashes); wait_for_success(git, &mut
+    // stderr, "git hash-object", pkg_path, parse_result)
+}
+
+fn libgit2_hash(
+    git_prefix: &AbsoluteSystemPath,
+    pkg_path: &AbsoluteSystemPath,
+    to_hash: Vec<RelativeUnixPathBuf>,
+    hashes: &mut GitHashes,
+) -> Result<(), Error> {
+    for filename in to_hash {
+        let full_file_path = git_prefix.join_unix_path(filename)?;
+        let path =
+            AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path).to_unix()?;
+
+        let hash = git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path)?;
+        hashes.insert(path, hash.to_string());
+    }
+    Ok(())
 }
 
 const HASH_LEN: usize = 40;
