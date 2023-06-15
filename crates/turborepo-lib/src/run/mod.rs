@@ -76,11 +76,7 @@ impl Run {
             .validate()
             .context("Invalid package dependency graph")?;
 
-        let g = CompleteGraph::new(
-            pkg_dep_graph.workspace_graph.clone(),
-            pkg_dep_graph.workspace_infos.clone(),
-            &self.base.repo_root,
-        );
+        let g = CompleteGraph::new(&pkg_dep_graph, &self.base.repo_root);
 
         let is_single_package = opts.run_opts.single_package;
         let turbo_json = g.get_turbo_config_from_workspace(ROOT_PKG_NAME, is_single_package)?;
@@ -112,8 +108,8 @@ impl Run {
             &self.base.ui,
             &self.base.repo_root,
             &root_package_json,
-            pkg_dep_graph.package_manager,
-            pkg_dep_graph.lockfile,
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
             // TODO: Fill in these vec![] once turbo.json is ported
             vec![],
             &env_at_execution_start,
