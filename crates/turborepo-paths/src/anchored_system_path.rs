@@ -54,12 +54,11 @@ impl AnchoredSystemPath {
             .to_str()
             .ok_or_else(|| PathError::InvalidUnicode(path_ref.to_string_lossy().to_string()))?;
 
-        let system_path = Cow::from_slash(path_str);
-        if let Cow::Owned(path) = system_path {
-            Err(PathError::NotSystem(path.to_string_lossy().to_string()))
-        } else {
-            Ok(unsafe { &*(path_ref as *const Path as *const Self) })
+        #[cfg(windows)]
+        if path_str.contains('/') {
+            return Err(PathError::NotSystem(path.to_string_lossy().to_string()))
         }
+        Ok(unsafe { &*(path_ref as *const Path as *const Self) })
     }
 
     pub fn to_str(&self) -> Result<&str, PathError> {
