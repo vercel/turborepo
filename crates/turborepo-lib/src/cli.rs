@@ -482,12 +482,14 @@ pub struct RunArgs {
     /// output. (default full)
     #[clap(long, value_enum)]
     pub output_logs: Option<OutputLogsMode>,
-    /// Set type of process output order. Use "stream" to show
+
+    /// Set type of task output order. Use "stream" to show
     /// output as soon as it is available. Use "grouped" to
     /// show output when a command has finished execution. Use "auto" to let
     /// turbo decide based on its own heuristics. (default auto)
     #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Auto)]
     pub log_order: LogOrder,
+
     #[clap(long, hide = true)]
     pub only: bool,
     /// Execute all tasks in parallel.
@@ -516,15 +518,17 @@ pub struct RunArgs {
     /// Generate a summary of the turbo run
     #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
-    /// Use "none" to remove prefixes from task logs. Use "auto" to let turbo
-    /// decide how to prefix the logs based on the execution environment. In
-    /// most cases this will be the same as --log-order="task". Use "task"
-    /// to get task id prefixing.
-    /// Note that tasks running in parallel interleave their logs, so removing
-    /// prefixes can make it difficult to associate logs with tasks. You can use
-    /// --log-order=grouped to prevent interleaving.
+
+    /// Use "none" to remove prefixes from task logs. Use "task" to get task id
+    /// prefixing. Use "auto" to let turbo decide how to prefix the logs
+    /// based on the execution environment. In most cases this will be the same
+    /// as "task". Note that tasks running in parallel interleave their
+    /// logs, so removing prefixes can make it difficult to associate logs
+    /// with tasks. Use --log-order=grouped to prevent interleaving. (default
+    /// auto)
     #[clap(long, value_enum, default_value_t = LogPrefix::Auto)]
     pub log_prefix: LogPrefix,
+
     // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
     // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
     #[clap(hide = true)]
