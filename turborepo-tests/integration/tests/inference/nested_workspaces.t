@@ -154,7 +154,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: EXTRA_VALUE_AT_END="run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist" (re)
+  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo\.json\. Follow directions at https://turbo\.build/repo/docs to create one: file does not exist (re)
    ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
   Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
   [1]
@@ -169,7 +169,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: EXTRA_VALUE_AT_END="run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist" (re)
+  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo\.json\. Follow directions at https://turbo\.build/repo/docs to create one: file does not exist (re)
    ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
   Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
   [1]
@@ -231,7 +231,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: EXTRA_VALUE_AT_END="run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist" (re)
+  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo\.json\. Follow directions at https://turbo\.build/repo/docs to create one: file does not exist (re)
    ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
   Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
   [1]
@@ -246,7 +246,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: EXTRA_VALUE_AT_END="run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist" (re)
+  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo\.json\. Follow directions at https://turbo\.build/repo/docs to create one: file does not exist (re)
    ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
   Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
   [1]

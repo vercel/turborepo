@@ -185,7 +185,7 @@ type CmdBase struct {
 // LogError prints an error to the UI
 func (b *CmdBase) LogError(format string, args ...interface{}) {
 	err := fmt.Errorf(format, args...)
-	b.Logger.Error("error", err)
+	b.Logger.Error(fmt.Sprintf("error: %v", err))
 	b.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 }
 

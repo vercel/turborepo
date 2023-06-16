@@ -45,8 +45,8 @@ pub use walkdir::Error as WalkDirError;
 #[derive(Debug, thiserror::Error)]
 pub enum WalkError {
     // note: wax 0.5 has a lifetime in the BuildError, so we can't use it here
-    #[error("bad pattern: {0}")]
-    BadPattern(#[from] BuildError),
+    #[error("bad pattern {0}: {1}")]
+    BadPattern(String, BuildError),
     #[error("invalid path")]
     InvalidPath,
     #[error("walk error: {0}")]
@@ -141,17 +141,15 @@ fn build_glob_matchers(
 ) -> Result<(InclusiveEmptyAny<'static>, Any<'static>), WalkError> {
     let inc_patterns = include_paths
         .iter()
-        .map(|g| Glob::new(g.as_str()).map(|g| g.into_owned()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(Into::<WalkError>::into)?;
-    let include = InclusiveEmptyAny::new::<Glob<'static>, _>(inc_patterns)
-        .map_err(Into::<WalkError>::into)?;
+        .map(glob_with_contextual_error)
+        .collect::<Result<Vec<_>, _>>()?;
+    let include =
+        InclusiveEmptyAny::new(inc_patterns, include_paths).map_err(Into::<WalkError>::into)?;
     let ex_patterns = exclude_paths
         .iter()
-        .map(|g| Glob::new(g.as_str()).map(|g| g.into_owned()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(Into::<WalkError>::into)?;
-    let exclude = wax::any(ex_patterns).map_err(Into::<WalkError>::into)?;
+        .map(glob_with_contextual_error)
+        .collect::<Result<Vec<_>, _>>()?;
+    let exclude = any_with_contextual_error(ex_patterns, exclude_paths)?;
     Ok((include, exclude))
 }
 
@@ -284,6 +282,23 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
     }
 }
 
+fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, WalkError> {
+    let raw = raw.as_ref();
+    Glob::new(raw)
+        .map(|g| g.into_owned())
+        .map_err(|e| WalkError::BadPattern(raw.to_string(), e))
+}
+
+pub(crate) fn any_with_contextual_error(
+    precompiled: Vec<Glob<'static>>,
+    text: Vec<String>,
+) -> Result<wax::Any<'static>, WalkError> {
+    wax::any(precompiled).map_err(|e| {
+        let text = text.iter().join(",");
+        WalkError::BadPattern(text, e)
+    })
+}
+
 pub fn globwalk(
     base_path: &AbsoluteSystemPath,
     include: &[String],
@@ -294,11 +309,11 @@ pub fn globwalk(
         preprocess_paths_and_globs(base_path, include, exclude)?;
     let inc_patterns = include_paths
         .iter()
-        .map(|g| Glob::new(g.as_str()).map_err(|e| e.into()))
+        .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, WalkError>>()?;
     let ex_patterns = exclude_paths
         .iter()
-        .map(|g| Glob::new(g.as_str()))
+        .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, _>>()?;
 
     let result = inc_patterns
@@ -359,10 +374,10 @@ mod test {
     use itertools::Itertools;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
-    use wax::Glob;
 
     use crate::{
-        collapse_path, empty_glob::InclusiveEmptyAny, globwalk, MatchType, WalkError, WalkType,
+        collapse_path, empty_glob::InclusiveEmptyAny, glob_with_contextual_error, globwalk,
+        MatchType, WalkError, WalkType,
     };
 
     #[cfg(unix)]
@@ -465,8 +480,12 @@ mod test {
         let (_, include, exclude) =
             super::preprocess_paths_and_globs(&base_path, &include, &exclude).unwrap();
 
-        let include_glob =
-            InclusiveEmptyAny::new::<Glob, _>(include.iter().map(|s| s.as_ref())).unwrap();
+        let include_globs = include
+            .iter()
+            .map(glob_with_contextual_error)
+            .collect::<Result<Vec<_>, WalkError>>()
+            .unwrap();
+        let include_glob = InclusiveEmptyAny::new(include_globs, include).unwrap();
         let exclude_glob = wax::any(exclude.iter().map(|s| s.as_ref())).unwrap();
 
         assert_eq!(
@@ -481,9 +500,15 @@ mod test {
 
     #[test]
     fn do_match_empty_include() {
-        let patterns: [&str; 0] = [];
-        let any = wax::any(patterns).unwrap();
-        let any_empty = InclusiveEmptyAny::new::<Glob, _>(patterns).unwrap();
+        let patterns: Vec<String> = vec![];
+        let empty: [&str; 0] = [];
+        let any = wax::any(empty).unwrap();
+        let compiled = patterns
+            .iter()
+            .map(glob_with_contextual_error)
+            .collect::<Result<Vec<_>, WalkError>>()
+            .unwrap();
+        let any_empty = InclusiveEmptyAny::new(compiled, patterns).unwrap();
         assert_eq!(
             super::do_match(
                 Path::new(&format!("{}{}", ROOT, "/a/b/c/d")),
@@ -565,15 +590,15 @@ mod test {
     #[test_case("a[^a][^a][^a]b", 0, 0 => matches None ; "multiple negated character classes mismatch")]
     #[test_case("a?b", 1, 1 => matches None ; "question mark not matching slash")]
     #[test_case("a*b", 1, 1 => matches None ; "single star not matching slash 2")]
-    #[test_case("[x-]", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "trailing dash in character class fail")]
-    #[test_case("[-x]", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "leading dash in character class fail")]
-    #[test_case("[a-b-d]", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "dash within character class range fail")]
-    #[test_case("[a-b-x]", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "dash within character class range fail 2")]
-    #[test_case("[", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed character class error")]
-    #[test_case("[^", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed negated character class error")]
-    #[test_case("[^bc", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed negated character class error 2")]
-    #[test_case("a[", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed character class error after pattern")]
-    #[test_case("ad[", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "unclosed character class error after pattern 2")]
+    #[test_case("[x-]", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "trailing dash in character class fail")]
+    #[test_case("[-x]", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "leading dash in character class fail")]
+    #[test_case("[a-b-d]", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "dash within character class range fail")]
+    #[test_case("[a-b-x]", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "dash within character class range fail 2")]
+    #[test_case("[", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "unclosed character class error")]
+    #[test_case("[^", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "unclosed negated character class error")]
+    #[test_case("[^bc", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "unclosed negated character class error 2")]
+    #[test_case("a[", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "unclosed character class error after pattern")]
+    #[test_case("ad[", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "unclosed character class error after pattern 2")]
     #[test_case("*x", 4, 4 => matches None ; "star pattern match")]
     #[test_case("[abc]", 3, 3 => matches None ; "single character class match")]
     #[test_case("a/**", 7, 7 => matches None ; "a followed by double star match")]
@@ -584,8 +609,8 @@ mod test {
     #[test_case("a/b/c", 1, 1 => matches None ; "a followed by subdirectories and double slash mismatch")]
     #[test_case("ab{c,d}", 1, 1 => matches None ; "pattern with curly braces match")]
     #[test_case("ab{c,d,*}", 5, 5 => matches None ; "pattern with curly braces and wildcard match")]
-    #[test_case("ab{c,d}[", 0, 0 => matches Some(WalkError::BadPattern(_)))]
-    #[test_case("a{,bc}", 0, 0 => matches Some(WalkError::BadPattern(_)) ; "a followed by comma or b or c")]
+    #[test_case("ab{c,d}[", 0, 0 => matches Some(WalkError::BadPattern(_, _)))]
+    #[test_case("a{,bc}", 0, 0 => matches Some(WalkError::BadPattern(_, _)) ; "a followed by comma or b or c")]
     #[test_case("a/{b/c,c/b}", 2, 2 => matches None)]
     #[test_case("{a/{b,c},abc}", 3, 3 => matches None)]
     #[test_case("{a/ab*}", 1, 1 => matches None)]
