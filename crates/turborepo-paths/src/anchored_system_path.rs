@@ -56,7 +56,7 @@ impl AnchoredSystemPath {
 
         #[cfg(windows)]
         if path_str.contains('/') {
-            return Err(PathError::NotSystem(path.to_string_lossy().to_string()))
+            return Err(PathError::NotSystem(path.to_string_lossy().to_string()));
         }
         Ok(unsafe { &*(path_ref as *const Path as *const Self) })
     }
