@@ -560,7 +560,7 @@ jobs:
           cargo check \
             --config $BINDING --config $TASKS --config $TASKS_FS \
             --all -p next-swc-api -p next-dev \
-            --no-default-features --features cli,custom_allocator,rustls-tls,__internal_nextjs_integration_test \
+            --no-default-features --features cli,custom_allocator,rustls-tls \
             --message-format short --quiet \
           2>&1 | tee cargo_output.log)
 

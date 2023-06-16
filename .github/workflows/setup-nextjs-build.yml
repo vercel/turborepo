@@ -94,7 +94,7 @@ jobs:
 
           echo "Trying to build next-swc with turbopack $GITHUB_SHA"
           echo "success=false" >> $GITHUB_OUTPUT
-          hyperfine --min-runs 1 --show-output 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls,__internal_nextjs_integration_test --release --cargo-flags="--config $BINDING --config $TASKS --config $TASKS_FS"'
+          hyperfine --min-runs 1 --show-output 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls --release --cargo-flags="--config $BINDING --config $TASKS --config $TASKS_FS"'
           echo "success=true" >> $GITHUB_OUTPUT
           echo "Successfully built next-swc with turbopack $GITHUB_SHA"
 
@@ -102,7 +102,7 @@ jobs:
         if: steps.build-next-swc-turbopack-patch.outputs.success != true
         run: |
           echo "Looks like we could not apply latest turbopack to next-swc. Trying to build next-swc with published turbopack. This might happen when there is a breaking changes in turbopack, and next.js is not yet updated."
-          hyperfine --min-runs 1 --show-output 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls,__internal_nextjs_integration_test --release'
+          hyperfine --min-runs 1 --show-output 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls --release'
           echo "Successfully built next-swc with published turbopack"
 
       - name: Build next.js
