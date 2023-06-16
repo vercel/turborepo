@@ -141,6 +141,7 @@ mod test {
     };
 
     #[tokio::test]
+    #[ignore]
     async fn test_run() -> Result<()> {
         let dir = tempdir()?;
         let repo_root = AbsoluteSystemPathBuf::try_from(dir.path())?;

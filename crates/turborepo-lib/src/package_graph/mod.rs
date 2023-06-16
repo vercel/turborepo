@@ -19,10 +19,23 @@ pub struct WorkspaceCatalog {}
 
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, Dependency>,
-    workspaces: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
-    package_jsons: HashMap<WorkspaceName, PackageJson>,
+    node_lookup: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
+    workspaces: HashMap<WorkspaceName, Entry>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct Entry {
+    json: PackageJson,
+    unresolved_external_dependencies: Option<HashSet<Package>>,
+    transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+struct Package {
+    name: String,
+    version: String,
 }
 
 /// Name of workspaces with a special marker for the workspace root
@@ -73,7 +86,8 @@ impl PackageGraph {
     }
 
     pub fn package_json(&self, workspace: &WorkspaceName) -> Option<&PackageJson> {
-        self.package_jsons.get(workspace)
+        let entry = self.workspaces.get(workspace)?;
+        Some(&entry.json)
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
@@ -82,7 +96,7 @@ impl PackageGraph {
     }
 
     fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
-        let idx = self.workspaces.get(node)?;
+        let idx = self.node_lookup.get(node)?;
         let mut visited = HashSet::new();
         petgraph::visit::depth_first_search(&self.workspace_graph, Some(*idx), |event| {
             if let petgraph::visit::DfsEvent::Discover(n, _) = event {
@@ -184,9 +198,6 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
-
-    use petgraph::visit::Control;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
