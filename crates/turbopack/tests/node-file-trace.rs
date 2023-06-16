@@ -247,7 +247,7 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 )]
 #[cfg_attr(
     //[TODO]: WEB-1188 reenable windows once fixed.
-    not(all(feature = "bench_against_node_nft", target_os = "windows")),
+    not(any(feature = "bench_against_node_nft", target_os = "windows")),
     case::ts_package_base("integration/ts-package/index.ts"),
     case::ts_package_extends("integration/ts-package-extends/index.ts"),
     case::ts_package_from_js("integration/ts-package-from-js/index.js"),
