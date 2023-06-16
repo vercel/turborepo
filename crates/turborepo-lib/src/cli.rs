@@ -516,11 +516,15 @@ pub struct RunArgs {
     /// Generate a summary of the turbo run
     #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
-    /// Use "none" to remove prefixes from task logs. Note that tasks running
-    /// in parallel interleave their logs and prefix is the only way
-    /// to identify which task produced a log.
-    #[clap(long, value_enum)]
-    pub log_prefix: Option<LogPrefix>,
+    /// Use "none" to remove prefixes from task logs. Use "auto" to let turbo
+    /// decide how to prefix the logs based on the execution environment. In
+    /// most cases this will be the same as --log-order="task". Use "task"
+    /// to get task id prefixing.
+    /// Note that tasks running in parallel interleave their logs, so removing
+    /// prefixes can make it difficult to associate logs with tasks. You can use
+    /// --log-order=grouped to prevent interleaving.
+    #[clap(long, value_enum, default_value_t = LogPrefix::Auto)]
+    pub log_prefix: LogPrefix,
     // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
     // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
     #[clap(hide = true)]
@@ -533,10 +537,20 @@ pub struct RunArgs {
     pub experimental_space_id: Option<String>,
 }
 
-#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum LogPrefix {
+    #[serde(rename = "auto")]
+    Auto,
     #[serde(rename = "none")]
     None,
+    #[serde(rename = "task")]
+    Task,
+}
+
+impl Default for LogPrefix {
+    fn default() -> Self {
+        Self::Auto
+    }
 }
 
 /// Runs the CLI by parsing arguments with clap, then either calling Rust code
@@ -802,7 +816,7 @@ mod test {
     use anyhow::Result;
 
     use crate::cli::{
-        Args, Command, DryRunMode, EnvMode, LogOrder, OutputLogsMode, RunArgs, Verbosity,
+        Args, Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, RunArgs, Verbosity,
     };
 
     #[test]
@@ -1287,6 +1301,42 @@ mod test {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
                     log_order: LogOrder::Grouped,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-prefix", "auto"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_prefix: LogPrefix::Auto,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-prefix", "none"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_prefix: LogPrefix::None,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-prefix", "task"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_prefix: LogPrefix::Task,
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
