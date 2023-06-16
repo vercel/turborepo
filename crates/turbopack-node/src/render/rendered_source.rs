@@ -164,7 +164,6 @@ impl ContentSource for NodeRenderContentSource {
                 get_content: NodeRenderGetContentResult {
                     source: self_vc,
                     render_data: this.render_data,
-                    path: path.to_string(),
                     debug: this.debug,
                 }
                 .cell()
@@ -180,7 +179,6 @@ impl ContentSource for NodeRenderContentSource {
 struct NodeRenderGetContentResult {
     source: NodeRenderContentSourceVc,
     render_data: JsonValueVc,
-    path: String,
     debug: bool,
 }
 
@@ -200,9 +198,13 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
     }
 
     #[turbo_tasks::function]
-    async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
+    async fn get(
+        &self,
+        path: &str,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceContentVc> {
         let source = self.source.await?;
-        let Some(params) = &*source.route_match.params(&self.path).await? else {
+        let Some(params) = &*source.route_match.params(path).await? else {
             return Err(anyhow!("Non matching path provided"));
         };
         let ContentSourceData {
@@ -219,7 +221,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
         let result = render_static(
             source.cwd,
             source.env,
-            source.server_root.join(&self.path),
+            source.server_root.join(path),
             entry.module,
             entry.runtime_entries,
             source.fallback_page,

@@ -140,8 +140,12 @@ impl GetContentSourceContent for WrappedGetContentSourceContent {
     }
 
     #[turbo_tasks::function]
-    async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
-        let res = self.inner.get(data);
+    async fn get(
+        &self,
+        path: &str,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceContentVc> {
+        let res = self.inner.get(path, data);
         if let ContentSourceContent::Rewrite(rewrite) = &*res.await? {
             let rewrite = rewrite.await?;
             return Ok(ContentSourceContent::Rewrite(

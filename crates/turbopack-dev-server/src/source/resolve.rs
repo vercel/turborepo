@@ -56,7 +56,7 @@ pub async fn resolve_source_request(
                 let content_vary = get_content.vary().await?;
                 let content_data =
                     request_to_data(&request_overwrites, &request, &content_vary).await?;
-                let content = get_content.get(Value::new(content_data));
+                let content = get_content.get(&current_asset_path, Value::new(content_data));
                 match &*content.await? {
                     ContentSourceContent::Rewrite(rewrite) => {
                         let rewrite = rewrite.await?;

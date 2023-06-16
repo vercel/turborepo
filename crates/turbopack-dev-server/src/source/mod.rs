@@ -118,7 +118,7 @@ pub trait GetContentSourceContent {
     }
 
     /// Get the content
-    fn get(&self, data: Value<ContentSourceData>) -> ContentSourceContentVc;
+    fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceContentVc;
 }
 
 #[turbo_tasks::value]
@@ -143,6 +143,7 @@ impl GetContentSourceContent for ContentSourceContent {
     #[turbo_tasks::function]
     fn get(
         self_vc: ContentSourceContentVc,
+        _path: &str,
         _data: Value<ContentSourceData>,
     ) -> ContentSourceContentVc {
         self_vc

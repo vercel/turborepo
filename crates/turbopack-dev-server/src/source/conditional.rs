@@ -144,8 +144,8 @@ impl GetContentSourceContent for ActivateOnGetContentSource {
     }
 
     #[turbo_tasks::function]
-    fn get(&self, data: Value<ContentSourceData>) -> ContentSourceContentVc {
+    fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceContentVc {
         self.source.activated.set(true);
-        self.get_content.get(data)
+        self.get_content.get(path, data)
     }
 }

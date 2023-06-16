@@ -106,11 +106,15 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
     }
 
     #[turbo_tasks::function]
-    async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
+    async fn get(
+        &self,
+        path: &str,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceContentVc> {
         let source = self.source.await?;
         let result = self
             .get_content
-            .get(data)
+            .get(path, data)
             .issue_context(source.context, &source.description)
             .await?;
         Ok(result)
