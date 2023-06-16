@@ -84,7 +84,7 @@ pub struct RunOpts<'a> {
     graph_file: Option<&'a str>,
     pub(crate) no_daemon: bool,
     pub(crate) single_package: bool,
-    log_prefix: Option<LogPrefix>,
+    log_prefix: LogPrefix,
     summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
 }

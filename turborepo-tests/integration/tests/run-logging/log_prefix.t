@@ -62,7 +62,7 @@ Setup
 # Running with bogus option
   $ ${TURBO} run build --log-prefix=blah
   ERROR invalid value 'blah' for '--log-prefix <LOG_PREFIX>'
-    [possible values: none]
+    [possible values: auto, none, task]
   
   For more information, try '--help'.
   
@@ -71,7 +71,7 @@ Setup
 # Running with missing value for option
   $ ${TURBO} run build --log-prefix
   ERROR a value is required for '--log-prefix <LOG_PREFIX>' but none was supplied
-    [possible values: none]
+    [possible values: auto, none, task]
   
   For more information, try '--help'.
   
