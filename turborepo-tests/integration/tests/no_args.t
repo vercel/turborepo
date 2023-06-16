@@ -59,7 +59,7 @@ Make sure exit code is 2 when no args are passed
         --log-order <LOG_ORDER>          Set type of process output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. (default stream) [env: TURBO_LOG_ORDER=] [default: stream] [possible values: stream, grouped]
         --parallel                       Execute all tasks in parallel
         --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
-        --remote-only                    Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache
+        --remote-only [<BOOL>]           Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
         --scope <SCOPE>                  Specify package(s) to act as entry points for task execution. Supports globs
         --since <SINCE>                  Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --summarize [<SUMMARIZE>]        Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]

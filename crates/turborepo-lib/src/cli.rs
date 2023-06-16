@@ -499,7 +499,7 @@ pub struct RunArgs {
     pub profile: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long)]
+    #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
     pub remote_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
@@ -758,6 +758,7 @@ mod test {
         RunArgs {
             cache_workers: 10,
             output_logs: None,
+            remote_only: false,
             framework_inference: true,
             ..RunArgs::default()
         }
@@ -1325,6 +1326,20 @@ mod test {
             }
         );
 
+        // remote-only flag tests
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    remote_only: false,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "remote_only default to false"
+        );
+
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--remote-only"]).unwrap(),
             Args {
@@ -1334,7 +1349,34 @@ mod test {
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
-            }
+            },
+            "remote_only with no value, means true"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--remote-only", "true"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    remote_only: true,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "remote_only=true works"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--remote-only", "false"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    remote_only: false,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "remote_only=false works"
         );
 
         assert_eq!(
