@@ -182,7 +182,7 @@ pub fn canonicalize_name(name: &Path) -> Result<AnchoredSystemPathBuf, CacheErro
     {
         if !windows_safe {
             return Err(CacheError::WindowsUnsafeName(
-                name.to_string(),
+                name.to_string_lossy().to_string(),
                 Backtrace::capture(),
             ));
         }
