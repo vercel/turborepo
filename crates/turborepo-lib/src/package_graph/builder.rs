@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use petgraph::graph::{Graph, NodeIndex};
 use turbopath::AbsoluteSystemPath;
 
-use super::{PackageGraph, WorkspaceName, WorkspaceNode};
+use super::{Dependency, PackageGraph, WorkspaceName, WorkspaceNode};
 use crate::{package_json::PackageJson, package_manager::PackageManager};
 
 pub struct PackageGraphBuilder<'a> {
@@ -48,13 +49,18 @@ impl<'a> PackageGraphBuilder<'a> {
         let mut package_jsons = HashMap::with_capacity(1);
         package_jsons.insert(WorkspaceName::Root, root_package_json);
         let mut workspace_graph = petgraph::Graph::new();
-        let root_index = workspace_graph.add_node(WorkspaceNode::Root);
-        let root_workspace =
-            workspace_graph.add_node(WorkspaceNode::Workspace(WorkspaceName::Root));
-        workspace_graph.add_edge(root_workspace, root_index, ());
+        let mut workspaces = HashMap::new();
+        let root_index = Self::add_node(&mut workspace_graph, &mut workspaces, WorkspaceNode::Root);
+        let root_workspace = Self::add_node(
+            &mut workspace_graph,
+            &mut workspaces,
+            WorkspaceNode::Workspace(WorkspaceName::Root),
+        );
+        workspace_graph.add_edge(root_workspace, root_index, Dependency::Root);
 
         Ok(PackageGraph {
             workspace_graph,
+            workspaces,
             package_jsons,
             package_manager,
             lockfile: None,
@@ -64,6 +70,7 @@ impl<'a> PackageGraphBuilder<'a> {
     fn build_multi_package_graph(self) -> Result<PackageGraph> {
         Ok(PackageGraph {
             workspace_graph: petgraph::Graph::new(),
+            workspaces: HashMap::new(),
             package_jsons: HashMap::new(),
             package_manager: PackageManager::Npm,
             lockfile: Some(Box::<turborepo_lockfiles::NpmLockfile>::default()),
@@ -75,5 +82,15 @@ impl<'a> PackageGraphBuilder<'a> {
             || PackageManager::get_package_manager(self.repo_root, Some(&self.root_package_json)),
             Result::Ok,
         )
+    }
+
+    fn add_node<E>(
+        graph: &mut Graph<WorkspaceNode, E>,
+        workspaces: &mut HashMap<WorkspaceNode, NodeIndex>,
+        node: WorkspaceNode,
+    ) -> petgraph::graph::NodeIndex {
+        let idx = graph.add_node(node.clone());
+        workspaces.insert(node, idx);
+        idx
     }
 }

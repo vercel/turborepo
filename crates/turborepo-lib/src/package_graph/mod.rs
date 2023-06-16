@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    rc::Rc,
+};
 
 use anyhow::Result;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
@@ -14,7 +18,8 @@ pub use builder::PackageGraphBuilder;
 pub struct WorkspaceCatalog {}
 
 pub struct PackageGraph {
-    workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
+    workspace_graph: petgraph::Graph<WorkspaceNode, Dependency>,
+    workspaces: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
     package_jsons: HashMap<WorkspaceName, PackageJson>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -24,13 +29,22 @@ pub struct PackageGraph {
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum WorkspaceName {
     Root,
-    Other(String),
+    Other(Rc<String>),
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum WorkspaceNode {
     Root,
     Workspace(WorkspaceName),
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum Dependency {
+    Direct,
+    Peer,
+    Dev,
+    // Special dependency edge added going to the task root
+    Root,
 }
 
 impl PackageGraph {
@@ -65,6 +79,21 @@ impl PackageGraph {
     pub fn root_package_json(&self) -> &PackageJson {
         self.package_json(&WorkspaceName::Root)
             .expect("package graph was built without root package.json")
+    }
+
+    fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+        let idx = self.workspaces.get(node)?;
+        let mut visited = HashSet::new();
+        petgraph::visit::depth_first_search(&self.workspace_graph, Some(*idx), |event| {
+            if let petgraph::visit::DfsEvent::Discover(n, _) = event {
+                visited.insert(
+                    self.workspace_graph
+                        .node_weight(n)
+                        .expect("node index found during dfs doesn't exist"),
+                );
+            }
+        });
+        Some(visited)
     }
 }
 
@@ -197,5 +226,21 @@ mod test {
             ),
             expected
         );
+    }
+
+    #[test]
+    fn test_single_package_is_depends_on_root() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(&root, PackageJson::default())
+            .with_package_manger(Some(PackageManager::Npm))
+            .with_single_package_mode(true)
+            .build()
+            .unwrap();
+
+        let closure = pkg_graph
+            .transitive_closure(&WorkspaceNode::Workspace(WorkspaceName::Root))
+            .unwrap();
+        assert!(closure.contains(&WorkspaceNode::Root));
     }
 }
