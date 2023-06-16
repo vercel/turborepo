@@ -146,12 +146,20 @@ impl Git {
         // The input patterns are relative to the package.
         // However, we need to change the globbing to be relative to the repo root.
         // Prepend the package path to each of the input patterns.
+        //
+        // FIXME: we don't yet error on absolute unix paths being passed in as inputs,
+        // and instead tack them on as if they were relative paths. This should be an
+        // error further upstream, but since we haven't pulled the switch yet,
+        // we need to mimic the Go behavior here and trim leading `/`
+        // characters.
         let (inclusions, exclusions): (Vec<String>, Vec<String>) =
             inputs.into_iter().partition_map(|raw_glob| {
                 if let Some(exclusion) = raw_glob.strip_prefix('!') {
-                    Either::Right([package_unix_path, exclusion].join("/"))
+                    Either::Right([package_unix_path, exclusion.trim_start_matches('/')].join("/"))
                 } else {
-                    Either::Left([package_unix_path, raw_glob.as_ref()].join("/"))
+                    Either::Left(
+                        [package_unix_path, raw_glob.trim_start_matches('/').as_ref()].join("/"),
+                    )
                 }
             });
         let files = globwalk::globwalk(
