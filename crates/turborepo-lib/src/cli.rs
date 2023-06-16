@@ -48,6 +48,8 @@ impl Default for OutputLogsMode {
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum LogOrder {
+    #[serde(rename = "auto")]
+    Auto,
     #[serde(rename = "stream")]
     Stream,
     #[serde(rename = "grouped")]
@@ -56,7 +58,7 @@ pub enum LogOrder {
 
 impl Default for LogOrder {
     fn default() -> Self {
-        Self::Stream
+        Self::Auto
     }
 }
 
@@ -482,8 +484,9 @@ pub struct RunArgs {
     pub output_logs: Option<OutputLogsMode>,
     /// Set type of process output order. Use "stream" to show
     /// output as soon as it is available. Use "grouped" to
-    /// show output when a command has finished execution. (default stream)
-    #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Stream)]
+    /// show output when a command has finished execution. Use "auto" to let
+    /// turbo decide based on its own heuristics. (default auto)
+    #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Auto)]
     pub log_order: LogOrder,
     #[clap(long, hide = true)]
     pub only: bool,
@@ -1295,7 +1298,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    log_order: LogOrder::Stream,
+                    log_order: LogOrder::Auto,
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
