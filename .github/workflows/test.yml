@@ -276,7 +276,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration
+        run: turbo run test --filter=turborepo-tests-integration --color
         env:
           GO_TAG: rust
 
