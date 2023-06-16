@@ -1,23 +1,19 @@
 //! A simple `wax` combinator that unconditionally matches if the set of globs
 //! is empty.
 
-use wax::{Any, BuildError, CandidatePath, Compose, Pattern};
+use wax::{Any, CandidatePath, Glob, Pattern};
+
+use crate::{any_with_contextual_error, WalkError};
 
 pub struct InclusiveEmptyAny<'a>(Option<Any<'a>>);
 
 impl<'a> InclusiveEmptyAny<'a> {
-    pub fn new<P, I>(patterns: I) -> Result<Self, BuildError>
-    where
-        BuildError: From<<I::Item as TryInto<P>>::Error>,
-        P: Pattern<'a>,
-        I: IntoIterator,
-        I::Item: TryInto<P> + Compose<'a>,
-    {
+    pub fn new(patterns: Vec<Glob<'static>>, text: Vec<String>) -> Result<Self, WalkError> {
         let iter = patterns.into_iter().collect::<Vec<_>>();
         if iter.is_empty() {
             Ok(Self(None))
         } else {
-            Ok(Self(Some(wax::any(iter)?)))
+            Ok(Self(Some(any_with_contextual_error(iter, text)?)))
         }
     }
 }
