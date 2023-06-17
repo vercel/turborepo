@@ -153,7 +153,7 @@ pub fn previous_content(
     // Note that we assume any relative file path is relative to the git root
     let anchored_file_path = if file_path.is_absolute() {
         let absolute_file_path = AbsoluteSystemPathBuf::new(file_path)?;
-        git_root.anchor(&absolute_file_path)?
+        git_root.anchor(absolute_file_path)?
     } else {
         file_path.as_path().try_into()?
     };
@@ -192,7 +192,7 @@ mod tests {
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
-    use turbopath::{PathError, PathValidationError};
+    use turbopath::PathError;
     use which::which;
 
     use super::previous_content;
@@ -260,7 +260,7 @@ mod tests {
 
         let git_binary = which("git")?;
         let output = Command::new(git_binary)
-            .args(&[
+            .args([
                 "clone",
                 "--depth",
                 "2",
@@ -297,10 +297,10 @@ mod tests {
         let file_path = Path::new("foo.js");
         fs::write(&file, "let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, &file_path, None)?;
+        let first_commit_oid = commit_file(&repo, file_path, None)?;
 
         fs::remove_file(&file)?;
-        let _second_commit_oid = commit_delete(&repo, &file_path, first_commit_oid)?;
+        let _second_commit_oid = commit_delete(&repo, file_path, first_commit_oid)?;
 
         let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
@@ -315,24 +315,24 @@ mod tests {
     fn test_merge_base() -> Result<(), Error> {
         let (repo_root, repo) = setup_repository()?;
         let first_file = repo_root.path().join("foo.js");
-        fs::write(&first_file, "let z = 0;")?;
+        fs::write(first_file, "let z = 0;")?;
         // Create a base commit. This will *not* be the merge base
         let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
 
         let second_file = repo_root.path().join("bar.js");
-        fs::write(&second_file, "let y = 1;")?;
+        fs::write(second_file, "let y = 1;")?;
         // This commit will be the merge base
         let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid))?;
 
         let third_file = repo_root.path().join("baz.js");
-        fs::write(&third_file, "let x = 2;")?;
+        fs::write(third_file, "let x = 2;")?;
         // Create a first commit off of merge base
         let third_commit_oid = commit_file(&repo, Path::new("baz.js"), Some(second_commit_oid))?;
 
         // Move head back to merge base
         repo.set_head_detached(second_commit_oid)?;
         let fourth_file = repo_root.path().join("qux.js");
-        fs::write(&fourth_file, "let w = 3;")?;
+        fs::write(fourth_file, "let w = 3;")?;
         // Create a second commit off of merge base
         let fourth_commit_oid = commit_file(&repo, Path::new("qux.js"), Some(second_commit_oid))?;
 
@@ -569,7 +569,7 @@ mod tests {
         assert_eq!(content, b"let z = 0;");
 
         let new_file = repo_root.path().join("bar.js");
-        fs::write(&new_file, "let y = 0;")?;
+        fs::write(new_file, "let y = 0;")?;
         let third_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(second_commit_oid))?;
         let third_commit = repo.find_commit(third_commit_oid)?;
         repo.branch("release-1", &third_commit, false)?;
@@ -625,10 +625,7 @@ mod tests {
 
         assert_matches!(
             turbo_root_is_not_subdir_of_git_root,
-            Err(Error::Path(
-                PathError::PathValidationError(PathValidationError::NotParent(_, _)),
-                _
-            ))
+            Err(Error::Path(PathError::NotParent(_, _), _))
         );
 
         Ok(())

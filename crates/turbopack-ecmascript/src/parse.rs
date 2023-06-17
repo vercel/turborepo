@@ -21,6 +21,7 @@ use swc_core::{
 };
 use turbo_tasks::{
     primitives::{StringVc, U64Vc},
+    util::WrapFuture,
     Value, ValueToString,
 };
 use turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
@@ -38,7 +39,6 @@ use super::EcmascriptModuleAssetType;
 use crate::{
     analyzer::graph::EvalContext,
     transform::{EcmascriptInputTransformsVc, TransformContext},
-    utils::WrapFuture,
     EcmascriptInputTransform,
 };
 
@@ -398,13 +398,10 @@ impl Issue for ReadSourceIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> StringVc {
-        StringVc::cell(
-            format!(
-                "An unexpected error happened while trying to read the source code to parse: {}",
-                self.error
-            )
-            .into(),
-        )
+        StringVc::cell(format!(
+            "An unexpected error happened while trying to read the source code to parse: {}",
+            self.error
+        ))
     }
 
     #[turbo_tasks::function]

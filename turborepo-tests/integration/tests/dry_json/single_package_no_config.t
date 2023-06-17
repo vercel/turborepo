@@ -7,25 +7,25 @@ Setup
   $ ${TURBO} run build --dry=json
   {
     "id": "[a-zA-Z0-9]+", (re)
-    "version": "0",
+    "version": "1",
     "turboVersion": "[a-z0-9\.-]+", (re)
+    "monorepo": false,
     "globalCacheInputs": {
-      "rootKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+      "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
       "files": {
-        "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+        "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
         "package.json": "185771929d92c3865ce06c863c07d357500d3364"
       },
       "hashOfExternalDependencies": "",
-      "rootPipeline": {
-        "//#build": {
-          "outputs": [],
-          "cache": false,
-          "dependsOn": [],
-          "inputs": [],
-          "outputMode": "full",
+      "globalDotEnv": null,
+      "environmentVariables": {
+        "specified": {
           "env": [],
-          "persistent": false
-        }
+          "passThroughEnv": null
+        },
+        "configured": [],
+        "inferred": [],
+        "passthrough": null
       }
     },
     "envMode": "infer",
@@ -34,10 +34,10 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "5b5ae44052e3d624",
+        "hash": "a6461c1683e4f102",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
-          "package-lock.json": "8db0df575e6509336a6719094b63eb23d2c649c1",
+          "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "185771929d92c3865ce06c863c07d357500d3364",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
         },
@@ -61,21 +61,24 @@ Setup
           "dependsOn": [],
           "inputs": [],
           "outputMode": "full",
+          "persistent": false,
           "env": [],
-          "persistent": false
+          "passThroughEnv": null,
+          "dotEnv": null
         },
         "expandedOutputs": [],
         "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
         "envMode": "loose",
         "environmentVariables": {
+          "specified": {
+            "env": [],
+            "passThroughEnv": null
+          },
           "configured": [],
           "inferred": [],
-          "global": [
-            "VERCEL_ANALYTICS_ID="
-          ],
-          "passthrough": null,
-          "globalPassthrough": null
-        }
+          "passthrough": null
+        },
+        "dotEnv": null
       }
     ],
     "user": ".*", (re)

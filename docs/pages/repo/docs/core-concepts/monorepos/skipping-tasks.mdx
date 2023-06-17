@@ -54,13 +54,14 @@ To specify a workspace, you can add it to your command like:
 npx turbo-ignore web
 ```
 
-where `web` is your workspace's name.
+where `web` is your workspace's name running the default `build` task.
 
-If you'd like to change more of the default behavior, there are a few flags available:
-
-- `--task`: Specifies the task for the command that `turbo-ignore` will invoke. Defaults to `build`.
-- `--fallback`: Specify a ref/head to compare against. Defaults to `HEAD^`.
+If you'd like to change the task, use the `--task` flag to specify the task for the command that `turbo-ignore` will invoke.
 
 ## Using `turbo-ignore` on Vercel
 
 To use `npx turbo-ignore` on Vercel, you can use the [Ignored Build Step](https://vercel.com/docs/concepts/projects/overview#ignored-build-step) feature. Vercel will automatically infer the correct arguments to successfully run `turbo-ignore`.
+
+### Customizing behavior
+
+On Vercel, you can specify the `--fallback` flag to give Vercel a git ref to compare against when the default comparison is not available. By default, Vercel compares to the most recently deployed SHA so this is useful for use cases like avoiding a deploy for the first commit to a branch.

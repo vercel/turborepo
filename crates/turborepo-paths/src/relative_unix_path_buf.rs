@@ -1,17 +1,17 @@
-use std::{fmt::Debug, io::Write};
+use std::{borrow::Borrow, fmt::Debug, io::Write, ops::Deref};
 
-use bstr::{BString, ByteSlice};
+use bstr::{BStr, BString, ByteSlice};
 
-use crate::{PathError, PathValidationError};
+use crate::{PathError, RelativeUnixPath};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct RelativeUnixPathBuf(BString);
+pub struct RelativeUnixPathBuf(pub(crate) BString);
 
 impl RelativeUnixPathBuf {
     pub fn new(path: impl Into<Vec<u8>>) -> Result<Self, PathError> {
         let bytes: Vec<u8> = path.into();
         if bytes.first() == Some(&b'/') {
-            return Err(PathValidationError::not_relative_error(&bytes).into());
+            return Err(PathError::not_relative_error(&bytes));
         }
         Ok(Self(BString::new(bytes)))
     }
@@ -20,7 +20,7 @@ impl RelativeUnixPathBuf {
         let s = self
             .0
             .to_str()
-            .or_else(|_| Err(PathError::Utf8Error(self.0.as_bytes().to_owned())))?;
+            .map_err(|_| PathError::InvalidUnicode(self.0.as_bytes().to_str_lossy().to_string()))?;
         Ok(s)
     }
 
@@ -51,38 +51,17 @@ impl RelativeUnixPathBuf {
         writer.write_all(&[b'\"'])?;
         Ok(())
     }
+}
 
-    pub fn strip_prefix(&self, prefix: &RelativeUnixPathBuf) -> Result<Self, PathError> {
-        let prefix_len = prefix.0.len();
-        if prefix_len == 0 {
-            return Ok(self.clone());
-        }
-        if !self.0.starts_with(&prefix.0) {
-            return Err(PathError::PathValidationError(
-                PathValidationError::NotParent(prefix.0.to_string(), self.0.to_string()),
-            ));
-        }
+pub trait RelativeUnixPathBufTestExt {
+    fn join(&self, tail: &RelativeUnixPathBuf) -> Self;
+}
 
-        // Handle the case where we are stripping the entire contents of this path
-        if self.0.len() == prefix.0.len() {
-            return Self::new("");
-        }
-
-        // We now know that this path starts with the prefix, and that this path's
-        // length is greater than the prefix's length
-        if self.0[prefix_len] != b'/' {
-            let prefix_str = prefix.0.to_str_lossy().into_owned();
-            let this = self.0.to_str_lossy().into_owned();
-            return Err(PathError::PathValidationError(
-                PathValidationError::PrefixError(prefix_str, this),
-            ));
-        }
-
-        let tail_slice = &self.0[(prefix_len + 1)..];
-        Self::new(tail_slice)
-    }
-
-    pub fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
+impl RelativeUnixPathBufTestExt for RelativeUnixPathBuf {
+    // Marked as test-only because it doesn't automatically clean the resulting
+    // path. *If* we end up needing or wanting this method outside of tests, we
+    // will need to implement .clean() for the result.
+    fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
         let buffer = Vec::with_capacity(self.0.len() + 1 + tail.0.len());
         let mut path = BString::new(buffer);
         if self.0.len() > 0 {
@@ -91,6 +70,27 @@ impl RelativeUnixPathBuf {
         }
         path.extend_from_slice(&tail.0);
         Self(path)
+    }
+}
+
+impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
+    fn borrow(&self) -> &RelativeUnixPath {
+        let inner: &BStr = self.0.borrow();
+        unsafe { &*(inner as *const BStr as *const RelativeUnixPath) }
+    }
+}
+
+impl AsRef<RelativeUnixPath> for RelativeUnixPathBuf {
+    fn as_ref(&self) -> &RelativeUnixPath {
+        self.borrow()
+    }
+}
+
+impl Deref for RelativeUnixPathBuf {
+    type Target = RelativeUnixPath;
+
+    fn deref(&self) -> &Self::Target {
+        self.borrow()
     }
 }
 
@@ -136,7 +136,7 @@ mod tests {
         let combined = RelativeUnixPathBuf::new("some/path/child/leaf").unwrap();
         let head = RelativeUnixPathBuf::new("some/path").unwrap();
         let expected = RelativeUnixPathBuf::new("child/leaf").unwrap();
-        let tail = combined.strip_prefix(&head).unwrap();
+        let tail = combined.strip_prefix(head).unwrap();
         assert_eq!(tail, expected);
     }
 
@@ -145,7 +145,7 @@ mod tests {
         let combined = RelativeUnixPathBuf::new("some/path").unwrap();
         let head = combined.clone();
         let expected = RelativeUnixPathBuf::new("").unwrap();
-        let tail = combined.strip_prefix(&head).unwrap();
+        let tail = combined.strip_prefix(head).unwrap();
         assert_eq!(tail, expected);
     }
 
@@ -153,7 +153,7 @@ mod tests {
     fn test_strip_empty_prefix() {
         let combined = RelativeUnixPathBuf::new("some/path").unwrap();
         let tail = combined
-            .strip_prefix(&RelativeUnixPathBuf::new("").unwrap())
+            .strip_prefix(RelativeUnixPathBuf::new("").unwrap())
             .unwrap();
         assert_eq!(tail, combined);
     }

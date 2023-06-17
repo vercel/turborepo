@@ -1,6 +1,6 @@
 {
   "name": "turbo-ignore",
-  "version": "1.9.7-canary.0",
+  "version": "1.10.4-canary.3",
   "description": "",
   "homepage": "https://turbo.build/repo",
   "keywords": [],
@@ -23,7 +23,8 @@
     "build": "tsup",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "devDependencies": {
     "@types/jest": "^27.4.0",

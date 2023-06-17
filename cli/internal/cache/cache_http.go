@@ -92,26 +92,26 @@ func (cache *httpCache) write(w io.WriteCloser, anchor turbopath.AbsoluteSystemP
 	cacheErrorChan <- cacheItem.Close()
 }
 
-func (cache *httpCache) Fetch(_ turbopath.AbsoluteSystemPath, key string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, int, error) {
+func (cache *httpCache) Fetch(_ turbopath.AbsoluteSystemPath, key string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, files, duration, err := cache.retrieve(key)
 	if err != nil {
 		// TODO: analytics event?
-		return ItemStatus{Remote: false}, files, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
+		return newRemoteTaskCacheStatus(false, duration), files, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
 	cache.logFetch(hit, key, duration)
-	return ItemStatus{Remote: hit}, files, duration, err
+	return newRemoteTaskCacheStatus(hit, duration), files, err
 }
 
 func (cache *httpCache) Exists(key string) ItemStatus {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
-	hit, err := cache.exists(key)
+	hit, timeSaved, err := cache.exists(key)
 	if err != nil {
-		return ItemStatus{Remote: false}
+		return newRemoteTaskCacheStatus(false, 0)
 	}
-	return ItemStatus{Remote: hit}
+	return newRemoteTaskCacheStatus(hit, timeSaved)
 }
 
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
@@ -130,20 +130,26 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	cache.recorder.LogEvent(payload)
 }
 
-func (cache *httpCache) exists(hash string) (bool, error) {
+func (cache *httpCache) exists(hash string) (bool, int, error) {
 	resp, err := cache.client.ArtifactExists(hash)
 	if err != nil {
-		return false, nil
+		return false, 0, nil
 	}
 
 	defer func() { err = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
+		return false, 0, nil
 	} else if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
+		return false, 0, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
 	}
-	return true, err
+
+	duration, err := getDurationFromResponse(resp)
+	if err != nil {
+		return false, 0, err
+	}
+
+	return true, duration, err
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemPath, int, error) {
@@ -158,15 +164,12 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 		b, _ := ioutil.ReadAll(resp.Body)
 		return false, nil, 0, fmt.Errorf("%s", string(b))
 	}
-	// If present, extract the duration from the response.
-	duration := 0
-	if resp.Header.Get("x-artifact-duration") != "" {
-		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
-		if err != nil {
-			return false, nil, 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
-		}
-		duration = intVar
+
+	duration, err := getDurationFromResponse(resp)
+	if err != nil {
+		return false, nil, 0, err
 	}
+
 	var tarReader io.Reader
 
 	defer func() { _ = resp.Body.Close() }()
@@ -200,6 +203,21 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 	return true, files, duration, nil
 }
 
+// getDurationFromResponse extracts the duration from the response header
+func getDurationFromResponse(resp *http.Response) (int, error) {
+	duration := 0
+	if resp.Header.Get("x-artifact-duration") != "" {
+		// If we had an error reading the duration header, just swallow it for now.
+		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
+		if err != nil {
+			return 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
+		}
+		duration = intVar
+	}
+
+	return duration, nil
+}
+
 func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
 	cache := cacheitem.FromReader(reader, true)
 	return cache.Restore(root)
@@ -225,7 +243,7 @@ func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoo
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
-			teamId:  client.GetTeamID(),
+			teamID:  client.GetTeamID(),
 			enabled: opts.RemoteCacheOpts.Signature,
 		},
 	}

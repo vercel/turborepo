@@ -10,6 +10,12 @@ pub enum Error {
     MissingVersion(String),
     #[error("Unable to convert from json: {0}")]
     JsonError(#[from] serde_json::Error),
+    #[error("Unable to convert to yaml: {0}")]
+    Yaml(#[from] serde_yaml::Error),
     #[error("Turbo doesn't support npm lockfiles without a 'packages' field")]
     UnsupportedNpmVersion,
+    #[error(transparent)]
+    Pnpm(#[from] crate::pnpm::Error),
+    #[error(transparent)]
+    Yarn1(#[from] crate::yarn1::Error),
 }

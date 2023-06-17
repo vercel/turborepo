@@ -3,7 +3,6 @@ package run
 import (
 	gocontext "context"
 	"fmt"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -34,10 +33,10 @@ import (
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.ExecutionState) error {
 	base, err := helper.GetCmdBase(executionState)
-	LogTag(base.Logger)
 	if err != nil {
 		return err
 	}
+	LogTag(base.Logger)
 	tasks := executionState.CLIArgs.Command.Run.Tasks
 	passThroughArgs := executionState.CLIArgs.Command.Run.PassThroughArgs
 	opts, err := optsFromArgs(&executionState.CLIArgs)
@@ -93,12 +92,14 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 		}
 		opts.runOpts.Concurrency = concurrency
 	}
+
 	opts.runOpts.Parallel = runPayload.Parallel
 	opts.runOpts.Profile = runPayload.Profile
 	opts.runOpts.ContinueOnError = runPayload.ContinueExecution
 	opts.runOpts.Only = runPayload.Only
 	opts.runOpts.NoDaemon = runPayload.NoDaemon
 	opts.runOpts.SinglePackage = args.Command.Run.SinglePackage
+	opts.runOpts.LogOrder = args.Command.Run.LogOrder
 
 	// See comment on Graph in turbostate.go for an explanation on Graph's representation.
 	// If flag is passed...
@@ -127,10 +128,6 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 }
 
 func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watcher) *run {
-	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
-		opts.cacheOpts.SkipFilesystem = true
-	}
-
 	processes := process.NewManager(base.Logger.Named("processes"))
 	signalWatcher.AddOnClose(processes.Close)
 	return &run{
@@ -153,8 +150,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	if err != nil {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
-
-	isStructuredOutput := r.opts.runOpts.GraphDot || r.opts.runOpts.DryRunJSON
 
 	var pkgDepGraph *context.Context
 	if r.opts.runOpts.SinglePackage {
@@ -239,20 +234,21 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		}
 	}
 
+	envAtExecutionStart := env.GetEnvMap()
+
 	globalHashInputs, err := getGlobalHashInputs(
+		r.base.Logger,
 		r.base.RepoRoot,
 		rootPackageJSON,
-		pipeline,
-		turboJSON.GlobalEnv,
-		turboJSON.GlobalDeps,
 		pkgDepGraph.PackageManager,
 		pkgDepGraph.Lockfile,
-		turboJSON.GlobalPassthroughEnv,
+		turboJSON.GlobalDeps,
+		envAtExecutionStart,
+		turboJSON.GlobalEnv,
+		turboJSON.GlobalPassThroughEnv,
 		r.opts.runOpts.EnvMode,
 		r.opts.runOpts.FrameworkInference,
-		r.base.Logger,
-		r.base.UI,
-		isStructuredOutput,
+		turboJSON.GlobalDotEnv,
 	)
 
 	if err != nil {
@@ -288,6 +284,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	taskHashTracker := taskhash.NewTracker(
 		g.RootNode,
 		g.GlobalHash,
+		envAtExecutionStart,
 		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
 		g.Pipeline,
 	)
@@ -346,15 +343,13 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		}
 	}
 
-	var envVarPassthroughMap env.EnvironmentVariableMap
-	if globalHashInputs.envVarPassthroughs != nil {
-		if envVarPassthroughDetailedMap, err := env.GetHashableEnvVars(globalHashInputs.envVarPassthroughs, nil, ""); err == nil {
-			envVarPassthroughMap = envVarPassthroughDetailedMap.BySource.Explicit
-		}
+	resolvedPassThroughEnvVars, err := envAtExecutionStart.FromWildcards(globalHashInputs.passThroughEnv)
+	if err != nil {
+		return err
 	}
 
 	globalEnvMode := rs.Opts.runOpts.EnvMode
-	if globalEnvMode == util.Infer && turboJSON.GlobalPassthroughEnv != nil {
+	if globalEnvMode == util.Infer && turboJSON.GlobalPassThroughEnv != nil {
 		globalEnvMode = util.Strict
 	}
 
@@ -370,13 +365,16 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,
+		envAtExecutionStart,
 		runsummary.NewGlobalHashSummary(
+			globalHashInputs.globalCacheKey,
 			globalHashInputs.globalFileHashMap,
 			globalHashInputs.rootExternalDepsHash,
-			globalHashInputs.envVars,
-			envVarPassthroughMap,
-			globalHashInputs.globalCacheKey,
-			globalHashInputs.pipeline,
+			globalHashInputs.env,
+			globalHashInputs.passThroughEnv,
+			globalHashInputs.dotEnv,
+			globalHashInputs.resolvedEnvVars,
+			resolvedPassThroughEnvVars,
 		),
 		rs.Opts.SynthesizeCommand(rs.Targets),
 	)
@@ -392,6 +390,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			turboCache,
 			turboJSON,
 			globalEnvMode,
+			globalHashInputs.resolvedEnvVars.All,
+			resolvedPassThroughEnvVars,
 			r.base,
 			summary,
 		)
@@ -407,6 +407,8 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		turboCache,
 		turboJSON,
 		globalEnvMode,
+		globalHashInputs.resolvedEnvVars.All,
+		resolvedPassThroughEnvVars,
 		packagesInScope,
 		r.base,
 		summary,
@@ -419,12 +421,20 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 	apiClient := r.base.APIClient
 	var analyticsSink analytics.Sink
+
 	if apiClient.IsLinked() {
 		analyticsSink = apiClient
 	} else {
 		r.opts.cacheOpts.SkipRemote = true
 		analyticsSink = analytics.NullSink
 	}
+
+	// After we know if its _possible_ to enable remote cache, check the config
+	// and dsiable it if wanted.
+	if !r.opts.cacheOpts.RemoteCacheOpts.Enabled {
+		r.opts.cacheOpts.SkipRemote = true
+	}
+
 	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
 	return analyticsClient
 }
@@ -469,9 +479,13 @@ func buildTaskGraphEngine(
 		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
 	}
 
-	// Check that no tasks would be blocked by a persistent task
-	if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.Concurrency); err != nil {
-		return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
+	// Check that no tasks would be blocked by a persistent task. Note that the
+	// parallel flag ignores both concurrency and dependencies, so in that scenario
+	// we don't need to validate.
+	if !rs.Opts.runOpts.Parallel {
+		if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.Concurrency); err != nil {
+			return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
+		}
 	}
 
 	return engine, nil

@@ -328,7 +328,8 @@ Let's take a look inside `turbo.json`, at the root:
     },
     "lint": {},
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -402,7 +403,7 @@ When we run `turbo lint`, Turborepo looks at each `lint` script in each workspac
 
 Let's run our `lint` script one more time. You'll notice a few new things appear in the terminal:
 
-1. `cache hit, replaying output` appears for `docs:lint`, `web:lint` and `ui:lint`.
+1. `cache hit, replaying logs` appears for `docs:lint`, `web:lint` and `ui:lint`.
 2. You'll see `3 cached, 3 total`.
 3. The total runtime should be under `100ms`, and `>>> FULL TURBO` appears.
 
@@ -466,7 +467,7 @@ Run the `build` script again. You'll notice:
 1. We hit `FULL TURBO` - the builds complete in under `100ms`.
 2. The `.next` folder re-appears!
 
-Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/repo/docs/core-concepts/caching#configuring-cache-outputs).
+Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/repo/docs/core-concepts/caching/what-to-cache).
 
 ### 6. Running dev scripts
 
@@ -500,6 +501,7 @@ Take a look at `turbo.json`:
 Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the
 results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so there
 is nothing to cache. Learn more about it in our docs on [turning off caching](/repo/docs/core-concepts/caching#turn-off-caching).
+
 Additionally, we set `"persistent": true`, to let turbo know that this is a long-running dev server,
 so that turbo can ensure that no other tasks depend on it. You can read more in the [docs for the
 `persistent` option](/repo/docs/reference/configuration#persistent).

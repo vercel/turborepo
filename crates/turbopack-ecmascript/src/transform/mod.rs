@@ -1,13 +1,12 @@
-use std::{fmt::Debug, hash::Hash, path::PathBuf, sync::Arc};
+use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
 use swc_core::{
     base::SwcComments,
-    common::{chain, util::take::Take, FileName, Mark, SourceMap},
+    common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program, Script},
-        atoms::JsWord,
         preset_env::{self, Targets},
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
@@ -16,7 +15,7 @@ use swc_core::{
         visit::{FoldWith, VisitMutWith},
     },
 };
-use turbo_tasks::primitives::{OptionStringVc, StringVc, StringsVc};
+use turbo_tasks::primitives::{OptionStringVc, StringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     environment::EnvironmentVc,
@@ -39,16 +38,6 @@ pub enum EcmascriptInputTransform {
         // swc.jsc.transform.react.runtime,
         runtime: OptionStringVc,
     },
-    StyledComponents {
-        display_name: bool,
-        ssr: bool,
-        file_name: bool,
-        top_level_import_paths: StringsVc,
-        meaningless_file_names: StringsVc,
-        css_prop: bool,
-        namespace: OptionStringVc,
-    },
-    StyledJsx,
     // These options are subset of swc_core::ecma::transforms::typescript::Config, but
     // it doesn't derive `Copy` so repeating values in here
     TypeScript {
@@ -139,8 +128,6 @@ impl EcmascriptInputTransform {
             source_map,
             top_level_mark,
             unresolved_mark,
-            file_name_hash,
-            file_path,
             ..
         } = ctx;
         match self {
@@ -182,16 +169,22 @@ impl EcmascriptInputTransform {
                     ..Default::default()
                 };
 
-                program.visit_mut_with(&mut react(
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
+                program.visit_mut_with(&mut react::<&dyn Comments>(
                     source_map.clone(),
-                    Some(comments.clone()),
+                    Some(&comments),
                     config,
                     top_level_mark,
                     unresolved_mark,
                 ));
             }
             EcmascriptInputTransform::CommonJs => {
-                program.visit_mut_with(&mut swc_core::ecma::transforms::module::common_js(
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
+                program.visit_mut_with(&mut swc_core::ecma::transforms::module::common_js::<
+                    &dyn Comments,
+                >(
                     unresolved_mark,
                     swc_core::ecma::transforms::module::util::Config {
                         allow_top_level_this: true,
@@ -201,7 +194,7 @@ impl EcmascriptInputTransform {
                         ..Default::default()
                     },
                     swc_core::ecma::transforms::base::feature::FeatureFlag::all(),
-                    Some(comments.clone()),
+                    Some(&comments),
                 ));
             }
             EcmascriptInputTransform::PresetEnv(env) => {
@@ -222,70 +215,24 @@ impl EcmascriptInputTransform {
                 {
                     Program::Module(Module {
                         span,
-                        body: body.drain(..).map(|stmt| ModuleItem::Stmt(stmt)).collect(),
+                        body: body.drain(..).map(ModuleItem::Stmt).collect(),
                         shebang,
                     })
                 } else {
                     module_program
                 };
 
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
                 *program = module_program.fold_with(&mut chain!(
-                    preset_env::preset_env(
+                    preset_env::preset_env::<&'_ dyn Comments>(
                         top_level_mark,
-                        Some(comments.clone()),
+                        Some(&comments),
                         config,
                         Assumptions::default(),
                         &mut FeatureFlag::empty(),
                     ),
                     inject_helpers(unresolved_mark),
-                ));
-            }
-            EcmascriptInputTransform::StyledComponents {
-                display_name,
-                ssr,
-                file_name,
-                top_level_import_paths,
-                meaningless_file_names,
-                css_prop,
-                namespace,
-            } => {
-                let mut options = styled_components::Config {
-                    display_name: *display_name,
-                    ssr: *ssr,
-                    file_name: *file_name,
-                    css_prop: *css_prop,
-                    ..Default::default()
-                };
-
-                if let Some(namespace) = &*namespace.await? {
-                    options.namespace = namespace.clone();
-                }
-
-                let top_level_import_paths = &*top_level_import_paths.await?;
-                if !top_level_import_paths.is_empty() {
-                    options.top_level_import_paths = top_level_import_paths
-                        .iter()
-                        .map(|s| JsWord::from(s.clone()))
-                        .collect();
-                }
-                let meaningless_file_names = &*meaningless_file_names.await?;
-                if !meaningless_file_names.is_empty() {
-                    options.meaningless_file_names = meaningless_file_names.clone();
-                }
-
-                program.visit_mut_with(&mut styled_components::styled_components(
-                    FileName::Real(PathBuf::from(file_path.await?.path.clone())),
-                    file_name_hash,
-                    options,
-                ));
-            }
-            EcmascriptInputTransform::StyledJsx => {
-                // Modeled after https://github.com/swc-project/plugins/blob/ae735894cdb7e6cfd776626fe2bc580d3e80fed9/packages/styled-jsx/src/lib.rs
-                let real_program = std::mem::replace(program, Program::Module(Module::dummy()));
-                *program = real_program.fold_with(&mut styled_jsx::visitor::styled_jsx(
-                    source_map.clone(),
-                    // styled_jsx don't really use that in a relevant way
-                    FileName::Anon,
                 ));
             }
             EcmascriptInputTransform::TypeScript {

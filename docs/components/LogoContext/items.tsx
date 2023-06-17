@@ -63,6 +63,14 @@ export const PRODUCT_MENU_ITEMS = ({
   site,
 }: ContextList): Array<ContextItem> => [
   {
+    name: "vercel",
+    "aria-label": "Open Vercel Home in New Tab",
+    children: "Vercel",
+    prefix: <VercelLogo className="mr-3 h-4 w-4" />,
+    type: "external",
+    href: "https://vercel.com",
+  },
+  {
     name: "next-js",
     "aria-label": "Open Next.js Home in New Tab",
     children: "Next.js",

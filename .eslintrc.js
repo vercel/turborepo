@@ -14,6 +14,15 @@ module.exports = {
       files: "crates/*/js/**",
       rules: {
         "prefer-const": "error",
+        // we can't use `no-var` because it doesn't understand that
+        // `declare var` declares a global, but `declare let` does not
+        "no-restricted-syntax": [
+          "error",
+          {
+            selector: "VariableDeclaration[kind='var'][declare!=true]",
+            message: "Unexpected var, use let or const instead.",
+          },
+        ],
       },
     },
   ],

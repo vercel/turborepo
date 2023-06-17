@@ -41,10 +41,12 @@ type DaemonLog = tracing_subscriber::fmt::Layer<
 type Layered = tracing_subscriber::layer::Layered<StdOutLog, Registry>;
 
 pub struct TurboSubscriber {
+    #[allow(dead_code)]
     update: Handle<Option<DaemonLog>, Layered>,
 
     /// The non-blocking file logger only continues to log while this guard is
     /// held. We keep it here so that it doesn't get dropped.
+    #[allow(dead_code)]
     guard: Mutex<Option<WorkerGuard>>,
 
     #[cfg(feature = "tracing-chrome")]
@@ -121,7 +123,9 @@ impl TurboSubscriber {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
         trace!("created non-blocking file writer");
 
-        let layer = tracing_subscriber::fmt::layer().with_writer(file_writer);
+        let layer = tracing_subscriber::fmt::layer()
+            .with_writer(file_writer)
+            .with_ansi(false);
 
         self.update.reload(Some(layer))?;
         self.guard.lock().expect("not poisoned").replace(guard);

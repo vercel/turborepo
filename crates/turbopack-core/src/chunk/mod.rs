@@ -2,6 +2,7 @@ pub mod availability_info;
 pub mod available_assets;
 pub(crate) mod chunking_context;
 pub(crate) mod containment_tree;
+pub(crate) mod data;
 pub(crate) mod evaluate;
 pub mod optimize;
 
@@ -15,10 +16,11 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use tracing::{info_span, Span};
 use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{GraphTraversal, GraphTraversalResult, ReverseTopological, Visit, VisitControlFlow},
-    primitives::StringVc,
+    primitives::{StringReadRef, StringVc},
     trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
 };
@@ -28,6 +30,7 @@ use turbo_tasks_hash::DeterministicHash;
 use self::availability_info::AvailabilityInfo;
 pub use self::{
     chunking_context::{ChunkingContext, ChunkingContextVc},
+    data::{ChunkData, ChunkDataOption, ChunkDataOptionVc, ChunkDataVc, ChunksData, ChunksDataVc},
     evaluate::{EvaluatableAsset, EvaluatableAssetVc, EvaluatableAssets, EvaluatableAssetsVc},
 };
 use crate::{
@@ -281,7 +284,7 @@ where
 #[derive(Eq, PartialEq, Clone, Hash)]
 enum ChunkContentGraphNode<I> {
     // Chunk items that are placed into the current chunk
-    ChunkItem(I),
+    ChunkItem { item: I, ident: StringReadRef },
     // Asset that is already available and doesn't need to be included
     AvailableAsset(AssetVc),
     // Chunks that are loaded in parallel to the current chunk
@@ -354,7 +357,10 @@ where
                 if let Some(chunk_item) = I::from_asset(context.chunking_context, asset).await? {
                     graph_nodes.push((
                         Some((asset, chunking_type)),
-                        ChunkContentGraphNode::ChunkItem(chunk_item),
+                        ChunkContentGraphNode::ChunkItem {
+                            item: chunk_item,
+                            ident: asset.ident().to_string().await?,
+                        },
                     ));
                 } else {
                     return Err(anyhow!(
@@ -392,7 +398,10 @@ where
                     {
                         graph_nodes.push((
                             Some((asset, chunking_type)),
-                            ChunkContentGraphNode::ChunkItem(chunk_item),
+                            ChunkContentGraphNode::ChunkItem {
+                                item: chunk_item,
+                                ident: asset.ident().to_string().await?,
+                            },
                         ));
                         continue;
                     }
@@ -424,7 +433,10 @@ where
                 {
                     graph_nodes.push((
                         Some((asset, chunking_type)),
-                        ChunkContentGraphNode::ChunkItem(manifest_loader_item),
+                        ChunkContentGraphNode::ChunkItem {
+                            item: manifest_loader_item,
+                            ident: asset.ident().to_string().await?,
+                        },
                     ));
                 } else {
                     return Ok(vec![(
@@ -476,7 +488,7 @@ where
             return VisitControlFlow::Skip(node);
         }
 
-        if let ChunkContentGraphNode::ChunkItem(_) = &node {
+        if let ChunkContentGraphNode::ChunkItem { .. } = &node {
             self.chunk_items_count += 1;
 
             // Make sure the chunk doesn't become too large.
@@ -492,7 +504,10 @@ where
     }
 
     fn edges(&mut self, node: &ChunkContentGraphNode<I>) -> Self::EdgesFuture {
-        let chunk_item = if let ChunkContentGraphNode::ChunkItem(chunk_item) = node {
+        let chunk_item = if let ChunkContentGraphNode::ChunkItem {
+            item: chunk_item, ..
+        } = node
+        {
             Some(chunk_item.clone())
         } else {
             None
@@ -514,6 +529,14 @@ where
                 .await?
                 .into_iter()
                 .flatten())
+        }
+    }
+
+    fn span(&mut self, node: &ChunkContentGraphNode<I>) -> Span {
+        if let ChunkContentGraphNode::ChunkItem { ident, .. } = node {
+            info_span!("module", name = display(ident))
+        } else {
+            Span::current()
         }
     }
 }
@@ -540,9 +563,10 @@ where
         .map(|entry| async move {
             Ok((
                 Some((entry, ChunkingType::Placed)),
-                ChunkContentGraphNode::ChunkItem(
-                    I::from_asset(chunking_context, entry).await?.unwrap(),
-                ),
+                ChunkContentGraphNode::ChunkItem {
+                    item: I::from_asset(chunking_context, entry).await?.unwrap(),
+                    ident: entry.ident().to_string().await?,
+                },
             ))
         })
         .try_join()
@@ -576,8 +600,8 @@ where
     for graph_node in graph_nodes {
         match graph_node {
             ChunkContentGraphNode::AvailableAsset(_asset) => {}
-            ChunkContentGraphNode::ChunkItem(chunk_item) => {
-                chunk_items.push(chunk_item);
+            ChunkContentGraphNode::ChunkItem { item, .. } => {
+                chunk_items.push(item);
             }
             ChunkContentGraphNode::Chunk(chunk) => {
                 chunks.push(chunk);

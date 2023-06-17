@@ -69,6 +69,9 @@ func (o *Opts) SynthesizeCommand(tasks []string) string {
 			cmd += " --dry"
 		}
 	}
+	if o.runOpts.Only {
+		cmd += " --only"
+	}
 	if len(o.runOpts.PassThroughArgs) > 0 {
 		cmd += " -- " + strings.Join(o.runOpts.PassThroughArgs, " ")
 	}

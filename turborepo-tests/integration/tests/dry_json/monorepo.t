@@ -11,62 +11,22 @@ Setup
 
   $ cat tmpjson.log | jq .globalCacheInputs
   {
-    "rootKey": "Buffalo buffalo Buffalo buffalo buffalo buffalo Buffalo buffalo",
+    "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
     "files": {
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56",
-    "rootPipeline": {
-      "//#something": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "build": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
+    "globalDotEnv": null,
+    "environmentVariables": {
+      "specified": {
         "env": [
-          "NODE_ENV"
+          "SOME_ENV_VAR"
         ],
-        "persistent": false
+        "passThroughEnv": null
       },
-      "maybefails": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "my-app#build": {
-        "outputs": [
-          "apple.json",
-          "banana.txt"
-        ],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      },
-      "something": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "env": [],
-        "persistent": false
-      }
+      "configured": [],
+      "inferred": [],
+      "passthrough": null
     }
   }
 
@@ -76,6 +36,7 @@ Setup
     "frameworkInference",
     "globalCacheInputs",
     "id",
+    "monorepo",
     "packages",
     "scm",
     "tasks",
@@ -90,8 +51,9 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "2f192ed93e20f940",
+    "hash": "0d1e6ee2c143211c",
     "inputs": {
+      ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
     "hashOfExternalDependencies": "ccab0b28617f1f56",
@@ -121,22 +83,28 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "persistent": false,
       "env": [],
-      "persistent": false
+      "passThroughEnv": null,
+      "dotEnv": [
+        ".env.local"
+      ]
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
     "envMode": "loose",
     "environmentVariables": {
+      "specified": {
+        "env": [],
+        "passThroughEnv": null
+      },
       "configured": [],
       "inferred": [],
-      "global": [
-        "SOME_ENV_VAR=",
-        "VERCEL_ANALYTICS_ID="
-      ],
-      "passthrough": null,
-      "globalPassthrough": null
-    }
+      "passthrough": null
+    },
+    "dotEnv": [
+      ".env.local"
+    ]
   }
 
 # Validate output of util#build task
@@ -145,7 +113,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "af2ba2d52192ee45",
+    "hash": "76ab904c7ecb2d51",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },
@@ -170,41 +138,44 @@ Setup
       "dependsOn": [],
       "inputs": [],
       "outputMode": "full",
+      "persistent": false,
       "env": [
         "NODE_ENV"
       ],
-      "persistent": false
+      "passThroughEnv": null,
+      "dotEnv": null
     },
     "expandedOutputs": [],
     "framework": "<NO FRAMEWORK DETECTED>",
     "envMode": "loose",
     "environmentVariables": {
-      "configured": [
-        "NODE_ENV="
-      ],
+      "specified": {
+        "env": [
+          "NODE_ENV"
+        ],
+        "passThroughEnv": null
+      },
+      "configured": [],
       "inferred": [],
-      "global": [
-        "SOME_ENV_VAR=",
-        "VERCEL_ANALYTICS_ID="
-      ],
-      "passthrough": null,
-      "globalPassthrough": null
-    }
+      "passthrough": null
+    },
+    "dotEnv": null
   }
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller
   $ NODE_ENV=banana ${TURBO} run build --dry=json --filter=util | jq '.tasks | map(select(.taskId == "util#build")) | .[0].environmentVariables'
   {
+    "specified": {
+      "env": [
+        "NODE_ENV"
+      ],
+      "passThroughEnv": null
+    },
     "configured": [
       "NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e"
     ],
     "inferred": [],
-    "global": [
-      "SOME_ENV_VAR=",
-      "VERCEL_ANALYTICS_ID="
-    ],
-    "passthrough": null,
-    "globalPassthrough": null
+    "passthrough": null
   }
 
 Tasks that don't exist throw an error

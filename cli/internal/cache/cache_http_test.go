@@ -59,7 +59,7 @@ func TestRemoteCachingDisabled(t *testing.T) {
 		requestLimiter: make(limiter, 20),
 	}
 	cd := &util.CacheDisabledError{}
-	_, _, _, err := cache.Fetch("unused-target", "some-hash", []string{"unused", "outputs"})
+	_, _, err := cache.Fetch("unused-target", "some-hash", []string{"unused", "outputs"})
 	if !errors.As(err, &cd) {
 		t.Errorf("cache.Fetch err got %v, want a CacheDisabled error", err)
 	}

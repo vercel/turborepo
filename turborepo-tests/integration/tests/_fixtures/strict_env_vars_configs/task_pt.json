@@ -3,7 +3,7 @@
   "pipeline": {
     "build": {
       "outputs": ["dist/**"],
-      "experimentalPassthroughEnv": ["LOCAL_VAR_PT"]
+      "passThroughEnv": ["LOCAL_VAR_PT"]
     }
   }
 }

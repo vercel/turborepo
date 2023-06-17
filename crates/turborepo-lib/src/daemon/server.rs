@@ -13,10 +13,10 @@
 //! globs, and to query for changes for those globs.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex as StdMutux,
     },
     time::{Duration, Instant},
 };
@@ -26,14 +26,14 @@ use tokio::{
     select,
     signal::ctrl_c,
     sync::{
-        oneshot::{Receiver, Sender},
+        oneshot::{self, Receiver, Sender},
         Mutex,
     },
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
-use tracing::error;
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use tracing::{error, trace};
+use turbopath::AbsoluteSystemPathBuf;
 
 use super::{
     bump_timeout::BumpTimeout,
@@ -47,20 +47,26 @@ use crate::{
 };
 
 pub struct DaemonServer<T: Watcher> {
+    #[allow(dead_code)]
     daemon_root: AbsoluteSystemPathBuf,
     log_file: AbsoluteSystemPathBuf,
 
     start_time: Instant,
+    #[allow(dead_code)]
     timeout: Arc<BumpTimeout>,
 
     watcher: Arc<HashGlobWatcher<T>>,
     shutdown: Mutex<Option<Sender<()>>>,
+    #[allow(dead_code)]
     shutdown_rx: Option<Receiver<()>>,
 
     running: Arc<AtomicBool>,
+
+    times_saved: Arc<std::sync::Mutex<HashMap<String, u64>>>,
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum CloseReason {
     Timeout,
     Shutdown,
@@ -81,10 +87,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
 
         let watcher = Arc::new(HashGlobWatcher::new(
             AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("valid repo root"),
-            daemon_root
-                .join_relative(RelativeSystemPathBuf::new("flush").expect("valid forward path"))
-                .as_path()
-                .to_owned(),
+            daemon_root.join_component("flush").as_path().to_owned(),
         )?);
 
         let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
@@ -101,6 +104,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
             shutdown_rx: Some(recv_shutdown),
 
             running: Arc::new(AtomicBool::new(true)),
+            times_saved: Arc::new(StdMutux::new(HashMap::new())),
         })
     }
 }
@@ -118,6 +122,7 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         let stop = StopSource::new();
         let watcher = self.watcher.clone();
         let watcher_fut = watcher.watch(stop.token());
+        tokio::pin!(watcher_fut);
 
         let timer = self.timeout.clone();
         let timeout_fut = timer.wait();
@@ -136,12 +141,12 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
         };
 
         // when one of these futures complete, let the server gracefully shutdown
-        let mut shutdown_reason = Option::None;
-        let shutdown_fut = async {
-            shutdown_reason = select! {
-                _ = shutdown_fut => Some(CloseReason::Shutdown),
-                _ = timeout_fut => Some(CloseReason::Timeout),
-                _ = ctrl_c() => Some(CloseReason::Interrupt),
+        let (shutdown_tx, shutdown_reason) = oneshot::channel();
+        let shutdown_fut = async move {
+            select! {
+                _ = shutdown_fut => shutdown_tx.send(CloseReason::Shutdown).ok(),
+                _ = timeout_fut => shutdown_tx.send(CloseReason::Timeout).ok(),
+                _ = ctrl_c() => shutdown_tx.send(CloseReason::Interrupt).ok(),
             };
         };
 
@@ -176,6 +181,8 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 Err(e) => return CloseReason::SocketOpenError(e),
             };
 
+            trace!("acquired connection stream for socket");
+
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(self.timeout.clone()))
                 .service(crate::daemon::proto::turbod_server::TurbodServer::new(self));
@@ -187,15 +194,26 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                     .serve_with_incoming_shutdown(stream, shutdown_fut),
             )
         };
+        tokio::pin!(server_fut);
 
-        select! {
-            _ = server_fut => {
-                match shutdown_reason {
-                    Some(reason) => reason,
-                    None => CloseReason::ServerClosed,
-                }
-            },
-            _ = watcher_fut => CloseReason::WatcherClosed,
+        // necessary to make sure we don't try to poll the watcher_fut once it
+        // has completed
+        let mut watcher_done = false;
+        loop {
+            select! {
+                    _ = &mut server_fut => {
+                    return shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
+                },
+                watch_res = &mut watcher_fut, if !watcher_done => {
+                    match watch_res {
+                        Ok(()) => return CloseReason::WatcherClosed,
+                        Err(e) => {
+                            error!("Globwatch config error: {:?}", e);
+                            watcher_done = true;
+                        },
+                    }
+                },
+            }
         }
 
         // here the stop token is dropped, and the pid lock is dropped
@@ -209,8 +227,13 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         request: tonic::Request<proto::HelloRequest>,
     ) -> Result<tonic::Response<proto::HelloResponse>, tonic::Status> {
-        if request.into_inner().version != get_version() {
-            return Err(tonic::Status::unimplemented("version mismatch"));
+        let client_version = request.into_inner().version;
+        let server_version = get_version();
+        if client_version != server_version {
+            return Err(tonic::Status::failed_precondition(format!(
+                "version mismatch. Client {} Server {}",
+                client_version, server_version
+            )));
         } else {
             Ok(tonic::Response::new(proto::HelloResponse {}))
         }
@@ -246,6 +269,10 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
         let inner = request.into_inner();
 
+        {
+            let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.insert(inner.hash.clone(), inner.time_saved);
+        }
         match self
             .watcher
             .watch_globs(
@@ -268,17 +295,27 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         request: tonic::Request<proto::GetChangedOutputsRequest>,
     ) -> Result<tonic::Response<proto::GetChangedOutputsResponse>, tonic::Status> {
         let inner = request.into_inner();
+        let hash = Arc::new(inner.hash);
         let changed = self
             .watcher
-            .changed_globs(
-                &Arc::new(inner.hash),
-                HashSet::from_iter(inner.output_globs),
-            )
+            .changed_globs(&hash, HashSet::from_iter(inner.output_globs))
             .await;
 
-        Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
-            changed_output_globs: changed.into_iter().collect(),
-        }))
+        let time_saved = {
+            let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.get(hash.as_str()).copied().unwrap_or_default()
+        };
+
+        match changed {
+            Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
+                changed_output_globs: changed.into_iter().collect(),
+                time_saved,
+            })),
+            Err(e) => {
+                error!("flush directory operation failed: {:?}", e);
+                Err(tonic::Status::internal("failed to watch flush directory"))
+            }
+        }
     }
 }
 
@@ -294,7 +331,7 @@ mod test {
     };
 
     use tokio::select;
-    use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::DaemonServer;
     use crate::{commands::CommandBase, ui::UI, Args};
@@ -326,8 +363,8 @@ mod test {
 
         tracing::info!("server started");
 
-        let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
-        let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
+        let pid_path = path.join_component("turbod.pid");
+        let sock_path = path.join_component("turbod.sock");
 
         select! {
             _ = daemon.serve() => panic!("must not close"),
@@ -365,7 +402,7 @@ mod test {
         )
         .unwrap();
 
-        let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
+        let pid_path = path.join_component("turbod.pid");
 
         let now = Instant::now();
         let close_reason = daemon.serve().await;

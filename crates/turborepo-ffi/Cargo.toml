@@ -9,9 +9,12 @@ crate-type = ["staticlib"]
 
 [dependencies]
 directories = "4.0.1"
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 prost = "0.11.6"
 thiserror = { workspace = true }
 turbopath = { workspace = true }
+turborepo-cache = { workspace = true }
+turborepo-env = { workspace = true }
 turborepo-fs = { workspace = true }
 turborepo-lockfiles = { workspace = true }
 turborepo-scm = { workspace = true }

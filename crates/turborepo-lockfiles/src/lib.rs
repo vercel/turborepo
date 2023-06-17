@@ -3,13 +3,17 @@
 mod berry;
 mod error;
 mod npm;
+mod pnpm;
+mod yarn1;
 
 use std::collections::{HashMap, HashSet};
 
 pub use berry::{Error as BerryError, *};
 pub use error::Error;
 pub use npm::*;
+pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
 use serde::Serialize;
+pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -91,4 +95,12 @@ fn transitive_closure_helper<L: Lockfile>(
     }
 
     Ok(())
+}
+
+impl Package {
+    pub fn new(key: impl Into<String>, version: impl Into<String>) -> Self {
+        let key = key.into();
+        let version = version.into();
+        Self { key, version }
+    }
 }

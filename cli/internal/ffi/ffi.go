@@ -7,8 +7,8 @@ package ffi
 
 // #include "bindings.h"
 //
-// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv
-// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv
+// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv -framework Security
+// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv -framework Security
 // #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind
 // #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind
 // #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz
@@ -216,6 +216,10 @@ func toPackageManager(packageManager string) ffi_proto.PackageManager {
 		return ffi_proto.PackageManager_NPM
 	case "berry":
 		return ffi_proto.PackageManager_BERRY
+	case "pnpm":
+		return ffi_proto.PackageManager_PNPM
+	case "yarn":
+		return ffi_proto.PackageManager_YARN
 	default:
 		panic(fmt.Sprintf("Invalid package manager string: %s", packageManager))
 	}
@@ -312,4 +316,161 @@ func GlobalChange(packageManager string, prevContents []byte, currContents []byt
 	}
 
 	return resp.GetGlobalChange()
+}
+
+// VerifySignature checks that the signature of an artifact matches the expected tag
+func VerifySignature(teamID []byte, hash string, artifactBody []byte, expectedTag string, secretKeyOverride []byte) (bool, error) {
+	req := ffi_proto.VerifySignatureRequest{
+		TeamId:            teamID,
+		Hash:              hash,
+		ArtifactBody:      artifactBody,
+		ExpectedTag:       expectedTag,
+		SecretKeyOverride: secretKeyOverride,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.verify_signature(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.VerifySignatureResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return false, errors.New(err)
+	}
+
+	return resp.GetVerified(), nil
+}
+
+// GetPackageFileHashesFromGitIndex proxies to rust to use git to hash the files in a package.
+// It does not support additional files, it just hashes the non-ignored files in the package.
+func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesFromGitIndexRequest{
+		TurboRoot:   rootPath,
+		PackagePath: packagePath,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_package_file_hashes_from_git_index(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetPackageFileHashesFromGitIndexResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}
+
+// GetPackageFileHashesFromProcessingGitIgnore proces to rust to walk the filesystem and produce a hash similar to
+// what git would do
+func GetPackageFileHashesFromProcessingGitIgnore(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesFromProcessingGitIgnoreRequest{
+		TurboRoot:   rootPath,
+		PackagePath: packagePath,
+		Inputs:      inputs,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_package_file_hashes_from_processing_git_ignore(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetPackageFileHashesFromProcessingGitIgnoreResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}
+
+// GetPackageFileHashesFromInputs proxies to rust to walk the filesystem and use git to hash the resulting
+// files
+func GetPackageFileHashesFromInputs(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesFromInputsRequest{
+		TurboRoot:   rootPath,
+		PackagePath: packagePath,
+		Inputs:      inputs,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_package_file_hashes_from_inputs(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetPackageFileHashesFromInputsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}
+
+// FromWildcards returns an EnvironmentVariableMap containing the variables
+// in the environment which match an array of wildcard patterns.
+func FromWildcards(environmentMap map[string]string, wildcardPatterns []string) (map[string]string, error) {
+	if wildcardPatterns == nil {
+		return nil, nil
+	}
+	req := ffi_proto.FromWildcardsRequest{
+		EnvVars: &ffi_proto.EnvVarMap{
+			Map: environmentMap,
+		},
+		WildcardPatterns: wildcardPatterns,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.from_wildcards(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.FromWildcardsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	envVarMap := resp.GetEnvVars().GetMap()
+	// If the map is nil, return an empty map instead of nil
+	// to match with existing Go code.
+	if envVarMap == nil {
+		return map[string]string{}, nil
+	}
+	return envVarMap, nil
+}
+
+// GetGlobalHashableEnvVars calculates env var dependencies
+func GetGlobalHashableEnvVars(envAtExecutionStart map[string]string, globalEnv []string) (*ffi_proto.DetailedMap, error) {
+	req := ffi_proto.GetGlobalHashableEnvVarsRequest{
+		EnvAtExecutionStart: &ffi_proto.EnvVarMap{Map: envAtExecutionStart},
+		GlobalEnv:           globalEnv,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_global_hashable_env_vars(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetGlobalHashableEnvVarsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	respDetailedMap := resp.GetDetailedMap()
+	if respDetailedMap == nil {
+		return nil, nil
+	}
+
+	return respDetailedMap, nil
 }

@@ -6,8 +6,11 @@ use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::EcmascriptModuleAssetVc,
-    module_options::{JsxTransformOptions, ModuleOptionsContext, ModuleOptionsContextVc},
+    ecmascript::{EcmascriptModuleAssetVc, TransformPluginVc},
+    module_options::{
+        CustomEcmascriptTransformPlugins, CustomEcmascriptTransformPluginsVc, JsxTransformOptions,
+        ModuleOptionsContext, ModuleOptionsContextVc,
+    },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
@@ -33,7 +36,9 @@ use turbopack_dev_server::{
     source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc},
 };
 use turbopack_ecmascript_plugins::transform::{
-    emotion::EmotionTransformConfigVc, styled_components::StyledComponentsTransformConfigVc,
+    emotion::{EmotionTransformConfig, EmotionTransformer},
+    styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
+    styled_jsx::StyledJsxTransformer,
 };
 use turbopack_node::execution_context::ExecutionContextVc;
 
@@ -53,10 +58,10 @@ pub async fn get_client_import_map(project_path: FileSystemPathVc) -> Result<Imp
     import_map.insert_singleton_alias("react-dom", project_path);
 
     import_map.insert_wildcard_alias(
-        "@vercel/turbopack-dev/",
+        "@vercel/turbopack-ecmascript-runtime/",
         ImportMapping::PrimaryAlternative(
             "./*".to_string(),
-            Some(turbopack_dev::embed_js::embed_fs().root()),
+            Some(turbopack_ecmascript_runtime::embed_fs().root()),
         )
         .cell(),
     );
@@ -116,17 +121,31 @@ async fn get_client_module_options_context(
         .cell(),
     );
 
+    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPluginsVc::cell(
+        CustomEcmascriptTransformPlugins {
+            source_transforms: vec![
+                TransformPluginVc::cell(Box::new(
+                    EmotionTransformer::new(&EmotionTransformConfig::default())
+                        .expect("Should be able to create emotion transformer"),
+                )),
+                TransformPluginVc::cell(Box::new(StyledComponentsTransformer::new(
+                    &StyledComponentsTransformConfig::default(),
+                ))),
+                TransformPluginVc::cell(Box::new(StyledJsxTransformer::new())),
+            ],
+            output_transforms: vec![],
+        },
+    ));
+
     let module_options_context = ModuleOptionsContext {
         enable_jsx,
-        enable_emotion: Some(EmotionTransformConfigVc::default()),
-        enable_styled_components: Some(StyledComponentsTransformConfigVc::default()),
-        enable_styled_jsx: true,
         enable_postcss_transform: Some(Default::default()),
         enable_typescript_transform: Some(Default::default()),
         rules: vec![(
             foreign_code_context_condition().await?,
             module_options_context.clone().cell(),
         )],
+        custom_ecma_transform_plugins,
         ..module_options_context
     }
     .cell();
@@ -274,7 +293,7 @@ pub async fn create_web_entry_source(
             } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
                 // TODO this is missing runtime code, so it's probably broken and we should also
                 // add an ecmascript chunk with the runtime code
-                Ok((chunkable.into(), chunking_context, None))
+                Ok((chunkable, chunking_context, None))
             } else {
                 // TODO convert into a serve-able asset
                 Err(anyhow!(

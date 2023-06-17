@@ -57,6 +57,8 @@ message PreviousContentResp {
 enum PackageManager {
   NPM = 0;
   BERRY = 1;
+  PNPM = 2;
+  YARN = 3;
 }
 
 message PackageDependency {
@@ -148,4 +150,100 @@ message RecursiveCopyRequest {
 
 message RecursiveCopyResponse {
   optional string error = 1;
+}
+
+message VerifySignatureRequest {
+  string hash = 1;
+  bytes artifact_body = 2;
+  bytes team_id = 3;
+  string expected_tag = 4;
+  optional bytes secret_key_override = 5;
+}
+
+message VerifySignatureResponse {
+  oneof response {
+    bool verified = 1;
+    string error = 2;
+  }
+}
+
+message GetPackageFileHashesFromGitIndexRequest {
+  string turbo_root = 1;
+  string package_path = 2;
+}
+
+message FileHashes {
+  map<string, string> hashes = 1;
+}
+
+message GetPackageFileHashesFromGitIndexResponse {
+  oneof response {
+    FileHashes hashes = 1;
+    string error = 2;
+  }
+}
+
+message GetPackageFileHashesFromProcessingGitIgnoreRequest {
+  string turbo_root = 1;
+  string package_path = 2;
+  repeated string inputs = 3;
+}
+
+message GetPackageFileHashesFromProcessingGitIgnoreResponse {
+  oneof response {
+    FileHashes hashes = 1;
+    string error = 2;
+  }
+}
+
+message GetPackageFileHashesFromInputsRequest {
+  string turbo_root = 1;
+  string package_path = 2;
+  repeated string inputs = 3;
+}
+
+message GetPackageFileHashesFromInputsResponse {
+  oneof response {
+    FileHashes hashes = 1;
+    string error = 2;
+  }
+}
+
+
+message FromWildcardsRequest {
+  EnvVarMap env_vars = 1;
+  repeated string wildcard_patterns = 2;
+}
+
+message FromWildcardsResponse {
+  oneof response {
+    EnvVarMap env_vars = 1;
+    string error = 2;
+  }
+}
+
+message EnvVarMap {
+  map<string, string> map = 1;
+}
+
+message DetailedMap {
+  map<string, string> all = 1;
+  BySource by_source = 2;
+}
+
+message BySource {
+  map<string, string> explicit = 1;
+  map<string, string> matching = 2;
+}
+
+message GetGlobalHashableEnvVarsRequest {
+  EnvVarMap env_at_execution_start = 1;
+  repeated string global_env = 2;
+}
+
+message GetGlobalHashableEnvVarsResponse {
+  oneof response {
+    DetailedMap detailed_map = 1;
+    string error = 2;
+  }
 }

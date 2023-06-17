@@ -59,8 +59,10 @@ turboGenCli
   )
   .addOption(
     new Option(
-      "-c, --copy",
-      "Generate a workspace using an existing workspace as a template"
+      "-c, --copy [source]",
+      `Generate a workspace using an existing workspace as a template. Can be the name of a local workspace
+      within your monorepo, or a fully qualified GitHub URL with any branch and/or subdirectory.
+      `
     ).conflicts("empty")
   )
   .addOption(
@@ -80,12 +82,6 @@ turboGenCli
       "-r, --root <dir>",
       "The root of your repository (default: directory with root turbo.json)"
     )
-  )
-  .addOption(
-    new Option(
-      "-e, --example [github-url]",
-      `An example package to add. You can use a GitHub URL with any branch and/or subdirectory.`
-    ).implies({ copy: true })
   )
   .addOption(
     new Option(

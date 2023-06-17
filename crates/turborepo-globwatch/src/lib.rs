@@ -9,6 +9,7 @@
 //! watch for a full round trip through the filesystem to ensure the watcher is
 //! up to date.
 
+#![allow(clippy::all)]
 #![deny(
     missing_docs,
     missing_debug_implementations,
@@ -29,14 +30,17 @@ use std::{
     },
 };
 
-use futures::{channel::oneshot, future::Either, Stream, StreamExt as _};
+use futures::{channel::oneshot, future::Either, FutureExt, Stream, StreamExt as _};
 use itertools::Itertools;
 use merge_streams::MergeStreams;
-pub use notify::{Error, Event, Watcher};
+pub use notify::{Event, Watcher};
 pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    watch,
+};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{event, span, trace, warn, Level};
+use tracing::{error, event, span, trace, warn, Level};
 
 /// A wrapper around notify that allows for glob-based watching.
 #[derive(Debug)]
@@ -45,6 +49,7 @@ pub struct GlobWatcher {
     flush_dir: PathBuf,
 
     config: UnboundedReceiver<WatcherCommand>,
+    setup_handle: tokio::task::JoinHandle<Result<(), notify::Error>>,
 }
 
 impl GlobWatcher {
@@ -54,7 +59,7 @@ impl GlobWatcher {
     #[tracing::instrument]
     pub fn new(
         flush_dir: PathBuf,
-    ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), Error> {
+    ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), notify::Error> {
         let (send_event, receive_event) = tokio::sync::mpsc::unbounded_channel();
         let (send_config, receive_config) = tokio::sync::mpsc::unbounded_channel();
 
@@ -62,7 +67,7 @@ impl GlobWatcher {
         std::fs::create_dir_all(&flush_dir).ok();
         let flush_dir = flush_dir.canonicalize()?;
 
-        let watcher = notify::recommended_watcher(move |event: Result<Event, Error>| {
+        let watcher = notify::recommended_watcher(move |event: Result<Event, notify::Error>| {
             let span = span!(tracing::Level::TRACE, "watcher");
             let _ = span.enter();
 
@@ -90,15 +95,24 @@ impl GlobWatcher {
         // background, to cut our startup time in half.
         let flush = watcher.clone();
         let path = flush_dir.as_path().to_owned();
-        tokio::task::spawn_blocking(move || {
+        let (setup_broadcaster, setup_receiver) = watch::channel(None);
+        let setup_handle = tokio::task::spawn_blocking(move || {
             if let Err(e) = flush
                 .lock()
                 .expect("only fails if poisoned")
                 .watch(&path, notify::RecursiveMode::Recursive)
             {
                 warn!("failed to watch flush dir: {}", e);
+                if setup_broadcaster.send(Some(false)).is_err() {
+                    trace!("failed to notify failed flush watch");
+                }
+                Err(e)
             } else {
                 trace!("watching flush dir: {:?}", path);
+                if setup_broadcaster.send(Some(true)).is_err() {
+                    trace!("failed to notify successful flush watch");
+                }
+                Ok(())
             }
         });
 
@@ -107,10 +121,12 @@ impl GlobWatcher {
                 flush_dir,
                 stream: receive_event,
                 config: receive_config,
+                setup_handle,
             },
             WatchConfig {
                 flush: send_config,
                 watcher,
+                setup_receiver,
             },
         ))
     }
@@ -123,19 +139,43 @@ impl GlobWatcher {
     /// This is implemented as a zipped stream which processes filesystem events
     /// and config changes driven by the same stream. This allows us to ensure
     /// that anything watching for filesystem is also propagating config changes
-    #[tracing::instrument(skip(self))]
     pub fn into_stream(
         self,
         token: stop_token::StopToken,
-    ) -> impl Stream<Item = Result<Event, TimedOutError>> + Send + Sync + 'static + Unpin {
+    ) -> impl Stream<Item = Result<Result<Event, ConfigError>, TimedOutError>>
+           + Send
+           + Sync
+           + 'static
+           + Unpin {
+        let Self {
+            setup_handle,
+            flush_dir,
+            ..
+        } = self;
         let flush_id = Arc::new(AtomicU64::new(1));
-        let flush_dir = Arc::new(self.flush_dir);
+        let flush_dir = Arc::new(flush_dir);
         let flush = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<()>>::new()));
+
+        // Wait until we have watched the flush directory, before we start processing
+        // events
+
+        // we need to map this to the correct error type
+        let setup_stream = setup_handle.into_stream().map(|setup_result| {
+            match setup_result.expect("globwatch setup thread panicked") {
+                Ok(()) => Ok(WatcherCommand::Start),
+                Err(e) => {
+                    error!("failed to start server: {}", e);
+                    Err(ConfigError::ServerFailedToStart)
+                }
+            }
+        });
 
         Box::pin(
             (
                 UnboundedReceiverStream::new(self.stream).map(Either::Left),
-                UnboundedReceiverStream::new(self.config).map(Either::Right),
+                setup_stream
+                    .chain(UnboundedReceiverStream::new(self.config).map(Result::Ok))
+                    .map(Either::Right),
             )
                 .merge()
                 // apply a filter_map, yielding only valid events and consuming config changes and
@@ -180,12 +220,16 @@ impl GlobWatcher {
                                 // if we have any paths left on the event, yield it
                                 if !e.paths.is_empty() {
                                     event!(parent: &span, Level::TRACE, "yielding {:?}", e);
-                                    Some(e)
+                                    Some(Ok(e))
                                 } else {
                                     None
                                 }
                             }
-                            Either::Right(WatcherCommand::Flush(tx)) => {
+                            Either::Right(Ok(WatcherCommand::Start)) => {
+                                trace!("setting up watching flush directory has completed");
+                                None
+                            }
+                            Either::Right(Ok(WatcherCommand::Flush(tx))) => {
                                 // create file in flush dir
                                 let flush_id = flush_id.fetch_add(1, Ordering::SeqCst);
                                 let flush_file = flush_dir.join(flush_id.to_string());
@@ -199,6 +243,7 @@ impl GlobWatcher {
                                 }
                                 None
                             }
+                            Either::Right(Err(e)) => Some(Err(e)),
                         }
                     }
                 })
@@ -217,15 +262,18 @@ fn get_flush_id(relative_path: &Path) -> Option<u64> {
 /// A configuration change to the watcher.
 #[derive(Debug)]
 pub enum WatcherCommand {
+    /// A marker command showing that watcher startup completed successfully
+    Start,
     /// A request to flush the watcher.
     Flush(oneshot::Sender<()>),
 }
 
 /// A sender for watcher configuration changes.
 #[derive(Debug, Clone)]
-pub struct WatchConfig<T: Watcher> {
+pub struct WatchConfig<T> {
     flush: UnboundedSender<WatcherCommand>,
     watcher: Arc<Mutex<T>>,
+    setup_receiver: watch::Receiver<Option<bool>>,
 }
 
 /// The server is no longer running.
@@ -235,6 +283,10 @@ pub enum ConfigError {
     ServerStopped,
     /// Watch error
     WatchError(Vec<notify::Error>),
+    /// The server has already been consumed.
+    WatchingAlready,
+    /// We were unable to watch the flush directory
+    ServerFailedToStart,
 }
 
 impl<T: Watcher> WatchConfig<T> {
@@ -243,7 +295,7 @@ impl<T: Watcher> WatchConfig<T> {
     pub async fn include(&self, relative_to: &Path, glob: &str) -> Result<(), ConfigError> {
         trace!("including {:?}", glob);
 
-        glob_to_paths(&glob)
+        glob_to_paths(glob)
             .iter()
             .map(|p| relative_to.join(p))
             .map(|p| {
@@ -255,7 +307,7 @@ impl<T: Watcher> WatchConfig<T> {
             })
             .map(|r| match r {
                 Ok(()) => Ok(()),
-                Err(Error {
+                Err(notify::Error {
                     kind: notify::ErrorKind::PathNotFound,
                     ..
                 }) => {
@@ -265,7 +317,7 @@ impl<T: Watcher> WatchConfig<T> {
                     // since it doesn't walk the fs, no no-op
                     Ok(())
                 }
-                Err(Error {
+                Err(notify::Error {
                     kind: notify::ErrorKind::Generic(s),
                     ..
                 }) if s.contains("No such file or directory")
@@ -287,12 +339,30 @@ impl<T: Watcher> WatchConfig<T> {
             .map_err(ConfigError::WatchError)
     }
 
+    /// Register a single path to be included by the watcher.
+    pub async fn include_path(&self, path: &Path) -> Result<(), ConfigError> {
+        trace!("watching {:?}", path);
+        // Windows doesn't create an event when a watched directory itself is deleted
+        // we watch the parent directory instead.
+        // More information at https://github.com/notify-rs/notify/issues/403
+        #[cfg(windows)]
+        let watched_path = path.parent().expect("turbo is unusable at filesytem root");
+        #[cfg(not(windows))]
+        let watched_path = path;
+
+        self.watcher
+            .lock()
+            .expect("watcher lock poisoned")
+            .watch(watched_path, notify::RecursiveMode::NonRecursive)
+            .map_err(|e| ConfigError::WatchError(vec![e]))
+    }
+
     /// Register a glob to be excluded by the watcher.
     #[tracing::instrument(skip(self))]
     pub async fn exclude(&self, relative_to: &Path, glob: &str) {
         trace!("excluding {:?}", glob);
 
-        for p in glob_to_paths(&glob).iter().map(|p| relative_to.join(p)) {
+        for p in glob_to_paths(glob).iter().map(|p| relative_to.join(p)) {
             // we don't care if this fails, it's just a best-effort
             self.watcher
                 .lock()
@@ -301,9 +371,23 @@ impl<T: Watcher> WatchConfig<T> {
                 .ok();
         }
     }
+}
 
+impl<T> WatchConfig<T> {
     /// Await a full filesystem flush from the watcher.
     pub async fn flush(&self) -> Result<(), ConfigError> {
+        let mut setup_rx = self.setup_receiver.clone();
+        // TODO once upgraded to tokio 1.27 use wait_until
+        while (*setup_rx.borrow()).is_none() {
+            // If this fails that means the channel was closed forcefully by the sender
+            if setup_rx.changed().await.is_err() {
+                return Err(ConfigError::ServerFailedToStart);
+            }
+        }
+        if *setup_rx.borrow() == Some(false) {
+            return Err(ConfigError::ServerFailedToStart);
+        }
+
         let (tx, rx) = oneshot::channel();
         self.flush
             .send(WatcherCommand::Flush(tx))
@@ -359,7 +443,7 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     let chunks = glob_to_symbols(glob).group_by(|s| s != &GlobSymbol::PathSeperator);
     let chunks = chunks
         .into_iter()
-        .filter_map(|(not_sep, chunk)| (not_sep).then(|| chunk));
+        .filter_map(|(not_sep, chunk)| (not_sep).then_some(chunk));
 
     // multi cartisian product allows us to get all the possible combinations
     // of path components for each chunk. for example, if we have a glob
@@ -372,10 +456,10 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     chunks
         .map(symbols_to_combinations) // yield all the possible segments for each glob chunk
         .take_while(|c| c.is_some()) // if any segment has no possible paths, we can stop
-        .filter_map(|chunk| chunk)
+        .flatten()
         .multi_cartesian_product() // get all the possible combinations of path segments
         .map(|chunks| {
-            let prefix = if glob.starts_with("/") { "/" } else { "" };
+            let prefix = if glob.starts_with('/') { "/" } else { "" };
             std::iter::once(prefix)
                 .chain(chunks.iter().map(|s| s.as_str()))
                 .collect::<PathBuf>()
@@ -480,11 +564,17 @@ fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol> {
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
+    use std::{
+        path::PathBuf,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     use test_case::test_case;
+    use tokio::sync::watch;
 
-    use super::GlobSymbol::*;
+    use super::{GlobSymbol::*, WatchConfig};
+    use crate::ConfigError;
 
     #[test_case("foo/**", vec!["foo"])]
     #[test_case("foo/{a,b}", vec!["foo"])]
@@ -514,5 +604,28 @@ mod test {
     fn test_glob_to_symbols(glob: &str, symbols_exp: Vec<super::GlobSymbol>) {
         let symbols = super::glob_to_symbols(glob).collect::<Vec<_>>();
         assert_eq!(symbols.as_slice(), symbols_exp.as_slice());
+    }
+
+    #[tokio::test]
+    async fn test_flush_on_setup_failure() {
+        let (setup_tx, setup_rx) = watch::channel(None);
+        let (tx, _) = tokio::sync::mpsc::unbounded_channel();
+        let config = WatchConfig {
+            flush: tx,
+            setup_receiver: setup_rx,
+            // Flush doesn't depend on watcher so we create a watcher for the unit type
+            watcher: Arc::new(Mutex::new(())),
+        };
+        setup_tx
+            .send(Some(false))
+            .expect("setup channel closed during testing");
+        match tokio::time::timeout(Duration::from_millis(10), config.flush()).await {
+            Err(_) => panic!("flush test timed out"),
+            Ok(result) => {
+                if !matches!(result, Err(ConfigError::ServerFailedToStart)) {
+                    panic!("expected flush to fail since setup failed");
+                }
+            }
+        }
     }
 }

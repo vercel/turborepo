@@ -47,6 +47,7 @@ type RunPayload struct {
 	NoDeps              bool     `json:"no_deps"`
 	Only                bool     `json:"only"`
 	OutputLogs          string   `json:"output_logs"`
+	LogOrder            string   `json:"log_order"`
 	PassThroughArgs     []string `json:"pass_through_args"`
 	Parallel            bool     `json:"parallel"`
 	Profile             string   `json:"profile"`
@@ -64,8 +65,9 @@ type RunPayload struct {
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
-	Prune *PrunePayload `json:"prune"`
-	Run   *RunPayload   `json:"run"`
+	Daemon *DaemonPayload `json:"daemon"`
+	Prune  *PrunePayload  `json:"prune"`
+	Run    *RunPayload    `json:"run"`
 }
 
 // ParsedArgsFromRust are the parsed command line arguments passed

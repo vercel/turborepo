@@ -27,6 +27,280 @@ func assertIsSorted(t *testing.T, arr []string, msg string) {
 	}
 }
 
+func Test_ReadTurboConfigDotEnvUndefined(t *testing.T) {
+	testDir := getTestDir(t, "dotenv-undefined")
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	// Undefined is nil.
+	var typedNil turbopath.AnchoredUnixPathArray
+
+	assert.Equal(t, typedNil, turboJSON.GlobalDotEnv)
+
+	pipelineExpected := Pipeline{
+		"build": {
+			definedFields:      util.SetFromStrings([]string{}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
+			TaskDefinition: taskDefinitionHashable{
+				Outputs:                 TaskOutputs{},
+				Cache:                   true,
+				TopologicalDependencies: []string{},
+				TaskDependencies:        []string{},
+				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+			},
+		},
+	}
+
+	assert.Equal(t, pipelineExpected, turboJSON.Pipeline)
+
+	// Snapshot test of serialization.
+	bytes, _ := turboJSON.MarshalJSON()
+	assert.Equal(t, "{\"globalPassThroughEnv\":null,\"globalDotEnv\":null,\"pipeline\":{\"build\":{\"outputs\":[],\"cache\":true,\"dependsOn\":[],\"inputs\":[],\"outputMode\":\"full\",\"persistent\":false,\"env\":[],\"passThroughEnv\":null,\"dotEnv\":null}},\"remoteCache\":{\"enabled\":true}}", string(bytes))
+}
+
+func Test_ReadTurboConfigDotEnvNull(t *testing.T) {
+	testDir := getTestDir(t, "dotenv-null")
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	// Undefined is nil.
+	var typedNil turbopath.AnchoredUnixPathArray
+
+	assert.Equal(t, typedNil, turboJSON.GlobalDotEnv)
+
+	pipelineExpected := Pipeline{
+		"build": {
+			definedFields:      util.SetFromStrings([]string{}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
+			TaskDefinition: taskDefinitionHashable{
+				Outputs:                 TaskOutputs{},
+				Cache:                   true,
+				TopologicalDependencies: []string{},
+				TaskDependencies:        []string{},
+				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+			},
+		},
+	}
+
+	assert.Equal(t, pipelineExpected, turboJSON.Pipeline)
+
+	// Snapshot test of serialization.
+	bytes, _ := turboJSON.MarshalJSON()
+	assert.Equal(t, "{\"globalPassThroughEnv\":null,\"globalDotEnv\":null,\"pipeline\":{\"build\":{\"outputs\":[],\"cache\":true,\"dependsOn\":[],\"inputs\":[],\"outputMode\":\"full\",\"persistent\":false,\"env\":[],\"passThroughEnv\":null,\"dotEnv\":null}},\"remoteCache\":{\"enabled\":true}}", string(bytes))
+}
+
+func Test_ReadTurboConfigDotEnvEmpty(t *testing.T) {
+	testDir := getTestDir(t, "dotenv-empty")
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	assert.Equal(t, make(turbopath.AnchoredUnixPathArray, 0), turboJSON.GlobalDotEnv)
+
+	pipelineExpected := Pipeline{
+		"build": {
+			definedFields:      util.SetFromStrings([]string{"DotEnv"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
+			TaskDefinition: taskDefinitionHashable{
+				Outputs:                 TaskOutputs{},
+				Cache:                   true,
+				TopologicalDependencies: []string{},
+				TaskDependencies:        []string{},
+				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+				DotEnv:                  make(turbopath.AnchoredUnixPathArray, 0),
+			},
+		},
+	}
+
+	assert.Equal(t, pipelineExpected, turboJSON.Pipeline)
+
+	// Snapshot test of serialization.
+	bytes, _ := turboJSON.MarshalJSON()
+	assert.Equal(t, "{\"globalPassThroughEnv\":null,\"globalDotEnv\":[],\"pipeline\":{\"build\":{\"outputs\":[],\"cache\":true,\"dependsOn\":[],\"inputs\":[],\"outputMode\":\"full\",\"persistent\":false,\"env\":[],\"passThroughEnv\":null,\"dotEnv\":[]}},\"remoteCache\":{\"enabled\":true}}", string(bytes))
+}
+
+func Test_ReadTurboConfigDotEnvPopulated(t *testing.T) {
+	testDir := getTestDir(t, "dotenv-populated")
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	assert.Equal(t, turbopath.AnchoredUnixPathArray{"z", "y", "x"}, turboJSON.GlobalDotEnv)
+
+	pipelineExpected := Pipeline{
+		"build": {
+			definedFields:      util.SetFromStrings([]string{"DotEnv"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
+			TaskDefinition: taskDefinitionHashable{
+				Outputs:                 TaskOutputs{},
+				Cache:                   true,
+				TopologicalDependencies: []string{},
+				TaskDependencies:        []string{},
+				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+				DotEnv:                  turbopath.AnchoredUnixPathArray{"3", "2", "1"},
+			},
+		},
+	}
+
+	assert.Equal(t, pipelineExpected, turboJSON.Pipeline)
+
+	// Snapshot test of serialization.
+	bytes, _ := turboJSON.MarshalJSON()
+	assert.Equal(t, "{\"globalPassThroughEnv\":null,\"globalDotEnv\":[\"z\",\"y\",\"x\"],\"pipeline\":{\"build\":{\"outputs\":[],\"cache\":true,\"dependsOn\":[],\"inputs\":[],\"outputMode\":\"full\",\"persistent\":false,\"env\":[],\"passThroughEnv\":null,\"dotEnv\":[\"3\",\"2\",\"1\"]}},\"remoteCache\":{\"enabled\":true}}", string(bytes))
+}
+
+func Test_ReadTurboConfigPassThroughEnvUndefined(t *testing.T) {
+	testDir := getTestDir(t, "passthrough-undefined")
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	// Undefined is nil.
+	var typedNil []string
+
+	assert.Equal(t, typedNil, turboJSON.GlobalPassThroughEnv)
+
+	pipelineExpected := Pipeline{
+		"build": {
+			definedFields:      util.SetFromStrings([]string{}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
+			TaskDefinition: taskDefinitionHashable{
+				Outputs:                 TaskOutputs{},
+				Cache:                   true,
+				TopologicalDependencies: []string{},
+				TaskDependencies:        []string{},
+				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+				PassThroughEnv:          typedNil,
+			},
+		},
+	}
+
+	assert.Equal(t, pipelineExpected, turboJSON.Pipeline)
+
+	// Snapshot test of serialization.
+	bytes, _ := turboJSON.MarshalJSON()
+	assert.Equal(t, "{\"globalPassThroughEnv\":null,\"globalDotEnv\":null,\"pipeline\":{\"build\":{\"outputs\":[],\"cache\":true,\"dependsOn\":[],\"inputs\":[],\"outputMode\":\"full\",\"persistent\":false,\"env\":[],\"passThroughEnv\":null,\"dotEnv\":null}},\"remoteCache\":{\"enabled\":true}}", string(bytes))
+}
+
+func Test_ReadTurboConfigPassThroughEnvNull(t *testing.T) {
+	testDir := getTestDir(t, "passthrough-null")
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	// Undefined is nil.
+	var typedNil []string
+
+	assert.Equal(t, typedNil, turboJSON.GlobalPassThroughEnv)
+
+	pipelineExpected := Pipeline{
+		"build": {
+			definedFields:      util.SetFromStrings([]string{}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
+			TaskDefinition: taskDefinitionHashable{
+				Outputs:                 TaskOutputs{},
+				Cache:                   true,
+				TopologicalDependencies: []string{},
+				TaskDependencies:        []string{},
+				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+				PassThroughEnv:          typedNil,
+			},
+		},
+	}
+
+	assert.Equal(t, pipelineExpected, turboJSON.Pipeline)
+
+	// Snapshot test of serialization.
+	bytes, _ := turboJSON.MarshalJSON()
+	assert.Equal(t, "{\"globalPassThroughEnv\":null,\"globalDotEnv\":null,\"pipeline\":{\"build\":{\"outputs\":[],\"cache\":true,\"dependsOn\":[],\"inputs\":[],\"outputMode\":\"full\",\"persistent\":false,\"env\":[],\"passThroughEnv\":null,\"dotEnv\":null}},\"remoteCache\":{\"enabled\":true}}", string(bytes))
+}
+
+func Test_ReadTurboConfigPassThroughEnvEmpty(t *testing.T) {
+	testDir := getTestDir(t, "passthrough-empty")
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	assert.Equal(t, []string{}, turboJSON.GlobalPassThroughEnv)
+
+	pipelineExpected := Pipeline{
+		"build": {
+			definedFields:      util.SetFromStrings([]string{"PassThroughEnv"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
+			TaskDefinition: taskDefinitionHashable{
+				Outputs:                 TaskOutputs{},
+				Cache:                   true,
+				TopologicalDependencies: []string{},
+				TaskDependencies:        []string{},
+				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+				PassThroughEnv:          []string{},
+			},
+		},
+	}
+
+	assert.Equal(t, pipelineExpected, turboJSON.Pipeline)
+
+	// Snapshot test of serialization.
+	bytes, _ := turboJSON.MarshalJSON()
+	assert.Equal(t, "{\"globalPassThroughEnv\":[],\"globalDotEnv\":null,\"pipeline\":{\"build\":{\"outputs\":[],\"cache\":true,\"dependsOn\":[],\"inputs\":[],\"outputMode\":\"full\",\"persistent\":false,\"env\":[],\"passThroughEnv\":[],\"dotEnv\":null}},\"remoteCache\":{\"enabled\":true}}", string(bytes))
+}
+
+func Test_ReadTurboConfigPassThroughEnvPopulated(t *testing.T) {
+	testDir := getTestDir(t, "passthrough-populated")
+	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
+	if turboJSONReadErr != nil {
+		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
+	}
+
+	assert.Equal(t, []string{"A", "B", "C"}, turboJSON.GlobalPassThroughEnv)
+
+	pipelineExpected := Pipeline{
+		"build": {
+			definedFields:      util.SetFromStrings([]string{"PassThroughEnv"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
+			TaskDefinition: taskDefinitionHashable{
+				Outputs:                 TaskOutputs{},
+				Cache:                   true,
+				TopologicalDependencies: []string{},
+				TaskDependencies:        []string{},
+				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+				PassThroughEnv:          []string{"X", "Y", "Z"},
+			},
+		},
+	}
+
+	assert.Equal(t, pipelineExpected, turboJSON.Pipeline)
+
+	// Snapshot test of serialization.
+	bytes, _ := turboJSON.MarshalJSON()
+	assert.Equal(t, "{\"globalPassThroughEnv\":[\"A\",\"B\",\"C\"],\"globalDotEnv\":null,\"pipeline\":{\"build\":{\"outputs\":[],\"cache\":true,\"dependsOn\":[],\"inputs\":[],\"outputMode\":\"full\",\"persistent\":false,\"env\":[],\"passThroughEnv\":[\"X\",\"Y\",\"Z\"],\"dotEnv\":null}},\"remoteCache\":{\"enabled\":true}}", string(bytes))
+}
+
 func Test_ReadTurboConfig(t *testing.T) {
 	testDir := getTestDir(t, "correct")
 	turboJSON, turboJSONReadErr := readTurboConfig(testDir.UntypedJoin("turbo.json"))
@@ -35,74 +309,70 @@ func Test_ReadTurboConfig(t *testing.T) {
 		t.Fatalf("invalid parse: %#v", turboJSONReadErr)
 	}
 
-	assert.EqualValues(t, []string{"AWS_SECRET_KEY"}, turboJSON.GlobalPassthroughEnv)
+	assert.EqualValues(t, []string{"AWS_SECRET_KEY"}, turboJSON.GlobalPassThroughEnv)
 
 	pipelineExpected := map[string]BookkeepingTaskDefinition{
 		"build": {
-			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
-			experimentalFields: util.SetFromStrings([]string{"PassthroughEnv"}),
-			experimental: taskDefinitionExperiments{
-				PassthroughEnv: []string{"GITHUB_TOKEN"},
-			},
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn", "PassThroughEnv"}),
+			experimentalFields: util.SetFromStrings([]string{}),
+			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
+				Cache:                   true,
 				TopologicalDependencies: []string{"build"},
-				EnvVarDependencies:      []string{},
 				TaskDependencies:        []string{},
-				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
+				Env:                     []string{},
+				PassThroughEnv:          []string{"GITHUB_TOKEN"},
 			},
 		},
 		"lint": {
-			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "ShouldCache", "DependsOn"}),
+			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "Cache", "DependsOn", "Env"}),
 			experimentalFields: util.SetFromStrings([]string{}),
-			experimental: taskDefinitionExperiments{
-				PassthroughEnv: []string{},
-			},
+			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{},
+				Cache:                   true,
 				TopologicalDependencies: []string{},
-				EnvVarDependencies:      []string{"MY_VAR"},
 				TaskDependencies:        []string{},
-				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
+				Env:                     []string{"MY_VAR"},
+				PassThroughEnv:          nil,
 			},
 		},
 		"dev": {
-			definedFields:      util.SetFromStrings([]string{"OutputMode", "ShouldCache"}),
+			definedFields:      util.SetFromStrings([]string{"OutputMode", "Cache", "PassThroughEnv"}),
 			experimentalFields: util.SetFromStrings([]string{}),
-			experimental: taskDefinitionExperiments{
-				PassthroughEnv: []string{},
-			},
+			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{},
+				Cache:                   false,
 				TopologicalDependencies: []string{},
-				EnvVarDependencies:      []string{},
 				TaskDependencies:        []string{},
-				ShouldCache:             false,
 				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+				PassThroughEnv:          []string{},
 			},
 		},
 		"publish": {
-			definedFields:      util.SetFromStrings([]string{"Inputs", "Outputs", "DependsOn", "ShouldCache"}),
+			definedFields:      util.SetFromStrings([]string{"Inputs", "Outputs", "DependsOn", "Cache"}),
 			experimentalFields: util.SetFromStrings([]string{}),
-			experimental: taskDefinitionExperiments{
-				PassthroughEnv: []string{},
-			},
+			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
+				Cache:                   false,
 				TopologicalDependencies: []string{"build", "publish"},
-				EnvVarDependencies:      []string{},
 				TaskDependencies:        []string{"admin#lint", "build"},
-				ShouldCache:             false,
 				Inputs:                  []string{"build/**/*"},
 				OutputMode:              util.FullTaskOutput,
+				Env:                     []string{},
+				PassThroughEnv:          nil,
 			},
 		},
 	}
 
 	validateOutput(t, turboJSON, pipelineExpected)
-	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
+	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true, true}
 	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
 }
 
@@ -140,23 +410,22 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 		"build": {
 			definedFields:      util.SetFromStrings([]string{"Outputs", "OutputMode", "DependsOn"}),
 			experimentalFields: util.SetFromStrings([]string{}),
-			experimental: taskDefinitionExperiments{
-				PassthroughEnv: []string{},
-			},
+			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
 				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
+				Cache:                   true,
 				TopologicalDependencies: []string{"build"},
-				EnvVarDependencies:      []string{},
 				TaskDependencies:        []string{},
-				ShouldCache:             true,
 				OutputMode:              util.NewTaskOutput,
+				Env:                     []string{},
+				PassThroughEnv:          nil,
 			},
 		},
 	}
 
 	validateOutput(t, turboJSON, pipelineExpected)
 
-	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true}
+	remoteCacheOptionsExpected := RemoteCacheOptions{"team_id", true, true}
 	assert.EqualValues(t, remoteCacheOptionsExpected, turboJSON.RemoteCacheOptions)
 	assert.Equal(t, rootPackageJSON.LegacyTurboConfig == nil, true)
 }
@@ -192,16 +461,16 @@ func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 	}
 
 	pipeline := turboJSON.Pipeline
-	assert.EqualValues(t, pipeline["task1"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task2"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task3"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task4"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B"}))
-	assert.EqualValues(t, pipeline["task6"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B", "C", "D", "E", "F"}))
-	assert.EqualValues(t, pipeline["task7"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B", "C"}))
-	assert.EqualValues(t, pipeline["task8"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B", "C"}))
-	assert.EqualValues(t, pipeline["task9"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task10"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A"}))
-	assert.EqualValues(t, pipeline["task11"].TaskDefinition.EnvVarDependencies, sortedArray([]string{"A", "B"}))
+	assert.EqualValues(t, pipeline["task1"].TaskDefinition.Env, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task2"].TaskDefinition.Env, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task3"].TaskDefinition.Env, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task4"].TaskDefinition.Env, sortedArray([]string{"A", "B"}))
+	assert.EqualValues(t, pipeline["task6"].TaskDefinition.Env, sortedArray([]string{"A", "B", "C", "D", "E", "F"}))
+	assert.EqualValues(t, pipeline["task7"].TaskDefinition.Env, sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, pipeline["task8"].TaskDefinition.Env, sortedArray([]string{"A", "B", "C"}))
+	assert.EqualValues(t, pipeline["task9"].TaskDefinition.Env, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task10"].TaskDefinition.Env, sortedArray([]string{"A"}))
+	assert.EqualValues(t, pipeline["task11"].TaskDefinition.Env, sortedArray([]string{"A", "B"}))
 
 	// check global env vars also
 	assert.EqualValues(t, sortedArray([]string{"FOO", "BAR", "BAZ", "QUX"}), sortedArray(turboJSON.GlobalEnv))
@@ -212,10 +481,11 @@ func Test_TaskOutputsSort(t *testing.T) {
 	inclusions := []string{"foo/**", "bar"}
 	exclusions := []string{"special-file", ".hidden/**"}
 	taskOutputs := TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
-	sortedOutputs := taskOutputs.Sort()
-	assertIsSorted(t, sortedOutputs.Inclusions, "Inclusions")
-	assertIsSorted(t, sortedOutputs.Exclusions, "Exclusions")
-	assert.False(t, cmp.DeepEqual(taskOutputs, sortedOutputs)().Success())
+	taskOutputs.Sort()
+	assertIsSorted(t, taskOutputs.Inclusions, "Inclusions")
+	assertIsSorted(t, taskOutputs.Exclusions, "Exclusions")
+
+	assert.True(t, cmp.DeepEqual(taskOutputs, TaskOutputs{Inclusions: []string{"bar", "foo/**"}, Exclusions: []string{".hidden/**", "special-file"}})().Success())
 }
 
 // Helpers
@@ -223,6 +493,7 @@ func validateOutput(t *testing.T, turboJSON *TurboJSON, expectedPipeline Pipelin
 	t.Helper()
 	assertIsSorted(t, turboJSON.GlobalDeps, "Global Deps")
 	assertIsSorted(t, turboJSON.GlobalEnv, "Global Env")
+	assertIsSorted(t, turboJSON.GlobalPassThroughEnv, "Global Pass Through Env")
 	validatePipeline(t, turboJSON.Pipeline, expectedPipeline)
 }
 
@@ -250,8 +521,8 @@ func validatePipeline(t *testing.T, actual Pipeline, expected Pipeline) {
 		actualTaskDefinition := bookkeepingTaskDef.GetTaskDefinition()
 		assertIsSorted(t, actualTaskDefinition.Outputs.Inclusions, "Task output inclusions")
 		assertIsSorted(t, actualTaskDefinition.Outputs.Exclusions, "Task output exclusions")
-		assertIsSorted(t, actualTaskDefinition.EnvVarDependencies, "Task env vars")
-		assertIsSorted(t, actualTaskDefinition.PassthroughEnv, "Task env vars")
+		assertIsSorted(t, actualTaskDefinition.Env, "Task env vars")
+		assertIsSorted(t, actualTaskDefinition.PassThroughEnv, "Task passthrough env vars")
 		assertIsSorted(t, actualTaskDefinition.TopologicalDependencies, "Topo deps")
 		assertIsSorted(t, actualTaskDefinition.TaskDependencies, "Task deps")
 		assert.EqualValuesf(t, expectedTaskDefinition, bookkeepingTaskDef, "task definition mismatch for %v", taskName)
