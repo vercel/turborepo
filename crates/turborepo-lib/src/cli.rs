@@ -588,6 +588,14 @@ pub async fn run(
         command
     } else {
         let run_args = mem::take(&mut cli_args.run_args).ok_or(anyhow!("No command specified"))?;
+        if run_args.tasks.is_empty() {
+            let mut cmd = <Args as CommandFactory>::command();
+            match cmd.print_help() {
+                Ok(_) => process::exit(1),
+                Err(_) => process::exit(1),
+            }
+        }
+
         Command::Run(Box::new(run_args))
     };
 
