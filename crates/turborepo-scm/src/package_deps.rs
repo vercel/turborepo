@@ -162,7 +162,10 @@ mod tests {
         link.symlink_to_dir("inside").unwrap();
         let to_hash = vec![RelativeUnixPathBuf::new("link").unwrap()];
         let mut hashes = GitHashes::new();
+        // FIXME: This test verifies a bug: we don't hash symlinks.
+        // TODO: update this test to point at get_package_file_hashes
         hash_objects(&git_root, &git_root, to_hash, &mut hashes).unwrap();
+        assert!(hashes.is_empty());
     }
 
     #[test]

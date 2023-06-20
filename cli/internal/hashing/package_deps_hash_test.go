@@ -398,11 +398,10 @@ func Test_hashSymlink(t *testing.T) {
 	requireGitCmd(t, repoRoot, "add", ".")
 	requireGitCmd(t, repoRoot, "commit", "-m", "foo")
 
-	toHash, err := link.RelativeTo(repoRoot)
-	assert.NilError(t, err, "RelativeTo")
-	hashes, err := gitHashObject(repoRoot, []turbopath.AnchoredSystemPath{toHash})
+	hashes, err := GetPackageFileHashes(repoRoot, turbopath.AnchoredSystemPathFromUpstream(""), []string{"l*"})
 	assert.NilError(t, err, "getHashObject")
-	println(hashes)
+	// We expect to skip hashing the symlink. Note that this is a bug and should be fixed
+	assert.Equal(t, len(hashes), 0)
 }
 
 func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
