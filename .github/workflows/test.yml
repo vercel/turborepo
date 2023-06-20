@@ -519,11 +519,11 @@ jobs:
 
       - name: Run cargo check release
         run: |
-          cargo groups check turbopack --features rustls-tls --release
+          RUSTFLAGS="-D warnings" cargo groups check turbopack --features rustls-tls --release
 
       - name: Run cargo clippy
         run: |
-          cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings" cargo groups clippy turbopack --features rustls-tls
 
   next_dev_check:
     needs: [determine_jobs]
