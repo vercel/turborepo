@@ -38,9 +38,9 @@ pub async fn resolve_source_request(
 ) -> Result<ResolveSourceRequestResultVc> {
     let mut data = ContentSourceData::default();
     let mut current_source = source;
-    // Remove leading slash.
     let original_path = request.uri.path().to_string();
-    let mut current_asset_path = urlencoding::decode(&original_path[1..])?.into_owned();
+    // Remove leading slash.
+    let mut current_asset_path = original_path[1..].to_owned();
     let mut request_overwrites = (*request).clone();
     let mut response_header_overwrites = Vec::new();
     loop {
@@ -66,8 +66,7 @@ pub async fn resolve_source_request(
                         if new_source == current_source && new_uri == request_overwrites.uri {
                             bail!("rewrite loop detected: {}", new_uri);
                         }
-                        let new_asset_path =
-                            urlencoding::decode(&new_uri.path()[1..])?.into_owned();
+                        let new_asset_path = new_uri.path()[1..].to_owned();
 
                         current_source = new_source.resolve().await?;
                         request_overwrites.uri = new_uri;
