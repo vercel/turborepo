@@ -3,7 +3,7 @@ use std::{fs::Metadata, io::Read};
 use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoUnix};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoUnix};
 use wax::{any, Glob, Pattern};
 
 use crate::{package_deps::GitHashes, Error};
@@ -117,7 +117,7 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
-    use turbopath::{RelativeUnixPath, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
     use super::*;
 

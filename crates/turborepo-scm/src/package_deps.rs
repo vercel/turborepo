@@ -25,7 +25,7 @@ pub enum Hasher {
 
 fn find_git(path_in_repo: &AbsoluteSystemPath) -> Option<Git> {
     let bin = which::which("git").ok()?;
-    let bin = AbsoluteSystemPathBuf::new(bin).ok()?;
+    let bin = AbsoluteSystemPathBuf::try_from(bin).ok()?;
     let root = find_git_root(path_in_repo).ok()?;
     Some(Git { root, _bin: bin })
 }
@@ -124,7 +124,7 @@ impl Git {
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
         let package_unix_path_buf = package_path.to_unix()?;
-        let package_unix_path = package_unix_path_buf.as_str()?;
+        let package_unix_path = package_unix_path_buf.as_str();
 
         let mut inputs = inputs
             .iter()
