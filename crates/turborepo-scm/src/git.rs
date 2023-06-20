@@ -191,32 +191,29 @@ mod tests {
 
     fn setup_repository() -> Result<(TempDir, Repository), Error> {
         let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init(repo_root.path())?;
-        let mut config = repo.config()?;
-        config.set_str("user.name", "test")?;
-        config.set_str("user.email", "test@example.com")?;
+        let repo = Repository::init(repo_root.path()).unwrap();
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "test").unwrap();
+        config.set_str("user.email", "test@example.com").unwrap();
 
         Ok((repo_root, repo))
     }
 
-    fn commit_file(
-        repo: &Repository,
-        path: &Path,
-        previous_commit: Option<Oid>,
-    ) -> Result<Oid, Error> {
-        let mut index = repo.index()?;
-        index.add_path(path)?;
-        let tree_oid = index.write_tree()?;
-        index.write()?;
-        let tree = repo.find_tree(tree_oid)?;
+    fn commit_file(repo: &Repository, path: &Path, previous_commit: Option<Oid>) -> Oid {
+        let mut index = repo.index().unwrap();
+        index.add_path(path).unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
         let previous_commit = previous_commit
             .map(|oid| repo.find_commit(oid))
-            .transpose()?;
+            .transpose()
+            .unwrap();
 
-        Ok(repo.commit(
+        repo.commit(
             Some("HEAD"),
-            &repo.signature()?,
-            &repo.signature()?,
+            &repo.signature().unwrap(),
+            &repo.signature().unwrap(),
             "Commit",
             &tree,
             previous_commit
@@ -224,25 +221,27 @@ mod tests {
                 .as_ref()
                 .map(std::slice::from_ref)
                 .unwrap_or_default(),
-        )?)
+        )
+        .unwrap()
     }
 
-    fn commit_delete(repo: &Repository, path: &Path, previous_commit: Oid) -> Result<Oid, Error> {
-        let mut index = repo.index()?;
-        index.remove_path(path)?;
-        let tree_oid = index.write_tree()?;
-        index.write()?;
-        let tree = repo.find_tree(tree_oid)?;
-        let previous_commit = repo.find_commit(previous_commit)?;
+    fn commit_delete(repo: &Repository, path: &Path, previous_commit: Oid) -> Oid {
+        let mut index = repo.index().unwrap();
+        index.remove_path(path).unwrap();
+        let tree_oid = index.write_tree().unwrap();
+        index.write().unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+        let previous_commit = repo.find_commit(previous_commit).unwrap();
 
-        Ok(repo.commit(
+        repo.commit(
             Some("HEAD"),
-            &repo.signature()?,
-            &repo.signature()?,
+            &repo.signature().unwrap(),
+            &repo.signature().unwrap(),
             "Commit",
             &tree,
             std::slice::from_ref(&&previous_commit),
-        )?)
+        )
+        .unwrap()
     }
 
     #[test]
@@ -288,10 +287,10 @@ mod tests {
         let file_path = Path::new("foo.js");
         fs::write(&file, "let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, file_path, None)?;
+        let first_commit_oid = commit_file(&repo, file_path, None);
 
         fs::remove_file(&file)?;
-        let _second_commit_oid = commit_delete(&repo, file_path, first_commit_oid)?;
+        let _second_commit_oid = commit_delete(&repo, file_path, first_commit_oid);
 
         let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
@@ -308,27 +307,29 @@ mod tests {
         let first_file = repo_root.path().join("foo.js");
         fs::write(first_file, "let z = 0;")?;
         // Create a base commit. This will *not* be the merge base
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
 
         let second_file = repo_root.path().join("bar.js");
         fs::write(second_file, "let y = 1;")?;
         // This commit will be the merge base
-        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid))?;
+        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid));
 
         let third_file = repo_root.path().join("baz.js");
         fs::write(third_file, "let x = 2;")?;
         // Create a first commit off of merge base
-        let third_commit_oid = commit_file(&repo, Path::new("baz.js"), Some(second_commit_oid))?;
+        let third_commit_oid = commit_file(&repo, Path::new("baz.js"), Some(second_commit_oid));
 
         // Move head back to merge base
-        repo.set_head_detached(second_commit_oid)?;
+        repo.set_head_detached(second_commit_oid).unwrap();
         let fourth_file = repo_root.path().join("qux.js");
         fs::write(fourth_file, "let w = 3;")?;
         // Create a second commit off of merge base
-        let fourth_commit_oid = commit_file(&repo, Path::new("qux.js"), Some(second_commit_oid))?;
+        let fourth_commit_oid = commit_file(&repo, Path::new("qux.js"), Some(second_commit_oid));
 
-        repo.set_head_detached(third_commit_oid)?;
-        let merge_base = repo.merge_base(third_commit_oid, fourth_commit_oid)?;
+        repo.set_head_detached(third_commit_oid).unwrap();
+        let merge_base = repo
+            .merge_base(third_commit_oid, fourth_commit_oid)
+            .unwrap();
 
         assert_eq!(merge_base, second_commit_oid);
 
@@ -350,13 +351,13 @@ mod tests {
     #[test]
     fn test_changed_files() -> Result<(), Error> {
         let (repo_root, repo) = setup_repository()?;
-        let mut index = repo.index()?;
+        let mut index = repo.index().unwrap();
         let turbo_root = repo_root.path();
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
         // First commit (we need a base commit to compare against)
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
 
         // Now change another file
         let new_file = repo_root.path().join("bar.js");
@@ -372,8 +373,8 @@ mod tests {
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Add file to index
-        index.add_path(Path::new("bar.js"))?;
-        index.write()?;
+        index.add_path(Path::new("bar.js")).unwrap();
+        index.write().unwrap();
 
         // Test that uncommitted file in index is still marked as changed
         let files = changed_files(
@@ -385,7 +386,7 @@ mod tests {
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Now commit file
-        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid))?;
+        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid));
 
         // Test that only second file is marked as changed when we check commit range
         let files = changed_files(
@@ -420,7 +421,7 @@ mod tests {
         fs::write(file, "let z = 0;")?;
 
         // First commit (we need a base commit to compare against)
-        commit_file(&repo, Path::new("foo.js"), None)?;
+        commit_file(&repo, Path::new("foo.js"), None);
 
         // Now change another file
         let new_file = repo_root.path().join("bar.js");
@@ -452,7 +453,7 @@ mod tests {
 
         let file = repo_root.path().join("subdir").join("foo.js");
         fs::write(file, "let z = 0;")?;
-        let first_commit = commit_file(&repo, Path::new("subdir/foo.js"), None)?;
+        let first_commit = commit_file(&repo, Path::new("subdir/foo.js"), None);
 
         let new_file = repo_root.path().join("subdir").join("src").join("bar.js");
         fs::write(new_file, "let y = 1;")?;
@@ -474,13 +475,19 @@ mod tests {
             assert_eq!(files, HashSet::from(["src\\bar.js".to_string()]));
         }
 
-        commit_file(&repo, Path::new("subdir/src/bar.js"), Some(first_commit))?;
+        commit_file(&repo, Path::new("subdir/src/bar.js"), Some(first_commit));
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
             Some(first_commit.to_string().as_str()),
-            repo.head()?.peel_to_commit()?.id().to_string().as_str(),
+            repo.head()
+                .unwrap()
+                .peel_to_commit()
+                .unwrap()
+                .id()
+                .to_string()
+                .as_str(),
         )?;
 
         #[cfg(unix)]
@@ -503,9 +510,9 @@ mod tests {
         let file = repo_root.path().join("foo.js");
         fs::write(&file, "let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
         fs::write(&file, "let z = 1;")?;
-        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid))?;
+        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid));
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
@@ -539,13 +546,13 @@ mod tests {
         let file = repo_root.path().join("foo.js");
         fs::write(&file, "let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None)?;
+        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
         fs::write(&file, "let z = 1;")?;
-        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid))?;
+        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid));
 
-        let revparsed_head = repo.revparse_single("HEAD")?;
+        let revparsed_head = repo.revparse_single("HEAD").unwrap();
         assert_eq!(revparsed_head.id(), second_commit_oid);
-        let revparsed_head_minus_1 = repo.revparse_single("HEAD~1")?;
+        let revparsed_head_minus_1 = repo.revparse_single("HEAD~1").unwrap();
         assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
 
         let files = changed_files(
@@ -561,9 +568,9 @@ mod tests {
 
         let new_file = repo_root.path().join("bar.js");
         fs::write(new_file, "let y = 0;")?;
-        let third_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(second_commit_oid))?;
-        let third_commit = repo.find_commit(third_commit_oid)?;
-        repo.branch("release-1", &third_commit, false)?;
+        let third_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(second_commit_oid));
+        let third_commit = repo.find_commit(third_commit_oid).unwrap();
+        repo.branch("release-1", &third_commit, false).unwrap();
 
         let files = changed_files(
             repo_root.path().to_path_buf(),

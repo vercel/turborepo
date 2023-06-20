@@ -152,6 +152,20 @@ mod tests {
     }
 
     #[test]
+    fn test_hash_symlink() {
+        let (_, tmp_root) = tmp_dir();
+        let git_root = tmp_root.join_component("actual_repo");
+        git_root.create_dir_all().unwrap();
+        setup_repository(&git_root);
+        git_root.join_component("inside").create_dir_all().unwrap();
+        let link = git_root.join_component("link");
+        link.symlink_to_dir("inside").unwrap();
+        let to_hash = vec![RelativeUnixPathBuf::new("link").unwrap()];
+        let mut hashes = GitHashes::new();
+        hash_objects(&git_root, &git_root, to_hash, &mut hashes).unwrap();
+    }
+
+    #[test]
     fn test_symlinked_git_root() {
         let (_, tmp_root) = tmp_dir();
         let git_root = tmp_root.join_component("actual_repo");

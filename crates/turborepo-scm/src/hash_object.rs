@@ -10,7 +10,8 @@ pub(crate) fn hash_objects(
 ) -> Result<(), Error> {
     for filename in to_hash {
         let full_file_path = git_root.join_unix_path(filename)?;
-        let hash = git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path)?;
+        let hash = git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path)
+            .map_err(|e| Error::git2_error_context(e, full_file_path.to_string()))?;
         let package_relative_path =
             AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path).to_unix()?;
         hashes.insert(package_relative_path, hash.to_string());

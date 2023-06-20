@@ -381,6 +381,30 @@ func Test_memoizedGetTraversePath(t *testing.T) {
 	assert.Check(t, gotOne == gotTwo, "The strings are identical.")
 }
 
+func Test_hashSymlink(t *testing.T) {
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+
+	dst := repoRoot.UntypedJoin("target")
+	err := dst.MkdirAll(0755)
+	assert.NilError(t, err, "EnsureDir")
+	link := repoRoot.UntypedJoin("link")
+	err = link.Symlink("target")
+	assert.NilError(t, err, "Symlink")
+
+	// set up git repo and commit all
+	requireGitCmd(t, repoRoot, "init", ".")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.name", "test")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.email", "test@example.com")
+	requireGitCmd(t, repoRoot, "add", ".")
+	requireGitCmd(t, repoRoot, "commit", "-m", "foo")
+
+	toHash, err := link.RelativeTo(repoRoot)
+	assert.NilError(t, err, "RelativeTo")
+	hashes, err := gitHashObject(repoRoot, []turbopath.AnchoredSystemPath{toHash})
+	assert.NilError(t, err, "getHashObject")
+	println(hashes)
+}
+
 func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	rootIgnore := strings.Join([]string{
 		"ignoreme",
