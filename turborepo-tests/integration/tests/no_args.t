@@ -65,6 +65,14 @@ Make sure exit code is 2 when no args are passed
         --summarize [<SUMMARIZE>]        Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
         --log-prefix <LOG_PREFIX>        Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
   [1]
+
   $ ${TURBO} run
   ERROR at least one task must be specified
   [1]
+
+Run again with an environment variable that corresponds to a run argument and assert that
+we get the full help output.
+  $ TURBO_LOG_ORDER=stream ${TURBO} 2>&1 > out.txt
+  [1]
+  $ cat out.txt | head -n1
+  The build system that makes ship happen
