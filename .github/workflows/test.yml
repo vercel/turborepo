@@ -493,11 +493,11 @@ jobs:
 
       - name: Run cargo check
         run: |
-          cargo groups check turborepo-libraries --features rustls-tls
+          RUSTFLAGS="-D warnings" cargo groups check turborepo-libraries --features rustls-tls
 
       - name: Run cargo clippy
         run: |
-          cargo groups clippy turborepo-libraries --features rustls-tls
+          RUSTFLAGS="-D warnings" cargo groups clippy turborepo-libraries --features rustls-tls
 
   turbopack_rust_check:
     needs: [determine_jobs, rust_pre_check]
