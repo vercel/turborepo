@@ -45,7 +45,7 @@ pub fn changed_files(
         pathspec,
     )?;
 
-    add_files_from_stdout(&mut files, &git_root, &turbo_root, output);
+    add_files_from_stdout(&mut files, git_root, &turbo_root, output);
 
     if let Some(from_commit) = from_commit {
         let output = execute_git_command(
@@ -58,7 +58,7 @@ pub fn changed_files(
             pathspec,
         )?;
 
-        add_files_from_stdout(&mut files, &git_root, &turbo_root, output);
+        add_files_from_stdout(&mut files, git_root, &turbo_root, output);
     }
 
     let output = execute_git_command(
@@ -67,7 +67,7 @@ pub fn changed_files(
         pathspec,
     )?;
 
-    add_files_from_stdout(&mut files, &git_root, &turbo_root, output);
+    add_files_from_stdout(&mut files, git_root, &turbo_root, output);
 
     Ok(files)
 }
@@ -109,7 +109,7 @@ fn add_files_from_stdout(
     let turbo_root = turbo_root.as_ref();
     let stdout = String::from_utf8(stdout).unwrap();
     for line in stdout.lines() {
-        let path = RelativeUnixPath::new(&line).unwrap();
+        let path = RelativeUnixPath::new(line).unwrap();
         let anchored_to_turbo_root_file_path =
             reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, path).unwrap();
         files.insert(anchored_to_turbo_root_file_path.to_string());
@@ -148,7 +148,7 @@ pub fn previous_content(
     // Note that we assume any relative file path is relative to the git root
     let anchored_file_path = if file_path.is_absolute() {
         let absolute_file_path = AbsoluteSystemPathBuf::try_from(file_path)?;
-        git_root.anchor(&absolute_file_path)?
+        git_root.anchor(absolute_file_path)?
     } else {
         file_path.as_path().try_into()?
     };
