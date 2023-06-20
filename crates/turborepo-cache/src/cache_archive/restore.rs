@@ -1009,7 +1009,7 @@ mod tests {
         processed_name: AnchoredSystemPathBuf,
         linkname: &Path,
         canonical_unix: &'static str,
-        _canonical_windows: &'static str,
+        canonical_windows: &'static str,
     ) -> Result<()> {
         #[cfg(unix)]
         let anchor = AbsoluteSystemPath::new("/Users/test").unwrap();

@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use anyhow::Result;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_lockfiles::Lockfile;
+use turborepo_lockfiles::{Lockfile, NpmLockfile};
 
 use crate::{package_json::PackageJson, package_manager::PackageManager};
 
@@ -23,7 +23,7 @@ impl PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
             workspace_infos: Rc::new(WorkspaceCatalog::default()),
             package_manager: PackageManager::Npm,
-            lockfile: Box::new(turborepo_lockfiles::NpmLockfile::default()),
+            lockfile: Box::<NpmLockfile>::default(),
         })
     }
 
@@ -36,7 +36,7 @@ impl PackageGraph {
             workspace_graph: Rc::new(petgraph::Graph::new()),
             workspace_infos: Rc::new(WorkspaceCatalog::default()),
             package_manager: PackageManager::Npm,
-            lockfile: Box::new(turborepo_lockfiles::NpmLockfile::default()),
+            lockfile: Box::<NpmLockfile>::default(),
         })
     }
 
