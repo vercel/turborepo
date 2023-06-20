@@ -116,9 +116,8 @@ pub(crate) fn find_git_root(
 mod tests {
     use std::{assert_matches::assert_matches, process::Command};
 
-    use crate::manual::get_package_file_hashes_from_processing_gitignore;
-
     use super::*;
+    use crate::manual::get_package_file_hashes_from_processing_gitignore;
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -170,7 +169,9 @@ mod tests {
         assert!(hashes.is_empty());
 
         let pkg_path = git_root.anchor(&git_root).unwrap();
-        let manual_hashes = get_package_file_hashes_from_processing_gitignore(&git_root, &pkg_path, &["l*"]).unwrap();
+        let manual_hashes =
+            get_package_file_hashes_from_processing_gitignore(&git_root, &pkg_path, &["l*"])
+                .unwrap();
         assert!(manual_hashes.is_empty());
     }
 
