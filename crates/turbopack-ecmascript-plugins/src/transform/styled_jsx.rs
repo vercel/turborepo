@@ -12,8 +12,8 @@ use turbopack_ecmascript::{CustomTransformer, TransformContext};
 #[derive(Debug)]
 pub struct StyledJsxTransformer;
 
-impl StyledJsxTransformer {
-    pub fn new() -> Self {
+impl Default for StyledJsxTransformer {
+    fn default() -> Self {
         Self
     }
 }

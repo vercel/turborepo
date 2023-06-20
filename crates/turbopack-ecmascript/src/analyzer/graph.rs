@@ -1771,12 +1771,10 @@ fn extract_var_from_umd_factory(callee: &Expr, args: &[ExprOrSpread]) -> Option<
 fn get_fn_init_return_vals(fn_body_stmts: Option<&BlockStmt>) -> Vec<JsValue> {
     let has_final_return_val = match fn_body_stmts {
         Some(fn_body_stmts) => {
-            if let Some(Stmt::Return(ReturnStmt { arg: Some(_), .. })) = fn_body_stmts.stmts.last()
-            {
-                true
-            } else {
-                false
-            }
+            matches!(
+                fn_body_stmts.stmts.last(),
+                Some(Stmt::Return(ReturnStmt { arg: Some(_), .. }))
+            )
         }
         None => false,
     };
