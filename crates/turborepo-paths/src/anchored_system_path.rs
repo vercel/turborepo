@@ -53,7 +53,7 @@ impl AnchoredSystemPath {
                 .to_str()
                 .ok_or_else(|| PathError::InvalidUnicode(path_ref.to_string_lossy().to_string()))?;
             if path_str.contains('/') {
-                return Err(PathError::NotSystem(path.to_string_lossy().to_string()));
+                return Err(PathError::NotSystem(path_str.to_string()));
             }
         }
 
