@@ -391,10 +391,7 @@ enum WaitAction {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        assert_matches::assert_matches,
-        path::{Path, PathBuf},
-    };
+    use std::{assert_matches::assert_matches, path::Path};
 
     use sysinfo::Pid;
     use tokio::{

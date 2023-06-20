@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
@@ -14,7 +17,7 @@ impl TryFrom<&str> for AnchoredSystemPathBuf {
     fn try_from(path: &str) -> Result<Self, Self::Error> {
         let path = Utf8Path::new(path);
         if path.is_absolute() {
-            return Err(PathError::NotRelative(path.to_string()).into());
+            return Err(PathError::NotRelative(path.to_string()));
         }
 
         Ok(AnchoredSystemPathBuf(path.into_system()))
@@ -33,10 +36,16 @@ impl TryFrom<&Path> for AnchoredSystemPathBuf {
     }
 }
 
+impl fmt::Display for AnchoredSystemPathBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 // TODO: perhaps we ought to be converting to a unix path?
-impl<'a> Into<wax::CandidatePath<'a>> for &'a AnchoredSystemPathBuf {
-    fn into(self) -> wax::CandidatePath<'a> {
-        self.0.as_std_path().into()
+impl<'a> From<&'a AnchoredSystemPathBuf> for wax::CandidatePath<'a> {
+    fn from(path: &'a AnchoredSystemPathBuf) -> Self {
+        path.0.as_std_path().into()
     }
 }
 
@@ -106,10 +115,6 @@ impl AnchoredSystemPathBuf {
         self.0.as_str()
     }
 
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-
     pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
         #[cfg(unix)]
         {
@@ -118,7 +123,7 @@ impl AnchoredSystemPathBuf {
         #[cfg(not(unix))]
         {
             use crate::IntoUnix;
-            let unix_buf = self.0.as_path().into_unix()?;
+            let unix_buf = self.0.as_path().into_unix();
             RelativeUnixPathBuf::new(unix_buf)
         }
     }

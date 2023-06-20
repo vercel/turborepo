@@ -21,7 +21,7 @@ impl RelativeUnixPathBuf {
     pub fn new(path: impl Into<String>) -> Result<Self, PathError> {
         let path_string = path.into();
         if path_string.starts_with('/') {
-            return Err(PathError::NotRelative(path_string).into());
+            return Err(PathError::NotRelative(path_string));
         }
         Ok(Self(path_string))
     }
@@ -109,7 +109,7 @@ impl RelativeUnixPathBufTestExt for RelativeUnixPathBuf {
 
 impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
     fn borrow(&self) -> &RelativeUnixPath {
-        let inner: &str = &self.0.borrow();
+        let inner: &str = self.0.borrow();
         unsafe { &*(inner as *const str as *const RelativeUnixPath) }
     }
 }

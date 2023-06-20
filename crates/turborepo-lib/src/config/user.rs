@@ -113,7 +113,6 @@ impl UserConfigLoader {
 mod test {
     use std::io::Write;
 
-    use camino::Utf8Path;
     use tempfile::{NamedTempFile, TempDir};
 
     use super::*;

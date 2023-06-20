@@ -28,10 +28,6 @@ impl RelativeUnixPath {
         Ok(unsafe { &*(path as *const str as *const Self) })
     }
 
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
-    }
-
     pub(crate) fn to_system_path_buf(&self) -> Result<Utf8PathBuf, PathError> {
         #[cfg(unix)]
         {
@@ -42,7 +38,7 @@ impl RelativeUnixPath {
 
         #[cfg(windows)]
         {
-            let system_path_string = self.replace('/', "\\");
+            let system_path_string = self.0.replace('/', "\\");
             Ok(Utf8PathBuf::from(system_path_string))
         }
     }

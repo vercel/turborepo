@@ -452,7 +452,6 @@ mod test {
     use std::fs;
 
     use anyhow::Result;
-    use camino::{Utf8Path, Utf8PathBuf};
     use tempfile::{NamedTempFile, TempDir};
     use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;

@@ -673,7 +673,7 @@ mod test {
     fn glob_walk_inner(pattern: &str, result_count: usize) -> Option<WalkError> {
         let dir = setup();
 
-        let path = AbsoluteSystemPathBuf::new(dir.path()).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
         let success = match super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All) {
             Ok(e) => e.into_iter(),
             Err(e) => return Some(e),
@@ -1237,7 +1237,7 @@ mod test {
     ) {
         let dir = setup_files(files);
         let base_path = base_path.trim_start_matches('/');
-        let path = AbsoluteSystemPathBuf::new(dir.path().join(base_path)).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(dir.path().join(base_path)).unwrap();
         let include: Vec<_> = include.iter().map(|s| s.to_string()).collect();
         let exclude: Vec<_> = exclude.iter().map(|s| s.to_string()).collect();
 
@@ -1249,13 +1249,7 @@ mod test {
 
             let success = success
                 .iter()
-                .map(|p| {
-                    p.as_path()
-                        .strip_prefix(dir.path())
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                })
+                .map(|p| p.as_path().strip_prefix(dir.path()).unwrap().as_str())
                 .sorted()
                 .collect::<Vec<_>>();
 
@@ -1334,7 +1328,7 @@ mod test {
     fn test_directory_traversal() {
         let files = &["root-file", "child/some-file"];
         let tmp = setup_files(files);
-        let root = AbsoluteSystemPathBuf::new(tmp.path()).unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         let child = root.join_component("child");
         let include = &["../*-file".to_string()];
         let exclude = &[];
@@ -1342,7 +1336,7 @@ mod test {
             .unwrap()
             .into_iter();
         let results = iter
-            .map(|entry| root.anchor(entry).unwrap().to_str().unwrap().to_string())
+            .map(|entry| root.anchor(entry).unwrap().to_string())
             .collect::<Vec<_>>();
         let expected = vec!["root-file".to_string()];
         assert_eq!(results, expected);
@@ -1359,7 +1353,7 @@ mod test {
             "apps/some-app/node_modules/dep/package.json",
         ];
         let tmp = setup_files(files);
-        let root = AbsoluteSystemPathBuf::new(tmp.path()).unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         let include = &[
             "apps/*/package.json".to_string(),
             "docs/package.json".to_string(),
@@ -1370,7 +1364,7 @@ mod test {
             .into_iter()
             .map(|path| {
                 let relative = root.anchor(path).unwrap();
-                relative.to_str().unwrap().to_string()
+                relative.to_string()
             })
             .collect::<HashSet<_>>();
         let expected: HashSet<String> = HashSet::from_iter(

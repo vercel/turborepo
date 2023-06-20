@@ -645,7 +645,7 @@ pub async fn run(
         run_args.single_package = single_package;
     }
     cli_args.command = Some(command);
-    cli_args.cwd = Some(repo_root.clone().into());
+    cli_args.cwd = Some(repo_root.as_path().to_owned());
 
     match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {

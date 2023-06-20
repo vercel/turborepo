@@ -69,7 +69,7 @@ impl AbsoluteSystemPathBuf {
     pub fn new(unchecked_path: impl Into<String>) -> Result<Self, PathError> {
         let unchecked_path = unchecked_path.into();
         if !Path::new(&unchecked_path).is_absolute() {
-            return Err(PathError::NotAbsolute(unchecked_path).into());
+            return Err(PathError::NotAbsolute(unchecked_path));
         }
 
         let system_path = unchecked_path.into_system();
@@ -128,7 +128,7 @@ impl AbsoluteSystemPathBuf {
     ///   let base = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
     ///   let anchored_path = AbsoluteSystemPathBuf::new("C:\\Users\\user\\Documents").unwrap();
     ///   let anchored_path = base.anchor(&anchored_path).unwrap();
-    ///  assert_eq!(anchored_path.to_str().unwrap(), "Documents");
+    ///  assert_eq!(anchored_path.as_str(), "Documents");
     /// }
     /// ```
     pub fn anchor(
@@ -160,9 +160,9 @@ impl AbsoluteSystemPathBuf {
     /// let resolved_path = absolute_path.resolve(&anchored_path);
     ///
     /// #[cfg(not(windows))]
-    /// assert_eq!(resolved_path.as_path(), Path::new("/Users/user/Documents"));
+    /// assert_eq!(resolved_path.as_str(), "/Users/user/Documents");
     /// #[cfg(windows)]
-    /// assert_eq!(resolved_path.as_path(), Path::new("C:\\Users\\user\\Documents"));
+    /// assert_eq!(resolved_path.as_str(), "C:\\Users\\user\\Documents");
     /// ```
     pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
         AbsoluteSystemPathBuf(self.0.join(path))
