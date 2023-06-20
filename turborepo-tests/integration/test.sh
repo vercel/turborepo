@@ -14,7 +14,8 @@
 export TURBO_LOG_ORDER=stream
 
 if [ "$1" = "" ]; then
-  .cram_env/bin/prysk --shell="$(which bash)" tests
+  .cram_env/bin/prysk --shell="$(which bash)" tests -iy
+  git diff
 else
   .cram_env/bin/prysk --shell="$(which bash)" "tests/$1"
 fi
