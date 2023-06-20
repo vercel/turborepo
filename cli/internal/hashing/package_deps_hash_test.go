@@ -381,6 +381,29 @@ func Test_memoizedGetTraversePath(t *testing.T) {
 	assert.Check(t, gotOne == gotTwo, "The strings are identical.")
 }
 
+func Test_hashSymlink(t *testing.T) {
+	repoRoot := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+
+	dst := repoRoot.UntypedJoin("target")
+	err := dst.MkdirAll(0755)
+	assert.NilError(t, err, "EnsureDir")
+	link := repoRoot.UntypedJoin("link")
+	err = link.Symlink("target")
+	assert.NilError(t, err, "Symlink")
+
+	// set up git repo and commit all
+	requireGitCmd(t, repoRoot, "init", ".")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.name", "test")
+	requireGitCmd(t, repoRoot, "config", "--local", "user.email", "test@example.com")
+	requireGitCmd(t, repoRoot, "add", ".")
+	requireGitCmd(t, repoRoot, "commit", "-m", "foo")
+
+	hashes, err := GetPackageFileHashes(repoRoot, turbopath.AnchoredSystemPathFromUpstream(""), []string{"l*"})
+	assert.NilError(t, err, "getHashObject")
+	// We expect to skip hashing the symlink. Note that this is a bug and should be fixed
+	assert.Equal(t, len(hashes), 0)
+}
+
 func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	rootIgnore := strings.Join([]string{
 		"ignoreme",

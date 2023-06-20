@@ -81,6 +81,10 @@ pub fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
                 continue;
             }
         }
+        // FIXME: we don't hash symlinks...
+        if metadata.is_symlink() {
+            continue;
+        }
         let hash = git_like_hash_file(path, &metadata)?;
         hashes.insert(relative_path, hash);
     }

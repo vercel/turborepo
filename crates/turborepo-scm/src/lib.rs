@@ -20,8 +20,8 @@ mod status;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("git error: {0}")]
-    Git2(#[from] git2::Error, #[backtrace] backtrace::Backtrace),
+    #[error("git error on {1}: {0}")]
+    Git2(git2::Error, String, #[backtrace] backtrace::Backtrace),
     #[error("git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error("io error: {0}")]
@@ -52,6 +52,10 @@ impl From<wax::BuildError> for Error {
 impl Error {
     pub(crate) fn git_error(s: impl Into<String>) -> Self {
         Error::Git(s.into(), Backtrace::capture())
+    }
+
+    pub(crate) fn git2_error_context(error: git2::Error, context: String) -> Self {
+        Error::Git2(error, context, Backtrace::capture())
     }
 }
 

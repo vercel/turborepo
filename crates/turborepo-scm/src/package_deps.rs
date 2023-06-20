@@ -117,6 +117,7 @@ mod tests {
     use std::{assert_matches::assert_matches, process::Command};
 
     use super::*;
+    use crate::manual::get_package_file_hashes_from_processing_gitignore;
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -149,6 +150,29 @@ mod tests {
         for cmd in cmds {
             require_git_cmd(repo_root, cmd);
         }
+    }
+
+    #[test]
+    fn test_hash_symlink() {
+        let (_, tmp_root) = tmp_dir();
+        let git_root = tmp_root.join_component("actual_repo");
+        git_root.create_dir_all().unwrap();
+        setup_repository(&git_root);
+        git_root.join_component("inside").create_dir_all().unwrap();
+        let link = git_root.join_component("link");
+        link.symlink_to_dir("inside").unwrap();
+        let to_hash = vec![RelativeUnixPathBuf::new("link").unwrap()];
+        let mut hashes = GitHashes::new();
+        // FIXME: This test verifies a bug: we don't hash symlinks.
+        // TODO: update this test to point at get_package_file_hashes
+        hash_objects(&git_root, &git_root, to_hash, &mut hashes).unwrap();
+        assert!(hashes.is_empty());
+
+        let pkg_path = git_root.anchor(&git_root).unwrap();
+        let manual_hashes =
+            get_package_file_hashes_from_processing_gitignore(&git_root, &pkg_path, &["l*"])
+                .unwrap();
+        assert!(manual_hashes.is_empty());
     }
 
     #[test]

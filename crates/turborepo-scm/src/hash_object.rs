@@ -10,10 +10,30 @@ pub(crate) fn hash_objects(
 ) -> Result<(), Error> {
     for filename in to_hash {
         let full_file_path = git_root.join_unix_path(filename)?;
-        let hash = git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path)?;
-        let package_relative_path =
-            AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path).to_unix()?;
-        hashes.insert(package_relative_path, hash.to_string());
+        match git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path) {
+            Ok(hash) => {
+                let package_relative_path =
+                    AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
+                        .to_unix()?;
+                hashes.insert(package_relative_path, hash.to_string());
+            }
+            Err(e) => {
+                // FIXME: we currently do not hash symlinks. "git hash-object" cannot handle
+                // them, and the Go implementation errors on them, switches to
+                // manual, and then skips them. For now, we'll skip them too.
+                if e.class() == git2::ErrorClass::Os
+                    && full_file_path
+                        .symlink_metadata()
+                        .map(|md| md.is_symlink())
+                        .unwrap_or(false)
+                {
+                    continue;
+                } else {
+                    // For any other error, ensure we attach some context to it
+                    return Err(Error::git2_error_context(e, full_file_path.to_string()));
+                }
+            }
+        }
     }
     Ok(())
 }
