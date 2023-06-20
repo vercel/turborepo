@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn test_detect_pnpm() -> Result<()> {
         let repo_root = tempdir()?;
-        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
         let lockfile_path = repo_root.path().join(LOCKFILE);
         File::create(lockfile_path)?;
         let package_manager = PackageManager::detect_package_manager(&repo_root_path)?;

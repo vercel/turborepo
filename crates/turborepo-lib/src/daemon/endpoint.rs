@@ -41,7 +41,7 @@ pub async fn listen_socket(
 > {
     let pid_path = path.join_component("turbod.pid");
     let sock_path = path.join_component("turbod.sock");
-    let mut lock = pidlock::Pidlock::new(pid_path.as_path().to_owned());
+    let mut lock = pidlock::Pidlock::new(pid_path.as_std_path().to_owned());
 
     trace!("acquiring pidlock");
     // this will fail if the pid is already owned
@@ -190,7 +190,7 @@ mod test {
     use crate::daemon::endpoint::SocketOpenError;
 
     fn pid_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::new(tmp_path.join("turbod.pid")).unwrap()
+        AbsoluteSystemPathBuf::try_from(tmp_path.join("turbod.pid")).unwrap()
     }
 
     #[tokio::test]

@@ -36,7 +36,7 @@ fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error>
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_ls_tree(&buffer)?;
         let hash = String::from_utf8(entry.hash.to_vec())?;
-        let path = RelativeUnixPathBuf::new(entry.filename)?;
+        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_vec())?)?;
         hashes.insert(path, hash);
         buffer.clear();
     }
@@ -81,12 +81,11 @@ mod tests {
     use crate::{ls_tree::read_ls_tree, package_deps::GitHashes};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
-            (
-                RelativeUnixPathBuf::new(path.as_bytes()).unwrap(),
-                hash.to_string(),
-            )
-        }))
+        HashMap::from_iter(
+            pairs
+                .into_iter()
+                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
+        )
     }
 
     #[test]

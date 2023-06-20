@@ -113,7 +113,9 @@ pub fn _globwalk(
         match match_type {
             // if it is a perfect match, and our walk_type allows it, then we should yield it
             MatchType::Match if walk_type.should_emit(is_directory) => {
-                return Some(Ok(AbsoluteSystemPathBuf::new(path).expect("absolute")));
+                return Some(Ok(
+                    AbsoluteSystemPathBuf::try_from(path.as_path()).expect("absolute")
+                ));
             }
             // we should yield potential matches if they are symlinks. we don't want to traverse
             // into them, but simply say 'hey this is a symlink that could match'
@@ -163,11 +165,12 @@ fn preprocess_paths_and_globs(
     exclude: &[String],
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
     let base_path_slash = base_path
-        .as_path()
+        .as_std_path()
         .to_slash()
         // Windows drive paths need to be escaped, and ':' is a valid token in unix paths
         .map(|s| s.replace(':', "\\:"))
         .ok_or(WalkError::InvalidPath)?;
+
     let (include_paths, lowest_segment) = include
         .iter()
         .map(|s| join_unix_like_paths(&base_path_slash, s))
@@ -325,7 +328,7 @@ pub fn globwalk(
                 assert!(prefix.is_absolute(), "Found relative glob path {}", glob);
                 // We're either going to return this path or nothing. Check if it's a directory
                 // and if we want directories
-                match AbsoluteSystemPathBuf::new(prefix).and_then(|path| {
+                match AbsoluteSystemPathBuf::try_from(prefix).and_then(|path| {
                     let metadata = path.symlink_metadata()?;
                     Ok((path, metadata))
                 }) {
@@ -355,9 +358,9 @@ pub fn globwalk(
                         Ok(entry) if walk_type == WalkType::Files && entry.file_type().is_dir() => {
                             None
                         }
-                        Ok(entry) => {
-                            Some(AbsoluteSystemPathBuf::new(entry.path()).map_err(|e| e.into()))
-                        }
+                        Ok(entry) => Some(
+                            AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
+                        ),
                         Err(e) => Some(Err(e.into())),
                     })
                     .collect::<Vec<_>>()
@@ -670,7 +673,7 @@ mod test {
     fn glob_walk_inner(pattern: &str, result_count: usize) -> Option<WalkError> {
         let dir = setup();
 
-        let path = AbsoluteSystemPathBuf::new(dir.path()).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(dir.path()).unwrap();
         let success = match super::globwalk(&path, &[pattern.into()], &[], crate::WalkType::All) {
             Ok(e) => e.into_iter(),
             Err(e) => return Some(e),
@@ -1234,7 +1237,7 @@ mod test {
     ) {
         let dir = setup_files(files);
         let base_path = base_path.trim_start_matches('/');
-        let path = AbsoluteSystemPathBuf::new(dir.path().join(base_path)).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(dir.path().join(base_path)).unwrap();
         let include: Vec<_> = include.iter().map(|s| s.to_string()).collect();
         let exclude: Vec<_> = exclude.iter().map(|s| s.to_string()).collect();
 
@@ -1246,13 +1249,7 @@ mod test {
 
             let success = success
                 .iter()
-                .map(|p| {
-                    p.as_path()
-                        .strip_prefix(dir.path())
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                })
+                .map(|p| p.as_path().strip_prefix(dir.path()).unwrap().as_str())
                 .sorted()
                 .collect::<Vec<_>>();
 
@@ -1331,7 +1328,7 @@ mod test {
     fn test_directory_traversal() {
         let files = &["root-file", "child/some-file"];
         let tmp = setup_files(files);
-        let root = AbsoluteSystemPathBuf::new(tmp.path()).unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         let child = root.join_component("child");
         let include = &["../*-file".to_string()];
         let exclude = &[];
@@ -1339,7 +1336,7 @@ mod test {
             .unwrap()
             .into_iter();
         let results = iter
-            .map(|entry| root.anchor(entry).unwrap().to_str().unwrap().to_string())
+            .map(|entry| root.anchor(entry).unwrap().to_string())
             .collect::<Vec<_>>();
         let expected = vec!["root-file".to_string()];
         assert_eq!(results, expected);
@@ -1356,7 +1353,7 @@ mod test {
             "apps/some-app/node_modules/dep/package.json",
         ];
         let tmp = setup_files(files);
-        let root = AbsoluteSystemPathBuf::new(tmp.path()).unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
         let include = &[
             "apps/*/package.json".to_string(),
             "docs/package.json".to_string(),
@@ -1367,7 +1364,7 @@ mod test {
             .into_iter()
             .map(|path| {
                 let relative = root.anchor(path).unwrap();
-                relative.to_str().unwrap().to_string()
+                relative.to_string()
             })
             .collect::<HashSet<_>>();
         let expected: HashSet<String> = HashSet::from_iter(

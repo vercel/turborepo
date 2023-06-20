@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+use camino::Utf8PathBuf;
 use futures::{stream::iter, StreamExt};
 use globwatch::{ConfigError, GlobWatcher, StopToken, WatchConfig, Watcher};
 use itertools::Itertools;
@@ -51,7 +52,7 @@ impl HashGlobWatcher<RecommendedWatcher> {
     #[tracing::instrument]
     pub fn new(
         relative_to: AbsoluteSystemPathBuf,
-        flush_folder: PathBuf,
+        flush_folder: Utf8PathBuf,
     ) -> Result<Self, notify::Error> {
         let (watcher, config) = GlobWatcher::new(flush_folder)?;
         Ok(Self {
@@ -358,6 +359,7 @@ fn clear_hash_globs(
 mod test {
     use std::{fs::File, sync::Arc, time::Duration};
 
+    use camino::Utf8PathBuf;
     use globwatch::StopSource;
     use tokio::time::timeout;
     use turbopath::AbsoluteSystemPathBuf;
@@ -392,8 +394,8 @@ mod test {
         let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
         let watcher = Arc::new(
             super::HashGlobWatcher::new(
-                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
-                flush.path().to_path_buf(),
+                AbsoluteSystemPathBuf::try_from(dir.path()).unwrap(),
+                Utf8PathBuf::try_from(flush.path().to_path_buf()).unwrap(),
             )
             .unwrap(),
         );
@@ -508,8 +510,8 @@ mod test {
         let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
         let watcher = Arc::new(
             super::HashGlobWatcher::new(
-                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
-                flush.path().to_path_buf(),
+                AbsoluteSystemPathBuf::try_from(dir.path()).unwrap(),
+                Utf8PathBuf::try_from(flush.path().to_path_buf()).unwrap(),
             )
             .unwrap(),
         );
@@ -630,8 +632,8 @@ mod test {
         let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
         let watcher = Arc::new(
             super::HashGlobWatcher::new(
-                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
-                flush.path().to_path_buf(),
+                AbsoluteSystemPathBuf::try_from(dir.path()).unwrap(),
+                Utf8PathBuf::try_from(flush.path().to_path_buf()).unwrap(),
             )
             .unwrap(),
         );
@@ -699,8 +701,8 @@ mod test {
         let flush = tempdir::TempDir::new("globwatch-flush").unwrap();
         let watcher = Arc::new(
             super::HashGlobWatcher::new(
-                AbsoluteSystemPathBuf::new(dir.path()).unwrap(),
-                flush.path().to_path_buf(),
+                AbsoluteSystemPathBuf::try_from(dir.path()).unwrap(),
+                Utf8PathBuf::try_from(flush.path().to_path_buf()).unwrap(),
             )
             .unwrap(),
         );

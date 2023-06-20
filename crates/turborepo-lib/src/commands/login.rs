@@ -326,7 +326,7 @@ mod test {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
-        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
         // Explicitly pass the wrong port to confirm that we're reading it from the
         // manual override
         fs::write(
@@ -340,7 +340,7 @@ mod test {
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .load()
                     .unwrap(),
             ),
@@ -378,7 +378,7 @@ mod test {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
-        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
         // Explicitly pass the wrong port to confirm that we're reading it from the
         // manual override
         fs::write(
@@ -392,7 +392,7 @@ mod test {
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .load()
                     .unwrap(),
             ),

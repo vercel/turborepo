@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn test_detect_yarn() -> Result<()> {
         let repo_root = tempdir()?;
-        let repo_root_path = AbsoluteSystemPathBuf::new(repo_root.path())?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
 
         let yarn_lock_path = repo_root.path().join(LOCKFILE);
         File::create(yarn_lock_path)?;

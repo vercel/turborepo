@@ -1,6 +1,5 @@
 use std::{
     env,
-    ffi::OsString,
     fs::{self},
     path::{Path, PathBuf},
     process,
@@ -9,6 +8,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
 use semver::Version;
@@ -198,7 +198,7 @@ struct PackageJson {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct YarnRc {
-    pnp_unplugged_folder: PathBuf,
+    pnp_unplugged_folder: Utf8PathBuf,
 }
 
 impl Default for YarnRc {
@@ -301,7 +301,7 @@ impl LocalTurboState {
     // - berry (nodeLinker: "node-modules")
     //
     // This also supports people directly depending upon the platform version.
-    fn generate_hoisted_path(root_path: &Path) -> Option<PathBuf> {
+    fn generate_hoisted_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
         Some(root_path.join("node_modules"))
     }
 
@@ -309,7 +309,7 @@ impl LocalTurboState {
     // - `npm install --install-strategy=shallow` (`npm install --global-style`)
     // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
     // - berry (nodeLinker: "pnpm")
-    fn generate_nested_path(root_path: &Path) -> Option<PathBuf> {
+    fn generate_nested_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
         Some(
             root_path
                 .join("node_modules")
@@ -321,14 +321,17 @@ impl LocalTurboState {
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
-    fn generate_linked_path(root_path: &Path) -> Option<PathBuf> {
-        fs_canonicalize(root_path.join("node_modules").join("turbo").join("..")).ok()
+    fn generate_linked_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
+        let canonical_path =
+            fs_canonicalize(root_path.join("node_modules").join("turbo").join("..")).ok()?;
+
+        Utf8PathBuf::try_from(canonical_path).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
-    fn get_unplugged_base_path(root_path: &Path) -> PathBuf {
+    fn get_unplugged_base_path(root_path: &Utf8Path) -> Utf8PathBuf {
         let yarn_rc_filename =
-            env::var_os("YARN_RC_FILENAME").unwrap_or_else(|| OsString::from(".yarnrc.yml"));
+            env::var("YARN_RC_FILENAME").unwrap_or_else(|_| String::from(".yarnrc.yml"));
         let yarn_rc_filepath = root_path.join(yarn_rc_filename);
 
         let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or_default();
@@ -339,12 +342,12 @@ impl LocalTurboState {
 
     // Unplugged strategy:
     // - berry 2.1+
-    fn generate_unplugged_path(root_path: &Path) -> Option<PathBuf> {
+    fn generate_unplugged_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
         let platform_package_name = TurboState::platform_package_name();
         let unplugged_base_path = Self::get_unplugged_base_path(root_path);
 
         unplugged_base_path
-            .read_dir()
+            .read_dir_utf8()
             .ok()
             .and_then(|mut read_dir| {
                 // berry includes additional metadata in the filename.
@@ -352,10 +355,7 @@ impl LocalTurboState {
                 read_dir.find_map(|item| match item {
                     Ok(entry) => {
                         let file_name = entry.file_name();
-                        if file_name
-                            .to_string_lossy()
-                            .starts_with(platform_package_name)
-                        {
+                        if file_name.starts_with(platform_package_name) {
                             Some(unplugged_base_path.join(file_name).join("node_modules"))
                         } else {
                             None
@@ -373,13 +373,13 @@ impl LocalTurboState {
     //
     // In spite of that, the only known unsupported local invocation is Yarn/Berry <
     // 2.1 PnP
-    pub fn infer(root_path: &Path) -> Option<Self> {
+    pub fn infer(root_path: &Utf8Path) -> Option<Self> {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
-        let platform_package_json_path: PathBuf =
+        let platform_package_json_path: Utf8PathBuf =
             [platform_package_name, "package.json"].iter().collect();
-        let platform_package_executable_path: PathBuf =
+        let platform_package_executable_path: Utf8PathBuf =
             [platform_package_name, "bin", binary_name].iter().collect();
 
         // These are lazy because the last two are more expensive.
@@ -414,7 +414,7 @@ impl LocalTurboState {
                         version: platform_package_json.version,
                     });
                 }
-                Err(_) => debug!("No local turbo binary found at: {}", bin_path.display()),
+                Err(_) => debug!("No local turbo binary found at: {}", bin_path),
             }
         }
 
@@ -762,13 +762,13 @@ pub fn run() -> Result<Payload> {
     // and `--cwd` flags.
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
-        debug!("Repository Root: {}", repo_state.root.to_string_lossy());
+        debug!("Repository Root: {}", repo_state.root);
         return cli::run(Some(repo_state), &subscriber, ui);
     }
 
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
-            debug!("Repository Root: {}", repo_state.root.to_string_lossy());
+            debug!("Repository Root: {}", repo_state.root);
             repo_state.run_correct_turbo(args, &subscriber, ui)
         }
         Err(err) => {
@@ -787,7 +787,7 @@ mod test {
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
-        let dir = AbsoluteSystemPathBuf::new(tmp_dir.path().to_path_buf())
+        let dir = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
             .unwrap()
             .to_realpath()
             .unwrap();

@@ -30,7 +30,7 @@ mod test {
         // Note that cwd can be different based on where the test suite is running from
         // or if the test is launched in debug mode from VSCode
         let cwd = std::env::current_dir().unwrap();
-        let cwd = AbsoluteSystemPathBuf::new(cwd).unwrap();
+        let cwd = AbsoluteSystemPathBuf::try_from(cwd).unwrap();
         let git_root = find_git_root(&cwd).unwrap();
         let fixture_path = git_root.join_components(&[
             "crates",

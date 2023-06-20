@@ -144,7 +144,7 @@ mod test {
     #[tokio::test]
     async fn test_run() -> Result<()> {
         let dir = tempdir()?;
-        let repo_root = AbsoluteSystemPathBuf::new(dir.path())?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path())?;
         let mut args = Args::default();
         // Daemon does not work with run stub yet
         let run_args = RunArgs {

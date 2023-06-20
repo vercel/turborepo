@@ -1,5 +1,6 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
+use camino::Utf8PathBuf;
 use pidlock::PidlockError::AlreadyOwned;
 use time::{format_description, OffsetDateTime};
 use tracing::{trace, warn};
@@ -56,13 +57,13 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             if *json {
                 println!("{}", serde_json::to_string_pretty(&status)?);
             } else {
-                println!("Daemon log file: {}", status.log_file.to_string_lossy());
+                println!("Daemon log file: {}", status.log_file);
                 println!(
                     "Daemon uptime: {}s",
                     humantime::format_duration(Duration::from_millis(status.uptime_ms))
                 );
-                println!("Daemon pid file: {}", status.pid_file.to_string_lossy());
-                println!("Daemon socket file: {}", status.sock_file.to_string_lossy());
+                println!("Daemon pid file: {}", status.pid_file);
+                println!("Daemon socket file: {}", status.sock_file);
             }
         }
         DaemonCommand::Clean => {
@@ -137,7 +138,9 @@ pub async fn daemon_server(
         let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
             .expect("user has a home dir");
 
-        let folder = AbsoluteSystemPathBuf::new(directories.data_dir()).expect("absolute");
+        let folder =
+            AbsoluteSystemPathBuf::new(directories.data_dir().to_str().expect("UTF-8 path"))
+                .expect("absolute");
 
         let log_folder = folder.join_component("logs");
         let log_file =
@@ -185,7 +188,7 @@ pub struct DaemonStatus {
     pub uptime_ms: u64,
     // this comes from the daemon server, so we trust that
     // it is correct
-    pub log_file: PathBuf,
+    pub log_file: Utf8PathBuf,
     pub pid_file: turbopath::AbsoluteSystemPathBuf,
     pub sock_file: turbopath::AbsoluteSystemPathBuf,
 }

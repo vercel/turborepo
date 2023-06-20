@@ -30,6 +30,7 @@ use std::{
     },
 };
 
+use camino::Utf8PathBuf;
 use futures::{channel::oneshot, future::Either, FutureExt, Stream, StreamExt as _};
 use itertools::Itertools;
 use merge_streams::MergeStreams;
@@ -58,7 +59,7 @@ impl GlobWatcher {
     /// see the module-level documentation.
     #[tracing::instrument]
     pub fn new(
-        flush_dir: PathBuf,
+        flush_dir: Utf8PathBuf,
     ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), notify::Error> {
         let (send_event, receive_event) = tokio::sync::mpsc::unbounded_channel();
         let (send_config, receive_config) = tokio::sync::mpsc::unbounded_channel();
@@ -414,25 +415,25 @@ enum GlobSymbol<'a> {
 /// specified in minimatch glob syntax.
 ///
 /// syntax:
-/// ?		Matches any single character.
+/// ?    Matches any single character.
 ///
 /// *      Matches zero or more characters, except for path separators.
 ///
-/// **		Matches zero or more characters, including path separators.
+/// **      Matches zero or more characters, including path separators.
 ///         Must match a complete path segment.
 ///
-/// [ab]	Matches one of the characters contained in the brackets.
+/// [ab]    Matches one of the characters contained in the brackets.
 ///         Character ranges, e.g. [a-z] are also supported. Use [!ab] or [^ab]
 ///         to match any character except those contained in the brackets.
 ///
-/// {a,b}	Matches one of the patterns contained in the braces. Any of the
+/// {a,b}   Matches one of the patterns contained in the braces. Any of the
 ///         wildcard characters can be used in the sub-patterns. Braces may
 ///         be nested up to 10 levels deep.
 ///
-/// !		When at the start of the glob, this negates the result.
+/// !       When at the start of the glob, this negates the result.
 ///         Multiple ! characters negate the glob multiple times.
 ///
-/// \		A backslash character may be used to escape any special characters.
+/// \       A backslash character may be used to escape any special characters.
 ///
 /// Of these, we only handle `{` and escaping.
 ///
