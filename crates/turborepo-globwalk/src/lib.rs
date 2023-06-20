@@ -46,7 +46,7 @@ pub use walkdir::Error as WalkDirError;
 pub enum WalkError {
     // note: wax 0.5 has a lifetime in the BuildError, so we can't use it here
     #[error("bad pattern {0}: {1}")]
-    BadPattern(String, BuildError),
+    BadPattern(String, Box<BuildError>),
     #[error("invalid path")]
     InvalidPath,
     #[error("walk error: {0}")]
@@ -286,7 +286,7 @@ fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, Wa
     let raw = raw.as_ref();
     Glob::new(raw)
         .map(|g| g.into_owned())
-        .map_err(|e| WalkError::BadPattern(raw.to_string(), e))
+        .map_err(|e| WalkError::BadPattern(raw.to_string(), Box::new(e)))
 }
 
 pub(crate) fn any_with_contextual_error(
@@ -295,7 +295,7 @@ pub(crate) fn any_with_contextual_error(
 ) -> Result<wax::Any<'static>, WalkError> {
     wax::any(precompiled).map_err(|e| {
         let text = text.iter().join(",");
-        WalkError::BadPattern(text, e)
+        WalkError::BadPattern(text, Box::new(e))
     })
 }
 
