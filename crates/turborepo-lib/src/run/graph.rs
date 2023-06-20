@@ -5,7 +5,7 @@ use turbopath::AbsoluteSystemPath;
 
 use crate::{
     config::TurboJson,
-    package_graph::{self, PackageGraph, WorkspaceCatalog},
+    package_graph::{PackageGraph, WorkspaceCatalog},
     task_graph::{Pipeline, TaskDefinition},
 };
 

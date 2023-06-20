@@ -23,6 +23,7 @@ pub struct GlobalHashableInputs {
     dot_env: Vec<RelativeUnixPathBuf>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
     _ui: &UI,
     _root_path: &AbsoluteSystemPath,

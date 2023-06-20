@@ -11,6 +11,7 @@ pub struct WorkspaceCatalog {}
 
 pub struct PackageGraph {
     workspace_graph: Rc<petgraph::Graph<String, String>>,
+    #[allow(dead_code)]
     workspace_infos: Rc<WorkspaceCatalog>,
     package_manager: PackageManager,
     lockfile: Box<dyn Lockfile>,
