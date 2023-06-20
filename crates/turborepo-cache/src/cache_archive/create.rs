@@ -166,9 +166,7 @@ mod tests {
         let anchor = AbsoluteSystemPath::new(dir.path())?;
         let out_path = anchor.join_component("test.tar");
         let mut archive = CacheArchive::create(&out_path)?;
-        let really_long_file = unsafe {
-            AnchoredSystemPath::new_unchecked("this-is-a-really-really-really-long-path-like-so-very-long-that-i-can-list-all-of-my-favorite-directors-like-edward-yang-claire-denis-lucrecia-martel-wong-kar-wai-even-kurosawa")
-        };
+        let really_long_file = AnchoredSystemPath::new("this-is-a-really-really-really-long-path-like-so-very-long-that-i-can-list-all-of-my-favorite-directors-like-edward-yang-claire-denis-lucrecia-martel-wong-kar-wai-even-kurosawa").unwrap();
 
         let really_long_path = anchor.resolve(really_long_file);
         really_long_path.create_with_contents("The End!")?;

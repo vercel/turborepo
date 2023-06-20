@@ -1,10 +1,7 @@
 use std::{
-    borrow::Cow,
     fmt,
     path::{Component, Path},
 };
-
-use path_slash::CowExt;
 
 use crate::{AnchoredSystemPathBuf, PathError};
 
@@ -50,14 +47,16 @@ impl AnchoredSystemPath {
             ));
         }
 
-        let path_str = path_ref
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path_ref.to_string_lossy().to_string()))?;
-
         #[cfg(windows)]
-        if path_str.contains('/') {
-            return Err(PathError::NotSystem(path.to_string_lossy().to_string()));
+        {
+            let path_str = path_ref
+                .to_str()
+                .ok_or_else(|| PathError::InvalidUnicode(path_ref.to_string_lossy().to_string()))?;
+            if path_str.contains('/') {
+                return Err(PathError::NotSystem(path.to_string_lossy().to_string()));
+            }
         }
+
         Ok(unsafe { &*(path_ref as *const Path as *const Self) })
     }
 

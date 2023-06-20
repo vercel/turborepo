@@ -435,75 +435,67 @@ mod tests {
                 name: "cache optimized",
                 input_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/three/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/a/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/a/").unwrap(),
                     },
                     TarFile::File {
                         body: vec![],
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("one/two/three/file-one")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/file-one").unwrap(),
                     },
                     TarFile::File {
                         body: vec![],
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("one/two/three/file-two")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/file-two").unwrap(),
                     },
                     TarFile::File {
                         body: vec![],
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/a/file") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/a/file").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/b/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/b/").unwrap(),
                     },
                     TarFile::File {
                         body: vec![],
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/b/file") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/b/file").unwrap(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/three/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("one/two/three/file-one")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/file-one").unwrap(),
                         body: vec![],
                     },
                     TarFile::File {
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("one/two/three/file-two")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/file-two").unwrap(),
                         body: vec![],
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/a/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/a/").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/a/file") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/a/file").unwrap(),
                         body: vec![],
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/b/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/b/").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/b/file") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/b/file").unwrap(),
                         body: vec![],
                     },
                 ],
@@ -523,75 +515,67 @@ mod tests {
                 name: "pathological cache works",
                 input_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/a/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/a/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/b/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/b/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/three/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/").unwrap(),
                     },
                     TarFile::File {
                         body: vec![],
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/a/file") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/a/file").unwrap(),
                     },
                     TarFile::File {
                         body: vec![],
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/b/file") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/b/file").unwrap(),
                     },
                     TarFile::File {
                         body: vec![],
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("one/two/three/file-one")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/file-one").unwrap(),
                     },
                     TarFile::File {
                         body: vec![],
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("one/two/three/file-two")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/file-two").unwrap(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/three/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("one/two/three/file-one")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/file-one").unwrap(),
                         body: vec![],
                     },
                     TarFile::File {
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("one/two/three/file-two")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/three/file-two").unwrap(),
                         body: vec![],
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/a/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/a/").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/a/file") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/a/file").unwrap(),
                         body: vec![],
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/b/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/b/").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/b/file") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/b/file").unwrap(),
                         body: vec![],
                     },
                 ],
@@ -611,20 +595,20 @@ mod tests {
                 name: "symlink hello world",
                 input_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("target") },
+                        path: AnchoredSystemPathBuf::from_raw("target").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("source") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("target") },
+                        link_path: AnchoredSystemPathBuf::from_raw("source").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("target").unwrap(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("source") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("target") },
+                        link_path: AnchoredSystemPathBuf::from_raw("source").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("target").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("target") },
+                        path: AnchoredSystemPathBuf::from_raw("target").unwrap(),
                     },
                 ],
                 expected_output: Ok(into_anchored_system_path_vec(vec!["target", "source"])),
@@ -633,19 +617,19 @@ mod tests {
                 name: "nested file",
                 input_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder/") },
+                        path: AnchoredSystemPathBuf::from_raw("folder/").unwrap(),
                     },
                     TarFile::File {
                         body: b"file".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder/file") },
+                        path: AnchoredSystemPathBuf::from_raw("folder/file").unwrap(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder/") },
+                        path: AnchoredSystemPathBuf::from_raw("folder/").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder/file") },
+                        path: AnchoredSystemPathBuf::from_raw("folder/file").unwrap(),
                         body: b"file".to_vec(),
                     },
                 ],
@@ -655,39 +639,33 @@ mod tests {
                 name: "nested symlink",
                 input_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder/") },
+                        path: AnchoredSystemPathBuf::from_raw("folder/").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("folder/symlink")
-                        },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("../") },
+                        link_path: AnchoredSystemPathBuf::from_raw("folder/symlink").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("folder/symlink/folder-sibling")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("folder/symlink/folder-sibling")
+                            .unwrap(),
                         body: b"folder-sibling".to_vec(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder/") },
+                        path: AnchoredSystemPathBuf::from_raw("folder/").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("folder/symlink")
-                        },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("../") },
+                        link_path: AnchoredSystemPathBuf::from_raw("folder/symlink").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("folder/symlink/folder-sibling")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("folder/symlink/folder-sibling")
+                            .unwrap(),
                         body: b"folder-sibling".to_vec(),
                     },
                     TarFile::File {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder-sibling") },
+                        path: AnchoredSystemPathBuf::from_raw("folder-sibling").unwrap(),
                         body: b"folder-sibling".to_vec(),
                     },
                 ],
@@ -701,37 +679,37 @@ mod tests {
                 name: "pathological symlinks",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("one") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("two") },
+                        link_path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("two").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("two") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("three") },
+                        link_path: AnchoredSystemPathBuf::from_raw("two").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("three").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("three") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("real") },
+                        link_path: AnchoredSystemPathBuf::from_raw("three").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("real").unwrap(),
                     },
                     TarFile::File {
                         body: b"real".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("real") },
+                        path: AnchoredSystemPathBuf::from_raw("real").unwrap(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("one") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("two") },
+                        link_path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("two").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("two") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("three") },
+                        link_path: AnchoredSystemPathBuf::from_raw("two").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("three").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("three") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("real") },
+                        link_path: AnchoredSystemPathBuf::from_raw("three").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("real").unwrap(),
                     },
                     TarFile::File {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("real") },
+                        path: AnchoredSystemPathBuf::from_raw("real").unwrap(),
                         body: b"real".to_vec(),
                     },
                 ],
@@ -743,29 +721,25 @@ mod tests {
                 name: "place file at dir location",
                 input_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder-not-file/") },
+                        path: AnchoredSystemPathBuf::from_raw("folder-not-file/").unwrap(),
                     },
                     TarFile::File {
                         body: b"subfile".to_vec(),
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("folder-not-file/subfile")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("folder-not-file/subfile").unwrap(),
                     },
                     TarFile::File {
                         body: b"this shouldn't work".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder-not-file") },
+                        path: AnchoredSystemPathBuf::from_raw("folder-not-file").unwrap(),
                     },
                 ],
 
                 expected_files: vec![
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("folder-not-file/") },
+                        path: AnchoredSystemPathBuf::from_raw("folder-not-file/").unwrap(),
                     },
                     TarFile::File {
                         body: b"subfile".to_vec(),
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("folder-not-file/subfile")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("folder-not-file/subfile").unwrap(),
                     },
                 ],
                 expected_output: Err("IO error: Is a directory (os error 21)".to_string()),
@@ -774,16 +748,16 @@ mod tests {
                 name: "symlink cycle",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("one") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("two") },
+                        link_path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("two").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("two") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("three") },
+                        link_path: AnchoredSystemPathBuf::from_raw("two").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("three").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("three") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("one") },
+                        link_path: AnchoredSystemPathBuf::from_raw("three").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("one").unwrap(),
                     },
                 ],
                 expected_files: vec![],
@@ -793,30 +767,30 @@ mod tests {
                 name: "symlink clobber",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("one") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("two") },
+                        link_path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("two").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("one") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("three") },
+                        link_path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("three").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("one") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("real") },
+                        link_path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("real").unwrap(),
                     },
                     TarFile::File {
                         body: b"real".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("real") },
+                        path: AnchoredSystemPathBuf::from_raw("real").unwrap(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("one") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("real") },
+                        link_path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("real").unwrap(),
                     },
                     TarFile::File {
                         body: b"real".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("real") },
+                        path: AnchoredSystemPathBuf::from_raw("real").unwrap(),
                     },
                 ],
                 expected_output: Ok(into_anchored_system_path_vec(vec!["real", "one"])),
@@ -825,17 +799,17 @@ mod tests {
                 name: "symlink traversal",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("escape") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("../") },
+                        link_path: AnchoredSystemPathBuf::from_raw("escape").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
                     },
                     TarFile::File {
                         body: b"file".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("escape/file") },
+                        path: AnchoredSystemPathBuf::from_raw("escape/file").unwrap(),
                     },
                 ],
                 expected_files: vec![TarFile::Symlink {
-                    link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("escape") },
-                    link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("../") },
+                    link_path: AnchoredSystemPathBuf::from_raw("escape").unwrap(),
+                    link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
                 }],
                 expected_output: Err("tar attempts to write outside of directory: ../".to_string()),
             },
@@ -843,16 +817,16 @@ mod tests {
                 name: "Double indirection: file",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("up") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("../") },
+                        link_path: AnchoredSystemPathBuf::from_raw("up").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("link") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("up") },
+                        link_path: AnchoredSystemPathBuf::from_raw("link").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("up").unwrap(),
                     },
                     TarFile::File {
                         body: b"file".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("link/outside-file") },
+                        path: AnchoredSystemPathBuf::from_raw("link/outside-file").unwrap(),
                     },
                 ],
                 expected_files: vec![],
@@ -862,17 +836,15 @@ mod tests {
                 name: "Double indirection: folder",
                 input_files: vec![
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("up") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("../") },
+                        link_path: AnchoredSystemPathBuf::from_raw("up").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("link") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("up") },
+                        link_path: AnchoredSystemPathBuf::from_raw("link").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("up").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe {
-                            AnchoredSystemPathBuf::new_unchecked("link/level-one/level-two")
-                        },
+                        path: AnchoredSystemPathBuf::from_raw("link/level-one/level-two").unwrap(),
                     },
                 ],
                 expected_files: vec![],
@@ -882,16 +854,14 @@ mod tests {
                 name: "windows unsafe",
                 input_files: vec![TarFile::File {
                     body: b"file".to_vec(),
-                    path: unsafe { AnchoredSystemPathBuf::new_unchecked("back\\slash\\file") },
+                    path: AnchoredSystemPathBuf::from_raw("back\\slash\\file").unwrap(),
                 }],
                 expected_files: {
                     #[cfg(unix)]
                     {
                         vec![TarFile::File {
                             body: b"file".to_vec(),
-                            path: unsafe {
-                                AnchoredSystemPathBuf::new_unchecked("back\\slash\\file")
-                            },
+                            path: AnchoredSystemPathBuf::from_raw("back\\slash\\file").unwrap(),
                         }]
                     }
                     #[cfg(windows)]
@@ -905,7 +875,7 @@ mod tests {
             TestCase {
                 name: "fifo (and others) unsupported",
                 input_files: vec![TarFile::Fifo {
-                    path: unsafe { AnchoredSystemPathBuf::new_unchecked("fifo") },
+                    path: AnchoredSystemPathBuf::from_raw("fifo").unwrap(),
                 }],
                 expected_files: vec![],
                 expected_output: Err("attempted to restore unsupported file type: Fifo".to_string()),
@@ -915,33 +885,33 @@ mod tests {
                 input_files: vec![
                     TarFile::File {
                         body: b"target".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("target") },
+                        path: AnchoredSystemPathBuf::from_raw("target").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("source") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("target") },
+                        link_path: AnchoredSystemPathBuf::from_raw("source").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("target").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/").unwrap(),
                     },
                 ],
                 expected_files: vec![
                     TarFile::File {
                         body: b"target".to_vec(),
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("target") },
+                        path: AnchoredSystemPathBuf::from_raw("target").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/").unwrap(),
                     },
                     TarFile::Directory {
-                        path: unsafe { AnchoredSystemPathBuf::new_unchecked("one/two/") },
+                        path: AnchoredSystemPathBuf::from_raw("one/two/").unwrap(),
                     },
                     TarFile::Symlink {
-                        link_path: unsafe { AnchoredSystemPathBuf::new_unchecked("source") },
-                        link_target: unsafe { AnchoredSystemPathBuf::new_unchecked("target") },
+                        link_path: AnchoredSystemPathBuf::from_raw("source").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("target").unwrap(),
                     },
                 ],
                 expected_output: Ok(into_anchored_system_path_vec(vec![
@@ -1032,16 +1002,19 @@ mod tests {
         Ok(())
     }
 
-    #[test_case(Path::new("source").try_into()?, Path::new("target"), "path/to/anchor/target", "path\\to\\anchor\\target" ; "hello world")]
-    #[test_case(Path::new("child/source").try_into()?, Path::new("../sibling/target"), "path/to/anchor/sibling/target", "path\\to\\anchor\\sibling\\target" ; "Unix path subdirectory traversal")]
-    #[test_case(Path::new("child/source").try_into()?, Path::new("..\\sibling\\target"), "path/to/anchor/child/..\\sibling\\target", "path\\to\\anchor\\sibling\\target" ; "Windows path subdirectory traversal")]
+    #[test_case(Path::new("source").try_into()?, Path::new("target"), "/Users/test/target", "C:\\Users\\test\\target" ; "hello world")]
+    #[test_case(Path::new("child/source").try_into()?, Path::new("../sibling/target"), "/Users/test/sibling/target", "C:\\Users\\test\\sibling\\target" ; "Unix path subdirectory traversal")]
+    #[test_case(Path::new("child/source").try_into()?, Path::new("..\\sibling\\target"), "/Users/test/child/..\\sibling\\target", "C:\\Users\\test\\sibling\\target" ; "Windows path subdirectory traversal")]
     fn test_canonicalize_linkname(
         processed_name: AnchoredSystemPathBuf,
         linkname: &Path,
         canonical_unix: &'static str,
         _canonical_windows: &'static str,
     ) -> Result<()> {
-        let anchor = unsafe { AbsoluteSystemPath::new_unchecked(Path::new("path/to/anchor")) };
+        #[cfg(unix)]
+        let anchor = AbsoluteSystemPath::new("/Users/test").unwrap();
+        #[cfg(windows)]
+        let anchor = AbsoluteSystemPath::new("C:\\Users\\test").unwrap();
 
         let received_path = canonicalize_linkname(anchor, &processed_name, linkname)?;
 
