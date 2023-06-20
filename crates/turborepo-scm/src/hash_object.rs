@@ -22,7 +22,6 @@ pub(crate) fn hash_objects(
                 // them, and the Go implementation errors on them, switches to
                 // manual, and then skips them. For now, we'll skip them too.
                 if e.class() == git2::ErrorClass::Os
-                    && e.message() == "error reading file for hashing: Is a directory"
                     && full_file_path
                         .symlink_metadata()
                         .map(|md| md.is_symlink())
