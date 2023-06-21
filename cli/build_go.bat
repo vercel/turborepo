@@ -9,6 +9,9 @@ cd ..\..\cli
 protoc -I..\crates\ ..\crates\turborepo-ffi\messages.proto --go_out=.\internal\
 if %errorlevel% neq 0 exit /b %errorlevel%
 
+protoc --go_out=. --go_opt=paths=source_relative --go-grpc-out=. --go-grpc_opt=paths=source_relative internal\turbodprotocol\turbod.proto
+if %errorlevel% neq 0 exit /b %errorlevel%
+
 SET CGO_ENABLED=1
 go build -tags=rust -o go-turbo.exe .\cmd\turbo
 if %errorlevel% neq 0 exit /b %errorlevel%
