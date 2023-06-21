@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/ci"
@@ -28,15 +29,16 @@ func (req *spaceRequest) error(msg string) error {
 }
 
 type spacesClient struct {
-	requests   chan *spaceRequest
-	errors     []error
-	api        *client.APIClient
-	ui         cli.Ui
-	run        *spaceRun
-	runCreated chan struct{}
-	wg         sync.WaitGroup
-	spaceID    string
-	enabled    bool
+	requests       chan *spaceRequest
+	errors         []error
+	api            *client.APIClient
+	ui             cli.Ui
+	run            *spaceRun
+	runCreated     chan struct{}
+	wg             sync.WaitGroup
+	spaceID        string
+	enabled        bool
+	requestTimeout time.Duration
 }
 
 type spaceRun struct {
@@ -46,13 +48,14 @@ type spaceRun struct {
 
 func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesClient {
 	c := &spacesClient{
-		api:        api,
-		ui:         ui,
-		spaceID:    spaceID,
-		enabled:    false,                    // Start with disabled
-		requests:   make(chan *spaceRequest), // TODO: give this a size based on tasks
-		runCreated: make(chan struct{}, 1),
-		run:        &spaceRun{},
+		api:            api,
+		ui:             ui,
+		spaceID:        spaceID,
+		enabled:        false,                    // Start with disabled
+		requests:       make(chan *spaceRequest), // TODO: give this a size based on tasks
+		runCreated:     make(chan struct{}, 1),
+		run:            &spaceRun{},
+		requestTimeout: 10 * time.Second,
 	}
 
 	if spaceID == "" {
@@ -159,9 +162,9 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	var resp []byte
 	var reqErr error
 	if req.method == "POST" {
-		resp, reqErr = c.api.JSONPost(req.url, payload)
+		resp, reqErr = c.api.JSONPost(req.url, payload, c.requestTimeout)
 	} else if req.method == "PATCH" {
-		resp, reqErr = c.api.JSONPatch(req.url, payload)
+		resp, reqErr = c.api.JSONPatch(req.url, payload, c.requestTimeout)
 	} else {
 		c.errors = append(c.errors, req.error("Unsupported request method"))
 	}

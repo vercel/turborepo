@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -9,6 +10,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
@@ -57,7 +59,7 @@ func Test_sendToServer(t *testing.T) {
 		},
 	}
 
-	apiClient.RecordAnalyticsEvents(events)
+	apiClient.RecordAnalyticsEvents(events, 10*time.Second)
 
 	body := <-ch
 
@@ -156,5 +158,25 @@ func Test_FetchWhenCachingDisabled(t *testing.T) {
 	}
 	if resp != nil {
 		t.Errorf("response got %v, want <nil>", resp)
+	}
+}
+
+func Test_Timeout(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		<-time.After(50 * time.Millisecond)
+	}))
+	defer ts.Close()
+
+	// Set up test expected values
+	apiClientConfig := turbostate.APIClientConfig{
+		TeamSlug: "my-team-slug",
+		APIURL:   ts.URL,
+		Token:    "my-token",
+	}
+	apiClient := NewClient(apiClientConfig, hclog.Default(), "v1")
+
+	_, err := apiClient.JSONPost("/", []byte{}, 1*time.Millisecond)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("JSONPost got %v, want DeadlineExceeded", err)
 	}
 }
