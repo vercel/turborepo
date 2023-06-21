@@ -45,7 +45,7 @@ runs:
         corepack enable
 
     - name: Echo PATH
-      shell: |
+      run: |
         echo unix $PATH
         echo win $env:PATH
 
