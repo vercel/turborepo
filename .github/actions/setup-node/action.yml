@@ -41,7 +41,13 @@ runs:
       run: |
         npm install --force --global corepack@latest
         npm config get prefix >> $GITHUB_PATH
+        npm config get prefix >> $env:GITHUB_PATH
         corepack enable
+
+    - name: Echo PATH
+      shell: |
+        echo unix $PATH
+        echo win $env:PATH
 
     - name: pnpm install
       id: install
