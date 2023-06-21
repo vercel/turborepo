@@ -2,7 +2,6 @@ use std::{
     borrow::Borrow,
     fmt,
     fmt::{Debug, Display, Formatter},
-    io::Write,
     ops::Deref,
 };
 
