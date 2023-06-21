@@ -1,13 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt,
-    rc::Rc,
 };
 
 use anyhow::Result;
-use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{package_json::PackageJson, package_manager::PackageManager};
@@ -205,5 +202,113 @@ mod test {
             name: "c".into(),
             version: "1.2.3".into()
         }));
+    }
+
+    struct MockLockfile {}
+    impl turborepo_lockfiles::Lockfile for MockLockfile {
+        fn resolve_package(
+            &self,
+            _workspace_path: &str,
+            name: &str,
+            _version: &str,
+        ) -> std::result::Result<Option<turborepo_lockfiles::Package>, turborepo_lockfiles::Error>
+        {
+            Ok(match name {
+                "a" => Some(turborepo_lockfiles::Package::new("key:a", "1")),
+                "b" => Some(turborepo_lockfiles::Package::new("key:b", "1")),
+                "c" => Some(turborepo_lockfiles::Package::new("key:c", "1")),
+                _ => None,
+            })
+        }
+
+        fn all_dependencies(
+            &self,
+            key: &str,
+        ) -> std::result::Result<Option<HashMap<String, String>>, turborepo_lockfiles::Error>
+        {
+            match key {
+                "key:a" => Ok(Some(
+                    vec![("c", "1")]
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect(),
+                )),
+                "key:b" => Ok(Some(
+                    vec![("c", "1")]
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect(),
+                )),
+                "key:c" => Ok(None),
+                _ => Ok(None),
+            }
+        }
+    }
+
+    #[test]
+    fn test_lockfile_traversal() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_manger(Some(PackageManager::Npm))
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("package_a"),
+                PackageJson::from_value(json!({
+                    "name": "foo",
+                    "dependencies": {
+                        "a": "1"
+                    }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_b"),
+                PackageJson::from_value(json!({
+                    "name": "bar",
+                    "dependencies": {
+                        "b": "1",
+                    }
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .unwrap();
+
+        let foo_deps = pkg_graph
+            .workspaces
+            .get(&WorkspaceName::from("foo"))
+            .unwrap()
+            .transitive_dependencies
+            .as_ref()
+            .unwrap();
+        let bar_deps = pkg_graph
+            .workspaces
+            .get(&WorkspaceName::from("bar"))
+            .unwrap()
+            .transitive_dependencies
+            .as_ref()
+            .unwrap();
+        assert_eq!(
+            foo_deps,
+            &HashSet::from_iter(vec![
+                turborepo_lockfiles::Package::new("key:a", "1"),
+                turborepo_lockfiles::Package::new("key:c", "1")
+            ])
+        );
+        assert_eq!(
+            bar_deps,
+            &HashSet::from_iter(vec![
+                turborepo_lockfiles::Package::new("key:b", "1"),
+                turborepo_lockfiles::Package::new("key:c", "1")
+            ])
+        );
     }
 }

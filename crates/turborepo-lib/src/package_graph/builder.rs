@@ -4,6 +4,7 @@ use std::{
 };
 
 use petgraph::graph::{Graph, NodeIndex};
+use tracing::warn;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
 };
@@ -38,6 +39,10 @@ pub enum Error {
     TurboPath(#[from] turbopath::PathError),
     #[error("unable to parse workspace package.json: {0}")]
     PackageJson(#[from] crate::package_json::Error),
+    #[error(transparent)]
+    Lockfile(#[from] turborepo_lockfiles::Error),
+    #[error("TODO lockfile errors")]
+    TODO,
 }
 
 impl<'a> PackageGraphBuilder<'a> {
@@ -309,9 +314,26 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
         Ok(())
     }
 
+    fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
+        // TODO actual lockfile parsing
+        self.lockfile.take().map_or_else(|| Err(Error::TODO), Ok)
+    }
+
     fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile>, Error> {
         self.connect_internal_dependencies()?;
-        // TODO actually parse lockfile
+
+        let lockfile = match self.populate_lockfile() {
+            Ok(lockfile) => Some(lockfile),
+            Err(e) => {
+                warn!(
+                    "Issues occurred when constructing package graph. Turbo will function, but \
+                     some features may not be available: {}",
+                    e
+                );
+                None
+            }
+        };
+
         let Self {
             repo_root,
             single,
@@ -319,7 +341,6 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
             workspaces,
             workspace_graph,
             node_lookup,
-            lockfile,
             ..
         } = self;
         Ok(BuildState {
@@ -337,7 +358,49 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
 }
 
 impl<'a> BuildState<'a, ResolvedLockfile> {
-    fn build(self) -> PackageGraph {
+    fn all_external_dependencies(&self) -> Result<HashMap<String, HashMap<String, String>>, Error> {
+        self.workspaces
+            .values()
+            .map(|entry| {
+                let workspace_path = entry.package_json_path.to_unix()?;
+                let workspace_string = workspace_path.as_str()?;
+                let external_deps = entry
+                    .unresolved_external_dependencies
+                    .as_ref()
+                    .map(|deps| {
+                        deps.iter()
+                            .map(|Package { name, version }| {
+                                (name.to_string(), version.to_string())
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Ok((workspace_string.to_string(), external_deps))
+            })
+            .collect()
+    }
+
+    fn populate_transitive_dependencies(&mut self) -> Result<(), Error> {
+        let Some(lockfile) = self
+            .lockfile
+            .as_deref() else {
+                return Ok(())
+            };
+
+        let mut closures = turborepo_lockfiles::all_transitive_closures(
+            lockfile,
+            self.all_external_dependencies()?,
+        )?;
+        for (_, entry) in self.workspaces.iter_mut() {
+            entry.transitive_dependencies = closures.remove(&entry.unix_dir_str()?);
+        }
+        Ok(())
+    }
+
+    fn build(mut self) -> PackageGraph {
+        if let Err(e) = self.populate_transitive_dependencies() {
+            warn!("Unable to calculate transitive closures: {}", e);
+        }
         let Self {
             package_manager,
             workspaces,
@@ -484,6 +547,13 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
             Some(protocol) => f.write_fmt(format_args!("{}:{}", protocol, self.version)),
             None => f.write_str(self.version),
         }
+    }
+}
+
+impl Entry {
+    fn unix_dir_str(&self) -> Result<String, Error> {
+        let unix = self.package_json_path.to_unix()?;
+        Ok(unix.as_str()?.to_string())
     }
 }
 
