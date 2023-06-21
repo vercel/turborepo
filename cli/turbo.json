@@ -3,7 +3,7 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
-      "env": ["GO_TAG", "RUNNER_OS"],
+      "env": ["RUNNER_OS"],
       "outputs": [
         "../target/debug/go-turbo",
         "../target/debug/turbo",
