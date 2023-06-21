@@ -27,7 +27,7 @@ func newDummySink() *dummySink {
 	}
 }
 
-func (d *dummySink) RecordAnalyticsEvents(events Events, timeout time.Duration) error {
+func (d *dummySink) RecordAnalyticsEvents(events Events, _ time.Duration) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	// Make a copy in case a test is holding a copy too

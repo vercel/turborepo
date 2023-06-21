@@ -31,7 +31,7 @@ type Sink interface {
 
 type nullSink struct{}
 
-func (n *nullSink) RecordAnalyticsEvents(events Events, timeout time.Duration) error {
+func (n *nullSink) RecordAnalyticsEvents(_ Events, _ time.Duration) error {
 	return nil
 }
 
