@@ -305,7 +305,9 @@ pub enum Command {
         #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
     },
-    Info,
+    Info {
+        workspace: Option<String>,
+    },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
     Link {
@@ -694,9 +696,10 @@ pub async fn run(
             generate::run(tag, command, &args)?;
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Info => {
+        Command::Info { workspace } => {
+            let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
-            info::run(&mut base)?;
+            info::run(&mut base, workspace.as_deref())?;
 
             Ok(Payload::Rust(Ok(0)))
         }

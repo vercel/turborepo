@@ -23,11 +23,20 @@ pub struct PackageGraph {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct Entry {
+pub struct Entry {
     package_json: PackageJson,
     package_json_path: AnchoredSystemPathBuf,
     unresolved_external_dependencies: Option<HashSet<Package>>,
     transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
+}
+
+impl Entry {
+    pub fn package_json(&self) -> &PackageJson {
+        &self.json
+    }
+    pub fn package_json_path(&self) -> &AnchoredSystemPathBuf {
+        &self.package_json_path
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
@@ -77,6 +86,10 @@ impl PackageGraph {
     pub fn package_json(&self, workspace: &WorkspaceName) -> Option<&PackageJson> {
         let entry = self.workspaces.get(workspace)?;
         Some(&entry.package_json)
+    }
+
+    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &Entry)> {
+        self.workspaces.iter()
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
