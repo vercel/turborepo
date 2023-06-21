@@ -103,6 +103,7 @@ fn is_not_system(path: impl AsRef<str>) -> bool {
     path.as_ref().contains(non_system_separator)
 }
 
+#[cfg(windows)]
 fn convert_separator(
     path: impl AsRef<str>,
     input_separator: char,
@@ -125,18 +126,15 @@ fn convert_separator(
 
 impl<T: AsRef<str>> IntoSystem for T {
     fn into_system(self) -> Utf8PathBuf {
-        let output;
         #[cfg(windows)]
         {
-            output = convert_separator(self, '/', std::path::MAIN_SEPARATOR)
+            convert_separator(self, '/', std::path::MAIN_SEPARATOR)
         }
 
         #[cfg(not(windows))]
         {
-            output = convert_separator(self, '\\', std::path::MAIN_SEPARATOR)
+            Utf8PathBuf::from(self.as_ref())
         }
-
-        output
     }
 }
 
