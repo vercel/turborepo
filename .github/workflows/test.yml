@@ -277,8 +277,6 @@ jobs:
 
       - name: Integration Tests
         run: turbo run test --filter=turborepo-tests-integration --color
-        env:
-          GO_TAG: rust
 
   turborepo_e2e:
     name: Turborepo E2E Tests
