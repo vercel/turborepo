@@ -158,3 +158,42 @@ impl<T: AsRef<str>> IntoUnix for T {
         output
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{IntoSystem, IntoUnix};
+
+    #[test]
+    fn test_into_system() {
+        #[cfg(unix)]
+        {
+            assert_eq!("foo/bar".into_system(), "foo/bar");
+            assert_eq!("/foo/bar".into_system(), "/foo/bar");
+            assert_eq!("foo\\bar".into_system(), "foo\\bar");
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!("foo/bar".into_system(), "foo\\bar");
+            assert_eq!("/foo/bar".into_system(), "\\foo\\bar");
+            assert_eq!("foo\\bar".into_system(), "foo\\bar");
+        }
+    }
+
+    #[test]
+    fn test_into_unix() {
+        #[cfg(unix)]
+        {
+            assert_eq!("foo/bar".into_unix(), "foo/bar");
+            assert_eq!("/foo/bar".into_unix(), "/foo/bar");
+            assert_eq!("foo\\bar".into_unix(), "foo\\bar");
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!("foo/bar".into_unix(), "foo/bar");
+            assert_eq!("\\foo\\bar".into_unix(), "/foo/bar");
+            assert_eq!("foo\\bar".into_unix(), "foo/bar");
+        }
+    }
+}
