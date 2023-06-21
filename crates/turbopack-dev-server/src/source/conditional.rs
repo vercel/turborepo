@@ -3,11 +3,13 @@ use turbo_tasks::{primitives::StringVc, State, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 use super::{
-    combined::CombinedContentSource, ContentSource, ContentSourceData, ContentSourceDataVaryVc,
-    ContentSourceResult, ContentSourceResultVc, ContentSourceVc, GetContentSourceContent,
-    GetContentSourceContentVc,
+    route_tree::{MapGetContentSourceContent, RouteTreeVc},
+    ContentSource, ContentSourceData, ContentSourceDataVaryVc, ContentSourceVc,
+    GetContentSourceContent, GetContentSourceContentVc,
 };
-use crate::source::{ContentSourceContentVc, ContentSourcesVc};
+use crate::source::{
+    route_tree::MapGetContentSourceContentVc, ContentSourceContentVc, ContentSourcesVc,
+};
 
 /// Combines two [ContentSource]s like the [CombinedContentSource], but only
 /// allows to serve from the second source when the first source has
@@ -42,42 +44,40 @@ impl ConditionalContentSourceVc {
 #[turbo_tasks::value_impl]
 impl ContentSource for ConditionalContentSource {
     #[turbo_tasks::function]
-    async fn get(
-        self_vc: ConditionalContentSourceVc,
-        path: &str,
-        data: turbo_tasks::Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    async fn get_routes(self_vc: ConditionalContentSourceVc) -> Result<RouteTreeVc> {
         let this = self_vc.await?;
-        if !*this.activated.get() {
-            let first = this.activator.get(path, data.clone());
-            let first_value = first.await?;
-            return Ok(match &*first_value {
-                &ContentSourceResult::Result {
-                    get_content,
-                    specificity,
-                } => ContentSourceResult::Result {
-                    get_content: ActivateOnGetContentSource {
-                        source: this,
-                        get_content,
-                    }
+        Ok(if !*this.activated.get() {
+            this.activator.get_routes().map_routes(
+                ConditionalContentSourceMapper { source: self_vc }
                     .cell()
                     .into(),
-                    specificity,
-                }
-                .cell(),
-                _ => first,
-            });
-        }
-        Ok(CombinedContentSource {
-            sources: vec![this.activator, this.action],
-        }
-        .cell()
-        .get(path, data))
+            )
+        } else {
+            RouteTreeVc::merge(vec![this.activator.get_routes(), this.action.get_routes()])
+        })
     }
 
     #[turbo_tasks::function]
     fn get_children(&self) -> ContentSourcesVc {
         ContentSourcesVc::cell(vec![self.activator, self.action])
+    }
+}
+
+#[turbo_tasks::value]
+struct ConditionalContentSourceMapper {
+    source: ConditionalContentSourceVc,
+}
+
+#[turbo_tasks::value_impl]
+impl MapGetContentSourceContent for ConditionalContentSourceMapper {
+    #[turbo_tasks::function]
+    fn map_get_content(&self, get_content: GetContentSourceContentVc) -> GetContentSourceContentVc {
+        ActivateOnGetContentSource {
+            source: self.source,
+            get_content,
+        }
+        .cell()
+        .into()
     }
 }
 
@@ -132,7 +132,7 @@ impl Introspectable for ConditionalContentSource {
 
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new")]
 struct ActivateOnGetContentSource {
-    source: ConditionalContentSourceReadRef,
+    source: ConditionalContentSourceVc,
     get_content: GetContentSourceContentVc,
 }
 
@@ -144,8 +144,12 @@ impl GetContentSourceContent for ActivateOnGetContentSource {
     }
 
     #[turbo_tasks::function]
-    fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceContentVc {
-        self.source.activated.set(true);
-        self.get_content.get(path, data)
+    async fn get(
+        &self,
+        path: &str,
+        data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceContentVc> {
+        self.source.await?.activated.set(true);
+        Ok(self.get_content.get(path, data))
     }
 }

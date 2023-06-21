@@ -16,9 +16,11 @@ use turbopack_core::{
 };
 
 use super::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
+    route_tree::{BaseSegment, RouteTreeVc},
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
+    GetContentSourceContent,
 };
+use crate::source::GetContentSourceContentVc;
 
 #[turbo_tasks::value(transparent)]
 struct AssetsMap(HashMap<String, AssetVc>);
@@ -151,25 +153,51 @@ async fn expand(
 #[turbo_tasks::value_impl]
 impl ContentSource for AssetGraphContentSource {
     #[turbo_tasks::function]
-    async fn get(
-        self_vc: AssetGraphContentSourceVc,
-        path: &str,
-        _data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    async fn get_routes(self_vc: AssetGraphContentSourceVc) -> Result<RouteTreeVc> {
         let assets = self_vc.all_assets_map().strongly_consistent().await?;
+        let routes = assets
+            .iter()
+            .map(|(path, asset)| {
+                RouteTreeVc::new_route(
+                    BaseSegment::from_static_pathname(path).collect(),
+                    None,
+                    AssetGraphGetContentSourceContentVc::new(self_vc, *asset).into(),
+                )
+            })
+            .collect();
+        Ok(RouteTreeVc::merge(routes))
+    }
+}
 
-        if let Some(asset) = assets.get(path) {
-            {
-                let this = self_vc.await?;
-                if let Some(expanded) = &this.expanded {
-                    expanded.update_conditionally(|expanded| expanded.insert(*asset));
-                }
-            }
-            return Ok(ContentSourceResultVc::exact(
-                ContentSourceContentVc::static_content(asset.versioned_content()).into(),
-            ));
+#[turbo_tasks::value]
+struct AssetGraphGetContentSourceContent {
+    source: AssetGraphContentSourceVc,
+    asset: AssetVc,
+}
+
+#[turbo_tasks::value_impl]
+impl AssetGraphGetContentSourceContentVc {
+    #[turbo_tasks::function]
+    pub fn new(source: AssetGraphContentSourceVc, asset: AssetVc) -> Self {
+        Self::cell(AssetGraphGetContentSourceContent { source, asset })
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GetContentSourceContent for AssetGraphGetContentSourceContent {
+    #[turbo_tasks::function]
+    async fn get(
+        &self,
+        _path: &str,
+        _data: Value<ContentSourceData>,
+    ) -> Result<ContentSourceContentVc> {
+        let source = self.source.await?;
+
+        if let Some(expanded) = &source.expanded {
+            expanded.update_conditionally(|expanded| expanded.insert(self.asset));
         }
-        Ok(ContentSourceResultVc::not_found())
+
+        Ok(ContentSourceContentVc::static_content(self.asset.versioned_content()).into())
     }
 }
 

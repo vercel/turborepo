@@ -2,6 +2,7 @@
 #![feature(trait_alias)]
 #![feature(array_chunks)]
 #![feature(iter_intersperse)]
+#![feature(str_split_remainder)]
 
 pub mod html;
 mod http;
@@ -35,19 +36,12 @@ use turbopack_core::{
     issue::{IssueReporter, IssueReporterVc, IssueVc},
 };
 
-use self::{
-    source::{ContentSourceResultVc, ContentSourceVc},
-    update::UpdateServer,
-};
+use self::{source::ContentSourceVc, update::UpdateServer};
 use crate::invalidation::ServerRequest;
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
     fn get_source(&self) -> ContentSourceVc;
-}
-
-pub trait ContentProvider: Send + Clone + 'static {
-    fn get_content(&self) -> ContentSourceResultVc;
 }
 
 impl<T> SourceProvider for T
