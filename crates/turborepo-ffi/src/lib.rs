@@ -304,7 +304,7 @@ pub extern "C" fn get_hashes_for_files(buffer: Buffer) -> Buffer {
     let files = match req
         .files
         .iter()
-        .map(|f| AnchoredSystemPathBuf::from_raw(f))
+        .map(AnchoredSystemPathBuf::from_raw)
         .collect::<Result<Vec<_>, PathError>>()
     {
         Ok(files) => files,

@@ -33,7 +33,7 @@ fn find_git(path_in_repo: &AbsoluteSystemPath) -> Option<Git> {
 impl Hasher {
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> Hasher {
         find_git(path_in_repo)
-            .map(|git| Hasher::Git(git))
+            .map(Hasher::Git)
             .unwrap_or(Hasher::Manual)
     }
 
@@ -157,9 +157,7 @@ impl Git {
                 if let Some(exclusion) = raw_glob.strip_prefix('!') {
                     Either::Right([package_unix_path, exclusion.trim_start_matches('/')].join("/"))
                 } else {
-                    Either::Left(
-                        [package_unix_path, raw_glob.trim_start_matches('/').as_ref()].join("/"),
-                    )
+                    Either::Left([package_unix_path, raw_glob.trim_start_matches('/')].join("/"))
                 }
             });
         let files = globwalk::globwalk(
