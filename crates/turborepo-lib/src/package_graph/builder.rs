@@ -16,7 +16,7 @@ use crate::{package_json::PackageJson, package_manager::PackageManager};
 pub struct PackageGraphBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
     root_package_json: PackageJson,
-    single: bool,
+    is_single_package: bool,
     package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -42,7 +42,7 @@ pub enum Error {
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("TODO lockfile errors")]
-    TODO,
+    Todo,
 }
 
 impl<'a> PackageGraphBuilder<'a> {
@@ -50,7 +50,7 @@ impl<'a> PackageGraphBuilder<'a> {
         Self {
             repo_root,
             root_package_json,
-            single: false,
+            is_single_package: false,
             package_manager: None,
             package_jsons: None,
             lockfile: None,
@@ -58,15 +58,17 @@ impl<'a> PackageGraphBuilder<'a> {
     }
 
     pub fn with_single_package_mode(mut self, is_single: bool) -> Self {
-        self.single = is_single;
+        self.is_single_package = is_single;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_package_manger(mut self, package_manager: Option<PackageManager>) -> Self {
         self.package_manager = package_manager;
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_package_jsons(
         mut self,
         package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
@@ -75,15 +77,16 @@ impl<'a> PackageGraphBuilder<'a> {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_lockfile(mut self, lockfile: Option<Box<dyn Lockfile>>) -> Self {
         self.lockfile = lockfile;
         self
     }
 
     pub fn build(self) -> Result<PackageGraph, Error> {
-        let single = self.single;
+        let is_single_package = self.is_single_package;
         let state = BuildState::new(self)?;
-        match single {
+        match is_single_package {
             true => Ok(state.build_single_package_graph()),
             false => {
                 let state = state.parse_package_jsons()?;
@@ -137,20 +140,20 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let PackageGraphBuilder {
             repo_root,
             root_package_json,
-            single,
+            is_single_package: single,
             package_manager,
             package_jsons,
             lockfile,
         } = builder;
         let package_manager = package_manager.map_or_else(
             || PackageManager::get_package_manager(repo_root, Some(&root_package_json)),
-            Result::Ok,
+            Ok,
         )?;
         let mut workspaces = HashMap::new();
         workspaces.insert(
             WorkspaceName::Root,
             Entry {
-                json: root_package_json,
+                package_json: root_package_json,
                 ..Default::default()
             },
         );
@@ -177,7 +180,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
         let name = WorkspaceName::Other(json.name.clone());
         let entry = Entry {
-            json,
+            package_json: json,
             package_json_path: relative_json_path,
             ..Default::default()
         };
@@ -190,8 +193,8 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
                 .clone();
             return Err(Error::DuplicateWorkspace {
                 name: name.to_string(),
-                path: path.to_str()?.into(),
-                existing_path: existing.package_json_path.to_str()?.into(),
+                path: path.to_string(),
+                existing_path: existing.package_json_path.to_string(),
             });
         }
         self.add_node(WorkspaceNode::Workspace(name));
@@ -278,7 +281,7 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
                         self.repo_root,
                         &entry.package_json_path,
                         &self.workspaces,
-                        entry.json.all_dependencies(),
+                        entry.package_json.all_dependencies(),
                     ),
                 )
             })
@@ -316,7 +319,7 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
 
     fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
         // TODO actual lockfile parsing
-        self.lockfile.take().map_or_else(|| Err(Error::TODO), Ok)
+        self.lockfile.take().map_or_else(|| Err(Error::Todo), Ok)
     }
 
     fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile>, Error> {
@@ -363,7 +366,7 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
             .values()
             .map(|entry| {
                 let workspace_path = entry.package_json_path.to_unix()?;
-                let workspace_string = workspace_path.as_str()?;
+                let workspace_string = workspace_path.as_str();
                 let external_deps = entry
                     .unresolved_external_dependencies
                     .as_ref()
@@ -444,7 +447,7 @@ impl Dependencies {
                 .get(&workspace_name)
                 // This is the current Go behavior, in the future we might not want to paper over a
                 // missing version
-                .map(|e| e.json.version.as_deref().unwrap_or_default())
+                .map(|e| e.package_json.version.as_deref().unwrap_or_default())
                 .map_or(false, |workspace_version| {
                     DependencyVersion::new(version).matches_workspace_package(
                         workspace_version,
@@ -553,7 +556,7 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
 impl Entry {
     fn unix_dir_str(&self) -> Result<String, Error> {
         let unix = self.package_json_path.to_unix()?;
-        Ok(unix.as_str()?.to_string())
+        Ok(unix.to_string())
     }
 }
 

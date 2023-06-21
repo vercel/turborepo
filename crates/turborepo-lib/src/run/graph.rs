@@ -1,11 +1,11 @@
-use std::{collections::BTreeMap, rc::Rc};
+use std::collections::BTreeMap;
 
 use anyhow::Result;
 use turbopath::AbsoluteSystemPath;
 
 use crate::{
     config::TurboJson,
-    package_graph::{PackageGraph, WorkspaceCatalog},
+    package_graph::PackageGraph,
     task_graph::{Pipeline, TaskDefinition},
 };
 
@@ -15,8 +15,6 @@ pub struct CompleteGraph<'run> {
     package_graph: &'run PackageGraph,
     // Config from turbo.json
     pipeline: Pipeline,
-    // Stores the package.json contents by package name
-    workspace_infos: Rc<WorkspaceCatalog>,
     // Hash of all global dependencies
     global_hash: Option<String>,
 
@@ -31,8 +29,6 @@ impl<'run> CompleteGraph<'run> {
         Self {
             package_graph,
             pipeline: Pipeline::default(),
-            // TODO: build during construction by querying package graph
-            workspace_infos: Default::default(),
             repo_root,
             global_hash: None,
             task_definitions: BTreeMap::new(),

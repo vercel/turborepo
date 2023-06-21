@@ -13,11 +13,9 @@ mod builder;
 
 pub use builder::PackageGraphBuilder;
 
-#[derive(Default)]
-pub struct WorkspaceCatalog {}
-
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
+    #[allow(dead_code)]
     node_lookup: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
     workspaces: HashMap<WorkspaceName, Entry>,
     package_manager: PackageManager,
@@ -26,7 +24,7 @@ pub struct PackageGraph {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct Entry {
-    json: PackageJson,
+    package_json: PackageJson,
     package_json_path: AnchoredSystemPathBuf,
     unresolved_external_dependencies: Option<HashSet<Package>>,
     transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
@@ -78,7 +76,7 @@ impl PackageGraph {
 
     pub fn package_json(&self, workspace: &WorkspaceName) -> Option<&PackageJson> {
         let entry = self.workspaces.get(workspace)?;
-        Some(&entry.json)
+        Some(&entry.package_json)
     }
 
     pub fn root_package_json(&self) -> &PackageJson {
@@ -86,6 +84,7 @@ impl PackageGraph {
             .expect("package graph was built without root package.json")
     }
 
+    #[allow(dead_code)]
     fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
         let idx = self.node_lookup.get(node)?;
         let mut visited = HashSet::new();
@@ -101,6 +100,7 @@ impl PackageGraph {
         Some(visited)
     }
 
+    #[allow(dead_code)]
     fn external_dependencies(&self, workspace: &WorkspaceName) -> Option<&HashSet<Package>> {
         let entry = self.workspaces.get(workspace)?;
         entry.unresolved_external_dependencies.as_ref()
