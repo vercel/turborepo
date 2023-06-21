@@ -3,12 +3,14 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
-      "env": ["GO_TAG", "RUNNER_OS"],
+      "env": ["RUNNER_OS"],
       "outputs": [
         "../target/debug/go-turbo",
+        "../target/debug/go-turbo.exe",
         "../target/debug/turbo",
         "../target/debug/turbo.exe",
         "../target/release/go-turbo",
+        "../target/release/go-turbo.exe",
         "../target/release/turbo",
         "../target/release/turbo.exe"
       ],
@@ -18,6 +20,8 @@
         "!**/*_test.go",
         "../crates/turborepo*/**/*.rs", // Rust crates
         "../crates/turborepo*/Cargo.toml",
+        "../Cargo.toml",
+        "../Cargo.lock",
         "!../crates/**/target"
       ]
     }
