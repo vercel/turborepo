@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
+	"gotest.tools/v3/assert"
 )
 
 func Test_sendToServer(t *testing.T) {
@@ -59,7 +60,8 @@ func Test_sendToServer(t *testing.T) {
 		},
 	}
 
-	apiClient.RecordAnalyticsEvents(events, 10*time.Second)
+	err = apiClient.RecordAnalyticsEvents(events, 10*time.Second)
+	assert.NilError(t, err, "RecordAnalyticsEvent")
 
 	body := <-ch
 

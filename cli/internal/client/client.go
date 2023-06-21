@@ -266,7 +266,8 @@ func (c *APIClient) request(endpoint string, method string, body []byte, timeout
 	if err != nil {
 		return nil, err
 	}
-	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	req.WithContext(ctx)
 
 	// Set headers
