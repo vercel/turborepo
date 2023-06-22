@@ -169,11 +169,9 @@ fn main() {
                     } else {
                         (ts_start, ts)
                     };
-                    if end > start {
-                        span.items.push(SpanItem::SelfTime {
-                            start,
-                            duration: end - start,
-                        });
+                    let duration = end.saturating_sub(start);
+                    span.items.push(SpanItem::SelfTime { start, duration });
+                    if duration > 0 {
                         all_self_times.push(Element {
                             range: start..end,
                             value: internal_id,
@@ -190,27 +188,27 @@ fn main() {
                     .unwrap_or("".into());
                 let internal_parent =
                     parent.map_or(0, |id| ensure_span(&mut active_ids, &mut spans, id));
+                *name_counts.entry(name.clone()).or_default() += 1;
+                let internal_id = spans.len();
+                let start = ts - duration;
+                spans.push(Span {
+                    parent: internal_parent,
+                    name,
+                    target: "".into(),
+                    start,
+                    end: ts,
+                    self_start: None,
+                    items: vec![SpanItem::SelfTime { start, duration }],
+                    values,
+                });
                 if duration > 0 {
-                    *name_counts.entry(name.clone()).or_default() += 1;
-                    let internal_id = spans.len();
-                    let start = ts - duration;
-                    spans.push(Span {
-                        parent: internal_parent,
-                        name,
-                        target: "".into(),
-                        start,
-                        end: ts,
-                        self_start: None,
-                        items: vec![SpanItem::SelfTime { start, duration }],
-                        values,
-                    });
                     all_self_times.push(Element {
                         range: start..ts,
                         value: internal_id,
                     });
-                    let parent = &mut spans[internal_parent];
-                    parent.items.push(SpanItem::Child(internal_id));
                 }
+                let parent = &mut spans[internal_parent];
+                parent.items.push(SpanItem::Child(internal_id));
             }
         }
     }
