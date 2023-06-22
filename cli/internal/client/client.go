@@ -199,8 +199,8 @@ func (c *APIClient) addTeamParam(params *url.Values) {
 }
 
 // JSONPatch sends a byte array (json.marshalled payload) to a given endpoint with PATCH
-func (c *APIClient) JSONPatch(endpoint string, body []byte) ([]byte, error) {
-	resp, err := c.request(endpoint, http.MethodPatch, body)
+func (c *APIClient) JSONPatch(endpoint string, body []byte, timeout time.Duration) ([]byte, error) {
+	resp, err := c.request(endpoint, http.MethodPatch, body, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -217,8 +217,8 @@ func (c *APIClient) JSONPatch(endpoint string, body []byte) ([]byte, error) {
 }
 
 // JSONPost sends a byte array (json.marshalled payload) to a given endpoint with POST
-func (c *APIClient) JSONPost(endpoint string, body []byte) ([]byte, error) {
-	resp, err := c.request(endpoint, http.MethodPost, body)
+func (c *APIClient) JSONPost(endpoint string, body []byte, timeout time.Duration) ([]byte, error) {
+	resp, err := c.request(endpoint, http.MethodPost, body, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (c *APIClient) JSONPost(endpoint string, body []byte) ([]byte, error) {
 	return rawResponse, nil
 }
 
-func (c *APIClient) request(endpoint string, method string, body []byte) (*http.Response, error) {
+func (c *APIClient) request(endpoint string, method string, body []byte, timeout time.Duration) (*http.Response, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
@@ -266,6 +266,9 @@ func (c *APIClient) request(endpoint string, method string, body []byte) (*http.
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req.WithContext(ctx)
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
