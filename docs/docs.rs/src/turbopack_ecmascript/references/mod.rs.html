@@ -2675,6 +2675,7 @@
 <a href="#2675" id="2675">2675</a>
 <a href="#2676" id="2676">2676</a>
 <a href="#2677" id="2677">2677</a>
+<a href="#2678" id="2678">2678</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2877,6 +2878,7 @@
     }
 
     <span class="doccomment">/// Adds a codegen to the analysis result.
+    </span><span class="attr">#[allow(dead_code)]
     </span><span class="kw">pub fn </span>add_code_gen_with_availability_info&lt;C&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, code_gen: C)
     <span class="kw">where
         </span>C: Into&lt;CodeGenerateableWithAvailabilityInfoVc&gt;,

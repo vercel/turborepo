@@ -314,7 +314,6 @@
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{fmt::Debug, hash::Hash, sync::Arc};
 
 <span class="kw">use </span>anyhow::Result;
@@ -553,26 +552,25 @@
                 ));
             }
             EcmascriptInputTransform::TypeScript {
-                use_define_for_class_fields,
+                <span class="comment">// TODO(WEB-1213)
+                </span>use_define_for_class_fields: _use_define_for_class_fields,
             } =&gt; {
-                <span class="kw">use </span>swc_core::ecma::transforms::typescript::{strip_with_config, Config};
-                <span class="kw">let </span>config = Config {
-                    use_define_for_class_fields: <span class="kw-2">*</span>use_define_for_class_fields,
-                    ..Default::default()
-                };
+                <span class="kw">use </span>swc_core::ecma::transforms::typescript::strip_with_config;
+                <span class="kw">let </span>config = Default::default();
                 program.visit_mut_with(<span class="kw-2">&amp;mut </span>strip_with_config(config, top_level_mark));
             }
             EcmascriptInputTransform::Decorators {
                 is_legacy,
                 is_ecma: <span class="kw">_</span>,
                 emit_decorators_metadata,
-                use_define_for_class_fields,
+                <span class="comment">// TODO(WEB-1213)
+                </span>use_define_for_class_fields: _use_define_for_class_fields,
             } =&gt; {
                 <span class="kw">use </span>swc_core::ecma::transforms::proposal::decorators::{decorators, Config};
                 <span class="kw">let </span>config = Config {
                     legacy: <span class="kw-2">*</span>is_legacy,
                     emit_metadata: <span class="kw-2">*</span>emit_decorators_metadata,
-                    use_define_for_class_fields: <span class="kw-2">*</span>use_define_for_class_fields,
+                    ..Default::default()
                 };
 
                 <span class="kw">let </span>p = std::mem::replace(program, Program::Module(Module::dummy()));

@@ -858,6 +858,7 @@
 <a href="#858" id="858">858</a>
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt,
     hash::{BuildHasherDefault, Hash},
@@ -1039,7 +1040,8 @@
 
 <span class="attr">#[derive(Debug, Clone, Copy)]
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">enum </span>Mode {
-    Development,
+    <span class="attr">#[allow(dead_code)]
+    </span>Development,
     Production,
 }
 

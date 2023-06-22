@@ -474,9 +474,6 @@
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
 <a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, fmt::Write};
 
 <span class="kw">use </span>anyhow::Result;
@@ -917,11 +914,8 @@
         .into_package
         .push(ResolveIntoPackage::Default(<span class="string">&quot;index&quot;</span>.to_string()));
     <span class="kw">for </span>item <span class="kw">in </span>resolve_options.in_package.iter_mut() {
-        <span class="kw">match </span>item {
-            ResolveInPackage::ImportsField { conditions, .. } =&gt; {
-                conditions.insert(<span class="string">&quot;types&quot;</span>.to_string(), ConditionValue::Set);
-            }
-            <span class="kw">_ </span>=&gt; {}
+        <span class="kw">if let </span>ResolveInPackage::ImportsField { conditions, .. } = item {
+            conditions.insert(<span class="string">&quot;types&quot;</span>.to_string(), ConditionValue::Set);
         }
     }
     <span class="prelude-val">Ok</span>(resolve_options.into())

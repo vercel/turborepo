@@ -1749,44 +1749,6 @@
 <a href="#1749" id="1749">1749</a>
 <a href="#1750" id="1750">1750</a>
 <a href="#1751" id="1751">1751</a>
-<a href="#1752" id="1752">1752</a>
-<a href="#1753" id="1753">1753</a>
-<a href="#1754" id="1754">1754</a>
-<a href="#1755" id="1755">1755</a>
-<a href="#1756" id="1756">1756</a>
-<a href="#1757" id="1757">1757</a>
-<a href="#1758" id="1758">1758</a>
-<a href="#1759" id="1759">1759</a>
-<a href="#1760" id="1760">1760</a>
-<a href="#1761" id="1761">1761</a>
-<a href="#1762" id="1762">1762</a>
-<a href="#1763" id="1763">1763</a>
-<a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
-<a href="#1766" id="1766">1766</a>
-<a href="#1767" id="1767">1767</a>
-<a href="#1768" id="1768">1768</a>
-<a href="#1769" id="1769">1769</a>
-<a href="#1770" id="1770">1770</a>
-<a href="#1771" id="1771">1771</a>
-<a href="#1772" id="1772">1772</a>
-<a href="#1773" id="1773">1773</a>
-<a href="#1774" id="1774">1774</a>
-<a href="#1775" id="1775">1775</a>
-<a href="#1776" id="1776">1776</a>
-<a href="#1777" id="1777">1777</a>
-<a href="#1778" id="1778">1778</a>
-<a href="#1779" id="1779">1779</a>
-<a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
-<a href="#1782" id="1782">1782</a>
-<a href="#1783" id="1783">1783</a>
-<a href="#1784" id="1784">1784</a>
-<a href="#1785" id="1785">1785</a>
-<a href="#1786" id="1786">1786</a>
-<a href="#1787" id="1787">1787</a>
-<a href="#1788" id="1788">1788</a>
-<a href="#1789" id="1789">1789</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -2450,12 +2412,13 @@
             f: <span class="kw">impl </span>FnOnce(<span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>Expr, <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;) -&gt; T,
         ) -&gt; T {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(inner_expr) = expr.as_paren() {
-                ast_path.with(AstParentNodeRef::Expr(expr, ExprField::Paren), |ast_path| {
-                    ast_path.with(
-                        AstParentNodeRef::ParenExpr(inner_expr, ParenExprField::Expr),
-                        |ast_path| unparen(<span class="kw-2">&amp;</span>inner_expr.expr, ast_path, f),
-                    )
-                })
+                <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                    ast_path.with_guard(AstParentNodeRef::Expr(expr, ExprField::Paren));
+                <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ParenExpr(
+                    inner_expr,
+                    ParenExprField::Expr,
+                ));
+                unparen(<span class="kw-2">&amp;</span>inner_expr.expr, <span class="kw-2">&amp;mut </span>ast_path, f)
             } <span class="kw">else </span>{
                 f(expr, ast_path)
             }
@@ -2464,72 +2427,59 @@
         <span class="kw">if </span>n.args.iter().any(|arg| arg.spread.is_some()) {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
-        <span class="kw">if </span>ast_path.with(
-            AstParentNodeRef::CallExpr(n, CallExprField::Callee),
-            |ast_path| {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(expr) = n.callee.as_expr() {
-                    ast_path.with(
-                        AstParentNodeRef::Callee(<span class="kw-2">&amp;</span>n.callee, CalleeField::Expr),
-                        |ast_path| {
-                            unparen(expr, ast_path, |expr, ast_path| <span class="kw">match </span>expr {
-                                Expr::Fn(fn_expr @ FnExpr { function, ident }) =&gt; {
-                                    ast_path.with(
-                                        AstParentNodeRef::Expr(expr, ExprField::Fn),
-                                        |ast_path| {
-                                            ast_path.with(
-                                                AstParentNodeRef::FnExpr(
-                                                    fn_expr,
-                                                    FnExprField::Ident,
-                                                ),
-                                                |ast_path| {
-                                                    <span class="self">self</span>.visit_opt_ident(ident.as_ref(), ast_path);
-                                                },
-                                            );
-                                            ast_path.with(
-                                                AstParentNodeRef::FnExpr(
-                                                    fn_expr,
-                                                    FnExprField::Function,
-                                                ),
-                                                |ast_path| {
-                                                    <span class="self">self</span>.handle_iife_function(
-                                                        function, ast_path, <span class="kw-2">&amp;</span>n.args,
-                                                    );
-                                                },
-                                            );
-                                        },
-                                    );
-                                    <span class="bool-val">true
-                                </span>}
-                                Expr::Arrow(arrow_expr) =&gt; {
-                                    ast_path.with(
-                                        AstParentNodeRef::Expr(expr, ExprField::Arrow),
-                                        |ast_path| {
-                                            <span class="kw">let </span>args = <span class="kw-2">&amp;</span>n.args;
-                                            <span class="self">self</span>.handle_iife_arrow(arrow_expr, args, ast_path);
-                                        },
-                                    );
-                                    <span class="bool-val">true
-                                </span>}
-                                <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-                            })
-                        },
-                    )
-                } <span class="kw">else </span>{
-                    <span class="bool-val">false
+
+        <span class="kw">let </span><span class="prelude-val">Some</span>(expr) = n.callee.as_expr() <span class="kw">else </span>{
+            <span class="kw">return </span><span class="bool-val">false</span>;
+        };
+
+        <span class="kw">let </span>fn_expr = {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::CallExpr(n, CallExprField::Callee));
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::Callee(<span class="kw-2">&amp;</span>n.callee, CalleeField::Expr));
+            unparen(expr, <span class="kw-2">&amp;mut </span>ast_path, |expr, ast_path| <span class="kw">match </span>expr {
+                Expr::Fn(fn_expr @ FnExpr { function, ident }) =&gt; {
+                    <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                        ast_path.with_guard(AstParentNodeRef::Expr(expr, ExprField::Fn));
+                    {
+                        <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path
+                            .with_guard(AstParentNodeRef::FnExpr(fn_expr, FnExprField::Ident));
+                        <span class="self">self</span>.visit_opt_ident(ident.as_ref(), <span class="kw-2">&amp;mut </span>ast_path);
+                    }
+
+                    {
+                        <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path
+                            .with_guard(AstParentNodeRef::FnExpr(fn_expr, FnExprField::Function));
+                        <span class="self">self</span>.handle_iife_function(function, <span class="kw-2">&amp;mut </span>ast_path, <span class="kw-2">&amp;</span>n.args);
+                    }
+
+                    <span class="bool-val">true
                 </span>}
-            },
-        ) {
-            ast_path.with(
-                AstParentNodeRef::CallExpr(n, CallExprField::Args(usize::MAX)),
-                |ast_path| {
-                    <span class="self">self</span>.visit_expr_or_spreads(<span class="kw-2">&amp;</span>n.args, ast_path);
-                },
-            );
-            <span class="bool-val">true
-        </span>} <span class="kw">else </span>{
-            <span class="bool-val">false
-        </span>}
-    }
+
+                Expr::Arrow(arrow_expr) =&gt; {
+                    <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                        ast_path.with_guard(AstParentNodeRef::Expr(expr, ExprField::Arrow));
+                    <span class="kw">let </span>args = <span class="kw-2">&amp;</span>n.args;
+                    <span class="self">self</span>.handle_iife_arrow(arrow_expr, args, <span class="kw-2">&amp;mut </span>ast_path);
+                    <span class="bool-val">true
+                </span>}
+                <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+            })
+        };
+
+        <span class="kw">if </span>!fn_expr {
+            <span class="kw">return </span><span class="bool-val">false</span>;
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::CallExpr(
+            n,
+            CallExprField::Args(usize::MAX),
+        ));
+
+        <span class="self">self</span>.visit_expr_or_spreads(<span class="kw-2">&amp;</span>n.args, <span class="kw-2">&amp;mut </span>ast_path);
+
+        <span class="bool-val">true
+    </span>}
 
     <span class="kw">fn </span>handle_iife_arrow&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
@@ -2548,37 +2498,41 @@
         } = arrow_expr;
         <span class="kw">let </span><span class="kw-2">mut </span>iter = args.iter();
         <span class="kw">for </span>(i, param) <span class="kw">in </span>params.iter().enumerate() {
-            ast_path.with(
-                AstParentNodeRef::ArrowExpr(arrow_expr, ArrowExprField::Params(i)),
-                |ast_path| {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(arg) = iter.next() {
-                        <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(<span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>arg.expr));
-                        <span class="self">self</span>.visit_pat(param, ast_path);
-                        <span class="self">self</span>.current_value = <span class="prelude-val">None</span>;
-                    } <span class="kw">else </span>{
-                        <span class="self">self</span>.visit_pat(param, ast_path);
-                    }
-                },
-            );
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ArrowExpr(
+                arrow_expr,
+                ArrowExprField::Params(i),
+            ));
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(arg) = iter.next() {
+                <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(<span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>arg.expr));
+                <span class="self">self</span>.visit_pat(param, <span class="kw-2">&amp;mut </span>ast_path);
+                <span class="self">self</span>.current_value = <span class="prelude-val">None</span>;
+            } <span class="kw">else </span>{
+                <span class="self">self</span>.visit_pat(param, <span class="kw-2">&amp;mut </span>ast_path);
+            }
         }
-        ast_path.with(
-            AstParentNodeRef::ArrowExpr(arrow_expr, ArrowExprField::Body),
-            |ast_path| {
-                <span class="self">self</span>.visit_block_stmt_or_expr(body, ast_path);
-            },
-        );
-        ast_path.with(
-            AstParentNodeRef::ArrowExpr(arrow_expr, ArrowExprField::ReturnType),
-            |ast_path| {
-                <span class="self">self</span>.visit_opt_ts_type_ann(return_type.as_ref(), ast_path);
-            },
-        );
-        ast_path.with(
-            AstParentNodeRef::ArrowExpr(arrow_expr, ArrowExprField::TypeParams),
-            |ast_path| {
-                <span class="self">self</span>.visit_opt_ts_type_param_decl(type_params.as_ref(), ast_path);
-            },
-        );
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ArrowExpr(
+                arrow_expr,
+                ArrowExprField::Body,
+            ));
+            <span class="self">self</span>.visit_block_stmt_or_expr(body, <span class="kw-2">&amp;mut </span>ast_path);
+        }
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ArrowExpr(
+                arrow_expr,
+                ArrowExprField::ReturnType,
+            ));
+            <span class="self">self</span>.visit_opt_ts_type_ann(return_type.as_ref(), <span class="kw-2">&amp;mut </span>ast_path);
+        }
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ArrowExpr(
+                arrow_expr,
+                ArrowExprField::TypeParams,
+            ));
+            <span class="self">self</span>.visit_opt_ts_type_param_decl(type_params.as_ref(), <span class="kw-2">&amp;mut </span>ast_path);
+        }
     }
 
     <span class="kw">fn </span>handle_iife_function&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
@@ -2599,43 +2553,52 @@
             type_params,
         } = function;
         <span class="kw">for </span>(i, param) <span class="kw">in </span>params.iter().enumerate() {
-            ast_path.with(
-                AstParentNodeRef::Function(function, FunctionField::Params(i)),
-                |ast_path| {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(arg) = iter.next() {
-                        <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(<span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>arg.expr));
-                        <span class="self">self</span>.visit_param(param, ast_path);
-                        <span class="self">self</span>.current_value = <span class="prelude-val">None</span>;
-                    } <span class="kw">else </span>{
-                        <span class="self">self</span>.visit_param(param, ast_path);
-                    }
-                },
-            );
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::Function(
+                function,
+                FunctionField::Params(i),
+            ));
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(arg) = iter.next() {
+                <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(<span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>arg.expr));
+                <span class="self">self</span>.visit_param(param, <span class="kw-2">&amp;mut </span>ast_path);
+                <span class="self">self</span>.current_value = <span class="prelude-val">None</span>;
+            } <span class="kw">else </span>{
+                <span class="self">self</span>.visit_param(param, <span class="kw-2">&amp;mut </span>ast_path);
+            }
         }
-        ast_path.with(
-            AstParentNodeRef::Function(function, FunctionField::Body),
-            |ast_path| {
-                <span class="self">self</span>.visit_opt_block_stmt(body.as_ref(), ast_path);
-            },
-        );
-        ast_path.with(
-            AstParentNodeRef::Function(function, FunctionField::Decorators(usize::MAX)),
-            |ast_path| {
-                <span class="self">self</span>.visit_decorators(decorators, ast_path);
-            },
-        );
-        ast_path.with(
-            AstParentNodeRef::Function(function, FunctionField::ReturnType),
-            |ast_path| {
-                <span class="self">self</span>.visit_opt_ts_type_ann(return_type.as_ref(), ast_path);
-            },
-        );
-        ast_path.with(
-            AstParentNodeRef::Function(function, FunctionField::TypeParams),
-            |ast_path| {
-                <span class="self">self</span>.visit_opt_ts_type_param_decl(type_params.as_ref(), ast_path);
-            },
-        );
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::Function(function, FunctionField::Body));
+
+            <span class="self">self</span>.visit_opt_block_stmt(body.as_ref(), <span class="kw-2">&amp;mut </span>ast_path);
+        }
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::Function(
+                function,
+                FunctionField::Decorators(usize::MAX),
+            ));
+
+            <span class="self">self</span>.visit_decorators(decorators, <span class="kw-2">&amp;mut </span>ast_path);
+        }
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::Function(
+                function,
+                FunctionField::ReturnType,
+            ));
+
+            <span class="self">self</span>.visit_opt_ts_type_ann(return_type.as_ref(), <span class="kw-2">&amp;mut </span>ast_path);
+        }
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::Function(
+                function,
+                FunctionField::TypeParams,
+            ));
+
+            <span class="self">self</span>.visit_opt_ts_type_param_decl(type_params.as_ref(), <span class="kw-2">&amp;mut </span>ast_path);
+        }
     }
 
     <span class="kw">fn </span>check_call_expr_for_effects&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
@@ -2730,9 +2693,10 @@
         n: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>AssignExpr,
         ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
     ) {
-        ast_path.with(
-            AstParentNodeRef::AssignExpr(n, AssignExprField::Left),
-            |ast_path| <span class="kw">match </span><span class="kw-2">&amp;</span>n.left {
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::AssignExpr(n, AssignExprField::Left));
+            <span class="kw">match </span><span class="kw-2">&amp;</span>n.left {
                 PatOrExpr::Expr(expr) =&gt; {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(key) = expr.as_ident() {
                         <span class="kw">let </span>value = <span class="kw">match </span>n.op {
@@ -2757,32 +2721,26 @@
                         }
                     }
 
-                    ast_path.with(
-                        AstParentNodeRef::PatOrExpr(<span class="kw-2">&amp;</span>n.left, PatOrExprField::Expr),
-                        |ast_path| {
-                            <span class="self">self</span>.visit_expr(expr, ast_path);
-                        },
-                    );
+                    <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path
+                        .with_guard(AstParentNodeRef::PatOrExpr(<span class="kw-2">&amp;</span>n.left, PatOrExprField::Expr));
+                    <span class="self">self</span>.visit_expr(expr, <span class="kw-2">&amp;mut </span>ast_path);
                 }
                 PatOrExpr::Pat(pat) =&gt; {
                     <span class="macro">debug_assert!</span>(n.op == AssignOp::Assign);
-                    ast_path.with(
-                        AstParentNodeRef::PatOrExpr(<span class="kw-2">&amp;</span>n.left, PatOrExprField::Pat),
-                        |ast_path| {
-                            <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(<span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>n.right));
-                            <span class="self">self</span>.visit_pat(pat, ast_path);
-                            <span class="self">self</span>.current_value = <span class="prelude-val">None</span>;
-                        },
-                    );
+                    <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path
+                        .with_guard(AstParentNodeRef::PatOrExpr(<span class="kw-2">&amp;</span>n.left, PatOrExprField::Pat));
+                    <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(<span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>n.right));
+                    <span class="self">self</span>.visit_pat(pat, <span class="kw-2">&amp;mut </span>ast_path);
+                    <span class="self">self</span>.current_value = <span class="prelude-val">None</span>;
                 }
-            },
-        );
-        ast_path.with(
-            AstParentNodeRef::AssignExpr(n, AssignExprField::Right),
-            |ast_path| {
-                <span class="self">self</span>.visit_expr(<span class="kw-2">&amp;</span>n.right, ast_path);
-            },
-        );
+            }
+        }
+
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::AssignExpr(n, AssignExprField::Right));
+            <span class="self">self</span>.visit_expr(<span class="kw-2">&amp;</span>n.right, <span class="kw-2">&amp;mut </span>ast_path);
+        }
     }
 
     <span class="kw">fn </span>visit_update_expr&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
@@ -2797,12 +2755,9 @@
             );
         }
 
-        ast_path.with(
-            AstParentNodeRef::UpdateExpr(n, UpdateExprField::Arg),
-            |ast_path| {
-                <span class="self">self</span>.visit_expr(<span class="kw-2">&amp;</span>n.arg, ast_path);
-            },
-        );
+        <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+            ast_path.with_guard(AstParentNodeRef::UpdateExpr(n, UpdateExprField::Arg));
+        <span class="self">self</span>.visit_expr(<span class="kw-2">&amp;</span>n.arg, <span class="kw-2">&amp;mut </span>ast_path);
     }
 
     <span class="kw">fn </span>visit_call_expr&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
@@ -2824,87 +2779,77 @@
 
         <span class="comment">// special behavior of IIFEs
         </span><span class="kw">if </span>!<span class="self">self</span>.check_iife(n, ast_path) {
-            ast_path.with(
-                AstParentNodeRef::CallExpr(n, CallExprField::Callee),
-                |ast_path| {
-                    n.callee.visit_with_path(<span class="self">self</span>, ast_path);
-                },
-            );
+            {
+                <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                    ast_path.with_guard(AstParentNodeRef::CallExpr(n, CallExprField::Callee));
+                n.callee.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+            }
             <span class="kw">let </span>args = n
                 .args
                 .iter()
                 .enumerate()
                 .map(|(i, arg)| {
-                    ast_path.with(
-                        AstParentNodeRef::CallExpr(n, CallExprField::Args(i)),
-                        |ast_path| {
-                            <span class="kw">if </span>arg.spread.is_none() {
-                                <span class="kw">let </span>value = <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>arg.expr);
+                    <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                        ast_path.with_guard(AstParentNodeRef::CallExpr(n, CallExprField::Args(i)));
+                    <span class="kw">if </span>arg.spread.is_none() {
+                        <span class="kw">let </span>value = <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>arg.expr);
 
-                                <span class="kw">let </span>block_path = <span class="kw">match </span><span class="kw-2">&amp;*</span>arg.expr {
-                                    Expr::Fn(FnExpr { .. }) =&gt; {
-                                        <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(ast_path);
-                                        path.push(AstParentKind::ExprOrSpread(
-                                            ExprOrSpreadField::Expr,
-                                        ));
-                                        path.push(AstParentKind::Expr(ExprField::Fn));
-                                        path.push(AstParentKind::FnExpr(FnExprField::Function));
-                                        path.push(AstParentKind::Function(FunctionField::Body));
-                                        <span class="prelude-val">Some</span>(path)
-                                    }
-                                    Expr::Arrow(ArrowExpr {
-                                        body: <span class="kw">box </span>BlockStmtOrExpr::BlockStmt(<span class="kw">_</span>),
-                                        ..
-                                    }) =&gt; {
-                                        <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(ast_path);
-                                        path.push(AstParentKind::ExprOrSpread(
-                                            ExprOrSpreadField::Expr,
-                                        ));
-                                        path.push(AstParentKind::Expr(ExprField::Arrow));
-                                        path.push(AstParentKind::ArrowExpr(ArrowExprField::Body));
-                                        path.push(AstParentKind::BlockStmtOrExpr(
-                                            BlockStmtOrExprField::BlockStmt,
-                                        ));
-                                        <span class="prelude-val">Some</span>(path)
-                                    }
-                                    Expr::Arrow(ArrowExpr {
-                                        body: <span class="kw">box </span>BlockStmtOrExpr::Expr(<span class="kw">_</span>),
-                                        ..
-                                    }) =&gt; {
-                                        <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(ast_path);
-                                        path.push(AstParentKind::ExprOrSpread(
-                                            ExprOrSpreadField::Expr,
-                                        ));
-                                        path.push(AstParentKind::Expr(ExprField::Arrow));
-                                        path.push(AstParentKind::ArrowExpr(ArrowExprField::Body));
-                                        path.push(AstParentKind::BlockStmtOrExpr(
-                                            BlockStmtOrExprField::Expr,
-                                        ));
-                                        <span class="prelude-val">Some</span>(path)
-                                    }
-                                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-                                };
-                                <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = block_path {
-                                    <span class="kw">let </span>old_effects = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects);
-                                    arg.visit_with_path(<span class="self">self</span>, ast_path);
-                                    <span class="kw">let </span>effects = replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects, old_effects);
-                                    EffectArg::Closure(
-                                        value,
-                                        EffectsBlock {
-                                            effects,
-                                            ast_path: path,
-                                        },
-                                    )
-                                } <span class="kw">else </span>{
-                                    arg.visit_with_path(<span class="self">self</span>, ast_path);
-                                    EffectArg::Value(value)
-                                }
-                            } <span class="kw">else </span>{
-                                arg.visit_with_path(<span class="self">self</span>, ast_path);
-                                EffectArg::Spread
+                        <span class="kw">let </span>block_path = <span class="kw">match </span><span class="kw-2">&amp;*</span>arg.expr {
+                            Expr::Fn(FnExpr { .. }) =&gt; {
+                                <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(<span class="kw-2">&amp;</span>ast_path);
+                                path.push(AstParentKind::ExprOrSpread(ExprOrSpreadField::Expr));
+                                path.push(AstParentKind::Expr(ExprField::Fn));
+                                path.push(AstParentKind::FnExpr(FnExprField::Function));
+                                path.push(AstParentKind::Function(FunctionField::Body));
+                                <span class="prelude-val">Some</span>(path)
                             }
-                        },
-                    )
+                            Expr::Arrow(ArrowExpr {
+                                body: <span class="kw">box </span>BlockStmtOrExpr::BlockStmt(<span class="kw">_</span>),
+                                ..
+                            }) =&gt; {
+                                <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(<span class="kw-2">&amp;</span>ast_path);
+                                path.push(AstParentKind::ExprOrSpread(ExprOrSpreadField::Expr));
+                                path.push(AstParentKind::Expr(ExprField::Arrow));
+                                path.push(AstParentKind::ArrowExpr(ArrowExprField::Body));
+                                path.push(AstParentKind::BlockStmtOrExpr(
+                                    BlockStmtOrExprField::BlockStmt,
+                                ));
+                                <span class="prelude-val">Some</span>(path)
+                            }
+                            Expr::Arrow(ArrowExpr {
+                                body: <span class="kw">box </span>BlockStmtOrExpr::Expr(<span class="kw">_</span>),
+                                ..
+                            }) =&gt; {
+                                <span class="kw">let </span><span class="kw-2">mut </span>path = as_parent_path(<span class="kw-2">&amp;</span>ast_path);
+                                path.push(AstParentKind::ExprOrSpread(ExprOrSpreadField::Expr));
+                                path.push(AstParentKind::Expr(ExprField::Arrow));
+                                path.push(AstParentKind::ArrowExpr(ArrowExprField::Body));
+                                path.push(AstParentKind::BlockStmtOrExpr(
+                                    BlockStmtOrExprField::Expr,
+                                ));
+                                <span class="prelude-val">Some</span>(path)
+                            }
+                            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+                        };
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = block_path {
+                            <span class="kw">let </span>old_effects = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects);
+                            arg.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                            <span class="kw">let </span>effects = replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects, old_effects);
+                            EffectArg::Closure(
+                                value,
+                                EffectsBlock {
+                                    effects,
+                                    ast_path: path,
+                                },
+                            )
+                        } <span class="kw">else </span>{
+                            arg.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                            EffectArg::Value(value)
+                        }
+                    } <span class="kw">else </span>{
+                        arg.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                        EffectArg::Spread
+                    }
                 })
                 .collect();
             <span class="self">self</span>.check_call_expr_for_effects(n, args, ast_path);
@@ -2975,7 +2920,8 @@
         <span class="kw">let </span>value = <span class="self">self</span>.current_value.take();
         <span class="kw">for </span>(index, p) <span class="kw">in </span>n.iter().enumerate() {
             <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::Argument(<span class="self">self</span>.cur_fn_ident, index));
-            ast_path.with_index(index, |ast_path| p.visit_children_with_path(<span class="self">self</span>, ast_path));
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_index_guard(index);
+            p.visit_children_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
         }
         <span class="self">self</span>.current_value = value;
     }
@@ -2993,16 +2939,18 @@
         } = n;
         <span class="self">self</span>.var_decl_kind = <span class="prelude-val">None</span>;
         <span class="kw">let </span>value = <span class="self">self</span>.current_value.take();
-        ast_path.with(
-            AstParentNodeRef::Param(n, ParamField::Decorators(usize::MAX)),
-            |ast_path| {
-                <span class="self">self</span>.visit_decorators(decorators, ast_path);
-            },
-        );
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::Param(
+                n,
+                ParamField::Decorators(usize::MAX),
+            ));
+            <span class="self">self</span>.visit_decorators(decorators, <span class="kw-2">&amp;mut </span>ast_path);
+        }
         <span class="self">self</span>.current_value = value;
-        ast_path.with(AstParentNodeRef::Param(n, ParamField::Pat), |ast_path| {
-            <span class="self">self</span>.visit_pat(pat, ast_path);
-        });
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::Param(n, ParamField::Pat));
+            <span class="self">self</span>.visit_pat(pat, <span class="kw-2">&amp;mut </span>ast_path);
+        }
         <span class="self">self</span>.current_value = <span class="prelude-val">None</span>;
         <span class="self">self</span>.var_decl_kind = old;
     }
@@ -3142,19 +3090,19 @@
                 <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(<span class="self">self</span>.eval_context.eval(init));
             }
         }
-        ast_path.with(
-            AstParentNodeRef::VarDeclarator(n, VarDeclaratorField::Name),
-            |ast_path| {
-                <span class="self">self</span>.visit_pat(<span class="kw-2">&amp;</span>n.name, ast_path);
-            },
-        );
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::VarDeclarator(n, VarDeclaratorField::Name));
+
+            <span class="self">self</span>.visit_pat(<span class="kw-2">&amp;</span>n.name, <span class="kw-2">&amp;mut </span>ast_path);
+        }
         <span class="self">self</span>.current_value = <span class="prelude-val">None</span>;
-        ast_path.with(
-            AstParentNodeRef::VarDeclarator(n, VarDeclaratorField::Init),
-            |ast_path| {
-                <span class="self">self</span>.visit_opt_expr(n.init.as_ref(), ast_path);
-            },
-        );
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::VarDeclarator(n, VarDeclaratorField::Init));
+
+            <span class="self">self</span>.visit_opt_expr(n.init.as_ref(), <span class="kw-2">&amp;mut </span>ast_path);
+        }
     }
 
     <span class="kw">fn </span>visit_pat&lt;<span class="lifetime">&#39;ast</span>: <span class="lifetime">&#39;r</span>, <span class="lifetime">&#39;r</span>&gt;(
@@ -3176,39 +3124,37 @@
             Pat::Array(arr) =&gt; {
                 <span class="kw">match </span><span class="kw-2">&amp;</span>value {
                     <span class="prelude-val">Some</span>(JsValue::Array { items, .. }) =&gt; {
-                        ast_path.with(AstParentNodeRef::Pat(pat, PatField::Array), |ast_path| {
-                            <span class="kw">for </span>(idx, elem) <span class="kw">in </span>arr.elems.iter().enumerate() {
-                                <span class="self">self</span>.current_value = items.get(idx).cloned();
-                                ast_path.with(
-                                    AstParentNodeRef::ArrayPat(arr, ArrayPatField::Elems(idx)),
-                                    |ast_path| {
-                                        elem.visit_with_path(<span class="self">self</span>, ast_path);
-                                    },
-                                );
-                            }
-                        });
+                        <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                            ast_path.with_guard(AstParentNodeRef::Pat(pat, PatField::Array));
+                        <span class="kw">for </span>(idx, elem) <span class="kw">in </span>arr.elems.iter().enumerate() {
+                            <span class="self">self</span>.current_value = items.get(idx).cloned();
+                            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ArrayPat(
+                                arr,
+                                ArrayPatField::Elems(idx),
+                            ));
+                            elem.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                        }
 
                         <span class="comment">// We should not call visit_children_with
                         </span><span class="kw">return</span>;
                     }
 
                     <span class="prelude-val">Some</span>(value) =&gt; {
-                        ast_path.with(AstParentNodeRef::Pat(pat, PatField::Array), |ast_path| {
-                            <span class="kw">for </span>(idx, elem) <span class="kw">in </span>arr.elems.iter().enumerate() {
-                                <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::member(
-                                    Box::new(value.clone()),
-                                    Box::new(JsValue::Constant(ConstantValue::Num(
-                                        ConstantNumber(idx <span class="kw">as </span>f64),
-                                    ))),
-                                ));
-                                ast_path.with(
-                                    AstParentNodeRef::ArrayPat(arr, ArrayPatField::Elems(idx)),
-                                    |ast_path| {
-                                        elem.visit_with_path(<span class="self">self</span>, ast_path);
-                                    },
-                                );
-                            }
-                        });
+                        <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                            ast_path.with_guard(AstParentNodeRef::Pat(pat, PatField::Array));
+                        <span class="kw">for </span>(idx, elem) <span class="kw">in </span>arr.elems.iter().enumerate() {
+                            <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::member(
+                                Box::new(value.clone()),
+                                Box::new(JsValue::Constant(ConstantValue::Num(ConstantNumber(
+                                    idx <span class="kw">as </span>f64,
+                                )))),
+                            ));
+                            <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ArrayPat(
+                                arr,
+                                ArrayPatField::Elems(idx),
+                            ));
+                            elem.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                        }
                         <span class="comment">// We should not call visit_children_with
                         </span><span class="kw">return</span>;
                     }
@@ -3316,37 +3262,32 @@
         stmt: <span class="kw-2">&amp;</span><span class="lifetime">&#39;ast </span>IfStmt,
         ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
     ) {
-        ast_path.with(
-            AstParentNodeRef::IfStmt(stmt, IfStmtField::Test),
-            |ast_path| {
-                stmt.test.visit_with_path(<span class="self">self</span>, ast_path);
-            },
-        );
+        {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::IfStmt(stmt, IfStmtField::Test));
+            stmt.test.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+        }
         <span class="kw">let </span>prev_effects = take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects);
-        <span class="kw">let </span>then = ast_path.with(
-            AstParentNodeRef::IfStmt(stmt, IfStmtField::Cons),
-            |ast_path| {
-                stmt.cons.visit_with_path(<span class="self">self</span>, ast_path);
-                EffectsBlock {
-                    effects: take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects),
-                    ast_path: as_parent_path(ast_path),
-                }
-            },
-        );
+        <span class="kw">let </span>then = {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::IfStmt(stmt, IfStmtField::Cons));
+            stmt.cons.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+            EffectsBlock {
+                effects: take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects),
+                ast_path: as_parent_path(<span class="kw-2">&amp;</span>ast_path),
+            }
+        };
         <span class="kw">let </span>r#else = stmt
             .alt
             .as_ref()
             .map(|alt| {
-                ast_path.with(
-                    AstParentNodeRef::IfStmt(stmt, IfStmtField::Alt),
-                    |ast_path| {
-                        alt.visit_with_path(<span class="self">self</span>, ast_path);
-                        EffectsBlock {
-                            effects: take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects),
-                            ast_path: as_parent_path(ast_path),
-                        }
-                    },
-                )
+                <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                    ast_path.with_guard(AstParentNodeRef::IfStmt(stmt, IfStmtField::Alt));
+                alt.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                EffectsBlock {
+                    effects: take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.effects),
+                    ast_path: as_parent_path(<span class="kw-2">&amp;</span>ast_path),
+                }
             })
             .unwrap_or_default();
         <span class="self">self</span>.effects = prev_effects;
@@ -3420,93 +3361,78 @@
         current_value: <span class="kw-2">&amp;</span>JsValue,
         ast_path: <span class="kw-2">&amp;mut </span>AstNodePath&lt;AstParentNodeRef&lt;<span class="lifetime">&#39;r</span>&gt;&gt;,
     ) {
-        ast_path.with(AstParentNodeRef::Pat(pat, PatField::Object), |ast_path| {
-            <span class="kw">for </span>(i, prop) <span class="kw">in </span>obj.props.iter().enumerate() {
-                ast_path.with(
-                    AstParentNodeRef::ObjectPat(obj, ObjectPatField::Props(i)),
-                    |ast_path| <span class="kw">match </span>prop {
-                        ObjectPatProp::KeyValue(kv) =&gt; {
-                            ast_path.with(
-                                AstParentNodeRef::ObjectPatProp(prop, ObjectPatPropField::KeyValue),
-                                |ast_path| {
-                                    <span class="kw">let </span>KeyValuePatProp { key, value } = kv;
-                                    <span class="kw">let </span>key_value = <span class="self">self</span>.eval_context.eval_prop_name(key);
-                                    ast_path.with(
-                                        AstParentNodeRef::KeyValuePatProp(
-                                            kv,
-                                            KeyValuePatPropField::Key,
-                                        ),
-                                        |ast_path| {
-                                            key.visit_with_path(<span class="self">self</span>, ast_path);
-                                        },
-                                    );
-                                    <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::member(
-                                        Box::new(current_value.clone()),
-                                        Box::new(key_value),
-                                    ));
-                                    ast_path.with(
-                                        AstParentNodeRef::KeyValuePatProp(
-                                            kv,
-                                            KeyValuePatPropField::Value,
-                                        ),
-                                        |ast_path| {
-                                            value.visit_with_path(<span class="self">self</span>, ast_path);
-                                        },
-                                    );
-                                },
-                            );
-                        }
-                        ObjectPatProp::Assign(assign) =&gt; {
-                            ast_path.with(
-                                AstParentNodeRef::ObjectPatProp(prop, ObjectPatPropField::Assign),
-                                |ast_path| {
-                                    <span class="kw">let </span>AssignPatProp { key, value, .. } = assign;
-                                    <span class="kw">let </span>key_value = key.sym.clone().into();
-                                    ast_path.with(
-                                        AstParentNodeRef::AssignPatProp(
-                                            assign,
-                                            AssignPatPropField::Key,
-                                        ),
-                                        |ast_path| {
-                                            key.visit_with_path(<span class="self">self</span>, ast_path);
-                                        },
-                                    );
-                                    <span class="self">self</span>.add_value(
-                                        key.to_id(),
-                                        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw">box </span>value) = value {
-                                            <span class="kw">let </span>value = <span class="self">self</span>.eval_context.eval(value);
-                                            JsValue::alternatives(<span class="macro">vec!</span>[
-                                                JsValue::member(
-                                                    Box::new(current_value.clone()),
-                                                    Box::new(key_value),
-                                                ),
-                                                value,
-                                            ])
-                                        } <span class="kw">else </span>{
-                                            JsValue::member(
-                                                Box::new(current_value.clone()),
-                                                Box::new(key_value),
-                                            )
-                                        },
-                                    );
-                                    ast_path.with(
-                                        AstParentNodeRef::AssignPatProp(
-                                            assign,
-                                            AssignPatPropField::Value,
-                                        ),
-                                        |ast_path| {
-                                            value.visit_with_path(<span class="self">self</span>, ast_path);
-                                        },
-                                    );
-                                },
-                            );
-                        }
+        <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::Pat(pat, PatField::Object));
+        <span class="kw">for </span>(i, prop) <span class="kw">in </span>obj.props.iter().enumerate() {
+            <span class="kw">let </span><span class="kw-2">mut </span>ast_path =
+                ast_path.with_guard(AstParentNodeRef::ObjectPat(obj, ObjectPatField::Props(i)));
+            <span class="kw">match </span>prop {
+                ObjectPatProp::KeyValue(kv) =&gt; {
+                    <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ObjectPatProp(
+                        prop,
+                        ObjectPatPropField::KeyValue,
+                    ));
+                    <span class="kw">let </span>KeyValuePatProp { key, value } = kv;
+                    <span class="kw">let </span>key_value = <span class="self">self</span>.eval_context.eval_prop_name(key);
+                    {
+                        <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::KeyValuePatProp(
+                            kv,
+                            KeyValuePatPropField::Key,
+                        ));
+                        key.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                    }
+                    <span class="self">self</span>.current_value = <span class="prelude-val">Some</span>(JsValue::member(
+                        Box::new(current_value.clone()),
+                        Box::new(key_value),
+                    ));
+                    {
+                        <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::KeyValuePatProp(
+                            kv,
+                            KeyValuePatPropField::Value,
+                        ));
+                        value.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                    }
+                }
+                ObjectPatProp::Assign(assign) =&gt; {
+                    <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::ObjectPatProp(
+                        prop,
+                        ObjectPatPropField::Assign,
+                    ));
+                    <span class="kw">let </span>AssignPatProp { key, value, .. } = assign;
+                    <span class="kw">let </span>key_value = key.sym.clone().into();
+                    {
+                        <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::AssignPatProp(
+                            assign,
+                            AssignPatPropField::Key,
+                        ));
+                        key.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                    }
+                    <span class="self">self</span>.add_value(
+                        key.to_id(),
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw">box </span>value) = value {
+                            <span class="kw">let </span>value = <span class="self">self</span>.eval_context.eval(value);
+                            JsValue::alternatives(<span class="macro">vec!</span>[
+                                JsValue::member(
+                                    Box::new(current_value.clone()),
+                                    Box::new(key_value),
+                                ),
+                                value,
+                            ])
+                        } <span class="kw">else </span>{
+                            JsValue::member(Box::new(current_value.clone()), Box::new(key_value))
+                        },
+                    );
+                    {
+                        <span class="kw">let </span><span class="kw-2">mut </span>ast_path = ast_path.with_guard(AstParentNodeRef::AssignPatProp(
+                            assign,
+                            AssignPatPropField::Value,
+                        ));
+                        value.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path);
+                    }
+                }
 
-                        <span class="kw">_ </span>=&gt; prop.visit_with_path(<span class="self">self</span>, ast_path),
-                    },
-                );
+                <span class="kw">_ </span>=&gt; prop.visit_with_path(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>ast_path),
             }
-        });
+        }
     }
 }
 
@@ -3560,12 +3486,10 @@
 <span class="kw">fn </span>get_fn_init_return_vals(fn_body_stmts: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>BlockStmt&gt;) -&gt; Vec&lt;JsValue&gt; {
     <span class="kw">let </span>has_final_return_val = <span class="kw">match </span>fn_body_stmts {
         <span class="prelude-val">Some</span>(fn_body_stmts) =&gt; {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(Stmt::Return(ReturnStmt { arg: <span class="prelude-val">Some</span>(<span class="kw">_</span>), .. })) = fn_body_stmts.stmts.last()
-            {
-                <span class="bool-val">true
-            </span>} <span class="kw">else </span>{
-                <span class="bool-val">false
-            </span>}
+            <span class="macro">matches!</span>(
+                fn_body_stmts.stmts.last(),
+                <span class="prelude-val">Some</span>(Stmt::Return(ReturnStmt { arg: <span class="prelude-val">Some</span>(<span class="kw">_</span>), .. }))
+            )
         }
         <span class="prelude-val">None </span>=&gt; <span class="bool-val">false</span>,
     };

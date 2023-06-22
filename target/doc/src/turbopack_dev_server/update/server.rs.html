@@ -281,6 +281,7 @@
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     pin::Pin,
     task::{Context, Poll},
@@ -311,7 +312,8 @@
 <span class="doccomment">/// A server that listens for updates and sends them to connected clients.
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>UpdateServer&lt;P: SourceProvider&gt; {
     source_provider: P,
-    issue_reporter: IssueReporterVc,
+    <span class="attr">#[allow(dead_code)]
+    </span>issue_reporter: IssueReporterVc,
 }
 
 <span class="kw">impl</span>&lt;P: SourceProvider + Clone + Send + Sync&gt; UpdateServer&lt;P&gt; {
