@@ -139,7 +139,6 @@ impl GetContentSourceContent for TurboTasksSource {
         };
         Ok(ContentSourceContentVc::static_content(
             AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
-        )
-        .into())
+        ))
     }
 }
