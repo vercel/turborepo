@@ -104,6 +104,18 @@ impl Introspectable for ConditionalContentSource {
     }
 
     #[turbo_tasks::function]
+    async fn details(&self) -> Result<StringVc> {
+        Ok(StringVc::cell(
+            if *self.activated.get() {
+                "activated"
+            } else {
+                "not activated"
+            }
+            .to_string(),
+        ))
+    }
+
+    #[turbo_tasks::function]
     async fn title(&self) -> Result<StringVc> {
         if let Some(activator) = IntrospectableVc::resolve_from(self.activator).await? {
             Ok(activator.title())

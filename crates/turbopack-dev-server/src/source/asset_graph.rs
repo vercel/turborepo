@@ -150,6 +150,10 @@ async fn expand(
     Ok(map)
 }
 
+#[turbo_tasks::value(serialization = "auto_for_input")]
+#[derive(Hash, PartialOrd, Ord, Debug, Clone)]
+struct UnresolvedAsset(AssetVc);
+
 #[turbo_tasks::value_impl]
 impl ContentSource for AssetGraphContentSource {
     #[turbo_tasks::function]
@@ -161,7 +165,11 @@ impl ContentSource for AssetGraphContentSource {
                 RouteTreeVc::new_route(
                     BaseSegment::from_static_pathname(path).collect(),
                     None,
-                    AssetGraphGetContentSourceContentVc::new(self_vc, *asset).into(),
+                    AssetGraphGetContentSourceContentVc::new(
+                        self_vc,
+                        Value::new(UnresolvedAsset(*asset)),
+                    )
+                    .into(),
                 )
             })
             .collect();
@@ -178,8 +186,11 @@ struct AssetGraphGetContentSourceContent {
 #[turbo_tasks::value_impl]
 impl AssetGraphGetContentSourceContentVc {
     #[turbo_tasks::function]
-    pub fn new(source: AssetGraphContentSourceVc, asset: AssetVc) -> Self {
-        Self::cell(AssetGraphGetContentSourceContent { source, asset })
+    pub fn new(source: AssetGraphContentSourceVc, asset: Value<UnresolvedAsset>) -> Self {
+        Self::cell(AssetGraphGetContentSourceContent {
+            source,
+            asset: asset.into_value().0,
+        })
     }
 }
 
@@ -193,11 +204,13 @@ impl GetContentSourceContent for AssetGraphGetContentSourceContent {
     ) -> Result<ContentSourceContentVc> {
         let source = self.source.await?;
 
+        let asset = self.asset;
+
         if let Some(expanded) = &source.expanded {
-            expanded.update_conditionally(|expanded| expanded.insert(self.asset));
+            expanded.update_conditionally(|expanded| expanded.insert(asset));
         }
 
-        Ok(ContentSourceContentVc::static_content(self.asset.versioned_content()).into())
+        Ok(ContentSourceContentVc::static_content(asset.versioned_content()).into())
     }
 }
 
@@ -219,18 +232,35 @@ impl Introspectable for AssetGraphContentSource {
     }
 
     #[turbo_tasks::function]
+    fn details(&self) -> StringVc {
+        StringVc::cell(if let Some(expanded) = &self.expanded {
+            format!("{} assets expanded", expanded.get().len())
+        } else {
+            "eager".to_string()
+        })
+    }
+
+    #[turbo_tasks::function]
     async fn children(self_vc: AssetGraphContentSourceVc) -> Result<IntrospectableChildrenVc> {
         let this = self_vc.await?;
         let key = StringVc::cell("root".to_string());
+        let inner_key = StringVc::cell("inner".to_string());
         let expanded_key = StringVc::cell("expanded".to_string());
 
         let root_assets = this.root_assets.await?;
-        let root_assets = root_assets
+        let root_asset_children = root_assets
             .iter()
             .map(|&asset| (key, IntrospectableAssetVc::new(asset)));
 
+        let expanded_assets = self_vc.all_assets_map().await?;
+        let expanded_asset_children = expanded_assets
+            .values()
+            .filter(|a| !root_assets.contains(*a))
+            .map(|asset| (inner_key, IntrospectableAssetVc::new(*asset)));
+
         Ok(IntrospectableChildrenVc::cell(
-            root_assets
+            root_asset_children
+                .chain(expanded_asset_children)
                 .chain(once((expanded_key, FullyExpaned(self_vc).cell().into())))
                 .collect(),
         ))

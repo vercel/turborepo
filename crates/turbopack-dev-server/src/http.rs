@@ -43,7 +43,10 @@ async fn get_from_source(
     source: ContentSourceVc,
     request: TransientInstance<SourceRequest>,
 ) -> Result<GetFromSourceResultVc> {
-    Ok(match &*resolve_source_request(source, request).await? {
+    Ok(match &*resolve_source_request(source, request)
+        .strongly_consistent()
+        .await?
+    {
         ResolveSourceRequestResult::Static(static_content_vc, header_overwrites) => {
             let static_content = static_content_vc.await?;
             if let AssetContent::File(file) = &*static_content.content.content().await? {

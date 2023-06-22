@@ -21,17 +21,6 @@ pub trait ContentSourceProcessor {
     fn process(&self, content: ContentSourceContentVc) -> ContentSourceContentVc;
 }
 
-pub fn encode_pathname_to_url(pathname: &str) -> String {
-    once(Cow::Borrowed("/"))
-        .chain(
-            pathname
-                .split('/')
-                .map(urlencoding::encode)
-                .intersperse(Cow::Borrowed("/")),
-        )
-        .collect()
-}
-
 /// A WrappedGetContentSourceContent simply wraps the get_content of a
 /// [ContentSourceResult], allowing us to process whatever
 /// [ContentSourceContent] it would have returned.

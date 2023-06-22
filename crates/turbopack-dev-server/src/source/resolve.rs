@@ -45,7 +45,7 @@ pub async fn resolve_source_request(
     'routes: loop {
         let mut sources = route_tree.get(&current_asset_path);
         'sources: loop {
-            for get_content in sources.strongly_consistent().await?.iter() {
+            for get_content in sources.await?.iter() {
                 let content_vary = get_content.vary().await?;
                 let content_data =
                     request_to_data(&request_overwrites, &request, &content_vary).await?;
