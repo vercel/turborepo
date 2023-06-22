@@ -28,7 +28,7 @@ impl BaseSegment {
 }
 
 #[turbo_tasks::value]
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct RouteTree {
     pub base: Vec<BaseSegment>,
     pub sources: Vec<GetContentSourceContentVc>,
@@ -143,6 +143,7 @@ impl RouteTreeVc {
             fallback_sources,
             not_found_sources,
         } = &*self.await?;
+        println!("RouteTree({:?})::get({:?})", self.await?, path);
         let mut segments = path.split('/');
         for base in base.iter() {
             let Some(segment) = segments.next() else {
@@ -198,8 +199,8 @@ impl RouteTreeVc {
                 if tree.base[common_base] != last_tree.base[common_base] {
                     break;
                 }
-                common_base += 1;
             }
+            common_base += 1;
         }
         tree_values.push(last_tree);
 
@@ -232,6 +233,11 @@ impl RouteTreeVc {
 
     #[turbo_tasks::function]
     async fn with_base_len(self_vc: RouteTreeVc, base_len: usize) -> Result<RouteTreeVc> {
+        println!(
+            "RouteTree({:?})::with_base_len({})",
+            self_vc.await?,
+            base_len
+        );
         let this = self_vc.await?;
         if this.base.len() > base_len {
             let mut inner = this.clone_value();

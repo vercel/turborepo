@@ -2,7 +2,7 @@ use anyhow::Result;
 use turbo_tasks::primitives::StringVc;
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
-use super::{route_tree::RouteTreeVc, ContentSource, ContentSourceData, ContentSourceVc};
+use super::{route_tree::RouteTreeVc, ContentSource, ContentSourceVc};
 
 /// A functor to get a [ContentSource]. Will be invoked when needed when using
 /// [LazyInstantiatedContentSource].

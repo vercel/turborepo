@@ -84,9 +84,7 @@ pub async fn resolve_source_request(
                             }
                         }
                     }
-                    ContentSourceContent::NotFound => {
-                        return Ok(ResolveSourceRequestResult::NotFound.cell());
-                    }
+                    ContentSourceContent::NotFound => continue,
                     ContentSourceContent::Static(static_content) => {
                         return Ok(ResolveSourceRequestResult::Static(
                             *static_content,
@@ -99,8 +97,11 @@ pub async fn resolve_source_request(
                     }
                 }
             }
+            break;
         }
+        break;
     }
+    return Ok(ResolveSourceRequestResult::NotFound.cell());
 }
 
 static CACHE_BUSTER: AtomicU64 = AtomicU64::new(0);
