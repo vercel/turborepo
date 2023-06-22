@@ -1,6 +1,16 @@
 {
   "$schema": "./docs/public/schema.json",
-  "globalPassThroughEnv": ["Path", "APPDATA"],
+  "globalPassThroughEnv": [
+    "Path", 
+    "APPDATA",
+    "LOCALAPPDATA",
+    "TMPDIR", 
+    "HOME",
+    "TMP", 
+    "GOROOT",
+    "USERPROFILE"
+  ],
+  "globalEnv": ["OS"],
   "pipeline": {
     "test": {
       "outputs": ["coverage/**/*"],
