@@ -105,8 +105,7 @@ impl GetContentSourceContent for NextSourceMapTraceContentSource {
         Ok(ContentSourceContent::Rewrite(
             RewriteBuilder::new_sources(GetContentSourceContentsVc::cell(sources)).build(),
         )
-        .cell()
-        .into())
+        .cell())
     }
 }
 
