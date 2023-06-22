@@ -45,6 +45,8 @@ impl SwcPluginModule {
 
         #[cfg(not(feature = "swc_ecma_transform_plugin"))]
         {
+            let _ = plugin_name;
+            let _ = plugin_bytes;
             Self(())
         }
     }
