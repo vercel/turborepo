@@ -619,9 +619,6 @@ pub async fn run(
         }
     }
 
-    let single_package =
-        matches!(&repo_state, Some(repo_state) if repo_state.mode == RepoMode::SinglePackage);
-
     let cwd = repo_state
         .as_ref()
         .map(|state| state.root.as_path())
@@ -638,11 +635,13 @@ pub async fn run(
     // Save all the mutation for the end. In the future, we should refactor this
     // into a "parse don't validate" scheme where we construct a config struct
     // that is contains all of the normalized, validated, and defaulted values.
-    if let Command::Run(run_args) = &mut command {
-        if let Some(pkg_inference_root) = pkg_inference_root {
-            run_args.pkg_inference_root = Some(pkg_inference_root);
+    if let Some(repo_state) = repo_state {
+        if let Command::Run(run_args) = &mut command {
+            if let Some(pkg_inference_root) = pkg_inference_root {
+                run_args.pkg_inference_root = Some(pkg_inference_root);
+            }
+            run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
         }
-        run_args.single_package = single_package;
     }
     cli_args.command = Some(command);
     cli_args.cwd = Some(repo_root.as_path().to_owned());
