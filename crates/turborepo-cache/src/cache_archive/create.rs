@@ -26,6 +26,10 @@ impl CacheWriter {
         Ok(self.builder.append_data(header, path, body)?)
     }
 
+    pub fn finish(mut self) -> Result<(), CacheError> {
+        Ok(self.builder.finish()?)
+    }
+
     // Makes a new CacheArchive at the specified path
     // Wires up the chain of writers:
     // tar::Builder -> zstd::Encoder (optional) -> BufWriter -> File
@@ -133,9 +137,232 @@ mod tests {
 
     use anyhow::Result;
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPath;
+    use test_case::test_case;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
     use super::*;
+    use crate::cache_archive::restore::CacheReader;
+
+    #[derive(Debug)]
+    enum FileType {
+        Dir,
+        Symlink { linkname: String },
+        Fifo,
+        File,
+    }
+
+    #[derive(Debug)]
+    struct CreateFileDefinition {
+        path: AnchoredSystemPathBuf,
+        mode: u32,
+        file_type: FileType,
+    }
+
+    fn create_entry(anchor: &AbsoluteSystemPath, file: &CreateFileDefinition) -> Result<()> {
+        match &file.file_type {
+            FileType::Dir => create_dir(anchor, file),
+            FileType::Symlink { linkname } => create_symlink(anchor, file, &linkname),
+            FileType::Fifo => create_fifo(anchor, file),
+            FileType::File => create_file(anchor, file),
+        }
+    }
+
+    fn create_dir(anchor: &AbsoluteSystemPath, file: &CreateFileDefinition) -> Result<()> {
+        let path = anchor.resolve(&file.path);
+        path.create_dir_all()?;
+
+        #[cfg(unix)]
+        {
+            path.set_mode(file.mode & 0o777)?;
+        }
+
+        Ok(())
+    }
+
+    fn create_symlink(
+        anchor: &AbsoluteSystemPath,
+        file: &CreateFileDefinition,
+        linkname: &str,
+    ) -> Result<()> {
+        let path = anchor.resolve(&file.path);
+        path.symlink_to_file(&linkname)?;
+
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    fn create_fifo(anchor: &AbsoluteSystemPath, file: &CreateFileDefinition) -> Result<()> {
+        use std::ffi::CString;
+
+        let path = anchor.resolve(&file.path);
+        let path_cstr = CString::new(path.as_str())?;
+
+        unsafe {
+            libc::mkfifo(path_cstr.as_ptr(), 0o644);
+        }
+
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    fn create_fifo(_: &AbsoluteSystemPath, _: &CreateFileDefinition) -> Result<()> {
+        Err(CacheError::UnsupportedFileType(
+            EntryType::Fifo,
+            Backtrace::capture(),
+        ))
+    }
+
+    fn create_file(anchor: &AbsoluteSystemPath, file: &CreateFileDefinition) -> Result<()> {
+        let path = anchor.resolve(&file.path);
+        fs::write(&path, b"file contents")?;
+        #[cfg(unix)]
+        {
+            path.set_mode(file.mode & 0o777)?;
+        }
+
+        Ok(())
+    }
+
+    #[test_case(
+      vec![
+         CreateFileDefinition {
+           path: AnchoredSystemPathBuf::from_raw("hello world.txt").unwrap(),
+           mode: 0o644,
+           file_type: FileType::File,
+         }
+      ],
+      "db05810ef8714bc849a27d2b78a267c03862cd5259a5c7fb916e92a1ef912da68a4c92032d8e984e241e12fb85a4b41574009922d740c7e66faf50a00682003c",
+      "9e5592e4244cfaa8d9394b9e11c66cef9337d5b99f98b0836f8255113222bea6bc13eed9123a97ff27acd8eee6c91191a524a907e277fa159a942c1bd61d043d",
+      "e304d1ba8c51209f97bd11dabf27ca06996b70a850db592343942c49480de47bcbb4b7131fb3dd4d7564021d3bc0e648919e4876572b46ac1da97fca92b009c5",
+      None
+    )]
+    #[test_case(
+        vec![
+            CreateFileDefinition {
+                path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                mode: 0o777,
+                file_type: FileType::Symlink { linkname: "two".to_string() },
+            },
+            CreateFileDefinition {
+                path: AnchoredSystemPathBuf::from_raw("two").unwrap(),
+                mode: 0o777,
+                file_type: FileType::Symlink { linkname: "three".to_string() },
+            },
+            CreateFileDefinition {
+                path: AnchoredSystemPathBuf::from_raw("three").unwrap(),
+                mode: 0o777,
+                file_type: FileType::Symlink { linkname: "real".to_string() },
+            },
+            CreateFileDefinition {
+                path: AnchoredSystemPathBuf::from_raw("real").unwrap(),
+                mode: 0o777,
+                file_type: FileType::File,
+            }
+        ],
+        "7cb91627c62368cfa15160f9f018de3320ee0cf267625d37265d162ae3b0dea64b8126aac9769922796e3eb864189efd7c5555c4eea8999c91cbbbe695852111",
+        "7cb91627c62368cfa15160f9f018de3320ee0cf267625d37265d162ae3b0dea64b8126aac9769922796e3eb864189efd7c5555c4eea8999c91cbbbe695852111",
+        "e304d1ba8c51209f97bd11dabf27ca06996b70a850db592343942c49480de47bcbb4b7131fb3dd4d7564021d3bc0e648919e4876572b46ac1da97fca92b009c5",
+        None
+    )]
+    #[test_case(
+        vec![
+            CreateFileDefinition {
+                path: AnchoredSystemPathBuf::from_raw("parent").unwrap(),
+                mode: 0o777,
+                file_type: FileType::Dir,
+            },
+            CreateFileDefinition {
+                path: AnchoredSystemPathBuf::from_raw("parent/child").unwrap(),
+                mode: 0o644,
+                file_type: FileType::File,
+            },
+        ],
+        "919de777e4d43eb072939d2e0664f9df533bd24ec357eacab83dcb8a64e2723f3ee5ecb277d1cf24538339fe06d210563188052d08dab146a8463fdb6898d655",
+        "919de777e4d43eb072939d2e0664f9df533bd24ec357eacab83dcb8a64e2723f3ee5ecb277d1cf24538339fe06d210563188052d08dab146a8463fdb6898d655",
+        "919de777e4d43eb072939d2e0664f9df533bd24ec357eacab83dcb8a64e2723f3ee5ecb277d1cf24538339fe06d210563188052d08dab146a8463fdb6898d655",
+        None
+    )]
+    #[test_case(
+        vec![
+            CreateFileDefinition {
+                path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                mode: 0o644,
+                file_type: FileType::Symlink { linkname: "two".to_string() },
+            },
+        ],
+        "40ce0d42109bb5e5a6b1d4ba9087a317b4c1c6c51822a57c9cb983f878b0ff765637c05fadd4bac32c8dd2b496c2a24825b183d9720b0cdd5b33f9248b692cc1",
+        "40ce0d42109bb5e5a6b1d4ba9087a317b4c1c6c51822a57c9cb983f878b0ff765637c05fadd4bac32c8dd2b496c2a24825b183d9720b0cdd5b33f9248b692cc1",
+        "40ce0d42109bb5e5a6b1d4ba9087a317b4c1c6c51822a57c9cb983f878b0ff765637c05fadd4bac32c8dd2b496c2a24825b183d9720b0cdd5b33f9248b692cc1",
+        None
+    )]
+    #[test_case(
+        vec![
+            CreateFileDefinition {
+                path: AnchoredSystemPathBuf::from_raw("one").unwrap(),
+                mode: 0o644,
+                file_type: FileType::Fifo,
+            }
+        ],
+        "",
+        "",
+        "",
+        Some("attempted to create unsupported file type")
+    )]
+    fn test_create(
+        files: Vec<CreateFileDefinition>,
+        #[allow(unused_variables)] expected_darwin: &str,
+        #[allow(unused_variables)] expected_unix: &str,
+        #[allow(unused_variables)] expected_windows: &str,
+        #[allow(unused_variables)] expected_err: Option<&str>,
+    ) -> Result<()> {
+        'outer: for compressed in [false, true] {
+            let input_dir = tempdir()?;
+            let archive_dir = tempdir()?;
+            let input_dir_path = AbsoluteSystemPathBuf::try_from(input_dir.path())?;
+            let archive_path = if compressed {
+                AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar.zst"))?
+            } else {
+                AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar"))?
+            };
+
+            let mut cache_archive = CacheWriter::create(&archive_path)?;
+
+            for file in files.iter() {
+                let result = create_entry(&input_dir_path, file);
+                if let Err(err) = result {
+                    assert!(expected_err.is_some());
+                    assert_eq!(err.to_string(), expected_err.unwrap());
+                    continue 'outer;
+                }
+
+                let result = cache_archive.add_file(&input_dir_path, &file.path);
+                if let Err(err) = result {
+                    assert!(expected_err.is_some());
+                    assert_eq!(err.to_string(), expected_err.unwrap());
+                    continue 'outer;
+                }
+            }
+
+            cache_archive.finish()?;
+
+            if compressed {
+                let opened_cache_archive = CacheReader::open(&archive_path)?;
+                let sha_one = opened_cache_archive.get_sha()?;
+                let snapshot = hex::encode(&sha_one);
+
+                #[cfg(target_os = "macos")]
+                assert_eq!(snapshot, expected_darwin);
+
+                #[cfg(windows)]
+                assert_eq!(snapshot, expected_windows);
+
+                #[cfg(all(unix, not(target_os = "macos")))]
+                assert_eq!(snapshot, expected_unix);
+            }
+        }
+
+        Ok(())
+    }
 
     #[test]
     #[cfg(unix)]
@@ -175,6 +402,23 @@ mod tests {
         let really_long_path = anchor.resolve(really_long_file);
         really_long_path.create_with_contents("The End!")?;
         archive.add_file(anchor, really_long_file)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_compression() -> Result<()> {
+        let mut buffer = Vec::new();
+        let mut encoder = zstd::Encoder::new(&mut buffer, 0)?.auto_finish();
+        encoder.write(b"hello world")?;
+        // Should finish encoding on drop
+        drop(encoder);
+
+        let mut decoder = zstd::Decoder::new(&buffer[..])?;
+        let mut out = String::new();
+        decoder.read_to_string(&mut out)?;
+
+        assert_eq!(out, "hello world");
 
         Ok(())
     }
