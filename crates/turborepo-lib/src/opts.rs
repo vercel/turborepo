@@ -122,7 +122,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             passthrough_args: args.pass_through_args.as_ref(),
             only: args.only,
             no_daemon: args.no_daemon,
-            single_package: args.single_package,
+            single_package: args.single_package.unwrap_or(false),
             graph_dot,
             graph_file,
             dry_run_json: matches!(args.dry_run, Some(DryRunMode::Json)),

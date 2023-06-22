@@ -428,7 +428,7 @@ pub struct RunArgs {
     pub dry_run: Option<DryRunMode>,
     /// Run turbo in single-package mode
     #[clap(long, global = true)]
-    pub single_package: bool,
+    pub single_package: Option<bool>,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
@@ -640,7 +640,11 @@ pub async fn run(
             if let Some(pkg_inference_root) = pkg_inference_root {
                 run_args.pkg_inference_root = Some(pkg_inference_root);
             }
-            run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
+            if run_args.single_package.is_none()
+                && matches!(repo_state.mode, RepoMode::SinglePackage)
+            {
+                run_args.single_package = Some(true);
+            }
         }
     }
     cli_args.command = Some(command);
