@@ -278,7 +278,7 @@ function runSmokeTests<T>(
       assert.equal(0, results.exitCode, "exit code should be 0");
       const commandOutput = getCommandOutputAsArray(results);
       const hash = getHashFromOutput(commandOutput, "c#lint");
-      assert.ok(!!hash, "No hash for c#lint");
+      assert.ok(!!hash, `No hash for c#lint in ${commandOutput.join("\n")}`);
 
       const cacheItemPath = getCacheItemForHash(repo, hash);
       await extractZst(path.join(repo.root, cacheItemPath), repo.root);
