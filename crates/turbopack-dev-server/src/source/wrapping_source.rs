@@ -72,9 +72,9 @@ impl GetContentSourceContent for WrappedGetContentSourceContent {
             return Ok(ContentSourceContent::Rewrite(
                 Rewrite {
                     ty: match &rewrite.ty {
-                        RewriteType::Location { path_and_query } => RewriteType::Location {
-                            path_and_query: path_and_query.clone(),
-                        },
+                        RewriteType::Location { .. } | RewriteType::ContentSource { .. } => todo!(
+                            "Rewrites for WrappedGetContentSourceContent are not implemented yet"
+                        ),
                         RewriteType::Sources { sources } => RewriteType::Sources {
                             sources: GetContentSourceContentsVc::cell(
                                 sources

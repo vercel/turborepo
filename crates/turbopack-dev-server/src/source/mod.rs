@@ -450,6 +450,15 @@ pub enum RewriteType {
         /// to be the original path or query.
         path_and_query: String,
     },
+    ContentSource {
+        /// [ContentSourceVc]s from which to restart the lookup
+        /// process. This _does not_ need to be the original content
+        /// source.
+        source: ContentSourceVc,
+        /// The new path and query used to lookup content. This _does not_ need
+        /// to be the original path or query.
+        path_and_query: String,
+    },
     Sources {
         /// [GetContentSourceContent]s from which to restart the lookup
         /// process. This _does not_ need to be the original content
@@ -483,6 +492,19 @@ impl RewriteBuilder {
         Self {
             rewrite: Rewrite {
                 ty: RewriteType::Location { path_and_query },
+                response_headers: None,
+                request_headers: None,
+            },
+        }
+    }
+
+    pub fn new_source(source: ContentSourceVc, path_and_query: String) -> Self {
+        Self {
+            rewrite: Rewrite {
+                ty: RewriteType::ContentSource {
+                    source,
+                    path_and_query,
+                },
                 response_headers: None,
                 request_headers: None,
             },

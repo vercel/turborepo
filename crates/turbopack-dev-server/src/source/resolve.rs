@@ -41,7 +41,7 @@ pub async fn resolve_source_request(
     let mut current_asset_path = urlencoding::decode(&original_path[1..])?.into_owned();
     let mut request_overwrites = (*request).clone();
     let mut response_header_overwrites = Vec::new();
-    let route_tree = source.get_routes();
+    let mut route_tree = source.get_routes();
     'routes: loop {
         let mut sources = route_tree.get(&current_asset_path);
         'sources: loop {
@@ -74,6 +74,18 @@ pub async fn resolve_source_request(
                                     urlencoding::decode(&new_uri.path()[1..])?.into_owned();
                                 request_overwrites.uri = new_uri;
                                 current_asset_path = new_asset_path;
+                                continue 'routes;
+                            }
+                            RewriteType::ContentSource {
+                                source,
+                                path_and_query,
+                            } => {
+                                let new_uri = Uri::try_from(path_and_query)?;
+                                let new_asset_path =
+                                    urlencoding::decode(&new_uri.path()[1..])?.into_owned();
+                                request_overwrites.uri = new_uri;
+                                current_asset_path = new_asset_path;
+                                route_tree = source.get_routes();
                                 continue 'routes;
                             }
                             RewriteType::Sources {
