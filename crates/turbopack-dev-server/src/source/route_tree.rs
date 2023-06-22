@@ -195,33 +195,41 @@ impl RouteTreeVc {
             fallback_sources,
             not_found_sources,
         } = &*self.await?;
-        let mut segments = path.split('/');
-        for base in base.iter() {
-            let Some(segment) = segments.next() else {
+        let mut results = Vec::new();
+        if path.is_empty() {
+            if !base.is_empty() {
                 return Ok(GetContentSourceContentsVc::cell(vec![]));
-            };
-            match base {
-                BaseSegment::Static(str) => {
-                    if str != segment {
-                        return Ok(GetContentSourceContentsVc::cell(vec![]));
+            }
+            results.extend(sources.iter().copied());
+        } else {
+            let mut segments = path.split('/');
+            for base in base.iter() {
+                let Some(segment) = segments.next() else {
+                    return Ok(GetContentSourceContentsVc::cell(vec![]));
+                };
+                match base {
+                    BaseSegment::Static(str) => {
+                        if str != segment {
+                            return Ok(GetContentSourceContentsVc::cell(vec![]));
+                        }
+                    }
+                    BaseSegment::Dynamic => {
+                        // always matching
                     }
                 }
-                BaseSegment::Dynamic => {
-                    // always matching
-                }
             }
-        }
 
-        let Some(segment) = segments.next() else {
-            return Ok(GetContentSourceContentsVc::cell(sources.clone()))
-        };
-        let remainder = segments.remainder().unwrap_or("");
-        if let Some(tree) = static_segments.get(segment) {
-            return Ok(tree.get(remainder));
-        }
-        let mut results = Vec::new();
-        for tree in dynamic_segments.iter() {
-            results.extend(tree.get(remainder).await?.iter().copied());
+            if let Some(segment) = segments.next() {
+                let remainder = segments.remainder().unwrap_or("");
+                if let Some(tree) = static_segments.get(segment) {
+                    results.extend(tree.get(remainder).await?.iter().copied());
+                }
+                for tree in dynamic_segments.iter() {
+                    results.extend(tree.get(remainder).await?.iter().copied());
+                }
+            } else {
+                results.extend(sources.iter().copied());
+            };
         }
         results.extend(catch_all_sources.iter().copied());
         results.extend(fallback_sources.iter().copied());
