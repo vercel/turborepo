@@ -107,6 +107,7 @@ impl SwcEcmaTransformPluginsTransformer {
     // [TODO] Due to WEB-1102 putting this module itself behind compile time feature
     // doesn't work. Instead allow to instantiate dummy instance.
     #[cfg(not(feature = "swc_ecma_transform_plugin"))]
+    #[allow(clippy::new-without-default)]
     pub fn new() -> Self {
         Self {}
     }
