@@ -187,7 +187,7 @@ impl GetContentSourceContent for NodeRenderContentSource {
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceContentVc> {
         let Some(params) = &*self.route_match.params(path).await? else {
-            return Err(anyhow!("Non matching path provided"));
+            return Err(anyhow!("Non matching path ({}) provided for {}", path, self.pathname.await?));
         };
         let ContentSourceData {
             method: Some(method),

@@ -1,8 +1,11 @@
-use std::{collections::HashMap, mem::replace};
+use std::{collections::HashMap, fmt::Write, mem::replace};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, TaskInput, TryJoinIterExt};
+use turbo_tasks::{
+    primitives::StringVc, trace::TraceRawVcs, TaskInput, TryJoinIterExt, ValueToString,
+    ValueToStringVc,
+};
 
 use super::{GetContentSourceContentVc, GetContentSourceContentsVc};
 
@@ -117,6 +120,55 @@ impl RouteTree {
 }
 
 #[turbo_tasks::value_impl]
+impl ValueToString for RouteTree {
+    #[turbo_tasks::function]
+    fn to_string(&self) -> Result<StringVc> {
+        let RouteTree {
+            base,
+            sources,
+            static_segments,
+            dynamic_segments,
+            catch_all_sources,
+            fallback_sources,
+            not_found_sources,
+        } = self;
+        let mut result = "RouteTree(".to_string();
+        for segment in base {
+            match segment {
+                BaseSegment::Static(str) => write!(result, "/{}", str)?,
+                BaseSegment::Dynamic => result.push_str("/[dynamic]"),
+            }
+        }
+        if !base.is_empty() {
+            result.push_str(", ");
+        }
+        for key in static_segments.keys() {
+            write!(result, "{}, ", key)?;
+        }
+        if !sources.is_empty() {
+            write!(result, "{} x source, ", sources.len())?;
+        }
+        if !dynamic_segments.is_empty() {
+            write!(result, "{} x dynamic, ", dynamic_segments.len())?;
+        }
+        if !catch_all_sources.is_empty() {
+            write!(result, "{} x catch-all, ", catch_all_sources.len())?;
+        }
+        if !fallback_sources.is_empty() {
+            write!(result, "{} x fallback, ", fallback_sources.len())?;
+        }
+        if !not_found_sources.is_empty() {
+            write!(result, "{} x not-found, ", not_found_sources.len())?;
+        }
+        if result.ends_with(", ") {
+            result.truncate(result.len() - 2);
+        }
+        result.push(')');
+        Ok(StringVc::cell(result))
+    }
+}
+
+#[turbo_tasks::value_impl]
 impl RouteTreeVc {
     #[turbo_tasks::function]
     pub fn empty() -> RouteTreeVc {
@@ -143,7 +195,6 @@ impl RouteTreeVc {
             fallback_sources,
             not_found_sources,
         } = &*self.await?;
-        println!("RouteTree({:?})::get({:?})", self.await?, path);
         let mut segments = path.split('/');
         for base in base.iter() {
             let Some(segment) = segments.next() else {
@@ -191,13 +242,13 @@ impl RouteTreeVc {
         let mut tree_values = trees.iter().try_join().await?;
         let mut common_base = 0;
         let last_tree = tree_values.pop().unwrap();
-        while common_base < last_tree.base.len() {
+        'outer: while common_base < last_tree.base.len() {
             for tree in tree_values.iter() {
                 if tree.base.len() <= common_base {
-                    break;
+                    break 'outer;
                 }
                 if tree.base[common_base] != last_tree.base[common_base] {
-                    break;
+                    break 'outer;
                 }
             }
             common_base += 1;
@@ -233,11 +284,6 @@ impl RouteTreeVc {
 
     #[turbo_tasks::function]
     async fn with_base_len(self_vc: RouteTreeVc, base_len: usize) -> Result<RouteTreeVc> {
-        println!(
-            "RouteTree({:?})::with_base_len({})",
-            self_vc.await?,
-            base_len
-        );
         let this = self_vc.await?;
         if this.base.len() > base_len {
             let mut inner = this.clone_value();
@@ -245,6 +291,7 @@ impl RouteTreeVc {
             let selector_segment = drain.next().unwrap();
             let inner_base = drain.collect();
             let base = replace(&mut inner.base, inner_base);
+            debug_assert!(base.len() == base_len);
             match selector_segment {
                 BaseSegment::Static(value) => Ok(RouteTree {
                     base,
