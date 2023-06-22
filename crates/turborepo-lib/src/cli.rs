@@ -640,7 +640,9 @@ pub async fn run(
             if let Some(pkg_inference_root) = pkg_inference_root {
                 run_args.pkg_inference_root = Some(pkg_inference_root);
             }
-            run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
+            // Don't overwrite the flag if it's already been set for whatever reason
+            run_args.single_package =
+                run_args.single_package || matches!(repo_state.mode, RepoMode::SinglePackage);
         }
     }
     cli_args.command = Some(command);
