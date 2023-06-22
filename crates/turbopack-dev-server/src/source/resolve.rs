@@ -113,7 +113,7 @@ pub async fn resolve_source_request(
         }
         break;
     }
-    return Ok(ResolveSourceRequestResult::NotFound.cell());
+    Ok(ResolveSourceRequestResult::NotFound.cell())
 }
 
 static CACHE_BUSTER: AtomicU64 = AtomicU64::new(0);

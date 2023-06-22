@@ -185,7 +185,6 @@ impl GetContentSourceContent for IntrospectionSource {
             )
             .cell()
             .into(),
-        )
-        .into())
+        ))
     }
 }

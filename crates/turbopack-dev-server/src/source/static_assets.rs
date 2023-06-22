@@ -53,7 +53,7 @@ async fn get_routes_from_directory(dir: FileSystemPathVc) -> Result<RouteTreeVc>
 
     let routes = entries
         .iter()
-        .map(|(name, entry)| match entry {
+        .flat_map(|(name, entry)| match entry {
             DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) => {
                 Some(RouteTreeVc::new_route(
                     vec![BaseSegment::Static(name.clone())],
@@ -67,7 +67,6 @@ async fn get_routes_from_directory(dir: FileSystemPathVc) -> Result<RouteTreeVc>
             ),
             _ => None,
         })
-        .flatten()
         .collect();
     Ok(RouteTreeVc::merge(routes))
 }

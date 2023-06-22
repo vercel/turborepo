@@ -210,7 +210,9 @@ impl GetContentSourceContent for AssetGraphGetContentSourceContent {
             expanded.update_conditionally(|expanded| expanded.insert(asset));
         }
 
-        Ok(ContentSourceContentVc::static_content(asset.versioned_content()).into())
+        Ok(ContentSourceContentVc::static_content(
+            asset.versioned_content(),
+        ))
     }
 }
 

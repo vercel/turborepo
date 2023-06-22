@@ -164,7 +164,7 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
     ) -> Result<ContentSourceContentVc> {
         Ok(
             if let Some(path) = path.strip_prefix(&self.mapper.await?.path) {
-                self.get_content.get(&path, data)
+                self.get_content.get(path, data)
             } else {
                 ContentSourceContentVc::not_found()
             },
