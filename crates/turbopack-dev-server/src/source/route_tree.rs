@@ -40,6 +40,7 @@ pub struct RouteTrees(Vec<RouteTreeVc>);
 
 #[turbo_tasks::value_impl]
 impl RouteTreesVc {
+    /// Merges the list of RouteTrees into one RouteTree.
     #[turbo_tasks::function]
     pub async fn merge(self) -> Result<RouteTreeVc> {
         let trees = &*self.await?;
@@ -104,6 +105,7 @@ pub struct RouteTree {
 }
 
 impl RouteTree {
+    /// Creates a route tree for a single route.
     pub fn new_route(
         base_segments: Vec<BaseSegment>,
         final_segment: Option<FinalSegment>,
@@ -133,7 +135,7 @@ impl RouteTree {
         }
     }
 
-    pub async fn flat_merge(&mut self, others: impl IntoIterator<Item = &Self> + '_) -> Result<()> {
+    async fn flat_merge(&mut self, others: impl IntoIterator<Item = &Self> + '_) -> Result<()> {
         let mut static_segments = IndexMap::new();
         for other in others {
             debug_assert_eq!(self.base, other.base);
@@ -231,11 +233,13 @@ impl ValueToString for RouteTree {
 
 #[turbo_tasks::value_impl]
 impl RouteTreeVc {
+    /// Creates an empty route tree.
     #[turbo_tasks::function]
     pub fn empty() -> RouteTreeVc {
         RouteTree::default().cell()
     }
 
+    /// Creates a route tree for a single route.
     #[turbo_tasks::function]
     pub fn new_route(
         base_segments: Vec<BaseSegment>,
@@ -245,6 +249,7 @@ impl RouteTreeVc {
         RouteTree::new_route(base_segments, final_segment, source).cell()
     }
 
+    /// Gets the [`GetContentSourceContent`]s for the given path.
     #[turbo_tasks::function]
     pub async fn get(self, path: &str) -> Result<GetContentSourceContentsVc> {
         let RouteTree {
@@ -298,6 +303,7 @@ impl RouteTreeVc {
         Ok(GetContentSourceContentsVc::cell(results))
     }
 
+    /// Prepends a base path to all routes.
     #[turbo_tasks::function]
     pub async fn with_prepended_base(
         self_vc: RouteTreeVc,
@@ -337,6 +343,8 @@ impl RouteTreeVc {
         }
     }
 
+    /// Applies a transformation on all [`GetContentSourceContent`]s in the
+    /// tree.
     #[turbo_tasks::function]
     pub async fn map_routes(self, mapper: MapGetContentSourceContentVc) -> Result<Self> {
         let mut this = self.await?.clone_value();
@@ -371,6 +379,7 @@ impl RouteTreeVc {
     }
 }
 
+/// Transformation functor
 #[turbo_tasks::value_trait]
 pub trait MapGetContentSourceContent {
     fn map_get_content(&self, get_content: GetContentSourceContentVc) -> GetContentSourceContentVc;
