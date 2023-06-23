@@ -149,7 +149,7 @@ impl GetContentSourceContent for NodeApiContentSource {
                 original_url: original_url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: format!("/{}", 4),
+                path: format!("/{}", path),
                 data: Some(self.render_data.await?),
             }
             .cell(),
