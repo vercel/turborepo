@@ -326,11 +326,14 @@ fs.copyFileSync(
     args?: readonly string[],
     options?: execa.SyncOptions<string>
   ) {
-    const resolvedArgs = [...args];
+    const resolvedArgs = args || [];
 
     return execa.sync(turboPath, [command, ...resolvedArgs], {
       cwd: this.root,
       shell: true,
+      env: {
+        TURBO_BINARY_PATH: turboPath,
+      },
       ...options,
     });
   }
