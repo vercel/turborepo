@@ -41,16 +41,16 @@ pub async fn resolve_source_request(
     let mut current_asset_path = urlencoding::decode(&original_path[1..])?.into_owned();
     let mut request_overwrites = (*request).clone();
     let mut response_header_overwrites = Vec::new();
-    let mut route_tree = source.get_routes();
+    let mut route_tree = source.get_routes().resolve_strongly_consistent().await?;
     'routes: loop {
         let mut sources = route_tree.get(&current_asset_path);
         'sources: loop {
-            for get_content in sources.await?.iter() {
-                let content_vary = get_content.vary().await?;
+            for get_content in sources.strongly_consistent().await?.iter() {
+                let content_vary = get_content.vary().strongly_consistent().await?;
                 let content_data =
                     request_to_data(&request_overwrites, &request, &content_vary).await?;
                 let content = get_content.get(&current_asset_path, Value::new(content_data));
-                match &*content.await? {
+                match &*content.strongly_consistent().await? {
                     ContentSourceContent::Rewrite(rewrite) => {
                         let rewrite = rewrite.await?;
                         // apply rewrite extras
@@ -85,7 +85,8 @@ pub async fn resolve_source_request(
                                     urlencoding::decode(&new_uri.path()[1..])?.into_owned();
                                 request_overwrites.uri = new_uri;
                                 current_asset_path = new_asset_path;
-                                route_tree = source.get_routes();
+                                route_tree =
+                                    source.get_routes().resolve_strongly_consistent().await?;
                                 continue 'routes;
                             }
                             RewriteType::Sources {
