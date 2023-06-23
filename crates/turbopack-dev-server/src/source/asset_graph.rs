@@ -150,6 +150,7 @@ async fn expand(
     Ok(map)
 }
 
+// This must not be a TaskInput since this would resolve the embedded asset
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Hash, PartialOrd, Ord, Debug, Clone)]
 struct UnresolvedAsset(AssetVc);
