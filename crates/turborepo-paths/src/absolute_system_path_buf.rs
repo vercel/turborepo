@@ -10,7 +10,7 @@ use camino::{Utf8Components, Utf8Path, Utf8PathBuf};
 use path_clean::PathClean;
 use serde::Serialize;
 
-use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError};
+use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 pub struct AbsoluteSystemPathBuf(pub(crate) Utf8PathBuf);
@@ -71,9 +71,7 @@ impl AbsoluteSystemPathBuf {
         if !Path::new(&unchecked_path).is_absolute() {
             return Err(PathError::NotAbsolute(unchecked_path));
         }
-
-        let system_path = unchecked_path.into_system();
-        Ok(AbsoluteSystemPathBuf(system_path))
+        Ok(AbsoluteSystemPathBuf(unchecked_path.into()))
     }
 
     pub fn from_unknown(base: &AbsoluteSystemPath, unknown: impl Into<Utf8PathBuf>) -> Self {

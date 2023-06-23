@@ -6,7 +6,7 @@ use std::{
 use camino::{Utf8Component, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{AbsoluteSystemPath, IntoSystem, PathError, RelativeUnixPathBuf};
+use crate::{AbsoluteSystemPath, PathError, RelativeUnixPathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
@@ -20,7 +20,7 @@ impl TryFrom<&str> for AnchoredSystemPathBuf {
             return Err(PathError::NotRelative(path.to_string()));
         }
 
-        Ok(AnchoredSystemPathBuf(path.into_system()))
+        Ok(AnchoredSystemPathBuf(path.into()))
     }
 }
 
@@ -107,8 +107,7 @@ impl AnchoredSystemPathBuf {
 
     pub fn from_raw<P: AsRef<str>>(raw: P) -> Result<Self, PathError> {
         let system_path = raw.as_ref();
-        let system_path = system_path.into_system();
-        Ok(Self(system_path))
+        Ok(Self(system_path.into()))
     }
 
     pub fn as_str(&self) -> &str {

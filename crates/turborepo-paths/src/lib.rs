@@ -78,30 +78,30 @@ impl PathError {
     }
 }
 
-pub trait IntoSystem {
-    fn into_system(self) -> Utf8PathBuf;
-}
+// pub trait IntoSystem {
+//     fn into_system(self) -> Utf8PathBuf;
+// }
 
 pub trait IntoUnix {
     fn into_unix(self) -> Utf8PathBuf;
 }
 
-// Checks if path contains a non system separator.
-fn is_not_system(path: impl AsRef<str>) -> bool {
-    let non_system_separator;
+// // Checks if path contains a non system separator.
+// fn is_not_system(path: impl AsRef<str>) -> bool {
+//     let non_system_separator;
 
-    #[cfg(windows)]
-    {
-        non_system_separator = '/';
-    }
+//     #[cfg(windows)]
+//     {
+//         non_system_separator = '/';
+//     }
 
-    #[cfg(not(windows))]
-    {
-        non_system_separator = '\\';
-    }
+//     #[cfg(not(windows))]
+//     {
+//         non_system_separator = '\\';
+//     }
 
-    path.as_ref().contains(non_system_separator)
-}
+//     path.as_ref().contains(non_system_separator)
+// }
 
 #[cfg(windows)]
 fn convert_separator(
@@ -124,19 +124,19 @@ fn convert_separator(
     )
 }
 
-impl<T: AsRef<str>> IntoSystem for T {
-    fn into_system(self) -> Utf8PathBuf {
-        #[cfg(windows)]
-        {
-            convert_separator(self, '/', std::path::MAIN_SEPARATOR)
-        }
+// impl<T: AsRef<str>> IntoSystem for T {
+//     fn into_system(self) -> Utf8PathBuf {
+//         #[cfg(windows)]
+//         {
+//             convert_separator(self, '/', std::path::MAIN_SEPARATOR)
+//         }
 
-        #[cfg(not(windows))]
-        {
-            Utf8PathBuf::from(self.as_ref())
-        }
-    }
-}
+//         #[cfg(not(windows))]
+//         {
+//             Utf8PathBuf::from(self.as_ref())
+//         }
+//     }
+// }
 
 impl<T: AsRef<str>> IntoUnix for T {
     /// NOTE: `into_unix` *only* converts Windows paths to Unix paths *on* a
@@ -161,24 +161,7 @@ impl<T: AsRef<str>> IntoUnix for T {
 
 #[cfg(test)]
 mod tests {
-    use crate::{IntoSystem, IntoUnix};
-
-    #[test]
-    fn test_into_system() {
-        #[cfg(unix)]
-        {
-            assert_eq!("foo/bar".into_system(), "foo/bar");
-            assert_eq!("/foo/bar".into_system(), "/foo/bar");
-            assert_eq!("foo\\bar".into_system(), "foo\\bar");
-        }
-
-        #[cfg(windows)]
-        {
-            assert_eq!("foo/bar".into_system(), "foo\\bar");
-            assert_eq!("/foo/bar".into_system(), "\\foo\\bar");
-            assert_eq!("foo\\bar".into_system(), "foo\\bar");
-        }
-    }
+    use crate::IntoUnix;
 
     #[test]
     fn test_into_unix() {
