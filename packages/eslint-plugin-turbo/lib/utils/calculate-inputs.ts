@@ -436,7 +436,7 @@ export class Project {
       ),
     ];
 
-    if (workspaceName) {
+    if (workspaceName && workspaceName in this._test.workspaceTasks) {
       tests.push(
         ...Object.values(this._test.workspaceTasks[workspaceName]).map(
           (context) => environmentTestArray(context)
