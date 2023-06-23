@@ -23,16 +23,9 @@ pub enum Hasher {
     Manual,
 }
 
-fn find_git(path_in_repo: &AbsoluteSystemPath) -> Option<Git> {
-    let bin = which::which("git").ok()?;
-    let bin = AbsoluteSystemPathBuf::try_from(bin).ok()?;
-    let root = find_git_root(path_in_repo).ok()?;
-    Some(Git { root, _bin: bin })
-}
-
 impl Hasher {
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> Hasher {
-        find_git(path_in_repo)
+        Git::find(path_in_repo)
             .map(Hasher::Git)
             .unwrap_or(Hasher::Manual)
     }
@@ -64,6 +57,9 @@ impl Hasher {
         }
     }
 
+    // hash_existing_of takes a list of files to hash and returns the hashes for the
+    // files in that list that exist. Files in the list that do not exist are
+    // skipped.
     pub fn hash_existing_of(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -74,6 +70,13 @@ impl Hasher {
 }
 
 impl Git {
+    fn find(path_in_repo: &AbsoluteSystemPath) -> Option<Self> {
+        let bin = which::which("git").ok()?;
+        let bin = AbsoluteSystemPathBuf::try_from(bin).ok()?;
+        let root = find_git_root(path_in_repo).ok()?;
+        Some(Self { root, _bin: bin })
+    }
+
     fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
