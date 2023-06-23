@@ -7,7 +7,7 @@ use turbopath::AbsoluteSystemPath;
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
-    pub name: String,
+    pub name: Option<String>,
     pub version: Option<String>,
     pub package_manager: Option<String>,
     pub dependencies: Option<BTreeMap<String, String>>,

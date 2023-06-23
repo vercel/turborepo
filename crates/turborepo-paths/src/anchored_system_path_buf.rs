@@ -102,6 +102,10 @@ impl AnchoredSystemPathBuf {
             .chain(other_components.into_iter().skip(prefix_len))
             .collect::<Utf8PathBuf>();
 
+        let path: Utf8PathBuf = path_clean::clean(path)
+            .try_into()
+            .expect("clean should preserve utf8");
+
         Self(path)
     }
 
@@ -151,11 +155,11 @@ mod tests {
 
     use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
-    #[test_case(&["a", "b", "c", "..", "c"], &[] ; "re-entry self")]
+    #[test_case(&["a", "b", "c", "..", "c"], &["..", "c"] ; "re-entry self")]
     #[test_case(&["a", "b", "c", "d", "..", "d"], &["d"] ; "re-entry child")]
     // TODO reorder
     #[test_case(&["a"], &["..", ".."] ; "parent")]
-    #[test_case(&["a", "b", "c"], &[] ; "empty self")]
+    #[test_case(&["a", "b", "c"], &["."] ; "empty self")]
     #[test_case(&["a", "b", "d"], &["..", "d"] ; "sibling")]
     #[test_case(&["a", "b", "c", "d"], &["d"] ; "child")]
     #[test_case(&["e", "f"], &["..", "..", "..", "e", "f"] ; "ancestor sibling")]

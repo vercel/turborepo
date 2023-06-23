@@ -39,6 +39,8 @@ pub enum Error {
     TurboPath(#[from] turbopath::PathError),
     #[error("unable to parse workspace package.json: {0}")]
     PackageJson(#[from] crate::package_json::Error),
+    #[error("package.json must have a name field")]
+    PackageJsonMissingName,
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("TODO lockfile errors")]
@@ -178,7 +180,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
     ) -> Result<(), Error> {
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
-        let name = WorkspaceName::Other(json.name.clone());
+        let name = WorkspaceName::Other(json.name.clone().ok_or(Error::PackageJsonMissingName)?);
         let entry = Entry {
             package_json: json,
             package_json_path: relative_json_path,
@@ -611,7 +613,7 @@ mod test {
         let builder = PackageGraphBuilder::new(
             &root,
             PackageJson {
-                name: "root".into(),
+                name: Some("root".into()),
                 ..Default::default()
             },
         )
@@ -621,14 +623,14 @@ mod test {
             map.insert(
                 root.join_component("a"),
                 PackageJson {
-                    name: "foo".into(),
+                    name: Some("foo".into()),
                     ..Default::default()
                 },
             );
             map.insert(
                 root.join_component("b"),
                 PackageJson {
-                    name: "foo".into(),
+                    name: Some("foo".into()),
                     ..Default::default()
                 },
             );
