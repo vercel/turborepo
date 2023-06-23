@@ -498,7 +498,7 @@ impl RewriteBuilder {
         }
     }
 
-    pub fn new_source(source: ContentSourceVc, path_and_query: String) -> Self {
+    pub fn new_source_with_path_and_query(source: ContentSourceVc, path_and_query: String) -> Self {
         Self {
             rewrite: Rewrite {
                 ty: RewriteType::ContentSource {

@@ -86,16 +86,17 @@ impl RouteTreesVc {
     }
 }
 
+/// The prefix tree of routes. Also handling dynamic and catch all segments.
 #[turbo_tasks::value]
 #[derive(Default, Clone, Debug)]
 pub struct RouteTree {
-    pub base: Vec<BaseSegment>,
-    pub sources: Vec<GetContentSourceContentVc>,
-    pub static_segments: IndexMap<String, RouteTreeVc>,
-    pub dynamic_segments: Vec<RouteTreeVc>,
-    pub catch_all_sources: Vec<GetContentSourceContentVc>,
-    pub fallback_sources: Vec<GetContentSourceContentVc>,
-    pub not_found_sources: Vec<GetContentSourceContentVc>,
+    base: Vec<BaseSegment>,
+    sources: Vec<GetContentSourceContentVc>,
+    static_segments: IndexMap<String, RouteTreeVc>,
+    dynamic_segments: Vec<RouteTreeVc>,
+    catch_all_sources: Vec<GetContentSourceContentVc>,
+    fallback_sources: Vec<GetContentSourceContentVc>,
+    not_found_sources: Vec<GetContentSourceContentVc>,
 }
 
 impl RouteTree {
