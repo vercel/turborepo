@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/mitchellh/cli"
 	internalUI "github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-func (rsm *Meta) printExecutionSummary() {
+func (rsm *Meta) printExecutionSummary(ui cli.Ui) {
 	maybeFullTurbo := ""
 	summary := rsm.RunSummary
-	ui := rsm.ui
 
 	attempted := summary.ExecutionSummary.attempted
 	successful := summary.ExecutionSummary.cached + summary.ExecutionSummary.success

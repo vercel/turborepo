@@ -1,14 +1,15 @@
 package runsummary
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/mitchellh/cli"
+	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/ci"
-	"github.com/vercel/turbo/cli/internal/client"
 )
 
 const runsEndpoint = "/v0/spaces/%s/runs"
@@ -21,24 +22,28 @@ type spaceRequest struct {
 	url     string
 	body    interface{}
 	makeURL func(self *spaceRequest, r *spaceRun) error // Should set url on self
-	onDone  func(self *spaceRequest, response []byte)   // Handler for when request completes
+	//onDone  func(self *spaceRequest, response []byte, err error) // Handler for when request completes
 }
 
-func (req *spaceRequest) error(msg string) error {
-	return fmt.Errorf("[%s] %s: %s", req.method, req.url, msg)
+type spacesAPIClient interface {
+	JSONPost(ctx context.Context, url string, payload []byte) ([]byte, error)
+	JSONPatch(ctx context.Context, url string, payload []byte) ([]byte, error)
+	IsLinked() bool
 }
 
 type spacesClient struct {
 	requests       chan *spaceRequest
-	errors         []error
-	api            *client.APIClient
-	ui             cli.Ui
+	api            spacesAPIClient
 	run            *spaceRun
 	runCreated     chan struct{}
+	runCreateError error
 	wg             sync.WaitGroup
 	spaceID        string
 	enabled        bool
 	requestTimeout time.Duration
+
+	errMu  sync.Mutex
+	errors []error
 }
 
 type spaceRun struct {
@@ -46,10 +51,9 @@ type spaceRun struct {
 	URL string
 }
 
-func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesClient {
+func newSpacesClient(spaceID string, api spacesAPIClient) *spacesClient {
 	c := &spacesClient{
 		api:            api,
-		ui:             ui,
 		spaceID:        spaceID,
 		enabled:        false,                    // Start with disabled
 		requests:       make(chan *spaceRequest), // TODO: give this a size based on tasks
@@ -82,7 +86,6 @@ func newSpacesClient(spaceID string, api *client.APIClient, ui cli.Ui) *spacesCl
 func (c *spacesClient) start() {
 	// Start an immediately invoked go routine that listens for requests coming in from a channel
 	pending := []*spaceRequest{}
-	firstRequestStarted := false
 
 	// Create a labeled statement so we can break out of the for loop more easily
 
@@ -100,15 +103,9 @@ FirstRequest:
 			if !isOpen {
 				break FirstRequest
 			}
-			// Make the first request right away in a goroutine,
-			// queue all other requests. When the first request is done,
+			// Queue everything. When the first request is done,
 			// we'll get a message on the other channel and break out of this loop
-			if !firstRequestStarted {
-				firstRequestStarted = true
-				go c.dequeueRequest(req)
-			} else {
-				pending = append(pending, req)
-			}
+			pending = append(pending, req)
 			// Wait for c.runCreated channel to be closed and:
 		case <-c.runCreated:
 			// 1. flush pending requests
@@ -127,7 +124,7 @@ FirstRequest:
 	}
 }
 
-func (c *spacesClient) makeRequest(req *spaceRequest) {
+func makeRequest(ctx context.Context, api spacesAPIClient, req *spaceRequest, run *spaceRun) ([]byte, error) {
 	// The runID is required for POST task requests and PATCH run request URLS,
 	// so we have to construct these URLs lazily with a `makeURL` affordance.
 	//
@@ -140,63 +137,47 @@ func (c *spacesClient) makeRequest(req *spaceRequest) {
 	// for every request that fails. On the other hand, if that POST /run request fails, and N
 	// requests fail after that as a consequence, it is ok to print all of those errors.
 	if req.makeURL != nil {
-		if err := req.makeURL(req, c.run); err != nil {
-			c.errors = append(c.errors, err)
-			return
+		if err := req.makeURL(req, run); err != nil {
+			return nil, err
 		}
-	}
-
-	// We only care about POST and PATCH right now
-	if req.method != "POST" && req.method != "PATCH" {
-		c.errors = append(c.errors, req.error(fmt.Sprintf("Unsupported method %s", req.method)))
-		return
 	}
 
 	payload, err := json.Marshal(req.body)
 	if err != nil {
-		c.errors = append(c.errors, req.error(fmt.Sprintf("Failed to create payload: %s", err)))
-		return
+		return nil, err
 	}
 
 	// Make the request
-	var resp []byte
-	var reqErr error
 	if req.method == "POST" {
-		resp, reqErr = c.api.JSONPost(req.url, payload, c.requestTimeout)
+		return api.JSONPost(ctx, req.url, payload)
 	} else if req.method == "PATCH" {
-		resp, reqErr = c.api.JSONPatch(req.url, payload, c.requestTimeout)
-	} else {
-		c.errors = append(c.errors, req.error("Unsupported request method"))
+		return api.JSONPatch(ctx, req.url, payload)
 	}
-
-	if reqErr != nil {
-		c.errors = append(c.errors, req.error(fmt.Sprintf("%s", reqErr)))
-		return
-	}
-
-	// Call the onDone handler if there is one
-	if req.onDone != nil {
-		req.onDone(req, resp)
-	}
+	panic(fmt.Sprintf("Unsupported method %v", req.method))
 }
 
-func (c *spacesClient) createRun(rsm *Meta) {
-	c.queueRequest(&spaceRequest{
-		method: "POST",
-		url:    fmt.Sprintf(runsEndpoint, c.spaceID),
-		body:   newSpacesRunCreatePayload(rsm),
+func (c *spacesClient) createRun(payload *spacesRunPayload) {
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		defer close(c.runCreated)
+		ctx, cancel := context.WithTimeout(context.Background(), c.requestTimeout)
+		defer cancel()
 
-		// handler for when the request finishes. We set the response into a struct on the client
-		// because we need the run ID and URL from the server later.
-		onDone: func(req *spaceRequest, response []byte) {
-			if err := json.Unmarshal(response, c.run); err != nil {
-				c.errors = append(c.errors, req.error(fmt.Sprintf("Error unmarshaling response: %s", err)))
-			}
-
-			// close the run.created channel, because all other requests are blocked on it
-			close(c.runCreated)
-		},
-	})
+		req := &spaceRequest{
+			method: "POST",
+			url:    fmt.Sprintf(runsEndpoint, c.spaceID),
+			body:   payload,
+		}
+		resp, err := makeRequest(ctx, c.api, req, c.run)
+		if err != nil {
+			c.runCreateError = err
+			return
+		}
+		if err := json.Unmarshal(resp, c.run); err != nil {
+			c.runCreateError = errors.Wrap(err, "failed to unmarshal create run response")
+		}
+	}()
 }
 
 func (c *spacesClient) postTask(task *TaskSummary) {
@@ -236,14 +217,25 @@ func (c *spacesClient) queueRequest(req *spaceRequest) {
 // dequeueRequest makes the request in a go routine and decrements the waitGroup counter
 func (c *spacesClient) dequeueRequest(req *spaceRequest) {
 	defer c.wg.Done()
-	c.makeRequest(req)
+	// Only send requests if we successfully created the Run
+	if c.runCreateError != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.requestTimeout)
+	defer cancel()
+	_, err := makeRequest(ctx, c.api, req, c.run)
+	if err != nil {
+		c.errMu.Lock()
+		defer c.errMu.Unlock()
+		c.errors = append(c.errors, err)
+	}
 }
 
-func (c *spacesClient) printErrors() {
+func (c *spacesClient) printErrors(ui cli.Ui) {
 	// Print any errors
 	if len(c.errors) > 0 {
 		for _, err := range c.errors {
-			c.ui.Warn(fmt.Sprintf("%s", err))
+			ui.Warn(fmt.Sprintf("%s", err))
 		}
 	}
 }

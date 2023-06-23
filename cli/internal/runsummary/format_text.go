@@ -8,13 +8,13 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // FormatAndPrintText prints a Run Summary to the Terminal UI
-func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
-	ui := rsm.ui
+func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog, ui cli.Ui) error {
 	summary := rsm.RunSummary
 
 	rsm.normalize() // normalize data

@@ -45,7 +45,6 @@ const (
 // about the Run and references to other things that we need.
 type Meta struct {
 	RunSummary         *RunSummary
-	ui                 cli.Ui
 	repoRoot           turbopath.AbsoluteSystemPath // used to write run summary
 	repoPath           turbopath.RelativeSystemPath
 	singlePackage      bool
@@ -74,7 +73,6 @@ type RunSummary struct {
 // NewRunSummary returns a RunSummary instance
 func NewRunSummary(
 	startAt time.Time,
-	ui cli.Ui,
 	repoRoot turbopath.AbsoluteSystemPath,
 	repoPath turbopath.RelativeSystemPath,
 	turboVersion string,
@@ -116,7 +114,6 @@ func NewRunSummary(
 			User:               getUser(envAtExecutionStart, repoRoot),
 			Monorepo:           !singlePackage,
 		},
-		ui:                 ui,
 		runType:            runType,
 		repoRoot:           repoRoot,
 		singlePackage:      singlePackage,
@@ -124,10 +121,11 @@ func NewRunSummary(
 		synthesizedCommand: synthesizedCommand,
 	}
 
-	rsm.spacesClient = newSpacesClient(spaceID, apiClient, ui)
+	rsm.spacesClient = newSpacesClient(spaceID, apiClient)
 	if rsm.spacesClient.enabled {
 		go rsm.spacesClient.start()
-		rsm.spacesClient.createRun(&rsm)
+		payload := newSpacesRunCreatePayload(&rsm)
+		rsm.spacesClient.createRun(payload)
 	}
 
 	return rsm
@@ -142,17 +140,17 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspace.Catalog) error {
+func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspace.Catalog, ui cli.Ui) error {
 	if rsm.runType == runTypeDryJSON || rsm.runType == runTypeDryText {
-		return rsm.closeDryRun(workspaceInfos)
+		return rsm.closeDryRun(workspaceInfos, ui)
 	}
 
 	rsm.RunSummary.ExecutionSummary.exitCode = exitCode
 	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
 
 	summary := rsm.RunSummary
-	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, rsm.ui); err != nil {
-		rsm.ui.Error(fmt.Sprintf("Error writing tracing data: %v", err))
+	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, ui); err != nil {
+		ui.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
 	// TODO: printing summary to local, writing to disk, and sending to API
@@ -163,41 +161,41 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 	// Warn on the error, but we don't need to throw an error
 	if rsm.shouldSave {
 		if err := rsm.save(); err != nil {
-			rsm.ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
+			ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
 		}
 	}
 
-	rsm.printExecutionSummary()
+	rsm.printExecutionSummary(ui)
 	if rsm.spacesClient.enabled {
-		rsm.sendToSpace(ctx)
+		rsm.sendToSpace(ctx, ui)
 	} else {
 		// Print any errors if the client is not enabled, since it could have
 		// been disabled at runtime due to an issue.
-		rsm.spacesClient.printErrors()
+		rsm.spacesClient.printErrors(ui)
 	}
 
 	return nil
 }
 
-func (rsm *Meta) sendToSpace(ctx context.Context) {
+func (rsm *Meta) sendToSpace(ctx context.Context, ui cli.Ui) {
 	rsm.spacesClient.finishRun(rsm)
 	func() {
-		_ = spinner.WaitFor(ctx, rsm.spacesClient.Close, rsm.ui, "...sending run summary...", 1000*time.Millisecond)
+		_ = spinner.WaitFor(ctx, rsm.spacesClient.Close, ui, "...sending run summary...", 1000*time.Millisecond)
 	}()
 
-	rsm.spacesClient.printErrors()
+	rsm.spacesClient.printErrors(ui)
 
 	url := rsm.spacesClient.run.URL
 	if url != "" {
-		rsm.ui.Output(fmt.Sprintf("Run: %s", url))
-		rsm.ui.Output("")
+		ui.Output(fmt.Sprintf("Run: %s", url))
+		ui.Output("")
 	}
 }
 
 // closeDryRun wraps up the Run Summary at the end of `turbo run --dry`.
 // Ideally this should be inlined into Close(), but RunSummary doesn't currently
 // have context about whether a run was real or dry.
-func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog) error {
+func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog, ui cli.Ui) error {
 	// Render the dry run as json
 	if rsm.runType == runTypeDryJSON {
 		rendered, err := rsm.FormatJSON()
@@ -205,11 +203,11 @@ func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog) error {
 			return err
 		}
 
-		rsm.ui.Output(string(rendered))
+		ui.Output(string(rendered))
 		return nil
 	}
 
-	return rsm.FormatAndPrintText(workspaceInfos)
+	return rsm.FormatAndPrintText(workspaceInfos, ui)
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
