@@ -353,6 +353,9 @@ fn main() {
         eprint!("Emitting span tree...");
 
         let get_concurrency = |range: Range<u64>| {
+            if range.end <= range.start {
+                return 100;
+            }
             let mut sum = 0;
             for interval in busy.query(range.clone()) {
                 let start = max(interval.range.start, range.start);
@@ -452,10 +455,13 @@ fn main() {
                                     concurrency,
                                 }) = stack.last_mut()
                                 {
-                                    *concurrency = ((*concurrency) * (*duration)
-                                        + new_concurrency * new_duration)
-                                        / (*duration + new_duration);
-                                    *duration += new_duration;
+                                    let total_duration = *duration + new_duration;
+                                    if total_duration > 0 {
+                                        *concurrency = ((*concurrency) * (*duration)
+                                            + new_concurrency * new_duration)
+                                            / total_duration;
+                                        *duration += new_duration;
+                                    }
                                 } else {
                                     stack.push(Task::SelfTime {
                                         duration: new_duration,
