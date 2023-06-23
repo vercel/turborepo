@@ -59,8 +59,8 @@ func Test_sendToServer(t *testing.T) {
 			"event":     "MISS",
 		},
 	}
-
-	err = apiClient.RecordAnalyticsEvents(events, 10*time.Second)
+	ctx := context.Background()
+	err = apiClient.RecordAnalyticsEvents(ctx, events)
 	assert.NilError(t, err, "RecordAnalyticsEvent")
 
 	body := <-ch
@@ -177,7 +177,9 @@ func Test_Timeout(t *testing.T) {
 	}
 	apiClient := NewClient(apiClientConfig, hclog.Default(), "v1")
 
-	_, err := apiClient.JSONPost("/", []byte{}, 1*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+	_, err := apiClient.JSONPost(ctx, "/", []byte{})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("JSONPost got %v, want DeadlineExceeded", err)
 	}
