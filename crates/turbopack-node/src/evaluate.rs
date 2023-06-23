@@ -223,7 +223,7 @@ impl futures_retry::ErrorHandler<anyhow::Error> for PoolErrorHandler {
 /// Pass the file you cared as `runtime_entries` to invalidate and reload the
 /// evaluated result automatically.
 #[turbo_tasks::function]
-pub fn evaluate(
+pub async fn evaluate(
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
@@ -234,7 +234,9 @@ pub fn evaluate(
     args: Vec<JsonValueVc>,
     additional_invalidation: CompletionVc,
     debug: bool,
-) -> JavaScriptEvaluationVc {
+) -> Result<JavaScriptEvaluationVc> {
+    println!("!!!INEVALUATING!!");
+    dbg!("");
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
 
@@ -250,6 +252,8 @@ pub fn evaluate(
         Box::new(receiver),
     )));
     let initial = Mutex::new(Some(sender));
+
+    println!("BEFORE COMPUTE");
 
     // run the evaluation as side effect
     compute_evaluate_stream(
@@ -283,7 +287,7 @@ pub fn evaluate(
     );
 
     let raw: RawVc = cell.into();
-    raw.into()
+    Ok(raw.into())
 }
 
 #[turbo_tasks::function]
@@ -300,6 +304,7 @@ async fn compute_evaluate_stream(
     debug: bool,
     sender: JavaScriptStreamSenderVc,
 ) {
+    println!("IN COMPUTE");
     mark_finished();
     let Ok(sender) = sender.await else {
         // Impossible to handle the error in a good way.
@@ -352,6 +357,7 @@ async fn compute_evaluate_stream(
         // and ferry that along.
         loop {
             let output = pull_operation(&mut operation, cwd, &pool, context_ident_for_issue, chunking_context).await?;
+            dbg!(&output);
 
             match output {
                 LoopResult::Continue(data) => {

@@ -75,10 +75,13 @@ impl<T: Clone> Stream<T> {
 impl<T: Clone, E: Clone> Stream<Result<T, E>> {
     /// Converts a TryStream into a single value when possible.
     pub async fn try_into_single(&self) -> Result<SingleValue<T>, E> {
+        println!("TIS");
         let mut stream = self.read();
+        println!("READ");
         let Some(first) = stream.try_next().await? else {
             return Ok(SingleValue::None);
         };
+        println!("FIRST");
 
         if stream.try_next().await?.is_some() {
             return Ok(SingleValue::Multiple);

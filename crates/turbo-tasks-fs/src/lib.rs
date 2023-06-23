@@ -1819,6 +1819,7 @@ pub struct FileLine {
 }
 
 #[turbo_tasks::value(shared, serialization = "none")]
+#[derive(Debug)]
 pub enum FileLinesContent {
     Lines(#[turbo_tasks(trace_ignore)] Vec<FileLine>),
     Unparseable,
