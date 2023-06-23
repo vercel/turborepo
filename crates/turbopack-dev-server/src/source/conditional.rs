@@ -3,7 +3,7 @@ use turbo_tasks::{primitives::StringVc, State, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 use super::{
-    route_tree::{MapGetContentSourceContent, RouteTreeVc},
+    route_tree::{MapGetContentSourceContent, RouteTreeVc, RouteTreesVc},
     ContentSource, ContentSourceData, ContentSourceDataVaryVc, ContentSourceVc,
     GetContentSourceContent, GetContentSourceContentVc,
 };
@@ -53,7 +53,7 @@ impl ContentSource for ConditionalContentSource {
                     .into(),
             )
         } else {
-            RouteTreeVc::merge(vec![this.activator.get_routes(), this.action.get_routes()])
+            RouteTreesVc::cell(vec![this.activator.get_routes(), this.action.get_routes()]).merge()
         })
     }
 

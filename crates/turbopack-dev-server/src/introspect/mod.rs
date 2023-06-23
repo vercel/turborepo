@@ -13,7 +13,7 @@ use turbopack_core::{
 use turbopack_ecmascript::utils::FormatIter;
 
 use crate::source::{
-    route_tree::{FinalSegment, RouteTreeVc},
+    route_tree::{FinalSegment, RouteTreeVc, RouteTreesVc},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
     GetContentSourceContent, GetContentSourceContentVc,
 };
@@ -79,10 +79,11 @@ impl<T: Display> Display for HtmlStringEscaped<T> {
 impl ContentSource for IntrospectionSource {
     #[turbo_tasks::function]
     fn get_routes(self_vc: IntrospectionSourceVc) -> RouteTreeVc {
-        RouteTreeVc::merge(vec![
+        RouteTreesVc::cell(vec![
             RouteTreeVc::new_route(Vec::new(), None, self_vc.into()),
             RouteTreeVc::new_route(Vec::new(), Some(FinalSegment::CatchAll), self_vc.into()),
         ])
+        .merge()
     }
 }
 

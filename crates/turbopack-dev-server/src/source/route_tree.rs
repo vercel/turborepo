@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fmt::Write, mem::replace};
+use std::{fmt::Write, mem::replace};
 
 use anyhow::Result;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     primitives::StringVc, trace::TraceRawVcs, TaskInput, TryJoinIterExt, ValueToString,
@@ -30,12 +31,67 @@ impl BaseSegment {
     }
 }
 
+#[turbo_tasks::value(transparent)]
+pub struct RouteTrees(Vec<RouteTreeVc>);
+
+#[turbo_tasks::value_impl]
+impl RouteTreesVc {
+    #[turbo_tasks::function]
+    pub async fn merge(self) -> Result<RouteTreeVc> {
+        let trees = &*self.await?;
+        if trees.is_empty() {
+            return Ok(RouteTree::default().cell());
+        }
+        if trees.len() == 1 {
+            return Ok(*trees.iter().next().unwrap());
+        }
+
+        // Find common base
+        let mut tree_values = trees.iter().try_join().await?;
+        let mut common_base = 0;
+        let last_tree = tree_values.pop().unwrap();
+        'outer: while common_base < last_tree.base.len() {
+            for tree in tree_values.iter() {
+                if tree.base.len() <= common_base {
+                    break 'outer;
+                }
+                if tree.base[common_base] != last_tree.base[common_base] {
+                    break 'outer;
+                }
+            }
+            common_base += 1;
+        }
+        tree_values.push(last_tree);
+
+        // Normalize bases to common base
+        let trees = trees
+            .iter()
+            .enumerate()
+            .map(|(i, tree)| {
+                if tree_values[i].base.len() > common_base {
+                    tree.with_base_len(common_base)
+                } else {
+                    *tree
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Flat merge trees
+        let tree_values = trees.into_iter().try_join().await?;
+        let mut iter = tree_values.iter().map(|rr| &**rr);
+        let mut merged = iter.next().unwrap().clone();
+        merged.flat_merge(iter).await?;
+
+        Ok(merged.cell())
+    }
+}
+
 #[turbo_tasks::value]
 #[derive(Default, Clone, Debug)]
 pub struct RouteTree {
     pub base: Vec<BaseSegment>,
     pub sources: Vec<GetContentSourceContentVc>,
-    pub static_segments: HashMap<String, RouteTreeVc>,
+    pub static_segments: IndexMap<String, RouteTreeVc>,
     pub dynamic_segments: Vec<RouteTreeVc>,
     pub catch_all_sources: Vec<GetContentSourceContentVc>,
     pub fallback_sources: Vec<GetContentSourceContentVc>,
@@ -73,7 +129,7 @@ impl RouteTree {
     }
 
     pub async fn flat_merge(&mut self, others: impl IntoIterator<Item = &Self> + '_) -> Result<()> {
-        let mut static_segments = HashMap::new();
+        let mut static_segments = IndexMap::new();
         for other in others {
             debug_assert_eq!(self.base, other.base);
             self.sources.extend(other.sources.iter().copied());
@@ -104,7 +160,7 @@ impl RouteTree {
                         if value.len() == 1 {
                             value.into_iter().next().unwrap()
                         } else {
-                            RouteTreeVc::merge(value).resolve().await?
+                            RouteTreesVc::cell(value).merge().resolve().await?
                         },
                     ))
                 })
@@ -238,49 +294,6 @@ impl RouteTreeVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn merge(trees: Vec<RouteTreeVc>) -> Result<RouteTreeVc> {
-        if trees.is_empty() {
-            return Ok(RouteTree::default().cell());
-        }
-        if trees.len() == 1 {
-            return Ok(trees.into_iter().next().unwrap());
-        }
-
-        // Find common base
-        let mut tree_values = trees.iter().try_join().await?;
-        let mut common_base = 0;
-        let last_tree = tree_values.pop().unwrap();
-        'outer: while common_base < last_tree.base.len() {
-            for tree in tree_values.iter() {
-                if tree.base.len() <= common_base {
-                    break 'outer;
-                }
-                if tree.base[common_base] != last_tree.base[common_base] {
-                    break 'outer;
-                }
-            }
-            common_base += 1;
-        }
-        tree_values.push(last_tree);
-
-        // Normalize bases to common base
-        let mut trees = trees;
-        for (i, tree) in trees.iter_mut().enumerate() {
-            if tree_values[i].base.len() > common_base {
-                *tree = tree.with_base_len(common_base);
-            }
-        }
-
-        // Flat merge trees
-        let tree_values = trees.into_iter().try_join().await?;
-        let mut iter = tree_values.iter().map(|rr| &**rr);
-        let mut merged = iter.next().unwrap().clone();
-        merged.flat_merge(iter).await?;
-
-        Ok(merged.cell())
-    }
-
-    #[turbo_tasks::function]
     pub async fn with_prepended_base(
         self_vc: RouteTreeVc,
         segments: Vec<BaseSegment>,
@@ -303,7 +316,7 @@ impl RouteTreeVc {
             match selector_segment {
                 BaseSegment::Static(value) => Ok(RouteTree {
                     base,
-                    static_segments: HashMap::from([(value, inner.cell())]),
+                    static_segments: IndexMap::from([(value, inner.cell())]),
                     ..Default::default()
                 }
                 .cell()),

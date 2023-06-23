@@ -10,7 +10,7 @@ use turbopack_core::{
 };
 
 use super::{
-    route_tree::{BaseSegment, RouteTreeVc},
+    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
     GetContentSourceContent,
 };
@@ -68,7 +68,7 @@ async fn get_routes_from_directory(dir: FileSystemPathVc) -> Result<RouteTreeVc>
             _ => None,
         })
         .collect();
-    Ok(RouteTreeVc::merge(routes))
+    Ok(RouteTreesVc::cell(routes).merge())
 }
 
 #[turbo_tasks::value_impl]

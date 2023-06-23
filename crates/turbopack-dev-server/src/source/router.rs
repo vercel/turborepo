@@ -5,7 +5,7 @@ use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 use super::{
-    route_tree::{BaseSegment, RouteTreeVc},
+    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataVaryVc,
     ContentSourceVc, GetContentSourceContentVc,
 };
@@ -108,11 +108,12 @@ impl ContentSource for PrefixedRouterContentSource {
                     .into(),
                 )
         });
-        Ok(RouteTreeVc::merge(
+        Ok(RouteTreesVc::cell(
             inner_trees
                 .chain(once(self.fallback.get_routes()))
                 .collect(),
-        ))
+        )
+        .merge())
     }
 
     #[turbo_tasks::function]

@@ -16,7 +16,7 @@ use turbopack_core::{
 };
 
 use super::{
-    route_tree::{BaseSegment, RouteTreeVc},
+    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
     GetContentSourceContent,
 };
@@ -173,7 +173,7 @@ impl ContentSource for AssetGraphContentSource {
                 )
             })
             .collect();
-        Ok(RouteTreeVc::merge(routes))
+        Ok(RouteTreesVc::cell(routes).merge())
     }
 }
 

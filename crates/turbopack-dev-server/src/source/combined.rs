@@ -2,7 +2,10 @@ use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
-use super::{route_tree::RouteTreeVc, ContentSource, ContentSourceVc};
+use super::{
+    route_tree::{RouteTreeVc, RouteTreesVc},
+    ContentSource, ContentSourceVc,
+};
 use crate::source::ContentSourcesVc;
 
 /// Combines multiple [ContentSource]s by trying all content sources in order.
@@ -24,7 +27,7 @@ impl ContentSource for CombinedContentSource {
     #[turbo_tasks::function]
     fn get_routes(&self) -> RouteTreeVc {
         let all_routes = self.sources.iter().map(|s| s.get_routes()).collect();
-        RouteTreeVc::merge(all_routes)
+        RouteTreesVc::cell(all_routes).merge()
     }
 
     #[turbo_tasks::function]
