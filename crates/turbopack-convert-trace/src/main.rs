@@ -352,9 +352,12 @@ fn main() {
     if single || merged {
         eprint!("Emitting span tree...");
 
+        const CONCURRENCY_FIXED_POINT_FACTOR: u64 = 100;
+        const CONCURRENCY_FIXED_POINT_FACTOR_F: f32 = 100.0;
+
         let get_concurrency = |range: Range<u64>| {
             if range.end <= range.start {
-                return 100;
+                return CONCURRENCY_FIXED_POINT_FACTOR;
             }
             let mut sum = 0;
             for interval in busy.query(range.clone()) {
@@ -362,11 +365,11 @@ fn main() {
                 let end = min(interval.range.end, range.end);
                 sum += end - start;
             }
-            100 * sum / (range.end - range.start)
+            CONCURRENCY_FIXED_POINT_FACTOR * sum / (range.end - range.start)
         };
 
-        let target_concurrency = 200;
-        let warn_concurrency = 400;
+        let target_concurrency = 2 * CONCURRENCY_FIXED_POINT_FACTOR;
+        let warn_concurrency = 4 * CONCURRENCY_FIXED_POINT_FACTOR;
 
         enum Task {
             Enter {
@@ -465,7 +468,10 @@ fn main() {
                                 } else {
                                     stack.push(Task::SelfTime {
                                         duration: new_duration,
-                                        concurrency: max(100, new_concurrency),
+                                        concurrency: max(
+                                            CONCURRENCY_FIXED_POINT_FACTOR,
+                                            new_concurrency,
+                                        ),
                                     });
                                 }
                             }
@@ -489,13 +495,13 @@ fn main() {
                         if single {
                             pjson!(
                                 r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{{"concurrency":{}}}}}"#,
-                                concurrency as f64 / 100.0,
+                                concurrency as f64 / CONCURRENCY_FIXED_POINT_FACTOR_F,
                             );
                         }
                         if merged {
                             pjson!(
                                 r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{{"concurrency":{}}}}}"#,
-                                concurrency as f64 / 100.0,
+                                concurrency as f64 / CONCURRENCY_FIXED_POINT_FACTOR_F,
                             );
                         }
                     } else {
@@ -528,13 +534,13 @@ fn main() {
                         if single {
                             pjson!(
                                 r#"{{"ph":"B","pid":1,"ts":{target},"tts":{tts},"name":"idle cpus","cat":"low concurrency","tid":0,"args":{{"concurrency":{}}}}}"#,
-                                concurrency as f64 / 100.0,
+                                concurrency as f64 / CONCURRENCY_FIXED_POINT_FACTOR_f,
                             );
                         }
                         if merged {
                             pjson!(
                                 r#"{{"ph":"B","pid":2,"ts":{merged_target},"tts":{merged_tts},"name":"idle cpus","cat":"low concurrency","tid":0,"args":{{"concurrency":{}}}}}"#,
-                                concurrency as f64 / 100.0,
+                                concurrency as f64 / CONCURRENCY_FIXED_POINT_FACTOR_f,
                             );
                         }
                     }
