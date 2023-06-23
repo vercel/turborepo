@@ -1,7 +1,6 @@
 use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
-    println!("cargo:rerun-if-changed=../../cli");
     let profile = env::var("PROFILE").unwrap();
     let is_ci_release =
         &profile == "release" && matches!(env::var("RELEASE_TURBO_CLI"), Ok(v) if v == "true");
@@ -14,8 +13,6 @@ fn main() {
 fn build_local_go_binary(profile: String) -> PathBuf {
     let cli_path = cli_path();
     let target = build_target::target().unwrap();
-    let mut cmd = Command::new("make");
-    cmd.current_dir(&cli_path);
 
     let go_binary_name = if target.os == build_target::Os::Windows {
         "go-turbo.exe"
@@ -23,7 +20,19 @@ fn build_local_go_binary(profile: String) -> PathBuf {
         "go-turbo"
     };
 
-    cmd.arg(go_binary_name);
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut cmd = Command::new("make");
+        cmd.current_dir(&cli_path);
+        cmd.arg(go_binary_name);
+        cmd
+    };
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = Command::new(cli_path.join("build_go.bat"));
+        cmd.current_dir(&cli_path);
+        cmd
+    };
 
     assert!(
         cmd.stdout(std::process::Stdio::inherit())

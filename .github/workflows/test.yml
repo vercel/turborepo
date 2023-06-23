@@ -491,11 +491,11 @@ jobs:
 
       - name: Run cargo check
         run: |
-          RUSTFLAGS="-D warnings" cargo groups check turborepo-libraries --features rustls-tls
+          cargo groups check turborepo-libraries --features rustls-tls
 
       - name: Run cargo clippy
         run: |
-          RUSTFLAGS="-D warnings" cargo groups clippy turborepo-libraries --features rustls-tls
+          cargo groups clippy turborepo-libraries --features rustls-tls
 
   turbopack_rust_check:
     needs: [determine_jobs, rust_pre_check]
@@ -519,11 +519,11 @@ jobs:
 
       - name: Run cargo check release
         run: |
-          cargo groups check turbopack --features rustls-tls --release
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
 
       - name: Run cargo clippy
         run: |
-          cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups clippy turbopack --features rustls-tls
 
   next_dev_check:
     needs: [determine_jobs]

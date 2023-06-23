@@ -93,7 +93,7 @@ func DryRun(
 
 	// The exitCode isn't really used by the Run Summary Close() method for dry runs
 	// but we pass in a successful value to match Real Runs.
-	return summary.Close(ctx, 0, g.WorkspaceInfos)
+	return summary.Close(ctx, 0, g.WorkspaceInfos, base.UI)
 }
 
 func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {

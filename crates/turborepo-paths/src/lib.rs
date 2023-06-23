@@ -103,6 +103,7 @@ fn is_not_system(path: impl AsRef<str>) -> bool {
     path.as_ref().contains(non_system_separator)
 }
 
+#[cfg(windows)]
 fn convert_separator(
     path: impl AsRef<str>,
     input_separator: char,
@@ -125,18 +126,15 @@ fn convert_separator(
 
 impl<T: AsRef<str>> IntoSystem for T {
     fn into_system(self) -> Utf8PathBuf {
-        let output;
         #[cfg(windows)]
         {
-            output = convert_separator(self, '/', std::path::MAIN_SEPARATOR)
+            convert_separator(self, '/', std::path::MAIN_SEPARATOR)
         }
 
         #[cfg(not(windows))]
         {
-            output = convert_separator(self, '\\', std::path::MAIN_SEPARATOR)
+            Utf8PathBuf::from(self.as_ref())
         }
-
-        output
     }
 }
 
@@ -158,5 +156,44 @@ impl<T: AsRef<str>> IntoUnix for T {
         }
 
         output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{IntoSystem, IntoUnix};
+
+    #[test]
+    fn test_into_system() {
+        #[cfg(unix)]
+        {
+            assert_eq!("foo/bar".into_system(), "foo/bar");
+            assert_eq!("/foo/bar".into_system(), "/foo/bar");
+            assert_eq!("foo\\bar".into_system(), "foo\\bar");
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!("foo/bar".into_system(), "foo\\bar");
+            assert_eq!("/foo/bar".into_system(), "\\foo\\bar");
+            assert_eq!("foo\\bar".into_system(), "foo\\bar");
+        }
+    }
+
+    #[test]
+    fn test_into_unix() {
+        #[cfg(unix)]
+        {
+            assert_eq!("foo/bar".into_unix(), "foo/bar");
+            assert_eq!("/foo/bar".into_unix(), "/foo/bar");
+            assert_eq!("foo\\bar".into_unix(), "foo\\bar");
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!("foo/bar".into_unix(), "foo/bar");
+            assert_eq!("\\foo\\bar".into_unix(), "/foo/bar");
+            assert_eq!("foo\\bar".into_unix(), "foo/bar");
+        }
     }
 }

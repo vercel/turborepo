@@ -232,7 +232,7 @@ func RealRun(
 		logWaitGroup.Wait()
 	}
 
-	if err := runSummary.Close(ctx, exitCode, g.WorkspaceInfos); err != nil {
+	if err := runSummary.Close(ctx, exitCode, g.WorkspaceInfos, base.UI); err != nil {
 		// We don't need to throw an error, but we can warn on this.
 		// Note: this method doesn't actually return an error for Real Runs at the time of writing.
 		base.UI.Info(fmt.Sprintf("Failed to close Run Summary %v", err))

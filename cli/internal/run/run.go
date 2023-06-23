@@ -357,7 +357,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
 		startAt,
-		r.base.UI,
 		r.base.RepoRoot,
 		rs.Opts.scopeOpts.PackageInferenceRoot,
 		r.base.TurboVersion,
