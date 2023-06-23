@@ -652,6 +652,21 @@ impl Backend for MemoryBackend {
         parent_task: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> TaskId {
+        let task_name = match &task_type {
+            PersistentTaskType::Native(fn_id, _inputs) => {
+                let native_fn = turbo_tasks::registry::get_function(*fn_id);
+                format!("native {}", native_fn.name)
+            }
+            PersistentTaskType::ResolveNative(fn_id, _inputs) => {
+                let native_fn = turbo_tasks::registry::get_function(*fn_id);
+                format!("resolve native {}", native_fn.name)
+            }
+            PersistentTaskType::ResolveTrait(trait_type, name, _inputs) => {
+                let trait_ = turbo_tasks::registry::get_trait(*trait_type);
+                format!("resolve trait {}::{}", trait_.name, name)
+            }
+        };
+
         if let Some(task) =
             self.lookup_and_connect_task(parent_task, &self.task_cache, &task_type, turbo_tasks)
         {
@@ -664,6 +679,12 @@ impl Backend for MemoryBackend {
             let task_type = Arc::new(task_type);
             // slow pass with key lock
             let id = turbo_tasks.get_fresh_task_id();
+            // eprintln!(
+            //     "Created {} ({}) with parent {}",
+            //     task_name,
+            //     *unsafe { id.get_unchecked() },
+            //     parent_task
+            // );
             let task = Task::new_persistent(
                 // Safety: That task will hold the value, but we are still in
                 // control of the task

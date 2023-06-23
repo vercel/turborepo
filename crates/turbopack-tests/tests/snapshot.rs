@@ -22,7 +22,7 @@ use turbopack::{
     ecmascript::{EcmascriptModuleAssetVc, TransformPluginVc},
     module_options::{
         CustomEcmascriptTransformPlugins, CustomEcmascriptTransformPluginsVc, JsxTransformOptions,
-        JsxTransformOptionsVc, ModuleOptionsContext,
+        JsxTransformOptionsVc, ModuleOptionsContext, TypescriptTransformOptionsVc,
     },
     resolve_options_context::ResolveOptionsContext,
     transition::TransitionsByNameVc,
@@ -141,7 +141,7 @@ fn default_runtime_type() -> RuntimeType {
     RuntimeType::Dummy
 }
 
-#[testing::fixture("tests/snapshot/*/*/")]
+#[testing::fixture("tests/snapshot/tests/*/*/")]
 fn test(resource: PathBuf) {
     let resource = canonicalize(resource).unwrap();
     // Separating this into a different function fixes my IDE's types for some
