@@ -1,15 +1,18 @@
 {
   "$schema": "./docs/public/schema.json",
+  // The following are used by tools such as pnpm, gh actions to setup pnpm, and the Go toolchain
   "globalPassThroughEnv": [
-    "Path", 
+    "Path",
     "APPDATA",
     "LOCALAPPDATA",
-    "TMPDIR", 
+    "TMPDIR",
     "HOME",
-    "TMP", 
+    "TMP",
     "GOROOT",
     "USERPROFILE"
   ],
+  // This is probably overkill, but we do things per-platform often enough that we should segment
+  // everything by OS
   "globalEnv": ["OS"],
   "pipeline": {
     "test": {
