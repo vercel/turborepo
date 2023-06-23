@@ -31,6 +31,12 @@ pub enum ResolveSourceRequestResult {
 
 /// Resolves a [SourceRequest] within a [super::ContentSource], returning the
 /// corresponding content.
+///
+/// This function is the boundary of consistency. All invoked methods should be
+/// invoked strongly consistent. This ensures that all requests serve the latest
+/// version of the content. We don't make resolve_source_request strongly
+/// consistent as we want get_routes and get to be independent consistent and
+/// any side effect in get should not wait for recomputing of get_routes.
 #[turbo_tasks::function]
 pub async fn resolve_source_request(
     source: ContentSourceVc,
