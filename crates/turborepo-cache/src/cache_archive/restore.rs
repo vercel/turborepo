@@ -160,7 +160,10 @@ fn restore_entry<T: Read>(
         tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry.header()),
         tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry),
         tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry.header()),
-        ty => Err(CacheError::UnsupportedFileType(ty, Backtrace::capture())),
+        ty => Err(CacheError::RestoreUnsupportedFileType(
+            ty,
+            Backtrace::capture(),
+        )),
     }
 }
 

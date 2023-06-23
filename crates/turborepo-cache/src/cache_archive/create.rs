@@ -1,8 +1,8 @@
 use std::{
     backtrace::Backtrace,
     fs,
-    fs::{File, OpenOptions},
-    io::{BufWriter, Read},
+    fs::OpenOptions,
+    io::{BufWriter, Read, Write},
     path::Path,
 };
 
@@ -11,15 +11,11 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
 
 use crate::CacheError;
 
-// We use an enum to get around Rust's generic restrictions
-// i.e. you can't have a function that can return two different
-// versions of a generic type like Vec<u32> and Vec<u64>
-enum CacheArchive<'a> {
-    Compressed(tar::Builder<zstd::Encoder<'a, BufWriter<File>>>),
-    Uncompressed(tar::Builder<BufWriter<File>>),
+struct CacheWriter {
+    builder: tar::Builder<Box<dyn Write>>,
 }
 
-impl<'a> CacheArchive<'a> {
+impl CacheWriter {
     // Appends data to tar builder.
     fn append_data(
         &mut self,
@@ -27,10 +23,7 @@ impl<'a> CacheArchive<'a> {
         path: impl AsRef<Path>,
         body: impl Read,
     ) -> Result<(), CacheError> {
-        match self {
-            CacheArchive::Compressed(builder) => Ok(builder.append_data(header, path, body)?),
-            CacheArchive::Uncompressed(builder) => Ok(builder.append_data(header, path, body)?),
-        }
+        Ok(self.builder.append_data(header, path, body)?)
     }
 
     // Makes a new CacheArchive at the specified path
@@ -48,11 +41,15 @@ impl<'a> CacheArchive<'a> {
         let is_compressed = path.extension() == Some("zst");
 
         if is_compressed {
-            let zw = zstd::Encoder::new(file_buffer, 0)?;
+            let zw = zstd::Encoder::new(file_buffer, 0)?.auto_finish();
 
-            Ok(CacheArchive::Compressed(tar::Builder::new(zw)))
+            Ok(CacheWriter {
+                builder: tar::Builder::new(Box::new(zw)),
+            })
         } else {
-            Ok(CacheArchive::Uncompressed(tar::Builder::new(file_buffer)))
+            Ok(CacheWriter {
+                builder: tar::Builder::new(Box::new(file_buffer)),
+            })
         }
     }
 
@@ -108,18 +105,15 @@ impl<'a> CacheArchive<'a> {
         if file_info.is_symlink() {
             let link = source_path.read_link()?;
             header.set_link_name(link)?;
-        }
-
-        // Throw an error if trying to create a cache that contains a type we don't
-        // support.
-        if !matches!(
-            header.entry_type(),
-            EntryType::Regular | EntryType::Directory | EntryType::Symlink
-        ) {
-            return Err(CacheError::UnsupportedFileType(
-                header.entry_type(),
-                Backtrace::capture(),
-            ));
+            header.set_entry_type(EntryType::Symlink);
+        } else if file_info.is_dir() {
+            header.set_entry_type(EntryType::Directory);
+        } else if file_info.is_file() {
+            header.set_entry_type(EntryType::Regular);
+        } else {
+            // Throw an error if trying to create a cache that contains a type we don't
+            // support.
+            return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
         }
 
         // Consistent creation
@@ -175,7 +169,7 @@ mod tests {
 
         let anchor = AbsoluteSystemPath::new(dir.path().to_str().unwrap())?;
         let out_path = anchor.join_component("test.tar");
-        let mut archive = CacheArchive::create(&out_path)?;
+        let mut archive = CacheWriter::create(&out_path)?;
         let really_long_file = AnchoredSystemPath::new("this-is-a-really-really-really-long-path-like-so-very-long-that-i-can-list-all-of-my-favorite-directors-like-edward-yang-claire-denis-lucrecia-martel-wong-kar-wai-even-kurosawa").unwrap();
 
         let really_long_path = anchor.resolve(really_long_file);

@@ -36,7 +36,11 @@ pub enum CacheError {
     #[error("Invalid tar, link target does not exist on header")]
     LinkTargetNotOnHeader(#[backtrace] Backtrace),
     #[error("attempted to restore unsupported file type: {0:?}")]
-    UnsupportedFileType(tar::EntryType, #[backtrace] Backtrace),
+    RestoreUnsupportedFileType(tar::EntryType, #[backtrace] Backtrace),
+    // We don't pass the `FileType` because there's no simple
+    // way to display it nicely.
+    #[error("attempted to create unsupported file type")]
+    CreateUnsupportedFileType(#[backtrace] Backtrace),
     #[error("file name is malformed: {0}")]
     MalformedName(String, #[backtrace] Backtrace),
     #[error("tar file is malformed")]
