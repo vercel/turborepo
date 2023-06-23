@@ -3,10 +3,7 @@ use std::{fs::OpenOptions, io, io::Read, path::Path};
 use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 
-use crate::{
-    cache_archive::{restore::canonicalize_name, restore_directory::CachedDirTree},
-    CacheError,
-};
+use crate::{cache_archive::restore_directory::CachedDirTree, CacheError};
 
 pub fn restore_regular(
     dir_cache: &mut CachedDirTree,
@@ -17,7 +14,7 @@ pub fn restore_regular(
     // Assuming this was a `turbo`-created input, we currently have an
     // AnchoredUnixPath. Assuming this is malicious input we don't really care
     // if we do the wrong thing.
-    let processed_name = canonicalize_name(&header.path()?)?;
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&header.path()?)?;
 
     // We need to traverse `processedName` from base to root split at
     // `os.Separator` to make sure we don't end up following a symlink

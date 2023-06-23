@@ -2,7 +2,7 @@ use std::{fmt, path::Path};
 
 use camino::{Utf8Component, Utf8Path};
 
-use crate::{validate_system, AnchoredSystemPathBuf, PathError};
+use crate::{AnchoredSystemPathBuf, PathError};
 
 pub struct AnchoredSystemPath(Utf8Path);
 
@@ -50,8 +50,6 @@ impl AnchoredSystemPath {
         if path.is_absolute() {
             return Err(PathError::NotRelative(path_str.to_string()));
         }
-
-        validate_system(path_str)?;
 
         Ok(unsafe { &*(path as *const Path as *const Self) })
     }

@@ -14,7 +14,9 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use path_clean::PathClean;
 
-use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError, RelativeUnixPath};
+use crate::{
+    AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
+};
 
 #[derive(Debug)]
 pub struct AbsoluteSystemPath(Utf8Path);

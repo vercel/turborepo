@@ -1,8 +1,8 @@
-use std::{backtrace::Backtrace, collections::HashMap, io::Read, path::Path};
+use std::{backtrace::Backtrace, collections::HashMap, io::Read};
 
 use petgraph::graph::DiGraph;
 use tar::Entry;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
     cache_archive::{
@@ -109,7 +109,7 @@ impl CacheReader {
         let mut nodes = HashMap::new();
 
         for entry in symlinks {
-            let processed_name = canonicalize_name(&entry.header().path()?)?;
+            let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.header().path()?)?;
             let processed_sourcename =
                 canonicalize_linkname(anchor, &processed_name, processed_name.as_path())?;
             // symlink must have a linkname
@@ -167,98 +167,6 @@ fn restore_entry<T: Read>(
     }
 }
 
-pub fn canonicalize_name(name: &Path) -> Result<AnchoredSystemPathBuf, CacheError> {
-    let name = name.to_str().ok_or_else(|| {
-        CacheError::PathError(
-            PathError::InvalidUnicode(name.to_string_lossy().to_string()),
-            Backtrace::capture(),
-        )
-    })?;
-
-    #[allow(unused_variables)]
-    let PathValidation {
-        well_formed,
-        windows_safe,
-    } = check_name(name);
-
-    if !well_formed {
-        return Err(CacheError::MalformedName(
-            name.to_string(),
-            Backtrace::capture(),
-        ));
-    }
-
-    #[cfg(windows)]
-    {
-        if !windows_safe {
-            return Err(CacheError::WindowsUnsafeName(
-                name.to_string(),
-                Backtrace::capture(),
-            ));
-        }
-    }
-
-    Ok(AnchoredSystemPathBuf::from_validated_tar_path(name))
-}
-
-#[derive(Debug, PartialEq)]
-struct PathValidation {
-    well_formed: bool,
-    windows_safe: bool,
-}
-
-fn check_name(name: &str) -> PathValidation {
-    if name.is_empty() {
-        return PathValidation {
-            well_formed: false,
-            windows_safe: false,
-        };
-    }
-
-    let mut well_formed = true;
-    let mut windows_safe = true;
-
-    // Name is:
-    // - "."
-    // - ".."
-    if well_formed && (name == "." || name == "..") {
-        well_formed = false;
-    }
-
-    // Name starts with:
-    // - `/`
-    // - `./`
-    // - `../`
-    if well_formed && (name.starts_with('/') || name.starts_with("./") || name.starts_with("../")) {
-        well_formed = false;
-    }
-
-    // Name ends in:
-    // - `/.`
-    // - `/..`
-    if well_formed && (name.ends_with("/.") || name.ends_with("/..")) {
-        well_formed = false;
-    }
-
-    // Name contains:
-    // - `//`
-    // - `/./`
-    // - `/../`
-    if well_formed && (name.contains("//") || name.contains("/./") || name.contains("/../")) {
-        well_formed = false;
-    }
-
-    // Name contains: `\`
-    if name.contains('\\') {
-        windows_safe = false;
-    }
-
-    PathValidation {
-        well_formed,
-        windows_safe,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{fs, fs::File, io::empty, path::Path};
@@ -270,10 +178,7 @@ mod tests {
     use tracing::debug;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
-    use crate::cache_archive::{
-        restore::{canonicalize_name, check_name, CacheReader, PathValidation},
-        restore_symlink::canonicalize_linkname,
-    };
+    use crate::cache_archive::{restore::CacheReader, restore_symlink::canonicalize_linkname};
 
     // Expected output of the cache
     #[derive(Debug)]
@@ -429,7 +334,7 @@ mod tests {
             assert!(result.is_err());
             assert_eq!(
                 result.unwrap_err().to_string(),
-                "file name is malformed: ../escape"
+                "Invalid file path: path is malformed: ../escape"
             );
         }
 
@@ -454,7 +359,8 @@ mod tests {
                 assert!(result.is_err());
                 assert_eq!(
                     result.unwrap_err().to_string(),
-                    "file name is not Windows-safe: windows-unsafe/this\\is\\a\\file\\on\\unix"
+                    "Invalid file path: Path is not safe for windows: \
+                     windows-unsafe/this\\is\\a\\file\\on\\unix"
                 );
             }
             #[cfg(unix)]
@@ -997,43 +903,6 @@ mod tests {
         Ok(())
     }
 
-    #[test_case("", PathValidation { well_formed: false, windows_safe: false } ; "1")]
-    #[test_case(".", PathValidation { well_formed: false, windows_safe: true } ; "2")]
-    #[test_case("..", PathValidation { well_formed: false, windows_safe: true } ; "3")]
-    #[test_case("/", PathValidation { well_formed: false, windows_safe: true } ; "4")]
-    #[test_case("./", PathValidation { well_formed: false, windows_safe: true } ; "5")]
-    #[test_case("../", PathValidation { well_formed: false, windows_safe: true } ; "6")]
-    #[test_case("/a", PathValidation { well_formed: false, windows_safe: true } ; "7")]
-    #[test_case("./a", PathValidation { well_formed: false, windows_safe: true } ; "8")]
-    #[test_case("../a", PathValidation { well_formed: false, windows_safe: true } ; "9")]
-    #[test_case("/.", PathValidation { well_formed: false, windows_safe: true } ; "10")]
-    #[test_case("/..", PathValidation { well_formed: false, windows_safe: true } ; "11")]
-    #[test_case("a/.", PathValidation { well_formed: false, windows_safe: true } ; "12")]
-    #[test_case("a/..", PathValidation { well_formed: false, windows_safe: true } ; "13")]
-    #[test_case("//", PathValidation { well_formed: false, windows_safe: true } ; "14")]
-    #[test_case("/./", PathValidation { well_formed: false, windows_safe: true } ; "15")]
-    #[test_case("/../", PathValidation { well_formed: false, windows_safe: true } ; "16")]
-    #[test_case("a//", PathValidation { well_formed: false, windows_safe: true } ; "17")]
-    #[test_case("a/./", PathValidation { well_formed: false, windows_safe: true } ; "18")]
-    #[test_case("a/../", PathValidation { well_formed: false, windows_safe: true } ; "19")]
-    #[test_case("//a", PathValidation { well_formed: false, windows_safe: true } ; "20")]
-    #[test_case("/./a", PathValidation { well_formed: false, windows_safe: true } ; "21")]
-    #[test_case("/../a", PathValidation { well_formed: false, windows_safe: true } ; "22")]
-    #[test_case("a//a", PathValidation { well_formed: false, windows_safe: true } ; "23")]
-    #[test_case("a/./a", PathValidation { well_formed: false, windows_safe: true } ; "24")]
-    #[test_case("a/../a", PathValidation { well_formed: false, windows_safe: true } ; "25")]
-    #[test_case("...", PathValidation { well_formed: true, windows_safe: true } ; "26")]
-    #[test_case(".../a", PathValidation { well_formed: true, windows_safe: true } ; "27")]
-    #[test_case("a/...", PathValidation { well_formed: true, windows_safe: true } ; "28")]
-    #[test_case("a/.../a", PathValidation { well_formed: true, windows_safe: true } ; "29")]
-    #[test_case(".../...", PathValidation { well_formed: true, windows_safe: true } ; "30")]
-    fn test_check_name(path: &'static str, expected_output: PathValidation) -> Result<()> {
-        let output = check_name(path);
-        assert_eq!(output, expected_output);
-
-        Ok(())
-    }
-
     #[test_case(Path::new("source").try_into()?, Path::new("target"), "/Users/test/target", "C:\\Users\\test\\target" ; "hello world")]
     #[test_case(Path::new("child/source").try_into()?, Path::new("../sibling/target"), "/Users/test/sibling/target", "C:\\Users\\test\\sibling\\target" ; "Unix path subdirectory traversal")]
     #[test_case(Path::new("child/source").try_into()?, Path::new("..\\sibling\\target"), "/Users/test/child/..\\sibling\\target", "C:\\Users\\test\\sibling\\target" ; "Windows path subdirectory traversal")]
@@ -1054,25 +923,6 @@ mod tests {
         assert_eq!(received_path.to_string(), canonical_unix);
         #[cfg(windows)]
         assert_eq!(received_path.to_string(), canonical_windows);
-
-        Ok(())
-    }
-
-    #[test_case(Path::new("test.txt"), Ok("test.txt") ; "hello world")]
-    #[test_case(Path::new("something/"), Ok("something") ; "directory")]
-    #[test_case(Path::new("//"), Err("file name is malformed: //".to_string()) ; "malformed name")]
-    fn test_canonicalize_name(
-        file_name: &Path,
-        expected: Result<&'static str, String>,
-    ) -> Result<()> {
-        let result = canonicalize_name(file_name).map_err(|e| e.to_string());
-        match (result, expected) {
-            (Ok(result), Ok(expected)) => {
-                assert_eq!(result.as_str(), expected)
-            }
-            (Err(result), Err(expected)) => assert_eq!(result, expected),
-            (result, expected) => panic!("Expected {:?}, got {:?}", expected, result),
-        }
 
         Ok(())
     }

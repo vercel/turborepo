@@ -436,8 +436,8 @@ impl Dependencies {
         workspaces: &HashMap<WorkspaceName, Entry>,
         dependencies: I,
     ) -> Self {
-        let workspace_dir = repo_root
-            .resolve(workspace_json_path)
+        let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
+        let workspace_dir = resolved_workspace_json_path
             .parent()
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();

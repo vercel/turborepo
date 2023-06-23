@@ -6,17 +6,14 @@ use turbopath::{
     PathError, UnknownPathType,
 };
 
-use crate::{
-    cache_archive::{restore::canonicalize_name, restore_directory::CachedDirTree},
-    CacheError,
-};
+use crate::{cache_archive::restore_directory::CachedDirTree, CacheError};
 
 pub fn restore_symlink(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     header: &tar::Header,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
-    let processed_name = canonicalize_name(&header.path()?)?;
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&header.path()?)?;
 
     let linkname = header
         .link_name()?
@@ -41,7 +38,7 @@ pub fn restore_symlink_allow_missing_target(
     anchor: &AbsoluteSystemPath,
     header: &tar::Header,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
-    let processed_name = canonicalize_name(&header.path()?)?;
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&header.path()?)?;
 
     actually_restore_symlink(dir_cache, anchor, &processed_name, header)?;
 
@@ -136,7 +133,7 @@ pub fn canonicalize_linkname(
         // anything else because the OS will also treat it like that when it is
         // a link target.
         UnknownPathType::Anchored(cleaned_linkname) => {
-            let source = anchor.resolve(&processed_name);
+            let source = anchor.resolve(processed_name);
             let canonicalized = source
                 .parent()
                 .expect("expected parent for file")

@@ -8,7 +8,10 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
+use crate::{
+    check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation,
+    RelativeUnixPathBuf,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
@@ -140,23 +143,40 @@ impl AnchoredSystemPathBuf {
         self.0.as_str()
     }
 
-    pub fn new_unchecked(path: impl Into<Utf8PathBuf>) -> Self {
-        AnchoredSystemPathBuf(path.into())
-    }
-
-    // Takes in a path that has already been validated as anchored
-    // via `check_name` in `turborepo-cache` and constructs an
+    // Takes in a path, validates that it is anchored and constructs an
     // `AnchoredSystemPathBuf` with no trailing slashes.
-    pub fn from_validated_tar_path(path: &str) -> Self {
-        let path = Utf8Path::new(path);
-        // There's no easier way to remove trailing slashes in Rust
-        // because `OsString`s don't allow for manipulation.
-        let no_trailing_slash: Utf8PathBuf = path.components().collect();
+    pub fn from_system_path(path: &Path) -> Result<Self, PathError> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
+
+        #[allow(unused_variables)]
+        let PathValidation {
+            well_formed,
+            windows_safe,
+        } = check_path(path);
+
+        if !well_formed {
+            return Err(PathError::MalformedPath(path.to_string()));
+        }
+
+        #[cfg(windows)]
+        {
+            if !windows_safe {
+                return Err(PathError::WindowsUnsafePath(path.to_string()));
+            }
+        }
+
+        // Remove trailing slash
+        println!("path before: {}", path);
+        let path = path.strip_suffix(std::path::MAIN_SEPARATOR).unwrap_or(path);
+        println!("path after: {}", path);
+        let path = Utf8PathBuf::from(path);
 
         // We know this is indeed anchored because of `check_name`,
         // and it is indeed system because we just split and combined with the
         // system path separator above
-        AnchoredSystemPathBuf::new_unchecked(no_trailing_slash)
+        Ok(AnchoredSystemPathBuf(path))
     }
 
     pub fn as_path(&self) -> &Path {
@@ -176,12 +196,12 @@ impl AnchoredSystemPathBuf {
         }
     }
 
-    pub fn components(&self) -> Utf8Components {
-        self.0.components()
-    }
-
     pub fn push(&mut self, path: impl AsRef<Utf8Path>) {
         self.0.push(path.as_ref());
+    }
+
+    pub fn components(&self) -> Utf8Components {
+        self.0.components()
     }
 }
 
@@ -205,6 +225,8 @@ impl AsRef<Path> for AnchoredSystemPathBuf {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use test_case::test_case;
 
     use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
@@ -237,18 +259,27 @@ mod tests {
         assert_eq!(result, expected);
     }
 
-    #[test_case("./foo/bar/", "./foo/bar", ".\\foo\\bar" ; "with trailing slash")]
-    #[test_case("foo/bar", "foo/bar", "foo\\bar" ; "no trailing slash")]
-    #[test_case("", "", "" ; "empty")]
-    fn test_from_validated_tar_path(
-        path: &str,
-        #[allow(unused_variables)] expected_unix_path: &str,
-        #[allow(unused_variables)] expected_windows_path: &str,
+    #[test_case(Path::new("test.txt"), Ok("test.txt"), Ok("test.txt") ; "hello world")]
+    #[test_case(Path::new("something/"), Ok("something"), Ok("something/") ; "Unix directory")]
+    #[test_case(Path::new("something\\"), Ok("something\\"), Err("Path is not safe for windows: something\\".to_string()) ; "Windows unsafe")]
+    #[test_case(Path::new("//"), Err("path is malformed: //".to_string()), Err("path is malformed: //".to_string()) ; "malformed name")]
+    fn test_from_system_path(
+        file_name: &Path,
+        expected_unix: Result<&'static str, String>,
+        expected_windows: Result<&'static str, String>,
     ) {
-        let path = AnchoredSystemPathBuf::from_validated_tar_path(path);
-        #[cfg(unix)]
-        assert_eq!(path.as_str(), expected_unix_path);
-        #[cfg(windows)]
-        assert_eq!(path.as_str(), expected_windows_path);
+        let result = AnchoredSystemPathBuf::from_system_path(file_name).map_err(|e| e.to_string());
+        let expected = if cfg!(windows) {
+            expected_windows
+        } else {
+            expected_unix
+        };
+        match (result, expected) {
+            (Ok(result), Ok(expected)) => {
+                assert_eq!(result.as_str(), expected)
+            }
+            (Err(result), Err(expected)) => assert_eq!(result, expected),
+            (result, expected) => panic!("Expected {:?}, got {:?}", expected, result),
+        }
     }
 }

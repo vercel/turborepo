@@ -7,14 +7,14 @@ use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
 
-use crate::{cache_archive::restore::canonicalize_name, CacheError};
+use crate::CacheError;
 
 pub fn restore_directory(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     header: &Header,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
-    let processed_name = canonicalize_name(&header.path()?)?;
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&header.path()?)?;
 
     dir_cache.safe_mkdir_all(anchor, &processed_name, header.mode()?)?;
 
