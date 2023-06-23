@@ -2,7 +2,6 @@ use std::{
     borrow::Borrow,
     fmt,
     fmt::{Debug, Display, Formatter},
-    io::Write,
     ops::Deref,
 };
 
@@ -28,34 +27,6 @@ impl RelativeUnixPathBuf {
 
     pub fn as_str(&self) -> &str {
         self.0.as_str()
-    }
-
-    // write_escaped_bytes writes this path to the given writer in the form
-    // "<escaped path>", where escaped_path is the path with '"' and '\n'
-    // characters escaped with '\'.
-    pub fn write_escaped_bytes<W: Write>(&self, writer: &mut W) -> Result<(), PathError> {
-        writer.write_all(&[b'\"'])?;
-        // i is our pointer into self.0, and to_escape_index is a pointer to the next
-        // byte to be escaped. Each time we find a byte to be escaped, we write
-        // out everything from i to to_escape_index, then the escape byte, '\\',
-        // then the byte-to-be-escaped. Finally we set i to 1 + to_escape_index
-        // to move our pointer past the byte we just escaped.
-        let mut i: usize = 0;
-        for (to_escaped_index, byte) in self
-            .0
-            .bytes()
-            .enumerate()
-            .filter(|(_, byte)| *byte == b'\"' || *byte == b'\n')
-        {
-            writer.write_all(self.0[i..to_escaped_index].as_bytes())?;
-            writer.write_all(&[b'\\', byte])?;
-            i = to_escaped_index + 1;
-        }
-        if i < self.0.len() {
-            writer.write_all(self.0[i..].as_bytes())?;
-        }
-        writer.write_all(&[b'\"'])?;
-        Ok(())
     }
 
     pub fn strip_prefix(&self, prefix: &RelativeUnixPathBuf) -> Result<Self, PathError> {
@@ -187,19 +158,6 @@ mod tests {
             .strip_prefix(&RelativeUnixPathBuf::new("").unwrap())
             .unwrap();
         assert_eq!(tail, combined);
-    }
-
-    #[test]
-    fn test_write_escaped() {
-        let input = "\"quote\"\nnewline\n";
-        let expected = b"\"\\\"quote\\\"\\\nnewline\\\n\"";
-        let mut buffer = Vec::new();
-        {
-            let mut writer = BufWriter::new(&mut buffer);
-            let path = RelativeUnixPathBuf::new(input).unwrap();
-            path.write_escaped_bytes(&mut writer).unwrap();
-        }
-        assert_eq!(buffer.as_slice(), expected);
     }
 
     #[test]

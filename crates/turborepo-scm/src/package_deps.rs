@@ -3,84 +3,183 @@ use std::{collections::HashMap, process::Command};
 use bstr::io::BufReadExt;
 use itertools::{Either, Itertools};
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError,
+    RelativeUnixPathBuf,
 };
 
 use crate::{hash_object::hash_objects, ls_tree::git_ls_tree, status::append_git_status, Error};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
-pub fn get_package_file_hashes_from_git_index(
-    turbo_root: &AbsoluteSystemPath,
-    package_path: &AnchoredSystemPathBuf,
-) -> Result<GitHashes, Error> {
-    // TODO: memoize git root -> turbo root calculation once we aren't crossing ffi
-    let git_root = find_git_root(turbo_root)?;
-    let full_pkg_path = turbo_root.resolve(package_path);
-    let git_to_pkg_path = git_root.anchor(&full_pkg_path)?;
-    let pkg_prefix = git_to_pkg_path.to_unix()?;
-    let mut hashes = git_ls_tree(&full_pkg_path)?;
-    // Note: to_hash is *git repo relative*
-    let to_hash = append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
-    hash_objects(&git_root, &full_pkg_path, to_hash, &mut hashes)?;
-    Ok(hashes)
+#[derive(Debug)]
+pub struct Git {
+    root: AbsoluteSystemPathBuf,
+    _bin: AbsoluteSystemPathBuf,
 }
 
-pub fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
-    turbo_root: &AbsoluteSystemPath,
-    package_path: &AnchoredSystemPathBuf,
-    inputs: &[S],
-) -> Result<GitHashes, Error> {
-    // TODO: memoize git root -> turbo root calculation once we aren't crossing ffi
-    let git_root = find_git_root(turbo_root)?;
-    let full_pkg_path = turbo_root.resolve(package_path);
-    let package_unix_path_buf = package_path.to_unix()?;
-    let package_unix_path = package_unix_path_buf.as_str();
+#[derive(Debug)]
+pub enum Hasher {
+    Git(Git),
+    Manual,
+}
 
-    let mut inputs = inputs
-        .iter()
-        .map(|s| s.as_ref().to_string())
-        .collect::<Vec<String>>();
-    // Add in package.json and turbo.json to input patterns. Both file paths are
-    // relative to pkgPath
-    //
-    // - package.json is an input because if the `scripts` in the package.json
-    //   change (i.e. the tasks that turbo executes), we want a cache miss, since
-    //   any existing cache could be invalid.
-    // - turbo.json because it's the definition of the tasks themselves. The root
-    //   turbo.json is similarly included in the global hash. This file may not
-    //   exist in the workspace, but that is ok, because it will get ignored
-    //   downstream.
-    inputs.push("package.json".to_string());
-    inputs.push("turbo.json".to_string());
+impl Hasher {
+    pub fn new(path_in_repo: &AbsoluteSystemPath) -> Hasher {
+        Git::find(path_in_repo)
+            .map(Hasher::Git)
+            .unwrap_or(Hasher::Manual)
+    }
 
-    // The input patterns are relative to the package.
-    // However, we need to change the globbing to be relative to the repo root.
-    // Prepend the package path to each of the input patterns.
-    let (inclusions, exclusions): (Vec<String>, Vec<String>) =
-        inputs.into_iter().partition_map(|raw_glob| {
-            if let Some(exclusion) = raw_glob.strip_prefix('!') {
-                Either::Right([package_unix_path, exclusion].join("/"))
-            } else {
-                Either::Left([package_unix_path, raw_glob.as_ref()].join("/"))
-            }
-        });
-    let files = globwalk::globwalk(
-        turbo_root,
-        &inclusions,
-        &exclusions,
-        globwalk::WalkType::Files,
-    )?;
-    let to_hash = files
-        .iter()
-        .map(|entry| {
-            let path = git_root.anchor(entry)?.to_unix()?;
-            Ok(path)
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-    let mut hashes = GitHashes::new();
-    hash_objects(&git_root, &full_pkg_path, to_hash, &mut hashes)?;
-    Ok(hashes)
+    pub fn get_package_file_hashes<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPathBuf,
+        inputs: &[S],
+    ) -> Result<GitHashes, Error> {
+        match self {
+            Hasher::Manual => crate::manual::get_package_file_hashes_from_processing_gitignore(
+                turbo_root,
+                package_path,
+                inputs,
+            ),
+            Hasher::Git(git) => git.get_package_file_hashes(turbo_root, package_path, inputs),
+        }
+    }
+
+    pub fn hash_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+    ) -> Result<GitHashes, Error> {
+        match self {
+            Hasher::Manual => crate::manual::hash_files(turbo_root, files, false),
+            Hasher::Git(git) => git.hash_files(turbo_root, files),
+        }
+    }
+
+    // hash_existing_of takes a list of files to hash and returns the hashes for the
+    // files in that list that exist. Files in the list that do not exist are
+    // skipped.
+    pub fn hash_existing_of(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+    ) -> Result<GitHashes, Error> {
+        crate::manual::hash_files(turbo_root, files, true)
+    }
+}
+
+impl Git {
+    fn find(path_in_repo: &AbsoluteSystemPath) -> Option<Self> {
+        let bin = which::which("git").ok()?;
+        let bin = AbsoluteSystemPathBuf::try_from(bin).ok()?;
+        let root = find_git_root(path_in_repo).ok()?;
+        Some(Self { root, _bin: bin })
+    }
+
+    fn get_package_file_hashes<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPathBuf,
+        inputs: &[S],
+    ) -> Result<GitHashes, Error> {
+        if inputs.is_empty() {
+            self.get_package_file_hashes_from_index(turbo_root, package_path)
+        } else {
+            self.get_package_file_hashes_from_inputs(turbo_root, package_path, inputs)
+        }
+    }
+
+    fn get_package_file_hashes_from_index(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPathBuf,
+    ) -> Result<GitHashes, Error> {
+        let full_pkg_path = turbo_root.resolve(package_path);
+        let git_to_pkg_path = self.root.anchor(&full_pkg_path)?;
+        let pkg_prefix = git_to_pkg_path.to_unix()?;
+        let mut hashes = git_ls_tree(&full_pkg_path)?;
+        // Note: to_hash is *git repo relative*
+        let to_hash = append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
+        hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        Ok(hashes)
+    }
+
+    fn hash_files(
+        &self,
+        process_relative_to: &AbsoluteSystemPath,
+        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+    ) -> Result<GitHashes, Error> {
+        let mut hashes = GitHashes::new();
+        let to_hash = files
+            .map(|f| self.root.anchor(process_relative_to.resolve(&f))?.to_unix())
+            .collect::<Result<Vec<_>, PathError>>()?;
+        // Note: to_hash is *git repo relative*
+        hash_objects(&self.root, process_relative_to, to_hash, &mut hashes)?;
+        Ok(hashes)
+    }
+
+    fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPathBuf,
+        inputs: &[S],
+    ) -> Result<GitHashes, Error> {
+        let full_pkg_path = turbo_root.resolve(package_path);
+        let package_unix_path_buf = package_path.to_unix()?;
+        let package_unix_path = package_unix_path_buf.as_str();
+
+        let mut inputs = inputs
+            .iter()
+            .map(|s| s.as_ref().to_string())
+            .collect::<Vec<String>>();
+        // Add in package.json and turbo.json to input patterns. Both file paths are
+        // relative to pkgPath
+        //
+        // - package.json is an input because if the `scripts` in the package.json
+        //   change (i.e. the tasks that turbo executes), we want a cache miss, since
+        //   any existing cache could be invalid.
+        // - turbo.json because it's the definition of the tasks themselves. The root
+        //   turbo.json is similarly included in the global hash. This file may not
+        //   exist in the workspace, but that is ok, because it will get ignored
+        //   downstream.
+        inputs.push("package.json".to_string());
+        inputs.push("turbo.json".to_string());
+
+        // The input patterns are relative to the package.
+        // However, we need to change the globbing to be relative to the repo root.
+        // Prepend the package path to each of the input patterns.
+        //
+        // FIXME: we don't yet error on absolute unix paths being passed in as inputs,
+        // and instead tack them on as if they were relative paths. This should be an
+        // error further upstream, but since we haven't pulled the switch yet,
+        // we need to mimic the Go behavior here and trim leading `/`
+        // characters.
+        let (inclusions, exclusions): (Vec<String>, Vec<String>) =
+            inputs.into_iter().partition_map(|raw_glob| {
+                if let Some(exclusion) = raw_glob.strip_prefix('!') {
+                    Either::Right([package_unix_path, exclusion.trim_start_matches('/')].join("/"))
+                } else {
+                    Either::Left([package_unix_path, raw_glob.trim_start_matches('/')].join("/"))
+                }
+            });
+        let files = globwalk::globwalk(
+            turbo_root,
+            &inclusions,
+            &exclusions,
+            globwalk::WalkType::Files,
+        )?;
+        let to_hash = files
+            .iter()
+            .map(|entry| {
+                let path = self.root.anchor(entry)?.to_unix()?;
+                Ok(path)
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let mut hashes = GitHashes::new();
+        hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        Ok(hashes)
+    }
 }
 
 pub(crate) fn find_git_root(
@@ -231,6 +330,10 @@ mod tests {
 
         setup_repository(&repo_root);
         commit_all(&repo_root);
+        let git = Hasher::new(&repo_root);
+        let Hasher::Git(git) = git else {
+            panic!("expected git, found {:?}", git);
+        };
 
         // remove a file
         deleted_file_path.remove()?;
@@ -257,7 +360,7 @@ mod tests {
                 "bfe53d766e64d78f80050b73cd1c88095bc70abb",
             ),
         ]);
-        let hashes = get_package_file_hashes_from_git_index(&repo_root, &package_path)?;
+        let hashes = git.get_package_file_hashes::<&str>(&repo_root, &package_path, &[])?;
         assert_eq!(hashes, all_expected);
 
         // add the new root file as an option
@@ -308,8 +411,9 @@ mod tests {
                 let value = all_expected.get(&key).unwrap().clone();
                 (key, value)
             }));
-            let hashes =
-                get_package_file_hashes_from_inputs(&repo_root, &package_path, &inputs).unwrap();
+            let hashes = git
+                .get_package_file_hashes(&repo_root, &package_path, &inputs)
+                .unwrap();
             assert_eq!(hashes, expected);
         }
         Ok(())

@@ -343,42 +343,18 @@ func VerifySignature(teamID []byte, hash string, artifactBody []byte, expectedTa
 	return resp.GetVerified(), nil
 }
 
-// GetPackageFileHashesFromGitIndex proxies to rust to use git to hash the files in a package.
-// It does not support additional files, it just hashes the non-ignored files in the package.
-func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[string]string, error) {
-	req := ffi_proto.GetPackageFileHashesFromGitIndexRequest{
-		TurboRoot:   rootPath,
-		PackagePath: packagePath,
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.get_package_file_hashes_from_git_index(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.GetPackageFileHashesFromGitIndexResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-
-	if err := resp.GetError(); err != "" {
-		return nil, errors.New(err)
-	}
-	hashes := resp.GetHashes()
-	return hashes.GetHashes(), nil
-}
-
-// GetPackageFileHashesFromProcessingGitIgnore proces to rust to walk the filesystem and produce a hash similar to
-// what git would do
-func GetPackageFileHashesFromProcessingGitIgnore(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
-	req := ffi_proto.GetPackageFileHashesFromProcessingGitIgnoreRequest{
+// GetPackageFileHashes proxies to rust for hashing the files in a package
+func GetPackageFileHashes(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesRequest{
 		TurboRoot:   rootPath,
 		PackagePath: packagePath,
 		Inputs:      inputs,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.get_package_file_hashes_from_processing_git_ignore(reqBuf)
+	resBuf := C.get_package_file_hashes(reqBuf)
 	reqBuf.Free()
 
-	resp := ffi_proto.GetPackageFileHashesFromProcessingGitIgnoreResponse{}
+	resp := ffi_proto.GetPackageFileHashesResponse{}
 	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
 		panic(err)
 	}
@@ -391,19 +367,18 @@ func GetPackageFileHashesFromProcessingGitIgnore(rootPath string, packagePath st
 	return hashes.GetHashes(), nil
 }
 
-// GetPackageFileHashesFromInputs proxies to rust to walk the filesystem and use git to hash the resulting
-// files
-func GetPackageFileHashesFromInputs(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
-	req := ffi_proto.GetPackageFileHashesFromInputsRequest{
-		TurboRoot:   rootPath,
-		PackagePath: packagePath,
-		Inputs:      inputs,
+// GetHashesForFiles proxies to rust for hashing a given set of files
+func GetHashesForFiles(rootPath string, files []string, allowMissing bool) (map[string]string, error) {
+	req := ffi_proto.GetHashesForFilesRequest{
+		TurboRoot:    rootPath,
+		Files:        files,
+		AllowMissing: allowMissing,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.get_package_file_hashes_from_inputs(reqBuf)
+	resBuf := C.get_hashes_for_files(reqBuf)
 	reqBuf.Free()
 
-	resp := ffi_proto.GetPackageFileHashesFromInputsResponse{}
+	resp := ffi_proto.GetHashesForFilesResponse{}
 	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
 		panic(err)
 	}
