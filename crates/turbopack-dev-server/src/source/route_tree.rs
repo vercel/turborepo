@@ -20,6 +20,7 @@ pub enum RouteType {
     NotFound,
 }
 
+/// Some normal segment of a route.
 #[derive(TaskInput, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 pub enum BaseSegment {
     Static(String),
