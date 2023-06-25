@@ -150,7 +150,10 @@ async fn expand(
     Ok(map)
 }
 
-// This must not be a TaskInput since this would resolve the embedded asset
+/// A unresolve asset. We need to have a unresolve Asset here as we need to
+/// lookup the Vc identity in the expanded set.
+///
+/// This must not be a TaskInput since this would resolve the embedded asset.
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Hash, PartialOrd, Ord, Debug, Clone)]
 struct UnresolvedAsset(AssetVc);

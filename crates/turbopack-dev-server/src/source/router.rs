@@ -86,8 +86,7 @@ impl ContentSource for PrefixedRouterContentSource {
             debug_assert!(prefix.is_empty() || prefix.ends_with('/'));
             debug_assert!(!prefix.starts_with('/'));
         }
-        let prefix = prefix
-            .is_empty()
+        let prefix = (!prefix.is_empty())
             .then(|| BaseSegment::from_static_pathname(prefix.as_str()).collect())
             .unwrap_or(Vec::new());
         let inner_trees = self.routes.iter().map(|(path, source)| {
@@ -164,7 +163,7 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceContentVc> {
         Ok(
-            if let Some(path) = path.strip_prefix(&self.mapper.await?.path) {
+            if let Some(path) = path.strip_prefix(&*self.mapper.await?.prefix.await?) {
                 self.get_content.get(path, data)
             } else {
                 ContentSourceContentVc::not_found()
