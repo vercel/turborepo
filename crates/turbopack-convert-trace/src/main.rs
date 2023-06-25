@@ -495,13 +495,13 @@ fn main() {
                         if single {
                             pjson!(
                                 r#"{{"ph":"E","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{{"concurrency":{}}}}}"#,
-                                concurrency as f64 / CONCURRENCY_FIXED_POINT_FACTOR_F,
+                                concurrency as f32 / CONCURRENCY_FIXED_POINT_FACTOR_F,
                             );
                         }
                         if merged {
                             pjson!(
                                 r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{{"concurrency":{}}}}}"#,
-                                concurrency as f64 / CONCURRENCY_FIXED_POINT_FACTOR_F,
+                                concurrency as f32 / CONCURRENCY_FIXED_POINT_FACTOR_F,
                             );
                         }
                     } else {
@@ -534,13 +534,13 @@ fn main() {
                         if single {
                             pjson!(
                                 r#"{{"ph":"B","pid":1,"ts":{target},"tts":{tts},"name":"idle cpus","cat":"low concurrency","tid":0,"args":{{"concurrency":{}}}}}"#,
-                                concurrency as f64 / CONCURRENCY_FIXED_POINT_FACTOR_f,
+                                concurrency as f32 / CONCURRENCY_FIXED_POINT_FACTOR_F,
                             );
                         }
                         if merged {
                             pjson!(
                                 r#"{{"ph":"B","pid":2,"ts":{merged_target},"tts":{merged_tts},"name":"idle cpus","cat":"low concurrency","tid":0,"args":{{"concurrency":{}}}}}"#,
-                                concurrency as f64 / CONCURRENCY_FIXED_POINT_FACTOR_f,
+                                concurrency as f32 / CONCURRENCY_FIXED_POINT_FACTOR_F,
                             );
                         }
                     }

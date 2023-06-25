@@ -13,7 +13,7 @@ use turbopack_core::{
 use turbopack_ecmascript::utils::FormatIter;
 
 use crate::source::{
-    route_tree::{FinalSegment, RouteTreeVc, RouteTreesVc, RouteType},
+    route_tree::{RouteTreeVc, RouteTreesVc, RouteType},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
     GetContentSourceContent, GetContentSourceContentVc,
 };
