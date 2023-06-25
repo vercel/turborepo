@@ -52,7 +52,12 @@ impl ContentSource for IssueContextContentSource {
     #[turbo_tasks::function]
     async fn get_routes(self_vc: IssueContextContentSourceVc) -> Result<RouteTreeVc> {
         let this = self_vc.await?;
-        Ok(this.source.get_routes().map_routes(
+        let routes = this
+            .source
+            .get_routes()
+            .issue_context(this.context, &this.description)
+            .await?;
+        Ok(routes.map_routes(
             IssueContextContentSourceMapper { source: self_vc }
                 .cell()
                 .into(),
