@@ -196,6 +196,7 @@ impl GlobWatcher {
                                 // if we receive an event for a file in the flush dir, we need to
                                 // remove it from the events list, and send a signal to the flush
                                 // requestor. flushes should not be considered as events.
+                                // Noop
                                 for flush_id in e
                                     .paths
                                     .drain_filter(|p| p.starts_with(flush_dir.as_path()))
