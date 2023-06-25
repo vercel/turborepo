@@ -5,7 +5,7 @@ use turbopack_core::{
     source_map::{GenerateSourceMap, GenerateSourceMapVc},
 };
 use turbopack_dev_server::source::{
-    route_tree::{FinalSegment, RouteTreeVc},
+    route_tree::{RouteTreeVc, RouteType},
     wrapping_source::{
         ContentSourceProcessor, ContentSourceProcessorVc, WrappedGetContentSourceContentVc,
     },
@@ -36,7 +36,7 @@ impl NextSourceMapTraceContentSourceVc {
 impl ContentSource for NextSourceMapTraceContentSource {
     #[turbo_tasks::function]
     fn get_routes(self_vc: NextSourceMapTraceContentSourceVc) -> RouteTreeVc {
-        RouteTreeVc::new_route(Vec::new(), Some(FinalSegment::CatchAll), self_vc.into())
+        RouteTreeVc::new_route(Vec::new(), RouteType::CatchAll, self_vc.into())
     }
 
     #[turbo_tasks::function]

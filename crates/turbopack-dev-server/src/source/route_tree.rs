@@ -10,8 +10,11 @@ use turbo_tasks::{
 
 use super::{GetContentSourceContentVc, GetContentSourceContentsVc};
 
+/// The type of the route. THis will decide about the remaining segements of the
+/// route after the base.
 #[derive(TaskInput, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
-pub enum FinalSegment {
+pub enum RouteType {
+    Exact,
     CatchAll,
     Fallback,
     NotFound,
@@ -108,26 +111,26 @@ impl RouteTree {
     /// Creates a route tree for a single route.
     pub fn new_route(
         base_segments: Vec<BaseSegment>,
-        final_segment: Option<FinalSegment>,
+        route_type: RouteType,
         source: GetContentSourceContentVc,
     ) -> Self {
-        match final_segment {
-            None => Self {
+        match route_type {
+            RouteType::Exact => Self {
                 base: base_segments,
                 sources: vec![source],
                 ..Default::default()
             },
-            Some(FinalSegment::CatchAll) => Self {
+            RouteType::CatchAll => Self {
                 base: base_segments,
                 catch_all_sources: vec![source],
                 ..Default::default()
             },
-            Some(FinalSegment::Fallback) => Self {
+            RouteType::Fallback => Self {
                 base: base_segments,
                 fallback_sources: vec![source],
                 ..Default::default()
             },
-            Some(FinalSegment::NotFound) => Self {
+            RouteType::NotFound => Self {
                 base: base_segments,
                 not_found_sources: vec![source],
                 ..Default::default()
@@ -243,10 +246,10 @@ impl RouteTreeVc {
     #[turbo_tasks::function]
     pub fn new_route(
         base_segments: Vec<BaseSegment>,
-        final_segment: Option<FinalSegment>,
+        route_type: RouteType,
         source: GetContentSourceContentVc,
     ) -> Self {
-        RouteTree::new_route(base_segments, final_segment, source).cell()
+        RouteTree::new_route(base_segments, route_type, source).cell()
     }
 
     /// Gets the [`GetContentSourceContent`]s for the given path.

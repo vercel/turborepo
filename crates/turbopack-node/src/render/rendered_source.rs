@@ -21,7 +21,7 @@ use turbopack_dev_server::{
         asset_graph::AssetGraphContentSourceVc,
         conditional::ConditionalContentSourceVc,
         lazy_instantiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
-        route_tree::{BaseSegment, FinalSegment, RouteTreeVc},
+        route_tree::{BaseSegment, RouteTreeVc, RouteType},
         ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
         ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceVc, GetContentSourceContent,
         GetContentSourceContentVc, ProxyResult,
@@ -49,7 +49,7 @@ pub fn create_node_rendered_source(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     base_segments: Vec<BaseSegment>,
-    final_segment: Option<FinalSegment>,
+    route_type: RouteType,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
     pathname: StringVc,
@@ -62,7 +62,7 @@ pub fn create_node_rendered_source(
         cwd,
         env,
         base_segments,
-        final_segment,
+        route_type,
         server_root,
         route_match,
         pathname,
@@ -89,7 +89,7 @@ pub struct NodeRenderContentSource {
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     base_segments: Vec<BaseSegment>,
-    final_segment: Option<FinalSegment>,
+    route_type: RouteType,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
     pathname: StringVc,
@@ -159,7 +159,7 @@ impl ContentSource for NodeRenderContentSource {
         let this = self_vc.await?;
         Ok(RouteTreeVc::new_route(
             this.base_segments.clone(),
-            this.final_segment.clone(),
+            this.route_type.clone(),
             self_vc.into(),
         ))
     }
@@ -273,8 +273,8 @@ impl Introspectable for NodeRenderContentSource {
     #[turbo_tasks::function]
     async fn details(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
-            "base: {:?}\nfinal: {:?}",
-            self.base_segments, self.final_segment
+            "base: {:?}\ntype: {:?}",
+            self.base_segments, self.route_type
         )))
     }
 

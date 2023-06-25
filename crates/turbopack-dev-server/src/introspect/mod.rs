@@ -13,7 +13,7 @@ use turbopack_core::{
 use turbopack_ecmascript::utils::FormatIter;
 
 use crate::source::{
-    route_tree::{FinalSegment, RouteTreeVc, RouteTreesVc},
+    route_tree::{FinalSegment, RouteTreeVc, RouteTreesVc, RouteType},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
     GetContentSourceContent, GetContentSourceContentVc,
 };
@@ -80,8 +80,8 @@ impl ContentSource for IntrospectionSource {
     #[turbo_tasks::function]
     fn get_routes(self_vc: IntrospectionSourceVc) -> RouteTreeVc {
         RouteTreesVc::cell(vec![
-            RouteTreeVc::new_route(Vec::new(), None, self_vc.into()),
-            RouteTreeVc::new_route(Vec::new(), Some(FinalSegment::CatchAll), self_vc.into()),
+            RouteTreeVc::new_route(Vec::new(), RouteType::Exact, self_vc.into()),
+            RouteTreeVc::new_route(Vec::new(), RouteType::CatchAll, self_vc.into()),
         ])
         .merge()
     }

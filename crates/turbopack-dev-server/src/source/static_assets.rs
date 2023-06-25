@@ -10,7 +10,7 @@ use turbopack_core::{
 };
 
 use super::{
-    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc},
+    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc, RouteType},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
     GetContentSourceContent,
 };
@@ -57,7 +57,7 @@ async fn get_routes_from_directory(dir: FileSystemPathVc) -> Result<RouteTreeVc>
             DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) => {
                 Some(RouteTreeVc::new_route(
                     vec![BaseSegment::Static(name.clone())],
-                    None,
+                    RouteType::Exact,
                     StaticAssetsContentSourceItemVc::new(*path).into(),
                 ))
             }

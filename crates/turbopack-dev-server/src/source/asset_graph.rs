@@ -16,7 +16,7 @@ use turbopack_core::{
 };
 
 use super::{
-    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc},
+    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc, RouteType},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
     GetContentSourceContent,
 };
@@ -165,7 +165,7 @@ impl ContentSource for AssetGraphContentSource {
             .map(|(path, asset)| {
                 RouteTreeVc::new_route(
                     BaseSegment::from_static_pathname(path).collect(),
-                    None,
+                    RouteType::Exact,
                     AssetGraphGetContentSourceContentVc::new(
                         self_vc,
                         Value::new(UnresolvedAsset(*asset)),

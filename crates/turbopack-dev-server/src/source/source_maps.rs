@@ -10,7 +10,7 @@ use turbopack_core::{
 
 use super::{
     query::QueryValue,
-    route_tree::{BaseSegment, RouteTreeVc},
+    route_tree::{BaseSegment, RouteTreeVc, RouteType},
     wrapping_source::{
         ContentSourceProcessor, ContentSourceProcessorVc, WrappedGetContentSourceContentVc,
     },
@@ -47,7 +47,7 @@ impl SourceMapContentSourceVc {
 impl ContentSource for SourceMapContentSource {
     #[turbo_tasks::function]
     fn get_routes(self_vc: SourceMapContentSourceVc) -> RouteTreeVc {
-        RouteTreeVc::new_route(vec![BaseSegment::Dynamic], None, self_vc.into())
+        RouteTreeVc::new_route(vec![BaseSegment::Dynamic], RouteType::Exact, self_vc.into())
     }
 }
 

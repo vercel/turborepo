@@ -10,7 +10,7 @@ use turbopack_core::introspect::{
     asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
 };
 use turbopack_dev_server::source::{
-    route_tree::{BaseSegment, FinalSegment, RouteTreeVc},
+    route_tree::{BaseSegment, RouteTreeVc, RouteType},
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
     ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceVc, GetContentSourceContent,
     GetContentSourceContentVc,
@@ -29,7 +29,7 @@ pub fn create_node_api_source(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     base_segments: Vec<BaseSegment>,
-    final_segment: Option<FinalSegment>,
+    route_type: RouteType,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
     pathname: StringVc,
@@ -41,7 +41,7 @@ pub fn create_node_api_source(
         cwd,
         env,
         base_segments,
-        final_segment,
+        route_type,
         server_root,
         pathname,
         route_match,
@@ -64,7 +64,7 @@ pub struct NodeApiContentSource {
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     base_segments: Vec<BaseSegment>,
-    final_segment: Option<FinalSegment>,
+    route_type: RouteType,
     server_root: FileSystemPathVc,
     pathname: StringVc,
     route_match: RouteMatcherVc,
@@ -88,7 +88,7 @@ impl ContentSource for NodeApiContentSource {
         let this = self_vc.await?;
         Ok(RouteTreeVc::new_route(
             this.base_segments.clone(),
-            this.final_segment.clone(),
+            this.route_type.clone(),
             self_vc.into(),
         ))
     }
@@ -180,8 +180,8 @@ impl Introspectable for NodeApiContentSource {
     #[turbo_tasks::function]
     async fn details(&self) -> Result<StringVc> {
         Ok(StringVc::cell(format!(
-            "base: {:?}\nfinal: {:?}",
-            self.base_segments, self.final_segment
+            "base: {:?}\ntype: {:?}",
+            self.base_segments, self.route_type
         )))
     }
 
