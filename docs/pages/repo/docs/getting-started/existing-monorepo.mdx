@@ -41,19 +41,15 @@ Specify your `packages` in `pnpm-workspace.yaml`.
 packages:
   - "packages/*"
   - "apps/*"
-  // Note that the below is NOT supported
-  - "nested-workspaces/**"
 ```
+
+<Callout>
+`pnpm` supports the ability declare workspaces in deeply nested subdirectories with a `**` Turborepo does not currently support this behavior.
+</Callout>
   </Tab>
 </Tabs>
 
 After configuring your workspaces, re-run your package manager's `install` command.
-
-<Callout>
-  Note: Nested workspaces are not supported. As package names are required to be
-  unique, moving each package to be a child of the monorepo's root package
-  should meet your needs.
-</Callout>
 
 ## Install `turbo`
 
