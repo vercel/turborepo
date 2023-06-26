@@ -12,8 +12,8 @@
     "USERPROFILE"
   ],
   // This is probably overkill, but we do things per-platform often enough that we should segment
-  // everything by OS
-  "globalEnv": ["OS"],
+  // everything by OS and RUNNER_OS. This will segment between GH actions and everything else for now.
+  "globalEnv": ["OS", "RUNNER_OS"],
   "pipeline": {
     "test": {
       "outputs": ["coverage/**/*"],
