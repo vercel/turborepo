@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      // outputs are set in workspace configs
+      "dependsOn": ["^build"]
+    },
+    "lint": {},
+    "dev": {
+      "persistent": true,
+      "cache": false
+    }
+  }
+}

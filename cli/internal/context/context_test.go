@@ -1,14 +1,20 @@
 package context
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 	"testing"
 
 	testifyAssert "github.com/stretchr/testify/assert"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/lockfile"
+	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/workspace"
+	"gotest.tools/v3/assert"
 )
 
 func Test_isWorkspaceReference(t *testing.T) {
@@ -135,13 +141,44 @@ func TestBuildPackageGraph_DuplicateNames(t *testing.T) {
 		PackageManager: "pnpm@7.15.0",
 	}
 
-	_, actualErr := BuildPackageGraph(path, pkgJSON)
+	_, actualErr := BuildPackageGraph(path, pkgJSON, "pnpm")
 
 	// Not asserting the full error message, because it includes a path with slashes and backslashes
 	// getting the regex incantation to check that is not worth it.
 	// We have to use regex because the actual error may be different depending on which workspace was
 	// added first and which one was second, causing the error.
 	testifyAssert.Regexp(t, regexp.MustCompile("^Failed to add workspace \"same-name\".+$"), actualErr)
+}
+
+func Test_populateExternalDeps_NoTransitiveDepsWithoutLockfile(t *testing.T) {
+	path := getTestDir(t, "dupe-workspace-names")
+	pkgJSON := &fs.PackageJSON{
+		Name:           "dupe-workspace-names",
+		PackageManager: "pnpm@7.15.0",
+	}
+
+	pm, err := packagemanager.GetPackageManager("pnpm")
+	assert.NilError(t, err)
+	pm.UnmarshalLockfile = func(rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
+		return nil, errors.New("bad lockfile")
+	}
+	context := Context{
+		WorkspaceInfos: workspace.Catalog{
+			PackageJSONs: map[string]*fs.PackageJSON{
+				"a": {},
+			},
+		},
+		WorkspaceNames: []string{},
+		PackageManager: pm,
+		mutex:          sync.Mutex{},
+	}
+	var warnings Warnings
+	err = context.populateExternalDeps(path, pkgJSON, &warnings)
+	assert.NilError(t, err)
+
+	assert.DeepEqual(t, pkgJSON.ExternalDepsHash, "")
+	assert.DeepEqual(t, context.WorkspaceInfos.PackageJSONs["a"].ExternalDepsHash, "")
+	assert.Assert(t, warnings.errorOrNil() != nil)
 }
 
 // This is duplicated from fs.turbo_json_test.go.

@@ -4,7 +4,6 @@ inputs:
   target:
     description: "Compilation target"
     required: true
-
   targets:
     description: "Comma-separated list of target triples to install for this toolchain"
     required: false
@@ -69,6 +68,10 @@ runs:
       uses: baptiste0928/cargo-install@v1
       with:
         crate: cargo-sweep
+
+    - name: "Install cargo-groups"
+      shell: bash
+      run: cargo install cargo-groups
 
     - name: "Run cargo-sweep"
       uses: ./.github/actions/cargo-sweep

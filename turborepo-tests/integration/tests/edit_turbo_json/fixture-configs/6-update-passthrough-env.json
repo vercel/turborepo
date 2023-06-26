@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["foo.txt"],
+  "globalEnv": ["SOME_ENV_VAR"],
+  "globalPassThroughEnv": ["PASSTHROUGH"],
+  "pipeline": {
+    "build": {
+      "env": ["NODE_ENV"],
+      "outputs": []
+    },
+    "my-app#build": {
+      "outputs": ["banana.txt", "apple.json"]
+    }
+  }
+}

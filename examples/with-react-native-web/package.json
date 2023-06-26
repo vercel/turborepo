@@ -5,14 +5,14 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "clean": "turbo run clean && rm -rf node_modules",
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "clean": "turbo clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore"
   },
   "devDependencies": {
     "prettier": "^2.7.1",
-    "turbo": "latest"
+    "turbo": "^1.9.3"
   },
-  "packageManager": "yarn@1.22.17"
+  "packageManager": "yarn@1.22.19"
 }

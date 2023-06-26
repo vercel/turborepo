@@ -1,10 +1,12 @@
 use std::{
+    fmt,
     net::SocketAddr,
     process::{Command, Stdio},
     str::FromStr,
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use serde::{Deserialize, Serialize};
 use swc_core::ecma::preset_env::{Version, Versions};
 use turbo_tasks::{
     primitives::{BoolVc, OptionStringVc, StringVc, StringsVc},
@@ -25,18 +27,41 @@ impl ServerAddr {
         Self(Some(addr))
     }
 
-    pub fn to_string(&self) -> Result<String> {
-        let addr = &self.0.context("expected some server address")?;
-        let uri = if addr.ip().is_loopback() || addr.ip().is_unspecified() {
-            match addr.port() {
-                80 => "http://localhost".to_string(),
-                443 => "https://localhost".to_string(),
-                _ => format!("http://localhost:{}", addr.port()),
+    /// The hostname portion of the address, without the port. Prefers
+    /// "localhost" when using a loopback address.
+    pub fn hostname(&self) -> Option<String> {
+        self.0.map(|addr| {
+            if addr.ip().is_loopback() || addr.ip().is_unspecified() {
+                "localhost".to_string()
+            } else if addr.is_ipv6() {
+                // When using an IPv6 address, we need to surround the IP in brackets to
+                // distinguish it from the port's `:`.
+                format!("[{}]", addr.ip())
+            } else {
+                addr.ip().to_string()
             }
-        } else {
-            format!("http://{}", addr)
-        };
-        Ok(uri)
+        })
+    }
+
+    pub fn ip(&self) -> Option<String> {
+        self.0.map(|addr| addr.ip().to_string())
+    }
+
+    pub fn port(&self) -> Option<u16> {
+        self.0.map(|addr| addr.port())
+    }
+
+    /// Constructs a URL out of the address.
+    pub fn to_string(&self) -> Result<String> {
+        let (hostname, port) = self
+            .hostname()
+            .zip(self.port())
+            .context("expected some server address")?;
+        let protocol = Protocol::from(port);
+        Ok(match port {
+            80 | 443 => format!("{protocol}://{hostname}"),
+            _ => format!("{protocol}://{hostname}:{port}"),
+        })
     }
 }
 
@@ -45,6 +70,62 @@ impl ServerAddrVc {
     #[turbo_tasks::function]
     pub fn empty() -> Self {
         ServerAddr(None).cell()
+    }
+}
+
+/// A simple serializable structure meant to carry information about Turbopack's
+/// server to node rendering processes.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerInfo {
+    pub ip: String,
+    pub port: u16,
+
+    /// The protocol, either `http` or `https`
+    pub protocol: Protocol,
+
+    /// A formatted hostname (eg, "localhost") or the IP address of the server
+    pub hostname: String,
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Protocol {
+    HTTP,
+    HTTPS,
+}
+
+impl From<u16> for Protocol {
+    fn from(value: u16) -> Self {
+        match value {
+            443 => Self::HTTPS,
+            _ => Self::HTTP,
+        }
+    }
+}
+
+impl fmt::Display for Protocol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::HTTP => f.write_str("http"),
+            Self::HTTPS => f.write_str("https"),
+        }
+    }
+}
+
+impl TryFrom<&ServerAddr> for ServerInfo {
+    type Error = anyhow::Error;
+
+    fn try_from(addr: &ServerAddr) -> Result<Self> {
+        if addr.0.is_none() {
+            bail!("cannot unwrap ServerAddr");
+        };
+        let port = addr.port().unwrap();
+        Ok(ServerInfo {
+            ip: addr.ip().unwrap(),
+            hostname: addr.hostname().unwrap(),
+            port,
+            protocol: Protocol::from(port),
+        })
     }
 }
 

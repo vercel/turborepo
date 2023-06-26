@@ -1,6 +1,9 @@
+use anyhow::Result;
+use async_recursion::async_recursion;
+use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::trace::TraceRawVcs;
-use turbo_tasks_fs::FileSystemPath;
+use turbo_tasks_fs::{FileSystemPath, FileSystemPathVc};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
 pub enum ContextCondition {
@@ -8,6 +11,7 @@ pub enum ContextCondition {
     Any(Vec<ContextCondition>),
     Not(Box<ContextCondition>),
     InDirectory(String),
+    InPath(FileSystemPathVc),
 }
 
 impl ContextCondition {
@@ -27,18 +31,30 @@ impl ContextCondition {
         ContextCondition::Not(Box::new(condition))
     }
 
+    #[async_recursion]
     /// Returns true if the condition matches the context.
-    pub fn matches(&self, context: &FileSystemPath) -> bool {
+    pub async fn matches(&self, context: &FileSystemPath) -> Result<bool> {
         match self {
-            ContextCondition::All(conditions) => conditions.iter().all(|c| c.matches(context)),
-            ContextCondition::Any(conditions) => conditions.iter().any(|c| c.matches(context)),
-            ContextCondition::Not(condition) => !condition.matches(context),
-            ContextCondition::InDirectory(dir) => {
-                context.path.starts_with(&format!("{dir}/"))
-                    || context.path.contains(&format!("/{dir}/"))
-                    || context.path.ends_with(&format!("/{dir}"))
-                    || context.path == *dir
+            ContextCondition::All(conditions) => {
+                stream::iter(conditions)
+                    .fold(Ok(true), |acc, c| async move {
+                        Ok(acc? && c.matches(context).await?)
+                    })
+                    .await
             }
+            ContextCondition::Any(conditions) => {
+                stream::iter(conditions)
+                    .fold(Ok(true), |acc, c| async move {
+                        Ok(acc? || c.matches(context).await?)
+                    })
+                    .await
+            }
+            ContextCondition::Not(condition) => condition.matches(context).await.map(|b| !b),
+            ContextCondition::InPath(path) => Ok(context.is_inside(&*path.await?)),
+            ContextCondition::InDirectory(dir) => Ok(context.path.starts_with(&format!("{dir}/"))
+                || context.path.contains(&format!("/{dir}/"))
+                || context.path.ends_with(&format!("/{dir}"))
+                || context.path == *dir),
         }
     }
 }

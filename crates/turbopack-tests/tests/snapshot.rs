@@ -7,50 +7,72 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use dunce::canonicalize;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
-use test_generator::test_resources;
 use turbo_tasks::{debug::ValueDebug, NothingVc, TryJoinIterExt, TurboTasks, Value, ValueToString};
 use turbo_tasks_env::DotenvProcessEnvVc;
 use turbo_tasks_fs::{
     json::parse_json_with_source_context, util::sys_to_unix, DiskFileSystemVc, FileSystem,
-    FileSystemPathVc, FileSystemVc,
+    FileSystemPathReadRef, FileSystemPathVc,
 };
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc},
-    module_options::ModuleOptionsContext,
+    ecmascript::{EcmascriptModuleAssetVc, TransformPluginVc},
+    module_options::{
+        CustomEcmascriptTransformPlugins, CustomEcmascriptTransformPluginsVc, JsxTransformOptions,
+        JsxTransformOptionsVc, ModuleOptionsContext,
+    },
     resolve_options_context::ResolveOptionsContext,
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
+use turbopack_build::BuildChunkingContextVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, dev::DevChunkingContextVc, ChunkableAsset,
-        ChunkableAssetVc,
+        ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc,
+        EvaluatableAssetsVc,
     },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
-    environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
+    environment::{
+        BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment,
+        NodeJsEnvironment,
+    },
     issue::IssueVc,
     reference::all_referenced_assets,
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
 };
+use turbopack_dev::DevChunkingContextVc;
+use turbopack_ecmascript_plugins::transform::{
+    emotion::{EmotionTransformConfig, EmotionTransformer},
+    styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
+};
+use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_test_utils::snapshot::{diff, expected, matches_expected, snapshot_issues};
 
 fn register() {
+    turbo_tasks::register();
+    turbo_tasks_env::register();
+    turbo_tasks_fs::register();
     turbopack::register();
+    turbopack_build::register();
+    turbopack_dev::register();
+    turbopack_env::register();
+    turbopack_ecmascript_plugins::register();
+    turbopack_ecmascript_runtime::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_snapshot.rs"));
 }
 
 static WORKSPACE_ROOT: Lazy<String> = Lazy::new(|| {
     let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    package_root
+    canonicalize(package_root)
+        .unwrap()
         .parent()
         .unwrap()
         .parent()
@@ -61,11 +83,32 @@ static WORKSPACE_ROOT: Lazy<String> = Lazy::new(|| {
 });
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SnapshotOptions {
     #[serde(default = "default_browserslist")]
     browserslist: String,
     #[serde(default = "default_entry")]
     entry: String,
+    #[serde(default)]
+    runtime: Runtime,
+    #[serde(default = "default_runtime_type")]
+    runtime_type: RuntimeType,
+    #[serde(default)]
+    environment: Environment,
+}
+
+#[derive(Debug, Deserialize, Default)]
+enum Runtime {
+    #[default]
+    Dev,
+    Build,
+}
+
+#[derive(Debug, Deserialize, Default)]
+enum Environment {
+    #[default]
+    Browser,
+    NodeJs,
 }
 
 impl Default for SnapshotOptions {
@@ -73,6 +116,9 @@ impl Default for SnapshotOptions {
         SnapshotOptions {
             browserslist: default_browserslist(),
             entry: default_entry(),
+            runtime: Default::default(),
+            runtime_type: default_runtime_type(),
+            environment: Default::default(),
         }
     }
 }
@@ -87,20 +133,29 @@ fn default_entry() -> String {
     "input/index.js".to_owned()
 }
 
-#[test_resources("crates/turbopack-tests/tests/snapshot/*/*/")]
-fn test(resource: &'static str) {
+fn default_runtime_type() -> RuntimeType {
+    // We don't want all snapshot tests to also include the runtime every time,
+    // as this would be a lot of extra noise whenever we make a single change to
+    // the runtime. Instead, we only include the runtime in snapshots that
+    // specifically request it via "runtime": "Default".
+    RuntimeType::Dummy
+}
+
+#[testing::fixture("tests/snapshot/*/*/")]
+fn test(resource: PathBuf) {
+    let resource = canonicalize(resource).unwrap();
     // Separating this into a different function fixes my IDE's types for some
     // reason...
     run(resource).unwrap();
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn run(resource: &'static str) -> Result<()> {
+async fn run(resource: PathBuf) -> Result<()> {
     register();
 
     let tt = TurboTasks::new(MemoryBackend::default());
     let task = tt.spawn_once_task(async move {
-        let out = run_test(resource.to_string());
+        let out = run_test(resource.to_str().unwrap());
         let captured_issues = IssueVc::peek_issues_with_path(out)
             .await?
             .strongly_consistent()
@@ -130,14 +185,11 @@ async fn run(resource: &'static str) -> Result<()> {
 
     Ok(())
 }
-#[turbo_tasks::function]
-async fn run_test(resource: String) -> Result<FileSystemPathVc> {
-    let test_path = Path::new(&resource)
-        // test_resources matches and returns relative paths from the workspace root,
-        // but pwd in cargo tests is the crate under test.
-        .strip_prefix("crates/turbopack-tests")?;
-    assert!(test_path.exists(), "{} does not exist", resource);
 
+#[turbo_tasks::function]
+async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
+    let test_path = Path::new(resource);
+    assert!(test_path.exists(), "{} does not exist", resource);
     assert!(
         test_path.is_dir(),
         "{} is not a directory. Snapshot tests must be directories.",
@@ -153,48 +205,74 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
     let project_fs = DiskFileSystemVc::new("project".to_string(), WORKSPACE_ROOT.clone());
     let project_root = project_fs.root();
 
-    let fs_path = Path::new(&resource);
-    let resource = sys_to_unix(&resource);
-    let path = root_fs.root().join(&resource);
-    let project_path = project_root.join(&resource);
+    let relative_path = test_path.strip_prefix(&*WORKSPACE_ROOT)?;
+    let relative_path = sys_to_unix(relative_path.to_str().unwrap());
+    let path = root_fs.root().join(&relative_path);
+    let project_path = project_root.join(&relative_path);
 
     let entry_asset = project_path.join(&options.entry);
     let entry_paths = vec![entry_asset];
 
-    let runtime_entries = maybe_load_env(project_fs.into(), fs_path).await?;
-
     let env = EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::Browser(
-            // TODO: load more from options.json
-            BrowserEnvironment {
-                dom: true,
-                web_worker: false,
-                service_worker: false,
-                browserslist_query: options.browserslist.to_owned(),
+        Value::new(match options.environment {
+            Environment::Browser => {
+                ExecutionEnvironment::Browser(
+                    // TODO: load more from options.json
+                    BrowserEnvironment {
+                        dom: true,
+                        web_worker: false,
+                        service_worker: false,
+                        browserslist_query: options.browserslist.to_owned(),
+                    }
+                    .into(),
+                )
             }
-            .into(),
-        )),
+            Environment::NodeJs => {
+                ExecutionEnvironment::NodeJsBuildTime(
+                    // TODO: load more from options.json
+                    NodeJsEnvironment::default().into(),
+                )
+            }
+        }),
         Value::new(EnvironmentIntention::Client),
     );
-    let compile_time_info = CompileTimeInfo {
-        environment: env,
-        defines: compile_time_defines!(
-            process.env.NODE_ENV = "development",
-            DEFINED_VALUE = "value",
-            DEFINED_TRUE = true,
-            A.VERY.LONG.DEFINED.VALUE = "value",
+    let compile_time_info = CompileTimeInfo::builder(env)
+        .defines(
+            compile_time_defines!(
+                process.env.NODE_ENV = "development",
+                DEFINED_VALUE = "value",
+                DEFINED_TRUE = true,
+                A.VERY.LONG.DEFINED.VALUE = "value",
+            )
+            .cell(),
         )
-        .cell(),
-    }
-    .cell();
+        .cell();
 
+    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPluginsVc::cell(
+        CustomEcmascriptTransformPlugins {
+            source_transforms: vec![
+                TransformPluginVc::cell(Box::new(
+                    EmotionTransformer::new(&EmotionTransformConfig {
+                        sourcemap: Some(false),
+                        ..Default::default()
+                    })
+                    .expect("Should be able to create emotion transformer"),
+                )),
+                TransformPluginVc::cell(Box::new(StyledComponentsTransformer::new(
+                    &StyledComponentsTransformConfig::default(),
+                ))),
+            ],
+            output_transforms: vec![],
+        },
+    ));
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
         compile_time_info,
         ModuleOptionsContext {
-            enable_jsx: true,
-            enable_emotion: true,
-            enable_styled_components: true,
+            enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
+                development: true,
+                ..Default::default()
+            })),
             preset_env_versions: Some(env),
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
@@ -203,6 +281,7 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
                 }
                 .cell(),
             )],
+            custom_ecma_transform_plugins,
             ..Default::default()
         }
         .into(),
@@ -226,11 +305,33 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
     )
     .into();
 
+    let runtime_entries = maybe_load_env(context, project_path)
+        .await?
+        .map(|asset| EvaluatableAssetsVc::one(EvaluatableAssetVc::from_asset(asset, context)));
+
     let chunk_root_path = path.join("output");
     let static_root_path = path.join("static");
-    let chunking_context =
-        DevChunkingContextVc::builder(project_root, path, chunk_root_path, static_root_path, env)
-            .build();
+    let chunking_context: ChunkingContextVc = match options.runtime {
+        Runtime::Dev => DevChunkingContextVc::builder(
+            project_root,
+            path,
+            chunk_root_path,
+            static_root_path,
+            env,
+        )
+        .runtime_type(options.runtime_type)
+        .build(),
+        Runtime::Build => BuildChunkingContextVc::builder(
+            project_root,
+            path,
+            chunk_root_path,
+            static_root_path,
+            env,
+        )
+        .runtime_type(options.runtime_type)
+        .build()
+        .into(),
+    };
 
     let expected_paths = expected(chunk_root_path)
         .await?
@@ -245,18 +346,18 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
         )
     });
 
-    let chunks = modules
+    let chunk_groups = modules
         .map(|module| async move {
             if let Some(ecmascript) = EcmascriptModuleAssetVc::resolve_from(module).await? {
                 // TODO: Load runtime entries from snapshots
-                Ok(ecmascript.as_evaluated_chunk(chunking_context, runtime_entries))
-            } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
-                Ok(chunkable.as_chunk(
-                    chunking_context,
-                    Value::new(AvailabilityInfo::Root {
-                        current_availability_root: chunkable.into(),
-                    }),
+                Ok(chunking_context.evaluated_chunk_group(
+                    ecmascript.as_root_chunk(chunking_context),
+                    runtime_entries
+                        .unwrap_or_else(EvaluatableAssetsVc::empty)
+                        .with_entry(ecmascript.into()),
                 ))
+            } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
+                Ok(chunking_context.chunk_group(chunkable.as_root_chunk(chunking_context)))
             } else {
                 // TODO convert into a serve-able asset
                 Err(anyhow!(
@@ -270,12 +371,15 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
 
     let mut seen = HashSet::new();
     let mut queue = VecDeque::with_capacity(32);
-    for chunk in chunks {
-        queue.push_back(chunk.as_asset());
+    for chunks in chunk_groups {
+        for chunk in &*chunks.await? {
+            queue.push_back(*chunk);
+        }
     }
 
+    let output_path = path.await?;
     while let Some(asset) = queue.pop_front() {
-        walk_asset(asset, &mut seen, &mut queue)
+        walk_asset(asset, &output_path, &mut seen, &mut queue)
             .await
             .context(format!(
                 "Failed to walk asset {}",
@@ -296,6 +400,7 @@ async fn run_test(resource: String) -> Result<FileSystemPathVc> {
 
 async fn walk_asset(
     asset: AssetVc,
+    output_path: &FileSystemPathReadRef,
     seen: &mut HashSet<FileSystemPathVc>,
     queue: &mut VecDeque<AssetVc>,
 ) -> Result<()> {
@@ -305,19 +410,21 @@ async fn walk_asset(
         return Ok(());
     }
 
-    diff(path, asset.content()).await?;
+    if path.await?.is_inside(output_path) {
+        // Only consider assets that should be written to disk.
+        diff(path, asset.content()).await?;
+    }
+
     queue.extend(&*all_referenced_assets(asset).await?);
 
     Ok(())
 }
 
 async fn maybe_load_env(
-    project_fs: FileSystemVc,
-    path: &Path,
-) -> Result<Option<EcmascriptChunkPlaceablesVc>> {
+    _context: AssetContextVc,
+    path: FileSystemPathVc,
+) -> Result<Option<AssetVc>> {
     let dotenv_path = path.join("input/.env");
-    let dotenv_path = sys_to_unix(dotenv_path.to_str().unwrap());
-    let dotenv_path = project_fs.root().join(&dotenv_path);
 
     if !dotenv_path.read().await?.is_content() {
         return Ok(None);
@@ -325,7 +432,5 @@ async fn maybe_load_env(
 
     let env = DotenvProcessEnvVc::new(None, dotenv_path);
     let asset = ProcessEnvAssetVc::new(dotenv_path, env.into());
-    Ok(Some(EcmascriptChunkPlaceablesVc::cell(vec![
-        asset.as_ecmascript_chunk_placeable()
-    ])))
+    Ok(Some(asset.into()))
 }

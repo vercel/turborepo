@@ -1,80 +1,116 @@
-use std::{borrow::Cow, thread::available_parallelism, time::Duration};
+use std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, bail, Result};
+use async_stream::try_stream as generator;
+use futures::{
+    channel::mpsc::{unbounded, UnboundedSender},
+    pin_mut, SinkExt, StreamExt,
+};
 use futures_retry::{FutureRetry, RetryPolicy};
 use indexmap::indexmap;
+use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use turbo_tasks::{
+    duration_span, mark_finished,
     primitives::{JsonValueVc, StringVc},
-    CompletionVc, TryJoinIterExt, Value, ValueToString,
+    util::SharedError,
+    CompletionVc, RawVc, TryJoinIterExt, Value, ValueToString,
 };
+use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{
-    glob::GlobVc, rope::Rope, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
+    glob::GlobVc, to_sys_path, DirectoryEntry, File, FileSystemPathVc, ReadGlobResultVc,
 };
 use turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{dev::DevChunkingContextVc, ChunkGroupVc},
+    chunk::{
+        ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+    },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    reference_type::{InnerAssetsVc, ReferenceType},
     source_asset::SourceAssetVc,
     virtual_asset::VirtualAssetVc,
-};
-use turbopack_ecmascript::{
-    chunk::EcmascriptChunkPlaceablesVc, EcmascriptInputTransform, EcmascriptInputTransformsVc,
-    EcmascriptModuleAssetType, EcmascriptModuleAssetVc, InnerAssetsVc,
 };
 
 use crate::{
     bootstrap::NodeJsBootstrapAsset,
     embed_js::embed_file_path,
-    emit,
-    pool::{NodeJsPool, NodeJsPoolVc},
-    EvalJavaScriptIncomingMessage, EvalJavaScriptOutgoingMessage, StructuredError,
+    emit, emit_package_json, internal_assets_for_source_mapping,
+    pool::{FormattingMode, NodeJsOperation, NodeJsPool, NodeJsPoolVc},
+    source_map::StructuredError,
+    AssetsForSourceMappingVc,
 };
 
-#[turbo_tasks::value(shared)]
-#[derive(Clone, Debug)]
-pub enum JavaScriptValue {
-    Error,
-    Value(Rope),
-    // TODO, support stream in the future
-    Stream(#[turbo_tasks(trace_ignore)] Vec<u8>),
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum EvalJavaScriptOutgoingMessage<'a> {
+    #[serde(rename_all = "camelCase")]
+    Evaluate { args: Vec<&'a JsonValue> },
 }
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum EvalJavaScriptIncomingMessage {
+    FileDependency {
+        path: String,
+    },
+    BuildDependency {
+        path: String,
+    },
+    DirDependency {
+        path: String,
+        glob: String,
+    },
+    EmittedError {
+        severity: IssueSeverity,
+        error: StructuredError,
+    },
+    Value {
+        // TODO(WEB-735): There is like 3 levels of JSON string encoding that goes into returning a
+        // value, making it really inefficient.
+        data: String,
+    },
+    End {
+        data: Option<String>,
+    },
+    Error(StructuredError),
+}
+
+type LoopResult = ControlFlow<Result<Option<String>, StructuredError>, String>;
+
+type EvaluationItem = Result<Bytes, SharedError>;
+type JavaScriptStream = Stream<EvaluationItem>;
+
+#[turbo_tasks::value(eq = "manual", cell = "new", serialization = "none")]
+struct JavaScriptStreamSender {
+    #[turbo_tasks(trace_ignore, debug_ignore)]
+    get: Box<dyn Fn() -> UnboundedSender<Result<Bytes, SharedError>> + Send + Sync>,
+}
+
+#[turbo_tasks::value(transparent)]
+#[derive(Clone, Debug)]
+pub struct JavaScriptEvaluation(#[turbo_tasks(trace_ignore)] JavaScriptStream);
 
 #[turbo_tasks::function]
 /// Pass the file you cared as `runtime_entries` to invalidate and reload the
 /// evaluated result automatically.
 pub async fn get_evaluate_pool(
-    context_path: FileSystemPathVc,
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     context: AssetContextVc,
-    intermediate_output_path: FileSystemPathVc,
-    runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    chunking_context: ChunkingContextVc,
+    runtime_entries: Option<EvaluatableAssetsVc>,
     additional_invalidation: CompletionVc,
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
-    let chunking_context = DevChunkingContextVc::builder(
-        context_path,
-        intermediate_output_path,
-        intermediate_output_path.join("chunks"),
-        intermediate_output_path.join("assets"),
-        context.compile_time_info().environment(),
-    )
-    .build();
-
-    let runtime_asset = EcmascriptModuleAssetVc::new(
+    let runtime_asset = context.process(
         SourceAssetVc::new(embed_file_path("ipc/evaluate.ts")).into(),
-        context,
-        Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: false,
-        }]),
-        context.compile_time_info(),
-    )
-    .as_asset();
+        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+    );
 
     let module_path = module_asset.ident().path().await?;
     let file_name = module_path.file_name();
@@ -85,8 +121,8 @@ pub async fn get_evaluate_pool(
     } else {
         Cow::Owned(format!("{file_name}.js"))
     };
-    let path = intermediate_output_path.join(file_name.as_ref());
-    let entry_module = EcmascriptModuleAssetVc::new_with_inner_assets(
+    let path = chunking_context.output_root().join(file_name.as_ref());
+    let entry_module = context.process(
         VirtualAssetVc::new(
             runtime_asset.ident().path().join("evaluate.js"),
             File::from(
@@ -96,51 +132,55 @@ pub async fn get_evaluate_pool(
             .into(),
         )
         .into(),
-        context,
-        Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: false,
-        }]),
-        context.compile_time_info(),
-        InnerAssetsVc::cell(indexmap! {
+        Value::new(ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
             "INNER".to_string() => module_asset,
             "RUNTIME".to_string() => runtime_asset
-        }),
+        }))),
     );
+
+    let Some(entry_module) = EvaluatableAssetVc::resolve_from(entry_module).await? else {
+        bail!("Internal module is not evaluatable");
+    };
 
     let (Some(cwd), Some(entrypoint)) = (to_sys_path(cwd).await?, to_sys_path(path).await?) else {
         panic!("can only evaluate from a disk filesystem");
     };
 
     let runtime_entries = {
-        let globals_module = EcmascriptModuleAssetVc::new(
+        let globals_module = context.process(
             SourceAssetVc::new(embed_file_path("globals.ts")).into(),
-            context,
-            Value::new(EcmascriptModuleAssetType::Typescript),
-            EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-                use_define_for_class_fields: false,
-            }]),
-            context.compile_time_info(),
-        )
-        .as_ecmascript_chunk_placeable();
+            Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+        );
 
-        let mut entries = vec![globals_module];
-        if let Some(other_entries) = runtime_entries {
-            for entry in &*other_entries.await? {
-                entries.push(*entry)
-            }
+        let Some(globals_module) = EvaluatableAssetVc::resolve_from(globals_module).await? else {
+            bail!("Internal module is not evaluatable");
         };
 
-        Some(EcmascriptChunkPlaceablesVc::cell(entries))
+        let mut entries = vec![globals_module];
+        if let Some(runtime_entries) = runtime_entries {
+            for &entry in &*runtime_entries.await? {
+                entries.push(entry)
+            }
+        }
+
+        EvaluatableAssetsVc::cell(entries)
     };
 
     let bootstrap = NodeJsBootstrapAsset {
         path,
-        chunk_group: ChunkGroupVc::from_chunk(
-            entry_module.as_evaluated_chunk(chunking_context, runtime_entries),
-        ),
-    };
-    emit(bootstrap.cell().into(), intermediate_output_path).await?;
+        chunking_context,
+        entry: entry_module.as_root_chunk(chunking_context),
+        evaluatable_assets: runtime_entries.with_entry(entry_module),
+    }
+    .cell()
+    .into();
+
+    let output_root = chunking_context.output_root();
+    let emit_package = emit_package_json(output_root);
+    let emit = emit(bootstrap, output_root);
+    let assets_for_source_mapping = internal_assets_for_source_mapping(bootstrap, output_root);
+    emit_package.await?;
+    emit.await?;
     let pool = NodeJsPool::new(
         cwd,
         entrypoint,
@@ -149,6 +189,9 @@ pub async fn get_evaluate_pool(
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
+        assets_for_source_mapping,
+        output_root,
+        chunking_context.context_path().root(),
         available_parallelism().map_or(1, |v| v.get()),
         debug,
     );
@@ -180,79 +223,206 @@ impl futures_retry::ErrorHandler<anyhow::Error> for PoolErrorHandler {
 /// Pass the file you cared as `runtime_entries` to invalidate and reload the
 /// evaluated result automatically.
 #[turbo_tasks::function]
-pub async fn evaluate(
-    context_path: FileSystemPathVc,
+pub fn evaluate(
     module_asset: AssetVc,
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
     context_ident_for_issue: AssetIdentVc,
     context: AssetContextVc,
-    intermediate_output_path: FileSystemPathVc,
-    runtime_entries: Option<EcmascriptChunkPlaceablesVc>,
+    chunking_context: ChunkingContextVc,
+    runtime_entries: Option<EvaluatableAssetsVc>,
     args: Vec<JsonValueVc>,
     additional_invalidation: CompletionVc,
     debug: bool,
-) -> Result<JavaScriptValueVc> {
-    let pool = get_evaluate_pool(
-        context_path,
+) -> JavaScriptEvaluationVc {
+    // Note the following code uses some hacks to create a child task that produces
+    // a stream that is returned by this task.
+
+    // We create a new cell in this task, which will be updated from the
+    // [compute_evaluate_stream] task.
+    let cell = turbo_tasks::macro_helpers::find_cell_by_type(*JAVASCRIPTEVALUATION_VALUE_TYPE_ID);
+
+    // We initialize the cell with a stream that is open, but has no values.
+    // The first [compute_evaluate_stream] pipe call will pick up that stream.
+    let (sender, receiver) = unbounded();
+    cell.update_shared(JavaScriptEvaluation(JavaScriptStream::new_open(
+        vec![],
+        Box::new(receiver),
+    )));
+    let initial = Mutex::new(Some(sender));
+
+    // run the evaluation as side effect
+    compute_evaluate_stream(
         module_asset,
         cwd,
         env,
+        context_ident_for_issue,
         context,
-        intermediate_output_path,
+        chunking_context,
         runtime_entries,
+        args,
         additional_invalidation,
         debug,
-    )
-    .await?;
+        JavaScriptStreamSender {
+            get: Box::new(move || {
+                if let Some(sender) = initial.lock().take() {
+                    sender
+                } else {
+                    // In cases when only [compute_evaluate_stream] is (re)executed, we need to
+                    // update the old stream with a new value.
+                    let (sender, receiver) = unbounded();
+                    cell.update_shared(JavaScriptEvaluation(JavaScriptStream::new_open(
+                        vec![],
+                        Box::new(receiver),
+                    )));
+                    sender
+                }
+            }),
+        }
+        .cell(),
+    );
 
-    let args = args.into_iter().try_join().await?;
+    let raw: RawVc = cell.into();
+    raw.into()
+}
 
-    // Workers in the pool could be in a bad state that we didn't detect yet.
-    // The bad state might even be unnoticable until we actually send the job to the
-    // worker. So we retry picking workers from the pools until we succeed
-    // sending the job.
+#[turbo_tasks::function]
+async fn compute_evaluate_stream(
+    module_asset: AssetVc,
+    cwd: FileSystemPathVc,
+    env: ProcessEnvVc,
+    context_ident_for_issue: AssetIdentVc,
+    context: AssetContextVc,
+    chunking_context: ChunkingContextVc,
+    runtime_entries: Option<EvaluatableAssetsVc>,
+    args: Vec<JsonValueVc>,
+    additional_invalidation: CompletionVc,
+    debug: bool,
+    sender: JavaScriptStreamSenderVc,
+) {
+    mark_finished();
+    let Ok(sender) = sender.await else {
+        // Impossible to handle the error in a good way.
+        return;
+    };
 
-    let (mut operation, _) = FutureRetry::new(
-        || async {
-            let mut operation = pool.operation().await?;
-            operation
-                .send(EvalJavaScriptOutgoingMessage::Evaluate {
-                    args: args.iter().map(|v| &**v).collect(),
-                })
-                .await?;
-            Ok(operation)
-        },
-        PoolErrorHandler,
-    )
-    .await
-    .map_err(|(e, _)| e)?;
+    let stream = generator! {
+        let pool = get_evaluate_pool(
+            module_asset,
+            cwd,
+            env,
+            context,
+            chunking_context,
+            runtime_entries,
+            additional_invalidation,
+            debug,
+        );
 
+        // Read this strongly consistent, since we don't want to run inconsistent
+        // node.js code.
+        let pool = pool.strongly_consistent().await?;
+
+        let args = args.into_iter().try_join().await?;
+        // Assume this is a one-off operation, so we can kill the process
+        // TODO use a better way to decide that.
+        let kill = args.is_empty();
+
+        // Workers in the pool could be in a bad state that we didn't detect yet.
+        // The bad state might even be unnoticeable until we actually send the job to the
+        // worker. So we retry picking workers from the pools until we succeed
+        // sending the job.
+
+        let (mut operation, _) = FutureRetry::new(
+            || async {
+                let mut operation = pool.operation().await?;
+                operation
+                    .send(EvalJavaScriptOutgoingMessage::Evaluate {
+                        args: args.iter().map(|v| &**v).collect(),
+                    })
+                    .await?;
+                Ok(operation)
+            },
+            PoolErrorHandler,
+        )
+        .await
+        .map_err(|(e, _)| e)?;
+
+        // The evaluation sent an initial intermediate value without completing. We'll
+        // need to spawn a new thread to continually pull data out of the process,
+        // and ferry that along.
+        loop {
+            let output = pull_operation(&mut operation, cwd, &pool, context_ident_for_issue, chunking_context).await?;
+
+            match output {
+                LoopResult::Continue(data) => {
+                    yield data.into();
+                }
+                LoopResult::Break(Ok(Some(data))) => {
+                    yield data.into();
+                    break;
+                }
+                LoopResult::Break(Err(e)) => {
+                    let error = e.print(pool.assets_for_source_mapping, pool.assets_root, chunking_context.context_path().root(), FormattingMode::Plain).await?;
+                    Err(anyhow!("Node.js evaluation failed: {}", error))?;
+                    break;
+                }
+                LoopResult::Break(Ok(None)) => {
+                    break;
+                }
+            }
+        }
+
+        if kill {
+            operation.wait_or_kill().await?;
+        }
+    };
+
+    let mut sender = (sender.get)();
+    pin_mut!(stream);
+    while let Some(value) = stream.next().await {
+        if sender.send(value).await.is_err() {
+            return;
+        }
+        if sender.flush().await.is_err() {
+            return;
+        }
+    }
+}
+
+/// Repeatedly pulls from the NodeJsOperation until we receive a
+/// value/error/end.
+async fn pull_operation(
+    operation: &mut NodeJsOperation,
+    cwd: FileSystemPathVc,
+    pool: &NodeJsPool,
+    context_ident_for_issue: AssetIdentVc,
+    chunking_context: ChunkingContextVc,
+) -> Result<LoopResult> {
     let mut file_dependencies = Vec::new();
     let mut dir_dependencies = Vec::new();
+
+    let guard = duration_span!("Node.js evaluation");
+
     let output = loop {
         match operation.recv().await? {
             EvalJavaScriptIncomingMessage::Error(error) => {
                 EvaluationIssue {
                     error,
                     context_ident: context_ident_for_issue,
-                    cwd,
+                    assets_for_source_mapping: pool.assets_for_source_mapping,
+                    assets_root: pool.assets_root,
+                    project_dir: chunking_context.context_path().root(),
                 }
                 .cell()
                 .as_issue()
                 .emit();
                 // Do not reuse the process in case of error
                 operation.disallow_reuse();
-                break JavaScriptValue::Error;
+                // Issue emitted, we want to break but don't want to return an error
+                break ControlFlow::Break(Ok(None));
             }
-            EvalJavaScriptIncomingMessage::JsonValue { data } => {
-                if args.is_empty() {
-                    // Assume this is a one-off operation, so we can kill the process
-                    // TODO use a better way to decide that.
-                    operation.wait_or_kill().await?;
-                }
-                break JavaScriptValue::Value(data.into());
-            }
+            EvalJavaScriptIncomingMessage::Value { data } => break ControlFlow::Continue(data),
+            EvalJavaScriptIncomingMessage::End { data } => break ControlFlow::Break(Ok(data)),
             EvalJavaScriptIncomingMessage::FileDependency { path } => {
                 // TODO We might miss some changes that happened during execution
                 file_dependencies.push(cwd.join(&path).read());
@@ -276,9 +446,11 @@ pub async fn evaluate(
             EvalJavaScriptIncomingMessage::EmittedError { error, severity } => {
                 EvaluateEmittedErrorIssue {
                     context: context_ident_for_issue.path(),
-                    cwd,
                     error,
                     severity: severity.cell(),
+                    assets_for_source_mapping: pool.assets_for_source_mapping,
+                    assets_root: pool.assets_root,
+                    project_dir: chunking_context.context_path().root(),
                 }
                 .cell()
                 .as_issue()
@@ -286,6 +458,8 @@ pub async fn evaluate(
             }
         }
     };
+    drop(guard);
+
     // Read dependencies to make them a dependencies of this task. This task will
     // execute again when they change.
     for dep in file_dependencies {
@@ -294,15 +468,18 @@ pub async fn evaluate(
     for dep in dir_dependencies {
         dep.await?;
     }
-    Ok(output.cell())
+
+    Ok(output)
 }
 
 /// An issue that occurred while evaluating node code.
 #[turbo_tasks::value(shared)]
 pub struct EvaluationIssue {
     pub context_ident: AssetIdentVc,
-    pub cwd: FileSystemPathVc,
     pub error: StructuredError,
+    pub assets_for_source_mapping: AssetsForSourceMappingVc,
+    pub assets_root: FileSystemPathVc,
+    pub project_dir: FileSystemPathVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -324,13 +501,14 @@ impl Issue for EvaluationIssue {
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<StringVc> {
-        let cwd = to_sys_path(self.cwd.root())
-            .await?
-            .context("Must have path on disk")?;
-
         Ok(StringVc::cell(
             self.error
-                .print(Default::default(), &cwd.to_string_lossy())
+                .print(
+                    self.assets_for_source_mapping,
+                    self.assets_root,
+                    self.project_dir,
+                    FormattingMode::Plain,
+                )
                 .await?,
         ))
     }
@@ -416,9 +594,11 @@ async fn dir_dependency_shallow(glob: ReadGlobResultVc) -> Result<CompletionVc> 
 #[turbo_tasks::value(shared)]
 pub struct EvaluateEmittedErrorIssue {
     pub context: FileSystemPathVc,
-    pub cwd: FileSystemPathVc,
     pub severity: IssueSeverityVc,
     pub error: StructuredError,
+    pub assets_for_source_mapping: AssetsForSourceMappingVc,
+    pub assets_root: FileSystemPathVc,
+    pub project_dir: FileSystemPathVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -445,13 +625,14 @@ impl Issue for EvaluateEmittedErrorIssue {
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<StringVc> {
-        let root = to_sys_path(self.cwd.root())
-            .await?
-            .context("Must have path on disk")?;
-
         Ok(StringVc::cell(
             self.error
-                .print(Default::default(), &root.to_string_lossy())
+                .print(
+                    self.assets_for_source_mapping,
+                    self.assets_root,
+                    self.project_dir,
+                    FormattingMode::Plain,
+                )
                 .await?,
         ))
     }

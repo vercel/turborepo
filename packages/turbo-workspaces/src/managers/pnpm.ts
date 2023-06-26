@@ -14,8 +14,9 @@ import {
   ManagerHandler,
 } from "../types";
 import {
+  getMainStep,
   expandPaths,
-  getWorkspaceName,
+  getWorkspaceInfo,
   expandWorkspaces,
   getPnpmWorkspaces,
   getPackageJson,
@@ -47,11 +48,15 @@ async function detect(args: DetectArgs): Promise<boolean> {
 async function read(args: ReadArgs): Promise<Project> {
   const isPnpm = await detect(args);
   if (!isPnpm) {
-    throw new ConvertError("Not a pnpm project");
+    throw new ConvertError("Not a pnpm project", {
+      type: "package_manager-unexpected",
+    });
   }
 
+  const { name, description } = getWorkspaceInfo(args);
   return {
-    name: getWorkspaceName(args),
+    name,
+    description,
     packageManager: "pnpm",
     paths: expandPaths({
       root: args.workspaceRoot,
@@ -78,41 +83,50 @@ async function read(args: ReadArgs): Promise<Project> {
  */
 async function create(args: CreateArgs): Promise<void> {
   const { project, to, logger, options } = args;
+  const hasWorkspaces = project.workspaceData.globs.length > 0;
 
-  logger.mainStep(`Creating pnpm workspaces`);
+  logger.mainStep(
+    getMainStep({ action: "create", packageManager: "pnpm", project })
+  );
+
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
   packageJson.packageManager = `${to.name}@${to.version}`;
   logger.rootStep(
     `adding "packageManager" field to ${project.name} root "package.json"`
   );
-  logger.rootStep(`adding "pnpm-workspace.yaml"`);
 
   // write the changes
   if (!options?.dry) {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
-    fs.writeFileSync(
-      path.join(project.paths.root, "pnpm-workspace.yaml"),
-      `packages:\n${project.workspaceData.globs
-        .map((w) => `  - "${w}"`)
-        .join("\n")}`
-    );
+
+    if (hasWorkspaces) {
+      logger.rootStep(`adding "pnpm-workspace.yaml"`);
+      fs.writeFileSync(
+        path.join(project.paths.root, "pnpm-workspace.yaml"),
+        `packages:\n${project.workspaceData.globs
+          .map((w) => `  - "${w}"`)
+          .join("\n")}`
+      );
+    }
   }
 
-  // root dependencies
-  updateDependencies({
-    workspace: { name: "root", paths: project.paths },
-    project,
-    to,
-    logger,
-    options,
-  });
+  if (hasWorkspaces) {
+    // root dependencies
+    updateDependencies({
+      workspace: { name: "root", paths: project.paths },
+      project,
+      to,
+      logger,
+      options,
+    });
 
-  // workspace dependencies
-  logger.workspaceHeader();
-  project.workspaceData.workspaces.forEach((workspace) =>
-    updateDependencies({ workspace, project, to, logger, options })
-  );
+    // workspace dependencies
+    logger.workspaceHeader();
+    project.workspaceData.workspaces.forEach((workspace) =>
+      updateDependencies({ workspace, project, to, logger, options })
+    );
+  }
 }
 
 /**
@@ -125,16 +139,28 @@ async function create(args: CreateArgs): Promise<void> {
  */
 async function remove(args: RemoveArgs): Promise<void> {
   const { project, logger, options } = args;
+  const hasWorkspaces = project.workspaceData.globs.length > 0;
 
-  logger.mainStep(`Removing pnpm workspaces`);
-  if (project.paths.workspaceConfig) {
+  logger.mainStep(
+    getMainStep({ action: "remove", packageManager: "pnpm", project })
+  );
+  const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
+
+  if (project.paths.workspaceConfig && hasWorkspaces) {
     logger.subStep(`removing "pnpm-workspace.yaml"`);
     if (!options?.dry) {
       fs.rmSync(project.paths.workspaceConfig, { force: true });
     }
   }
 
+  logger.subStep(
+    `removing "packageManager" field in ${project.name} root "package.json"`
+  );
+  delete packageJson.packageManager;
+
   if (!options?.dry) {
+    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+
     // collect all workspace node_modules directories
     const allModulesDirs = [
       project.paths.nodeModules,
@@ -149,7 +175,9 @@ async function remove(args: RemoveArgs): Promise<void> {
         )
       );
     } catch (err) {
-      throw new ConvertError("Failed to remove node_modules");
+      throw new ConvertError("Failed to remove node_modules", {
+        type: "error_removing_node_modules",
+      });
     }
   }
 }
@@ -191,8 +219,7 @@ async function convertLock(args: ConvertArgs): Promise<void> {
           stdio: "ignore",
           cwd: project.paths.root,
         });
-      } catch (err) {
-        console.error(project.paths.lockfile, err);
+      } finally {
         fs.rmSync(project.paths.lockfile, { force: true });
       }
     }

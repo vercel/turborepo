@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "error": {
+      "dependsOn": ["okay"],
+      "outputs": ["foo"]
+    },
+    "okay": {
+      "outputs": []
+    },
+    "okay2": {
+      "dependsOn": ["error"],
+      "outputs": []
+    }
+  }
+}

@@ -1,6 +1,7 @@
 #![feature(proc_macro_diagnostic)]
 #![feature(allow_internal_unstable)]
 #![feature(box_patterns)]
+#![allow(clippy::too_many_arguments)]
 
 mod derive;
 mod func;
@@ -33,6 +34,11 @@ pub fn derive_value_debug_format_attr(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(DeterministicHash, attributes(turbo_tasks))]
 pub fn derive_deterministic_hash(input: TokenStream) -> TokenStream {
     derive::derive_deterministic_hash(input)
+}
+
+#[proc_macro_derive(TaskInput, attributes(turbo_tasks))]
+pub fn derive_task_input(input: TokenStream) -> TokenStream {
+    derive::derive_task_input(input)
 }
 
 /// Creates a ValueVc struct for a `struct` or `enum` that represent

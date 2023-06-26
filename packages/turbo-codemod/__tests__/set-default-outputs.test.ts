@@ -1,5 +1,5 @@
 import { transformer } from "../src/transforms/set-default-outputs";
-import { setupTestFixtures } from "turbo-test-utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("set-default-outputs", () => {
   const { useFixture } = setupTestFixtures({

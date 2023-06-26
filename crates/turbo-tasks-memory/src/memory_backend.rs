@@ -19,6 +19,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use nohash_hasher::BuildNoHashHasher;
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
+use tracing::{trace_span, Instrument};
 use turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
@@ -243,7 +244,7 @@ impl MemoryBackend {
 
             let mem_limit = self.memory_limit;
 
-            let usage = turbo_malloc::TurboMalloc::memory_usage();
+            let usage = turbo_tasks_malloc::TurboMalloc::memory_usage();
             let target = if idle {
                 mem_limit * 3 / 4
             } else {
@@ -691,6 +692,14 @@ impl Backend for MemoryBackend {
         self.connect_task_child(parent_task, task, turbo_tasks);
     }
 
+    fn mark_own_task_as_finished(
+        &self,
+        task: TaskId,
+        _turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
+        self.with_task(task, |task| task.mark_as_finished(self))
+    }
+
     fn create_transient_task(
         &self,
         task_type: TransientTaskType,
@@ -759,6 +768,7 @@ impl Job {
     ) {
         match self {
             Job::RemoveFromScopes(tasks, scopes) => {
+                let _guard = trace_span!("Job::RemoveFromScopes").entered();
                 for task in tasks {
                     backend.with_task(task, |task| {
                         task.remove_from_scopes(scopes.iter().copied(), backend, turbo_tasks)
@@ -767,6 +777,7 @@ impl Job {
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::RemoveFromScope(tasks, scope) => {
+                let _guard = trace_span!("Job::RemoveFromScope").entered();
                 for task in tasks {
                     backend.with_task(task, |task| {
                         task.remove_from_scope(scope, backend, turbo_tasks)
@@ -775,6 +786,7 @@ impl Job {
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::ScheduleWhenDirtyFromScope(tasks) => {
+                let _guard = trace_span!("Job::ScheduleWhenDirtyFromScope").entered();
                 for task in tasks.into_iter() {
                     backend.with_task(task, |task| {
                         task.schedule_when_dirty_from_scope(backend, turbo_tasks);
@@ -791,16 +803,20 @@ impl Job {
                     .run_low(async {
                         run_add_to_scope_queue(queue, scope, merging_scopes, backend, turbo_tasks);
                     })
+                    .instrument(trace_span!("Job::AddToScopeQueue"))
                     .await;
             }
             Job::RemoveFromScopeQueue(queue, id) => {
+                let _guard = trace_span!("Job::AddToScopeQueue").entered();
                 run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::UnloadRootScope(id) => {
+                let span = trace_span!("Job::UnloadRootScope");
                 if let Some(future) = turbo_tasks.wait_foreground_done_excluding_own() {
-                    future.await;
+                    future.instrument(span.clone()).await;
                 }
+                let _guard = span.entered();
                 backend.with_scope(id, |scope| {
                     scope.assert_unused();
                 });
@@ -809,6 +825,7 @@ impl Job {
                 }
             }
             Job::GarbageCollection => {
+                let _guard = trace_span!("Job::GarbageCollection").entered();
                 backend.run_gc(true, turbo_tasks);
             }
         }

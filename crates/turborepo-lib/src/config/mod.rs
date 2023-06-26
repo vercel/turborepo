@@ -1,11 +1,13 @@
 mod client;
 mod env;
 mod repo;
+mod turbo;
 mod user;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 pub use client::{ClientConfig, ClientConfigLoader};
 #[cfg(not(windows))]
 use dirs_next::config_dir;
@@ -18,12 +20,15 @@ use dirs_next::data_local_dir as config_dir;
 pub use env::MappedEnvironment;
 pub use repo::{get_repo_config_path, RepoConfig, RepoConfigLoader};
 use serde::Serialize;
+pub use turbo::{SpacesJson, TurboJson};
 pub use user::{UserConfig, UserConfigLoader};
 
-pub fn default_user_config_path() -> Result<PathBuf> {
-    config_dir()
-        .map(|p| p.join("turborepo").join("config.json"))
-        .context("default config path not found")
+pub fn default_user_config_path() -> Result<Utf8PathBuf> {
+    Ok(Utf8PathBuf::try_from(
+        config_dir()
+            .map(|p| p.join("turborepo").join("config.json"))
+            .context("default config path not found")?,
+    )?)
 }
 
 #[allow(dead_code)]
@@ -31,7 +36,7 @@ pub fn data_dir() -> Option<PathBuf> {
     dirs_next::data_dir().map(|p| p.join("turborepo"))
 }
 
-fn write_to_disk<T>(path: &Path, config: &T) -> Result<()>
+fn write_to_disk<T>(path: &Utf8Path, config: &T) -> Result<()>
 where
     T: Serialize,
 {

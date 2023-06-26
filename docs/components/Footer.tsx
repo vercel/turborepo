@@ -63,8 +63,8 @@ const navigation = {
     {
       name: "Contact Sales",
       href: `https://vercel.com/${
-        site === "repo" ? "solutions" : "contact"
-      }/turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink`,
+        site === "repo" ? "solutions/turborepo" : "contact/sales"
+      }?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink`,
     },
     { name: "Twitter", href: "https://twitter.com/vercel" },
   ],

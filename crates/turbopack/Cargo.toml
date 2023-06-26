@@ -16,6 +16,7 @@ bench_against_node_nft = []
 [dependencies]
 anyhow = { workspace = true }
 async-recursion = "1.0.2"
+futures = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 lazy_static = { workspace = true }
 regex = { workspace = true }
@@ -24,17 +25,18 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 
 turbo-tasks = { workspace = true }
+turbo-tasks-env = { workspace = true }
 turbo-tasks-fs = { workspace = true }
 turbopack-core = { workspace = true }
 turbopack-css = { workspace = true }
 turbopack-ecmascript = { workspace = true }
+turbopack-ecmascript-plugins = { workspace = true }
 turbopack-env = { workspace = true }
+turbopack-image = { workspace = true }
 turbopack-json = { workspace = true }
 turbopack-mdx = { workspace = true }
 turbopack-node = { workspace = true }
 turbopack-static = { workspace = true }
-# turbo-tasks-rocksdb could be a dev dependencies, but optional dev dependencies are not allowed
-# turbo-tasks-rocksdb = { path = "../turbo-tasks-rocksdb", optional = true }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }
@@ -42,9 +44,8 @@ difference = "2.0"
 futures = { workspace = true }
 rstest = { workspace = true }
 rstest_reuse = "0.5.0"
-test-generator = { workspace = true }
 tokio = { workspace = true }
-turbo-malloc = { workspace = true }
+turbo-tasks-malloc = { workspace = true, default-features = false }
 turbo-tasks-memory = { workspace = true }
 
 [build-dependencies]

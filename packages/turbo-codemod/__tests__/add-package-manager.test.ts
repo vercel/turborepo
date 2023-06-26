@@ -1,5 +1,5 @@
 import { transformer } from "../src/transforms/add-package-manager";
-import { setupTestFixtures } from "turbo-test-utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 import fs from "fs-extra";
 import * as getPackageManager from "../src/utils/getPackageManager";
 import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";

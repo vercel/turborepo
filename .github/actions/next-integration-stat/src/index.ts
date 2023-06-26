@@ -53,18 +53,17 @@ type ExistingComment =
       ReturnType<Octokit["rest"]["issues"]["listComments"]>
     >["data"][number]
   | undefined;
-interface FailedJobResult {
+interface JobResult {
   job: string;
-  /**
-   * Failed test file name
-   */
-  name: string;
   data: TestResult;
 }
 interface TestResultManifest {
   nextjsVersion: string;
   ref: string;
-  result: Array<FailedJobResult>;
+  buildTime?: string;
+  buildSize?: string;
+  result: Array<JobResult>;
+  flakyMonitorJobResults: Array<JobResult>;
 }
 
 // A comment marker to identify the comment created by this action.
@@ -265,70 +264,6 @@ async function createSlackPostSummary(payload: {
   fs.writeFileSync("./slack-payload.json", slackPayloadJson);
 }
 
-// Filter out logs that does not contain failed tests, then parse test results into json
-function collectFailedTestResults(
-  splittedLogs: Array<string>,
-  job: Job
-): Array<FailedJobResult> {
-  const ret = splittedLogs
-    .filter((logs) => {
-      if (
-        !logs.includes(`failed to pass within`) ||
-        !logs.includes("--test output start--")
-      ) {
-        console.log(
-          `Couldn't find failed tests in logs, not posting for ${job.name}`
-        );
-        return false;
-      }
-      return true;
-    })
-    .map((logs) => {
-      const failedSplitLogs = logs.split(`failed to pass within`);
-      let logLine = failedSplitLogs.shift();
-      const ret = [];
-
-      while (logLine) {
-        let failedTest = logLine;
-        // Look for the failed test file name
-        failedTest = failedTest?.includes("test/")
-          ? failedTest?.split("\n").pop()?.trim()
-          : "";
-
-        // Parse JSON-stringified test output between marker
-        try {
-          const testData = logs
-            ?.split("--test output start--")
-            .pop()
-            ?.split("--test output end--")
-            ?.shift()
-            ?.trim()!;
-
-          ret.push({
-            job: job.name,
-            name: failedTest,
-            data: JSON.parse(testData),
-          });
-        } catch (_) {
-          console.log(`Failed to parse test data`, { logs });
-        } finally {
-          logLine = failedSplitLogs.shift();
-        }
-      }
-
-      return ret;
-    })
-    .flatMap((x) => x)
-    .filter(Boolean) as Array<FailedJobResult>;
-
-  console.log(`Found failed test results from job`, {
-    job: job.name,
-    failedTests: ret.map((x) => x.name),
-  });
-
-  return ret;
-}
-
 // Collect necessary inputs to run actions,
 async function getInputs(): Promise<{
   token: string;
@@ -420,7 +355,7 @@ async function getInputs(): Promise<{
 }
 
 // Iterate all the jobs in the current workflow run, collect & parse logs for failed jobs for the postprocessing.
-async function getFailedJobResults(
+async function getJobResults(
   octokit: Octokit,
   token: string,
   sha: string
@@ -447,6 +382,30 @@ async function getFailedJobResults(
     nextjsBuildSetupJob
   );
 
+  // Find out next-swc build workflow
+  const nextSwcBuildJob = jobs?.find((job) =>
+    job.name.includes("Build Next.js for the turbopack integration test")
+  );
+  const nextSwcBuildLogs = (
+    await fetchJobLogsFromWorkflow(octokit, token, nextSwcBuildJob)
+  ).logs.split("\n");
+  const buildTimeMatch = (
+    nextSwcBuildLogs.find((line) => line.includes("Time (abs ≡):")) ?? ""
+  ).match(/  ([+-]?(?=\.\d|\d)(?:\d+)?(?:\.?\d*))(?:[Ee]([+-]?\d+))? s/);
+  const buildTime = buildTimeMatch.length >= 2 ? buildTimeMatch[1] : undefined;
+  const nextSwcBuildSize = (
+    nextSwcBuildLogs.find(
+      (line) =>
+        line.includes("NEXT_SWC_FILESIZE:") &&
+        /NEXT_SWC_FILESIZE: (\d+)/.test(line)
+    ) ?? ""
+  ).match(/NEXT_SWC_FILESIZE: (\d+)/)[1];
+
+  console.log(`Found next-swc build information from build logs`, {
+    buildTime,
+    nextSwcBuildSize,
+  });
+
   // Filter out next.js integration test jobs
   const integrationTestJobs = jobs?.filter((job) =>
     /Next\.js integration test \([^)]*\) \([^)]*\)$/.test(job.name)
@@ -467,25 +426,45 @@ async function getFailedJobResults(
 
   const testResultManifest: TestResultManifest = {
     nextjsVersion,
+    buildTime,
+    buildSize: nextSwcBuildSize,
     ref: sha,
   } as any;
 
-  const failedJobResults = fullJobLogsFromWorkflow.reduce(
+  const [jobResults, flakyMonitorJobResults] = fullJobLogsFromWorkflow.reduce(
     (acc, { logs, job }) => {
-      // Split logs per each test suites, exclude if it's arbitrary log does not contain test data
-      const splittedLogs = logs
-        .split("NEXT_INTEGRATION_TEST: true")
-        .filter((log) => log.includes("--test output start--"));
+      const subset = job.name.includes("FLAKY_SUBSET");
+      const index = subset ? 1 : 0;
 
-      // Iterate each chunk of logs, find out test name and corresponding test data
-      const failedTestResultsData = collectFailedTestResults(splittedLogs, job);
+      const splittedLogs = logs.split("--test output start--");
+      // First item isn't test data, it's just the log header
+      splittedLogs.shift();
+      for (const logLine of splittedLogs) {
+        try {
+          const testData = logLine.split("--test output end--")[0].trim()!;
 
-      return acc.concat(failedTestResultsData);
+          const data = JSON.parse(testData);
+          acc[index].push({
+            job: job.name,
+            data,
+          });
+        } catch (err) {
+          console.log("Failed to parse test results", {
+            err,
+            logs,
+          });
+        }
+      }
+
+      return acc;
     },
-    [] as Array<FailedJobResult>
+    [[], []] as [Array<JobResult>, Array<JobResult>]
   );
 
-  testResultManifest.result = failedJobResults;
+  console.log(`Flakyness test subset results`, { flakyMonitorJobResults });
+
+  testResultManifest.flakyMonitorJobResults = flakyMonitorJobResults;
+  testResultManifest.result = jobResults;
 
   // Collect all test results into single manifest to store into file. This'll allow to upload / compare test results
   // across different runs.
@@ -620,7 +599,7 @@ async function getTestResultDiffBase(
     }
 
     return acc.date >= date ? acc : { date, value };
-  }, null as any as { date: Date; value: typeof testResultJsonTree[0] });
+  }, null as any as { date: Date; value: (typeof testResultJsonTree)[0] });
 
   if (!actualTestResultTree || !actualTestResultTree?.value?.sha) {
     console.log("There is no test results json stored in the base yet");
@@ -650,11 +629,28 @@ async function getTestResultDiffBase(
   }
 }
 
+function withoutRetries(results: Array<JobResult>): Array<JobResult> {
+  results = results.slice().reverse();
+  const seenNames = new Set();
+  results = results.filter((job) => {
+    if (
+      job.data.testResults.some((testResult) => seenNames.has(testResult.name))
+    ) {
+      return false;
+    }
+    job.data.testResults.forEach((testResult) =>
+      seenNames.add(testResult.name)
+    );
+    return true;
+  });
+  return results.reverse();
+}
+
 function getTestSummary(
   sha: string,
   shouldDiffWithMain: boolean,
   baseResults: TestResultManifest | null,
-  failedJobResults: TestResultManifest,
+  jobResults: TestResultManifest,
   shouldShareTestSummaryToSlack: boolean
 ) {
   // Read current tests summary
@@ -666,19 +662,20 @@ function getTestSummary(
     currentTestPassedCaseCount,
     currentTestTotalCaseCount,
     currentTestFailedNames,
-  } = failedJobResults.result.reduce(
+  } = withoutRetries(jobResults.result).reduce(
     (acc, value) => {
-      const { data, name } = value;
+      const { data } = value;
       acc.currentTestFailedSuiteCount += data.numFailedTestSuites;
       acc.currentTestPassedSuiteCount += data.numPassedTestSuites;
       acc.currentTestTotalSuiteCount += data.numTotalTestSuites;
       acc.currentTestFailedCaseCount += data.numFailedTests;
       acc.currentTestPassedCaseCount += data.numPassedTests;
       acc.currentTestTotalCaseCount += data.numTotalTests;
-      if (name.length > 2) {
-        acc.currentTestFailedNames.push(name);
+      for (const testResult of data.testResults ?? []) {
+        if (testResult.status !== "passed" && testResult.name.length > 2) {
+          acc.currentTestFailedNames.push(testResult.name);
+        }
       }
-
       return acc;
     },
     {
@@ -692,8 +689,7 @@ function getTestSummary(
     }
   );
 
-  const shortCurrentNextJsVersion =
-    failedJobResults.nextjsVersion.split(" ")[1];
+  const shortCurrentNextJsVersion = jobResults.nextjsVersion.split(" ")[1];
 
   console.log(
     "Current test summary",
@@ -743,18 +739,19 @@ function getTestSummary(
     baseTestPassedCaseCount,
     baseTestTotalCaseCount,
     baseTestFailedNames,
-  } = baseResults.result.reduce(
+  } = withoutRetries(baseResults.result).reduce(
     (acc, value) => {
-      const { data, name } = value;
+      const { data } = value;
       acc.baseTestFailedSuiteCount += data.numFailedTestSuites;
       acc.baseTestPassedSuiteCount += data.numPassedTestSuites;
       acc.baseTestTotalSuiteCount += data.numTotalTestSuites;
       acc.baseTestFailedCaseCount += data.numFailedTests;
       acc.baseTestPassedCaseCount += data.numPassedTests;
       acc.baseTestTotalCaseCount += data.numTotalTests;
-
-      if (name.length > 2) {
-        acc.baseTestFailedNames.push(name);
+      for (const testResult of data.testResults ?? []) {
+        if (testResult.status !== "passed" && testResult.name.length > 2) {
+          acc.baseTestFailedNames.push(testResult.name);
+        }
       }
       return acc;
     },
@@ -925,7 +922,7 @@ async function run() {
         (!prNumber && !shouldDiffWithMain);
 
   // Collect current PR's failed test results
-  const failedJobResults = await getFailedJobResults(octokit, token, sha);
+  const jobResults = await getJobResults(octokit, token, sha);
 
   // Get the base to compare against
   const baseResults = noBaseComparison
@@ -939,38 +936,47 @@ async function run() {
   const perJobFailedLists = {};
 
   // Consturct a comment body to post test report with summary & full details.
-  const comments = failedJobResults.result.reduce((acc, value, idx) => {
-    const { name: failedTest, data: testData } = value;
+  const comments = jobResults.result.reduce((acc, value, idx) => {
+    const { data: testData } = value;
 
     const commentValues = [];
     // each job have nested array of test results
     // Fill in each individual test suite failures
     const groupedFails = {};
-    const testResult = testData.testResults?.[0];
-    const resultMessage = stripAnsi(testResult?.message);
-    const failedAssertions = testResult?.assertionResults?.filter(
-      (res) => res.status === "failed"
-    );
+    let resultMessage = "";
+    for (const testResult of testData.testResults ?? []) {
+      resultMessage += stripAnsi(testResult?.message);
+      resultMessage += "\n\n";
+      const failedAssertions = testResult?.assertionResults?.filter(
+        (res) => res.status === "failed"
+      );
 
-    for (const fail of failedAssertions ?? []) {
-      const ancestorKey = fail?.ancestorTitles?.join(" > ")!;
+      for (const fail of failedAssertions ?? []) {
+        const ancestorKey = fail?.ancestorTitles?.join(" > ")!;
 
-      if (!groupedFails[ancestorKey]) {
-        groupedFails[ancestorKey] = [];
+        if (!groupedFails[ancestorKey]) {
+          groupedFails[ancestorKey] = [];
+        }
+        groupedFails[ancestorKey].push(fail);
       }
-      groupedFails[ancestorKey].push(fail);
     }
 
-    if (!failedTestLists.includes(failedTest)) {
-      commentValues.push(`\`${failedTest}\``);
-      failedTestLists.push(failedTest);
+    let hasFailedTest = false;
+    for (const test of testData.testResults ?? []) {
+      if (test.status !== "passed") {
+        const failedTest = test.name;
+        if (!failedTestLists.includes(failedTest)) {
+          commentValues.push(`\`${failedTest}\``);
+          failedTestLists.push(failedTest);
 
-      if (!perJobFailedLists[value.job]) {
-        perJobFailedLists[value.job] = [];
+          if (!perJobFailedLists[value.job]) {
+            perJobFailedLists[value.job] = [];
+          }
+          perJobFailedLists[value.job].push(failedTest);
+        }
       }
-      perJobFailedLists[value.job].push(failedTest);
     }
-    commentValues.push(`\n`);
+    if (hasFailedTest) commentValues.push(`\n`);
 
     // Currently there are too many test failures to post since it creates several comments.
     // Only expands if explicitly requested in the option.
@@ -983,6 +989,7 @@ async function run() {
         });
       }
 
+      resultMessage = resultMessage.trim();
       const strippedResultMessage =
         resultMessage.length >= 50000
           ? resultMessage.substring(0, 50000) +
@@ -1028,7 +1035,7 @@ async function run() {
           sha,
           shouldDiffWithMain,
           noBaseComparison ? null : baseResults,
-          failedJobResults,
+          jobResults,
           shouldReportSlack
         ),
       ],
@@ -1052,7 +1059,7 @@ async function run() {
       return;
     }
 
-    if (failedJobResults.result.length === 0) {
+    if (jobResults.result.length === 0) {
       console.log("No failed test results found :tada:");
       await postCommentAsync(
         `### Next.js test passes :green_circle: ${BOT_COMMENT_MARKER}` +

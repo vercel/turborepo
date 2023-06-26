@@ -2,11 +2,11 @@ import { ConvertCommandArgument, ConvertCommandOptions } from "./types";
 import inquirer from "inquirer";
 import { Logger } from "../../logger";
 import chalk from "chalk";
-import { getAvailablePackageManagers } from "turbo-utils";
+import { getAvailablePackageManagers } from "@turbo/utils";
 import { directoryInfo } from "../../utils";
 import getWorkspaceDetails from "../../getWorkspaceDetails";
 import { PackageManager } from "../../types";
-import convert from "../../convert";
+import { convertProject } from "../../convert";
 
 function isPackageManagerDisabled({
   packageManager,
@@ -75,7 +75,7 @@ export default async function convertCommand(
   const packageManagerAnswer = await inquirer.prompt<{
     packageManagerInput?: PackageManager;
   }>({
-    name: "packageManager",
+    name: "packageManagerInput",
     type: "list",
     message: `Convert from ${project.packageManager} workspaces to:`,
     when:
@@ -96,7 +96,7 @@ export default async function convertCommand(
       selectedPackageManager = packageManager as PackageManager,
   } = packageManagerAnswer;
 
-  await convert({
+  await convertProject({
     project,
     to: {
       name: selectedPackageManager,

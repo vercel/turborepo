@@ -59,10 +59,6 @@ async function loadAssets(): Promise<
   ];
 }
 
-export const config = {
-  runtime: "experimental-edge",
-};
-
 export default async function openGraphImage(
   req: NextApiRequest
 ): Promise<ImageResponse> {
@@ -165,3 +161,7 @@ export function OGImage({
     </div>
   );
 }
+
+export const config = {
+  runtime: "edge",
+};

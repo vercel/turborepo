@@ -24,18 +24,13 @@ impl QueryMapVc {
 }
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialOrd, Ord, Hash, Clone, Debug, Default)]
 pub enum Pattern {
     Constant(String),
+    #[default]
     Dynamic,
     Alternatives(Vec<Pattern>),
     Concatenation(Vec<Pattern>),
-}
-
-impl Default for Pattern {
-    fn default() -> Self {
-        Pattern::Dynamic
-    }
 }
 
 fn concatenation_push_or_merge_item(list: &mut Vec<Pattern>, pat: Pattern) {
@@ -158,6 +153,15 @@ impl Pattern {
             }
         }
         Self::Alternatives(list)
+    }
+
+    pub fn concat(items: impl IntoIterator<Item = Pattern>) -> Self {
+        let mut items = items.into_iter();
+        let mut current = items.next().unwrap_or_default();
+        for item in items {
+            current.push(item);
+        }
+        current
     }
 
     /// Order into Alternatives -> Concatenation -> Constant/Dynamic

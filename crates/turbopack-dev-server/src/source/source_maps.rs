@@ -1,5 +1,3 @@
-use std::{borrow::Cow, iter::once};
-
 use anyhow::Result;
 use mime::APPLICATION_JSON;
 use turbo_tasks::{primitives::StringVc, Value};
@@ -12,7 +10,10 @@ use turbopack_core::{
 
 use super::{
     query::QueryValue,
-    wrapping_source::{ContentSourceProcessor, ContentSourceProcessorVc, WrappedContentSourceVc},
+    wrapping_source::{
+        encode_pathname_to_url, ContentSourceProcessor, ContentSourceProcessorVc,
+        WrappedContentSourceVc,
+    },
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
     ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
     NeededData, RewriteBuilder,
@@ -40,17 +41,6 @@ impl SourceMapContentSourceVc {
     pub fn new(asset_source: ContentSourceVc) -> SourceMapContentSourceVc {
         SourceMapContentSource { asset_source }.cell()
     }
-}
-
-fn encode_pathname_to_url(pathname: &str) -> String {
-    once(Cow::Borrowed("/"))
-        .chain(
-            pathname
-                .split('/')
-                .map(urlencoding::encode)
-                .intersperse(Cow::Borrowed("/")),
-        )
-        .collect()
 }
 
 #[turbo_tasks::value_impl]
@@ -147,13 +137,13 @@ impl ContentSourceProcessor for SourceMapContentProcessor {
         };
 
         let sm = if let Some(id) = &self.id {
-            let section = gen.by_section(id).await?;
-            match &*section {
-                Some(sm) => *sm,
-                None => return Ok(ContentSourceContentVc::not_found()),
-            }
+            gen.by_section(id).await?
         } else {
-            gen.generate_source_map()
+            gen.generate_source_map().await?
+        };
+        let sm = match &*sm {
+            Some(sm) => *sm,
+            None => return Ok(ContentSourceContentVc::not_found()),
         };
 
         let content = sm.to_rope().await?;

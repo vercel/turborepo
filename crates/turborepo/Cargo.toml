@@ -9,9 +9,13 @@ license = "MPL-2.0"
 # This is for the convenience of running daily dev workflows, i.e running
 # `cargo xxx` without explicitly specifying features, not that we want to
 # promote this as default backend.
-default = ["native-tls"]
+default = ["rustls-tls"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
+http = ["turborepo-lib/http"]
+tracing-chrome = ["turborepo-lib/tracing-chrome"]
+go-daemon = ["turborepo-lib/go-daemon"]
+run-stub = ["turborepo-lib/run-stub"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
@@ -26,11 +30,15 @@ pretty_assertions = { workspace = true }
 anyhow = { workspace = true, features = ["backtrace"] }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
+command-group = { version = "2.0.1", features = ["with-tokio"] }
 dunce = { workspace = true }
-log = { workspace = true }
-predicates = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tiny-gradient = { workspace = true }
+tokio-util = { version = "0.7.7", features = ["io"] }
+tracing = { workspace = true }
 turborepo-lib = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = "0.3.9"

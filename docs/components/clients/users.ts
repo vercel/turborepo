@@ -241,7 +241,7 @@ export const users: Array<TurboUser> = [
   {
     caption: "Plex",
     image: "/images/logos/plex.svg",
-    infoLink: "https://www.plex.com/",
+    infoLink: "https://www.plex.tv/",
     pinned: true,
   },
   {
@@ -551,6 +551,12 @@ export const users: Array<TurboUser> = [
     caption: "Chợ Tốt",
     image: "/images/logos/chotot.svg",
     infoLink: "https://chotot.com/",
+    pinned: true,
+  },
+  {
+    caption: "SLIIT FOSS",
+    image: "/images/logos/sliit-foss.svg",
+    infoLink: "https://sliitfoss.org",
     pinned: true,
   },
 ];

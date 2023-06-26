@@ -12,6 +12,7 @@ use swc_core::{
 use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
     chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
+    issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::CssReferenceSubType,
     resolve::{
@@ -109,7 +110,7 @@ impl ImportAttributes {
         }
 
         // something random that's never gonna be in real css
-        let mut rule = Rule::ListOfComponentValues(box ListOfComponentValues {
+        let mut rule = Rule::ListOfComponentValues(Box::new(ListOfComponentValues {
             span: DUMMY_SP,
             children: vec![ComponentValue::PreservedToken(Box::new(token(
                 Token::String {
@@ -117,23 +118,23 @@ impl ImportAttributes {
                     raw: r#""""__turbopack_placeholder__""""#.into(),
                 },
             )))],
-        });
+        }));
 
         fn at_rule(name: &str, prelude: AtRulePrelude, inner_rule: Rule) -> Rule {
-            Rule::AtRule(box AtRule {
+            Rule::AtRule(Box::new(AtRule {
                 span: DUMMY_SP,
                 name: AtRuleName::Ident(Ident {
                     span: DUMMY_SP,
                     value: name.into(),
                     raw: None,
                 }),
-                prelude: Some(box prelude),
+                prelude: Some(Box::new(prelude)),
                 block: Some(SimpleBlock {
                     span: DUMMY_SP,
                     name: token(Token::LBrace),
                     value: vec![ComponentValue::from(inner_rule)],
                 }),
-            })
+            }))
         }
 
         if let Some(media) = &self.media {
@@ -190,6 +191,7 @@ pub struct ImportAssetReference {
     pub request: RequestVc,
     pub path: AstPathVc,
     pub attributes: ImportAttributesVc,
+    pub issue_source: IssueSourceVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -200,12 +202,14 @@ impl ImportAssetReferenceVc {
         request: RequestVc,
         path: AstPathVc,
         attributes: ImportAttributesVc,
+        issue_source: IssueSourceVc,
     ) -> Self {
         Self::cell(ImportAssetReference {
             origin,
             request,
             path,
             attributes,
+            issue_source,
         })
     }
 }
@@ -218,6 +222,7 @@ impl AssetReference for ImportAssetReference {
             self.origin,
             self.request,
             Value::new(CssReferenceSubType::AtImport),
+            OptionIssueSourceVc::some(self.issue_source),
         )
     }
 }

@@ -102,7 +102,7 @@ COPY --from=pruner /app/out/yarn.lock ./yarn.lock
 RUN yarn install
 
 # Copy source code of pruned subworkspace and build
-FROM base as builder
+FROM base AS builder
 WORKDIR /app
 COPY --from=pruner /app/.git ./.git
 COPY --from=pruner /app/out/full/ .
@@ -173,7 +173,7 @@ Building on the example from above, you can now set cache output conventions acr
     "pipeline": {
       "build": {
         // Cache anything in dist or .next directories emitted by a `build` command
-        "outputs": ["dist/**", ".next/**"]
+        "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
         "dependsOn": ["^build"]
       },
       "test": {

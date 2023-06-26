@@ -10,9 +10,11 @@ module.exports = {
   coverageThreshold: {
     global: {
       branches: 83,
-      functions: 80,
-      lines: 86,
-      statements: 86,
+      functions: 87,
+      lines: 93,
+      statements: 93,
     },
   },
+  verbose: process.env.RUNNER_DEBUG === "1",
+  silent: process.env.RUNNER_DEBUG !== "1",
 };

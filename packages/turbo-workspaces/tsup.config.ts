@@ -5,5 +5,6 @@ export default defineConfig((options: Options) => ({
   format: ["cjs"],
   dts: true,
   clean: true,
+  minify: true,
   ...options,
 }));

@@ -2,6 +2,14 @@
 
 This is an official starter Turborepo.
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx create-turbo@latest
+```
+
 ## What's inside?
 
 This Turborepo includes the following packages/apps:
@@ -23,20 +31,6 @@ This Turborepo has some additional tools already setup for you:
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
-
-## Using this example
-
-This repository is used with `npx create-turbo@latest` command, but you can also use `degit` to
-download and run this example, like the other examples.
-
-Run the following command:
-
-```sh
-npx degit vercel/turbo/examples/basic basic
-cd basic
-pnpm install
-git init . && git add . && git commit -m "Init"
-```
 
 ### Build
 

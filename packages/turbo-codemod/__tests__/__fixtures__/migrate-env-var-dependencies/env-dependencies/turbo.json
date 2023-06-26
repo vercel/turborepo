@@ -3,7 +3,7 @@
   "globalDependencies": ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
   "pipeline": {
     "build": {
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
       "dependsOn": ["^build", "$PROD_API_KEY"]
     },
     "lint": {

@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{primitives::StringVc, Value};
+use turbo_tasks::{
+    primitives::{JsonValueVc, StringVc},
+    Value,
+};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -21,10 +24,9 @@ use turbopack_dev_server::{
         specificity::SpecificityVc,
         ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
         ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult, ContentSourceResultVc,
-        ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
+        ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc, ProxyResult,
     },
 };
-use turbopack_ecmascript::chunk::EcmascriptChunkPlaceablesVc;
 
 use super::{
     render_static::{render_static, StaticResult},
@@ -51,8 +53,9 @@ pub fn create_node_rendered_source(
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
+    render_data: JsonValueVc,
+    debug: bool,
 ) -> ContentSourceVc {
     let source = NodeRenderContentSource {
         cwd,
@@ -62,8 +65,9 @@ pub fn create_node_rendered_source(
         route_match,
         pathname,
         entry,
-        runtime_entries,
         fallback_page,
+        render_data,
+        debug,
     }
     .cell();
     ConditionalContentSourceVc::new(
@@ -87,8 +91,9 @@ pub struct NodeRenderContentSource {
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
     fallback_page: DevHtmlAssetVc,
+    render_data: JsonValueVc,
+    debug: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -128,7 +133,7 @@ impl GetContentSource for NodeRenderContentSource {
             set.extend(
                 external_asset_entrypoints(
                     entry.module,
-                    self.runtime_entries,
+                    entry.runtime_entries,
                     entry.chunking_context,
                     entry.intermediate_output_path,
                 )
@@ -158,7 +163,9 @@ impl ContentSource for NodeRenderContentSource {
                 specificity: this.specificity,
                 get_content: NodeRenderGetContentResult {
                     source: self_vc,
+                    render_data: this.render_data,
                     path: path.to_string(),
+                    debug: this.debug,
                 }
                 .cell()
                 .into(),
@@ -172,7 +179,9 @@ impl ContentSource for NodeRenderContentSource {
 #[turbo_tasks::value]
 struct NodeRenderGetContentResult {
     source: NodeRenderContentSourceVc,
+    render_data: JsonValueVc,
     path: String,
+    debug: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -182,6 +191,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
         ContentSourceDataVary {
             method: true,
             url: true,
+            original_url: true,
             raw_headers: true,
             raw_query: true,
             ..Default::default()
@@ -198,6 +208,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
         let ContentSourceData {
             method: Some(method),
             url: Some(url),
+            original_url: Some(original_url),
             raw_headers: Some(raw_headers),
             raw_query: Some(raw_query),
             ..
@@ -210,24 +221,28 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
             source.env,
             source.server_root.join(&self.path),
             entry.module,
-            source.runtime_entries,
+            entry.runtime_entries,
             source.fallback_page,
             entry.chunking_context,
             entry.intermediate_output_path,
             entry.output_root,
+            entry.project_dir,
             RenderData {
                 params: params.clone(),
                 method: method.clone(),
                 url: url.clone(),
+                original_url: original_url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: format!("/{}", source.pathname.await?),
+                path: source.pathname.await?.clone_value(),
+                data: Some(self.render_data.await?),
             }
             .cell(),
+            self.debug,
         )
         .issue_context(
             entry.module.ident().path(),
-            format!("server-side rendering /{}", source.pathname.await?),
+            format!("server-side rendering {}", source.pathname.await?),
         )
         .await?;
         Ok(match *result.await? {
@@ -236,6 +251,19 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
                 status_code,
                 headers,
             } => ContentSourceContentVc::static_with_headers(content.into(), status_code, headers),
+            StaticResult::StreamedContent {
+                status,
+                headers,
+                ref body,
+            } => ContentSourceContent::HttpProxy(
+                ProxyResult {
+                    status,
+                    headers: headers.await?.clone_value(),
+                    body: body.clone(),
+                }
+                .cell(),
+            )
+            .cell(),
             StaticResult::Rewrite(rewrite) => ContentSourceContent::Rewrite(rewrite).cell(),
         })
     }
@@ -278,10 +306,9 @@ impl Introspectable for NodeRenderContentSource {
             set.insert((
                 StringVc::cell("intermediate asset".to_string()),
                 IntrospectableAssetVc::new(get_intermediate_asset(
-                    entry
-                        .module
-                        .as_evaluated_chunk(entry.chunking_context, Some(self.runtime_entries)),
-                    entry.intermediate_output_path,
+                    entry.chunking_context,
+                    entry.module,
+                    entry.runtime_entries,
                 )),
             ));
         }

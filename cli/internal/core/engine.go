@@ -6,6 +6,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
@@ -71,26 +73,88 @@ type EngineExecutionOptions struct {
 	Concurrency int
 }
 
+// StopExecutionSentinel is used to return an error from a graph Walk that indicates that
+// all further walking should stop.
+type StopExecutionSentinel struct {
+	err error
+}
+
+// StopExecution wraps the given error in a sentinel error indicating that
+// graph traversal should stop. Note that this will stop all tasks, not just
+// downstream tasks.
+func StopExecution(reason error) *StopExecutionSentinel {
+	return &StopExecutionSentinel{
+		err: reason,
+	}
+}
+
+// Error implements error.Error for StopExecutionSentinel
+func (se *StopExecutionSentinel) Error() string {
+	return fmt.Sprintf("Execution stopped due to error: %v", se.err)
+}
+
 // Execute executes the pipeline, constructing an internal task graph and walking it accordingly.
 func (e *Engine) Execute(visitor Visitor, opts EngineExecutionOptions) []error {
 	var sema = util.NewSemaphore(opts.Concurrency)
-	return e.TaskGraph.Walk(func(v dag.Vertex) error {
-		// Each vertex in the graph is a taskID (package#task format)
-		taskID := dag.VertexName(v)
+	var errored int32
 
-		// Always return if it is the root node
-		if strings.Contains(taskID, ROOT_NODE_NAME) {
-			return nil
-		}
+	// The dag library's behavior is that returning an error from the Walk callback cancels downstream
+	// tasks, but not unrelated tasks.
+	// The behavior we want is to either cancel everything or nothing (--continue). So, we do our own
+	// error handling. Collect any errors that occur in "errors", and report them as the result of
+	// Execute. panic on any other error returned by Walk.
+	var errorMu sync.Mutex
+	var errors []error
+	recordErr := func(err error) {
+		errorMu.Lock()
+		defer errorMu.Unlock()
+		errors = append(errors, err)
+	}
+	unusedErrs := e.TaskGraph.Walk(func(v dag.Vertex) error {
+		// Use an extra func() to ensure that we are not returning any errors to Walk
+		func() {
+			// If something has already errored, short-circuit.
+			// There is a race here between concurrent tasks. However, if there is not a
+			// dependency edge between them, we are not required to have a strict order
+			// between them, so a failed task can fail to short-circuit a concurrent
+			// task that happened to be starting at the same time.
+			if atomic.LoadInt32(&errored) != 0 {
+				return
+			}
+			// Each vertex in the graph is a taskID (package#task format)
+			taskID := dag.VertexName(v)
 
-		// Acquire the semaphore unless parallel
-		if !opts.Parallel {
-			sema.Acquire()
-			defer sema.Release()
-		}
+			// Always return if it is the root node
+			if strings.Contains(taskID, ROOT_NODE_NAME) {
+				return
+			}
 
-		return visitor(taskID)
+			// Acquire the semaphore unless parallel
+			if !opts.Parallel {
+				sema.Acquire()
+				defer sema.Release()
+			}
+
+			if err := visitor(taskID); err != nil {
+				if se, ok := err.(*StopExecutionSentinel); ok {
+					// We only ever flip from false to true, so we don't need to compare and swap the atomic
+					atomic.StoreInt32(&errored, 1)
+					recordErr(se.err)
+					// Note: returning an error here would cancel execution of downstream tasks only, and show
+					// up in the errors returned from Walk. However, we are doing our own error collection
+					// and intentionally ignoring errors from walk, so fallthrough and use the "errored" mechanism
+					// to skip downstream tasks
+				} else {
+					recordErr(err)
+				}
+			}
+		}()
+		return nil
 	})
+	if len(unusedErrs) > 0 {
+		panic("we should be handling execution errors via our own errors + errored mechanism")
+	}
+	return errors
 }
 
 // MissingTaskError is a specialized Error thrown in the case that we can't find a task.
@@ -125,14 +189,14 @@ func (e *Engine) getTaskDefinition(pkg string, taskName string, taskID string) (
 	if task, ok := pipeline[taskID]; ok {
 		return &Task{
 			Name:           taskName,
-			TaskDefinition: task.TaskDefinition,
+			TaskDefinition: task.GetTaskDefinition(),
 		}, nil
 	}
 
 	if task, ok := pipeline[taskName]; ok {
 		return &Task{
 			Name:           taskName,
-			TaskDefinition: task.TaskDefinition,
+			TaskDefinition: task.GetTaskDefinition(),
 		}, nil
 	}
 
@@ -281,7 +345,7 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 		}
 
 		// Filter down the tasks if there's a filter in place
-		// https: //turbo.build/repo/docs/reference/command-line-reference#--only
+		// https: //turbo.build/repo/docs/reference/command-line-reference/run#--only
 		if tasksOnly {
 			deps = deps.Filter(func(d interface{}) bool {
 				for _, target := range taskNames {
@@ -389,8 +453,9 @@ func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 
 // ValidatePersistentDependencies checks if any task dependsOn persistent tasks and throws
 // an error if that task is actually implemented
-func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) error {
+func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph, concurrency int) error {
 	var validationError error
+	persistentCount := 0
 
 	// Adding in a lock because otherwise walking the graph can introduce a data race
 	// (reproducible with `go test -race`)
@@ -409,6 +474,11 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 		// up when running tests with the `-race` flag.
 		sema.Acquire()
 		defer sema.Release()
+
+		currentTaskDefinition, currentTaskExists := e.completeGraph.TaskDefinitions[vertexName]
+		if currentTaskExists && currentTaskDefinition.Persistent {
+			persistentCount++
+		}
 
 		currentPackageName, currentTaskName := util.GetPackageTaskFromId(vertexName)
 
@@ -458,8 +528,13 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph) erro
 		return fmt.Errorf("Validation failed: %v", err)
 	}
 
-	// May or may not be set (could be nil)
-	return validationError
+	if validationError != nil {
+		return validationError
+	} else if persistentCount >= concurrency {
+		return fmt.Errorf("You have %v persistent tasks but `turbo` is configured for concurrency of %v. Set --concurrency to at least %v", persistentCount, concurrency, persistentCount+1)
+	}
+
+	return nil
 }
 
 // getTaskDefinitionChain gets a set of TaskDefinitions that apply to the taskID.
@@ -562,42 +637,4 @@ func validateExtends(turboJSON *fs.TurboJSON) []error {
 	}
 
 	return extendErrors
-}
-
-// GetTaskGraphAncestors gets all the ancestors for a given task in the graph.
-// "Ancestors" are all tasks that the given task depends on.
-// This is only used by DryRun output right now.
-func (e *Engine) GetTaskGraphAncestors(taskID string) ([]string, error) {
-	ancestors, err := e.TaskGraph.Ancestors(taskID)
-	if err != nil {
-		return nil, err
-	}
-	stringAncestors := []string{}
-	for _, dep := range ancestors {
-		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
-			stringAncestors = append(stringAncestors, dep.(string))
-		}
-	}
-	// TODO(mehulkar): Why are ancestors not sorted, but GetTaskGraphDescendants sorts?
-	return stringAncestors, nil
-}
-
-// GetTaskGraphDescendants gets all the descendants for a given task in the graph.
-// "Descendants" are all tasks that depend on the given taskID.
-// This is only used by DryRun output right now.
-func (e *Engine) GetTaskGraphDescendants(taskID string) ([]string, error) {
-	descendents, err := e.TaskGraph.Descendents(taskID)
-	if err != nil {
-		return nil, err
-	}
-	stringDescendents := []string{}
-	for _, dep := range descendents {
-		// Don't leak out internal ROOT_NODE_NAME nodes, which are just placeholders
-		if !strings.Contains(dep.(string), ROOT_NODE_NAME) {
-			stringDescendents = append(stringDescendents, dep.(string))
-		}
-	}
-	sort.Strings(stringDescendents)
-	return stringDescendents, nil
 }

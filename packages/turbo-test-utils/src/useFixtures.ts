@@ -4,13 +4,19 @@ import fs from "fs-extra";
 import yaml from "js-yaml";
 import JSON5 from "json5";
 
+interface SetupTextFixtures {
+  directory: string;
+  test?: string;
+  options?: {
+    emptyFixture?: boolean;
+  };
+}
+
 export default function setupTestFixtures({
   directory,
   test = "",
-}: {
-  directory: string;
-  test?: string;
-}) {
+  options = {},
+}: SetupTextFixtures) {
   const fixtures: Array<string> = [];
   const parentDirectory = path.join(directory, test ? test : "test-runs");
 
@@ -34,18 +40,23 @@ export default function setupTestFixtures({
     fixtures.push(testDirectory);
 
     // copy fixture to test directory
-    const fixturePath = path.join(directory, "__fixtures__", test, fixture);
-    fs.copySync(fixturePath, testDirectory, {
-      recursive: true,
-    });
+    if (!options.emptyFixture) {
+      const fixturePath = path.join(directory, "__fixtures__", test, fixture);
+      fs.copySync(fixturePath, testDirectory, {
+        recursive: true,
+      });
+    }
+
+    const getFilePath = (filename: string) => {
+      return path.isAbsolute(filename)
+        ? filename
+        : path.join(testDirectory, filename);
+    };
 
     const readGenerator = (method: (filePath: string) => unknown) => {
       return <T>(filename: string) => {
-        const filePath = path.isAbsolute(filename)
-          ? filename
-          : path.join(testDirectory, filename);
         try {
-          return method(filePath) as T;
+          return method(getFilePath(filename)) as T;
         } catch (e) {
           return undefined;
         }
@@ -56,11 +67,11 @@ export default function setupTestFixtures({
       filename: string,
       content: string | NodeJS.ArrayBufferView
     ) => {
-      const filePath = path.isAbsolute(filename)
-        ? filename
-        : path.join(testDirectory, filename);
+      fs.writeFileSync(getFilePath(filename), content);
+    };
 
-      fs.writeFileSync(filePath, content);
+    const exists = (filename: string): boolean => {
+      return fs.existsSync(getFilePath(filename));
     };
 
     const read = readGenerator((filePath) => fs.readFileSync(filePath, "utf8"));
@@ -77,6 +88,7 @@ export default function setupTestFixtures({
       readJson,
       readYaml,
       write,
+      exists,
       directoryName,
     };
   };

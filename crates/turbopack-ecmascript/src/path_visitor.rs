@@ -114,7 +114,13 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
                     }
                     return;
                 } else {
+                    // `current_visitors` has the invariant that is must not be empty.
+                    // When it becomes empty, we must early exit
                     current_visitors = &visitors[nested_visitors_start..];
+                    if current_visitors.is_empty() {
+                        // Nothing to do in this subtree, skip it
+                        return;
+                    }
                 }
             } else {
                 // Skip visiting this sub tree
@@ -190,7 +196,7 @@ mod tests {
 
     impl VisitorFactory for Box<StrReplacer<'_>> {
         fn create<'a>(&'a self) -> Box<dyn VisitMut + Send + Sync + 'a> {
-            box &**self
+            Box::new(&**self)
         }
     }
 
@@ -202,7 +208,7 @@ mod tests {
     }
 
     fn replacer(from: &'static str, to: &'static str) -> impl VisitorFactory {
-        box StrReplacer { from, to }
+        Box::new(StrReplacer { from, to })
     }
 
     fn to_js(m: &Module, cm: &Arc<SourceMap>) -> String {

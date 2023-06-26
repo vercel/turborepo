@@ -1,11 +1,11 @@
 #![feature(hash_drain_filter)]
 #![feature(option_get_or_insert_default)]
-#![feature(box_syntax)]
 #![feature(type_alias_impl_trait)]
 #![feature(lint_reasons)]
 #![feature(box_patterns)]
 #![feature(int_roundings)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::too_many_arguments)]
 
 mod cell;
 mod concurrent_priority_queue;

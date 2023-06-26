@@ -1,126 +1,199 @@
-/*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
- * This source code is licensed under both the MIT license found in the
- * LICENSE-MIT file in the root directory of this source tree and the Apache
- * License, Version 2.0 found in the LICENSE-APACHE file in the root
- * directory of this source tree.
- */
+#![feature(assert_matches)]
 
-//!
-//! The paths crate for turborepo. Adapted from buck2's paths module.
-//!
-//! Changes from buck2:
-//!  - Removed abbreviations such as `AbsPath` -> `AbsolutePath` to fit with the
-//!    turbo codebase's conventions
-//!
-//! Introduces 'ForwardRelativePath', 'ForwardRelativePathBuf', 'AbsolutePath',
-//! and 'AbsolutePathBuf', which are equivalents of 'Path' and 'PathBuf'.
-//!
-//! ForwardRelativePaths are fully normalized relative platform agnostic paths
-//! that only points forward. This means  that there is no `.` or `..` in this
-//! path, and does not begin with `/`. These are resolved to the 'PathBuf' by
-//! resolving them against an 'AbsPath'.
-//!
-//! 'AbsPath' are absolute paths, meaning they must start with a directory root
-//! of either `/` or some  windows root directory like `c:`. These behave
-//! roughly like 'Path'.
+/// Turborepo's path handling library
+/// Defines distinct path types for the different usecases of paths in turborepo
+///
+/// - `AbsoluteSystemPath(Buf)`: a path that is absolute and uses the system's
+///   path separator. Used for interacting with the filesystem
+/// - `RelativeSystemPath(Buf)`: a path that is relative and uses the system's
+///   path separator. Mostly used for appending onto `AbsoluteSystemPaths`.
+/// - `RelativeUnixPath(Buf)`: a path that is relative and uses the unix path
+///   separator. Used when saving to a cache as a platform-independent path.
+/// - `AnchoredSystemPath(Buf)`: a path that is relative to a specific directory
+///   and uses the system's path separator. Used for handling files relative to
+///   the repository root.
+///
+/// NOTE: All paths contain UTF-8 strings and use `camino` as the underlying
+/// representation. For reasons why, see [the `camino` documentation](https://github.com/camino-rs/camino/).
+///
+/// As in `std::path`, there are `Path` and `PathBuf` variants of each path
+/// type, that indicate whether the path is borrowed or owned.
+///
+/// When initializing a path type, it is highly recommended that you use a
+/// method that validates the path. This will ensure that the path is in the
+/// correct format. For the -Buf variants, the `new` method will validate that
+/// the path is either absolute or relative, and then convert it to either
+/// system or unix. For the non-Buf variants, the `new` method will *only*
+/// validate and not convert (this is because conversion requires allocation).
+///
+/// The only case where initializing a path type without validation is
+/// recommended is inside turbopath itself. But that unchecked initialization
+/// should be considered unsafe
+mod absolute_system_path;
+mod absolute_system_path_buf;
+mod anchored_system_path_buf;
+mod relative_unix_path;
+mod relative_unix_path_buf;
 
-#![feature(type_alias_impl_trait)]
-#![feature(fs_try_exists)]
-#![feature(absolute_path)]
+use std::io;
 
-pub mod absolute_normalized_path;
-pub mod absolute_path;
-mod cmp_impls;
-pub mod file_name;
-pub(crate) mod fmt;
-pub mod forward_relative_path;
-pub mod fs_util;
-mod into_filename_buf_iterator;
-mod io_counters;
-pub mod project;
-pub mod project_relative_path;
+pub use absolute_system_path::AbsoluteSystemPath;
+pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
+pub use anchored_system_path_buf::AnchoredSystemPathBuf;
+use camino::Utf8PathBuf;
+pub use relative_unix_path::RelativeUnixPath;
+pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
-pub use into_filename_buf_iterator::*;
-pub use relative_path::{RelativePath, RelativePathBuf};
+#[derive(Debug, thiserror::Error)]
+pub enum PathError {
+    #[error("Path is non-UTF-8: {0}")]
+    InvalidUnicode(String),
+    #[error("Failed to convert path")]
+    FromPathBufError(#[from] camino::FromPathBufError),
+    #[error("Path is not absolute: {0}")]
+    NotAbsolute(String),
+    #[error("Path is not relative: {0}")]
+    NotRelative(String),
+    #[error("Path {0} is not parent of {1}")]
+    NotParent(String, String),
+    #[error("Path {0} is not a unix path")]
+    NotUnix(String),
+    #[error("Path {0} is not a system path")]
+    NotSystem(String),
+    #[error("IO Error {0}")]
+    IO(#[from] io::Error),
+    #[error("{0} is not a prefix for {1}")]
+    PrefixError(String, String),
+}
 
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use crate::{
-        absolute_normalized_path::{AbsoluteNormalizedPath, AbsoluteNormalizedPathBuf},
-        forward_relative_path::{ForwardRelativePath, ForwardRelativePathBuf},
-        project_relative_path::ProjectRelativePath,
-    };
-
-    #[test]
-    fn wrapped_paths_work_in_maps() -> anyhow::Result<()> {
-        let mut map = HashMap::new();
-
-        let p1 = ForwardRelativePath::new("foo")?;
-        let p2 = ProjectRelativePath::new("bar")?;
-
-        map.insert(p1.to_buf(), p2.to_buf());
-
-        assert_eq!(Some(p2), map.get(p1).map(|p| p.as_ref()));
-
-        Ok(())
+impl From<std::string::FromUtf8Error> for PathError {
+    fn from(value: std::string::FromUtf8Error) -> Self {
+        PathError::InvalidUnicode(value.utf8_error().to_string())
     }
+}
 
-    #[test]
-    fn path_buf_is_clonable() -> anyhow::Result<()> {
-        let buf = ForwardRelativePathBuf::unchecked_new("foo".into());
-        let buf_ref = &buf;
-
-        let cloned: ForwardRelativePathBuf = buf_ref.clone();
-        assert_eq!(buf, cloned);
-
-        Ok(())
+impl PathError {
+    pub fn is_io_error(&self, kind: io::ErrorKind) -> bool {
+        matches!(self, PathError::IO(err) if err.kind() == kind)
     }
+}
 
-    #[test]
-    fn relative_path_display_is_readable() -> anyhow::Result<()> {
-        let buf = ForwardRelativePathBuf::unchecked_new("foo/bar".into());
-        assert_eq!("foo/bar", format!("{}", buf));
-        assert_eq!("ForwardRelativePathBuf(\"foo/bar\")", format!("{:?}", buf));
-        let refpath: &ForwardRelativePath = &buf;
-        assert_eq!("foo/bar", format!("{}", refpath));
-        assert_eq!("ForwardRelativePath(\"foo/bar\")", format!("{:?}", refpath));
+pub trait IntoSystem {
+    fn into_system(self) -> Utf8PathBuf;
+}
 
-        Ok(())
+pub trait IntoUnix {
+    fn into_unix(self) -> Utf8PathBuf;
+}
+
+// Checks if path contains a non system separator.
+fn is_not_system(path: impl AsRef<str>) -> bool {
+    let non_system_separator;
+
+    #[cfg(windows)]
+    {
+        non_system_separator = '/';
     }
 
     #[cfg(not(windows))]
-    #[test]
-    fn absolute_path_display_is_readable() -> anyhow::Result<()> {
-        let buf = AbsoluteNormalizedPathBuf::from("/foo/bar".into())?;
-        assert_eq!("/foo/bar", format!("{}", buf));
-        assert_eq!(
-            "AbsoluteNormalizedPathBuf(\"/foo/bar\")",
-            format!("{:?}", buf)
-        );
-        let refpath: &AbsoluteNormalizedPath = &buf;
-        assert_eq!("/foo/bar", format!("{}", refpath));
-        assert_eq!(
-            "AbsoluteNormalizedPath(\"/foo/bar\")",
-            format!("{:?}", refpath)
-        );
-
-        Ok(())
+    {
+        non_system_separator = '\\';
     }
 
-    #[cfg(windows)]
-    #[test]
-    fn absolute_path_display_is_readable() -> anyhow::Result<()> {
-        let buf = AbsoluteNormalizedPathBuf::from("C:/foo/bar".into())?;
-        assert_eq!("C:/foo/bar", format!("{}", buf));
-        assert_eq!("AbsNormPathBuf(\"C:/foo/bar\")", format!("{:?}", buf));
-        let refpath: &AbsoluteNormalizedPath = &buf;
-        assert_eq!("C:/foo/bar", format!("{}", refpath));
-        assert_eq!("AbsNormPath(\"C:/foo/bar\")", format!("{:?}", refpath));
+    path.as_ref().contains(non_system_separator)
+}
 
-        Ok(())
+#[cfg(windows)]
+fn convert_separator(
+    path: impl AsRef<str>,
+    input_separator: char,
+    output_separator: char,
+) -> Utf8PathBuf {
+    let path = path.as_ref();
+
+    Utf8PathBuf::from(
+        path.chars()
+            .map(|c| {
+                if c == input_separator {
+                    output_separator
+                } else {
+                    c
+                }
+            })
+            .collect::<String>(),
+    )
+}
+
+impl<T: AsRef<str>> IntoSystem for T {
+    fn into_system(self) -> Utf8PathBuf {
+        #[cfg(windows)]
+        {
+            convert_separator(self, '/', std::path::MAIN_SEPARATOR)
+        }
+
+        #[cfg(not(windows))]
+        {
+            Utf8PathBuf::from(self.as_ref())
+        }
+    }
+}
+
+impl<T: AsRef<str>> IntoUnix for T {
+    /// NOTE: `into_unix` *only* converts Windows paths to Unix paths *on* a
+    /// Windows system. Do not pass a Windows path on a Unix system and
+    /// assume it'll be converted.
+    fn into_unix(self) -> Utf8PathBuf {
+        let output;
+
+        #[cfg(windows)]
+        {
+            output = convert_separator(self, std::path::MAIN_SEPARATOR, '/')
+        }
+
+        #[cfg(not(windows))]
+        {
+            output = Utf8PathBuf::from(self.as_ref())
+        }
+
+        output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{IntoSystem, IntoUnix};
+
+    #[test]
+    fn test_into_system() {
+        #[cfg(unix)]
+        {
+            assert_eq!("foo/bar".into_system(), "foo/bar");
+            assert_eq!("/foo/bar".into_system(), "/foo/bar");
+            assert_eq!("foo\\bar".into_system(), "foo\\bar");
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!("foo/bar".into_system(), "foo\\bar");
+            assert_eq!("/foo/bar".into_system(), "\\foo\\bar");
+            assert_eq!("foo\\bar".into_system(), "foo\\bar");
+        }
+    }
+
+    #[test]
+    fn test_into_unix() {
+        #[cfg(unix)]
+        {
+            assert_eq!("foo/bar".into_unix(), "foo/bar");
+            assert_eq!("/foo/bar".into_unix(), "/foo/bar");
+            assert_eq!("foo\\bar".into_unix(), "foo\\bar");
+        }
+
+        #[cfg(windows)]
+        {
+            assert_eq!("foo/bar".into_unix(), "foo/bar");
+            assert_eq!("\\foo\\bar".into_unix(), "/foo/bar");
+            assert_eq!("foo\\bar".into_unix(), "foo/bar");
+        }
     }
 }

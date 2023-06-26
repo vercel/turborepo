@@ -58,7 +58,12 @@ export function BenchmarksGraph({
               key={bar.key}
               turbo={bar.turbo}
               Label={
-                <GraphLabel label={bar.label} turbo={bar.turbo} swc={bar.swc} />
+                <GraphLabel
+                  label={bar.label}
+                  version={bar.version}
+                  turbo={bar.turbo}
+                  swc={bar.swc}
+                />
               }
               duration={data[bar.key] * 1000}
               longestTime={longestTimeWithPadding}
@@ -296,8 +301,10 @@ function GraphLabel({
   swc,
   mobileOnly,
   esbuild,
+  version,
 }: {
   label: string;
+  version: string;
   turbo?: boolean;
   swc?: boolean;
   mobileOnly?: boolean;
@@ -308,6 +315,7 @@ function GraphLabel({
       className={`flex items-center h-12 whitespace-nowrap font-bold gap-y-1 gap-x-2 ${
         mobileOnly && "md:hidden"
       }`}
+      title={version}
     >
       <p>{label}</p>
       {turbo && (

@@ -21,25 +21,31 @@ GO_FLAGS += -trimpath
 CLI_DIR = $(shell pwd)
 
 # allow opting in to the rust codepaths
-GO_TAG ?= go
+GO_TAG ?= rust
 
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: go-turbo$(EXT)
-	cargo build --manifest-path ../crates/turborepo/Cargo.toml
+# We do not set go-turbo as a dependency because the Rust build.rs
+# script will call it for us and copy over the binary
+turbo:
+	cargo build -p turbo
+
+turbo-prod:
+	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
 
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
-	CGO_ENABLED=1 go build $(GO_FLAGS) -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+	CGO_ENABLED=1 go build -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
-	cp ../crates/turborepo-ffi/target/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
+	cp ../crates/turborepo-ffi/target/debug/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
 
 .PHONY: turborepo-ffi
 turborepo-ffi:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target
+	cd ../crates/turborepo-ffi && cargo build --target-dir ./target
 
 .PHONY: turborepo-ffi-copy-bindings
 turborepo-ffi-copy-bindings:
@@ -87,11 +93,11 @@ turborepo-ffi-darwin-amd64:
 
 .PHONY: turborepo-ffi-linux-arm64
 turborepo-ffi-linux-arm64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target aarch64-linux-musl" cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
 
 .PHONY: turborepo-ffi-linux-amd64
 turborepo-ffi-linux-amd64:
-	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
+	cd ../crates/turborepo-ffi && CC="zig cc -target x86_64-linux-musl" cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
 
 #
 # end
@@ -128,7 +134,7 @@ ifeq ($(UNAME), Windows)
 endif
 
 clean-go:
-	go clean -testcache ./...
+	go clean -testcache -r
 
 test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum turborepo-ffi-install
 	go test $(TURBO_RACE) -tags $(GO_TAG) ./...
@@ -162,9 +168,15 @@ cmd/turbo/version.go: ../version.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 build: install
-	cd $(CLI_DIR)/../ && pnpm install --filter=create-turbo && pnpm turbo build --filter=create-turbo...
-	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo build --filter=@turbo/codemod...
-	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo build --filter=turbo-ignore...
+	cd $(CLI_DIR)/../ && pnpm build:turbo
+	cd $(CLI_DIR)/../ && pnpm install --filter=create-turbo && pnpm turbo-prebuilt build --filter=create-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo-prebuilt build --filter=@turbo/codemod...
+	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo-prebuilt build --filter=turbo-ignore...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/workspaces && pnpm turbo-prebuilt build --filter=@turbo/workspaces...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/gen && pnpm turbo-prebuilt build --filter=@turbo/gen...
+	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-plugin-turbo && pnpm turbo-prebuilt build --filter=eslint-plugin-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-config-turbo && pnpm turbo-prebuilt build --filter=eslint-config-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/types && pnpm turbo-prebuilt build --filter=@turbo/types...
 
 .PHONY: prepublish
 prepublish: compile-protos cmd/turbo/version.go
@@ -217,7 +229,6 @@ stage-release: cmd/turbo/version.go
 	cat $(CLI_DIR)/../version.txt
 	git diff -- $(CLI_DIR)/../version.txt
 	git status
-	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
 	# Stop if versions are not updated.
@@ -229,6 +240,11 @@ stage-release: cmd/turbo/version.go
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-gen && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
@@ -253,6 +269,11 @@ publish-turbo: clean build
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
 	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-gen && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-types && pnpm pack --pack-destination=$(CLI_DIR)/../
 
 ifneq ($(SKIP_PUBLISH),--skip-publish)
 	# Publish the remaining JS packages in order to avoid race conditions.
@@ -261,6 +282,11 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-workspaces-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-gen-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-plugin-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
 endif
 
 demo/lage: install
@@ -303,28 +329,12 @@ clean-demo:
 	rm -rf node_modules
 	rm -rf demo
 
-CRAM_ENV := .cram_env
-
-$(CRAM_ENV)/bin/pip:
-	python3 -m venv $(CRAM_ENV)
-
-$(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
-	$(CRAM_ENV)/bin/pip install prysk
-
-INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
-
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
-	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
-
-integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack turbo
-	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
-
-# use target testbed-<some directory under integration_tests> to set up the testbed directory
-.PHONY=testbed-%
-testbed-%:
-	$(eval $@_TEST := $(@:testbed-%=%))
-	@echo "testbed setup $($@_TEST)"
+# use target fixture-<some directory under integration_tests/_fixtures> to set up the testbed directory
+.PHONY=fixture-%
+fixture-%:
+	$(eval $@_FIXTURE := $(@:fixture-%=%))
+	@echo "fixture setup $($@_FIXTURE)"
 	rm -rf testbed
 	mkdir -p testbed
-	./integration_tests/$($@_TEST)/setup.sh testbed
+	../turborepo-tests/integration/tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
 

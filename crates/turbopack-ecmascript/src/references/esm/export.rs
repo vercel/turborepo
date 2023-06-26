@@ -16,13 +16,15 @@ use swc_core::{
 use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, ValueToString};
 use turbopack_core::{
     asset::Asset,
-    chunk::ChunkingContextVc,
     issue::{analyze::AnalyzeIssue, IssueSeverity},
 };
 
 use super::{base::ReferencedAsset, EsmAssetReferenceVc};
 use crate::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptExports},
+    chunk::{
+        EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc,
+        EcmascriptExports,
+    },
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor,
     references::esm::base::insert_hoisted_stmt,
@@ -67,8 +69,9 @@ async fn expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -> Result<E
                 category: StringVc::cell("analyze".to_string()),
                 message: StringVc::cell(format!(
                     "export * used with module {} which has no exports\nTypescript only: Did you \
-                     want to export only types with `export type {{ ... }} from \"...\"`?",
-                    // TODO recommend export type * from "..." once https://github.com/microsoft/TypeScript/issues/37238 is implemented
+                     want to export only types with `export type * from \"...\"`?\nNote: Using \
+                     `export type` is more efficient than `export *` as it won't emit any runtime \
+                     code.",
                     asset.ident().to_string().await?
                 )),
                 source_ident: asset.ident(),
@@ -137,7 +140,7 @@ impl CodeGenerateable for EsmExports {
     #[turbo_tasks::function]
     async fn code_generation(
         self_vc: EsmExportsVc,
-        _context: ChunkingContextVc,
+        _context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let this = self_vc.await?;
         let mut visitors = Vec::new();
@@ -189,14 +192,14 @@ impl CodeGenerateable for EsmExports {
                             "(() => $expr)" as Expr,
                             expr: Expr = Expr::Member(MemberExpr {
                                 span: DUMMY_SP,
-                                obj: box Expr::Ident(Ident::new(ident.into(), DUMMY_SP)),
+                                obj: Box::new(Expr::Ident(Ident::new(ident.into(), DUMMY_SP))),
                                 prop: MemberProp::Computed(ComputedPropName {
                                     span: DUMMY_SP,
-                                    expr: box Expr::Lit(Lit::Str(Str {
+                                    expr: Box::new(Expr::Lit(Lit::Str(Str {
                                         span: DUMMY_SP,
                                         value: (name as &str).into(),
                                         raw: None,
-                                    }))
+                                    })))
                                 })
                             })
                         )
@@ -213,14 +216,14 @@ impl CodeGenerateable for EsmExports {
                 }
             };
             if let Some(expr) = expr {
-                props.push(PropOrSpread::Prop(box Prop::KeyValue(KeyValueProp {
+                props.push(PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
                     key: PropName::Str(Str {
                         span: DUMMY_SP,
                         value: exported.as_ref().into(),
                         raw: None,
                     }),
-                    value: box expr,
-                })));
+                    value: Box::new(expr),
+                }))));
             }
         }
         let getters = Expr::Object(ObjectLit {

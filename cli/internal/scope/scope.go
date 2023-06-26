@@ -55,14 +55,14 @@ type Opts struct {
 	// Patterns are the filter patterns supplied to --filter on the commandline
 	FilterPatterns []string
 
-	PackageInferenceRoot string
+	PackageInferenceRoot turbopath.RelativeSystemPath
 }
 
 var (
 	_filterHelp = `Use the given selector to specify package(s) to act as
 entry points. The syntax mirrors pnpm's syntax, and
 additional documentation and examples can be found in
-turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
 --filter can be specified multiple times. Packages that
 match any filter will be included.`
 	_ignoreHelp    = `Files to ignore when calculating changed files (i.e. --since). Supports globs.`
@@ -70,17 +70,35 @@ match any filter will be included.`
 in the root directory. Includes turbo.json, root package.json, and the root lockfile by default.`
 )
 
+// normalize package inference path. We compare against "" in several places, so maintain
+// that behavior. In a post-rust-port world, this should more properly be an Option
+func resolvePackageInferencePath(raw string) (turbopath.RelativeSystemPath, error) {
+	pkgInferenceRoot, err := turbopath.CheckedToRelativeSystemPath(raw)
+	if err != nil {
+		return "", errors.Wrapf(err, "invalid package inference root %v", raw)
+	}
+	if pkgInferenceRoot == "." {
+		return "", nil
+	}
+	return pkgInferenceRoot, nil
+}
+
 // OptsFromArgs adds the settings relevant to this package to the given Opts
-func OptsFromArgs(opts *Opts, args *turbostate.ParsedArgsFromRust) {
+func OptsFromArgs(opts *Opts, args *turbostate.ParsedArgsFromRust) error {
 	opts.FilterPatterns = args.Command.Run.Filter
 	opts.IgnorePatterns = args.Command.Run.Ignore
 	opts.GlobalDepPatterns = args.Command.Run.GlobalDeps
-	opts.PackageInferenceRoot = args.Command.Run.PkgInferenceRoot
+	pkgInferenceRoot, err := resolvePackageInferencePath(args.Command.Run.PkgInferenceRoot)
+	if err != nil {
+		return err
+	}
+	opts.PackageInferenceRoot = pkgInferenceRoot
 	addLegacyFlagsFromArgs(&opts.LegacyFilter, args)
+	return nil
 }
 
-// asFilterPatterns normalizes legacy selectors to filter syntax
-func (l *LegacyFilter) asFilterPatterns() []string {
+// AsFilterPatterns normalizes legacy selectors to filter syntax
+func (l *LegacyFilter) AsFilterPatterns() []string {
 	var patterns []string
 	prefix := ""
 	if !l.SkipDependents {
@@ -131,7 +149,7 @@ func ResolvePackages(opts *Opts, repoRoot turbopath.AbsoluteSystemPath, scm scm.
 		PackagesChangedInRange: opts.getPackageChangeFunc(scm, repoRoot, ctx),
 	}
 	filterPatterns := opts.FilterPatterns
-	legacyFilterPatterns := opts.LegacyFilter.asFilterPatterns()
+	legacyFilterPatterns := opts.LegacyFilter.AsFilterPatterns()
 	filterPatterns = append(filterPatterns, legacyFilterPatterns...)
 	isAllPackages := len(filterPatterns) == 0 && opts.PackageInferenceRoot == ""
 	filteredPkgs, err := filterResolver.GetPackagesFromPatterns(filterPatterns)
@@ -149,14 +167,10 @@ func ResolvePackages(opts *Opts, repoRoot turbopath.AbsoluteSystemPath, scm scm.
 	return filteredPkgs, isAllPackages, nil
 }
 
-func calculateInference(repoRoot turbopath.AbsoluteSystemPath, rawPkgInferenceDir string, packageInfos workspace.Catalog, logger hclog.Logger) (*scope_filter.PackageInference, error) {
-	if rawPkgInferenceDir == "" {
+func calculateInference(repoRoot turbopath.AbsoluteSystemPath, pkgInferencePath turbopath.RelativeSystemPath, packageInfos workspace.Catalog, logger hclog.Logger) (*scope_filter.PackageInference, error) {
+	if pkgInferencePath == "" {
 		// No inference specified, no need to calculate anything
 		return nil, nil
-	}
-	pkgInferencePath, err := turbopath.CheckedToRelativeSystemPath(rawPkgInferenceDir)
-	if err != nil {
-		return nil, err
 	}
 	logger.Debug(fmt.Sprintf("Using %v as a basis for selecting packages", pkgInferencePath))
 	fullInferencePath := repoRoot.Join(pkgInferencePath)
@@ -199,7 +213,7 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd turbopath.AbsoluteSystemPat
 		// scope changed files more deeply if we know there are no global dependencies.
 		var changedFiles []string
 		if fromRef != "" {
-			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, true, cwd.ToStringDuringMigration())
+			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, cwd.ToStringDuringMigration())
 			if err != nil {
 				return nil, err
 			}
@@ -262,7 +276,7 @@ func getChangesFromLockfile(scm scm.SCM, ctx *context.Context, changedFiles []st
 		// unable to reconstruct old lockfile, assume everything changed
 		return nil, true
 	}
-	prevLockfile, err := ctx.PackageManager.UnmarshalLockfile(prevContents)
+	prevLockfile, err := ctx.PackageManager.UnmarshalLockfile(ctx.WorkspaceInfos.PackageJSONs[util.RootPkgName], prevContents)
 	if err != nil {
 		// unable to parse old lockfile, assume everything changed
 		return nil, true

@@ -3,8 +3,9 @@
 package run
 
 import (
+	"strings"
+
 	"github.com/vercel/turbo/cli/internal/cache"
-	"github.com/vercel/turbo/cli/internal/client"
 	"github.com/vercel/turbo/cli/internal/runcache"
 	"github.com/vercel/turbo/cli/internal/scope"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -27,10 +28,10 @@ type runSpec struct {
 
 // ArgsForTask returns the set of args that need to be passed through to the task
 func (rs *runSpec) ArgsForTask(task string) []string {
-	passThroughArgs := make([]string, 0, len(rs.Opts.runOpts.passThroughArgs))
+	passThroughArgs := make([]string, 0, len(rs.Opts.runOpts.PassThroughArgs))
 	for _, target := range rs.Targets {
 		if target == task {
-			passThroughArgs = append(passThroughArgs, rs.Opts.runOpts.passThroughArgs...)
+			passThroughArgs = append(passThroughArgs, rs.Opts.runOpts.PassThroughArgs...)
 		}
 	}
 	return passThroughArgs
@@ -38,51 +39,50 @@ func (rs *runSpec) ArgsForTask(task string) []string {
 
 // Opts holds the current run operations configuration
 type Opts struct {
-	runOpts      runOpts
+	runOpts      util.RunOpts
 	cacheOpts    cache.Opts
-	clientOpts   client.Opts
 	runcacheOpts runcache.Opts
 	scopeOpts    scope.Opts
+}
+
+// SynthesizeCommand produces a command that produces an equivalent set of packages, tasks,
+// and task arguments to what the current set of opts selects.
+func (o *Opts) SynthesizeCommand(tasks []string) string {
+	cmd := "turbo run"
+	cmd += " " + strings.Join(tasks, " ")
+	for _, filterPattern := range o.scopeOpts.FilterPatterns {
+		cmd += " --filter=" + filterPattern
+	}
+	for _, filterPattern := range o.scopeOpts.LegacyFilter.AsFilterPatterns() {
+		cmd += " --filter=" + filterPattern
+	}
+	if o.runOpts.Parallel {
+		cmd += " --parallel"
+	}
+	if o.runOpts.ContinueOnError {
+		cmd += " --continue"
+	}
+	if o.runOpts.DryRun {
+		if o.runOpts.DryRunJSON {
+			cmd += " --dry=json"
+		} else {
+			cmd += " --dry"
+		}
+	}
+	if o.runOpts.Only {
+		cmd += " --only"
+	}
+	if len(o.runOpts.PassThroughArgs) > 0 {
+		cmd += " -- " + strings.Join(o.runOpts.PassThroughArgs, " ")
+	}
+	return cmd
 }
 
 // getDefaultOptions returns the default set of Opts for every run
 func getDefaultOptions() *Opts {
 	return &Opts{
-		runOpts: runOpts{
-			concurrency: 10,
-		},
-		clientOpts: client.Opts{
-			Timeout: client.ClientTimeout,
+		runOpts: util.RunOpts{
+			Concurrency: 10,
 		},
 	}
-}
-
-// RunOpts holds the options that control the execution of a turbo run
-type runOpts struct {
-	// Force execution to be serially one-at-a-time
-	concurrency int
-	// Whether to execute in parallel (defaults to false)
-	parallel bool
-
-	// The filename to write a perf profile.
-	profile string
-	// If true, continue task executions even if a task fails.
-	continueOnError bool
-	passThroughArgs []string
-	// Restrict execution to only the listed task names. Default false
-	only bool
-	// Dry run flags
-	dryRun     bool
-	dryRunJSON bool
-	// Graph flags
-	graphDot      bool
-	graphFile     string
-	noDaemon      bool
-	singlePackage bool
-
-	// logPrefix controls whether we should print a prefix in task logs
-	logPrefix string
-
-	// Whether turbo should create a run summary
-	summarize bool
 }

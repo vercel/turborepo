@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use lazy_static::lazy_static;
 use swc_core::{
     common::DUMMY_SP,
@@ -9,16 +9,21 @@ use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc, ChunkingType,
+        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContext, ChunkingType,
         ChunkingTypeOptionVc, ModuleId,
     },
+    issue::{IssueSeverity, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, PrimaryResolveResult, ResolveResultVc},
+    reference_type::EcmaScriptModulesReferenceSubType,
+    resolve::{
+        origin::ResolveOriginVc, parse::RequestVc, ModulePartVc, PrimaryResolveResult,
+        ResolveResultVc,
+    },
 };
 
 use crate::{
     analyzer::imports::ImportAnnotations,
-    chunk::{EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
     create_visitor, magic_identifier,
     references::util::{request_to_string, throw_module_not_found_expr},
@@ -37,7 +42,7 @@ impl ReferencedAsset {
         Ok(match self {
             ReferencedAsset::Some(asset) => Some(Self::get_ident_from_placeable(asset).await?),
             ReferencedAsset::OriginalReferenceTypeExternal(request) => {
-                Some(magic_identifier::encode(&format!("external {}", request)))
+                Some(magic_identifier::mangle(&format!("external {}", request)))
             }
             ReferencedAsset::None => None,
         })
@@ -47,7 +52,7 @@ impl ReferencedAsset {
         asset: &EcmascriptChunkPlaceableVc,
     ) -> Result<String> {
         let path = asset.ident().to_string().await?;
-        Ok(magic_identifier::encode(&format!(
+        Ok(magic_identifier::mangle(&format!(
             "imported module {}",
             path
         )))
@@ -95,6 +100,8 @@ pub struct EsmAssetReference {
     pub origin: ResolveOriginVc,
     pub request: RequestVc,
     pub annotations: ImportAnnotations,
+
+    pub export_name: Option<ModulePartVc>,
 }
 
 impl EsmAssetReference {
@@ -112,8 +119,9 @@ impl EsmAssetReferenceVc {
     #[turbo_tasks::function]
     pub(super) async fn get_referenced_asset(self) -> Result<ReferencedAssetVc> {
         let this = self.await?;
+
         Ok(ReferencedAssetVc::from_resolve_result(
-            esm_resolve(this.get_origin(), this.request),
+            self.resolve_reference(),
             this.request,
         ))
     }
@@ -123,11 +131,13 @@ impl EsmAssetReferenceVc {
         origin: ResolveOriginVc,
         request: RequestVc,
         annotations: Value<ImportAnnotations>,
+        export_name: Option<ModulePartVc>,
     ) -> Self {
         Self::cell(EsmAssetReference {
             origin,
             request,
             annotations: annotations.into_value(),
+            export_name,
         })
     }
 }
@@ -136,7 +146,18 @@ impl EsmAssetReferenceVc {
 impl AssetReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        esm_resolve(self.get_origin(), self.request)
+        let ty = Value::new(match &self.export_name {
+            Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
+            None => EcmaScriptModulesReferenceSubType::Undefined,
+        });
+
+        esm_resolve(
+            self.get_origin(),
+            self.request,
+            ty,
+            OptionIssueSourceVc::none(),
+            IssueSeverity::Error.cell(),
+        )
     }
 }
 
@@ -177,7 +198,7 @@ impl CodeGenerateable for EsmAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         self_vc: EsmAssetReferenceVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
         let mut visitors = Vec::new();
 
@@ -221,6 +242,9 @@ impl CodeGenerateable for EsmAssetReference {
                         }));
                     }
                     ReferencedAsset::OriginalReferenceTypeExternal(request) => {
+                        if !*context.environment().node_externals().await? {
+                            bail!("the chunking context does not support Node.js external modules");
+                        }
                         let request = request.clone();
                         visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
                             // TODO Technically this should insert a ESM external, but we don't support that yet
@@ -242,7 +266,7 @@ impl CodeGenerateable for EsmAssetReference {
 }
 
 lazy_static! {
-    static ref ESM_HOISTING_LOCATION: &'static str = Box::leak(Box::new(magic_identifier::encode(
+    static ref ESM_HOISTING_LOCATION: &'static str = Box::leak(Box::new(magic_identifier::mangle(
         "ecmascript hoisting location"
     )));
 }
@@ -267,7 +291,7 @@ pub(crate) fn insert_hoisted_stmt(program: &mut Program, stmt: Stmt) {
                 body.insert(
                     0,
                     ModuleItem::Stmt(Stmt::Expr(ExprStmt {
-                        expr: box Expr::Lit(Lit::Str((*ESM_HOISTING_LOCATION).into())),
+                        expr: Box::new(Expr::Lit(Lit::Str((*ESM_HOISTING_LOCATION).into()))),
                         span: DUMMY_SP,
                     })),
                 );
@@ -292,7 +316,7 @@ pub(crate) fn insert_hoisted_stmt(program: &mut Program, stmt: Stmt) {
                 body.insert(
                     0,
                     Stmt::Expr(ExprStmt {
-                        expr: box Expr::Lit(Lit::Str((*ESM_HOISTING_LOCATION).into())),
+                        expr: Box::new(Expr::Lit(Lit::Str((*ESM_HOISTING_LOCATION).into()))),
                         span: DUMMY_SP,
                     }),
                 );

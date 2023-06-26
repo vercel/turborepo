@@ -10,6 +10,8 @@
 
 #![feature(min_specialization)]
 
+pub mod fixed;
+
 use anyhow::{anyhow, Result};
 use turbo_tasks::{primitives::StringVc, Value, ValueToString};
 use turbo_tasks_fs::FileContent;
@@ -28,9 +30,9 @@ use turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_js,
+    utils::StringifyJs,
 };
 
 #[turbo_tasks::function]
@@ -99,12 +101,12 @@ impl EcmascriptChunkPlaceable for StaticModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: StaticModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
         ModuleChunkItemVc::cell(ModuleChunkItem {
             module: self_vc,
             context,
-            static_asset: self_vc.static_asset(context),
+            static_asset: self_vc.static_asset(context.into()),
         })
         .into()
     }
@@ -136,7 +138,6 @@ struct StaticAsset {
 impl Asset for StaticAsset {
     #[turbo_tasks::function]
     async fn ident(&self) -> Result<AssetIdentVc> {
-        let source_path = self.source.ident().path();
         let content = self.source.content();
         let content_hash = if let AssetContent::File(file) = &*content.await? {
             if let FileContent::Content(file) = &*file.await? {
@@ -148,10 +149,9 @@ impl Asset for StaticAsset {
             return Err(anyhow!("StaticAsset::path: unsupported file content"));
         };
         let content_hash_b16 = turbo_tasks_hash::encode_hex(content_hash);
-        let asset_path = match source_path.await?.extension() {
-            Some(ext) => self.context.asset_path(&content_hash_b16, ext),
-            None => self.context.asset_path(&content_hash_b16, "bin"),
-        };
+        let asset_path = self
+            .context
+            .asset_path(&content_hash_b16, self.source.ident());
         Ok(AssetIdentVc::from_path(asset_path))
     }
 
@@ -164,7 +164,7 @@ impl Asset for StaticAsset {
 #[turbo_tasks::value]
 struct ModuleChunkItem {
     module: StaticModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
     static_asset: StaticAssetVc,
 }
 
@@ -191,7 +191,7 @@ impl ChunkItem for ModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 
@@ -200,7 +200,10 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         Ok(EcmascriptChunkItemContent {
             inner_code: format!(
                 "__turbopack_export_value__({path});",
-                path = stringify_js(&format!("/{}", &*self.static_asset.ident().path().await?))
+                path = StringifyJs(&format_args!(
+                    "/{}",
+                    &*self.static_asset.ident().path().await?
+                ))
             )
             .into(),
             ..Default::default()

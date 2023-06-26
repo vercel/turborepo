@@ -1,13 +1,15 @@
 use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
 use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    chunk::{Chunk, ChunkGroupVc, ChunkReferenceVc},
+    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    chunk::{
+        ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
+    },
     ident::AssetIdentVc,
-    reference::AssetReferencesVc,
+    reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{Version, VersionVc, VersionedContent, VersionedContentVc},
 };
 
@@ -18,8 +20,19 @@ use turbopack_core::{
 #[derive(Clone)]
 pub struct DevHtmlAsset {
     path: FileSystemPathVc,
-    chunk_groups: Vec<ChunkGroupVc>,
+    // TODO(WEB-945) This should become a `Vec<DevHtmlEntry>` once we have a
+    // `turbo_tasks::input` attribute macro/`Input` derive macro.
+    entries: Vec<(
+        ChunkableAssetVc,
+        ChunkingContextVc,
+        Option<EvaluatableAssetsVc>,
+    )>,
     body: Option<String>,
+}
+
+#[turbo_tasks::function]
+fn dev_html_chunk_reference_description() -> StringVc {
+    StringVc::cell("dev html chunk".to_string())
 }
 
 #[turbo_tasks::value_impl]
@@ -35,13 +48,12 @@ impl Asset for DevHtmlAsset {
     }
 
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<AssetReferencesVc> {
+    async fn references(self_vc: DevHtmlAssetVc) -> Result<AssetReferencesVc> {
         let mut references = Vec::new();
-        for chunk_group in &self.chunk_groups {
-            let chunks = chunk_group.chunks().await?;
-            for chunk in chunks.iter() {
-                references.push(ChunkReferenceVc::new(*chunk).into());
-            }
+        for chunk in &*self_vc.chunks().await? {
+            references.push(
+                SingleAssetReferenceVc::new(*chunk, dev_html_chunk_reference_description()).into(),
+            );
         }
         Ok(AssetReferencesVc::cell(references))
     }
@@ -54,10 +66,17 @@ impl Asset for DevHtmlAsset {
 
 impl DevHtmlAssetVc {
     /// Create a new dev HTML asset.
-    pub fn new(path: FileSystemPathVc, chunk_groups: Vec<ChunkGroupVc>) -> Self {
+    pub fn new(
+        path: FileSystemPathVc,
+        entries: Vec<(
+            ChunkableAssetVc,
+            ChunkingContextVc,
+            Option<EvaluatableAssetsVc>,
+        )>,
+    ) -> Self {
         DevHtmlAsset {
             path,
-            chunk_groups,
+            entries,
             body: None,
         }
         .cell()
@@ -66,12 +85,16 @@ impl DevHtmlAssetVc {
     /// Create a new dev HTML asset.
     pub fn new_with_body(
         path: FileSystemPathVc,
-        chunk_groups: Vec<ChunkGroupVc>,
+        entries: Vec<(
+            ChunkableAssetVc,
+            ChunkingContextVc,
+            Option<EvaluatableAssetsVc>,
+        )>,
         body: String,
     ) -> Self {
         DevHtmlAsset {
             path,
-            chunk_groups,
+            entries,
             body: Some(body),
         }
         .cell()
@@ -103,16 +126,43 @@ impl DevHtmlAssetVc {
         let context_path = this.path.parent().await?;
 
         let mut chunk_paths = vec![];
-        for chunk_group in &this.chunk_groups {
-            for chunk in chunk_group.chunks().await?.iter() {
-                let chunk_path = &*chunk.path().await?;
-                if let Some(relative_path) = context_path.get_path_to(chunk_path) {
-                    chunk_paths.push(format!("/{relative_path}"));
-                }
+        for chunk in &*self.chunks().await? {
+            let chunk_path = &*chunk.ident().path().await?;
+            if let Some(relative_path) = context_path.get_path_to(chunk_path) {
+                chunk_paths.push(format!("/{relative_path}"));
             }
         }
 
         Ok(DevHtmlAssetContentVc::new(chunk_paths, this.body.clone()))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunks(self) -> Result<AssetsVc> {
+        let this = self.await?;
+
+        let all_assets = this
+            .entries
+            .iter()
+            .map(|entry| async move {
+                let (chunkable_asset, chunking_context, runtime_entries) = entry;
+
+                let chunk = chunkable_asset.as_root_chunk(*chunking_context);
+                let assets = if let Some(runtime_entries) = runtime_entries {
+                    chunking_context.evaluated_chunk_group(chunk, *runtime_entries)
+                } else {
+                    chunking_context.chunk_group(chunk)
+                };
+
+                assets.await
+            })
+            .try_join()
+            .await?
+            .iter()
+            .flatten()
+            .copied()
+            .collect();
+
+        Ok(AssetsVc::cell(all_assets))
     }
 }
 

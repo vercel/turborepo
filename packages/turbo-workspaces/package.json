@@ -1,7 +1,7 @@
 {
   "name": "@turbo/workspaces",
-  "version": "0.0.0",
-  "description": "Tools for working with package manager workspaces",
+  "version": "1.10.6",
+  "description": "Tools for working with package managers",
   "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
   "repository": {
@@ -14,12 +14,14 @@
   },
   "bin": "dist/cli.js",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
     "chalk": "2.4.2",
@@ -33,7 +35,6 @@
     "ora": "4.1.1",
     "rimraf": "^3.0.2",
     "semver": "^7.3.5",
-    "turbo-utils": "workspace:*",
     "update-check": "^1.5.4"
   },
   "devDependencies": {
@@ -51,12 +52,16 @@
     "semver": "^7.3.5",
     "strip-ansi": "^6.0.1",
     "ts-jest": "^27.1.1",
-    "tsconfig": "workspace:*",
+    "@turbo/tsconfig": "workspace:*",
     "tsup": "^5.10.3",
-    "turbo-test-utils": "workspace:*",
+    "@turbo/test-utils": "workspace:*",
+    "@turbo/utils": "workspace:*",
     "typescript": "^4.5.5"
   },
   "files": [
     "dist"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

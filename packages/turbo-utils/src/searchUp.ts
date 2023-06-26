@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-function searchUp({
+export function searchUp({
   target,
   cwd,
   contentCheck,
@@ -40,5 +40,3 @@ function searchUp({
 
   return null;
 }
-
-export default searchUp;

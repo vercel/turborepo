@@ -4,15 +4,14 @@ package run
 
 import (
 	gocontext "context"
-	"fmt"
-	"path/filepath"
-	"regexp"
 	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/runsummary"
@@ -27,83 +26,39 @@ func DryRun(
 	g *graph.CompleteGraph,
 	rs *runSpec,
 	engine *core.Engine,
-	taskHashTracker *taskhash.Tracker,
+	_ *taskhash.Tracker, // unused, but keep here for parity with RealRun method signature
 	turboCache cache.Cache,
+	_ *fs.TurboJSON, // unused, but keep here for parity with RealRun method signature
+	globalEnvMode util.EnvMode,
+	_ env.EnvironmentVariableMap,
+	_ env.EnvironmentVariableMap,
 	base *cmdutil.CmdBase,
-	summary *runsummary.RunSummary,
+	summary runsummary.Meta,
 ) error {
 	defer turboCache.Shutdown()
 
-	dryRunJSON := rs.Opts.runOpts.dryRunJSON
-	singlePackage := rs.Opts.runOpts.singlePackage
+	taskSummaries := []*runsummary.TaskSummary{}
 
-	taskSummaries, err := executeDryRun(
-		ctx,
-		engine,
-		g,
-		taskHashTracker,
-		rs,
-		base,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	// We walk the graph with no concurrency.
-	// Populating the cache state is parallelizable.
-	// Do this _after_ walking the graph.
-	populateCacheState(turboCache, taskSummaries)
-
-	// Assign the Task Summaries to the main summary
-	summary.Tasks = taskSummaries
-
-	// Render the dry run as json
-	if dryRunJSON {
-		rendered, err := summary.FormatJSON(singlePackage)
-		if err != nil {
-			return err
-		}
-		base.UI.Output(string(rendered))
-		return nil
-	}
-
-	return summary.FormatAndPrintText(base.UI, g.WorkspaceInfos, singlePackage)
-}
-
-func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.CompleteGraph, taskHashTracker *taskhash.Tracker, rs *runSpec, base *cmdutil.CmdBase) ([]*runsummary.TaskSummary, error) {
-	taskIDs := []*runsummary.TaskSummary{}
-
-	dryRunExecFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		isRootTask := packageTask.PackageName == util.RootPkgName
-		if isRootTask && commandLooksLikeTurbo(taskSummary.Command) {
-			return fmt.Errorf("root task %v (%v) looks like it invokes turbo and might cause a loop", packageTask.Task, taskSummary.Command)
-		}
-
-		ancestors, err := engine.GetTaskGraphAncestors(packageTask.TaskID)
-		if err != nil {
-			return err
-		}
-
-		descendents, err := engine.GetTaskGraphDescendants(packageTask.TaskID)
-		if err != nil {
-			return err
-		}
-
+	mu := sync.Mutex{}
+	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
 		// Assign some fallbacks if they were missing
 		if taskSummary.Command == "" {
 			taskSummary.Command = runsummary.MissingTaskLabel
 		}
 
 		if taskSummary.Framework == "" {
-			taskSummary.Framework = runsummary.MissingFrameworkLabel
+			if rs.Opts.runOpts.FrameworkInference {
+				taskSummary.Framework = runsummary.NoFrameworkDetected
+			} else {
+				taskSummary.Framework = runsummary.FrameworkDetectionSkipped
+			}
 		}
 
-		taskSummary.Dependencies = ancestors // TODO(mehulkar): Move this to PackageTask
-		taskSummary.Dependents = descendents // TODO(mehulkar): Move this to PackageTask
-
-		taskIDs = append(taskIDs, taskSummary)
-
+		// This mutex is not _really_ required, since we are using Concurrency: 1 as an execution
+		// option, but we add it here to match the shape of RealRuns execFunc.
+		mu.Lock()
+		defer mu.Unlock()
+		taskSummaries = append(taskSummaries, taskSummary)
 		return nil
 	}
 
@@ -114,21 +69,31 @@ func executeDryRun(ctx gocontext.Context, engine *core.Engine, g *graph.Complete
 	getArgs := func(taskID string) []string {
 		return rs.ArgsForTask(taskID)
 	}
-	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, getArgs, base.Logger, dryRunExecFunc)
+
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, rs.Opts.runOpts.FrameworkInference, globalEnvMode, getArgs, base.Logger, execFunc)
 	execOpts := core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
 	}
-	errs := engine.Execute(visitorFn, execOpts)
 
-	if len(errs) > 0 {
+	if errs := engine.Execute(visitorFn, execOpts); len(errs) > 0 {
 		for _, err := range errs {
 			base.UI.Error(err.Error())
 		}
-		return nil, errors.New("errors occurred during dry-run graph traversal")
+		return errors.New("errors occurred during dry-run graph traversal")
 	}
 
-	return taskIDs, nil
+	// We walk the graph with no concurrency.
+	// Populating the cache state is parallelizable.
+	// Do this _after_ walking the graph.
+	populateCacheState(turboCache, taskSummaries)
+
+	// Assign the Task Summaries to the main summary
+	summary.RunSummary.Tasks = taskSummaries
+
+	// The exitCode isn't really used by the Run Summary Close() method for dry runs
+	// but we pass in a successful value to match Real Runs.
+	return summary.Close(ctx, 0, g.WorkspaceInfos, base.UI)
 }
 
 func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {
@@ -151,7 +116,7 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.Task
 			for index := range queue {
 				task := taskSummaries[index]
 				itemStatus := turboCache.Exists(task.Hash)
-				task.CacheState = itemStatus
+				task.CacheSummary = runsummary.NewTaskCacheSummary(itemStatus)
 			}
 		}()
 	}
@@ -161,10 +126,4 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.Task
 	}
 	close(queue)
 	wg.Wait()
-}
-
-var _isTurbo = regexp.MustCompile(fmt.Sprintf("(?:^|%v|\\s)turbo(?:$|\\s)", regexp.QuoteMeta(string(filepath.Separator))))
-
-func commandLooksLikeTurbo(command string) bool {
-	return _isTurbo.MatchString(command)
 }

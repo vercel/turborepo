@@ -58,6 +58,54 @@ A list of environment variables for implicit global hash dependencies. The conte
 }
 ```
 
+## `globalPassThroughEnv`
+
+This goes at the root of your configuration.
+
+`type: string[]`
+
+An allowlist of environment variables that should be made available to all tasks
+but should not contribute to the task's cache key. Using this key opts all tasks
+into `strict` environment variable mode.
+
+Changing this list will contribute to the global cache key, but the value of each
+variable will not.
+
+**Example**
+
+`AWS_SECRET_KEY` and `GITHUB_TOKEN` are available to all tasks in `strict` [env mode][r-cli-env-mode].
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"],
+  "pipeline": {
+    // ...task definitions...
+  }
+}
+```
+
+## `globalDotEnv`
+
+`type: null | string[]`
+`default: null`
+
+The ordered list of `.env` files to include into the global hash key's file hash.
+
+Note: this does _not_ load the files into the environment.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDotEnv": [".env.local", ".env"],
+  "pipeline": {
+    "build": {}
+  }
+}
+```
+
 ## `extends`
 
 `type: string[]`
@@ -135,6 +183,28 @@ Items in `dependsOn` without `^` prefix, express the relationships between tasks
 }
 ```
 
+### `dotEnv`
+
+`type: null | string[]`
+`default: null`
+
+The ordered list of `.env` files to include into the task's file hash. These files will be included into the hash regardless of whether or not they are included in the `git` index.
+
+Note: this does _not_ load the files into the environment.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dotEnv": [".env.local", ".env"],
+    }
+  }
+}
+```
+
 ### `env`
 
 `type: string[]`
@@ -150,12 +220,12 @@ The list of environment variables a task depends on.
     "build": {
       "dependsOn": ["^build"],
       "env": ["SOMETHING_ELSE"], // value will impact the hashes of all build tasks
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "web#build": {
       "dependsOn": ["^build"],
       "env": ["STRIPE_SECRET_KEY"], // value will impact hash of only web's build task
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   },
   "globalEnv": [
@@ -175,6 +245,39 @@ The list of environment variables a task depends on.
   on them automatically. See more in the [docs on
   caching](/repo/docs/core-concepts/caching#automatic-environment-variable-inclusion).
 </Callout>
+
+### `passThroughEnv`
+
+`type: string[]`
+
+This config goes inside each task definition in the [`pipeline`][r-config-pipeline].
+
+An allowlist of environment variables that should be made available to this task
+but should not contribute to the task's cache key. Using this key opts this task
+into `strict` environment variable mode.
+
+Changing this list will contribute to the task's cache key, but the value of each
+variable will not.
+
+**Example**
+
+`AWS_SECRET_KEY` and `GITHUB_TOKEN` are available to the `build` task, but not to the `lint` task
+in `strict` [env mode][r-cli-env-mode].
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "passThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
+    },
+    "lint": {},
+  }
+}
+```
+
+[r-config-pipeline]: #pipeline
+[r-cli-env-mode]: /repo/docs/reference/command-line-reference/run#--env-mode
 
 ### `outputs`
 
@@ -202,7 +305,7 @@ logs (and treat them like an artifact).
     "build": {
       // "Cache all files emitted to workspace's dist/** or .next
       // directories by a `build` task"
-      "outputs": ["dist/**", ".next/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
       "dependsOn": ["^build"]
     },
     "test": {

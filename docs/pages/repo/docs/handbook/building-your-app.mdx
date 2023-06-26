@@ -48,7 +48,7 @@ Inside `turbo.json`, you can add `build` to the pipeline.
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   }
 }

@@ -28,7 +28,6 @@
 #![feature(hash_drain_filter)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![feature(result_flattening)]
-#![feature(box_syntax)]
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
 #![feature(new_uninit)]
@@ -39,11 +38,15 @@ mod collectibles;
 mod completion;
 pub mod debug;
 mod display;
+pub mod duration_span;
 pub mod event;
 pub mod graph;
 mod id;
 mod id_factory;
+mod invalidation;
 mod join_iter_ext;
+#[doc(hidden)]
+pub mod macro_helpers;
 mod magic_any;
 mod manager;
 mod native_function;
@@ -73,11 +76,15 @@ pub use id::{
     with_task_id_mapping, without_task_id_mapping, FunctionId, IdMapping, TaskId, TraitTypeId,
     ValueTypeId,
 };
+pub use invalidation::{
+    DynamicEqHash, InvalidationReason, InvalidationReasonKind, InvalidationReasonSet,
+};
 pub use join_iter_ext::{JoinIterExt, TryJoinIterExt};
 pub use manager::{
-    dynamic_call, emit, get_invalidator, mark_stateful, run_once, spawn_blocking, spawn_thread,
-    trait_call, turbo_tasks, Invalidator, StatsType, TaskIdProvider, TurboTasks, TurboTasksApi,
-    TurboTasksBackendApi, TurboTasksCallApi, Unused,
+    dynamic_call, emit, get_invalidator, mark_finished, mark_stateful, run_once,
+    run_once_with_reason, spawn_blocking, spawn_thread, trait_call, turbo_tasks, Invalidator,
+    StatsType, TaskIdProvider, TurboTasks, TurboTasksApi, TurboTasksBackendApi, TurboTasksCallApi,
+    Unused, UpdateInfo,
 };
 pub use native_function::{NativeFunction, NativeFunctionVc};
 pub use nothing::{Nothing, NothingVc};
@@ -89,19 +96,12 @@ pub use read_ref::ReadRef;
 pub use state::State;
 pub use task_input::{FromTaskInput, SharedReference, SharedValue, TaskInput};
 pub use trait_ref::{IntoTraitRef, TraitRef};
-pub use turbo_tasks_macros::{function, value, value_impl, value_trait};
+pub use turbo_tasks_macros::{function, value, value_impl, value_trait, TaskInput};
 pub use value::{TransientInstance, TransientValue, Value};
 pub use value_type::{
     FromSubTrait, IntoSuperTrait, TraitMethod, TraitType, Typed, TypedForInput, ValueTraitVc,
     ValueType, ValueVc,
 };
-
-#[doc(hidden)]
-pub mod macro_helpers {
-    pub use once_cell::sync::{Lazy, OnceCell};
-
-    pub use super::manager::find_cell_by_type;
-}
 
 pub mod test_helpers {
     pub use super::manager::{current_task_for_testing, with_turbo_tasks_for_testing};
@@ -109,4 +109,10 @@ pub mod test_helpers {
 
 pub fn register() {
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
+}
+
+/// Helper for derive macros
+#[doc(hidden)]
+mod turbo_tasks {
+    pub use crate::macro_helpers;
 }

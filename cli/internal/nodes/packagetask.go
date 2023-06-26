@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // PackageTask represents running a particular task in a particular package
@@ -13,6 +14,7 @@ type PackageTask struct {
 	Task            string
 	PackageName     string
 	Pkg             *fs.PackageJSON
+	EnvMode         util.EnvMode
 	TaskDefinition  *fs.TaskDefinition
 	Dir             string
 	Command         string
@@ -36,8 +38,10 @@ func (pt *PackageTask) HashableOutputs() fs.TaskOutputs {
 	inclusionOutputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.Task)}
 	inclusionOutputs = append(inclusionOutputs, pt.TaskDefinition.Outputs.Inclusions...)
 
-	return fs.TaskOutputs{
+	hashable := fs.TaskOutputs{
 		Inclusions: inclusionOutputs,
 		Exclusions: pt.TaskDefinition.Outputs.Exclusions,
 	}
+	hashable.Sort()
+	return hashable
 }

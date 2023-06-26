@@ -55,9 +55,9 @@ pub fn gen_native_function_code(
                     }
                 };
                 input_extraction.push(quote! {
-                    let __self = __iter
-                        .next()
-                        .ok_or_else(|| anyhow::anyhow!("{}() self argument missing", #name_code))?;
+                    let Some(__self) = __iter.next() else {
+                        anyhow::bail!("{}() self argument missing", #name_code);
+                    };
                 });
                 input_convert.push(quote! {
                     let __self: #self_ref_ident = turbo_tasks::FromTaskInput::try_from(__self)?;
@@ -94,9 +94,9 @@ pub fn gen_native_function_code(
             }
             FnArg::Typed(PatType { pat, ty, .. }) => {
                 input_extraction.push(quote! {
-                    let #pat = __iter
-                        .next()
-                        .ok_or_else(|| anyhow::anyhow!(concat!("{}() argument ", stringify!(#index), " (", stringify!(#pat), ") missing"), #name_code))?;
+                    let Some(#pat) = __iter.next() else {
+                        anyhow::bail!(concat!("{}() argument ", stringify!(#index), " (", stringify!(#pat), ") missing"), #name_code);
+                    };
                 });
                 input_final.push(quote! {});
                 if let Type::Reference(TypeReference {
@@ -165,8 +165,10 @@ pub fn gen_native_function_code(
         },
         (true, false) => quote! { #original_call_code.map(|v| v.into()) },
         (false, true) => quote! {
-            #original_call_code;
-            Ok(turbo_tasks::NothingVc::new().into())
+            {
+                #original_call_code;
+                Ok(turbo_tasks::NothingVc::new().into())
+            }
         },
         (false, false) => quote! { Ok(#original_call_code.into()) },
     };
@@ -175,7 +177,7 @@ pub fn gen_native_function_code(
             #[doc(hidden)]
             pub(crate) static #function_ident: turbo_tasks::macro_helpers::Lazy<turbo_tasks::NativeFunction> =
                 turbo_tasks::macro_helpers::Lazy::new(|| {
-                    turbo_tasks::NativeFunction::new(#name_code.to_owned(), |inputs| {
+                    turbo_tasks::NativeFunction::new(#name_code.to_owned(), Box::new(|inputs| {
                         let mut __iter = inputs.iter();
                         #(#input_extraction)*
                         if __iter.next().is_some() {
@@ -184,12 +186,14 @@ pub fn gen_native_function_code(
                         #(#input_convert)*
                         Ok(Box::new(move || {
                             #(#input_clone)*
-                            Box::pin(async move {
+                            Box::pin(turbo_tasks::macro_helpers::tracing::Instrument::instrument(async move {
                                 #(#input_final)*
-                                #original_call_code
-                            })
+                                let turbo_tasks_result = #original_call_code;
+                                turbo_tasks::macro_helpers::notify_scheduled_tasks();
+                                turbo_tasks_result
+                            }, turbo_tasks::macro_helpers::tracing::trace_span!(#name_code)))
                         }))
-                    })
+                    }))
                 });
 
             #[doc(hidden)]

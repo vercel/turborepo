@@ -79,11 +79,11 @@ Let's assume that the Next.js `docs-site` renders the markdown files from the `.
     // ... omitted for brevity
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "docs#build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
       // Define set of relevant globs which impact caching of docs site
       // builds
       "inputs": [

@@ -1,10 +1,21 @@
-import { getAvailablePackageManagers } from "turbo-utils";
+import { getAvailablePackageManagers } from "@turbo/utils";
 import getWorkspaceDetails from "./getWorkspaceDetails";
-import { PackageManager, Options } from "./types";
-import { default as convert } from "./convert";
+import { convertProject } from "./convert";
 import { Logger } from "./logger";
+import install, { getPackageManagerMeta } from "./install";
+import { ConvertError } from "./errors";
+import MANAGERS from "./managers";
 
-async function convertMonorepo({
+import type {
+  PackageManager,
+  Options,
+  InstallArgs,
+  Workspace,
+  Project,
+} from "./types";
+import type { ConvertErrorType } from "./errors";
+
+async function convert({
   root,
   to,
   options,
@@ -18,7 +29,7 @@ async function convertMonorepo({
     getWorkspaceDetails({ root }),
     getAvailablePackageManagers(),
   ]);
-  await convert({
+  await convertProject({
     project,
     to: {
       name: to,
@@ -29,5 +40,19 @@ async function convertMonorepo({
   });
 }
 
-export { convertMonorepo, getWorkspaceDetails };
-export { default as MANAGERS } from "./managers";
+export type {
+  PackageManager,
+  Options,
+  InstallArgs,
+  Workspace,
+  Project,
+  ConvertErrorType,
+};
+export {
+  convert,
+  getWorkspaceDetails,
+  install,
+  MANAGERS,
+  getPackageManagerMeta,
+  ConvertError,
+};

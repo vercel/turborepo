@@ -1,4 +1,4 @@
-import { setupTestFixtures } from "turbo-test-utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 import getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
 import * as utils from "../src/commands/migrate/utils";
 import * as getPackageManager from "../src/utils/getPackageManager";

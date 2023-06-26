@@ -2,61 +2,45 @@
     (
         "*anonymous function 170*",
         Function(
-            5,
+            3,
             170,
-            Alternatives(
-                4,
-                [
-                    Constant(
-                        Undefined,
+            Array {
+                total_nodes: 2,
+                items: [
+                    Variable(
+                        (
+                            Atom('file' type=static),
+                            #4,
+                        ),
                     ),
-                    Array {
-                        total_nodes: 2,
-                        items: [
-                            Variable(
-                                (
-                                    Atom('file' type=static),
-                                    #3,
-                                ),
-                            ),
-                        ],
-                        mutable: true,
-                    },
                 ],
-            ),
+                mutable: true,
+            },
         ),
     ),
     (
         "*anonymous function 254*",
         Function(
-            7,
+            5,
             254,
-            Alternatives(
-                6,
-                [
-                    Constant(
-                        Undefined,
+            MemberCall(
+                4,
+                FreeVar(
+                    Atom('require' type=static),
+                ),
+                Constant(
+                    Str(
+                        Word(
+                            Atom('resolve' type=inline),
+                        ),
                     ),
-                    MemberCall(
-                        4,
-                        FreeVar(
-                            Require,
+                ),
+                [
+                    Variable(
+                        (
+                            Atom('file' type=static),
+                            #5,
                         ),
-                        Constant(
-                            Str(
-                                Word(
-                                    Atom('resolve' type=inline),
-                                ),
-                            ),
-                        ),
-                        [
-                            Variable(
-                                (
-                                    Atom('file' type=static),
-                                    #4,
-                                ),
-                            ),
-                        ],
                     ),
                 ],
             ),
@@ -65,21 +49,13 @@
     (
         "*anonymous function 88*",
         Function(
-            4,
+            2,
             88,
-            Alternatives(
-                3,
-                [
-                    Constant(
-                        Undefined,
-                    ),
-                    Variable(
-                        (
-                            Atom('file' type=static),
-                            #2,
-                        ),
-                    ),
-                ],
+            Variable(
+                (
+                    Atom('file' type=static),
+                    #3,
+                ),
             ),
         ),
     ),
@@ -230,21 +206,21 @@
         ),
     ),
     (
-        "file#2",
+        "file#3",
         Argument(
             88,
             0,
         ),
     ),
     (
-        "file#3",
+        "file#4",
         Argument(
             170,
             0,
         ),
     ),
     (
-        "file#4",
+        "file#5",
         Argument(
             254,
             0,
@@ -260,34 +236,26 @@
     (
         "func",
         Function(
-            7,
+            5,
             308,
-            Alternatives(
-                6,
-                [
-                    Constant(
-                        Undefined,
+            MemberCall(
+                4,
+                FreeVar(
+                    Atom('require' type=static),
+                ),
+                Constant(
+                    Str(
+                        Word(
+                            Atom('resolve' type=inline),
+                        ),
                     ),
-                    MemberCall(
-                        4,
-                        FreeVar(
-                            Require,
+                ),
+                [
+                    Variable(
+                        (
+                            Atom('file' type=static),
+                            #6,
                         ),
-                        Constant(
-                            Str(
-                                Word(
-                                    Atom('resolve' type=inline),
-                                ),
-                            ),
-                        ),
-                        [
-                            Variable(
-                                (
-                                    Atom('file' type=static),
-                                    #6,
-                                ),
-                            ),
-                        ],
                     ),
                 ],
             ),

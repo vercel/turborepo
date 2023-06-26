@@ -600,6 +600,17 @@ func Test_SCM(t *testing.T) {
 			},
 			[]string{"package-3"},
 		},
+		{
+			"match dependency subtree",
+			[]*TargetSelector{
+				{
+					fromRef:           "HEAD~1",
+					parentDir:         "package-*",
+					matchDependencies: true,
+				},
+			},
+			[]string{"package-1", "package-2"},
+		},
 	}
 
 	for _, tc := range testCases {

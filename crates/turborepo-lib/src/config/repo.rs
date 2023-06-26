@@ -1,11 +1,9 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, env};
 
 use anyhow::Result;
 use config::Config;
 use serde::{Deserialize, Serialize};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::{write_to_disk, MappedEnvironment};
 
@@ -16,76 +14,97 @@ const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 pub struct RepoConfig {
     disk_config: RepoConfigValue,
     config: RepoConfigValue,
-    path: PathBuf,
+    path: AbsoluteSystemPathBuf,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
-struct RepoConfigValue {
-    apiurl: Option<String>,
-    loginurl: Option<String>,
-    teamslug: Option<String>,
-    teamid: Option<String>,
+pub struct RepoConfigValue {
+    #[serde(alias = "apiUrl")]
+    #[serde(alias = "ApiUrl")]
+    #[serde(alias = "APIURL")]
+    #[serde(rename = "apiurl")]
+    pub(crate) api_url: Option<String>,
+
+    #[serde(alias = "loginUrl")]
+    #[serde(alias = "LoginUrl")]
+    #[serde(alias = "LOGINURL")]
+    #[serde(rename = "loginurl")]
+    pub(crate) login_url: Option<String>,
+
+    #[serde(alias = "teamSlug")]
+    #[serde(alias = "TeamSlug")]
+    #[serde(alias = "TEAMSLUG")]
+    #[serde(rename = "teamslug")]
+    pub(crate) team_slug: Option<String>,
+
+    #[serde(alias = "teamId")]
+    #[serde(alias = "TeamId")]
+    #[serde(alias = "TEAMID")]
+    #[serde(rename = "teamid")]
+    pub(crate) team_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct RepoConfigLoader {
-    path: PathBuf,
+    path: AbsoluteSystemPathBuf,
     api: Option<String>,
     login: Option<String>,
-    teamslug: Option<String>,
+    team_slug: Option<String>,
     environment: Option<HashMap<String, String>>,
 }
 
 impl RepoConfig {
     #[allow(dead_code)]
     pub fn api_url(&self) -> &str {
-        self.config.apiurl.as_deref().unwrap_or(DEFAULT_API_URL)
+        self.config.api_url.as_deref().unwrap_or(DEFAULT_API_URL)
     }
 
     #[allow(dead_code)]
     pub fn login_url(&self) -> &str {
-        self.config.loginurl.as_deref().unwrap_or(DEFAULT_LOGIN_URL)
+        self.config
+            .login_url
+            .as_deref()
+            .unwrap_or(DEFAULT_LOGIN_URL)
     }
 
     #[allow(dead_code)]
     pub fn team_slug(&self) -> Option<&str> {
-        self.config.teamslug.as_deref()
+        self.config.team_slug.as_deref()
     }
 
     #[allow(dead_code)]
     pub fn team_id(&self) -> Option<&str> {
-        self.config.teamid.as_deref()
+        self.config.team_id.as_deref()
     }
 
     /// Sets the team id and clears the team slug, since it may have been from
     /// an old team
     #[allow(dead_code)]
     pub fn set_team_id(&mut self, team_id: Option<String>) -> Result<()> {
-        self.disk_config.teamslug = None;
-        self.config.teamslug = None;
-        self.disk_config.teamid = team_id.clone();
-        self.config.teamid = team_id;
+        self.disk_config.team_slug = None;
+        self.config.team_slug = None;
+        self.disk_config.team_id = team_id.clone();
+        self.config.team_id = team_id;
         self.write_to_disk()
     }
 
     fn write_to_disk(&self) -> Result<()> {
-        write_to_disk(&self.path, &self.disk_config)
+        write_to_disk(self.path.as_path(), &self.disk_config)
     }
 }
 
-#[allow(dead_code)]
-pub fn get_repo_config_path(repo_root: &Path) -> PathBuf {
-    repo_root.join(".turbo").join("config.json")
+pub fn get_repo_config_path(repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+    repo_root.join_components(&[".turbo", "config.json"])
 }
 
 impl RepoConfigLoader {
     #[allow(dead_code)]
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: AbsoluteSystemPathBuf) -> Self {
         Self {
             path,
             api: None,
             login: None,
-            teamslug: None,
+            team_slug: None,
             environment: None,
         }
     }
@@ -104,7 +123,7 @@ impl RepoConfigLoader {
 
     #[allow(dead_code)]
     pub fn with_team_slug(mut self, team_slug: Option<String>) -> Self {
-        self.teamslug = team_slug;
+        self.team_slug = team_slug;
         self
     }
 
@@ -120,18 +139,18 @@ impl RepoConfigLoader {
             path,
             api,
             login,
-            teamslug,
+            team_slug,
             environment,
         } = self;
         let raw_disk_config = Config::builder()
             .add_source(
-                config::File::with_name(path.to_string_lossy().as_ref())
+                config::File::with_name(path.as_str())
                     .format(config::FileFormat::Json)
                     .required(false),
             )
             .build()?;
 
-        let has_teamslug_override = teamslug.is_some();
+        let has_team_slug_override = team_slug.is_some();
 
         let mut config: RepoConfigValue = Config::builder()
             .add_source(raw_disk_config.clone())
@@ -144,7 +163,7 @@ impl RepoConfigLoader {
             )
             .set_override_option("apiurl", api)?
             .set_override_option("loginurl", login)?
-            .set_override_option("teamslug", teamslug)?
+            .set_override_option("teamslug", team_slug)?
             // set teamid to none if teamslug present
             .build()?
             .try_deserialize()?;
@@ -153,8 +172,13 @@ impl RepoConfigLoader {
 
         // If teamid was passed via command line flag we ignore team slug as it
         // might not match.
-        if has_teamslug_override {
-            config.teamid = None;
+        if has_team_slug_override {
+            config.team_id = None;
+        }
+
+        // We don't set this above because it's specific to team_id
+        if let Ok(vercel_artifacts_owner) = env::var("VERCEL_ARTIFACTS_OWNER") {
+            config.team_id = Some(vercel_artifacts_owner);
         }
 
         Ok(RepoConfig {
@@ -170,15 +194,47 @@ mod test {
     use std::io::Write;
 
     use tempfile::NamedTempFile;
+    use test_case::test_case;
 
     use super::*;
 
     #[test]
+    fn test_repo_config_when_missing() -> Result<()> {
+        let path = if cfg!(windows) {
+            "C:\\missing"
+        } else {
+            "/missing"
+        };
+
+        let config = RepoConfigLoader::new(AbsoluteSystemPathBuf::new(path).unwrap()).load();
+        assert!(config.is_ok());
+
+        Ok(())
+    }
+
+    #[test_case("teamSlug" ; "lowerCamelCase")]
+    #[test_case("teamslug" ; "lowercase")]
+    #[test_case("TeamSlug" ; "CamelCase")]
+    #[test_case("TEAMSLUG" ; "ALLCAPS")]
+    fn test_repo_config_with_different_cases(field_name: &str) -> Result<()> {
+        let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
+        writeln!(&mut config_file, "{{\"{}\": \"123\"}}", field_name)?;
+
+        let config = RepoConfigLoader::new(config_path).load()?;
+
+        assert_eq!(config.team_slug(), Some("123"));
+
+        Ok(())
+    }
+
+    #[test]
     fn test_repo_config_with_team_and_api_flags() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
 
-        let config = RepoConfigLoader::new(config_file.path().to_path_buf())
+        let config = RepoConfigLoader::new(config_path)
             .with_team_slug(Some("my-team-slug".into()))
             .with_api(Some("http://my-login-url".into()))
             .load()?;
@@ -191,11 +247,28 @@ mod test {
     }
 
     #[test]
+    fn test_repo_config_includes_defaults() {
+        let path = if cfg!(windows) {
+            "C:\\missing"
+        } else {
+            "/missing"
+        };
+
+        let config = RepoConfigLoader::new(AbsoluteSystemPathBuf::new(path).unwrap())
+            .load()
+            .unwrap();
+        assert_eq!(config.api_url(), DEFAULT_API_URL);
+        assert_eq!(config.login_url(), DEFAULT_LOGIN_URL);
+        assert_eq!(config.team_slug(), None);
+        assert_eq!(config.team_id(), None);
+    }
+
+    #[test]
     fn test_team_override_clears_id() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
-        let loader = RepoConfigLoader::new(config_file.path().to_path_buf())
-            .with_team_slug(Some("foo".into()));
+        let loader = RepoConfigLoader::new(config_path).with_team_slug(Some("foo".into()));
 
         let config = loader.load()?;
         assert_eq!(config.team_slug(), Some("foo"));
@@ -207,10 +280,11 @@ mod test {
     #[test]
     fn test_set_team_clears_id() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         // We will never pragmatically write the "teamslug" field as camelCase,
         // but viper is case insensitive and we want to keep this functionality.
         writeln!(&mut config_file, "{{\"teamSlug\": \"my-team\"}}")?;
-        let loader = RepoConfigLoader::new(config_file.path().to_path_buf());
+        let loader = RepoConfigLoader::new(config_path);
 
         let mut config = loader.clone().load()?;
         config.set_team_id(Some("my-team-id".into()))?;
@@ -225,12 +299,13 @@ mod test {
     #[test]
     fn test_repo_env_variable() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamslug\": \"other-team\"}}")?;
         let login_url = "http://my-login-url";
         let api_url = "http://my-api";
         let team_id = "123";
         let team_slug = "my-team";
-        let config = RepoConfigLoader::new(config_file.path().to_path_buf())
+        let config = RepoConfigLoader::new(config_path)
             .with_environment({
                 let mut env = HashMap::new();
                 env.insert("TURBO_API".into(), api_url.into());

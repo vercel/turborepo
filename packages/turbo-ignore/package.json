@@ -1,6 +1,6 @@
 {
   "name": "turbo-ignore",
-  "version": "1.8.4-canary.4",
+  "version": "1.10.6",
   "description": "",
   "homepage": "https://turbo.build/repo",
   "keywords": [],
@@ -23,7 +23,8 @@
     "build": "tsup",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "devDependencies": {
     "@types/jest": "^27.4.0",
@@ -31,10 +32,10 @@
     "eslint": "^8.20.0",
     "jest": "^27.4.3",
     "ts-jest": "^27.1.1",
-    "tsconfig": "workspace:*",
+    "@turbo/tsconfig": "workspace:*",
     "tsup": "^5.12.1",
-    "turbo-test-utils": "workspace:^0.0.0",
-    "turbo-utils": "workspace:*",
+    "@turbo/test-utils": "workspace:^0.0.0",
+    "@turbo/utils": "workspace:*",
     "typescript": "^4.7.4"
   }
 }

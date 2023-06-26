@@ -1,9 +1,7 @@
 import { createConnection } from "node:net";
-
-import {
-  StackFrame,
-  parse as parseStackTrace,
-} from "../compiled/stacktrace-parser";
+import type { StackFrame } from "../compiled/stacktrace-parser";
+import { parse as parseStackTrace } from "../compiled/stacktrace-parser";
+import { getProperError } from "./error";
 
 export type StructuredError = {
   name: string;
@@ -12,10 +10,12 @@ export type StructuredError = {
 };
 
 export function structuredError(e: Error): StructuredError {
+  e = getProperError(e);
+
   return {
     name: e.name,
     message: e.message,
-    stack: parseStackTrace(e.stack!),
+    stack: typeof e.stack === "string" ? parseStackTrace(e.stack!) : [],
   };
 }
 
@@ -83,6 +83,12 @@ function createIpc<TIncoming, TOutgoing>(
       }
     });
   });
+  // When the socket is closed, this process is no longer needed.
+  // This might happen e. g. when parent process is killed or
+  // node.js pool is garbage collected.
+  socket.once("close", () => {
+    process.exit(0);
+  });
 
   function send(message: any): Promise<void> {
     const packet = Buffer.from(JSON.stringify(message), "utf8");
@@ -92,6 +98,8 @@ function createIpc<TIncoming, TOutgoing>(
 
     return new Promise((resolve, reject) => {
       socket.write(packet, (err) => {
+        process.stderr.write(`TURBOPACK_OUTPUT_D\n`);
+        process.stdout.write(`TURBOPACK_OUTPUT_D\n`);
         if (err != null) {
           reject(err);
         } else {
@@ -128,9 +136,12 @@ function createIpc<TIncoming, TOutgoing>(
           ...structuredError(error),
         });
       } catch (err) {
+        console.error("failed to send error back to rust:", err);
         // ignore and exit anyway
+        process.exit(1);
       }
-      process.exit(1);
+
+      process.exit(0);
     },
   };
 }

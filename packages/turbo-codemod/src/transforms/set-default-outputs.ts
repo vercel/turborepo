@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
-import { getTurboConfigs } from "turbo-utils";
-import type { Schema as TurboJsonSchema } from "turbo-types";
+import { getTurboConfigs } from "@turbo/utils";
+import type { Schema as TurboJsonSchema } from "@turbo/types";
 
 import type { TransformerArgs } from "../types";
 import getTransformerHelpers from "../utils/getTransformerHelpers";

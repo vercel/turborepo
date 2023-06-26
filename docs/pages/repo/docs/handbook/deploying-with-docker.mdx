@@ -114,7 +114,9 @@ Splitting up **dependencies** and **source files** in this way lets us **only ru
 Our detailed [`with-docker` example](https://github.com/vercel/turbo/tree/main/examples/with-docker) goes into depth on how to utilise `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
 
 ```docker
-FROM node:alpine AS builder
+FROM node:18-alpine AS base
+
+FROM base AS builder
 RUN apk add --no-cache libc6-compat
 RUN apk update
 # Set working directory
@@ -124,7 +126,7 @@ COPY . .
 RUN turbo prune --scope=web --docker
 
 # Add lockfile and package.json's of isolated subworkspace
-FROM node:alpine AS installer
+FROM base AS installer
 RUN apk add --no-cache libc6-compat
 RUN apk update
 WORKDIR /app
@@ -139,7 +141,7 @@ RUN yarn install
 COPY --from=builder /app/out/full/ .
 RUN yarn turbo run build --filter=web...
 
-FROM node:alpine AS runner
+FROM base AS runner
 WORKDIR /app
 
 # Don't run production as root

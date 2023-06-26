@@ -65,8 +65,16 @@ labeler:
     - label: "pkg: create-turbo"
       when:
         isAnyFilePathMatch: '^packages\/create-turbo\/.*$'
+    - label: "pkg: turbo-gen"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-gen\/.*$'
+    - label: "pkg: turbo-workspaces"
+      when:
+        isAnyFilePathMatch: '^packages\/turbo-workspaces\/.*$'
 events:
   onPublish:
     turbo:
       - runWorkflow: turborepo-smoke-published.yml
+        when: any
+      - runWorkflow: bench-turborepo.yml
         when: any

@@ -58,7 +58,7 @@ For more information on configuring your `turbo.json`, see the [Configuration Op
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {}
   }

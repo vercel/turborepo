@@ -25,7 +25,7 @@ type mockSCM struct {
 	contents map[string][]byte
 }
 
-func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _includeUntracked bool, _relativeTo string) ([]string, error) {
+func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _relativeTo string) ([]string, error) {
 	return m.changed, nil
 }
 
@@ -84,7 +84,10 @@ func TestResolvePackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cwd: %v", err)
 	}
-	tui := ui.Default()
+	defaultUIFactory := ui.ColoredUIFactory{
+		Base: &ui.BasicUIFactory{},
+	}
+	tui := defaultUIFactory.Build(os.Stdin, os.Stdout, os.Stderr)
 	logger := hclog.Default()
 	// Dependency graph:
 	//
@@ -507,8 +510,12 @@ func TestResolvePackages(t *testing.T) {
 			for _, path := range systemSeparatorChanged {
 				scm.contents[path] = nil
 			}
-			readLockfile := func(contents []byte) (lockfile.Lockfile, error) {
+			readLockfile := func(_rootPackageJSON *fs.PackageJSON, content []byte) (lockfile.Lockfile, error) {
 				return tc.prevLockfile, nil
+			}
+			pkgInferenceRoot, err := resolvePackageInferencePath(tc.inferPkgPath)
+			if err != nil {
+				t.Errorf("bad inference path (%v): %v", tc.inferPkgPath, err)
 			}
 			pkgs, isAllPackages, err := ResolvePackages(&Opts{
 				LegacyFilter: LegacyFilter{
@@ -519,7 +526,7 @@ func TestResolvePackages(t *testing.T) {
 				},
 				IgnorePatterns:       []string{tc.ignore},
 				GlobalDepPatterns:    tc.globalDeps,
-				PackageInferenceRoot: tc.inferPkgPath,
+				PackageInferenceRoot: pkgInferenceRoot,
 			}, root, scm, &context.Context{
 				WorkspaceInfos: workspaceInfos,
 				WorkspaceNames: packageNames,

@@ -23,7 +23,8 @@ use turbo_tasks::{
     backend::Backend,
     primitives::{OptionStringVc, StringsVc},
     util::FormatDuration,
-    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi, Value,
+    NothingVc, TaskId, TransientInstance, TransientValue, TurboTasks, TurboTasksBackendApi,
+    UpdateInfo, Value,
 };
 use turbo_tasks_fs::{
     glob::GlobVc, DirectoryEntry, DiskFileSystemVc, FileSystem, FileSystemPathVc, FileSystemVc,
@@ -41,7 +42,7 @@ use turbopack::{
 use turbopack_cli_utils::issue::{ConsoleUiVc, IssueSeverityCliOption, LogOptions};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
-    compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
+    compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     issue::{IssueContextExt, IssueReporter, IssueSeverity, IssueVc},
@@ -422,30 +423,42 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
             if let Err(e) = tt.wait_task_completion(root_task, true).await {
                 println!("{}", e);
             }
-            let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
+            let UpdateInfo {
+                duration, tasks, ..
+            } = tt
+                .get_or_wait_aggregated_update_info(Duration::from_millis(100))
+                .await;
             println!(
                 "done in {} ({} task execution, {} tasks)",
                 FormatDuration(start.elapsed()),
-                FormatDuration(elapsed),
-                count
+                FormatDuration(duration),
+                tasks
             );
 
             loop {
-                let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
-                println!("updated {} tasks in {}", count, FormatDuration(elapsed));
+                let UpdateInfo {
+                    duration, tasks, ..
+                } = tt
+                    .get_or_wait_aggregated_update_info(Duration::from_millis(100))
+                    .await;
+                println!("updated {} tasks in {}", tasks, FormatDuration(duration));
             }
         } else {
             let result = tt.wait_task_completion(root_task, true).await;
             let dur = start.elapsed();
-            let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
+            let UpdateInfo {
+                duration, tasks, ..
+            } = tt
+                .get_or_wait_aggregated_update_info(Duration::from_millis(100))
+                .await;
             final_finish(tt, root_task, dur).await;
             let dur2 = start.elapsed();
             println!(
                 "done in {} ({} compilation, {} task execution, {} tasks)",
                 FormatDuration(dur2),
                 FormatDuration(dur),
-                FormatDuration(elapsed),
-                count
+                FormatDuration(duration),
+                tasks
             );
             result
         }
@@ -633,11 +646,7 @@ async fn create_module_asset(
         )),
         Value::new(EnvironmentIntention::Api),
     );
-    let compile_time_info = CompileTimeInfo {
-        environment: env,
-        defines: CompileTimeDefinesVc::empty(),
-    }
-    .cell();
+    let compile_time_info = CompileTimeInfo::builder(env).cell();
     let glob_mappings = vec![
         (
             root,

@@ -1,44 +1,40 @@
 #![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(lint_reasons)]
+#![allow(clippy::too_many_arguments)]
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Write as _,
-    path::PathBuf,
-    thread::available_parallelism,
-};
+use std::{collections::HashMap, iter::once, thread::available_parallelism};
 
 use anyhow::{bail, Result};
-use futures::{stream::FuturesUnordered, TryStreamExt};
 use indexmap::IndexSet;
 pub use node_entry::{
     NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
-use turbo_tasks::{CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString};
+use turbo_tasks::{
+    graph::{GraphTraversal, ReverseTopological},
+    CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString,
+};
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
 use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
-use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
-    chunk::{ChunkGroupVc, ChunkVc, ChunkingContextVc},
-    issue::IssueSeverity,
-    reference::AssetReference,
-    source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
+    chunk::{
+        ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+    },
+    reference::primary_referenced_assets,
+    source_map::GenerateSourceMapVc,
     virtual_asset::VirtualAssetVc,
 };
-use turbopack_ecmascript::{chunk::EcmascriptChunkPlaceablesVc, EcmascriptModuleAssetVc};
 
 use self::{
     bootstrap::NodeJsBootstrapAsset,
     pool::{NodeJsPool, NodeJsPoolVc},
+    source_map::StructuredError,
 };
-use crate::source_map::{SourceMapTraceVc, StackFrame, TraceResult};
 
 pub mod bootstrap;
-mod embed_js;
+pub mod debug;
+pub mod embed_js;
 pub mod evaluate;
 pub mod execution_context;
 mod node_entry;
@@ -58,17 +54,7 @@ async fn emit(
             .strongly_consistent()
             .await?
             .iter()
-            .map(|a| async {
-                Ok(if *a.ident().path().extension().await? != "map" {
-                    Some(a.content().write(a.ident().path()))
-                } else {
-                    None
-                })
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten()
+            .map(|a| a.content().write(a.ident().path()))
             .collect(),
     )
     .completed())
@@ -99,22 +85,45 @@ async fn internal_assets(
     )
 }
 
+#[turbo_tasks::value(transparent)]
+pub struct AssetsForSourceMapping(HashMap<String, GenerateSourceMapVc>);
+
+/// Extracts a map of "internal" assets ([`internal_assets`]) which implement
+/// the [GenerateSourceMap] trait.
+#[turbo_tasks::function]
+async fn internal_assets_for_source_mapping(
+    intermediate_asset: AssetVc,
+    intermediate_output_path: FileSystemPathVc,
+) -> Result<AssetsForSourceMappingVc> {
+    let internal_assets = internal_assets(intermediate_asset, intermediate_output_path).await?;
+    let intermediate_output_path = &*intermediate_output_path.await?;
+    let mut internal_assets_for_source_mapping = HashMap::new();
+    for asset in internal_assets.iter() {
+        if let Some(generate_source_map) = GenerateSourceMapVc::resolve_from(asset).await? {
+            if let Some(path) = intermediate_output_path.get_path_to(&*asset.ident().path().await?)
+            {
+                internal_assets_for_source_mapping.insert(path.to_string(), generate_source_map);
+            }
+        }
+    }
+    Ok(AssetsForSourceMappingVc::cell(
+        internal_assets_for_source_mapping,
+    ))
+}
+
 /// Returns a set of "external" assets on the boundary of the "internal"
 /// subgraph
 #[turbo_tasks::function]
 pub async fn external_asset_entrypoints(
-    module: EcmascriptModuleAssetVc,
-    runtime_entries: EcmascriptChunkPlaceablesVc,
+    module: EvaluatableAssetVc,
+    runtime_entries: EvaluatableAssetsVc,
     chunking_context: ChunkingContextVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<AssetsSetVc> {
     Ok(separate_assets(
-        get_intermediate_asset(
-            module.as_evaluated_chunk(chunking_context, Some(runtime_entries)),
-            intermediate_output_path,
-        )
-        .resolve()
-        .await?,
+        get_intermediate_asset(chunking_context, module, runtime_entries)
+            .resolve()
+            .await?,
         intermediate_output_path,
     )
     .strongly_consistent()
@@ -129,63 +138,79 @@ async fn separate_assets(
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
 ) -> Result<SeparatedAssetsVc> {
+    let intermediate_output_path = &*intermediate_output_path.await?;
+    #[derive(PartialEq, Eq, Hash, Clone, Copy)]
     enum Type {
-        Internal(AssetVc, Vec<AssetVc>),
+        Internal(AssetVc),
         External(AssetVc),
     }
-    let intermediate_output_path = intermediate_output_path.await?;
-    let mut queue = FuturesUnordered::new();
-    let process_asset = |asset: AssetVc| {
-        let intermediate_output_path = &intermediate_output_path;
-        async move {
-            // Assets within the output directory are considered as "internal" and all
-            // others as "external". We follow references on "internal" assets, but do not
-            // look into references of "external" assets, since there are no "internal"
-            // assets behind "externals"
-            if asset
-                .ident()
-                .path()
-                .await?
-                .is_inside(intermediate_output_path)
-            {
-                let mut assets = Vec::new();
-                for reference in asset.references().await?.iter() {
-                    for asset in reference.resolve_reference().primary_assets().await?.iter() {
-                        assets.push(*asset);
-                    }
+    let get_asset_children = |asset| async move {
+        let Type::Internal(asset) = asset else {
+            return Ok(Vec::new());
+        };
+        primary_referenced_assets(asset)
+            .await?
+            .iter()
+            .map(|asset| async {
+                // Assets within the output directory are considered as "internal" and all
+                // others as "external". We follow references on "internal" assets, but do not
+                // look into references of "external" assets, since there are no "internal"
+                // assets behind "externals"
+                if asset
+                    .ident()
+                    .path()
+                    .await?
+                    .is_inside(intermediate_output_path)
+                {
+                    Ok(Type::Internal(*asset))
+                } else {
+                    Ok(Type::External(*asset))
                 }
-                Ok::<_, anyhow::Error>(Type::Internal(asset, assets))
-            } else {
-                Ok(Type::External(asset))
-            }
-        }
+            })
+            .try_join()
+            .await
     };
-    queue.push(process_asset(intermediate_asset));
-    let mut processed = HashSet::new();
+
+    let graph = ReverseTopological::new()
+        .skip_duplicates()
+        .visit(once(Type::Internal(intermediate_asset)), get_asset_children)
+        .await
+        .completed()?
+        .into_inner();
+
     let mut internal_assets = IndexSet::new();
     let mut external_asset_entrypoints = IndexSet::new();
-    // TODO(sokra) This is not deterministic, since it's using FuturesUnordered.
-    // This need to be fixed!
-    while let Some(item) = queue.try_next().await? {
+
+    for item in graph {
         match item {
-            Type::Internal(asset, assets) => {
+            Type::Internal(asset) => {
                 internal_assets.insert(asset);
-                for asset in assets {
-                    if processed.insert(asset) {
-                        queue.push(process_asset(asset));
-                    }
-                }
             }
             Type::External(asset) => {
                 external_asset_entrypoints.insert(asset);
             }
         }
     }
+
     Ok(SeparatedAssets {
         internal_assets: AssetsSetVc::cell(internal_assets),
         external_asset_entrypoints: AssetsSetVc::cell(external_asset_entrypoints),
     }
     .cell())
+}
+
+/// Emit a basic package.json that sets the type of the package to commonjs.
+/// Currently code generated for Node is CommonJS, while authored code may be
+/// ESM, for example.
+pub(self) fn emit_package_json(dir: FileSystemPathVc) -> CompletionVc {
+    emit(
+        VirtualAssetVc::new(
+            dir.join("package.json"),
+            FileContent::Content(File::from("{\"type\": \"commonjs\"}")).into(),
+        )
+        .into(),
+        dir,
+    )
 }
 
 /// Creates a node.js renderer pool for an entrypoint.
@@ -196,35 +221,25 @@ pub async fn get_renderer_pool(
     intermediate_asset: AssetVc,
     intermediate_output_path: FileSystemPathVc,
     output_root: FileSystemPathVc,
+    project_dir: FileSystemPathVc,
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
-    // Emit a basic package.json that sets the type of the package to commonjs.
-    // Currently code generated for Node is CommonJS, while authored code may be
-    // ESM, for example.
-    //
-    // Note that this is placed at .next/server/package.json, while Next.js
-    // currently creates this file at .next/package.json.
-    emit(
-        VirtualAssetVc::new(
-            intermediate_output_path.join("package.json"),
-            FileContent::Content(File::from("{\"type\": \"commonjs\"}")).into(),
-        )
-        .into(),
-        intermediate_output_path,
-    )
-    .await?;
+    emit_package_json(intermediate_output_path).await?;
 
-    emit(intermediate_asset, output_root).await?;
+    let emit = emit(intermediate_asset, output_root);
+    let assets_for_source_mapping =
+        internal_assets_for_source_mapping(intermediate_asset, output_root);
 
     let entrypoint = intermediate_asset.ident().path();
 
     let Some(cwd) = to_sys_path(cwd).await? else {
-        bail!("can only render from a disk filesystem, but `cwd = {}`", cwd.fs().to_string().await?);
+        bail!("can only render from a disk filesystem, but `cwd = {}`", cwd.to_string().await?);
     };
     let Some(entrypoint) = to_sys_path(entrypoint).await? else {
-        bail!("can only render from a disk filesystem, but `entrypoint = {}`", entrypoint.fs().to_string().await?);
+        bail!("can only render from a disk filesystem, but `entrypoint = {}`", entrypoint.to_string().await?);
     };
 
+    emit.await?;
     Ok(NodeJsPool::new(
         cwd,
         entrypoint,
@@ -233,6 +248,9 @@ pub async fn get_renderer_pool(
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
+        assets_for_source_mapping,
+        output_root,
+        project_dir,
         available_parallelism().map_or(1, |v| v.get()),
         debug,
     )
@@ -242,139 +260,30 @@ pub async fn get_renderer_pool(
 /// Converts a module graph into node.js executable assets
 #[turbo_tasks::function]
 pub async fn get_intermediate_asset(
-    entry_chunk: ChunkVc,
-    intermediate_output_path: FileSystemPathVc,
+    chunking_context: ChunkingContextVc,
+    main_entry: EvaluatableAssetVc,
+    other_entries: EvaluatableAssetsVc,
 ) -> Result<AssetVc> {
-    let chunk_group = ChunkGroupVc::from_chunk(entry_chunk);
-    let mut hash = encode_hex(hash_xxh3_hash64(
-        entry_chunk.ident().path().to_string().await?.as_str(),
-    ));
-    hash.push_str(".js");
     Ok(NodeJsBootstrapAsset {
-        path: intermediate_output_path.join(&hash),
-        chunk_group,
+        path: chunking_context.chunk_path(main_entry.ident(), ".js"),
+        chunking_context,
+        entry: main_entry.as_root_chunk(chunking_context),
+        evaluatable_assets: other_entries.with_entry(main_entry),
     }
     .cell()
     .into())
 }
 
+#[derive(Clone, Debug)]
 #[turbo_tasks::value(shared)]
 pub struct ResponseHeaders {
     pub status: u16,
     pub headers: Vec<(String, String)>,
 }
 
-#[derive(Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-enum EvalJavaScriptOutgoingMessage<'a> {
-    #[serde(rename_all = "camelCase")]
-    Evaluate { args: Vec<&'a JsonValue> },
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-enum EvalJavaScriptIncomingMessage {
-    FileDependency {
-        path: String,
-    },
-    BuildDependency {
-        path: String,
-    },
-    DirDependency {
-        path: String,
-        glob: String,
-    },
-    JsonValue {
-        data: String,
-    },
-    EmittedError {
-        severity: IssueSeverity,
-        error: StructuredError,
-    },
-    Error(StructuredError),
-}
-
-#[turbo_tasks::value(shared)]
-pub struct StructuredError {
-    name: String,
-    message: String,
-    stack: Vec<StackFrame>,
-}
-
-impl StructuredError {
-    async fn print(&self, assets: HashMap<String, SourceMapVc>, root: &str) -> Result<String> {
-        let mut message = String::new();
-
-        writeln!(message, "{}: {}", self.name, self.message)?;
-
-        for frame in &self.stack {
-            if let Some((line, column)) = frame.get_pos() {
-                if let Some(path) = frame.file.strip_prefix(
-                    // Add a trailing slash so paths don't lead with `/`.
-                    &format!("{}{}", root, std::path::MAIN_SEPARATOR),
-                ) {
-                    if let Some(map) = assets.get(path) {
-                        let trace = SourceMapTraceVc::new(*map, line, column, frame.name.clone())
-                            .trace()
-                            .await?;
-                        if let TraceResult::Found(f) = &*trace {
-                            writeln!(message, "  at {} [{}]", f, frame.with_path(path))?;
-                            continue;
-                        }
-                    }
-
-                    writeln!(message, "  at {}", frame.with_path(path))?;
-                    continue;
-                }
-            }
-
-            writeln!(message, "  at {}", frame)?;
-        }
-        Ok(message)
-    }
-}
-
-pub async fn trace_stack(
-    error: StructuredError,
-    intermediate_asset: AssetVc,
-    intermediate_output_path: FileSystemPathVc,
-) -> Result<String> {
-    let root = match to_sys_path(intermediate_output_path.root()).await? {
-        Some(r) => r.to_string_lossy().to_string(),
-        None => bail!("couldn't extract disk fs from path"),
-    };
-
-    let assets = internal_assets(intermediate_asset, intermediate_output_path.root())
-        .await?
-        .iter()
-        .map(|a| async {
-            let gen = match GenerateSourceMapVc::resolve_from(*a).await? {
-                Some(gen) => gen,
-                None => return Ok(None),
-            };
-
-            let path = match to_sys_path(a.ident().path()).await? {
-                Some(p) => p,
-                None => PathBuf::from(&a.ident().path().await?.path),
-            };
-
-            let p = path.strip_prefix(&root).unwrap();
-            Ok(Some((
-                p.to_str().unwrap().to_string(),
-                gen.generate_source_map(),
-            )))
-        })
-        .try_join()
-        .await?
-        .into_iter()
-        .flatten()
-        .collect::<HashMap<_, _>>();
-
-    error.print(assets, &root).await
-}
-
 pub fn register() {
     turbo_tasks::register();
+    turbo_tasks_bytes::register();
     turbo_tasks_fs::register();
     turbopack_dev_server::register();
     turbopack_ecmascript::register();

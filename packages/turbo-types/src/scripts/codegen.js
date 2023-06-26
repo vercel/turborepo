@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 const tsj = require("ts-json-schema-generator");
 const fs = require("fs");
 const path = require("path");

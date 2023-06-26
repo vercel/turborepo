@@ -1,7 +1,5 @@
 //! Testing utilities and macros for turbo-tasks and applications based on it.
 
-#![feature(box_syntax)]
-
 mod macros;
 pub mod retry;
 
@@ -20,8 +18,9 @@ use turbo_tasks::{
     event::{Event, EventListener},
     primitives::RawVcSetVc,
     registry,
-    test_helpers::{current_task_for_testing, with_turbo_tasks_for_testing},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
+    test_helpers::with_turbo_tasks_for_testing,
+    util::StaticOrArc,
+    CellId, InvalidationReason, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
 };
 
 enum Task {
@@ -92,6 +91,14 @@ impl TurboTasksCallApi for VcStorage {
         unreachable!()
     }
 
+    fn run_once_with_reason(
+        &self,
+        _reason: StaticOrArc<dyn InvalidationReason>,
+        _future: std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
+    ) -> TaskId {
+        unreachable!()
+    }
+
     fn run_once_process(
         &self,
         _future: std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
@@ -102,6 +109,14 @@ impl TurboTasksCallApi for VcStorage {
 
 impl TurboTasksApi for VcStorage {
     fn invalidate(&self, _task: TaskId) {
+        unreachable!()
+    }
+
+    fn invalidate_with_reason(
+        &self,
+        _task: TaskId,
+        _reason: turbo_tasks::util::StaticOrArc<dyn turbo_tasks::InvalidationReason>,
+    ) {
         unreachable!()
     }
 
@@ -158,10 +173,10 @@ impl TurboTasksApi for VcStorage {
 
     fn try_read_own_task_cell_untracked(
         &self,
-        _current_task: TaskId,
+        current_task: TaskId,
         index: CellId,
     ) -> Result<CellContent> {
-        self.read_current_task_cell(index)
+        self.read_own_task_cell(current_task, index)
     }
 
     fn emit_collectible(&self, _trait_type: turbo_tasks::TraitTypeId, _collectible: RawVc) {
@@ -184,8 +199,7 @@ impl TurboTasksApi for VcStorage {
         unimplemented!()
     }
 
-    fn read_current_task_cell(&self, index: CellId) -> Result<CellContent> {
-        let task = current_task_for_testing();
+    fn read_own_task_cell(&self, task: TaskId, index: CellId) -> Result<CellContent> {
         let map = self.cells.lock().unwrap();
         if let Some(cell) = map.get(&(task, index)) {
             Ok(cell.clone())
@@ -194,8 +208,7 @@ impl TurboTasksApi for VcStorage {
         }
     }
 
-    fn update_current_task_cell(&self, index: CellId, content: CellContent) {
-        let task = current_task_for_testing();
+    fn update_own_task_cell(&self, task: TaskId, index: CellId, content: CellContent) {
         let mut map = self.cells.lock().unwrap();
         let cell = map.entry((task, index)).or_default();
         *cell = content;
@@ -203,6 +216,17 @@ impl TurboTasksApi for VcStorage {
 
     fn connect_task(&self, _task: TaskId) {
         // no-op
+    }
+
+    fn mark_own_task_as_finished(&self, _task: TaskId) {
+        // no-op
+    }
+
+    fn detached(
+        &self,
+        _f: std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>> {
+        unimplemented!()
     }
 }
 

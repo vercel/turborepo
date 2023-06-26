@@ -11,7 +11,9 @@ use std::{
 
 use anyhow::Result;
 use tokio::{spawn, time::sleep};
-use turbo_tasks::{util::FormatDuration, NothingVc, TurboTasks, TurboTasksBackendApi, Value};
+use turbo_tasks::{
+    util::FormatDuration, NothingVc, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value,
+};
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
@@ -27,6 +29,7 @@ use turbopack_core::{
     context::AssetContext,
     environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     source_asset::SourceAssetVc,
+    PROJECT_FILESYSTEM_NAME,
 };
 
 #[tokio::main]
@@ -39,7 +42,7 @@ async fn main() -> Result<()> {
     let task = tt.spawn_root_task(|| {
         Box::pin(async {
             let root = current_dir().unwrap().to_str().unwrap().to_string();
-            let disk_fs = DiskFileSystemVc::new("project".to_string(), root);
+            let disk_fs = DiskFileSystemVc::new(PROJECT_FILESYSTEM_NAME.to_string(), root);
             disk_fs.await?.start_watching()?;
 
             // Smart Pointer cast
@@ -84,8 +87,12 @@ async fn main() -> Result<()> {
             println!("done in {}", FormatDuration(start.elapsed()));
 
             loop {
-                let (elapsed, count) = tt.get_or_wait_update_info(Duration::from_millis(100)).await;
-                println!("updated {} tasks in {}", count, FormatDuration(elapsed));
+                let UpdateInfo {
+                    duration, tasks, ..
+                } = tt
+                    .get_or_wait_aggregated_update_info(Duration::from_millis(100))
+                    .await;
+                println!("updated {} tasks in {}", tasks, FormatDuration(duration));
             }
         }
     })

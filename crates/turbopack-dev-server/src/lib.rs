@@ -6,6 +6,7 @@
 pub mod html;
 mod http;
 pub mod introspect;
+mod invalidation;
 pub mod source;
 pub mod update;
 
@@ -23,16 +24,22 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Request, Response, Server,
 };
+use socket2::{Domain, Protocol, Socket, Type};
+use tracing::{event, info_span, Instrument, Level, Span};
 use turbo_tasks::{
-    run_once, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
+    run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
     TransientInstance, TransientValue, TurboTasksApi,
 };
-use turbopack_core::issue::{IssueReporter, IssueReporterVc, IssueVc};
+use turbopack_core::{
+    error::PrettyPrintError,
+    issue::{IssueReporter, IssueReporterVc, IssueVc},
+};
 
 use self::{
     source::{ContentSourceResultVc, ContentSourceVc},
     update::UpdateServer,
 };
+use crate::invalidation::ServerRequest;
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
@@ -99,11 +106,28 @@ impl DevServer {
         // because the OS will remap that to an actual free port, and we need to know
         // that port before we build the request handler. So we need to construct a
         // real TCP listener, see if it bound, and get its bound address.
-        let listener = TcpListener::bind(addr).context("not able to bind address")?;
+        let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))
+            .context("unable to create socket")?;
+        // Allow the socket to be reused immediately after closing. This ensures that
+        // the dev server can be restarted on the same address without a buffer time for
+        // the OS to release the socket.
+        // https://docs.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
+        #[cfg(not(windows))]
+        let _ = socket.set_reuse_address(true);
+        if matches!(addr, SocketAddr::V6(_)) {
+            // When possible bind to v4 and v6, otherwise ignore the error
+            let _ = socket.set_only_v6(false);
+        }
+        let sock_addr = addr.into();
+        socket
+            .bind(&sock_addr)
+            .context("not able to bind address")?;
+        socket.listen(128).context("not able to listen on socket")?;
+
+        let listener: TcpListener = socket.into();
         let addr = listener
             .local_addr()
             .context("not able to get bound address")?;
-
         let server = Server::from_tcp(listener).context("Not able to start server")?;
         Ok(DevServerBuilder { addr, server })
     }
@@ -122,12 +146,18 @@ impl DevServerBuilder {
             let get_issue_reporter = get_issue_reporter.clone();
             async move {
                 let handler = move |request: Request<hyper::Body>| {
+                    let request_span = info_span!(parent: None, "request", name = ?request.uri());
                     let start = Instant::now();
                     let tt = tt.clone();
                     let get_issue_reporter = get_issue_reporter.clone();
                     let source_provider = source_provider.clone();
                     let future = async move {
-                        run_once(tt.clone(), async move {
+                        event!(parent: Span::current(), Level::DEBUG, "request start");
+                        let reason = ServerRequest {
+                            method: request.method().clone(),
+                            uri: request.uri().clone(),
+                        };
+                        run_once_with_reason(tt.clone(), reason, async move {
                             let issue_reporter = get_issue_reporter();
 
                             if hyper_tungstenite::is_upgrade_request(&request) {
@@ -196,16 +226,17 @@ impl DevServerBuilder {
                             Ok(r) => Ok::<_, hyper::http::Error>(r),
                             Err(e) => {
                                 println!(
-                                    "[500] error: {:?} ({})",
-                                    e,
-                                    FormatDuration(start.elapsed())
+                                    "[500] error ({}): {}",
+                                    FormatDuration(start.elapsed()),
+                                    PrettyPrintError(&e),
                                 );
                                 Ok(Response::builder()
                                     .status(500)
-                                    .body(hyper::Body::from(format!("{:?}", e,)))?)
+                                    .body(hyper::Body::from(format!("{}", PrettyPrintError(&e))))?)
                             }
                         }
                     }
+                    .instrument(request_span)
                 };
                 anyhow::Ok(service_fn(handler))
             }
@@ -224,6 +255,7 @@ impl DevServerBuilder {
 
 pub fn register() {
     turbo_tasks::register();
+    turbo_tasks_bytes::register();
     turbo_tasks_fs::register();
     turbopack_core::register();
     turbopack_cli_utils::register();

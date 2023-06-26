@@ -1,6 +1,6 @@
 import { MigrateCommandArgument } from "../src/commands";
 import migrate from "../src/commands/migrate";
-import { setupTestFixtures, spyExit } from "turbo-test-utils";
+import { setupTestFixtures, spyExit } from "@turbo/test-utils";
 import childProcess from "child_process";
 import * as checkGitStatus from "../src/utils/checkGitStatus";
 import * as getCurrentVersion from "../src/commands/migrate/steps/getCurrentVersion";
@@ -64,7 +64,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
@@ -201,7 +201,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
@@ -277,7 +277,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
@@ -437,7 +437,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,
@@ -522,7 +522,7 @@ describe("migrate", () => {
       $schema: "https://turbo.build/schema.json",
       pipeline: {
         build: {
-          outputs: [".next/**"],
+          outputs: [".next/**", "!.next/cache/**"],
         },
         dev: {
           cache: false,

@@ -1,0 +1,42 @@
+lockfileVersion: 5.4
+
+patchedDependencies:
+  is-number@7.0.0:
+    hash: 4fcx2ubzko3upkndnus4sjwpd4
+    path: patches/is-number@7.0.0.patch
+
+importers:
+
+  .:
+    specifiers:
+      util: workspace:*
+    devDependencies:
+      util: link:packages/util
+
+  apps/docs:
+    specifiers:
+      shared: workspace:*
+    dependencies:
+      shared: link:../../packages/shared
+
+  apps/web:
+    specifiers:
+      is-number: ^7.0.0
+      shared: workspace:*
+    dependencies:
+      is-number: 7.0.0_4fcx2ubzko3upkndnus4sjwpd4
+      shared: link:../../packages/shared
+
+  packages/shared:
+    specifiers: {}
+
+  packages/util:
+    specifiers: {}
+
+packages:
+
+  /is-number/7.0.0_4fcx2ubzko3upkndnus4sjwpd4:
+    resolution: {integrity: sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==}
+    engines: {node: '>=0.12.0'}
+    dev: false
+    patched: true

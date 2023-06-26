@@ -3,7 +3,7 @@
         obj: Variable(
             (
                 Atom('array' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -49,12 +49,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('array' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -109,12 +110,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
                 Atom('array' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -195,7 +197,7 @@
                         Variable(
                             (
                                 Atom('item' type=inline),
-                                #1,
+                                #2,
                             ),
                         ),
                     ],
@@ -238,6 +240,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Member(
@@ -335,6 +338,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Array {
@@ -428,6 +432,71 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('unknown' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    3,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    0,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Array,
+            ),
+            ArrayLit(
+                Elems(
+                    3,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                171,
+            ),
+            hi: BytePos(
+                178,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
     MemberCall {
         obj: Member(
@@ -507,9 +576,7 @@
                             ),
                         ),
                         FreeVar(
-                            Other(
-                                Atom('unknown' type=static),
-                            ),
+                            Atom('unknown' type=static),
                         ),
                     ],
                     mutable: true,
@@ -552,6 +619,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Member(
@@ -649,6 +717,7 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Array {
@@ -742,6 +811,60 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('unknown' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    4,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Call,
+            ),
+            CallExpr(
+                Args(
+                    3,
+                ),
+            ),
+            ExprOrSpread(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                231,
+            ),
+            hi: BytePos(
+                238,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
     MemberCall {
         obj: Member(
@@ -824,9 +947,7 @@
             ),
             Value(
                 FreeVar(
-                    Other(
-                        Atom('unknown' type=static),
-                    ),
+                    Atom('unknown' type=static),
                 ),
             ),
         ],
@@ -866,12 +987,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('arrays' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -917,12 +1039,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('array' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -977,12 +1100,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     MemberCall {
         obj: Variable(
             (
                 Atom('array' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -1059,5 +1183,6 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
 ]

@@ -1,26 +1,19 @@
 [package]
-name = "turborepo-paths"
+name = "turbopath"
 version = "0.1.0"
+license = "MPL-2.0"
 edition = "2021"
-license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-allocative = "0.2.0"
-anyhow = { workspace = true }
-assert_matches = "1.5.0"
-common-path = "1.0.0"
-compact_str = "0.7.0"
-derivative = "2.2.0"
-derive_more = "0.99.17"
+camino = { version = "1.1.4", features = ["serde1"] }
 dunce = { workspace = true }
-gazebo = "0.8.1"
-itertools = { workspace = true }
-memchr = "2.5.0"
-ref-cast = "1.0.14"
-relative-path = "1.7.3"
+path-clean = "1.0.1"
+# TODO: Make this a crate feature
 serde = { workspace = true }
-smallvec = "1.10.0"
-tempfile = { workspace = true }
 thiserror = { workspace = true }
+wax = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }

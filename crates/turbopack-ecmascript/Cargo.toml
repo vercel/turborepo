@@ -15,22 +15,17 @@ async-trait = { workspace = true }
 indexmap = { workspace = true }
 indoc = { workspace = true }
 lazy_static = { workspace = true }
-next-font = { workspace = true }
-next-transform-dynamic = { workspace = true }
-next-transform-strip-page-exports = { workspace = true }
 num-bigint = "0.4"
 num-traits = "0.2.15"
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
+petgraph = "0.6.2"
 pin-project-lite = { workspace = true }
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_qs = { workspace = true }
-styled_components = { workspace = true }
-styled_jsx = { workspace = true }
-swc_emotion = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 turbo-tasks = { workspace = true }
@@ -42,6 +37,7 @@ url = { workspace = true }
 
 swc_core = { workspace = true, features = [
   "ecma_ast",
+  "ecma_ast_serde",
   "common",
   "common_concurrent",
   "common_sourcemap",
@@ -52,6 +48,7 @@ swc_core = { workspace = true, features = [
   "ecma_transforms_module",
   "ecma_transforms_react",
   "ecma_transforms_typescript",
+  "ecma_transforms_proposal",
   "ecma_quote",
   "ecma_visit",
   "ecma_visit_path",

@@ -5,12 +5,12 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
 use axum::{extract::Query, response::Redirect, routing::get, Router};
-use log::debug;
-#[cfg(not(test))]
-use log::warn;
 use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
+use tracing::debug;
+#[cfg(not(test))]
+use tracing::warn;
 
 use crate::{
     commands::{
@@ -20,9 +20,6 @@ use crate::{
     get_version,
     ui::{start_spinner, BOLD, CYAN, GREY, UNDERLINE},
 };
-
-#[cfg(test)]
-pub const EXPECTED_TOKEN_TEST: &str = "expected_token";
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -179,12 +176,17 @@ struct LoginPayload {
 }
 
 #[cfg(test)]
+const EXPECTED_VERIFICATION_TOKEN: &str = "expected_verification_token";
+
+#[cfg(test)]
 async fn run_login_one_shot_server(
     _: u16,
     _: String,
     login_token: Arc<OnceCell<String>>,
 ) -> Result<()> {
-    login_token.set(EXPECTED_TOKEN_TEST.to_string()).unwrap();
+    login_token
+        .set(vercel_api_mock::EXPECTED_TOKEN.to_string())
+        .unwrap();
     Ok(())
 }
 
@@ -260,7 +262,7 @@ fn get_token_and_redirect(payload: SsoPayload) -> Result<(Option<String>, Url)> 
 #[cfg(test)]
 async fn run_sso_one_shot_server(_: u16, verification_token: Arc<OnceCell<String>>) -> Result<()> {
     verification_token
-        .set(EXPECTED_TOKEN_TEST.to_string())
+        .set(EXPECTED_VERIFICATION_TOKEN.to_string())
         .unwrap();
     Ok(())
 }
@@ -296,20 +298,19 @@ async fn run_sso_one_shot_server(
 
 #[cfg(test)]
 mod test {
-    use std::{fs, net::SocketAddr};
+    use std::fs;
 
-    use anyhow::Result;
-    use axum::{routing::get, Json, Router};
     use reqwest::Url;
     use serde::Deserialize;
     use tempfile::NamedTempFile;
     use tokio::sync::OnceCell;
+    use turbopath::AbsoluteSystemPathBuf;
+    use vercel_api_mock::start_test_server;
 
     use crate::{
-        client::{CachingStatus, CachingStatusResponse, User, UserResponse, VerificationResponse},
         commands::{
             login,
-            login::{get_token_and_redirect, SsoPayload, EXPECTED_TOKEN_TEST},
+            login::{get_token_and_redirect, SsoPayload},
             CommandBase,
         },
         config::{ClientConfigLoader, RepoConfigLoader, UserConfigLoader},
@@ -319,32 +320,38 @@ mod test {
 
     #[tokio::test]
     async fn test_login() {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
+        // Explicitly pass the wrong port to confirm that we're reading it from the
+        // manual override
         fs::write(
             repo_config_file.path(),
-            r#"{ "apiurl": "http://localhost:3000" }"#,
+            format!("{{ \"apiurl\": \"http://localhost:{}\" }}", port + 1),
         )
         .unwrap();
 
-        let handle = tokio::spawn(start_test_server());
         let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .load()
                     .unwrap(),
             ),
             repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
-                    .with_api(Some("http://localhost:3001".to_string()))
+                RepoConfigLoader::new(repo_config_path)
+                    .with_api(Some(format!("http://localhost:{}", port)))
                     .load()
                     .unwrap(),
             ),
             args: Args::default(),
+            version: "",
         };
 
         login::login(&mut base).await.unwrap();
@@ -353,7 +360,7 @@ mod test {
 
         assert_eq!(
             base.user_config().unwrap().token().unwrap(),
-            EXPECTED_TOKEN_TEST
+            vercel_api_mock::EXPECTED_TOKEN
         );
     }
 
@@ -363,66 +370,43 @@ mod test {
         redirect_uri: String,
     }
 
-    /// NOTE: Each test server should be on its own port to avoid any
-    /// concurrency bugs.
-    async fn start_test_server() -> Result<()> {
-        let app = Router::new()
-            // `GET /` goes to `root`
-            .route(
-                "/v2/user",
-                get(|| async move {
-                    Json(UserResponse {
-                        user: User {
-                            id: "my_user_id".to_string(),
-                            username: "my_username".to_string(),
-                            email: "my_email".to_string(),
-                            name: None,
-                            created_at: Some(0),
-                        },
-                    })
-                }),
-            );
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
-
-        Ok(axum_server::bind(addr)
-            .serve(app.into_make_service())
-            .await?)
-    }
-
-    const EXPECTED_SSO_TEAM_SLUG: &str = "vercel";
-    const EXPECTED_SSO_TEAM_ID: &str = "team_0";
-
     #[tokio::test]
     async fn test_sso_login() {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
+        // Explicitly pass the wrong port to confirm that we're reading it from the
+        // manual override
         fs::write(
             repo_config_file.path(),
-            r#"{ "apiurl": "http://localhost:3002" }"#,
+            format!("{{ \"apiurl\": \"http://localhost:{}\" }}", port + 1),
         )
         .unwrap();
 
-        let handle = tokio::spawn(start_sso_test_server());
         let mut base = CommandBase {
             repo_root: Default::default(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .load()
                     .unwrap(),
             ),
             repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
-                    .with_api(Some("http://localhost:3002".to_string()))
+                RepoConfigLoader::new(repo_config_path)
+                    .with_api(Some(format!("http://localhost:{}", port)))
                     .load()
                     .unwrap(),
             ),
             args: Args::default(),
+            version: "",
         };
 
-        login::sso_login(&mut base, EXPECTED_SSO_TEAM_SLUG)
+        login::sso_login(&mut base, vercel_api_mock::EXPECTED_SSO_TEAM_SLUG)
             .await
             .unwrap();
 
@@ -430,54 +414,12 @@ mod test {
 
         assert_eq!(
             base.user_config().unwrap().token().unwrap(),
-            EXPECTED_TOKEN_TEST
+            vercel_api_mock::EXPECTED_TOKEN
         );
         assert_eq!(
             base.repo_config().unwrap().team_id().unwrap(),
-            EXPECTED_SSO_TEAM_ID
+            vercel_api_mock::EXPECTED_SSO_TEAM_ID
         );
-    }
-
-    /// NOTE: Each test server should be on its own port to avoid any
-    /// concurrency bugs.
-    async fn start_sso_test_server() -> Result<()> {
-        let app = Router::new()
-            .route(
-                "/registration/verify",
-                get(|| async move {
-                    Json(VerificationResponse {
-                        token: EXPECTED_TOKEN_TEST.to_string(),
-                        team_id: Some(EXPECTED_SSO_TEAM_ID.to_string()),
-                    })
-                }),
-            )
-            .route(
-                "/v8/artifacts/status",
-                get(|| async move {
-                    Json(CachingStatusResponse {
-                        status: CachingStatus::Enabled,
-                    })
-                }),
-            )
-            .route(
-                "/v2/user",
-                get(|| async move {
-                    Json(UserResponse {
-                        user: User {
-                            id: "0".to_string(),
-                            username: "my_username_3".to_string(),
-                            email: "me@vercel.com".to_string(),
-                            name: None,
-                            created_at: None,
-                        },
-                    })
-                }),
-            );
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3002));
-
-        Ok(axum_server::bind(addr)
-            .serve(app.into_make_service())
-            .await?)
     }
 
     #[test]

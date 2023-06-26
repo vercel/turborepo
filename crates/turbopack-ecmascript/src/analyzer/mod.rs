@@ -9,9 +9,12 @@ use std::{
     sync::Arc,
 };
 
-use indexmap::IndexSet;
+use anyhow::{bail, Context, Result};
+use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use swc_core::{
     common::Mark,
     ecma::{
@@ -24,7 +27,7 @@ use url::Url;
 
 use self::imports::ImportAnnotations;
 pub(crate) use self::imports::ImportMap;
-use crate::utils::stringify_js;
+use crate::{references::require_context::RequireContextMapVc, utils::StringifyJs};
 
 pub mod builtin;
 pub mod graph;
@@ -150,8 +153,9 @@ impl From<String> for ConstantString {
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Default)]
 pub enum ConstantValue {
+    #[default]
     Undefined,
     Str(ConstantString),
     Num(ConstantNumber),
@@ -166,6 +170,14 @@ impl ConstantValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::Str(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::True => Some(true),
+            Self::False => Some(false),
             _ => None,
         }
     }
@@ -201,12 +213,6 @@ impl ConstantValue {
 
     pub fn is_value_type(&self) -> bool {
         !matches!(self, Self::Regex(..))
-    }
-}
-
-impl Default for ConstantValue {
-    fn default() -> Self {
-        ConstantValue::Undefined
     }
 }
 
@@ -249,7 +255,7 @@ impl Display for ConstantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConstantValue::Undefined => write!(f, "undefined"),
-            ConstantValue::Str(str) => f.write_str(&stringify_js(str.as_str())),
+            ConstantValue::Str(str) => write!(f, "{}", StringifyJs(str.as_str())),
             ConstantValue::True => write!(f, "true"),
             ConstantValue::False => write!(f, "false"),
             ConstantValue::Null => write!(f, "null"),
@@ -374,7 +380,7 @@ pub enum JsValue {
     WellKnownFunction(WellKnownFunctionKind),
     /// Not-analyzable value. Might contain the original value for additional
     /// info. Has a reason string for explanation.
-    Unknown(Option<Arc<JsValue>>, &'static str),
+    Unknown(Option<Arc<JsValue>>, Cow<'static, str>),
 
     // NESTED VALUES
     // ----------------------------
@@ -431,7 +437,7 @@ pub enum JsValue {
     Argument(u32, usize),
     // TODO no predefined kinds, only JsWord
     /// A reference to a free variable.
-    FreeVar(FreeVarKind),
+    FreeVar(JsWord),
     /// This is a reference to a imported module.
     Module(ModuleValue),
 }
@@ -495,7 +501,7 @@ impl From<&CompileTimeDefineValue> for JsValue {
 
 impl Default for JsValue {
     fn default() -> Self {
-        JsValue::Unknown(None, "")
+        JsValue::unknown_empty("")
     }
 }
 
@@ -716,36 +722,36 @@ impl JsValue {
     pub fn equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::Equal,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn not_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::NotEqual,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn strict_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::StrictEqual,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn strict_not_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::StrictNotEqual,
-            box b,
+            Box::new(b),
         )
     }
 
@@ -813,8 +819,17 @@ impl JsValue {
             args,
         )
     }
+
     pub fn member(o: Box<JsValue>, p: Box<JsValue>) -> Self {
         Self::Member(1 + o.total_nodes() + p.total_nodes(), o, p)
+    }
+
+    pub fn unknown(value: impl Into<Arc<JsValue>>, reason: impl Into<Cow<'static, str>>) -> Self {
+        Self::Unknown(Some(value.into()), reason.into())
+    }
+
+    pub fn unknown_empty(reason: impl Into<Cow<'static, str>>) -> Self {
+        Self::Unknown(None, reason.into())
     }
 }
 
@@ -1130,8 +1145,7 @@ impl JsValue {
                     "| "
                 )
             ),
-            JsValue::FreeVar(FreeVarKind::Other(name)) => format!("FreeVar({})", name),
-            JsValue::FreeVar(name) => format!("FreeVar({:?})", name),
+            JsValue::FreeVar(name) => format!("FreeVar({})", name),
             JsValue::Variable(name) => {
                 format!("{}", name.0)
             }
@@ -1323,6 +1337,10 @@ impl JsValue {
                         "@grpc/proto-loader",
                         "The Node.js @grpc/proto-loader package: https://github.com/grpc/grpc-node"
                     ),
+                    WellKnownObjectKind::NodeBuffer => (
+                        "Buffer",
+                        "The Node.js Buffer object: https://nodejs.org/api/buffer.html#class-buffer"
+                    ),
                     WellKnownObjectKind::RequireCache => (
                         "require.cache",
                         "The CommonJS require.cache object: https://nodejs.org/api/modules.html#requirecache"
@@ -1360,6 +1378,10 @@ impl JsValue {
                     ),
                     WellKnownFunctionKind::Require => ("require".to_string(), "The require method from CommonJS"),
                     WellKnownFunctionKind::RequireResolve => ("require.resolve".to_string(), "The require.resolve method from CommonJS"),
+                    WellKnownFunctionKind::RequireContext => ("require.context".to_string(), "The require.context method from webpack"),
+                    WellKnownFunctionKind::RequireContextRequire(..) => ("require.context(...)".to_string(), "The require.context(...) method from webpack: https://webpack.js.org/api/module-methods/#requirecontext"),
+                    WellKnownFunctionKind::RequireContextRequireKeys(..) => ("require.context(...).keys".to_string(), "The require.context(...).keys method from webpack: https://webpack.js.org/guides/dependency-management/#requirecontext"),
+                    WellKnownFunctionKind::RequireContextRequireResolve(..) => ("require.context(...).resolve".to_string(), "The require.context(...).resolve method from webpack: https://webpack.js.org/guides/dependency-management/#requirecontext"),
                     WellKnownFunctionKind::Define => ("define".to_string(), "The define method from AMD"),
                     WellKnownFunctionKind::FsReadMethod(name) => (
                         format!("fs.{name}"),
@@ -1460,14 +1482,20 @@ impl JsValue {
 // Unknown management
 impl JsValue {
     /// Convert the value into unknown with a specific reason.
-    pub fn make_unknown(&mut self, reason: &'static str) {
-        *self = JsValue::Unknown(Some(Arc::new(take(self))), reason);
+    pub fn make_unknown(&mut self, reason: impl Into<Cow<'static, str>>) {
+        *self = JsValue::unknown(take(self), reason);
+    }
+
+    /// Convert the owned value into unknown with a specific reason.
+    pub fn into_unknown(mut self, reason: impl Into<Cow<'static, str>>) -> Self {
+        self.make_unknown(reason);
+        self
     }
 
     /// Convert the value into unknown with a specific reason, but don't retain
     /// the original value.
-    pub fn make_unknown_without_content(&mut self, reason: &'static str) {
-        *self = JsValue::Unknown(None, reason);
+    pub fn make_unknown_without_content(&mut self, reason: impl Into<Cow<'static, str>>) {
+        *self = JsValue::unknown_empty(reason);
     }
 
     /// Make all nested operations unknown when the value is an operation.
@@ -1488,12 +1516,20 @@ impl JsValue {
     }
 
     pub fn add_unknown_mutations(&mut self) {
-        self.add_alt(JsValue::Unknown(None, "unknown mutation"));
+        self.add_alt(JsValue::unknown_empty("unknown mutation"));
     }
 }
 
 // Defineable name management
 impl JsValue {
+    /// When the value has a user-defineable name, return the length of it (in
+    /// segments). Otherwise returns None.
+    /// - any free var has itself as user-defineable name.
+    /// - any member access adds the identifier as segement to the name of the
+    ///   object.
+    /// - some well-known objects/functions have a user-defineable names.
+    /// - member calls without arguments also have a user-defineable name which
+    ///   is the property with `()` appended.
     pub fn get_defineable_name_len(&self) -> Option<usize> {
         match self {
             JsValue::FreeVar(_) => Some(1),
@@ -1512,6 +1548,12 @@ impl JsValue {
         }
     }
 
+    /// Returns a reverse iterator over the segments of the user-defineable
+    /// name. e. g. `foo.bar().baz` would yield `baz`, `bar()`, `foo`.
+    /// `(1+2).foo.baz` would also yield `baz`, `foo` even while the value is
+    /// not a complete user-defineable name. Before calling this method you must
+    /// use [JsValue::get_defineable_name_len] to determine if the value has a
+    /// user-defineable name at all.
     pub fn iter_defineable_name_rev(&self) -> DefineableNameIter<'_> {
         DefineableNameIter {
             next: Some(self),
@@ -1531,7 +1573,7 @@ impl<'a> Iterator for DefineableNameIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let value = self.next.take()?;
         Some(match value {
-            JsValue::FreeVar(kind) => kind.as_str().into(),
+            JsValue::FreeVar(kind) => (&**kind).into(),
             JsValue::Member(_, obj, prop) => {
                 self.next = Some(obj);
                 prop.as_str()?.into()
@@ -1569,6 +1611,14 @@ impl JsValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             JsValue::Constant(c) => c.as_str(),
+            _ => None,
+        }
+    }
+
+    /// Returns the constant bool if the value represents a constant boolean.
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            JsValue::Constant(c) => c.as_bool(),
             _ => None,
         }
     }
@@ -2812,48 +2862,6 @@ impl Hash for SimilarJsValue {
     }
 }
 
-// TODO get rid of that and only use `JsWord` in `FreeVar(...)`
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum FreeVarKind {
-    // Object
-    Object,
-    /// `__dirname`
-    Dirname,
-
-    /// `__filename`
-    Filename,
-
-    /// A reference to global `require`
-    Require,
-
-    /// A reference to global `define` (AMD)
-    Define,
-
-    /// A reference to `import`
-    Import,
-
-    /// Node.js process
-    NodeProcess,
-
-    /// `abc` `some_global`
-    Other(JsWord),
-}
-
-impl FreeVarKind {
-    pub fn as_str(&self) -> &str {
-        match self {
-            FreeVarKind::Object => "Object",
-            FreeVarKind::Dirname => "__dirname",
-            FreeVarKind::Filename => "__filename",
-            FreeVarKind::Require => "require",
-            FreeVarKind::Define => "define",
-            FreeVarKind::Import => "import",
-            FreeVarKind::NodeProcess => "process",
-            FreeVarKind::Other(v) => v.as_ref(),
-        }
-    }
-}
-
 /// A list of well-known objects that have special meaning in the analysis.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownObjectKind {
@@ -2874,6 +2882,7 @@ pub enum WellKnownObjectKind {
     NodePreGyp,
     NodeExpressApp,
     NodeProtobufLoader,
+    NodeBuffer,
     RequireCache,
 }
 
@@ -2888,8 +2897,133 @@ impl WellKnownObjectKind {
             Self::OsModule => Some(&["os"]),
             Self::NodeProcess => Some(&["process"]),
             Self::NodeProcessEnv => Some(&["process", "env"]),
+            Self::NodeBuffer => Some(&["Buffer"]),
             Self::RequireCache => Some(&["require", "cache"]),
             _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RequireContextOptions {
+    pub dir: String,
+    pub include_subdirs: bool,
+    /// this is a regex (pattern, flags)
+    pub filter: Regex,
+}
+
+/// Convert an ECMAScript regex to a Rust regex.
+fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex> {
+    // rust regex doesn't allow escaped slashes, but they are necessary in js
+    let pattern = pattern.replace("\\/", "/");
+
+    let mut applied_flags = String::new();
+    for flag in flags.chars() {
+        match flag {
+            // indices for substring matches: not relevant for the regex itself
+            'd' => {}
+            // global: default in rust, ignore
+            'g' => {}
+            // case-insensitive: letters match both upper and lower case
+            'i' => applied_flags.push('i'),
+            // multi-line mode: ^ and $ match begin/end of line
+            'm' => applied_flags.push('m'),
+            // allow . to match \n
+            's' => applied_flags.push('s'),
+            // Unicode support (enabled by default)
+            'u' => applied_flags.push('u'),
+            // sticky search: not relevant for the regex itself
+            'y' => {}
+            _ => bail!("unsupported flag `{}` in regex", flag),
+        }
+    }
+
+    let regex = if !applied_flags.is_empty() {
+        format!("(?{}){}", applied_flags, pattern)
+    } else {
+        pattern
+    };
+
+    Regex::new(&regex).context("could not convert ECMAScript regex to Rust regex")
+}
+
+/// Parse the arguments passed to a require.context invocation, validate them
+/// and convert them to the appropriate rust values.
+pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOptions> {
+    if !(1..=3).contains(&args.len()) {
+        // https://linear.app/vercel/issue/WEB-910/add-support-for-requirecontexts-mode-argument
+        bail!("require.context() only supports 1-3 arguments (mode is not supported)");
+    }
+
+    let Some(dir) = args[0].as_str().map(|s| s.to_string()) else {
+        bail!("require.context(dir, ...) requires dir to be a constant string");
+    };
+
+    let include_subdirs = if let Some(include_subdirs) = args.get(1) {
+        if let Some(include_subdirs) = include_subdirs.as_bool() {
+            include_subdirs
+        } else {
+            bail!(
+                "require.context(..., includeSubdirs, ...) requires includeSubdirs to be a \
+                 constant boolean",
+            );
+        }
+    } else {
+        true
+    };
+
+    let filter = if let Some(filter) = args.get(2) {
+        if let JsValue::Constant(ConstantValue::Regex(pattern, flags)) = filter {
+            regex_from_js(pattern, flags)?
+        } else {
+            bail!("require.context(..., ..., filter) requires filter to be a regex");
+        }
+    } else {
+        // https://webpack.js.org/api/module-methods/#requirecontext
+        // > optional, default /^\.\/.*$/, any file
+        static DEFAULT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\\./.*$").unwrap());
+
+        DEFAULT_REGEX.clone()
+    };
+
+    Ok(RequireContextOptions {
+        dir,
+        include_subdirs,
+        filter,
+    })
+}
+
+#[turbo_tasks::value(transparent)]
+#[derive(Debug, Clone)]
+pub struct RequireContextValue(IndexMap<String, String>);
+
+#[turbo_tasks::value_impl]
+impl RequireContextValueVc {
+    #[turbo_tasks::function]
+    pub async fn from_context_map(map: RequireContextMapVc) -> Result<Self> {
+        let mut context_map = IndexMap::new();
+
+        for (key, entry) in map.await?.iter() {
+            context_map.insert(key.clone(), entry.origin_relative.clone());
+        }
+
+        Ok(Self::cell(context_map))
+    }
+}
+
+impl From<RequireContextMapVc> for RequireContextValueVc {
+    fn from(map: RequireContextMapVc) -> Self {
+        Self::from_context_map(map)
+    }
+}
+
+impl Hash for RequireContextValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.len().hash(state);
+        for (i, (k, v)) in self.0.iter().enumerate() {
+            i.hash(state);
+            k.hash(state);
+            v.hash(state);
         }
     }
 }
@@ -2905,6 +3039,10 @@ pub enum WellKnownFunctionKind {
     Import,
     Require,
     RequireResolve,
+    RequireContext,
+    RequireContextRequire(RequireContextValueVc),
+    RequireContextRequireKeys(RequireContextValueVc),
+    RequireContextRequireResolve(RequireContextValueVc),
     Define,
     FsReadMethod(JsWord),
     PathToFileUrl,
@@ -2931,6 +3069,7 @@ impl WellKnownFunctionKind {
             Self::Import => Some(&["import"]),
             Self::Require => Some(&["require"]),
             Self::RequireResolve => Some(&["require", "resolve"]),
+            Self::RequireContext => Some(&["require", "context"]),
             Self::Define => Some(&["define"]),
             _ => None,
         }
@@ -2943,16 +3082,15 @@ fn is_unresolved(i: &Ident, unresolved_mark: Mark) -> bool {
 
 #[doc(hidden)]
 pub mod test_utils {
-    use std::sync::Arc;
-
     use anyhow::Result;
-    use turbopack_core::compile_time_info::CompileTimeInfoVc;
+    use indexmap::IndexMap;
+    use turbopack_core::{compile_time_info::CompileTimeInfoVc, error::PrettyPrintError};
 
     use super::{
-        builtin::early_replace_builtin, well_known::replace_well_known, FreeVarKind, JsValue,
-        ModuleValue, WellKnownFunctionKind, WellKnownObjectKind,
+        builtin::early_replace_builtin, well_known::replace_well_known, JsValue, ModuleValue,
+        WellKnownFunctionKind, WellKnownObjectKind,
     };
-    use crate::analyzer::builtin::replace_builtin;
+    use crate::analyzer::{builtin::replace_builtin, parse_require_context, RequireContextValueVc};
 
     pub async fn early_visitor(mut v: JsValue) -> Result<(JsValue, bool)> {
         let m = early_replace_builtin(&mut v);
@@ -2970,22 +3108,34 @@ pub mod test_utils {
                 ref args,
             ) => match &args[0] {
                 JsValue::Constant(v) => (v.to_string() + "/resolved/lib/index.js").into(),
-                _ => JsValue::Unknown(Some(Arc::new(v)), "resolve.resolve non constant"),
+                _ => v.into_unknown("require.resolve non constant"),
             },
-            JsValue::FreeVar(FreeVarKind::Require) => {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Require)
-            }
-            JsValue::FreeVar(FreeVarKind::Define) => {
-                JsValue::WellKnownFunction(WellKnownFunctionKind::Define)
-            }
-            JsValue::FreeVar(FreeVarKind::Dirname) => "__dirname".into(),
-            JsValue::FreeVar(FreeVarKind::Filename) => "__filename".into(),
-            JsValue::FreeVar(FreeVarKind::NodeProcess) => {
-                JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess)
-            }
-            JsValue::FreeVar(kind) => {
-                JsValue::Unknown(Some(Arc::new(JsValue::FreeVar(kind))), "unknown global")
-            }
+            JsValue::Call(
+                _,
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+                ref args,
+            ) => match parse_require_context(args) {
+                Ok(options) => {
+                    let mut map = IndexMap::new();
+
+                    map.insert("./a".into(), format!("[context: {}]/a", options.dir));
+                    map.insert("./b".into(), format!("[context: {}]/b", options.dir));
+                    map.insert("./c".into(), format!("[context: {}]/c", options.dir));
+
+                    JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(
+                        RequireContextValueVc::cell(map),
+                    ))
+                }
+                Err(err) => v.into_unknown(PrettyPrintError(&err).to_string()),
+            },
+            JsValue::FreeVar(ref var) => match &**var {
+                "require" => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
+                "define" => JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
+                "__dirname" => "__dirname".into(),
+                "__filename" => "__filename".into(),
+                "process" => JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
+                _ => v.into_unknown("unknown global"),
+            },
             JsValue::Module(ModuleValue {
                 module: ref name, ..
             }) => match name.as_ref() {
@@ -3022,7 +3172,7 @@ mod tests {
     };
     use turbo_tasks::{util::FormatDuration, Value};
     use turbopack_core::{
-        compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo},
+        compile_time_info::CompileTimeInfo,
         environment::{
             EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
         },
@@ -3189,7 +3339,7 @@ mod tests {
                                         );
                                     }
                                     EffectArg::Spread => {
-                                        new_args.push(JsValue::Unknown(None, "spread"));
+                                        new_args.push(JsValue::unknown_empty("spread"));
                                     }
                                 }
                             }
@@ -3227,8 +3377,11 @@ mod tests {
                                 let new_args = handle_args(args, &mut queue, &var_graph, i).await;
                                 resolved.push((
                                     format!("{parent} -> {i} call"),
-                                    JsValue::call(box func, new_args),
+                                    JsValue::call(Box::new(func), new_args),
                                 ));
+                            }
+                            Effect::FreeVar { var, .. } => {
+                                resolved.push((format!("{parent} -> {i} free var"), var));
                             }
                             Effect::MemberCall {
                                 obj, prop, args, ..
@@ -3238,7 +3391,7 @@ mod tests {
                                 let new_args = handle_args(args, &mut queue, &var_graph, i).await;
                                 resolved.push((
                                     format!("{parent} -> {i} member call"),
-                                    JsValue::member_call(box obj, box prop, new_args),
+                                    JsValue::member_call(Box::new(obj), Box::new(prop), new_args),
                                 ));
                             }
                             _ => {}
@@ -3285,25 +3438,22 @@ mod tests {
 
     async fn resolve(var_graph: &VarGraph, val: JsValue) -> JsValue {
         turbo_tasks_testing::VcStorage::with(async {
-            let compile_time_info = CompileTimeInfo {
-                environment: EnvironmentVc::new(
-                    Value::new(ExecutionEnvironment::NodeJsLambda(
-                        NodeJsEnvironment {
-                            compile_target: CompileTarget {
-                                arch: Arch::X64,
-                                platform: Platform::Linux,
-                                endianness: Endianness::Little,
-                                libc: Libc::Glibc,
-                            }
-                            .into(),
-                            ..Default::default()
+            let compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(
+                Value::new(ExecutionEnvironment::NodeJsLambda(
+                    NodeJsEnvironment {
+                        compile_target: CompileTarget {
+                            arch: Arch::X64,
+                            platform: Platform::Linux,
+                            endianness: Endianness::Little,
+                            libc: Libc::Glibc,
                         }
                         .into(),
-                    )),
-                    Value::new(EnvironmentIntention::ServerRendering),
-                ),
-                defines: CompileTimeDefinesVc::empty(),
-            }
+                        ..Default::default()
+                    }
+                    .into(),
+                )),
+                Value::new(EnvironmentIntention::ServerRendering),
+            ))
             .cell();
             link(
                 var_graph,

@@ -1,22 +1,42 @@
-0 -> 1 call = require*0*("path")
-- *0* require: The require method from CommonJS
+0 -> 1 free var = FreeVar(require)
 
 0 -> 2 call = require*0*("path")
 - *0* require: The require method from CommonJS
 
-0 -> 3 call = require*0*("os")
+0 -> 3 free var = FreeVar(require)
+
+0 -> 4 call = require*0*("path")
 - *0* require: The require method from CommonJS
 
-0 -> 6 member call = os*0*["arch"]()
+0 -> 5 free var = FreeVar(require)
+
+0 -> 6 call = require*0*("os")
+- *0* require: The require method from CommonJS
+
+0 -> 8 free var = FreeVar(process)
+
+0 -> 10 member call = os*0*["arch"]()
 - *0* os: The Node.js os module: https://nodejs.org/api/os.html
 
-0 -> 8 member call = os*0*["endianness"]()
+0 -> 12 member call = os*0*["endianness"]()
 - *0* os: The Node.js os module: https://nodejs.org/api/os.html
 
-0 -> 11 call = (...) => (undefined | {"pkg": pkg, "subpath": subpath})()
+0 -> 15 free var = FreeVar(Error)
 
-0 -> 13 member call = require*0*["resolve"](
-    `${(undefined["pkg"] | ???*1* | ???*2* | ???*3* | "esbuild-linux-64")}/${(undefined["subpath"] | ???*4* | "esbuild.exe" | "bin/esbuild" | ???*5*)}`
+0 -> 16 free var = FreeVar(ESBUILD_BINARY_PATH)
+
+0 -> 17 conditional = ???*0*
+- *0* FreeVar(ESBUILD_BINARY_PATH)
+  ⚠️  unknown global
+
+17 -> 18 free var = FreeVar(ESBUILD_BINARY_PATH)
+
+0 -> 19 call = (...) => {"pkg": pkg, "subpath": subpath}()
+
+0 -> 21 free var = FreeVar(require)
+
+0 -> 22 member call = require*0*["resolve"](
+    `${(???*1* | ???*2* | ???*3* | "esbuild-linux-64")}/${(???*4* | "esbuild.exe" | "bin/esbuild" | ???*5*)}`
 )
 - *0* require: The require method from CommonJS
 - *1* pkg
@@ -28,10 +48,9 @@
   ⚠️  pattern without value
 - *5* unknown mutation
 
-0 -> 14 call = ???*0*(
-    (undefined["pkg"] | ???*1* | ???*2* | ???*3* | "esbuild-linux-64"),
-    (undefined["subpath"] | ???*4* | "esbuild.exe" | "bin/esbuild" | ???*5*)
-)
+0 -> 23 free var = FreeVar(downloadedBinPath)
+
+0 -> 24 call = ???*0*((???*1* | ???*2* | ???*3* | "esbuild-linux-64"), (???*4* | "esbuild.exe" | "bin/esbuild" | ???*5*))
 - *0* FreeVar(downloadedBinPath)
   ⚠️  unknown global
 - *1* pkg
@@ -43,15 +62,17 @@
   ⚠️  pattern without value
 - *5* unknown mutation
 
-0 -> 16 member call = ???*0*["existsSync"]((???*1* | ???*2* | ???*9*))
+0 -> 26 free var = FreeVar(fs)
+
+0 -> 27 member call = ???*0*["existsSync"]((???*1* | ???*2* | ???*9*))
 - *0* FreeVar(fs)
   ⚠️  unknown global
 - *1* binPath
   ⚠️  pattern without value
 - *2* require.resolve*3*(
-        `${(undefined["pkg"] | ???*4* | ???*5* | ???*6* | "esbuild-linux-64")}/${(undefined["subpath"] | ???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*)}`
+        `${(???*4* | ???*5* | ???*6* | "esbuild-linux-64")}/${(???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*)}`
     )
-  ⚠️  resolve.resolve non constant
+  ⚠️  require.resolve non constant
 - *3* require.resolve: The require.resolve method from CommonJS
 - *4* pkg
   ⚠️  pattern without value
@@ -66,15 +87,15 @@
 - *10* FreeVar(downloadedBinPath)
   ⚠️  unknown global
 
-0 -> 17 conditional = !(???*0*)
+0 -> 28 conditional = !(???*0*)
 - *0* ???*1*["existsSync"](binPath)
   ⚠️  unknown callee object
 - *1* FreeVar(fs)
   ⚠️  unknown global
 
-17 -> 19 member call = require*0*["resolve"](
-    (undefined["pkg"] | ???*1* | ???*2* | ???*3* | "esbuild-linux-64")
-)
+28 -> 30 free var = FreeVar(require)
+
+28 -> 31 member call = require*0*["resolve"]((???*1* | ???*2* | ???*3* | "esbuild-linux-64"))
 - *0* require: The require method from CommonJS
 - *1* pkg
   ⚠️  pattern without value
@@ -82,28 +103,32 @@
   ⚠️  unknown global
 - *3* unknown mutation
 
-0 -> 20 call = require*0*("pnpapi")
+28 -> 32 free var = FreeVar(Error)
+
+0 -> 33 free var = FreeVar(require)
+
+0 -> 34 call = require*0*("pnpapi")
 - *0* require: The require method from CommonJS
 
-0 -> 21 conditional = (false | true)
+0 -> 35 conditional = (false | true)
 
-21 -> 24 member call = require*0*["resolve"]("esbuild")
+35 -> 38 free var = FreeVar(require)
+
+35 -> 39 member call = require*0*["resolve"]("esbuild")
 - *0* require: The require method from CommonJS
 
-21 -> 25 member call = path*0*["dirname"]("\"esbuild\"/resolved/lib/index.js")
+35 -> 40 member call = path*0*["dirname"]("\"esbuild\"/resolved/lib/index.js")
 - *0* path: The Node.js path module: https://nodejs.org/api/path.html
 
-21 -> 28 member call = path*0*["basename"](
-    (undefined["subpath"] | ???*1* | "esbuild.exe" | "bin/esbuild" | ???*2*)
-)
+35 -> 43 member call = path*0*["basename"]((???*1* | "esbuild.exe" | "bin/esbuild" | ???*2*))
 - *0* path: The Node.js path module: https://nodejs.org/api/path.html
 - *1* subpath
   ⚠️  pattern without value
 - *2* unknown mutation
 
-21 -> 29 member call = path*0*["join"](
+35 -> 44 member call = path*0*["join"](
     "\"esbuild\"/resolved/lib",
-    `pnpapi-${(undefined["pkg"] | ???*1* | ???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`
+    `pnpapi-${(???*1* | ???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`
 )
 - *0* path: The Node.js path module: https://nodejs.org/api/path.html
 - *1* pkg
@@ -111,9 +136,7 @@
 - *2* FreeVar(undefined)
   ⚠️  unknown global
 - *3* unknown mutation
-- *4* ???*5*(
-        (undefined["subpath"] | ???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*)
-    )
+- *4* ???*5*((???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*))
   ⚠️  unknown callee
 - *5* path*6*["basename"]
   ⚠️  unsupported property on Node.js path module
@@ -122,8 +145,10 @@
   ⚠️  pattern without value
 - *8* unknown mutation
 
-21 -> 31 member call = ???*0*["existsSync"](
-    `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(undefined["pkg"] | ???*1* | ???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`
+35 -> 46 free var = FreeVar(fs)
+
+35 -> 47 member call = ???*0*["existsSync"](
+    `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`
 )
 - *0* FreeVar(fs)
   ⚠️  unknown global
@@ -132,9 +157,7 @@
 - *2* FreeVar(undefined)
   ⚠️  unknown global
 - *3* unknown mutation
-- *4* ???*5*(
-        (undefined["subpath"] | ???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*)
-    )
+- *4* ???*5*((???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*))
   ⚠️  unknown callee
 - *5* path*6*["basename"]
   ⚠️  unsupported property on Node.js path module
@@ -143,24 +166,26 @@
   ⚠️  pattern without value
 - *8* unknown mutation
 
-21 -> 32 conditional = !(???*0*)
+35 -> 48 conditional = !(???*0*)
 - *0* ???*1*["existsSync"](binTargetPath)
   ⚠️  unknown callee object
 - *1* FreeVar(fs)
   ⚠️  unknown global
 
-32 -> 34 member call = ???*0*["copyFileSync"](
+48 -> 50 free var = FreeVar(fs)
+
+48 -> 51 member call = ???*0*["copyFileSync"](
     (???*1* | ???*2* | ???*9*),
-    `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(undefined["pkg"] | ???*11* | ???*12* | ???*13* | "esbuild-linux-64")}-${???*14*}`
+    `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*11* | ???*12* | ???*13* | "esbuild-linux-64")}-${???*14*}`
 )
 - *0* FreeVar(fs)
   ⚠️  unknown global
 - *1* binPath
   ⚠️  pattern without value
 - *2* require.resolve*3*(
-        `${(undefined["pkg"] | ???*4* | ???*5* | ???*6* | "esbuild-linux-64")}/${(undefined["subpath"] | ???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*)}`
+        `${(???*4* | ???*5* | ???*6* | "esbuild-linux-64")}/${(???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*)}`
     )
-  ⚠️  resolve.resolve non constant
+  ⚠️  require.resolve non constant
 - *3* require.resolve: The require.resolve method from CommonJS
 - *4* pkg
   ⚠️  pattern without value
@@ -180,7 +205,7 @@
   ⚠️  unknown global
 - *13* unknown mutation
 - *14* ???*15*(
-        (undefined["subpath"] | ???*17* | "esbuild.exe" | "bin/esbuild" | ???*18*)
+        (???*17* | "esbuild.exe" | "bin/esbuild" | ???*18*)
     )
   ⚠️  unknown callee
 - *15* path*16*["basename"]
@@ -190,8 +215,10 @@
   ⚠️  pattern without value
 - *18* unknown mutation
 
-32 -> 36 member call = ???*0*["chmodSync"](
-    `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(undefined["pkg"] | ???*1* | ???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`,
+48 -> 53 free var = FreeVar(fs)
+
+48 -> 54 member call = ???*0*["chmodSync"](
+    `"esbuild"/resolved/lib${("/" | "")}pnpapi-${(???*1* | ???*2* | ???*3* | "esbuild-linux-64")}-${???*4*}`,
     493
 )
 - *0* FreeVar(fs)
@@ -201,9 +228,7 @@
 - *2* FreeVar(undefined)
   ⚠️  unknown global
 - *3* unknown mutation
-- *4* ???*5*(
-        (undefined["subpath"] | ???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*)
-    )
+- *4* ???*5*((???*7* | "esbuild.exe" | "bin/esbuild" | ???*8*))
   ⚠️  unknown callee
 - *5* path*6*["basename"]
   ⚠️  unsupported property on Node.js path module
@@ -212,29 +237,54 @@
   ⚠️  pattern without value
 - *8* unknown mutation
 
-0 -> 38 member call = path*0*["basename"]("__filename")
+0 -> 55 free var = FreeVar(ESBUILD_BINARY_PATH)
+
+0 -> 57 free var = FreeVar(__filename)
+
+0 -> 58 member call = path*0*["basename"]("__filename")
 - *0* path: The Node.js path module: https://nodejs.org/api/path.html
 
-0 -> 40 member call = path*0*["basename"]("__dirname")
+0 -> 60 free var = FreeVar(__dirname)
+
+0 -> 61 member call = path*0*["basename"]("__dirname")
 - *0* path: The Node.js path module: https://nodejs.org/api/path.html
 
-0 -> 41 conditional = false
+0 -> 62 conditional = (!(???*0*) | false | (???*1* !== "main.js") | (???*4* !== "lib"))
+- *0* FreeVar(ESBUILD_BINARY_PATH)
+  ⚠️  unknown global
+- *1* ???*2*("__filename")
+  ⚠️  unknown callee
+- *2* path*3*["basename"]
+  ⚠️  unsupported property on Node.js path module
+- *3* path: The Node.js path module: https://nodejs.org/api/path.html
+- *4* ???*5*("__dirname")
+  ⚠️  unknown callee
+- *5* path*6*["basename"]
+  ⚠️  unsupported property on Node.js path module
+- *6* path: The Node.js path module: https://nodejs.org/api/path.html
 
-41 -> 43 member call = path*0*["join"]("__dirname", "..", "bin", "esbuild")
+62 -> 63 free var = FreeVar(Error)
+
+62 -> 64 free var = FreeVar(__filename)
+
+0 -> 65 conditional = false
+
+65 -> 67 free var = FreeVar(__dirname)
+
+65 -> 68 member call = path*0*["join"]("__dirname", "..", "bin", "esbuild")
 - *0* path: The Node.js path module: https://nodejs.org/api/path.html
 
-0 -> 44 call = (...) => (undefined | FreeVar(ESBUILD_BINARY_PATH) | binTargetPath | binPath)()
+0 -> 69 call = (...) => (FreeVar(ESBUILD_BINARY_PATH) | binTargetPath | binPath)()
 
-0 -> 45 call = (...) => (
-  | undefined
+0 -> 70 call = (...) => (
   | [
         "node",
         [
-            path2["join"](FreeVar(Dirname), "..", "bin", "esbuild")
+            path2["join"](FreeVar(__dirname), "..", "bin", "esbuild")
         ]
     ]
   | [generateBinPath(), []]
 )()
 
-0 -> 47 member call = ???*0*["concat"]("--service=0.14.12", "--ping")
+0 -> 72 member call = ???*0*["concat"]("--service=0.14.12", "--ping")
 - *0* max number of linking steps reached

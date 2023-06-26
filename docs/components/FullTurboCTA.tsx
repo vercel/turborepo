@@ -17,7 +17,7 @@ function FullTurboCTA() {
       </div>
       <div className="flex-none">
         <Link
-          href="https://vercel.com/contact/turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=turborepo_side_banner"
+          href="https://vercel.com/contact/sales?utm_source=turbo.build&utm_medium=referral&utm_campaign=turborepo_side_banner"
           className="justify-center block px-4 py-2 text-black no-underline bg-white rounded-full dark:bg-opacity-5 dark:text-white"
         >
           Talk to an Expert

@@ -10,7 +10,8 @@ builds:
   - id: turbo
     main: ./cmd/turbo
     tags:
-      - go
+      - rust
+      - staticbinary
     binary: bin/go-turbo
     hooks:
       pre:

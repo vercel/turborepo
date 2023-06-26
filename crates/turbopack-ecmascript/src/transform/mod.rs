@@ -1,100 +1,111 @@
-mod server_to_client_proxy;
-
-use std::{path::Path, sync::Arc};
+use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 use anyhow::Result;
-use next_transform_dynamic::{next_dynamic, NextDynamicMode};
-use next_transform_strip_page_exports::{next_transform_strip_page_exports, ExportFilter};
-use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 use swc_core::{
     base::SwcComments,
-    common::{chain, util::take::Take, FileName, Mark, SourceMap},
+    common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
-        ast::{Module, ModuleItem, Program},
-        atoms::JsWord,
+        ast::{Module, ModuleItem, Program, Script},
         preset_env::{self, Targets},
         transforms::{
-            base::{feature::FeatureFlag, helpers::inject_helpers, resolver, Assumptions},
+            base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
             react::react,
         },
         visit::{FoldWith, VisitMutWith},
     },
 };
-use turbo_tasks::{
-    primitives::{StringVc, StringsVc},
-    trace::TraceRawVcs,
+use turbo_tasks::primitives::{OptionStringVc, StringVc};
+use turbo_tasks_fs::FileSystemPathVc;
+use turbopack_core::{
+    environment::EnvironmentVc,
+    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
 };
-use turbo_tasks_fs::{json::parse_json_with_source_context, FileSystemPathVc};
-use turbopack_core::environment::EnvironmentVc;
-
-use self::server_to_client_proxy::{create_proxy_module, is_client_module};
-
-#[derive(
-    Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, TraceRawVcs,
-)]
-pub enum NextJsPageExportFilter {
-    /// Strip all data exports (getServerSideProps,
-    /// getStaticProps, getStaticPaths exports.) and their unique dependencies.
-    StripDataExports,
-    /// Strip default export and all its unique dependencies.
-    StripDefaultExport,
-}
-
-impl From<NextJsPageExportFilter> for ExportFilter {
-    fn from(val: NextJsPageExportFilter) -> Self {
-        match val {
-            NextJsPageExportFilter::StripDataExports => ExportFilter::StripDataExports,
-            NextJsPageExportFilter::StripDefaultExport => ExportFilter::StripDefaultExport,
-        }
-    }
-}
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmascriptInputTransform {
-    ClientDirective(StringVc),
     CommonJs,
-    Custom,
-    Emotion,
-    /// This enables a Next.js transform which will eliminate some exports
-    /// from a page file, as well as any imports exclusively used by these
-    /// exports.
-    ///
-    /// It also provides diagnostics for improper use of `getServerSideProps`.
-    NextJsStripPageExports(NextJsPageExportFilter),
-    /// Enables the Next.js transform for next/dynamic.
-    NextJsDynamic {
-        is_development: bool,
-        is_server: bool,
-        is_server_components: bool,
-        pages_dir: Option<FileSystemPathVc>,
-    },
-    NextJsFont(StringsVc),
+    Plugin(TransformPluginVc),
     PresetEnv(EnvironmentVc),
     React {
         #[serde(default)]
+        development: bool,
+        #[serde(default)]
         refresh: bool,
+        // swc.jsc.transform.react.importSource
+        import_source: OptionStringVc,
+        // swc.jsc.transform.react.runtime,
+        runtime: OptionStringVc,
     },
-    StyledComponents,
-    StyledJsx,
     // These options are subset of swc_core::ecma::transforms::typescript::Config, but
     // it doesn't derive `Copy` so repeating values in here
     TypeScript {
         #[serde(default)]
         use_define_for_class_fields: bool,
     },
+    Decorators {
+        #[serde(default)]
+        is_legacy: bool,
+        #[serde(default)]
+        is_ecma: bool,
+        #[serde(default)]
+        emit_decorators_metadata: bool,
+        #[serde(default)]
+        use_define_for_class_fields: bool,
+    },
+}
+
+/// The CustomTransformer trait allows you to implement your own custom SWC
+/// transformer to run over all ECMAScript files imported in the graph.
+#[async_trait]
+pub trait CustomTransformer: Debug {
+    async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()>;
+}
+
+/// A wrapper around a TransformPlugin instance, allowing it to operate with
+/// the turbo_task caching requirements.
+#[turbo_tasks::value(
+    transparent,
+    serialization = "none",
+    eq = "manual",
+    into = "new",
+    cell = "new"
+)]
+#[derive(Debug)]
+pub struct TransformPlugin(#[turbo_tasks(trace_ignore)] Box<dyn CustomTransformer + Send + Sync>);
+
+#[turbo_tasks::value(transparent)]
+pub struct OptionTransformPlugin(Option<TransformPluginVc>);
+
+impl Default for OptionTransformPluginVc {
+    fn default() -> Self {
+        OptionTransformPluginVc::cell(None)
+    }
+}
+
+#[async_trait]
+impl CustomTransformer for TransformPlugin {
+    async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
+        self.0.transform(program, ctx).await
+    }
 }
 
 #[turbo_tasks::value(transparent, serialization = "auto_for_input")]
-#[derive(Debug, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub struct EcmascriptInputTransforms(Vec<EcmascriptInputTransform>);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptInputTransformsVc {
     #[turbo_tasks::function]
+    pub fn empty() -> Self {
+        EcmascriptInputTransformsVc::cell(Vec::new())
+    }
+
+    #[turbo_tasks::function]
     pub async fn extend(self, other: EcmascriptInputTransformsVc) -> Result<Self> {
         let mut transforms = self.await?.clone_value();
-        transforms.extend(&*other.await?);
+        transforms.extend(other.await?.clone_value());
         Ok(EcmascriptInputTransformsVc::cell(transforms))
     }
 }
@@ -107,44 +118,73 @@ pub struct TransformContext<'a> {
     pub file_path_str: &'a str,
     pub file_name_str: &'a str,
     pub file_name_hash: u128,
+    pub file_path: FileSystemPathVc,
 }
 
 impl EcmascriptInputTransform {
-    pub async fn apply(
-        &self,
-        program: &mut Program,
-        &TransformContext {
+    pub async fn apply(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
+        let &TransformContext {
             comments,
             source_map,
             top_level_mark,
             unresolved_mark,
-            file_path_str,
-            file_name_str,
-            file_name_hash,
-        }: &TransformContext<'_>,
-    ) -> Result<()> {
-        match *self {
-            EcmascriptInputTransform::React { refresh } => {
-                program.visit_mut_with(&mut react(
-                    source_map.clone(),
-                    Some(comments.clone()),
-                    swc_core::ecma::transforms::react::Options {
-                        runtime: Some(swc_core::ecma::transforms::react::Runtime::Automatic),
-                        development: Some(true),
-                        refresh: if refresh {
-                            Some(swc_core::ecma::transforms::react::RefreshOptions {
-                                ..Default::default()
-                            })
-                        } else {
-                            None
-                        },
-                        ..Default::default()
+            ..
+        } = ctx;
+        match self {
+            EcmascriptInputTransform::React {
+                development,
+                refresh,
+                import_source,
+                runtime,
+            } => {
+                use swc_core::ecma::transforms::react::{Options, Runtime};
+                let runtime = if let Some(runtime) = &*runtime.await? {
+                    match runtime.as_str() {
+                        "classic" => Runtime::Classic,
+                        "automatic" => Runtime::Automatic,
+                        _ => {
+                            return Err(anyhow::anyhow!(
+                                "Invalid value for swc.jsc.transform.react.runtime: {}",
+                                runtime
+                            ))
+                        }
+                    }
+                } else {
+                    Runtime::Automatic
+                };
+
+                let config = Options {
+                    runtime: Some(runtime),
+                    development: Some(*development),
+                    import_source: import_source.await?.clone_value(),
+                    refresh: if *refresh {
+                        Some(swc_core::ecma::transforms::react::RefreshOptions {
+                            refresh_reg: "__turbopack_refresh__.register".to_string(),
+                            refresh_sig: "__turbopack_refresh__.signature".to_string(),
+                            ..Default::default()
+                        })
+                    } else {
+                        None
                     },
+                    ..Default::default()
+                };
+
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
+                program.visit_mut_with(&mut react::<&dyn Comments>(
+                    source_map.clone(),
+                    Some(&comments),
+                    config,
                     top_level_mark,
+                    unresolved_mark,
                 ));
             }
             EcmascriptInputTransform::CommonJs => {
-                program.visit_mut_with(&mut swc_core::ecma::transforms::module::common_js(
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
+                program.visit_mut_with(&mut swc_core::ecma::transforms::module::common_js::<
+                    &dyn Comments,
+                >(
                     unresolved_mark,
                     swc_core::ecma::transforms::module::util::Config {
                         allow_top_level_this: true,
@@ -154,17 +194,8 @@ impl EcmascriptInputTransform {
                         ..Default::default()
                     },
                     swc_core::ecma::transforms::base::feature::FeatureFlag::all(),
-                    Some(comments.clone()),
+                    Some(&comments),
                 ));
-            }
-            EcmascriptInputTransform::Emotion => {
-                let p = std::mem::replace(program, Program::Module(Module::dummy()));
-                *program = p.fold_with(&mut swc_emotion::emotion(
-                    Default::default(),
-                    Path::new(file_name_str),
-                    source_map.clone(),
-                    comments.clone(),
-                ))
             }
             EcmascriptInputTransform::PresetEnv(env) => {
                 let versions = env.runtime_versions().await?;
@@ -174,12 +205,29 @@ impl EcmascriptInputTransform {
                     ..Default::default()
                 };
 
-                let module_program = unwrap_module_program(program);
+                let module_program = std::mem::replace(program, Program::Module(Module::dummy()));
 
+                let module_program = if let Program::Script(Script {
+                    span,
+                    mut body,
+                    shebang,
+                }) = module_program
+                {
+                    Program::Module(Module {
+                        span,
+                        body: body.drain(..).map(ModuleItem::Stmt).collect(),
+                        shebang,
+                    })
+                } else {
+                    module_program
+                };
+
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
                 *program = module_program.fold_with(&mut chain!(
-                    preset_env::preset_env(
+                    preset_env::preset_env::<&'_ dyn Comments>(
                         top_level_mark,
-                        Some(comments.clone()),
+                        Some(&comments),
                         config,
                         Assumptions::default(),
                         &mut FeatureFlag::empty(),
@@ -187,86 +235,37 @@ impl EcmascriptInputTransform {
                     inject_helpers(unresolved_mark),
                 ));
             }
-            EcmascriptInputTransform::StyledComponents => {
-                program.visit_mut_with(&mut styled_components::styled_components(
-                    FileName::Anon,
-                    file_name_hash,
-                    parse_json_with_source_context("{}")?,
-                ));
-            }
-            EcmascriptInputTransform::StyledJsx => {
-                // Modeled after https://github.com/swc-project/plugins/blob/ae735894cdb7e6cfd776626fe2bc580d3e80fed9/packages/styled-jsx/src/lib.rs
-                let real_program = std::mem::replace(program, Program::Module(Module::dummy()));
-                *program = real_program.fold_with(&mut styled_jsx::visitor::styled_jsx(
-                    source_map.clone(),
-                    // styled_jsx don't really use that in a relevant way
-                    FileName::Anon,
-                ));
-            }
             EcmascriptInputTransform::TypeScript {
-                use_define_for_class_fields,
+                // TODO(WEB-1213)
+                use_define_for_class_fields: _use_define_for_class_fields,
             } => {
-                use swc_core::ecma::transforms::typescript::{strip_with_config, Config};
-                let config = Config {
-                    use_define_for_class_fields,
-                    ..Default::default()
-                };
+                use swc_core::ecma::transforms::typescript::strip_with_config;
+                let config = Default::default();
                 program.visit_mut_with(&mut strip_with_config(config, top_level_mark));
             }
-            EcmascriptInputTransform::ClientDirective(transition_name) => {
-                let transition_name = &*transition_name.await?;
-                if is_client_module(program) {
-                    *program = create_proxy_module(transition_name, &format!("./{file_name_str}"));
-                    program.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
-                }
-            }
-            EcmascriptInputTransform::NextJsStripPageExports(export_type) => {
-                // TODO(alexkirsz) Connect the eliminated_packages to telemetry.
-                let eliminated_packages = Default::default();
-
-                let module_program = unwrap_module_program(program);
-
-                *program = module_program.fold_with(&mut next_transform_strip_page_exports(
-                    export_type.into(),
-                    eliminated_packages,
-                ));
-            }
-            EcmascriptInputTransform::NextJsDynamic {
-                is_development,
-                is_server,
-                is_server_components,
-                pages_dir,
+            EcmascriptInputTransform::Decorators {
+                is_legacy,
+                is_ecma: _,
+                emit_decorators_metadata,
+                // TODO(WEB-1213)
+                use_define_for_class_fields: _use_define_for_class_fields,
             } => {
-                let module_program = unwrap_module_program(program);
-
-                let pages_dir = if let Some(pages_dir) = pages_dir {
-                    Some(pages_dir.await?.path.clone().into())
-                } else {
-                    None
+                use swc_core::ecma::transforms::proposal::decorators::{decorators, Config};
+                let config = Config {
+                    legacy: *is_legacy,
+                    emit_metadata: *emit_decorators_metadata,
+                    ..Default::default()
                 };
 
-                *program = module_program.fold_with(&mut next_dynamic(
-                    is_development,
-                    is_server,
-                    is_server_components,
-                    NextDynamicMode::Turbo,
-                    FileName::Real(file_path_str.into()),
-                    pages_dir,
+                let p = std::mem::replace(program, Program::Module(Module::dummy()));
+                *program = p.fold_with(&mut chain!(
+                    decorators(config),
+                    inject_helpers(unresolved_mark)
                 ));
             }
-            EcmascriptInputTransform::NextJsFont(font_loaders_vc) => {
-                let mut font_loaders = vec![];
-                for loader in &(*font_loaders_vc.await?) {
-                    font_loaders.push(std::convert::Into::<JsWord>::into(&**loader));
-                }
-                let mut next_font = next_font::next_font_loaders(next_font::Config {
-                    font_loaders,
-                    relative_file_path_from_root: file_name_str.into(),
-                });
-
-                program.visit_mut_with(&mut next_font);
+            EcmascriptInputTransform::Plugin(transform) => {
+                transform.await?.transform(program, ctx).await?
             }
-            EcmascriptInputTransform::Custom => todo!(),
         }
         Ok(())
     }
@@ -283,17 +282,35 @@ pub fn remove_shebang(program: &mut Program) {
     }
 }
 
-fn unwrap_module_program(program: &mut Program) -> Program {
-    match program {
-        Program::Module(module) => Program::Module(module.take()),
-        Program::Script(s) => Program::Module(Module {
-            span: s.span,
-            body: s
-                .body
-                .iter()
-                .map(|stmt| ModuleItem::Stmt(stmt.clone()))
-                .collect(),
-            shebang: s.shebang.clone(),
-        }),
+#[turbo_tasks::value(shared)]
+pub struct UnsupportedServerActionIssue {
+    pub context: FileSystemPathVc,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for UnsupportedServerActionIssue {
+    #[turbo_tasks::function]
+    fn severity(&self) -> IssueSeverityVc {
+        IssueSeverity::Error.into()
+    }
+
+    #[turbo_tasks::function]
+    fn category(&self) -> StringVc {
+        StringVc::cell("unsupported".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> StringVc {
+        StringVc::cell("Server actions (\"use server\") are not yet supported in Turbopack".into())
+    }
+
+    #[turbo_tasks::function]
+    fn context(&self) -> FileSystemPathVc {
+        self.context
+    }
+
+    #[turbo_tasks::function]
+    async fn description(&self) -> Result<StringVc> {
+        Ok(StringVc::cell("".to_string()))
     }
 }

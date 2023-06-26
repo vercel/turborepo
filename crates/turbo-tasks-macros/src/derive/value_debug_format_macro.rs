@@ -6,8 +6,8 @@ use turbo_tasks_macros_shared::{generate_destructuring, match_expansion};
 
 use super::FieldAttributes;
 
-fn ignore_field(field: &Field) -> bool {
-    FieldAttributes::from(field.attrs.as_slice()).debug_ignore
+fn filter_field(field: &Field) -> bool {
+    !FieldAttributes::from(field.attrs.as_slice()).debug_ignore
 }
 
 /// This macro generates the implementation of the `ValueDebugFormat` trait for
@@ -55,20 +55,14 @@ pub fn derive_value_debug_format(input: TokenStream) -> TokenStream {
 /// Formats a single field nested inside named or unnamed fields.
 fn format_field(value: TokenStream2) -> TokenStream2 {
     quote! {
-        match #value.value_debug_format(depth.saturating_sub(1)).try_to_value_debug_string().await {
-            Ok(result) => match result.await {
-                Ok(result) => result.to_string(),
-                Err(err) => format!("{:?}", err),
-            },
-            Err(err) => format!("{:?}", err),
-        }
+        turbo_tasks::macro_helpers::value_debug_format_field(#value.value_debug_format(depth.saturating_sub(1))).await
     }
 }
 
 /// Formats a struct or enum variant with named fields (e.g. `struct Foo {
 /// bar: u32 }`, `Foo::Bar { baz: u32 }`).
 fn format_named(ident: &Ident, fields: &FieldsNamed) -> (TokenStream2, TokenStream2) {
-    let (captures, fields_idents) = generate_destructuring(fields.named.iter(), &ignore_field);
+    let (captures, fields_idents) = generate_destructuring(fields.named.iter(), &filter_field);
     let fields_values = fields_idents.iter().cloned().map(format_field);
     (
         captures,
@@ -89,7 +83,7 @@ fn format_named(ident: &Ident, fields: &FieldsNamed) -> (TokenStream2, TokenStre
 /// Formats a struct or enum variant with unnamed fields (e.g. `struct
 /// Foo(u32)`, `Foo::Bar(u32)`).
 fn format_unnamed(ident: &Ident, fields: &FieldsUnnamed) -> (TokenStream2, TokenStream2) {
-    let (captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), &ignore_field);
+    let (captures, fields_idents) = generate_destructuring(fields.unnamed.iter(), &filter_field);
     let fields_values = fields_idents.into_iter().map(format_field);
     (
         captures,

@@ -49,7 +49,7 @@ Note that Vite is using the official [SWC plugin](https://github.com/vitejs/vite
 
 Vite is extremely fast in development because of its speedy Fast Refresh capabilities. When you update a file, Vite uses its Native ESM system to to send the updated module to the browser - and performs a little bit of magic to integrate that into the existing module graph.
 
-In Turbopack, we discovered that for Fast Refresh, we don't really need to do bundling work at all. We can send updates in a similar style to Vite. In fact - a little bit more efficently: Turbopack sends changed modules directly through the WebSocket without doing any bundling at all.
+In Turbopack, we discovered that for Fast Refresh, we don't really need to do bundling work at all. We can send updates in a similar style to Vite. In fact - a little bit more efficiently: Turbopack sends changed modules directly through the WebSocket without doing any bundling at all.
 
 In a 1,000 module application, Turbopack can react to file changes **<DocsBenchmarkStat stat="turbopack-update-vs-vite" /> faster** than Vite.
 

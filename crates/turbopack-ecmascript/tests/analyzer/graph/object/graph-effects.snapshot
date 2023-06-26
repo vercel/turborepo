@@ -3,7 +3,7 @@
         obj: Variable(
             (
                 Atom('object' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -49,12 +49,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -100,12 +101,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -151,12 +153,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -202,12 +205,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -253,12 +257,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -304,12 +309,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -355,12 +361,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object' type=static),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -406,12 +413,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object_spread' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -457,12 +465,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object_spread' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -508,12 +517,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object_spread' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -559,12 +569,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object_spread' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -610,12 +621,69 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('global' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    16,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Object,
+            ),
+            ObjectLit(
+                Props(
+                    1,
+                ),
+            ),
+            PropOrSpread(
+                Spread,
+            ),
+            SpreadElement(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                548,
+            ),
+            hi: BytePos(
+                554,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('unknown_spread' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -661,12 +729,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('unknown_spread' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -712,12 +781,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('unknown_spread' type=dynamic),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -763,12 +833,143 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('global' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    20,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Object,
+            ),
+            ObjectLit(
+                Props(
+                    1,
+                ),
+            ),
+            PropOrSpread(
+                Prop,
+            ),
+            Prop(
+                KeyValue,
+            ),
+            KeyValueProp(
+                Key,
+            ),
+            PropName(
+                Computed,
+            ),
+            ComputedPropName(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                678,
+            ),
+            hi: BytePos(
+                684,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
+    },
+    FreeVar {
+        var: FreeVar(
+            Atom('global' type=static),
+        ),
+        ast_path: [
+            Program(
+                Script,
+            ),
+            Script(
+                Body(
+                    20,
+                ),
+            ),
+            Stmt(
+                Decl,
+            ),
+            Decl(
+                Var,
+            ),
+            VarDecl(
+                Decls(
+                    0,
+                ),
+            ),
+            VarDeclarator(
+                Init,
+            ),
+            Expr(
+                Object,
+            ),
+            ObjectLit(
+                Props(
+                    3,
+                ),
+            ),
+            PropOrSpread(
+                Prop,
+            ),
+            Prop(
+                KeyValue,
+            ),
+            KeyValueProp(
+                Key,
+            ),
+            PropName(
+                Computed,
+            ),
+            ComputedPropName(
+                Expr,
+            ),
+            Expr(
+                Ident,
+            ),
+        ],
+        span: Span {
+            lo: BytePos(
+                697,
+            ),
+            hi: BytePos(
+                703,
+            ),
+            ctxt: #1,
+        },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object2' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -814,12 +1015,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object2' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -865,12 +1067,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object2' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -916,12 +1119,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object2' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -967,12 +1171,13 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
     Member {
         obj: Variable(
             (
                 Atom('object2' type=inline),
-                #1,
+                #2,
             ),
         ),
         prop: Constant(
@@ -1018,5 +1223,6 @@
             ),
             ctxt: #0,
         },
+        in_try: false,
     },
 ]

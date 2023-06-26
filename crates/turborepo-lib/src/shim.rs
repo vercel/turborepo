@@ -1,8 +1,6 @@
 use std::{
     env,
-    env::current_dir,
-    fs::{self, File},
-    io::Write,
+    fs::{self},
     path::{Path, PathBuf},
     process,
     process::Stdio,
@@ -10,16 +8,20 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use chrono::offset::Local;
+use camino::{Utf8Path, Utf8PathBuf};
+use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
-use env_logger::{fmt::Color, Builder, Env, WriteStyle};
-use log::{debug, Level, LevelFilter};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
+use tracing::debug;
 use turbo_updater::check_for_updates;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-use crate::{cli, get_version, package_manager::Globs, PackageManager, Payload};
+use crate::{
+    cli, get_version, package_manager::WorkspaceGlobs, spawn_child, tracing::TurboSubscriber,
+    ui::UI, PackageManager, Payload,
+};
 
 // all arguments that result in a stdout that much be directly parsable and
 // should not be paired with additional output (from the update notifier for
@@ -48,19 +50,21 @@ fn turbo_version_has_shim(version: &str) -> bool {
 
 #[derive(Debug)]
 struct ShimArgs {
-    cwd: PathBuf,
-    invocation_dir: PathBuf,
+    cwd: AbsoluteSystemPathBuf,
+    invocation_dir: AbsoluteSystemPathBuf,
     skip_infer: bool,
     verbosity: usize,
     force_update_check: bool,
     remaining_turbo_args: Vec<String>,
     forwarded_args: Vec<String>,
+    color: bool,
+    no_color: bool,
 }
 
 impl ShimArgs {
     pub fn parse() -> Result<Self> {
         let mut found_cwd_flag = false;
-        let mut cwd: Option<PathBuf> = None;
+        let mut cwd: Option<AbsoluteSystemPathBuf> = None;
         let mut skip_infer = false;
         let mut found_verbosity_flag = false;
         let mut verbosity = 0;
@@ -68,6 +72,8 @@ impl ShimArgs {
         let mut remaining_turbo_args = Vec::new();
         let mut forwarded_args = Vec::new();
         let mut is_forwarded_args = false;
+        let mut color = false;
+        let mut no_color = false;
         let args = env::args().skip(1);
         for arg in args {
             // We've seen a `--` and therefore we do no parsing
@@ -96,7 +102,8 @@ impl ShimArgs {
                 verbosity = arg[1..].len();
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
-                cwd = Some(arg.into());
+                //cwd = Some(arg.into());
+                cwd = Some(AbsoluteSystemPathBuf::from_cwd(arg)?);
                 found_cwd_flag = false;
             } else if arg == "--cwd" {
                 if cwd.is_some() {
@@ -110,7 +117,11 @@ impl ShimArgs {
                 if cwd.is_some() {
                     return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
                 }
-                cwd = Some(cwd_arg.into());
+                cwd = Some(AbsoluteSystemPathBuf::from_cwd(cwd_arg)?);
+            } else if arg == "--color" {
+                color = true;
+            } else if arg == "--no-color" {
+                no_color = true;
             } else {
                 remaining_turbo_args.push(arg);
             }
@@ -119,12 +130,8 @@ impl ShimArgs {
         if found_cwd_flag {
             Err(anyhow!("No value assigned to `--cwd` argument"))
         } else {
-            let invocation_dir = current_dir()?;
-            let cwd = if let Some(cwd) = cwd {
-                fs_canonicalize(cwd)?
-            } else {
-                invocation_dir.clone()
-            };
+            let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
+            let cwd = cwd.unwrap_or_else(|| invocation_dir.clone());
 
             Ok(ShimArgs {
                 cwd,
@@ -134,6 +141,8 @@ impl ShimArgs {
                 force_update_check,
                 remaining_turbo_args,
                 forwarded_args,
+                color,
+                no_color,
             })
         }
     }
@@ -163,9 +172,19 @@ impl ShimArgs {
 
         true
     }
+
+    pub fn ui(&self) -> UI {
+        if self.no_color {
+            UI::new(true)
+        } else if self.color {
+            UI::new(false)
+        } else {
+            UI::infer()
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RepoMode {
     SinglePackage,
     MultiPackage,
@@ -176,62 +195,246 @@ struct PackageJson {
     version: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct YarnRc {
+    pnp_unplugged_folder: Utf8PathBuf,
+}
+
+impl Default for YarnRc {
+    fn default() -> Self {
+        Self {
+            pnp_unplugged_folder: [".yarn", "unplugged"].iter().collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TurboState {
+    bin_path: Option<PathBuf>,
+    version: &'static str,
+    repo_state: Option<RepoState>,
+}
+
+impl Default for TurboState {
+    fn default() -> Self {
+        Self {
+            bin_path: env::current_exe().ok(),
+            version: get_version(),
+            repo_state: None,
+        }
+    }
+}
+
+impl TurboState {
+    pub fn platform_package_name() -> &'static str {
+        const ARCH: &str = {
+            #[cfg(target_arch = "x86_64")]
+            {
+                "64"
+            }
+            #[cfg(target_arch = "aarch64")]
+            {
+                "arm64"
+            }
+            #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+            {
+                "unknown"
+            }
+        };
+
+        const OS: &str = {
+            #[cfg(target_os = "macos")]
+            {
+                "darwin"
+            }
+            #[cfg(target_os = "windows")]
+            {
+                "windows"
+            }
+            #[cfg(target_os = "linux")]
+            {
+                "linux"
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+            {
+                "unknown"
+            }
+        };
+
+        formatcp!("turbo-{}-{}", OS, ARCH)
+    }
+
+    pub fn binary_name() -> &'static str {
+        {
+            #[cfg(windows)]
+            {
+                "turbo.exe"
+            }
+            #[cfg(not(windows))]
+            {
+                "turbo"
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn version() -> &'static str {
+        include_str!("../../../version.txt")
+            .lines()
+            .next()
+            .expect("Failed to read version from version.txt")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalTurboState {
     bin_path: PathBuf,
     version: String,
 }
 
 impl LocalTurboState {
-    pub fn infer(repo_root: &Path) -> Option<Self> {
-        let local_turbo_path = repo_root.join("node_modules").join(".bin").join({
-            #[cfg(windows)]
-            {
-                "turbo.cmd"
-            }
-            #[cfg(not(windows))]
-            {
-                "turbo"
-            }
-        });
+    // Hoisted strategy:
+    // - `npm install`
+    // - `yarn`
+    // - `yarn install --flat`
+    // - berry (nodeLinker: "node-modules")
+    //
+    // This also supports people directly depending upon the platform version.
+    fn generate_hoisted_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
+        Some(root_path.join("node_modules"))
+    }
 
-        if !local_turbo_path.exists() {
-            debug!(
-                "No local turbo binary found at: {}",
-                local_turbo_path.display()
-            );
-            return None;
+    // Nested strategy:
+    // - `npm install --install-strategy=shallow` (`npm install --global-style`)
+    // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
+    // - berry (nodeLinker: "pnpm")
+    fn generate_nested_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
+        Some(
+            root_path
+                .join("node_modules")
+                .join("turbo")
+                .join("node_modules"),
+        )
+    }
+
+    // Linked strategy:
+    // - `pnpm install`
+    // - `npm install --install-strategy=linked`
+    fn generate_linked_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
+        let canonical_path =
+            fs_canonicalize(root_path.join("node_modules").join("turbo").join("..")).ok()?;
+
+        Utf8PathBuf::try_from(canonical_path).ok()
+    }
+
+    // The unplugged directory doesn't have a fixed path.
+    fn get_unplugged_base_path(root_path: &Utf8Path) -> Utf8PathBuf {
+        let yarn_rc_filename =
+            env::var("YARN_RC_FILENAME").unwrap_or_else(|_| String::from(".yarnrc.yml"));
+        let yarn_rc_filepath = root_path.join(yarn_rc_filename);
+
+        let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or_default();
+        let yarn_rc: YarnRc = serde_yaml::from_str(&yarn_rc_yaml_string).unwrap_or_default();
+
+        root_path.join(yarn_rc.pnp_unplugged_folder)
+    }
+
+    // Unplugged strategy:
+    // - berry 2.1+
+    fn generate_unplugged_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
+        let platform_package_name = TurboState::platform_package_name();
+        let unplugged_base_path = Self::get_unplugged_base_path(root_path);
+
+        unplugged_base_path
+            .read_dir_utf8()
+            .ok()
+            .and_then(|mut read_dir| {
+                // berry includes additional metadata in the filename.
+                // We actually have to find the platform package.
+                read_dir.find_map(|item| match item {
+                    Ok(entry) => {
+                        let file_name = entry.file_name();
+                        if file_name.starts_with(platform_package_name) {
+                            Some(unplugged_base_path.join(file_name).join("node_modules"))
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                })
+            })
+    }
+
+    // We support six per-platform packages and one `turbo` package which handles
+    // indirection. We identify the per-platform package and execute the appropriate
+    // binary directly. We can choose to operate this aggressively because the
+    // _worst_ outcome is that we run global `turbo`.
+    //
+    // In spite of that, the only known unsupported local invocation is Yarn/Berry <
+    // 2.1 PnP
+    pub fn infer(root_path: &Utf8Path) -> Option<Self> {
+        let platform_package_name = TurboState::platform_package_name();
+        let binary_name = TurboState::binary_name();
+
+        let platform_package_json_path: Utf8PathBuf =
+            [platform_package_name, "package.json"].iter().collect();
+        let platform_package_executable_path: Utf8PathBuf =
+            [platform_package_name, "bin", binary_name].iter().collect();
+
+        // These are lazy because the last two are more expensive.
+        let search_functions = [
+            Self::generate_hoisted_path,
+            Self::generate_nested_path,
+            Self::generate_linked_path,
+            Self::generate_unplugged_path,
+        ];
+
+        // Detecting the package manager is more expensive than just doing an exhaustive
+        // search.
+        for root in search_functions
+            .iter()
+            .filter_map(|search_function| search_function(root_path))
+        {
+            // Needs borrow because of the loop.
+            #[allow(clippy::needless_borrow)]
+            let bin_path = root.join(&platform_package_executable_path);
+            match fs_canonicalize(&bin_path) {
+                Ok(bin_path) => {
+                    let resolved_package_json_path = root.join(platform_package_json_path);
+                    let platform_package_json_string =
+                        fs::read_to_string(resolved_package_json_path).ok()?;
+                    let platform_package_json: PackageJson =
+                        serde_json::from_str(&platform_package_json_string).ok()?;
+
+                    debug!("Local turbo path: {}", bin_path.display());
+                    debug!("Local turbo version: {}", platform_package_json.version);
+                    return Some(Self {
+                        bin_path,
+                        version: platform_package_json.version,
+                    });
+                }
+                Err(_) => debug!("No local turbo binary found at: {}", bin_path),
+            }
         }
 
-        let local_turbo_package_path = repo_root
-            .join("node_modules")
-            .join("turbo")
-            .join("package.json");
-
-        let package_json: PackageJson =
-            serde_json::from_reader(File::open(local_turbo_package_path).ok()?).ok()?;
-
-        debug!("Local turbo version: {}", package_json.version);
-        Some(Self {
-            bin_path: local_turbo_path,
-            version: package_json.version,
-        })
+        None
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RepoState {
-    pub root: PathBuf,
+    pub root: AbsoluteSystemPathBuf,
     pub mode: RepoMode,
     pub local_turbo_state: Option<LocalTurboState>,
 }
 
 #[derive(Debug)]
 struct InferInfo {
-    path: PathBuf,
+    path: AbsoluteSystemPathBuf,
     has_package_json: bool,
     has_turbo_json: bool,
-    workspace_globs: Option<Globs>,
+    workspace_globs: Option<WorkspaceGlobs>,
 }
 
 impl InferInfo {
@@ -242,10 +445,10 @@ impl InferInfo {
         info.has_turbo_json
     }
 
-    pub fn is_workspace_root_of(&self, target_path: &Path) -> bool {
+    pub fn is_workspace_root_of(&self, target_path: &AbsoluteSystemPath) -> bool {
         match &self.workspace_globs {
             Some(globs) => globs
-                .test(self.path.to_path_buf(), target_path.to_path_buf())
+                .target_is_workspace(&self.path, target_path)
                 .unwrap_or(false),
             None => false,
         }
@@ -253,29 +456,23 @@ impl InferInfo {
 }
 
 impl RepoState {
-    fn generate_potential_turbo_roots(reference_dir: &Path) -> Vec<InferInfo> {
+    fn generate_potential_turbo_roots(reference_dir: &AbsoluteSystemPath) -> Vec<InferInfo> {
         // Find all directories that contain a `package.json` or a `turbo.json`.
         // Gather a bit of additional metadata about them.
         let potential_turbo_roots = reference_dir
             .ancestors()
             .filter_map(|path| {
-                let has_package_json = fs::metadata(path.join("package.json")).is_ok();
-                let has_turbo_json = fs::metadata(path.join("turbo.json")).is_ok();
+                let has_package_json = path.join_component("package.json").exists();
+                let has_turbo_json = path.join_component("turbo.json").exists();
 
                 if !has_package_json && !has_turbo_json {
                     return None;
                 }
 
-                // FIXME: This should be based upon detecting the pacakage manager.
-                // However, we don't have that functionality implemented in Rust yet.
-                // PackageManager::detect(path).get_workspace_globs().unwrap_or(None)
-                let workspace_globs = PackageManager::Pnpm
-                    .get_workspace_globs(path)
-                    .unwrap_or_else(|_| {
-                        PackageManager::Npm
-                            .get_workspace_globs(path)
-                            .unwrap_or(None)
-                    });
+                // FIXME: We should save this package manager that we detected
+                let workspace_globs = PackageManager::get_package_manager(path, None)
+                    .and_then(|mgr| mgr.get_workspace_globs(path))
+                    .ok();
 
                 Some(InferInfo {
                     path: path.to_owned(),
@@ -323,9 +520,9 @@ impl RepoState {
 
             // If there is only one potential root, that's the winner.
             if check_roots.peek().is_none() {
-                let local_turbo_state = LocalTurboState::infer(&current.path);
+                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
                 return Ok(Self {
-                    root: current.path.to_path_buf(),
+                    root: current.path.clone(),
                     mode: if current.workspace_globs.is_some() {
                         RepoMode::MultiPackage
                     } else {
@@ -339,9 +536,9 @@ impl RepoState {
             // and set the mode properly in the else and it would still work.
             } else if current.workspace_globs.is_some() {
                 // If the closest one has workspaces then we stop there.
-                let local_turbo_state = LocalTurboState::infer(&current.path);
+                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
                 return Ok(Self {
-                    root: current.path.to_path_buf(),
+                    root: current.path.clone(),
                     mode: RepoMode::MultiPackage,
                     local_turbo_state,
                 });
@@ -353,9 +550,10 @@ impl RepoState {
             } else {
                 for ancestor_infer in check_roots {
                     if ancestor_infer.is_workspace_root_of(&current.path) {
-                        let local_turbo_state = LocalTurboState::infer(&ancestor_infer.path);
+                        let local_turbo_state =
+                            LocalTurboState::infer(ancestor_infer.path.as_path());
                         return Ok(Self {
-                            root: ancestor_infer.path.to_path_buf(),
+                            root: ancestor_infer.path.clone(),
                             mode: RepoMode::MultiPackage,
                             local_turbo_state,
                         });
@@ -364,9 +562,9 @@ impl RepoState {
 
                 // We have eliminated RepoMode::MultiPackage as an option.
                 // We must exhaustively check before this becomes the answer.
-                let local_turbo_state = LocalTurboState::infer(&current.path);
+                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
                 return Ok(Self {
-                    root: current.path.to_path_buf(),
+                    root: current.path.clone(),
                     mode: RepoMode::SinglePackage,
                     local_turbo_state,
                 });
@@ -384,7 +582,7 @@ impl RepoState {
     /// * `current_dir`: Current working directory
     ///
     /// returns: Result<RepoState, Error>
-    pub fn infer(reference_dir: &Path) -> Result<Self> {
+    pub fn infer(reference_dir: &AbsoluteSystemPath) -> Result<Self> {
         let potential_turbo_roots = RepoState::generate_potential_turbo_roots(reference_dir);
         RepoState::process_potential_turbo_roots(potential_turbo_roots)
     }
@@ -399,7 +597,12 @@ impl RepoState {
     /// * `turbo_state`: state for current execution
     ///
     /// returns: Result<i32, Error>
-    fn run_correct_turbo(self, shim_args: ShimArgs) -> Result<Payload> {
+    fn run_correct_turbo(
+        self,
+        shim_args: ShimArgs,
+        subscriber: &TurboSubscriber,
+        ui: UI,
+    ) -> Result<Payload> {
         if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
             try_check_for_updates(&shim_args, version);
             let canonical_local_turbo = fs_canonicalize(bin_path)?;
@@ -410,9 +613,12 @@ impl RepoState {
             try_check_for_updates(&shim_args, get_version());
             // cli::run checks for this env var, rather than an arg, so that we can support
             // calling old versions without passing unknown flags.
-            env::set_var(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir);
+            env::set_var(
+                cli::INVOCATION_DIR_ENV_VAR,
+                shim_args.invocation_dir.as_path(),
+            );
             debug!("Running command as global turbo");
-            cli::run(Some(self))
+            cli::run(Some(self), subscriber, ui)
         }
     }
 
@@ -463,18 +669,38 @@ impl RepoState {
 
         // We spawn a process that executes the local turbo
         // that we've found in node_modules/.bin/turbo.
-        let mut command = process::Command::new(local_turbo_path)
+        let mut command = process::Command::new(local_turbo_path);
+        command
             .args(&raw_args)
             // rather than passing an argument that local turbo might not understand, set
             // an environment variable that can be optionally used
-            .env(cli::INVOCATION_DIR_ENV_VAR, &shim_args.invocation_dir)
+            .env(
+                cli::INVOCATION_DIR_ENV_VAR,
+                shim_args.invocation_dir.as_path(),
+            )
             .current_dir(cwd)
             .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .expect("Failed to execute turbo.");
+            .stderr(Stdio::inherit());
 
-        Ok(command.wait()?.code().unwrap_or(2))
+        let child = spawn_child(command)?;
+
+        let exit_status = child.wait()?;
+        let exit_code = exit_status.code().unwrap_or_else(|| {
+            debug!("go-turbo failed to report exit code");
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::ExitStatusExt;
+                let signal = exit_status.signal();
+                let core_dumped = exit_status.core_dumped();
+                debug!(
+                    "go-turbo caught signal {:?}. Core dumped? {}",
+                    signal, core_dumped
+                );
+            }
+            2
+        });
+
+        Ok(exit_code)
     }
 }
 
@@ -486,72 +712,6 @@ impl RepoState {
 /// executing that binary, these two features are fundamentally incompatible.
 fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
-}
-
-fn init_env_logger(verbosity: usize) {
-    // configure logger
-    let level = match verbosity {
-        0 => LevelFilter::Warn,
-        1 => LevelFilter::Info,
-        2 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
-    };
-
-    let mut builder = Builder::new();
-    let env = Env::new().filter("TURBO_LOG_VERBOSITY");
-
-    builder
-        // set defaults
-        .filter_level(level)
-        .write_style(WriteStyle::Auto)
-        // override from env (if available)
-        .parse_env(env);
-
-    builder.format(|buf, record| match record.level() {
-        Level::Error => {
-            let mut level_style = buf.style();
-            let mut log_style = buf.style();
-            level_style.set_bg(Color::Red).set_color(Color::Black);
-            log_style.set_color(Color::Red);
-
-            writeln!(
-                buf,
-                "{} {}",
-                level_style.value(record.level()),
-                log_style.value(record.args())
-            )
-        }
-        Level::Warn => {
-            let mut level_style = buf.style();
-            let mut log_style = buf.style();
-            level_style.set_bg(Color::Yellow).set_color(Color::Black);
-            log_style.set_color(Color::Yellow);
-
-            writeln!(
-                buf,
-                "{} {}",
-                level_style.value(record.level()),
-                log_style.value(record.args())
-            )
-        }
-        Level::Info => writeln!(buf, "{}", record.args()),
-        // trace and debug use the same style
-        _ => {
-            let now = Local::now();
-            writeln!(
-                buf,
-                "{} [{}] {}: {}",
-                // build our own timestamp to match the hashicorp/go-hclog format used by the go
-                // binary
-                now.format("%Y-%m-%dT%H:%M:%S.%3f%z"),
-                record.level(),
-                record.target(),
-                record.args()
-            )
-        }
-    });
-
-    builder.init();
 }
 
 fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
@@ -585,15 +745,16 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
 
 pub fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
+    let ui = args.ui();
+    let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
 
-    init_env_logger(args.verbosity);
     debug!("Global turbo version: {}", get_version());
 
     // If skip_infer is passed, we're probably running local turbo with
     // global turbo having handled the inference. We can run without any
     // concerns.
     if args.skip_infer {
-        return cli::run(None);
+        return cli::run(None, &subscriber, ui);
     }
 
     // If the TURBO_BINARY_PATH is set, we do inference but we do not use
@@ -601,21 +762,21 @@ pub fn run() -> Result<Payload> {
     // and `--cwd` flags.
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
-        debug!("Repository Root: {}", repo_state.root.to_string_lossy());
-        return cli::run(Some(repo_state));
+        debug!("Repository Root: {}", repo_state.root);
+        return cli::run(Some(repo_state), &subscriber, ui);
     }
 
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
-            debug!("Repository Root: {}", repo_state.root.to_string_lossy());
-            repo_state.run_correct_turbo(args)
+            debug!("Repository Root: {}", repo_state.root);
+            repo_state.run_correct_turbo(args, &subscriber, ui)
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
-            cli::run(None)
+            cli::run(None, &subscriber, ui)
         }
     }
 }
@@ -624,13 +785,28 @@ pub fn run() -> Result<Payload> {
 mod test {
     use super::*;
 
+    fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let dir = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        (tmp_dir, dir)
+    }
+
     #[test]
     fn test_process_potential_turbo_roots() {
         struct TestCase {
             description: &'static str,
             infer_infos: Vec<InferInfo>,
-            output: Result<PathBuf>,
+            output: Result<AbsoluteSystemPathBuf>,
         }
+
+        let (_tmp, root) = tmp_dir();
+        let root_one = root.join_components(&["..", "root-one"]);
+        let root_two = root_one.join_component("root-two");
+        let project_one = root.join_components(&["..", "project-one"]);
+        let project_two = project_one.join_component("project-two");
 
         let tests = [
             // Test for zero, exhaustive.
@@ -643,252 +819,237 @@ mod test {
             TestCase {
                 description: "Only one, is monorepo with turbo.json.",
                 infer_infos: vec![InferInfo {
-                    path: PathBuf::from("/path/to/root"),
+                    path: root.clone(),
                     has_package_json: true,
                     has_turbo_json: true,
-                    workspace_globs: Some(Globs {
-                        inclusions: vec!["packages/*".to_string()],
-                        exclusions: vec![],
-                    }),
+                    workspace_globs: Some(WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap()),
                 }],
-                output: Ok(PathBuf::from("/path/to/root")),
+                output: Ok(root.clone()),
             },
             TestCase {
                 description: "Only one, is non-monorepo with turbo.json.",
                 infer_infos: vec![InferInfo {
-                    path: PathBuf::from("/path/to/root"),
+                    path: root.clone(),
                     has_package_json: true,
                     has_turbo_json: true,
                     workspace_globs: None,
                 }],
-                output: Ok(PathBuf::from("/path/to/root")),
+                output: Ok(root.clone()),
             },
             TestCase {
                 description: "Only one, is monorepo without turbo.json.",
                 infer_infos: vec![InferInfo {
-                    path: PathBuf::from("/path/to/root"),
+                    path: root.clone(),
                     has_package_json: true,
                     has_turbo_json: false,
-                    workspace_globs: Some(Globs {
-                        inclusions: vec!["packages/*".to_string()],
-                        exclusions: vec![],
-                    }),
+                    workspace_globs: Some(WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap()),
                 }],
-                output: Ok(PathBuf::from("/path/to/root")),
+                output: Ok(root.clone()),
             },
             TestCase {
                 description: "Only one, is non-monorepo without turbo.json.",
                 infer_infos: vec![InferInfo {
-                    path: PathBuf::from("/path/to/root"),
+                    path: root.clone(),
                     has_package_json: true,
                     has_turbo_json: false,
                     workspace_globs: None,
                 }],
-                output: Ok(PathBuf::from("/path/to/root")),
+                output: Ok(root.clone()),
             },
             // Tests for how to choose what is closest.
             TestCase {
                 description: "Execution in a workspace.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from("/path/to/root/packages/ui-library"),
+                        path: root.join_components(&["packages", "ui-library"]),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root"),
+                        path: root.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
+                        ),
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/root")),
+                output: Ok(root.clone()),
             },
             TestCase {
                 description: "Execution in a workspace, weird package layout.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from("/path/to/root/packages/ui-library/css"),
+                        path: root.join_components(&["packages", "ui-library", "css"]),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root/packages/ui-library"),
+                        path: root.join_components(&["packages", "ui-library"]),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root"),
+                        path: root.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            // This `**` is important:
-                            inclusions: vec!["packages/**".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(
+                                // This `**` is important:
+                                vec!["packages/**"],
+                                vec![],
+                            )
+                            .unwrap(),
+                        ),
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/root")),
+                output: Ok(root.clone()),
             },
             TestCase {
                 description: "Nested disjoint monorepo roots.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from("/path/to/root-one/root-two"),
+                        path: root_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
+                        ),
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root-one"),
+                        path: root_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
+                        ),
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/root-one/root-two")),
+                output: Ok(root_two.clone()),
             },
             TestCase {
                 description: "Nested disjoint monorepo roots, execution in a workspace of the \
                               closer root.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from(
-                            "/path/to/root-one/root-two/root-two-packages/ui-library",
-                        ),
+                        path: root_two.join_components(&["root-two-packages", "ui-library"]),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root-one/root-two"),
+                        path: root_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root-one"),
+                        path: root_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two/root-one-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["root-two/root-one-packages/*"], vec![])
+                                .unwrap(),
+                        ),
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/root-one/root-two")),
+                output: Ok(root_two.clone()),
             },
             TestCase {
                 description: "Nested disjoint monorepo roots, execution in a workspace of the \
                               farther root.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from(
-                            "/path/to/root-one/root-two/root-one-packages/ui-library",
-                        ),
+                        path: root_two.join_components(&["root-one-packages", "ui-library"]),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root-one/root-two"),
+                        path: root_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
+                        ),
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root-one"),
+                        path: root_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two/root-one-packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["root-two/root-one-packages/*"], vec![])
+                                .unwrap(),
+                        ),
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/root-one")),
+                output: Ok(root_one.clone()),
             },
             TestCase {
                 description: "Disjoint package.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from("/path/to/root/some-other-project"),
+                        path: root.join_component("some-other-project"),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root"),
+                        path: root.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
+                        ),
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/root/some-other-project")),
+                output: Ok(root.join_component("some-other-project")),
             },
             TestCase {
                 description: "Monorepo trying to point to a monorepo. We choose the closer one \
                               and ignore the problem.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from("/path/to/root-one/root-two"),
+                        path: root_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["packages/*".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
+                        ),
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/root-one"),
+                        path: root_one,
                         has_package_json: true,
                         has_turbo_json: true,
-                        workspace_globs: Some(Globs {
-                            inclusions: vec!["root-two".to_string()],
-                            exclusions: vec![],
-                        }),
+                        workspace_globs: Some(
+                            WorkspaceGlobs::new(vec!["root-two"], vec![]).unwrap(),
+                        ),
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/root-one/root-two")),
+                output: Ok(root_two.clone()),
             },
             TestCase {
                 description: "Nested non-monorepo packages.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from("/path/to/project-one/project-two"),
+                        path: project_two.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/project-one"),
+                        path: project_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/project-one/project-two")),
+                output: Ok(project_two.clone()),
             },
             // The below test ensures that we privilege a valid `turbo.json` structure prior to
             // evaluation of a valid `package.json` structure. If you include `turbo.json` you are
@@ -903,19 +1064,19 @@ mod test {
                 description: "Nested non-monorepo packages, turbo.json primacy.",
                 infer_infos: vec![
                     InferInfo {
-                        path: PathBuf::from("/path/to/project-one/project-two"),
+                        path: project_two,
                         has_package_json: true,
                         has_turbo_json: false,
                         workspace_globs: None,
                     },
                     InferInfo {
-                        path: PathBuf::from("/path/to/project-one"),
+                        path: project_one.clone(),
                         has_package_json: true,
                         has_turbo_json: true,
                         workspace_globs: None,
                     },
                 ],
-                output: Ok(PathBuf::from("/path/to/project-one")),
+                output: Ok(project_one),
             },
         ];
 
@@ -956,15 +1117,5 @@ mod test {
         assert!(turbo_version_has_shim(new_major));
         assert!(!turbo_version_has_shim(old));
         assert!(!turbo_version_has_shim(old_canary));
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn test_windows_path_normalization() -> Result<()> {
-        let cwd = current_dir()?;
-        let normalized = fs_canonicalize(&cwd)?;
-        // Just make sure it isn't a UNC path
-        assert!(!normalized.starts_with("\\\\?"));
-        Ok(())
     }
 }

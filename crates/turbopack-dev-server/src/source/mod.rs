@@ -13,13 +13,16 @@ pub mod specificity;
 pub mod static_assets;
 pub mod wrapping_source;
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::collections::BTreeSet;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize, Serializer};
-use turbo_tasks::{trace::TraceRawVcs, Value};
-use turbo_tasks_fs::{rope::Rope, FileSystemPathVc};
-use turbopack_core::version::VersionedContentVc;
+use futures::{stream::Stream as StreamTrait, TryStreamExt};
+use serde::{Deserialize, Serialize};
+use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, util::SharedError, Value};
+use turbo_tasks_bytes::{Bytes, Stream, StreamRead};
+use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_hash::{DeterministicHash, DeterministicHasher, Xxh3Hash64Hasher};
+use turbopack_core::version::{Version, VersionVc, VersionedContentVc};
 
 use self::{
     headers::Headers, issue_context::IssueContextContentSourceVc, query::Query,
@@ -34,7 +37,25 @@ pub struct ProxyResult {
     /// Headers arranged as contiguous (name, value) pairs.
     pub headers: Vec<(String, String)>,
     /// The body to return.
-    pub body: Rope,
+    pub body: Body,
+}
+
+#[turbo_tasks::value_impl]
+impl Version for ProxyResult {
+    #[turbo_tasks::function]
+    async fn id(&self) -> Result<StringVc> {
+        let mut hash = Xxh3Hash64Hasher::new();
+        hash.write_u16(self.status);
+        for (name, value) in &self.headers {
+            name.deterministic_hash(&mut hash);
+            value.deterministic_hash(&mut hash);
+        }
+        let mut read = self.body.read();
+        while let Some(chunk) = read.try_next().await? {
+            hash.write_bytes(&chunk);
+        }
+        Ok(StringVc::cell(hash.finish().to_string()))
+    }
 }
 
 /// The return value of a content source when getting a path. A specificity is
@@ -215,6 +236,9 @@ pub struct ContentSourceData {
     pub method: Option<String>,
     /// The full url (including query string), if requested.
     pub url: Option<String>,
+    /// The full url (including query string) before rewrites where applied, if
+    /// requested.
+    pub original_url: Option<String>,
     /// Query string items, if requested.
     pub query: Option<Query>,
     /// raw query string, if requested. Does not include the `?`.
@@ -231,56 +255,41 @@ pub struct ContentSourceData {
     pub cache_buster: u64,
 }
 
+pub type BodyChunk = Result<Bytes, SharedError>;
+
 /// A request body.
 #[turbo_tasks::value(shared)]
 #[derive(Default, Clone, Debug)]
 pub struct Body {
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    chunks: Arc<Vec<Bytes>>,
+    #[turbo_tasks(trace_ignore)]
+    chunks: Stream<BodyChunk>,
 }
 
 impl Body {
     /// Creates a new body from a list of chunks.
-    pub fn new(chunks: Vec<Bytes>) -> Self {
+    pub fn new(chunks: Vec<BodyChunk>) -> Self {
         Self {
-            chunks: Arc::new(chunks),
+            chunks: Stream::new_closed(chunks),
         }
     }
 
     /// Returns an iterator over the body's chunks.
-    pub fn chunks(&self) -> impl Iterator<Item = &Bytes> {
-        self.chunks.iter()
+    pub fn read(&self) -> StreamRead<BodyChunk> {
+        self.chunks.read()
+    }
+
+    pub fn from_stream<T: StreamTrait<Item = BodyChunk> + Send + Unpin + 'static>(
+        source: T,
+    ) -> Self {
+        Self {
+            chunks: Stream::from(source),
+        }
     }
 }
 
-/// A wrapper around [hyper::body::Bytes] that implements [Serialize] and
-/// [Deserialize].
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Bytes(hyper::body::Bytes);
-
-impl Bytes {
-    /// Returns the bytes as a slice.
-    pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
-impl From<hyper::body::Bytes> for Bytes {
-    fn from(bytes: hyper::body::Bytes) -> Self {
-        Self(bytes)
-    }
-}
-
-impl Serialize for Bytes {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_bytes(self.0.as_ref())
-    }
-}
-
-impl<'de> Deserialize<'de> for Bytes {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let bytes = Vec::<u8>::deserialize(deserializer)?;
-        Ok(Bytes(hyper::body::Bytes::from(bytes)))
+impl<T: Into<Bytes>> From<T> for Body {
+    fn from(value: T) -> Self {
+        Body::new(vec![Ok(value.into())])
     }
 }
 
@@ -362,6 +371,7 @@ impl ContentSourceDataFilter {
 pub struct ContentSourceDataVary {
     pub method: bool,
     pub url: bool,
+    pub original_url: bool,
     pub query: Option<ContentSourceDataFilter>,
     pub raw_query: bool,
     pub headers: Option<ContentSourceDataFilter>,
@@ -381,6 +391,7 @@ impl ContentSourceDataVary {
         let ContentSourceDataVary {
             method,
             url,
+            original_url,
             query,
             raw_query,
             headers,
@@ -391,6 +402,7 @@ impl ContentSourceDataVary {
         } = self;
         *method = *method || other.method;
         *url = *url || other.url;
+        *original_url = *original_url || other.original_url;
         *body = *body || other.body;
         *cache_buster = *cache_buster || other.cache_buster;
         *raw_query = *raw_query || other.raw_query;
@@ -406,6 +418,7 @@ impl ContentSourceDataVary {
         let ContentSourceDataVary {
             method,
             url,
+            original_url,
             query,
             raw_query,
             headers,
@@ -418,6 +431,9 @@ impl ContentSourceDataVary {
             return false;
         }
         if other.url && !url {
+            return false;
+        }
+        if other.original_url && !original_url {
             return false;
         }
         if other.body && !body {
@@ -499,9 +515,9 @@ impl ContentSource for NoContentSource {
 
 /// A rewrite returned from a [ContentSource]. This tells the dev server to
 /// update its parsed url, path, and queries with this new information, and any
-/// later [NeededData] will receive data out of t these new values.
-#[derive(Debug)]
+/// later [NeededData] will receive data out of these new values.
 #[turbo_tasks::value(shared)]
+#[derive(Debug)]
 pub struct Rewrite {
     /// The new path and query used to lookup content. This _does not_ need to
     /// be the original path or query.
@@ -515,6 +531,10 @@ pub struct Rewrite {
     /// A [Headers] which will be appended to the eventual, fully resolved
     /// content result. This overwrites any previous matching headers.
     pub response_headers: Option<HeaderListVc>,
+
+    /// A [HeaderList] which will overwrite the values used during the lookup
+    /// process. All headers not present in this list will be deleted.
+    pub request_headers: Option<HeaderListVc>,
 }
 
 pub struct RewriteBuilder {
@@ -528,6 +548,7 @@ impl RewriteBuilder {
                 path_and_query,
                 source: None,
                 response_headers: None,
+                request_headers: None,
             },
         }
     }
@@ -544,6 +565,13 @@ impl RewriteBuilder {
     /// result.
     pub fn response_headers(mut self, headers: HeaderListVc) -> Self {
         self.rewrite.response_headers = Some(headers);
+        self
+    }
+
+    /// Sets request headers to overwrite the headers used during the lookup
+    /// process.
+    pub fn request_headers(mut self, headers: HeaderListVc) -> Self {
+        self.rewrite.request_headers = Some(headers);
         self
     }
 

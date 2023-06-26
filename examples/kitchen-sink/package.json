@@ -1,16 +1,16 @@
 {
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "clean": "turbo run clean",
-    "dev": "turbo run dev --no-cache  --continue",
+    "build": "turbo build",
+    "clean": "turbo clean",
+    "dev": "turbo dev --no-cache  --continue",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "lint": "turbo run lint",
-    "test": "turbo run test"
+    "lint": "turbo lint",
+    "test": "turbo test"
   },
   "devDependencies": {
     "prettier": "^2.7.1",
-    "turbo": "latest"
+    "turbo": "^1.9.3"
   },
   "packageManager": "pnpm@7.15.0"
 }

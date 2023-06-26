@@ -30,9 +30,9 @@ use turbopack_ecmascript::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
         EcmascriptChunkItemVc, EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc,
-        EcmascriptChunkVc, EcmascriptExports, EcmascriptExportsVc,
+        EcmascriptChunkVc, EcmascriptChunkingContextVc, EcmascriptExports, EcmascriptExportsVc,
     },
-    utils::stringify_js,
+    utils::StringifyJs,
     ParseResultSourceMap, ParseResultSourceMapVc,
 };
 
@@ -72,7 +72,7 @@ impl ModuleCssModuleAssetVc {
 impl Asset for ModuleCssModuleAsset {
     #[turbo_tasks::function]
     fn ident(&self) -> AssetIdentVc {
-        self.inner.ident().with_modifier(modifier())
+        self.inner.source_ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
@@ -155,17 +155,17 @@ impl ModuleCssModuleAssetVc {
                 for export_class_name in export_class_names {
                     export.push(match export_class_name {
                         CssClassName::Import { from, name } => ModuleCssClass::Import {
-                            original: name.to_string(),
+                            original: name.value.to_string(),
                             from: CssModuleComposeReferenceVc::new(
                                 self.as_resolve_origin(),
                                 RequestVc::parse(Value::new(from.to_string().into())),
                             ),
                         },
                         CssClassName::Local { name } => ModuleCssClass::Local {
-                            name: name.to_string(),
+                            name: name.value.to_string(),
                         },
                         CssClassName::Global { name } => ModuleCssClass::Global {
-                            name: name.to_string(),
+                            name: name.value.to_string(),
                         },
                     })
                 }
@@ -213,7 +213,7 @@ impl EcmascriptChunkPlaceable for ModuleCssModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self_vc: ModuleCssModuleAssetVc,
-        context: ChunkingContextVc,
+        context: EcmascriptChunkingContextVc,
     ) -> EcmascriptChunkItemVc {
         ModuleChunkItem {
             context,
@@ -245,7 +245,7 @@ impl ResolveOrigin for ModuleCssModuleAsset {
 #[turbo_tasks::value]
 struct ModuleChunkItem {
     module: ModuleCssModuleAssetVc,
-    context: ChunkingContextVc,
+    context: EcmascriptChunkingContextVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -277,7 +277,7 @@ impl ChunkItem for ModuleChunkItem {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
-    fn chunking_context(&self) -> ChunkingContextVc {
+    fn chunking_context(&self) -> EcmascriptChunkingContextVc {
         self.context
     }
 
@@ -332,16 +332,16 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                             unreachable!("ModuleCssModuleAsset implements EcmascriptChunkPlaceableVc");
                         };
 
-                        let module_id =
-                            stringify_js(&*placeable.as_chunk_item(self.context).id().await?);
-                        let original_name = stringify_js(original_name);
+                        let module_id = placeable.as_chunk_item(self.context).id().await?;
+                        let module_id = StringifyJs(&*module_id);
+                        let original_name = StringifyJs(original_name);
                         exported_class_names.push(format! {
                             "__turbopack_import__({module_id})[{original_name}]"
                         });
                     }
                     ModuleCssClass::Local { name: class_name }
                     | ModuleCssClass::Global { name: class_name } => {
-                        exported_class_names.push(stringify_js(class_name));
+                        exported_class_names.push(StringifyJs(class_name).to_string());
                     }
                 }
             }
@@ -349,7 +349,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             writeln!(
                 code,
                 "  {}: {},",
-                stringify_js(export_name),
+                StringifyJs(export_name),
                 exported_class_names.join(" + \" \" + ")
             )?;
         }
@@ -418,8 +418,8 @@ struct CssProxyModuleAsset {
 #[turbo_tasks::value_impl]
 impl Asset for CssProxyModuleAsset {
     #[turbo_tasks::function]
-    fn ident(&self) -> AssetIdentVc {
-        self.module.ident()
+    async fn ident(&self) -> Result<AssetIdentVc> {
+        Ok(self.module.await?.inner.ident().with_modifier(modifier()))
     }
 
     #[turbo_tasks::function]
@@ -458,9 +458,9 @@ impl ChunkableAsset for CssProxyModuleAsset {
 #[turbo_tasks::value_impl]
 impl CssChunkPlaceable for CssProxyModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk_item(&self, context: ChunkingContextVc) -> CssChunkItemVc {
+    fn as_chunk_item(self_vc: CssProxyModuleAssetVc, context: ChunkingContextVc) -> CssChunkItemVc {
         CssProxyModuleChunkItemVc::cell(CssProxyModuleChunkItem {
-            module: self.module,
+            inner: self_vc,
             context,
         })
         .into()
@@ -482,7 +482,7 @@ impl ResolveOrigin for CssProxyModuleAsset {
 
 #[turbo_tasks::value]
 struct CssProxyModuleChunkItem {
-    module: ModuleCssModuleAssetVc,
+    inner: CssProxyModuleAssetVc,
     context: ChunkingContextVc,
 }
 
@@ -490,12 +490,12 @@ struct CssProxyModuleChunkItem {
 impl ChunkItem for CssProxyModuleChunkItem {
     #[turbo_tasks::function]
     fn asset_ident(&self) -> AssetIdentVc {
-        self.module.ident()
+        self.inner.ident()
     }
 
     #[turbo_tasks::function]
     fn references(&self) -> AssetReferencesVc {
-        self.module.references()
+        self.inner.references()
     }
 }
 
@@ -504,6 +504,8 @@ impl CssChunkItem for CssProxyModuleChunkItem {
     #[turbo_tasks::function]
     async fn content(&self) -> Result<CssChunkItemContentVc> {
         Ok(self
+            .inner
+            .await?
             .module
             .await?
             .inner

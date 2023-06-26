@@ -38,7 +38,7 @@ module.exports = {
           },
         ],
         // Option-less format
-        '.mdx': '@mdx-js/loader',
+        '.mdx': ['@mdx-js/loader'],
       },
     },
   },
@@ -71,7 +71,7 @@ module.exports = {
   experimental: {
     turbo: {
       loaders: {
-        '.mdx': './my-mdx-loader',
+        '.mdx': ['./my-mdx-loader'],
       },
     },
   },

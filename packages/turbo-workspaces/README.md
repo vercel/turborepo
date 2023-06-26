@@ -1,6 +1,6 @@
 # `@turbo/workspaces`
 
-Easily convert your monorepo between package managers. Supports monorepos using either npm, yarn, or pnpm workspaces.
+Easily convert your repo between package managers. Supports both non-monorepos and monorepos (using package manager workspaces).
 
 ## CLI
 
@@ -24,7 +24,7 @@ Commands:
 Methods are also available via the Node API:
 
 ```js
-import { convertMonorepo, getWorkspaceDetails } from "@turbo/workspaces";
+import { convert, getWorkspaceDetails } from "@turbo/workspaces";
 
 // detect the package manager
 const project = getWorkspaceDetails({
@@ -33,7 +33,7 @@ const project = getWorkspaceDetails({
 
 // if the package manager is not pnpm, convert to pnpm
 if (project.packageManager !== "pnpm") {
-  await convertMonorepo({
+  await convert({
     root: process.cwd(),
     to: "pnpm",
     options: {

@@ -79,18 +79,19 @@ struct ReadScopeCollectiblesTaskType {
 
 /// Different Task types
 enum TaskType {
+    // Note: double boxed to reduce TaskType size
     /// A root task that will track dependencies and re-execute when
     /// dependencies change. Task will eventually settle to the correct
     /// execution.
-    Root(NativeTaskFn),
+    Root(Box<NativeTaskFn>),
 
-    // TODO implement these strongly consistency
+    // Note: double boxed to reduce TaskType size
     /// A single root task execution. It won't track dependencies.
     /// Task will definitely include all invalidations that happened before the
     /// start of the task. It may or may not include invalidations that
     /// happened after that. It may see these invalidations partially
     /// applied.
-    Once(OnceTaskFn),
+    Once(Box<OnceTaskFn>),
 
     /// A task that reads all collectibles of a certain trait from a
     /// [TaskScope]. It will do that by recursively calling
@@ -482,7 +483,10 @@ enum TaskStateType {
     /// on finish this will move to Done
     ///
     /// on invalidation this will move to InProgressDirty
-    InProgress { event: Event },
+    InProgress {
+        event: Event,
+        count_as_finished: bool,
+    },
 
     /// Invalid execution is happening
     ///
@@ -524,10 +528,10 @@ impl Task {
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(
                 description,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -537,15 +541,13 @@ impl Task {
         functor: impl Fn() -> NativeTaskFuture + Sync + Send + 'static,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::Root(Box::new(functor));
+        let ty = TaskType::Root(Box::new(Box::new(functor)));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
             ))),
         }
     }
@@ -556,15 +558,13 @@ impl Task {
         functor: impl Future<Output = Result<RawVc>> + Send + 'static,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::Once(Mutex::new(Some(Box::pin(functor))));
+        let ty = TaskType::Once(Box::new(Mutex::new(Some(Box::pin(functor)))));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
             ))),
         }
     }
@@ -575,18 +575,18 @@ impl Task {
         trait_type_id: TraitTypeId,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::ReadScopeCollectibles(box ReadScopeCollectiblesTaskType {
+        let ty = TaskType::ReadScopeCollectibles(Box::new(ReadScopeCollectiblesTaskType {
             scope: target_scope,
             trait_type: trait_type_id,
-        });
+        }));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(
                 description,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -597,19 +597,19 @@ impl Task {
         trait_type_id: TraitTypeId,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::ReadTaskCollectibles(box ReadTaskCollectiblesTaskType {
+        let ty = TaskType::ReadTaskCollectibles(Box::new(ReadTaskCollectiblesTaskType {
             task: target_task,
             trait_type: trait_type_id,
-        });
+        }));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_root_scoped(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new_root_scoped(
                 description,
                 scope,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -796,6 +796,7 @@ impl Task {
             Scheduled { ref mut event } => {
                 state.state_type = InProgress {
                     event: event.take(),
+                    count_as_finished: false,
                 };
                 state.stats.increment_executions();
                 // TODO we need to reconsider the approach of doing scope changes in background
@@ -912,6 +913,24 @@ impl Task {
         }
     }
 
+    pub(crate) fn mark_as_finished(&self, backend: &MemoryBackend) {
+        let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() else {
+            return;
+        };
+        let TaskStateType::InProgress { ref mut count_as_finished, .. } = state.state_type else {
+            return;
+        };
+        if *count_as_finished {
+            return;
+        }
+        *count_as_finished = true;
+        for scope in state.scopes.iter() {
+            backend.with_scope(scope, |scope| {
+                scope.decrement_unfinished_tasks(backend);
+            })
+        }
+    }
+
     pub(crate) fn execution_result(
         &self,
         result: Result<Result<RawVc>, Option<Cow<'static, str>>>,
@@ -979,7 +998,10 @@ impl Task {
                 .stats
                 .register_execution(duration, turbo_tasks.program_duration_until(instant));
             match state.state_type {
-                InProgress { ref mut event } => {
+                InProgress {
+                    ref mut event,
+                    count_as_finished,
+                } => {
                     let event = event.take();
                     let mut dependencies = take(&mut dependencies);
                     // This will stay here for longer, so make sure to not consume too much memory
@@ -990,10 +1012,12 @@ impl Task {
                     state.cells.shrink_to_fit();
                     state.stateful = stateful;
                     state.state_type = Done { dependencies };
-                    for scope in state.scopes.iter() {
-                        backend.with_scope(scope, |scope| {
-                            scope.decrement_unfinished_tasks(backend);
-                        })
+                    if !count_as_finished {
+                        for scope in state.scopes.iter() {
+                            backend.with_scope(scope, |scope| {
+                                scope.decrement_unfinished_tasks(backend);
+                            })
+                        }
                     }
                     event.notify(usize::MAX);
                 }
@@ -1105,9 +1129,24 @@ impl Task {
             let mut clear_dependencies = AutoSet::default();
 
             match state.state_type {
-                Dirty { .. } | Scheduled { .. } | InProgressDirty { .. } => {
+                Scheduled { .. } | InProgressDirty { .. } => {
                     // already dirty
                     drop(state);
+                }
+                Dirty { .. } => {
+                    if force_schedule {
+                        let description = self.get_event_description();
+                        state.state_type = Scheduled {
+                            event: Event::new(move || {
+                                format!("TaskState({})::event", description())
+                            }),
+                        };
+                        drop(state);
+                        turbo_tasks.schedule(self.id);
+                    } else {
+                        // already dirty
+                        drop(state);
+                    }
                 }
                 Done {
                     ref mut dependencies,
@@ -1138,10 +1177,19 @@ impl Task {
                         drop(state);
                     }
                 }
-                InProgress { ref mut event } => {
-                    state.state_type = InProgressDirty {
-                        event: event.take(),
-                    };
+                InProgress {
+                    ref mut event,
+                    count_as_finished,
+                } => {
+                    let event = event.take();
+                    if count_as_finished {
+                        for scope in state.scopes.iter() {
+                            backend.with_scope(scope, |scope| {
+                                scope.increment_unfinished_tasks(backend);
+                            })
+                        }
+                    }
+                    state.state_type = InProgressDirty { event };
                     drop(state);
                 }
             }
@@ -1276,7 +1324,15 @@ impl Task {
         backend.with_scope(id, |scope| {
             scope.increment_tasks();
             if !matches!(state.state_type, TaskStateType::Done { .. }) {
-                scope.increment_unfinished_tasks(backend);
+                if !matches!(
+                    state.state_type,
+                    TaskStateType::InProgress {
+                        count_as_finished: true,
+                        ..
+                    }
+                ) {
+                    scope.increment_unfinished_tasks(backend);
+                }
                 log_scope_update!("add unfinished task (added): {} -> {}", *scope.id, *self.id);
                 if let TaskStateType::Dirty { ref mut event } = state.state_type {
                     let mut scope = scope.state.lock();
@@ -1353,6 +1409,12 @@ impl Task {
                     scope.decrement_unfinished_tasks(backend);
                     let mut scope = scope.state.lock();
                     scope.remove_dirty_task(self.id);
+                }
+                InProgress {
+                    count_as_finished: true,
+                    ..
+                } => {
+                    // no need to decrement unfinished tasks
                 }
                 _ => {
                     scope.decrement_unfinished_tasks(backend);
@@ -2110,7 +2172,9 @@ impl Task {
                 drop(state);
                 Ok(Err(listener))
             }
-            Scheduled { ref event } | InProgress { ref event } | InProgressDirty { ref event } => {
+            Scheduled { ref event }
+            | InProgress { ref event, .. }
+            | InProgressDirty { ref event } => {
                 let listener = event.listen_with_note(note);
                 drop(state);
                 Ok(Err(listener))
@@ -2719,7 +2783,7 @@ impl Task {
         if unset {
             *state = TaskMetaState::Unloaded(UnloadedTaskState { stats_type });
         } else {
-            *state = TaskMetaState::Partial(box PartialTaskState { scopes, stats_type });
+            *state = TaskMetaState::Partial(Box::new(PartialTaskState { scopes, stats_type }));
         }
         drop(state);
 
