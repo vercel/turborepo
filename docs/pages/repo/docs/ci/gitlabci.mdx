@@ -47,10 +47,6 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
     <Tab>
         ```yaml
         image: node:latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # variables:
-        #   TURBO_TOKEN: $TURBO_TOKEN
-        #   TURBO_TEAM: $TURBO_TEAM
         stages:
           - build
         build:
@@ -64,10 +60,6 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
     <Tab>
         ```yaml
         image: node:latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # variables:
-        #   TURBO_TOKEN: $TURBO_TOKEN
-        #   TURBO_TEAM: $TURBO_TEAM
         stages:
           - build
         build:
@@ -85,10 +77,6 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
     <Tab>
         ```yaml
         image: node:latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # variables:
-        #   TURBO_TOKEN: $TURBO_TOKEN
-        #   TURBO_TEAM: $TURBO_TEAM
         stages:
           - build
         build:
@@ -101,7 +89,9 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
             - pnpm build
             - pnpm test
           cache:
-            key: "$CI_COMMIT_REF_SLUG"
+            key:
+              files:
+                - pnpm-lock.yaml
             paths:
               - .pnpm-store
         ```
