@@ -435,7 +435,7 @@ impl AssetContext for ModuleAssetContext {
                 request,
             );
 
-            result.add_reference(types_reference.into());
+            result.add_reference(types_reference.into()).await?;
         }
 
         Ok(result)

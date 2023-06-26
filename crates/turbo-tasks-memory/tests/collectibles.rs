@@ -124,11 +124,11 @@ async fn my_collecting_function_indirect() -> Result<ThingVc> {
 }
 
 #[turbo_tasks::function]
-fn my_multi_emitting_function() -> ThingVc {
-    my_transitive_emitting_function("", "a");
-    my_transitive_emitting_function("", "b");
+async fn my_multi_emitting_function() -> Result<ThingVc> {
+    my_transitive_emitting_function("", "a").await?;
+    my_transitive_emitting_function("", "b").await?;
     my_emitting_function("");
-    ThingVc::cell(Thing(0))
+    Ok(ThingVc::cell(Thing(0)))
 }
 
 #[turbo_tasks::function]

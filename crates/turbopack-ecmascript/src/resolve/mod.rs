@@ -105,7 +105,7 @@ pub async fn url_resolve(
     } else {
         rel_result
     };
-    handle_resolve_error(
+    let _ = handle_resolve_error(
         result,
         ty.clone(),
         origin.origin_path(),
