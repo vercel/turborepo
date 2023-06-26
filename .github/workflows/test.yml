@@ -329,8 +329,6 @@ jobs:
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          setup-rust: false
-          setup-go: false
 
       # TODO: .github/actions/setup-node is pretty similar to the following
       # steps (Setup Pnpm, pnpm cache, corepack, setup node), but it didn't
@@ -363,7 +361,7 @@ jobs:
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run example-test --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
       # Re-enable corepack, actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it here. The "Post" step
