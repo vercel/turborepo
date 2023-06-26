@@ -197,7 +197,11 @@
     // Since they also has a unique set of dependencies, we don't model example tests with the
     // test task, or we'd have to override the dependenies in each workspace.
     "example-test": {
-      "dependsOn": ["topo", "@turborepo-examples-tests/helpers#setup"],
+      "dependsOn": [
+        "topo",
+        "@turborepo-examples-tests/helpers#setup",
+        "cli#build"
+      ],
       "inputs": ["*.t", "../setup.sh"]
     }
   },

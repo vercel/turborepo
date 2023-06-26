@@ -71,4 +71,11 @@ fi
 # Delete .git directory if it's there, we'll set up a new git repo
 [ ! -d .git ] || rm -rf .git
 
+if [ "${OSTYPE}" == "msys" ]; then
+  EXT=".exe"
+else
+  EXT=""
+fi
+export TURBO_BINARY_PATH=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
+
 "$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}" "false"
