@@ -185,7 +185,7 @@ jobs:
       go: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' }}
       turborepo_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
       go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
-      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' }}
+      examples: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.examples.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
@@ -329,8 +329,6 @@ jobs:
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          setup-rust: false
-          setup-go: false
 
       # TODO: .github/actions/setup-node is pretty similar to the following
       # steps (Setup Pnpm, pnpm cache, corepack, setup node), but it didn't
@@ -363,7 +361,7 @@ jobs:
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run example-test --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
 
       # Re-enable corepack, actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it here. The "Post" step
