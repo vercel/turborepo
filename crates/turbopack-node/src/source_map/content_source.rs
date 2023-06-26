@@ -89,7 +89,8 @@ impl GetContentSourceContent for NextSourceMapTraceContentSource {
             }
         });
 
-        let sources = self_vc.await?.asset_source.get_routes().get(file.path());
+        let path = urlencoding::decode(file.path().trim_start_matches('/'))?;
+        let sources = self_vc.await?.asset_source.get_routes().get(&path);
         let processor = NextSourceMapTraceContentProcessorVc::new(
             id,
             line,
