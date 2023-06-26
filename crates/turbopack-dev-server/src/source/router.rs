@@ -162,13 +162,17 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
         path: &str,
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceContentVc> {
-        Ok(
-            if let Some(path) = path.strip_prefix(&*self.mapper.await?.prefix.await?) {
-                self.get_content.get(path, data)
-            } else {
-                ContentSourceContentVc::not_found()
-            },
-        )
+        let prefix = self.mapper.await?.prefix.await?;
+        if let Some(path) = path.strip_prefix(&*prefix) {
+            if path.is_empty() {
+                return Ok(self.get_content.get("", data));
+            } else if prefix.is_empty() {
+                return Ok(self.get_content.get(path, data));
+            } else if let Some(path) = path.strip_prefix("/") {
+                return Ok(self.get_content.get(path, data));
+            }
+        }
+        Ok(ContentSourceContentVc::not_found())
     }
 }
 
