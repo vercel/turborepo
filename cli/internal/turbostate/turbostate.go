@@ -4,17 +4,8 @@
 package turbostate
 
 import (
-	"fmt"
-
 	"github.com/vercel/turbo/cli/internal/util"
 )
-
-// RepoState is the state for repository. Consists of the root for the repo
-// along with the mode (single package or multi package)
-type RepoState struct {
-	Root string `json:"root"`
-	Mode string `json:"mode"`
-}
 
 // DaemonPayload is the extra flags and command that are
 // passed for the `daemon` subcommand
@@ -32,15 +23,16 @@ type PrunePayload struct {
 
 // RunPayload is the extra flags passed for the `run` subcommand
 type RunPayload struct {
-	CacheDir          string       `json:"cache_dir"`
-	CacheWorkers      int          `json:"cache_workers"`
-	Concurrency       string       `json:"concurrency"`
-	ContinueExecution bool         `json:"continue_execution"`
-	DryRun            string       `json:"dry_run"`
-	Filter            []string     `json:"filter"`
-	Force             bool         `json:"force"`
-	GlobalDeps        []string     `json:"global_deps"`
-	EnvMode           util.EnvMode `json:"env_mode"`
+	CacheDir           string       `json:"cache_dir"`
+	CacheWorkers       int          `json:"cache_workers"`
+	Concurrency        string       `json:"concurrency"`
+	ContinueExecution  bool         `json:"continue_execution"`
+	DryRun             string       `json:"dry_run"`
+	Filter             []string     `json:"filter"`
+	Force              bool         `json:"force"`
+	FrameworkInference bool         `json:"framework_inference"`
+	GlobalDeps         []string     `json:"global_deps"`
+	EnvMode            util.EnvMode `json:"env_mode"`
 	// NOTE: Graph has three effective states that is modeled using a *string:
 	//   nil -> no flag passed
 	//   ""  -> flag passed but no file name attached: print to stdout
@@ -55,6 +47,7 @@ type RunPayload struct {
 	NoDeps              bool     `json:"no_deps"`
 	Only                bool     `json:"only"`
 	OutputLogs          string   `json:"output_logs"`
+	LogOrder            string   `json:"log_order"`
 	PassThroughArgs     []string `json:"pass_through_args"`
 	Parallel            bool     `json:"parallel"`
 	Profile             string   `json:"profile"`
@@ -97,45 +90,19 @@ type ParsedArgsFromRust struct {
 	Command            Command `json:"command"`
 }
 
-// GetColor returns the value of the `color` flag.
-func (a ParsedArgsFromRust) GetColor() bool {
-	return a.Color
+// ExecutionState is the entire state of a turbo execution that is passed from the Rust shim.
+type ExecutionState struct {
+	APIClientConfig APIClientConfig    `json:"api_client_config"`
+	PackageManager  string             `json:"package_manager"`
+	CLIArgs         ParsedArgsFromRust `json:"cli_args"`
 }
 
-// GetNoColor returns the value of the `token` flag.
-func (a ParsedArgsFromRust) GetNoColor() bool {
-	return a.NoColor
-}
-
-// GetLogin returns the value of the `login` flag.
-func (a ParsedArgsFromRust) GetLogin() (string, error) {
-	return a.Login, nil
-}
-
-// GetAPI returns the value of the `api` flag.
-func (a ParsedArgsFromRust) GetAPI() (string, error) {
-	return a.API, nil
-}
-
-// GetTeam returns the value of the `team` flag.
-func (a ParsedArgsFromRust) GetTeam() (string, error) {
-	return a.Team, nil
-}
-
-// GetToken returns the value of the `token` flag.
-func (a ParsedArgsFromRust) GetToken() (string, error) {
-	return a.Token, nil
-}
-
-// GetCwd returns the value of the `cwd` flag.
-func (a ParsedArgsFromRust) GetCwd() (string, error) {
-	return a.CWD, nil
-}
-
-// GetRemoteCacheTimeout returns the value of the `remote-cache-timeout` flag.
-func (a ParsedArgsFromRust) GetRemoteCacheTimeout() (uint64, error) {
-	if a.RemoteCacheTimeout != 0 {
-		return a.RemoteCacheTimeout, nil
-	}
-	return 0, fmt.Errorf("no remote cache timeout provided")
+// APIClientConfig holds the authentication and endpoint details for the API client
+type APIClientConfig struct {
+	Token        string `json:"token"`
+	TeamID       string `json:"team_id"`
+	TeamSlug     string `json:"team_slug"`
+	APIURL       string `json:"api_url"`
+	UsePreflight bool   `json:"use_preflight"`
+	Timeout      uint64 `json:"timeout"`
 }

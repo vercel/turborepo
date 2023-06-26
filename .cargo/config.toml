@@ -8,12 +8,14 @@ linker = "rust-lld"
 xtask = "run --package xtask --"
 tr-build = "build -p turbo"
 tr-run = "run -p turbo"
-tr-test = "test -p turborepo-* -p turbopath -p vercel-api-mock --features rustls-tls"
-tr-check = "check -p turbo -p vercel-api-mock"
+tr-test = "groups test turborepo"
+tr-check = "groups check turborepo"
 # Builds all test code to check for compiler errors before running
-tp-pre-test = "nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock"
-tp-test = "nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock"
-tp-bench-test = "test --benches --workspace --release --no-fail-fast --exclude turbopack-bench --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock"
+tp-pre-test = "nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+tp-test = "nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+tp-bench-test = "test --benches --workspace --release --no-fail-fast --exclude turbopack-bench --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+tp-check = "check --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+tp-clippy = "clippy --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
 
 [target.'cfg(all())']
-rustflags = ["--cfg", "tokio_unstable", "-Csymbol-mangling-version=v0", "-Aclippy::too_many_arguments"]
+rustflags = ["--cfg", "tokio_unstable", "-Zshare-generics=y", "-Csymbol-mangling-version=v0", "-Aclippy::too_many_arguments"]

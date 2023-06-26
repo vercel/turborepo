@@ -18,12 +18,14 @@ class MyDocument extends Document {
           <link
             rel="preconnect"
             href="https://fonts.gstatic.com"
-            crossOrigin="true"
+            crossOrigin="anonymous"
           />
           <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=optional"
             rel="stylesheet"
           />
+
+          {/* we can disable these lint rules because we've already established a preconnect to https://fonts.gstatic.com above */}
 
           {/* eslint-disable-next-line @next/next/google-font-preconnect */}
           <link
@@ -31,7 +33,7 @@ class MyDocument extends Document {
             as="font"
             href="https://fonts.gstatic.com/s/spacegrotesk/v13/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7aUXskPMBBSSJLm2E.woff2"
             type="font/woff2"
-            crossOrigin="true"
+            crossOrigin="anonymous"
           />
           {/* eslint-disable-next-line @next/next/google-font-preconnect */}
           <link
@@ -39,7 +41,7 @@ class MyDocument extends Document {
             as="font"
             href="https://fonts.gstatic.com/s/spacegrotesk/v13/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7oUXskPMBBSSJLm2E.woff2"
             type="font/woff2"
-            crossOrigin="true"
+            crossOrigin="anonymous"
           />
         </Head>
         <body>

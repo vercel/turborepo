@@ -1,5 +1,5 @@
 import path from "path";
-import getTurboRoot from "../src/getTurboRoot";
+import { getTurboRoot } from "../src/getTurboRoot";
 import { setupTestFixtures } from "@turbo/test-utils";
 
 describe("getTurboConfigs", () => {

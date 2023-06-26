@@ -7,8 +7,8 @@ package ffi
 
 // #include "bindings.h"
 //
-// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv
-// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv
+// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv -framework Security
+// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv -framework Security
 // #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind
 // #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind
 // #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz
@@ -18,6 +18,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"unsafe"
 
@@ -116,15 +117,14 @@ func stringToRef(s string) *string {
 }
 
 // ChangedFiles returns the files changed in between two commits, the workdir and the index, and optionally untracked files
-func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCommit string) ([]string, error) {
+func ChangedFiles(gitRoot string, turboRoot string, fromCommit string, toCommit string) ([]string, error) {
 	fromCommitRef := stringToRef(fromCommit)
-	toCommitRef := stringToRef(toCommit)
 
 	req := ffi_proto.ChangedFilesReq{
-		RepoRoot:     repoRoot,
-		FromCommit:   fromCommitRef,
-		ToCommit:     toCommitRef,
-		MonorepoRoot: monorepoRoot,
+		GitRoot:    gitRoot,
+		FromCommit: fromCommitRef,
+		ToCommit:   toCommit,
+		TurboRoot:  turboRoot,
 	}
 
 	reqBuf := Marshal(&req)
@@ -144,9 +144,9 @@ func ChangedFiles(repoRoot string, monorepoRoot string, fromCommit string, toCom
 }
 
 // PreviousContent returns the content of a file at a previous commit
-func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
+func PreviousContent(gitRoot, fromCommit, filePath string) ([]byte, error) {
 	req := ffi_proto.PreviousContentReq{
-		RepoRoot:   repoRoot,
+		GitRoot:    gitRoot,
 		FromCommit: fromCommit,
 		FilePath:   filePath,
 	}
@@ -168,23 +168,33 @@ func PreviousContent(repoRoot, fromCommit, filePath string) ([]byte, error) {
 	return []byte(content), nil
 }
 
-// NpmTransitiveDeps returns the transitive external deps of a given package based on the deps and specifiers given
-func NpmTransitiveDeps(content []byte, pkgDir string, unresolvedDeps map[string]string) ([]*ffi_proto.LockfilePackage, error) {
-	return transitiveDeps(npmTransitiveDeps, content, pkgDir, unresolvedDeps)
-}
-
-func npmTransitiveDeps(buf C.Buffer) C.Buffer {
-	return C.npm_transitive_closure(buf)
-}
-
-func transitiveDeps(cFunc func(C.Buffer) C.Buffer, content []byte, pkgDir string, unresolvedDeps map[string]string) ([]*ffi_proto.LockfilePackage, error) {
+// TransitiveDeps returns the transitive external deps for all provided workspaces
+func TransitiveDeps(content []byte, packageManager string, workspaces map[string]map[string]string, resolutions map[string]string) (map[string]*ffi_proto.LockfilePackageList, error) {
+	var additionalData *ffi_proto.AdditionalBerryData
+	if resolutions != nil {
+		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
+	}
+	flatWorkspaces := make(map[string]*ffi_proto.PackageDependencyList)
+	for workspace, deps := range workspaces {
+		packageDependencyList := make([]*ffi_proto.PackageDependency, len(deps))
+		i := 0
+		for name, version := range deps {
+			packageDependencyList[i] = &ffi_proto.PackageDependency{
+				Name:  name,
+				Range: version,
+			}
+			i++
+		}
+		flatWorkspaces[workspace] = &ffi_proto.PackageDependencyList{List: packageDependencyList}
+	}
 	req := ffi_proto.TransitiveDepsRequest{
 		Contents:       content,
-		WorkspaceDir:   pkgDir,
-		UnresolvedDeps: unresolvedDeps,
+		PackageManager: toPackageManager(packageManager),
+		Workspaces:     flatWorkspaces,
+		Resolutions:    additionalData,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := cFunc(reqBuf)
+	resBuf := C.transitive_closure(reqBuf)
 	reqBuf.Free()
 
 	resp := ffi_proto.TransitiveDepsResponse{}
@@ -196,19 +206,40 @@ func transitiveDeps(cFunc func(C.Buffer) C.Buffer, content []byte, pkgDir string
 		return nil, errors.New(err)
 	}
 
-	list := resp.GetPackages()
-	return list.GetList(), nil
+	dependencies := resp.GetDependencies()
+	return dependencies.GetDependencies(), nil
 }
 
-// NpmSubgraph returns the contents of a npm lockfile subgraph
-func NpmSubgraph(content []byte, workspaces []string, packages []string) ([]byte, error) {
+func toPackageManager(packageManager string) ffi_proto.PackageManager {
+	switch packageManager {
+	case "npm":
+		return ffi_proto.PackageManager_NPM
+	case "berry":
+		return ffi_proto.PackageManager_BERRY
+	case "pnpm":
+		return ffi_proto.PackageManager_PNPM
+	case "yarn":
+		return ffi_proto.PackageManager_YARN
+	default:
+		panic(fmt.Sprintf("Invalid package manager string: %s", packageManager))
+	}
+}
+
+// Subgraph returns the contents of a lockfile subgraph
+func Subgraph(packageManager string, content []byte, workspaces []string, packages []string, resolutions map[string]string) ([]byte, error) {
+	var additionalData *ffi_proto.AdditionalBerryData
+	if resolutions != nil {
+		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
+	}
 	req := ffi_proto.SubgraphRequest{
-		Contents:   content,
-		Workspaces: workspaces,
-		Packages:   packages,
+		Contents:       content,
+		Workspaces:     workspaces,
+		Packages:       packages,
+		PackageManager: toPackageManager(packageManager),
+		Resolutions:    additionalData,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.npm_subgraph(reqBuf)
+	resBuf := C.subgraph(reqBuf)
 	reqBuf.Free()
 
 	resp := ffi_proto.SubgraphResponse{}
@@ -221,4 +252,200 @@ func NpmSubgraph(content []byte, workspaces []string, packages []string) ([]byte
 	}
 
 	return resp.GetContents(), nil
+}
+
+// Patches returns all patch files referenced in the lockfile
+func Patches(content []byte, packageManager string) []string {
+	req := ffi_proto.PatchesRequest{
+		Contents:       content,
+		PackageManager: toPackageManager(packageManager),
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.patches(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.PatchesResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+	if err := resp.GetError(); err != "" {
+		panic(err)
+	}
+
+	return resp.GetPatches().GetPatches()
+}
+
+// RecursiveCopy copies src and its contents to dst
+func RecursiveCopy(src string, dst string) error {
+	req := ffi_proto.RecursiveCopyRequest{
+		Src: src,
+		Dst: dst,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.recursive_copy(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.RecursiveCopyResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+	// Error is optional, so a nil value means no error was set
+	// GetError() papers over the difference and returns the zero
+	// value if it isn't set, so we need to check the value directly.
+	if resp.Error != nil {
+		return errors.New(*resp.Error)
+	}
+	return nil
+}
+
+// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
+// the cache.
+func GlobalChange(packageManager string, prevContents []byte, currContents []byte) bool {
+	req := ffi_proto.GlobalChangeRequest{
+		PackageManager: toPackageManager(packageManager),
+		PrevContents:   prevContents,
+		CurrContents:   currContents,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.patches(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GlobalChangeResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	return resp.GetGlobalChange()
+}
+
+// VerifySignature checks that the signature of an artifact matches the expected tag
+func VerifySignature(teamID []byte, hash string, artifactBody []byte, expectedTag string, secretKeyOverride []byte) (bool, error) {
+	req := ffi_proto.VerifySignatureRequest{
+		TeamId:            teamID,
+		Hash:              hash,
+		ArtifactBody:      artifactBody,
+		ExpectedTag:       expectedTag,
+		SecretKeyOverride: secretKeyOverride,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.verify_signature(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.VerifySignatureResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return false, errors.New(err)
+	}
+
+	return resp.GetVerified(), nil
+}
+
+// GetPackageFileHashes proxies to rust for hashing the files in a package
+func GetPackageFileHashes(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesRequest{
+		TurboRoot:   rootPath,
+		PackagePath: packagePath,
+		Inputs:      inputs,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_package_file_hashes(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetPackageFileHashesResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}
+
+// GetHashesForFiles proxies to rust for hashing a given set of files
+func GetHashesForFiles(rootPath string, files []string, allowMissing bool) (map[string]string, error) {
+	req := ffi_proto.GetHashesForFilesRequest{
+		TurboRoot:    rootPath,
+		Files:        files,
+		AllowMissing: allowMissing,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_hashes_for_files(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetHashesForFilesResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}
+
+// FromWildcards returns an EnvironmentVariableMap containing the variables
+// in the environment which match an array of wildcard patterns.
+func FromWildcards(environmentMap map[string]string, wildcardPatterns []string) (map[string]string, error) {
+	if wildcardPatterns == nil {
+		return nil, nil
+	}
+	req := ffi_proto.FromWildcardsRequest{
+		EnvVars: &ffi_proto.EnvVarMap{
+			Map: environmentMap,
+		},
+		WildcardPatterns: wildcardPatterns,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.from_wildcards(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.FromWildcardsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	envVarMap := resp.GetEnvVars().GetMap()
+	// If the map is nil, return an empty map instead of nil
+	// to match with existing Go code.
+	if envVarMap == nil {
+		return map[string]string{}, nil
+	}
+	return envVarMap, nil
+}
+
+// GetGlobalHashableEnvVars calculates env var dependencies
+func GetGlobalHashableEnvVars(envAtExecutionStart map[string]string, globalEnv []string) (*ffi_proto.DetailedMap, error) {
+	req := ffi_proto.GetGlobalHashableEnvVarsRequest{
+		EnvAtExecutionStart: &ffi_proto.EnvVarMap{Map: envAtExecutionStart},
+		GlobalEnv:           globalEnv,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_global_hashable_env_vars(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetGlobalHashableEnvVarsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	respDetailedMap := resp.GetDetailedMap()
+	if respDetailedMap == nil {
+		return nil, nil
+	}
+
+	return respDetailedMap, nil
 }

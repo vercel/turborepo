@@ -19,36 +19,53 @@ use turbo_tasks_fs::{
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::EcmascriptModuleAssetVc,
+    ecmascript::{EcmascriptModuleAssetVc, TransformPluginVc},
     module_options::{
-        EmotionTransformConfig, JsxTransformOptions, JsxTransformOptionsVc, ModuleOptionsContext,
-        StyledComponentsTransformConfigVc,
+        CustomEcmascriptTransformPlugins, CustomEcmascriptTransformPluginsVc, JsxTransformOptions,
+        JsxTransformOptionsVc, ModuleOptionsContext,
     },
     resolve_options_context::ResolveOptionsContext,
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
 };
+use turbopack_build::BuildChunkingContextVc;
 use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{
-        ChunkableAsset, ChunkableAssetVc, ChunkingContext, EvaluatableAssetVc, EvaluatableAssetsVc,
+        ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc,
+        EvaluatableAssetsVc,
     },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
-    environment::{BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment},
+    environment::{
+        BrowserEnvironment, EnvironmentIntention, EnvironmentVc, ExecutionEnvironment,
+        NodeJsEnvironment,
+    },
     issue::IssueVc,
     reference::all_referenced_assets,
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
 };
 use turbopack_dev::DevChunkingContextVc;
+use turbopack_ecmascript_plugins::transform::{
+    emotion::{EmotionTransformConfig, EmotionTransformer},
+    styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
+};
+use turbopack_ecmascript_runtime::RuntimeType;
 use turbopack_env::ProcessEnvAssetVc;
 use turbopack_test_utils::snapshot::{diff, expected, matches_expected, snapshot_issues};
 
 fn register() {
+    turbo_tasks::register();
+    turbo_tasks_env::register();
+    turbo_tasks_fs::register();
     turbopack::register();
+    turbopack_build::register();
     turbopack_dev::register();
+    turbopack_env::register();
+    turbopack_ecmascript_plugins::register();
+    turbopack_ecmascript_runtime::register();
     include!(concat!(env!("OUT_DIR"), "/register_test_snapshot.rs"));
 }
 
@@ -66,11 +83,32 @@ static WORKSPACE_ROOT: Lazy<String> = Lazy::new(|| {
 });
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SnapshotOptions {
     #[serde(default = "default_browserslist")]
     browserslist: String,
     #[serde(default = "default_entry")]
     entry: String,
+    #[serde(default)]
+    runtime: Runtime,
+    #[serde(default = "default_runtime_type")]
+    runtime_type: RuntimeType,
+    #[serde(default)]
+    environment: Environment,
+}
+
+#[derive(Debug, Deserialize, Default)]
+enum Runtime {
+    #[default]
+    Dev,
+    Build,
+}
+
+#[derive(Debug, Deserialize, Default)]
+enum Environment {
+    #[default]
+    Browser,
+    NodeJs,
 }
 
 impl Default for SnapshotOptions {
@@ -78,6 +116,9 @@ impl Default for SnapshotOptions {
         SnapshotOptions {
             browserslist: default_browserslist(),
             entry: default_entry(),
+            runtime: Default::default(),
+            runtime_type: default_runtime_type(),
+            environment: Default::default(),
         }
     }
 }
@@ -90,6 +131,14 @@ fn default_browserslist() -> String {
 
 fn default_entry() -> String {
     "input/index.js".to_owned()
+}
+
+fn default_runtime_type() -> RuntimeType {
+    // We don't want all snapshot tests to also include the runtime every time,
+    // as this would be a lot of extra noise whenever we make a single change to
+    // the runtime. Instead, we only include the runtime in snapshots that
+    // specifically request it via "runtime": "Default".
+    RuntimeType::Dummy
 }
 
 #[testing::fixture("tests/snapshot/*/*/")]
@@ -165,16 +214,26 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
     let entry_paths = vec![entry_asset];
 
     let env = EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::Browser(
-            // TODO: load more from options.json
-            BrowserEnvironment {
-                dom: true,
-                web_worker: false,
-                service_worker: false,
-                browserslist_query: options.browserslist.to_owned(),
+        Value::new(match options.environment {
+            Environment::Browser => {
+                ExecutionEnvironment::Browser(
+                    // TODO: load more from options.json
+                    BrowserEnvironment {
+                        dom: true,
+                        web_worker: false,
+                        service_worker: false,
+                        browserslist_query: options.browserslist.to_owned(),
+                    }
+                    .into(),
+                )
             }
-            .into(),
-        )),
+            Environment::NodeJs => {
+                ExecutionEnvironment::NodeJsBuildTime(
+                    // TODO: load more from options.json
+                    NodeJsEnvironment::default().into(),
+                )
+            }
+        }),
         Value::new(EnvironmentIntention::Client),
     );
     let compile_time_info = CompileTimeInfo::builder(env)
@@ -189,20 +248,31 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
         )
         .cell();
 
+    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPluginsVc::cell(
+        CustomEcmascriptTransformPlugins {
+            source_transforms: vec![
+                TransformPluginVc::cell(Box::new(
+                    EmotionTransformer::new(&EmotionTransformConfig {
+                        sourcemap: Some(false),
+                        ..Default::default()
+                    })
+                    .expect("Should be able to create emotion transformer"),
+                )),
+                TransformPluginVc::cell(Box::new(StyledComponentsTransformer::new(
+                    &StyledComponentsTransformConfig::default(),
+                ))),
+            ],
+            output_transforms: vec![],
+        },
+    ));
     let context: AssetContextVc = ModuleAssetContextVc::new(
         TransitionsByNameVc::cell(HashMap::new()),
         compile_time_info,
         ModuleOptionsContext {
             enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
+                development: true,
                 ..Default::default()
             })),
-            enable_emotion: Some(EmotionTransformConfig::cell(EmotionTransformConfig {
-                sourcemap: Some(false),
-                ..Default::default()
-            })),
-            enable_styled_components: Some(StyledComponentsTransformConfigVc::cell(
-                Default::default(),
-            )),
             preset_env_versions: Some(env),
             rules: vec![(
                 ContextCondition::InDirectory("node_modules".to_string()),
@@ -211,6 +281,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
                 }
                 .cell(),
             )],
+            custom_ecma_transform_plugins,
             ..Default::default()
         }
         .into(),
@@ -240,9 +311,27 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
 
     let chunk_root_path = path.join("output");
     let static_root_path = path.join("static");
-    let chunking_context =
-        DevChunkingContextVc::builder(project_root, path, chunk_root_path, static_root_path, env)
-            .build();
+    let chunking_context: ChunkingContextVc = match options.runtime {
+        Runtime::Dev => DevChunkingContextVc::builder(
+            project_root,
+            path,
+            chunk_root_path,
+            static_root_path,
+            env,
+        )
+        .runtime_type(options.runtime_type)
+        .build(),
+        Runtime::Build => BuildChunkingContextVc::builder(
+            project_root,
+            path,
+            chunk_root_path,
+            static_root_path,
+            env,
+        )
+        .runtime_type(options.runtime_type)
+        .build()
+        .into(),
+    };
 
     let expected_paths = expected(chunk_root_path)
         .await?
@@ -321,7 +410,7 @@ async fn walk_asset(
         return Ok(());
     }
 
-    if path.await?.is_inside(&*output_path) {
+    if path.await?.is_inside(output_path) {
         // Only consider assets that should be written to disk.
         diff(path, asset.content()).await?;
     }

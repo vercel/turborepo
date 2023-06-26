@@ -10,7 +10,7 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 // we change graph traversal now
 // resolve_package should only be used now for converting initial contents
 // of workspace package.json into a set of node ids
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct NpmLockfile {
     #[serde(rename = "lockfileVersion")]
     lockfile_version: i32,
@@ -78,7 +78,7 @@ impl Lockfile for NpmLockfile {
             .transpose()
     }
 
-    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, &str>>, Error> {
+    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
         self.packages
             .get(key)
             .map(|pkg| {
@@ -87,12 +87,12 @@ impl Lockfile for NpmLockfile {
                         Self::possible_npm_deps(key, name)
                             .into_iter()
                             .find_map(|possible_key| {
-                                self.packages.get(&possible_key).map(|entry| {
-                                    let version = entry.version.as_deref().ok_or_else(|| {
-                                        Error::MissingVersion(possible_key.clone())
-                                    })?;
-                                    Ok((possible_key, version))
-                                })
+                                let entry = self.packages.get(&possible_key)?;
+                                match entry.version.as_deref() {
+                                    Some(version) => Some(Ok((possible_key, version.to_string()))),
+                                    None if entry.resolved.is_some() => None,
+                                    None => Some(Err(Error::MissingVersion(possible_key.clone()))),
+                                }
                             })
                     })
                     .collect()
@@ -205,6 +205,15 @@ pub fn npm_subgraph(
     Ok(new_contents)
 }
 
+pub fn npm_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, Error> {
+    let prev_lockfile = NpmLockfile::load(prev_contents)?;
+    let curr_lockfile = NpmLockfile::load(curr_contents)?;
+
+    Ok(
+        prev_lockfile.lockfile_version != curr_lockfile.lockfile_version
+            || prev_lockfile.other.get("requires") != curr_lockfile.other.get("requires"),
+    )
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -337,6 +346,16 @@ mod test {
                     "node_modules/turbo-windows-arm64",
                 ],
             ),
+            (
+                "node_modules/@babel/helper-compilation-targets",
+                vec![
+                    "node_modules/@babel/compat-data",
+                    "node_modules/@babel/core",
+                    "node_modules/@babel/helper-validator-option",
+                    "node_modules/browserslist",
+                    "node_modules/semver",
+                ],
+            ),
         ];
 
         for (key, expected) in &tests {
@@ -384,6 +403,34 @@ mod test {
             serde_json::to_string_pretty(&lockfile)?,
             serde_json::to_string_pretty(&lockfile)?,
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_workspace_peer_dependencies() -> Result<(), Error> {
+        let lockfile =
+            NpmLockfile::load(include_bytes!("../fixtures/workspace-peer-dependency.json"))?;
+        let closures = crate::all_transitive_closures(
+            &lockfile,
+            vec![
+                (
+                    "packages/a".into(),
+                    vec![("eslint-plugin-turbo".into(), "^1.9.3".into())]
+                        .into_iter()
+                        .collect(),
+                ),
+                ("packages/b".into(), HashMap::new()),
+                ("packages/c".into(), HashMap::new()),
+            ]
+            .into_iter()
+            .collect(),
+        )?;
+        assert!(closures.get("packages/a").unwrap().contains(&Package {
+            key: "node_modules/eslint-plugin-turbo".into(),
+            version: "1.9.3".into()
+        }));
+        assert!(closures.get("packages/b").unwrap().is_empty());
+        assert!(closures.get("packages/c").unwrap().is_empty());
         Ok(())
     }
 }

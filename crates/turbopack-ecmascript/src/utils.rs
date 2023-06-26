@@ -1,10 +1,3 @@
-use std::{
-    future::Future,
-    pin::Pin,
-    task::{Context, Poll},
-};
-
-use pin_project_lite::pin_project;
 use serde::Serialize;
 use swc_core::{
     common::DUMMY_SP,
@@ -131,28 +124,3 @@ format_iter!(std::fmt::Octal);
 format_iter!(std::fmt::Pointer);
 format_iter!(std::fmt::UpperExp);
 format_iter!(std::fmt::UpperHex);
-
-pin_project! {
-    pub struct WrapFuture<F, W> {
-        wrapper: W,
-        #[pin]
-        future: F,
-    }
-}
-
-impl<F: Future, W: for<'a> Fn(Pin<&mut F>, &mut Context<'a>) -> Poll<F::Output>> WrapFuture<F, W> {
-    pub fn new(wrapper: W, future: F) -> Self {
-        Self { wrapper, future }
-    }
-}
-
-impl<F: Future, W: for<'a> Fn(Pin<&mut F>, &mut Context<'a>) -> Poll<F::Output>> Future
-    for WrapFuture<F, W>
-{
-    type Output = F::Output;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
-        (this.wrapper)(this.future, cx)
-    }
-}

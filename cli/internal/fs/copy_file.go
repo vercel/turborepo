@@ -6,38 +6,9 @@ package fs
 import (
 	"errors"
 	"os"
-	"path/filepath"
 
 	"github.com/karrick/godirwalk"
 )
-
-// RecursiveCopy copies either a single file or a directory.
-// 'mode' is the mode of the destination file.
-func RecursiveCopy(from string, to string) error {
-	// Verified all callers are passing in absolute paths for from (and to)
-	statedFrom := LstatCachedFile{Path: UnsafeToAbsoluteSystemPath(from)}
-	fromType, err := statedFrom.GetType()
-	if err != nil {
-		return err
-	}
-
-	if fromType.IsDir() {
-		return WalkMode(statedFrom.Path.ToStringDuringMigration(), func(name string, isDir bool, fileType os.FileMode) error {
-			dest := filepath.Join(to, name[len(statedFrom.Path.ToString()):])
-			// name is absolute, (originates from godirwalk)
-			src := LstatCachedFile{Path: UnsafeToAbsoluteSystemPath(name), fileType: &fileType}
-			if isDir {
-				mode, err := src.GetMode()
-				if err != nil {
-					return err
-				}
-				return os.MkdirAll(dest, mode)
-			}
-			return CopyFile(&src, dest)
-		})
-	}
-	return CopyFile(&statedFrom, to)
-}
 
 // Walk implements an equivalent to filepath.Walk.
 // It's implemented over github.com/karrick/godirwalk but the provided interface doesn't use that

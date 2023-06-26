@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/vercel/turbo/cli/internal/ci"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 )
 
 // APIClient is the main interface for making network requests to Vercel
@@ -47,31 +48,14 @@ func (c *APIClient) SetToken(token string) {
 	c.token = token
 }
 
-// RemoteConfig holds the authentication and endpoint details for the API client
-type RemoteConfig struct {
-	Token    string
-	TeamID   string
-	TeamSlug string
-	APIURL   string
-}
-
-// Opts holds values for configuring the behavior of the API client
-type Opts struct {
-	UsePreflight bool
-	Timeout      uint64
-}
-
-// ClientTimeout Exported ClientTimeout used in run.go
-const ClientTimeout uint64 = 20
-
 // NewClient creates a new APIClient
-func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion string, opts Opts) *APIClient {
+func NewClient(config turbostate.APIClientConfig, logger hclog.Logger, turboVersion string) *APIClient {
 	client := &APIClient{
-		baseURL:      remoteConfig.APIURL,
+		baseURL:      config.APIURL,
 		turboVersion: turboVersion,
 		HTTPClient: &retryablehttp.Client{
 			HTTPClient: &http.Client{
-				Timeout: time.Duration(opts.Timeout) * time.Second,
+				Timeout: time.Duration(config.Timeout) * time.Second,
 			},
 			RetryWaitMin: 2 * time.Second,
 			RetryWaitMax: 10 * time.Second,
@@ -79,10 +63,10 @@ func NewClient(remoteConfig RemoteConfig, logger hclog.Logger, turboVersion stri
 			Backoff:      retryablehttp.DefaultBackoff,
 			Logger:       logger,
 		},
-		token:        remoteConfig.Token,
-		teamID:       remoteConfig.TeamID,
-		teamSlug:     remoteConfig.TeamSlug,
-		usePreflight: opts.UsePreflight,
+		token:        config.Token,
+		teamID:       config.TeamID,
+		teamSlug:     config.TeamSlug,
+		usePreflight: config.UsePreflight,
 	}
 	client.HTTPClient.CheckRetry = client.checkRetry
 	return client
@@ -215,44 +199,16 @@ func (c *APIClient) addTeamParam(params *url.Values) {
 }
 
 // JSONPatch sends a byte array (json.marshalled payload) to a given endpoint with PATCH
-func (c *APIClient) JSONPatch(endpoint string, body []byte) ([]byte, error) {
-	resp, err := c.request(endpoint, http.MethodPatch, body)
-	if err != nil {
-		return nil, err
-	}
-
-	rawResponse, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s", string(rawResponse))
-	}
-
-	return rawResponse, nil
+func (c *APIClient) JSONPatch(ctx context.Context, endpoint string, body []byte) ([]byte, error) {
+	return c.request(ctx, endpoint, http.MethodPatch, body)
 }
 
 // JSONPost sends a byte array (json.marshalled payload) to a given endpoint with POST
-func (c *APIClient) JSONPost(endpoint string, body []byte) ([]byte, error) {
-	resp, err := c.request(endpoint, http.MethodPost, body)
-	if err != nil {
-		return nil, err
-	}
-
-	rawResponse, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response %v", err)
-	}
-
-	// For non 200/201 status codes, return the response body as an error
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("%s", string(rawResponse))
-	}
-
-	return rawResponse, nil
+func (c *APIClient) JSONPost(ctx context.Context, endpoint string, body []byte) ([]byte, error) {
+	return c.request(ctx, endpoint, http.MethodPost, body)
 }
 
-func (c *APIClient) request(endpoint string, method string, body []byte) (*http.Response, error) {
+func (c *APIClient) request(ctx context.Context, endpoint string, method string, body []byte) ([]byte, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
@@ -282,6 +238,7 @@ func (c *APIClient) request(endpoint string, method string, body []byte) (*http.
 	if err != nil {
 		return nil, err
 	}
+	req.WithContext(ctx)
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
@@ -305,5 +262,15 @@ func (c *APIClient) request(endpoint string, method string, body []byte) (*http.
 		return nil, fmt.Errorf("response from %s is nil, something went wrong", requestURL)
 	}
 
-	return resp, nil
+	rawResponse, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response %v", err)
+	}
+
+	// For non 200/201 status codes, return the response body as an error
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("%s", string(rawResponse))
+	}
+
+	return rawResponse, nil
 }

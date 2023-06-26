@@ -236,6 +236,9 @@ pub struct ContentSourceData {
     pub method: Option<String>,
     /// The full url (including query string), if requested.
     pub url: Option<String>,
+    /// The full url (including query string) before rewrites where applied, if
+    /// requested.
+    pub original_url: Option<String>,
     /// Query string items, if requested.
     pub query: Option<Query>,
     /// raw query string, if requested. Does not include the `?`.
@@ -368,6 +371,7 @@ impl ContentSourceDataFilter {
 pub struct ContentSourceDataVary {
     pub method: bool,
     pub url: bool,
+    pub original_url: bool,
     pub query: Option<ContentSourceDataFilter>,
     pub raw_query: bool,
     pub headers: Option<ContentSourceDataFilter>,
@@ -387,6 +391,7 @@ impl ContentSourceDataVary {
         let ContentSourceDataVary {
             method,
             url,
+            original_url,
             query,
             raw_query,
             headers,
@@ -397,6 +402,7 @@ impl ContentSourceDataVary {
         } = self;
         *method = *method || other.method;
         *url = *url || other.url;
+        *original_url = *original_url || other.original_url;
         *body = *body || other.body;
         *cache_buster = *cache_buster || other.cache_buster;
         *raw_query = *raw_query || other.raw_query;
@@ -412,6 +418,7 @@ impl ContentSourceDataVary {
         let ContentSourceDataVary {
             method,
             url,
+            original_url,
             query,
             raw_query,
             headers,
@@ -424,6 +431,9 @@ impl ContentSourceDataVary {
             return false;
         }
         if other.url && !url {
+            return false;
+        }
+        if other.original_url && !original_url {
             return false;
         }
         if other.body && !body {
@@ -505,9 +515,9 @@ impl ContentSource for NoContentSource {
 
 /// A rewrite returned from a [ContentSource]. This tells the dev server to
 /// update its parsed url, path, and queries with this new information, and any
-/// later [NeededData] will receive data out of t these new values.
-#[derive(Debug)]
+/// later [NeededData] will receive data out of these new values.
 #[turbo_tasks::value(shared)]
+#[derive(Debug)]
 pub struct Rewrite {
     /// The new path and query used to lookup content. This _does not_ need to
     /// be the original path or query.
@@ -521,6 +531,10 @@ pub struct Rewrite {
     /// A [Headers] which will be appended to the eventual, fully resolved
     /// content result. This overwrites any previous matching headers.
     pub response_headers: Option<HeaderListVc>,
+
+    /// A [HeaderList] which will overwrite the values used during the lookup
+    /// process. All headers not present in this list will be deleted.
+    pub request_headers: Option<HeaderListVc>,
 }
 
 pub struct RewriteBuilder {
@@ -534,6 +548,7 @@ impl RewriteBuilder {
                 path_and_query,
                 source: None,
                 response_headers: None,
+                request_headers: None,
             },
         }
     }
@@ -550,6 +565,13 @@ impl RewriteBuilder {
     /// result.
     pub fn response_headers(mut self, headers: HeaderListVc) -> Self {
         self.rewrite.response_headers = Some(headers);
+        self
+    }
+
+    /// Sets request headers to overwrite the headers used during the lookup
+    /// process.
+    pub fn request_headers(mut self, headers: HeaderListVc) -> Self {
+        self.rewrite.request_headers = Some(headers);
         self
     }
 

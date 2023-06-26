@@ -10,6 +10,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -29,6 +30,8 @@ func DryRun(
 	turboCache cache.Cache,
 	_ *fs.TurboJSON, // unused, but keep here for parity with RealRun method signature
 	globalEnvMode util.EnvMode,
+	_ env.EnvironmentVariableMap,
+	_ env.EnvironmentVariableMap,
 	base *cmdutil.CmdBase,
 	summary runsummary.Meta,
 ) error {
@@ -44,7 +47,11 @@ func DryRun(
 		}
 
 		if taskSummary.Framework == "" {
-			taskSummary.Framework = runsummary.MissingFrameworkLabel
+			if rs.Opts.runOpts.FrameworkInference {
+				taskSummary.Framework = runsummary.NoFrameworkDetected
+			} else {
+				taskSummary.Framework = runsummary.FrameworkDetectionSkipped
+			}
 		}
 
 		// This mutex is not _really_ required, since we are using Concurrency: 1 as an execution
@@ -63,7 +70,7 @@ func DryRun(
 		return rs.ArgsForTask(taskID)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, globalEnvMode, getArgs, base.Logger, execFunc)
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, rs.Opts.runOpts.FrameworkInference, globalEnvMode, getArgs, base.Logger, execFunc)
 	execOpts := core.EngineExecutionOptions{
 		Concurrency: 1,
 		Parallel:    false,
@@ -86,7 +93,7 @@ func DryRun(
 
 	// The exitCode isn't really used by the Run Summary Close() method for dry runs
 	// but we pass in a successful value to match Real Runs.
-	return summary.Close(0, g.WorkspaceInfos)
+	return summary.Close(ctx, 0, g.WorkspaceInfos, base.UI)
 }
 
 func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.TaskSummary) {
@@ -109,7 +116,7 @@ func populateCacheState(turboCache cache.Cache, taskSummaries []*runsummary.Task
 			for index := range queue {
 				task := taskSummaries[index]
 				itemStatus := turboCache.Exists(task.Hash)
-				task.CacheSummary = runsummary.NewTaskCacheSummary(itemStatus, nil)
+				task.CacheSummary = runsummary.NewTaskCacheSummary(itemStatus)
 			}
 		}()
 	}

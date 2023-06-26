@@ -1,17 +1,17 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_deps
 
 Check
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing 8fc80cfff3b64237
+  build: cache miss, executing d6b8b065382193a4
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache miss, executing c71366ccd6a86465
+  test: cache miss, executing 1dca8c4431a90e36
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]
@@ -25,12 +25,12 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying output 8fc80cfff3b64237
+  build: cache hit, replaying logs d6b8b065382193a4
   build: 
   build: > build
   build: > echo 'building' > foo
   build: 
-  test: cache hit, replaying output c71366ccd6a86465
+  test: cache hit, replaying logs 1dca8c4431a90e36
   test: 
   test: > test
   test: > [[ ( -f foo ) && $(cat foo) == 'building' ]]
@@ -44,8 +44,8 @@ Run with --output-logs=hash-only
   $ ${TURBO} run test --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, suppressing output 8fc80cfff3b64237
-  test: cache hit, suppressing output c71366ccd6a86465
+  build: cache hit, suppressing logs d6b8b065382193a4
+  test: cache hit, suppressing logs 1dca8c4431a90e36
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total

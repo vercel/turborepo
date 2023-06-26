@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) pnpm
 
 Populate cache
@@ -42,7 +42,7 @@ Only b should have a cache miss
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  a:build: cache hit, replaying output [0-9a-f]+ (re)
+  a:build: cache hit, replaying logs [0-9a-f]+ (re)
   a:build: 
   a:build: > a@ build .*/apps/a (re)
   a:build: > echo 'building'

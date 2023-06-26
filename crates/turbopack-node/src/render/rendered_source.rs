@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{primitives::StringVc, Value};
+use turbo_tasks::{
+    primitives::{JsonValueVc, StringVc},
+    Value,
+};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
@@ -51,6 +54,8 @@ pub fn create_node_rendered_source(
     pathname: StringVc,
     entry: NodeEntryVc,
     fallback_page: DevHtmlAssetVc,
+    render_data: JsonValueVc,
+    debug: bool,
 ) -> ContentSourceVc {
     let source = NodeRenderContentSource {
         cwd,
@@ -61,6 +66,8 @@ pub fn create_node_rendered_source(
         pathname,
         entry,
         fallback_page,
+        render_data,
+        debug,
     }
     .cell();
     ConditionalContentSourceVc::new(
@@ -85,6 +92,8 @@ pub struct NodeRenderContentSource {
     pathname: StringVc,
     entry: NodeEntryVc,
     fallback_page: DevHtmlAssetVc,
+    render_data: JsonValueVc,
+    debug: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -154,7 +163,9 @@ impl ContentSource for NodeRenderContentSource {
                 specificity: this.specificity,
                 get_content: NodeRenderGetContentResult {
                     source: self_vc,
+                    render_data: this.render_data,
                     path: path.to_string(),
+                    debug: this.debug,
                 }
                 .cell()
                 .into(),
@@ -168,7 +179,9 @@ impl ContentSource for NodeRenderContentSource {
 #[turbo_tasks::value]
 struct NodeRenderGetContentResult {
     source: NodeRenderContentSourceVc,
+    render_data: JsonValueVc,
     path: String,
+    debug: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -178,6 +191,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
         ContentSourceDataVary {
             method: true,
             url: true,
+            original_url: true,
             raw_headers: true,
             raw_query: true,
             ..Default::default()
@@ -194,6 +208,7 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
         let ContentSourceData {
             method: Some(method),
             url: Some(url),
+            original_url: Some(original_url),
             raw_headers: Some(raw_headers),
             raw_query: Some(raw_query),
             ..
@@ -216,15 +231,18 @@ impl GetContentSourceContent for NodeRenderGetContentResult {
                 params: params.clone(),
                 method: method.clone(),
                 url: url.clone(),
+                original_url: original_url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: format!("/{}", source.pathname.await?),
+                path: source.pathname.await?.clone_value(),
+                data: Some(self.render_data.await?),
             }
             .cell(),
+            self.debug,
         )
         .issue_context(
             entry.module.ident().path(),
-            format!("server-side rendering /{}", source.pathname.await?),
+            format!("server-side rendering {}", source.pathname.await?),
         )
         .await?;
         Ok(match *result.await? {
@@ -289,7 +307,7 @@ impl Introspectable for NodeRenderContentSource {
                 StringVc::cell("intermediate asset".to_string()),
                 IntrospectableAssetVc::new(get_intermediate_asset(
                     entry.chunking_context,
-                    entry.module.into(),
+                    entry.module,
                     entry.runtime_entries,
                 )),
             ));

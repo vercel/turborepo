@@ -2,6 +2,7 @@ package runsummary
 
 import (
 	"encoding/json"
+	"sort"
 
 	"github.com/pkg/errors"
 	"github.com/segmentio/ksuid"
@@ -28,11 +29,6 @@ func (rsm *Meta) FormatJSON() ([]byte, error) {
 }
 
 func (rsm *Meta) normalize() {
-	for _, t := range rsm.RunSummary.Tasks {
-		t.EnvVars.Global = rsm.RunSummary.GlobalHashSummary.envVars
-		t.EnvVars.GlobalPassthrough = rsm.RunSummary.GlobalHashSummary.passthroughEnvVars
-	}
-
 	// Remove execution summary for dry runs
 	if rsm.runType == runTypeDryJSON {
 		rsm.RunSummary.ExecutionSummary = nil
@@ -47,7 +43,15 @@ func (rsm *Meta) normalize() {
 			task.cleanForSinglePackage()
 		}
 	}
+
+	sort.Sort(byTaskID(rsm.RunSummary.Tasks))
 }
+
+type byTaskID []*TaskSummary
+
+func (a byTaskID) Len() int           { return len(a) }
+func (a byTaskID) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byTaskID) Less(i, j int) bool { return a[i].TaskID < a[j].TaskID }
 
 // nonMonorepoRunSummary is an exact copy of RunSummary, but the JSON tags are structured
 // for rendering a single-package run of turbo. Notably, we want to always omit packages
@@ -55,12 +59,16 @@ func (rsm *Meta) normalize() {
 // This struct exists solely for the purpose of serializing to JSON and should not be
 // used anywhere else.
 type nonMonorepoRunSummary struct {
-	ID                ksuid.KSUID        `json:"id"`
-	Version           string             `json:"version"`
-	TurboVersion      string             `json:"turboVersion"`
-	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
-	Packages          []string           `json:"-"`
-	EnvMode           util.EnvMode       `json:"envMode"`
-	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
-	Tasks             []*TaskSummary     `json:"tasks"`
+	ID                 ksuid.KSUID        `json:"id"`
+	Version            string             `json:"version"`
+	TurboVersion       string             `json:"turboVersion"`
+	Monorepo           bool               `json:"monorepo"`
+	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
+	Packages           []string           `json:"-"`
+	EnvMode            util.EnvMode       `json:"envMode"`
+	FrameworkInference bool               `json:"frameworkInference"`
+	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
+	Tasks              []*TaskSummary     `json:"tasks"`
+	User               string             `json:"user"`
+	SCM                *scmState          `json:"scm"`
 }

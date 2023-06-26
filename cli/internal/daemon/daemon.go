@@ -78,19 +78,19 @@ func (d *daemon) logError(err error) {
 var _logFileFlags = os.O_WRONLY | os.O_APPEND | os.O_CREATE
 
 // ExecuteDaemon executes the root daemon command
-func ExecuteDaemon(ctx context.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, args *turbostate.ParsedArgsFromRust) error {
-	base, err := helper.GetCmdBase(args)
+func ExecuteDaemon(ctx context.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.ExecutionState) error {
+	base, err := helper.GetCmdBase(executionState)
 	if err != nil {
 		return err
 	}
-	if args.TestRun {
+	if executionState.CLIArgs.TestRun {
 		base.UI.Info("Daemon test run successful")
 		return nil
 	}
 
 	idleTimeout := 4 * time.Hour
-	if args.Command.Daemon.IdleTimeout != "" {
-		idleTimeout, err = time.ParseDuration(args.Command.Daemon.IdleTimeout)
+	if executionState.CLIArgs.Command.Daemon.IdleTimeout != "" {
+		idleTimeout, err = time.ParseDuration(executionState.CLIArgs.Command.Daemon.IdleTimeout)
 		if err != nil {
 			return err
 		}

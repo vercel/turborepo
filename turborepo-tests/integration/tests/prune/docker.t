@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) monorepo_with_root_dep
 
   $ ${TURBO} prune --scope=web --docker

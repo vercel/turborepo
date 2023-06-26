@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{primitives::StringVc, Value};
+use turbo_tasks::{
+    primitives::{JsonValueVc, StringVc},
+    Value,
+};
 use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::introspect::{
@@ -29,6 +32,8 @@ pub fn create_node_api_source(
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
+    render_data: JsonValueVc,
+    debug: bool,
 ) -> ContentSourceVc {
     NodeApiContentSource {
         cwd,
@@ -38,6 +43,8 @@ pub fn create_node_api_source(
         pathname,
         route_match,
         entry,
+        render_data,
+        debug,
     }
     .cell()
     .into()
@@ -58,6 +65,8 @@ pub struct NodeApiContentSource {
     pathname: StringVc,
     route_match: RouteMatcherVc,
     entry: NodeEntryVc,
+    render_data: JsonValueVc,
+    debug: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -82,7 +91,9 @@ impl ContentSource for NodeApiContentSource {
                 specificity: this.specificity,
                 get_content: NodeApiGetContentResult {
                     source: self_vc,
+                    render_data: this.render_data,
                     path: path.to_string(),
+                    debug: this.debug,
                 }
                 .cell()
                 .into(),
@@ -96,7 +107,9 @@ impl ContentSource for NodeApiContentSource {
 #[turbo_tasks::value]
 struct NodeApiGetContentResult {
     source: NodeApiContentSourceVc,
+    render_data: JsonValueVc,
     path: String,
+    debug: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -106,6 +119,7 @@ impl GetContentSourceContent for NodeApiGetContentResult {
         ContentSourceDataVary {
             method: true,
             url: true,
+            original_url: true,
             raw_headers: true,
             raw_query: true,
             body: true,
@@ -114,6 +128,7 @@ impl GetContentSourceContent for NodeApiGetContentResult {
         }
         .cell()
     }
+
     #[turbo_tasks::function]
     async fn get(&self, data: Value<ContentSourceData>) -> Result<ContentSourceContentVc> {
         let source = self.source.await?;
@@ -123,6 +138,7 @@ impl GetContentSourceContent for NodeApiGetContentResult {
         let ContentSourceData {
             method: Some(method),
             url: Some(url),
+            original_url: Some(original_url),
             raw_headers: Some(raw_headers),
             raw_query: Some(raw_query),
             body: Some(body),
@@ -145,12 +161,15 @@ impl GetContentSourceContent for NodeApiGetContentResult {
                 params: params.clone(),
                 method: method.clone(),
                 url: url.clone(),
+                original_url: original_url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
                 path: format!("/{}", self.path),
+                data: Some(self.render_data.await?),
             }
             .cell(),
             *body,
+            self.debug,
         ))
         .cell())
     }
@@ -194,7 +213,7 @@ impl Introspectable for NodeApiContentSource {
                 StringVc::cell("intermediate asset".to_string()),
                 IntrospectableAssetVc::new(get_intermediate_asset(
                     entry.chunking_context,
-                    entry.module.into(),
+                    entry.module,
                     entry.runtime_entries,
                 )),
             ));

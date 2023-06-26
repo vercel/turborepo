@@ -25,6 +25,7 @@ use hyper::{
     Request, Response, Server,
 };
 use socket2::{Domain, Protocol, Socket, Type};
+use tracing::{event, info_span, Instrument, Level, Span};
 use turbo_tasks::{
     run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
     TransientInstance, TransientValue, TurboTasksApi,
@@ -107,6 +108,12 @@ impl DevServer {
         // real TCP listener, see if it bound, and get its bound address.
         let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))
             .context("unable to create socket")?;
+        // Allow the socket to be reused immediately after closing. This ensures that
+        // the dev server can be restarted on the same address without a buffer time for
+        // the OS to release the socket.
+        // https://docs.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
+        #[cfg(not(windows))]
+        let _ = socket.set_reuse_address(true);
         if matches!(addr, SocketAddr::V6(_)) {
             // When possible bind to v4 and v6, otherwise ignore the error
             let _ = socket.set_only_v6(false);
@@ -139,11 +146,13 @@ impl DevServerBuilder {
             let get_issue_reporter = get_issue_reporter.clone();
             async move {
                 let handler = move |request: Request<hyper::Body>| {
+                    let request_span = info_span!(parent: None, "request", name = ?request.uri());
                     let start = Instant::now();
                     let tt = tt.clone();
                     let get_issue_reporter = get_issue_reporter.clone();
                     let source_provider = source_provider.clone();
                     let future = async move {
+                        event!(parent: Span::current(), Level::DEBUG, "request start");
                         let reason = ServerRequest {
                             method: request.method().clone(),
                             uri: request.uri().clone(),
@@ -227,6 +236,7 @@ impl DevServerBuilder {
                             }
                         }
                     }
+                    .instrument(request_span)
                 };
                 anyhow::Ok(service_fn(handler))
             }

@@ -6,10 +6,10 @@ use turbo_tasks_env::ProcessEnvVc;
 use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::EcmascriptModuleAssetVc,
+    ecmascript::{EcmascriptModuleAssetVc, TransformPluginVc},
     module_options::{
-        EmotionTransformConfigVc, JsxTransformOptions, ModuleOptionsContext,
-        ModuleOptionsContextVc, StyledComponentsTransformConfigVc,
+        CustomEcmascriptTransformPlugins, CustomEcmascriptTransformPluginsVc, JsxTransformOptions,
+        ModuleOptionsContext, ModuleOptionsContextVc,
     },
     resolve_options_context::{ResolveOptionsContext, ResolveOptionsContextVc},
     transition::TransitionsByNameVc,
@@ -17,7 +17,7 @@ use turbopack::{
 };
 use turbopack_cli_utils::runtime_entry::{RuntimeEntriesVc, RuntimeEntry};
 use turbopack_core::{
-    chunk::{ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc},
+    chunk::{ChunkableAssetVc, ChunkingContextVc},
     compile_time_defines,
     compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     context::AssetContextVc,
@@ -34,6 +34,11 @@ use turbopack_dev::{react_refresh::assert_can_resolve_react_refresh, DevChunking
 use turbopack_dev_server::{
     html::DevHtmlAssetVc,
     source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc},
+};
+use turbopack_ecmascript_plugins::transform::{
+    emotion::{EmotionTransformConfig, EmotionTransformer},
+    styled_components::{StyledComponentsTransformConfig, StyledComponentsTransformer},
+    styled_jsx::StyledJsxTransformer,
 };
 use turbopack_node::execution_context::ExecutionContextVc;
 
@@ -53,10 +58,10 @@ pub async fn get_client_import_map(project_path: FileSystemPathVc) -> Result<Imp
     import_map.insert_singleton_alias("react-dom", project_path);
 
     import_map.insert_wildcard_alias(
-        "@vercel/turbopack-dev/",
+        "@vercel/turbopack-ecmascript-runtime/",
         ImportMapping::PrimaryAlternative(
             "./*".to_string(),
-            Some(turbopack_dev::embed_js::embed_fs().root()),
+            Some(turbopack_ecmascript_runtime::embed_fs().root()),
         )
         .cell(),
     );
@@ -108,18 +113,39 @@ async fn get_client_module_options_context(
             .await?
             .is_found();
 
+    let enable_jsx = Some(
+        JsxTransformOptions {
+            react_refresh: enable_react_refresh,
+            ..Default::default()
+        }
+        .cell(),
+    );
+
+    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPluginsVc::cell(
+        CustomEcmascriptTransformPlugins {
+            source_transforms: vec![
+                TransformPluginVc::cell(Box::new(
+                    EmotionTransformer::new(&EmotionTransformConfig::default())
+                        .expect("Should be able to create emotion transformer"),
+                )),
+                TransformPluginVc::cell(Box::new(StyledComponentsTransformer::new(
+                    &StyledComponentsTransformConfig::default(),
+                ))),
+                TransformPluginVc::cell(Box::new(StyledJsxTransformer::new())),
+            ],
+            output_transforms: vec![],
+        },
+    ));
+
     let module_options_context = ModuleOptionsContext {
-        enable_jsx: Some(JsxTransformOptions::default().cell()),
-        enable_emotion: Some(EmotionTransformConfigVc::default()),
-        enable_react_refresh,
-        enable_styled_components: Some(StyledComponentsTransformConfigVc::default()),
-        enable_styled_jsx: true,
+        enable_jsx,
         enable_postcss_transform: Some(Default::default()),
         enable_typescript_transform: Some(Default::default()),
         rules: vec![(
             foreign_code_context_condition().await?,
             module_options_context.clone().cell(),
         )],
+        custom_ecma_transform_plugins,
         ..module_options_context
     }
     .cell();
@@ -254,20 +280,20 @@ pub async fn create_web_entry_source(
         .try_join()
         .await?;
 
-    let chunk_groups: Vec<_> = entries
+    let entries: Vec<_> = entries
         .into_iter()
         .flatten()
         .map(|module| async move {
             if let Some(ecmascript) = EcmascriptModuleAssetVc::resolve_from(module).await? {
-                let chunk_group = chunking_context.evaluated_chunk_group(
-                    ecmascript.as_root_chunk(chunking_context),
-                    runtime_entries.with_entry(ecmascript.into()),
-                );
-                Ok(chunk_group)
+                Ok((
+                    ecmascript.into(),
+                    chunking_context,
+                    Some(runtime_entries.with_entry(ecmascript.into())),
+                ))
             } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
                 // TODO this is missing runtime code, so it's probably broken and we should also
                 // add an ecmascript chunk with the runtime code
-                Ok(chunking_context.chunk_group(chunkable.as_root_chunk(chunking_context)))
+                Ok((chunkable, chunking_context, None))
             } else {
                 // TODO convert into a serve-able asset
                 Err(anyhow!(
@@ -279,7 +305,7 @@ pub async fn create_web_entry_source(
         .try_join()
         .await?;
 
-    let entry_asset = DevHtmlAssetVc::new(server_root.join("index.html"), chunk_groups).into();
+    let entry_asset = DevHtmlAssetVc::new(server_root.join("index.html"), entries).into();
 
     let graph = if eager_compile {
         AssetGraphContentSourceVc::new_eager(server_root, entry_asset)

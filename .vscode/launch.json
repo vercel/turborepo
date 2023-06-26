@@ -130,6 +130,15 @@
       "program": "${workspaceRoot}/target/debug/turbo",
       "args": ["build"],
       "cwd": "${workspaceRoot}/examples/basic"
+    },
+    {
+      "name": "Daemon",
+      "type": "lldb",
+      "request": "launch",
+      "preLaunchTask": "prepare turbo",
+      "program": "${workspaceRoot}/target/debug/turbo",
+      "args": ["daemon"],
+      "cwd": "${workspaceRoot}"
     }
   ]
 }

@@ -27,6 +27,8 @@ type RunOpts struct {
 	Parallel bool
 
 	EnvMode EnvMode
+	// Whether or not to infer the framework for each workspace.
+	FrameworkInference bool
 	// The filename to write a perf profile.
 	Profile string
 	// If true, continue task executions even if a task fails.
@@ -45,6 +47,9 @@ type RunOpts struct {
 
 	// logPrefix controls whether we should print a prefix in task logs
 	LogPrefix string
+
+	// The order of the logs, either 'grouped' or 'stream'
+	LogOrder string
 
 	// Whether turbo should create a run summary
 	Summarize bool

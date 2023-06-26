@@ -7,6 +7,17 @@ inputs:
   github-token:
     description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
     required: true
+  setup-rust:
+    description: "Install Rust toolchain to build Turborepo"
+    required: false
+    type: boolean
+    default: true
+  setup-go:
+    description: "Install Go toolchain to build Turborepo"
+    required: false
+    type: boolean
+    default: true
+
 runs:
   using: "composite"
   steps:
@@ -14,14 +25,23 @@ runs:
       uses: ./.github/actions/setup-node
 
     - name: "Setup Go"
+      if: inputs.setup-go == 'true'
       uses: ./.github/actions/setup-go
       with:
         github-token: ${{ inputs.github-token }}
 
     - name: "Setup Rust"
+      if: inputs.setup-rust == 'true'
       uses: ./.github/actions/setup-rust
       with:
         target: ${{ inputs.target }}
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
+
+    - name: Install Turbo globally
+      shell: bash
+      run: |
+        VERSION=$(npm view turbo --json | jq -r '.versions | last')
+        echo "Latest pubblished version: $VERSION"
+        npm i -g turbo@$VERSION

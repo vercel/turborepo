@@ -29,13 +29,19 @@ pub fn start_spinner(message: &str) -> ProgressBar {
 }
 
 /// Helper struct to apply any necessary formatting to UI output
+#[derive(Debug)]
 pub struct UI {
-    should_strip_ansi: bool,
+    pub should_strip_ansi: bool,
 }
 
 impl UI {
     pub fn new(should_strip_ansi: bool) -> Self {
         Self { should_strip_ansi }
+    }
+
+    // STUB
+    pub fn is_ci(&self) -> bool {
+        env::var("CI").is_ok()
     }
 
     /// Infer the color choice from environment variables and checking if stdout
