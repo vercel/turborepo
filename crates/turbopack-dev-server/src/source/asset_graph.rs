@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 use indexmap::{indexset, IndexSet};
-use turbo_tasks::{primitives::StringVc, State, Value, ValueToString};
+use turbo_tasks::{primitives::StringVc, CompletionVc, State, Value, ValueToString};
 use turbo_tasks_fs::{FileSystemPath, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
@@ -17,10 +17,10 @@ use turbopack_core::{
 
 use super::{
     route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc, RouteType},
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
-    GetContentSourceContent,
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceSideEffect,
+    ContentSourceVc, GetContentSourceContent,
 };
-use crate::source::GetContentSourceContentVc;
+use crate::source::{ContentSourceSideEffectVc, GetContentSourceContentVc};
 
 #[turbo_tasks::value(transparent)]
 struct AssetsMap(HashMap<String, AssetVc>);
@@ -202,21 +202,29 @@ impl AssetGraphGetContentSourceContentVc {
 impl GetContentSourceContent for AssetGraphGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
-        &self,
+        self_vc: AssetGraphGetContentSourceContentVc,
         _path: &str,
         _data: Value<ContentSourceData>,
     ) -> Result<ContentSourceContentVc> {
+        let this = self_vc.await?;
+        turbo_tasks::emit(self_vc.as_content_source_side_effect());
+        Ok(ContentSourceContentVc::static_content(
+            this.asset.versioned_content(),
+        ))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ContentSourceSideEffect for AssetGraphGetContentSourceContent {
+    #[turbo_tasks::function]
+    async fn apply(&self) -> Result<CompletionVc> {
         let source = self.source.await?;
 
-        let asset = self.asset;
-
         if let Some(expanded) = &source.expanded {
+            let asset = self.asset;
             expanded.update_conditionally(|expanded| expanded.insert(asset));
         }
-
-        Ok(ContentSourceContentVc::static_content(
-            asset.versioned_content(),
-        ))
+        Ok(CompletionVc::new())
     }
 }
 

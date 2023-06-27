@@ -1,14 +1,15 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, State, Value};
+use turbo_tasks::{primitives::StringVc, CompletionVc, State, Value};
 use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 use super::{
     route_tree::{MapGetContentSourceContent, RouteTreeVc, RouteTreesVc},
-    ContentSource, ContentSourceData, ContentSourceDataVaryVc, ContentSourceVc,
-    GetContentSourceContent, GetContentSourceContentVc,
+    ContentSource, ContentSourceData, ContentSourceDataVaryVc, ContentSourceSideEffect,
+    ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
 };
 use crate::source::{
-    route_tree::MapGetContentSourceContentVc, ContentSourceContentVc, ContentSourcesVc,
+    route_tree::MapGetContentSourceContentVc, ContentSourceContentVc, ContentSourceSideEffectVc,
+    ContentSourcesVc,
 };
 
 /// Combines two [ContentSource]s like the [CombinedContentSource], but only
@@ -157,11 +158,20 @@ impl GetContentSourceContent for ActivateOnGetContentSource {
 
     #[turbo_tasks::function]
     async fn get(
-        &self,
+        self_vc: ActivateOnGetContentSourceVc,
         path: &str,
         data: Value<ContentSourceData>,
     ) -> Result<ContentSourceContentVc> {
+        turbo_tasks::emit(self_vc.as_content_source_side_effect());
+        Ok(self_vc.await?.get_content.get(path, data))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ContentSourceSideEffect for ActivateOnGetContentSource {
+    #[turbo_tasks::function]
+    async fn apply(&self) -> Result<CompletionVc> {
         self.source.await?.activated.set(true);
-        Ok(self.get_content.get(path, data))
+        Ok(CompletionVc::new())
     }
 }

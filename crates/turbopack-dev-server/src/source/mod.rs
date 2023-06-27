@@ -18,7 +18,9 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 use futures::{stream::Stream as StreamTrait, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, util::SharedError, Value};
+use turbo_tasks::{
+    primitives::StringVc, trace::TraceRawVcs, util::SharedError, CompletionVc, Value,
+};
 use turbo_tasks_bytes::{Bytes, Stream, StreamRead};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbo_tasks_hash::{DeterministicHash, DeterministicHasher, Xxh3Hash64Hasher};
@@ -89,6 +91,14 @@ pub enum ContentSourceContent {
     Static(StaticContentVc),
     HttpProxy(ProxyResultVc),
     Rewrite(RewriteVc),
+}
+
+/// This trait can be emitted as collectible and will be applied after the
+/// request is handled and it's ensured that it finishes before the next request
+/// is handled.
+#[turbo_tasks::value_trait]
+pub trait ContentSourceSideEffect {
+    fn apply(&self) -> CompletionVc;
 }
 
 #[turbo_tasks::value_impl]
