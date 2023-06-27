@@ -35,7 +35,7 @@ use self::{
 };
 use crate::{
     embed::{CssEmbed, CssEmbeddable, CssEmbeddableVc},
-    parse::ParseResultSourceMapVc,
+    parse::ParseCssResultSourceMapVc,
     util::stringify_js,
     ImportAssetReferenceVc,
 };
@@ -485,7 +485,7 @@ pub enum CssImport {
 pub struct CssChunkItemContent {
     pub inner_code: Rope,
     pub imports: Vec<CssImport>,
-    pub source_map: Option<ParseResultSourceMapVc>,
+    pub source_map: Option<ParseCssResultSourceMapVc>,
 }
 
 #[turbo_tasks::value_trait]

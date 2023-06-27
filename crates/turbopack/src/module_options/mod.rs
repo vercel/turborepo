@@ -1,19 +1,21 @@
+pub(crate) mod custom_module_type;
 pub mod module_options_context;
 pub mod module_rule;
 pub mod rule_condition;
 
 use anyhow::{Context, Result};
+pub use custom_module_type::{CustomModuleType, CustomModuleTypeVc};
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
 use turbo_tasks::primitives::OptionStringVc;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 use turbopack_core::{
-    reference_type::{ReferenceType, UrlReferenceSubType},
+    reference_type::{CssReferenceSubType, ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
     source_transform::SourceTransformsVc,
 };
-use turbopack_css::{CssInputTransform, CssInputTransformsVc};
+use turbopack_css::{CssInputTransform, CssInputTransformsVc, CssModuleAssetType};
 use turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType,
 };
@@ -223,7 +225,12 @@ impl ModuleOptionsVc {
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Json)],
             ),
             ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
+                ModuleRuleCondition::all(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
+                    ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
+                        ReferenceType::Css(CssReferenceSubType::Internal),
+                    )),
+                ]),
                 [
                     if let Some(options) = enable_postcss_transform {
                         let execution_context = execution_context
@@ -249,19 +256,44 @@ impl ModuleOptionsVc {
                     } else {
                         None
                     },
-                    Some(ModuleRuleEffect::ModuleType(ModuleType::Css(
-                        css_transforms,
-                    ))),
+                    Some(ModuleRuleEffect::ModuleType(ModuleType::CssGlobal)),
                 ]
                 .into_iter()
                 .flatten()
                 .collect(),
             ),
             ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::CssModule(
-                    css_transforms,
-                ))],
+                ModuleRuleCondition::all(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
+                    ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
+                        ReferenceType::Css(CssReferenceSubType::Internal),
+                    )),
+                ]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::CssModule)],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::all(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
+                    ModuleRuleCondition::ReferenceType(ReferenceType::Css(
+                        CssReferenceSubType::Internal,
+                    )),
+                ]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                    ty: CssModuleAssetType::Default,
+                    transforms: css_transforms,
+                })],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::all(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
+                    ModuleRuleCondition::ReferenceType(ReferenceType::Css(
+                        CssReferenceSubType::Internal,
+                    )),
+                ]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                    ty: CssModuleAssetType::Module,
+                    transforms: css_transforms,
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::any(vec![

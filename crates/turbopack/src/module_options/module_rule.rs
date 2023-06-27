@@ -3,14 +3,13 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::trace::TraceRawVcs;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    asset::AssetVc, plugin::CustomModuleTypeVc, reference_type::ReferenceType,
-    source_transform::SourceTransformsVc,
+    asset::AssetVc, reference_type::ReferenceType, source_transform::SourceTransformsVc,
 };
-use turbopack_css::CssInputTransformsVc;
+use turbopack_css::{CssInputTransformsVc, CssModuleAssetType};
 use turbopack_ecmascript::{EcmascriptInputTransformsVc, EcmascriptOptions};
 use turbopack_mdx::MdxTransformOptionsVc;
 
-use super::ModuleRuleCondition;
+use super::{CustomModuleTypeVc, ModuleRuleCondition};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
 pub struct ModuleRule {
@@ -74,8 +73,12 @@ pub enum ModuleType {
         transforms: EcmascriptInputTransformsVc,
         options: MdxTransformOptionsVc,
     },
-    Css(CssInputTransformsVc),
-    CssModule(CssInputTransformsVc),
+    CssGlobal,
+    CssModule,
+    Css {
+        ty: CssModuleAssetType,
+        transforms: CssInputTransformsVc,
+    },
     Static,
     Custom(CustomModuleTypeVc),
 }

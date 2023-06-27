@@ -45,6 +45,12 @@ pub enum EcmaScriptModulesReferenceSubType {
 pub enum CssReferenceSubType {
     AtImport,
     Compose,
+    /// Reference from any asset to a CSS-parseable asset.
+    ///
+    /// This marks the boundary between non-CSS and CSS assets. The Next.js App
+    /// Router implementation uses this to inject client references in-between
+    /// Global/Module CSS assets and the underlying CSS assets.
+    Internal,
     Custom(u8),
     Undefined,
 }
