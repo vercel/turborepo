@@ -3468,6 +3468,83 @@
 <a href="#3468" id="3468">3468</a>
 <a href="#3469" id="3469">3469</a>
 <a href="#3470" id="3470">3470</a>
+<a href="#3471" id="3471">3471</a>
+<a href="#3472" id="3472">3472</a>
+<a href="#3473" id="3473">3473</a>
+<a href="#3474" id="3474">3474</a>
+<a href="#3475" id="3475">3475</a>
+<a href="#3476" id="3476">3476</a>
+<a href="#3477" id="3477">3477</a>
+<a href="#3478" id="3478">3478</a>
+<a href="#3479" id="3479">3479</a>
+<a href="#3480" id="3480">3480</a>
+<a href="#3481" id="3481">3481</a>
+<a href="#3482" id="3482">3482</a>
+<a href="#3483" id="3483">3483</a>
+<a href="#3484" id="3484">3484</a>
+<a href="#3485" id="3485">3485</a>
+<a href="#3486" id="3486">3486</a>
+<a href="#3487" id="3487">3487</a>
+<a href="#3488" id="3488">3488</a>
+<a href="#3489" id="3489">3489</a>
+<a href="#3490" id="3490">3490</a>
+<a href="#3491" id="3491">3491</a>
+<a href="#3492" id="3492">3492</a>
+<a href="#3493" id="3493">3493</a>
+<a href="#3494" id="3494">3494</a>
+<a href="#3495" id="3495">3495</a>
+<a href="#3496" id="3496">3496</a>
+<a href="#3497" id="3497">3497</a>
+<a href="#3498" id="3498">3498</a>
+<a href="#3499" id="3499">3499</a>
+<a href="#3500" id="3500">3500</a>
+<a href="#3501" id="3501">3501</a>
+<a href="#3502" id="3502">3502</a>
+<a href="#3503" id="3503">3503</a>
+<a href="#3504" id="3504">3504</a>
+<a href="#3505" id="3505">3505</a>
+<a href="#3506" id="3506">3506</a>
+<a href="#3507" id="3507">3507</a>
+<a href="#3508" id="3508">3508</a>
+<a href="#3509" id="3509">3509</a>
+<a href="#3510" id="3510">3510</a>
+<a href="#3511" id="3511">3511</a>
+<a href="#3512" id="3512">3512</a>
+<a href="#3513" id="3513">3513</a>
+<a href="#3514" id="3514">3514</a>
+<a href="#3515" id="3515">3515</a>
+<a href="#3516" id="3516">3516</a>
+<a href="#3517" id="3517">3517</a>
+<a href="#3518" id="3518">3518</a>
+<a href="#3519" id="3519">3519</a>
+<a href="#3520" id="3520">3520</a>
+<a href="#3521" id="3521">3521</a>
+<a href="#3522" id="3522">3522</a>
+<a href="#3523" id="3523">3523</a>
+<a href="#3524" id="3524">3524</a>
+<a href="#3525" id="3525">3525</a>
+<a href="#3526" id="3526">3526</a>
+<a href="#3527" id="3527">3527</a>
+<a href="#3528" id="3528">3528</a>
+<a href="#3529" id="3529">3529</a>
+<a href="#3530" id="3530">3530</a>
+<a href="#3531" id="3531">3531</a>
+<a href="#3532" id="3532">3532</a>
+<a href="#3533" id="3533">3533</a>
+<a href="#3534" id="3534">3534</a>
+<a href="#3535" id="3535">3535</a>
+<a href="#3536" id="3536">3536</a>
+<a href="#3537" id="3537">3537</a>
+<a href="#3538" id="3538">3538</a>
+<a href="#3539" id="3539">3539</a>
+<a href="#3540" id="3540">3540</a>
+<a href="#3541" id="3541">3541</a>
+<a href="#3542" id="3542">3542</a>
+<a href="#3543" id="3543">3543</a>
+<a href="#3544" id="3544">3544</a>
+<a href="#3545" id="3545">3545</a>
+<a href="#3546" id="3546">3546</a>
+<a href="#3547" id="3547">3547</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::Ordering,
@@ -3891,6 +3968,9 @@
     <span class="doccomment">/// A function call without a this context.
     /// `(total_node_count, callee, args)`
     </span>Call(usize, Box&lt;JsValue&gt;, Vec&lt;JsValue&gt;),
+    <span class="doccomment">/// A super call to the parent constructor.
+    /// `(total_node_count, args)`
+    </span>SuperCall(usize, Vec&lt;JsValue&gt;),
     <span class="doccomment">/// A function call with a this context.
     /// `(total_node_count, obj, prop, args)`
     </span>MemberCall(usize, Box&lt;JsValue&gt;, Box&lt;JsValue&gt;, Vec&lt;JsValue&gt;),
@@ -4056,6 +4136,14 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                     .join(<span class="string">&quot;, &quot;</span>)
             ),
+            JsValue::SuperCall(<span class="kw">_</span>, list) =&gt; <span class="macro">write!</span>(
+                f,
+                <span class="string">&quot;super({})&quot;</span>,
+                list.iter()
+                    .map(|v| v.to_string())
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+                    .join(<span class="string">&quot;, &quot;</span>)
+            ),
             JsValue::MemberCall(<span class="kw">_</span>, obj, prop, list) =&gt; <span class="macro">write!</span>(
                 f,
                 <span class="string">&quot;{}[{}]({})&quot;</span>,
@@ -4150,6 +4238,7 @@
             | JsValue::Logical(..)
             | JsValue::Binary(..)
             | JsValue::Call(..)
+            | JsValue::SuperCall(..)
             | JsValue::MemberCall(..) =&gt; JsValueMetaKind::Operation,
             JsValue::Variable(..)
             | JsValue::Argument(..)
@@ -4281,6 +4370,10 @@
         <span class="self">Self</span>::Call(<span class="number">1 </span>+ f.total_nodes() + total_nodes(<span class="kw-2">&amp;</span>args), f, args)
     }
 
+    <span class="kw">pub fn </span>super_call(args: Vec&lt;JsValue&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::SuperCall(<span class="number">1 </span>+ total_nodes(<span class="kw-2">&amp;</span>args), args)
+    }
+
     <span class="kw">pub fn </span>member_call(o: Box&lt;JsValue&gt;, p: Box&lt;JsValue&gt;, args: Vec&lt;JsValue&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::MemberCall(
             <span class="number">1 </span>+ o.total_nodes() + p.total_nodes() + total_nodes(<span class="kw-2">&amp;</span>args),
@@ -4326,6 +4419,7 @@
             | JsValue::Logical(c, <span class="kw">_</span>, <span class="kw">_</span>)
             | JsValue::Binary(c, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>)
             | JsValue::Call(c, <span class="kw">_</span>, <span class="kw">_</span>)
+            | JsValue::SuperCall(c, <span class="kw">_</span>)
             | JsValue::MemberCall(c, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>)
             | JsValue::Member(c, <span class="kw">_</span>, <span class="kw">_</span>)
             | JsValue::Function(c, <span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="kw-2">*</span>c,
@@ -4378,6 +4472,9 @@
             }
             JsValue::Call(c, f, list) =&gt; {
                 <span class="kw-2">*</span>c = <span class="number">1 </span>+ f.total_nodes() + total_nodes(list);
+            }
+            JsValue::SuperCall(c, list) =&gt; {
+                <span class="kw-2">*</span>c = <span class="number">1 </span>+ total_nodes(list);
             }
             JsValue::MemberCall(c, o, m, list) =&gt; {
                 <span class="kw-2">*</span>c = <span class="number">1 </span>+ o.total_nodes() + m.total_nodes() + total_nodes(list);
@@ -4456,6 +4553,10 @@
                 }
                 JsValue::Call(<span class="kw">_</span>, f, args) =&gt; {
                     make_max_unknown([<span class="kw-2">&amp;mut **</span>f].into_iter().chain(args.iter_mut()));
+                    <span class="self">self</span>.update_total_nodes();
+                }
+                JsValue::SuperCall(<span class="kw">_</span>, args) =&gt; {
+                    make_max_unknown(args.iter_mut());
                     <span class="self">self</span>.update_total_nodes();
                 }
                 JsValue::MemberCall(<span class="kw">_</span>, o, p, args) =&gt; {
@@ -4685,6 +4786,26 @@
                 <span class="macro">format!</span>(
                     <span class="string">&quot;{}({})&quot;</span>,
                     callee.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
+                    pretty_join(
+                        <span class="kw-2">&amp;</span>list
+                            .iter()
+                            .map(|v| v.explain_internal_inner(
+                                hints,
+                                indent_depth + <span class="number">1</span>,
+                                depth,
+                                unknown_depth
+                            ))
+                            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+                        indent_depth,
+                        <span class="string">&quot;, &quot;</span>,
+                        <span class="string">&quot;,&quot;</span>,
+                        <span class="string">&quot;&quot;
+                    </span>)
+                )
+            }
+            JsValue::SuperCall(<span class="kw">_</span>, list) =&gt; {
+                <span class="macro">format!</span>(
+                    <span class="string">&quot;super({})&quot;</span>,
                     pretty_join(
                         <span class="kw-2">&amp;</span>list
                             .iter()
@@ -5301,7 +5422,8 @@
             | JsValue::Argument(..)
             | JsValue::Call(..)
             | JsValue::MemberCall(..)
-            | JsValue::Member(..) =&gt; <span class="prelude-val">None</span>,
+            | JsValue::Member(..)
+            | JsValue::SuperCall(..) =&gt; <span class="prelude-val">None</span>,
         }
     }
 
@@ -5495,6 +5617,18 @@
             JsValue::Call(<span class="kw">_</span>, <span class="kw">box </span>callee, list) =&gt; {
                 <span class="kw">let </span>(new_callee, <span class="kw-2">mut </span>modified) = <span class="macro-nonterminal">$visit_fn</span>(take(callee), $(<span class="macro-nonterminal">$args</span>),+).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw-2">*</span>callee = new_callee;
+                <span class="kw">for </span>item <span class="kw">in </span>list.iter_mut() {
+                    <span class="kw">let </span>(v, m) = <span class="macro-nonterminal">$visit_fn</span>(take(item), $(<span class="macro-nonterminal">$args</span>),+).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw-2">*</span>item = v;
+                    <span class="kw">if </span>m {
+                        modified = <span class="bool-val">true
+                    </span>}
+                }
+                <span class="macro-nonterminal">$value</span>.update_total_nodes();
+                (<span class="macro-nonterminal">$value</span>, modified)
+            }
+            JsValue::SuperCall(<span class="kw">_</span>, list) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>modified = <span class="bool-val">false</span>;
                 <span class="kw">for </span>item <span class="kw">in </span>list.iter_mut() {
                     <span class="kw">let </span>(v, m) = <span class="macro-nonterminal">$visit_fn</span>(take(item), $(<span class="macro-nonterminal">$args</span>),+).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw-2">*</span>item = v;
@@ -5771,6 +5905,18 @@
                 }
                 modified
             }
+            JsValue::SuperCall(<span class="kw">_</span>, list) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>modified = <span class="bool-val">false</span>;
+                <span class="kw">for </span>item <span class="kw">in </span>list.iter_mut() {
+                    <span class="kw">if </span>visitor(item) {
+                        modified = <span class="bool-val">true
+                    </span>}
+                }
+                <span class="kw">if </span>modified {
+                    <span class="self">self</span>.update_total_nodes();
+                }
+                modified
+            }
             JsValue::MemberCall(<span class="kw">_</span>, obj, prop, list) =&gt; {
                 <span class="kw">let </span>m1 = visitor(obj);
                 <span class="kw">let </span>m2 = visitor(prop);
@@ -5935,6 +6081,11 @@
             }
             JsValue::Call(<span class="kw">_</span>, callee, list) =&gt; {
                 visitor(callee);
+                <span class="kw">for </span>item <span class="kw">in </span>list.iter() {
+                    visitor(item);
+                }
+            }
+            JsValue::SuperCall(<span class="kw">_</span>, list) =&gt; {
                 <span class="kw">for </span>item <span class="kw">in </span>list.iter() {
                     visitor(item);
                 }
@@ -6274,6 +6425,9 @@
             JsValue::Call(<span class="kw">_</span>, a, b) =&gt; {
                 a.similar_hash(state, depth - <span class="number">1</span>);
                 all_similar_hash(b, state, depth - <span class="number">1</span>);
+            }
+            JsValue::SuperCall(<span class="kw">_</span>, a) =&gt; {
+                all_similar_hash(a, state, depth - <span class="number">1</span>);
             }
             JsValue::MemberCall(<span class="kw">_</span>, a, b, c) =&gt; {
                 a.similar_hash(state, depth - <span class="number">1</span>);

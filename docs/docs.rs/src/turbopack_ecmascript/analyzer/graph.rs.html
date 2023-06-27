@@ -1749,6 +1749,27 @@
 <a href="#1749" id="1749">1749</a>
 <a href="#1750" id="1750">1750</a>
 <a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
+<a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
+<a href="#1770" id="1770">1770</a>
+<a href="#1771" id="1771">1771</a>
+<a href="#1772" id="1772">1772</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::HashMap,
     iter,
@@ -2270,6 +2291,21 @@
             }
 
             Expr::Call(CallExpr {
+                callee: Callee::Super(<span class="kw">_</span>),
+                args,
+                ..
+            }) =&gt; {
+                <span class="comment">// We currently do not handle spreads.
+                </span><span class="kw">if </span>args.iter().any(|arg| arg.spread.is_some()) {
+                    <span class="kw">return </span>JsValue::unknown_empty(<span class="string">&quot;spread in function calls is not supported&quot;</span>);
+                }
+
+                <span class="kw">let </span>args = args.iter().map(|arg| <span class="self">self</span>.eval(<span class="kw-2">&amp;</span>arg.expr)).collect();
+
+                JsValue::super_call(args)
+            }
+
+            Expr::Call(CallExpr {
                 callee: Callee::Import(<span class="kw">_</span>),
                 args,
                 ..
@@ -2649,7 +2685,13 @@
                     });
                 }
             }
-            <span class="kw">_ </span>=&gt; {}
+            Callee::Super(<span class="kw">_</span>) =&gt; <span class="self">self</span>.add_effect(Effect::Call {
+                func: <span class="self">self</span>.eval_context.eval(<span class="kw-2">&amp;</span>Expr::Call(n.clone())),
+                args,
+                ast_path: as_parent_path(ast_path),
+                span: n.span(),
+                in_try: is_in_try(ast_path),
+            }),
         }
     }
 
