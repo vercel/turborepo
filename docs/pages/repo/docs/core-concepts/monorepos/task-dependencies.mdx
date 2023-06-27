@@ -120,70 +120,6 @@ finished.
 
 </Callout>
 
-## Dependencies outside of a task
-
-Let's say you have a set of packages modeled as workspaces in your codebase to
-define some math functions: `add`, `subtract`, and `multiply`. `subtract` is
-implemented by calling `add` with a negative number and `multiply` works by
-calling `add` in a loop. So, `add` is a dependency of both `subtract` and
-`multiply`.
-
-```bash
-packages/
-  add/package.json      # does not depend on anything
-  multiply/package.json # depends on add
-  subtract/package.json # depends on add
-turbo.json
-package.json
-```
-
-You've written tests in all three of these workspaces and it's time to run them.
-There are two requirements here:
-
-1. All tests run in parallel to keep things speedy
-2. A change in a dependency should result in a cache miss
-
-To accomplish this, we can set up a pipeline like this:
-
-```jsonc filename="turbo.json"
-{
-   "$schema": "https://turbo.build/schema.json",
-   "pipeline": {
-     "topo": {
-       "dependsOn": ["^topo"]
-     },
-     "test": {
-       "dependsOn": ["topo"]
-     }
-   }
- }
-```
-
-![](/images/docs/task-graph-with-placeholder-task.png)
-
-In this pipeline, we declare a "synthetic" task called `topo`. Since we don't
-have a `topo` script in any of our `package.json` files, the `turbo test`
-pipeline will go straight to running all `test` scripts in parallel, meeting our first requirement.
-
-But this `topo` task also creates a "synthetic" workspace-task dependency from `multiple` -> `add`,
-and from `subtract` -> `add`. This means that when you change code in `add`, you will also get
-a cache miss for the workspaces in `multiply` and `subtract`, meeting the second requirement.
-
-The pipeline declares that `test` depends on the `topo` task, and `topo` dependsOn `^topo`. In
-English, this means that the `topo` task of the _same_ workspace must run before all `test` tasks,
-and the `topo` task of all _package dependencies_ must run before the `topo` task itself.
-
-Why doesn't `test` directly depend on `^topo`, you ask? Because we want our workspaces to _recursively_
-wire up package dependencies via synthetic tasks. If `test` depends on `^topo`, turbo will stop
-adding to the graph after the first level of dependencies. In this example, if the `add` package
-installed a `numbers` package, for example, changes to the `numbers` package would not trickle
-all the way up to `multiply` and `subtract`.
-
-<Callout type="idea">
-  The name `topo` here is not a special name. It is short for "topological", so it helps indicate
-  why it exists, but you can call this task anything you want.
-</Callout>
-
 ## No dependencies
 
 An empty dependency list (`dependsOn` is either undefined or `[]`) means that
@@ -198,3 +134,122 @@ nothing needs to run before this task! After all, it has no dependencies.
   }
 }
 ```
+
+## Dependencies outside of a task
+
+Let's say you have a common `ui` package that you are using in two apps, `docs` and `web`.
+
+```bash
+apps/
+  docs/package.json # Depends on ui
+  web/package.json  # Depends on ui
+packages/
+  ui/package.json   # No workspace dependencies
+turbo.json
+package.json
+```
+
+You've written some TypeScript in your workspaces and it's time run `tsc` to check your types.
+There are two requirements here:
+
+- **All type checks run in parallel to keep things speedy**: Because the results of your type checks don't depend on each other, you can run all of them in parallel.
+- **A change in a dependency should result in a cache miss**: If the `ui` package changes, the type checking task in `docs` or `web` should know to miss cache.
+
+To accomplish this, you'll create a fake, recursive task in your graph and depend on it:
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+   "pipeline": {
+     "topo": {
+       "dependsOn": ["^topo"]
+     },
+     "your-task": {
+       "dependsOn": ["topo"]
+     }
+   }
+ }
+```
+
+Since the `topo` task doesn't exist in your scripts, Turborepo will complete the task "instantly" and then look to any workspaces that were depending on that workspace. Because of this, your tasks will execute in parallel while still understanding their relationship to other workspaces in the your task graph.
+
+  <Callout type="idea">
+    The name `topo` here is not a special name. It is short for "topological", so it helps indicate
+    why it exists, but you can call this task anything you want.
+  </Callout>
+
+### Why does this work?
+
+We can more deeply understand why this works by taking a look at pipelines that _almost_ fulfill our requirements.
+
+You can achieve parallelism with your tasks by omitting `dependsOn` from your task definition like below:
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+    "pipeline": {
+      "typecheck": {} // Uh oh, not quite!
+    }
+}
+```
+
+Your `typecheck` tasks will successfully run in parallel - but they won't know about their workspace dependencies!
+
+We can demonstrate this using these steps:
+
+1. Run `turbo typecheck`
+2. Change some source code in your `ui` package
+3. Run `turbo typecheck --filter=web`
+
+If you do this, you will hit cache in Step 3 - but you shouldn't! You could have created a type error in your `web` workspace that comes from the changes in the `ui` package's code. The cache hit in Step 3 would be incorrect, hiding the type error from you.
+
+To solve this problem, you may choose to depend on your topological dependency graph directly, much like you would for a `build` task:
+
+```jsonc filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "typecheck": {
+      "dependsOn": ["^typecheck"] // Uh oh, not quite!
+    }
+  }
+}
+```
+
+Now you have the right cache behavior: `web` will miss cache when `ui` code changes. That's great - but we just lost the parallelism that was making our pipeline execute so fast. The `typecheck` task in the `ui` workspace now has to **finish** before the task in `web` **starts**.
+
+What if we could depend on a task in `ui` that "finishes instantly," starting the `typecheck` commands in dependent workspaces much sooner?
+
+This is where the "fake" `topo` task comes in:
+
+```jsonc filename="turbo.json"
+{
+   "$schema": "https://turbo.build/schema.json",
+   "pipeline": {
+     "topo": {
+       "dependsOn": ["^topo"]
+     },
+     "typecheck": {
+       "dependsOn": ["topo"]
+     }
+   }
+ }
+```
+
+In this pipeline, we declare a "synthetic" task called `topo`. Since we don't
+have a `topo` script in any of our `package.json` files, the `turbo typecheck`
+pipeline will go straight to running all `typecheck` scripts in parallel, meeting our first requirement.
+
+But this `topo` task also creates a "synthetic" workspace-task dependency from `web` to `ui`,
+and from `docs` to `ui`. This means that when you change code in `ui`, you will also get
+a cache miss for the workspaces in `web` and `docs`, meeting the second requirement.
+
+The pipeline declares that `typecheck` depends on the `topo` task, and `topo` depends on `^topo`. In
+English, this means that the `topo` task of the _same_ workspace must run before all `typecheck` tasks,
+and the `topo` task of all _package dependencies_ must run before the `topo` task itself.
+
+![](/images/docs/task-graph-with-placeholder-task.png)
+
+Why doesn't `typecheck` directly depend on `^topo`, you ask? Because we want our workspaces to _recursively_
+wire up package dependencies via synthetic tasks. If `typecheck` depends on `^topo`, `turbo` will stop
+adding to the graph after the first level of dependencies.
