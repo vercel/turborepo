@@ -10,7 +10,7 @@ use turbopath::{
 };
 use turborepo_lockfiles::Lockfile;
 
-use super::{Entry, Package, PackageGraph, WorkspaceName, WorkspaceNode};
+use super::{Package, PackageGraph, WorkspaceEntry, WorkspaceName, WorkspaceNode};
 use crate::{package_json::PackageJson, package_manager::PackageManager};
 
 pub struct PackageGraphBuilder<'a> {
@@ -103,7 +103,7 @@ struct BuildState<'a, S> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     package_manager: PackageManager,
-    workspaces: HashMap<WorkspaceName, Entry>,
+    workspaces: HashMap<WorkspaceName, WorkspaceEntry>,
     workspace_graph: Graph<WorkspaceNode, ()>,
     node_lookup: HashMap<WorkspaceNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -154,7 +154,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let mut workspaces = HashMap::new();
         workspaces.insert(
             WorkspaceName::Root,
-            Entry {
+            WorkspaceEntry {
                 package_json: root_package_json,
                 ..Default::default()
             },
@@ -180,26 +180,27 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
     ) -> Result<(), Error> {
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
-        let name = WorkspaceName::Other(json.name.clone().ok_or(Error::PackageJsonMissingName)?);
-        let entry = Entry {
+        let workspace_name =
+            WorkspaceName::Other(json.name.clone().ok_or(Error::PackageJsonMissingName)?);
+        let entry = WorkspaceEntry {
             package_json: json,
             package_json_path: relative_json_path,
             ..Default::default()
         };
-        if let Some(existing) = self.workspaces.insert(name.clone(), entry) {
+        if let Some(existing) = self.workspaces.insert(workspace_name.clone(), entry) {
             let path = self
                 .workspaces
-                .get(&name)
+                .get(&workspace_name)
                 .expect("just inserted entry to be present")
                 .package_json_path
                 .clone();
             return Err(Error::DuplicateWorkspace {
-                name: name.to_string(),
+                name: workspace_name.to_string(),
                 path: path.to_string(),
                 existing_path: existing.package_json_path.to_string(),
             });
         }
-        self.add_node(WorkspaceNode::Workspace(name));
+        self.add_node(WorkspaceNode::Workspace(workspace_name));
         Ok(())
     }
 
@@ -434,7 +435,7 @@ impl Dependencies {
     pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
-        workspaces: &HashMap<WorkspaceName, Entry>,
+        workspaces: &HashMap<WorkspaceName, WorkspaceEntry>,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -556,7 +557,7 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
     }
 }
 
-impl Entry {
+impl WorkspaceEntry {
     fn unix_dir_str(&self) -> Result<String, Error> {
         let unix = self.package_json_path.to_unix()?;
         Ok(unix.to_string())

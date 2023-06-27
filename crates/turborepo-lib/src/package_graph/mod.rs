@@ -17,7 +17,7 @@ pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
     #[allow(dead_code)]
     node_lookup: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
-    workspaces: HashMap<WorkspaceName, Entry>,
+    workspaces: HashMap<WorkspaceName, WorkspaceEntry>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
 }
