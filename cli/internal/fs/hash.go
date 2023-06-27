@@ -9,12 +9,20 @@ import (
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/xxhash"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 func HashObject(i interface{}) (string, error) {
 	hash := xxhash.New()
 
-	_, err := hash.Write([]byte(fmt.Sprintf("%v", i)))
+	bytes, err := msgpack.Marshal(&i)
+	if err != nil {
+		return "", err
+	}
+	println(fmt.Sprintf("%v", bytes))
+	if _, err := hash.Write(bytes); err != nil {
+		return "", err
+	}
 
 	return hex.EncodeToString(hash.Sum(nil)), err
 }

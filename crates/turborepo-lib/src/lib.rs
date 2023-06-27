@@ -3,6 +3,9 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
 
+#[macro_use]
+extern crate serde_derive;
+
 mod child;
 mod cli;
 mod commands;
@@ -10,6 +13,7 @@ mod config;
 mod daemon;
 mod execution_state;
 pub(crate) mod globwatcher;
+mod hash;
 mod manager;
 mod opts;
 mod package_graph;
