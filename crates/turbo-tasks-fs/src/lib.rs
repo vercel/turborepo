@@ -17,6 +17,7 @@ mod retry;
 pub mod rope;
 pub mod source_context;
 pub mod util;
+pub(crate) mod virtual_fs;
 
 use std::{
     borrow::Cow,
@@ -1090,38 +1091,59 @@ impl FileSystemPathVc {
         Ok(BoolVc::cell(self.await?.is_inside_or_equal(&*other.await?)))
     }
 
+    /// Creates a new [`FileSystemPathVc`] like `self` but with the given
+    /// extension.
     #[turbo_tasks::function]
     pub async fn with_extension(self, extension: &str) -> Result<FileSystemPathVc> {
         let this = self.await?;
-        let Some((prefix_path, file_name)) = this.path.rsplit_once('/') else {
-            return Ok(self);
-        };
-        let Some((file_stem, _old_extension)) = file_name.rsplit_once('.') else {
-            return Ok(self);
-        };
+        let path_without_extension =
+            if let Some((path_without_extension, old_extension)) = this.path.rsplit_once('.') {
+                if old_extension.contains('/') {
+                    this.path.as_str()
+                } else {
+                    path_without_extension
+                }
+            } else {
+                this.path.as_str()
+            };
         Ok(Self::new_normalized(
             this.fs,
             // Like `Path::with_extension` and `PathBuf::set_extension`, if the extension is empty,
             // we remove the extension altogether.
             match extension.is_empty() {
-                true => format!("{prefix_path}/{file_stem}"),
-                false => format!("{prefix_path}/{file_stem}.{extension}"),
+                true => format!("{path_without_extension}"),
+                false => format!("{path_without_extension}.{extension}"),
             },
         ))
     }
 
+    /// Extracts the stem (non-extension) portion of self.file_name.
+    ///
+    /// The stem is:
+    ///
+    /// * [`None`], if there is no file name;
+    /// * The entire file name if there is no embedded `.`;
+    /// * The entire file name if the file name begins with `.` and has no other
+    ///   `.`s within;
+    /// * Otherwise, the portion of the file name before the final `.`
     #[turbo_tasks::function]
     pub async fn file_stem(self) -> Result<OptionStringVc> {
         let this = self.await?;
         if this.path.is_empty() {
             return Ok(OptionStringVc::cell(None));
         }
-        let Some((_prefix_path, file_name)) = this.path.rsplit_once('/') else {
-            return Ok(OptionStringVc::cell(Some(this.path.clone())));
+        let file_name = if let Some((_prefix_path, file_name)) = this.path.rsplit_once('/') {
+            file_name
+        } else {
+            this.path.as_str()
         };
-        let Some((file_stem, _old_extension)) = file_name.rsplit_once('.') else {
+        let Some((file_stem, _extension)) = file_name.rsplit_once('.') else {
             return Ok(OptionStringVc::cell(Some(file_name.to_string())));
         };
+        if file_stem.is_empty() {
+            // The file name begins with a `.` and has no other `.`s within.
+            return Ok(OptionStringVc::cell(Some(file_name.to_string())));
+        }
         Ok(OptionStringVc::cell(Some(file_stem.to_string())))
     }
 }
@@ -1994,4 +2016,75 @@ pub async fn to_sys_path(mut path: FileSystemPathVc) -> Result<Option<PathBuf>> 
 pub fn register() {
     turbo_tasks::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{virtual_fs::VirtualFileSystemVc, *};
+
+    #[tokio::test]
+    async fn with_extension() {
+        crate::register();
+
+        turbo_tasks_testing::VcStorage::with(async {
+            let fs = VirtualFileSystemVc::new().as_file_system();
+
+            let path_txt = FileSystemPathVc::new_normalized(fs, "foo/bar.txt".into());
+
+            let path_json = path_txt.with_extension("json");
+            assert_eq!(&*path_json.await.unwrap().path, "foo/bar.json");
+
+            let path_no_ext = path_txt.with_extension("");
+            assert_eq!(&*path_no_ext.await.unwrap().path, "foo/bar");
+
+            let path_new_ext = path_no_ext.with_extension("json");
+            assert_eq!(&*path_new_ext.await.unwrap().path, "foo/bar.json");
+
+            let path_no_slash_txt = FileSystemPathVc::new_normalized(fs, "bar.txt".into());
+
+            let path_no_slash_json = path_no_slash_txt.with_extension("json");
+            assert_eq!(path_no_slash_json.await.unwrap().path.as_str(), "bar.json");
+
+            let path_no_slash_no_ext = path_no_slash_txt.with_extension("");
+            assert_eq!(path_no_slash_no_ext.await.unwrap().path.as_str(), "bar");
+
+            let path_no_slash_new_ext = path_no_slash_no_ext.with_extension("json");
+            assert_eq!(
+                path_no_slash_new_ext.await.unwrap().path.as_str(),
+                "bar.json"
+            );
+
+            anyhow::Ok(())
+        })
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn file_stem() {
+        crate::register();
+
+        turbo_tasks_testing::VcStorage::with(async {
+            let fs = VirtualFileSystemVc::new().as_file_system();
+
+            let path = FileSystemPathVc::new_normalized(fs, "".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), None);
+
+            let path = FileSystemPathVc::new_normalized(fs, "foo/bar.txt".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), Some("bar"));
+
+            let path = FileSystemPathVc::new_normalized(fs, "bar.txt".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), Some("bar"));
+
+            let path = FileSystemPathVc::new_normalized(fs, "foo/bar".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), Some("bar"));
+
+            let path = FileSystemPathVc::new_normalized(fs, "foo/.bar".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), Some(".bar"));
+
+            anyhow::Ok(())
+        })
+        .await
+        .unwrap()
+    }
 }
