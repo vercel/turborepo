@@ -14,10 +14,7 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use path_clean::PathClean;
 
-use crate::{
-    is_not_system, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, IntoSystem, PathError,
-    RelativeUnixPath,
-};
+use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError, RelativeUnixPath};
 
 pub struct AbsoluteSystemPath(Utf8Path);
 
@@ -83,10 +80,6 @@ impl AbsoluteSystemPath {
             return Err(PathError::NotAbsolute(path.to_owned()));
         }
 
-        if is_not_system(path) {
-            return Err(PathError::NotSystem(path.to_owned()));
-        }
-
         Ok(Self::new_unchecked(path))
     }
 
@@ -94,10 +87,6 @@ impl AbsoluteSystemPath {
         let path_str = path
             .to_str()
             .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
-
-        if is_not_system(path_str) {
-            return Err(PathError::NotSystem(path_str.to_owned()));
-        }
 
         Self::new(path_str)
     }
@@ -178,17 +167,14 @@ impl AbsoluteSystemPath {
     }
 
     pub fn symlink_to_file<P: AsRef<str>>(&self, to: P) -> Result<(), PathError> {
-        let system_path = to.as_ref();
-        let system_path = system_path.into_system();
-        symlink_file(system_path, &self.0)?;
+        let target = to.as_ref();
+        symlink_file(target, &self.0)?;
         Ok(())
     }
 
     pub fn symlink_to_dir<P: AsRef<str>>(&self, to: P) -> Result<(), PathError> {
-        let system_path = to.as_ref();
-
-        let system_path = system_path.into_system();
-        symlink_dir(system_path, &self.0)?;
+        let target = to.as_ref();
+        symlink_dir(target, &self.0)?;
 
         Ok(())
     }

@@ -107,7 +107,6 @@ impl Debug for RelativeUnixPathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::io::BufWriter;
     #[cfg(windows)]
     use std::path::Path;
 
