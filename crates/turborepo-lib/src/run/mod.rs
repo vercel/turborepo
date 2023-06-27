@@ -92,7 +92,7 @@ impl Run {
         let scm = SCM::new(&self.base.repo_root);
 
         let mut filtered_pkgs =
-            scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph, &scm)?;
+            scope::resolve_packages(&opts.scope_opts, &self.base.repo_root, &pkg_dep_graph, &scm)?;
 
         if filtered_pkgs.len() == pkg_dep_graph.len() {
             for target in targets {
