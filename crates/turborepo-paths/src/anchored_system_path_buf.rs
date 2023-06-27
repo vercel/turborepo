@@ -168,14 +168,19 @@ impl AnchoredSystemPathBuf {
         }
 
         // Remove trailing slash
-        println!("path before: {}", path);
-        let path = path.strip_suffix(std::path::MAIN_SEPARATOR).unwrap_or(path);
-        println!("path after: {}", path);
-        let path = Utf8PathBuf::from(path);
+        let stripped_path = path.strip_suffix(std::path::MAIN_SEPARATOR).unwrap_or(path);
 
-        // We know this is indeed anchored because of `check_name`,
-        // and it is indeed system because we just split and combined with the
-        // system path separator above
+        let path;
+        #[cfg(windows)]
+        {
+            let windows_path = stripped_path.replace('/', std::path::MAIN_SEPARATOR_STR);
+            path = Utf8PathBuf::from(windows_path);
+        }
+        #[cfg(unix)]
+        {
+            path = Utf8PathBuf::from(stripped_path);
+        }
+
         Ok(AnchoredSystemPathBuf(path))
     }
 
