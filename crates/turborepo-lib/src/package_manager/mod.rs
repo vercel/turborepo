@@ -597,6 +597,7 @@ mod tests {
     fn test_read_package_manager() -> Result<(), Error> {
         let mut package_json = PackageJson {
             package_manager: Some("npm@8.19.4".to_string()),
+            ..Default::default()
         };
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Npm));
