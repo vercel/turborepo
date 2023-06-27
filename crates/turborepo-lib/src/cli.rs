@@ -270,9 +270,7 @@ pub enum Command {
     Bin {},
     /// Generate the autocompletion script for the specified shell
     #[serde(skip)]
-    Completion {
-        shell: Shell,
-    },
+    Completion { shell: Shell },
     /// Runs the Turborepo background daemon
     Daemon {
         /// Set the idle timeout for turbod
@@ -305,9 +303,8 @@ pub enum Command {
         #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
     },
-    Info {
-        workspace: Option<String>,
-    },
+    #[clap(hide = true)]
+    Info { workspace: Option<String> },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
     Link {
