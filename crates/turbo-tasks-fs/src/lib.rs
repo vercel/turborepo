@@ -54,7 +54,7 @@ use tokio::{
 use tracing::{instrument, Level};
 use turbo_tasks::{
     mark_stateful,
-    primitives::{BoolVc, StringReadRef, StringVc},
+    primitives::{BoolVc, OptionStringVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
     CompletionVc, InvalidationReason, Invalidator, ValueToString, ValueToStringVc,
@@ -1088,6 +1088,41 @@ impl FileSystemPathVc {
     #[turbo_tasks::function]
     pub async fn is_inside_or_equal(self, other: FileSystemPathVc) -> Result<BoolVc> {
         Ok(BoolVc::cell(self.await?.is_inside_or_equal(&*other.await?)))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn with_extension(self, extension: &str) -> Result<FileSystemPathVc> {
+        let this = self.await?;
+        let Some((prefix_path, file_name)) = this.path.rsplit_once('/') else {
+            return Ok(self);
+        };
+        let Some((file_stem, _old_extension)) = file_name.rsplit_once('.') else {
+            return Ok(self);
+        };
+        Ok(Self::new_normalized(
+            this.fs,
+            // Like `Path::with_extension` and `PathBuf::set_extension`, if the extension is empty,
+            // we remove the extension altogether.
+            match extension.is_empty() {
+                true => format!("{prefix_path}/{file_stem}"),
+                false => format!("{prefix_path}/{file_stem}.{extension}"),
+            },
+        ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn file_stem(self) -> Result<OptionStringVc> {
+        let this = self.await?;
+        if this.path.is_empty() {
+            return Ok(OptionStringVc::cell(None));
+        }
+        let Some((_prefix_path, file_name)) = this.path.rsplit_once('/') else {
+            return Ok(OptionStringVc::cell(Some(this.path.clone())));
+        };
+        let Some((file_stem, _old_extension)) = file_name.rsplit_once('.') else {
+            return Ok(OptionStringVc::cell(Some(file_name.to_string())));
+        };
+        Ok(OptionStringVc::cell(Some(file_stem.to_string())))
     }
 }
 
