@@ -276,7 +276,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color
+        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict
 
   turborepo_e2e:
     name: Turborepo E2E Tests
@@ -302,7 +302,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
-        run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color
+        run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color --env-mode=strict
 
   turborepo_examples:
     name: Turborepo Examples
@@ -361,7 +361,7 @@ jobs:
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
 
       # Re-enable corepack, actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it here. The "Post" step
