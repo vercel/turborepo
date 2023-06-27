@@ -19,5 +19,5 @@ Run info on package `another`
 Run info on package `my-app`
   $ ${TURBO} info my-app
   my-app depends on:
-  - util
   - root
+  - util

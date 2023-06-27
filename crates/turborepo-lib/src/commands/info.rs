@@ -56,17 +56,22 @@ fn print_workspace_details(package_graph: &PackageGraph, workspace_name: &str) -
         return Err(anyhow!("Workspace not found: {}", workspace_name));
     };
 
-    println!("{} depends on:", workspace_name);
-    for dependency in transitive_dependencies {
-        let dep_name = match dependency {
-            WorkspaceNode::Root | WorkspaceNode::Workspace(WorkspaceName::Root) => "root",
+    let mut workspace_dep_names: Vec<&str> = transitive_dependencies
+        .into_iter()
+        .filter_map(|dependency| match dependency {
+            WorkspaceNode::Root | WorkspaceNode::Workspace(WorkspaceName::Root) => Some("root"),
             WorkspaceNode::Workspace(WorkspaceName::Other(dep_name))
                 if dep_name == workspace_name =>
             {
-                continue
+                None
             }
-            WorkspaceNode::Workspace(WorkspaceName::Other(dep_name)) => dep_name,
-        };
+            WorkspaceNode::Workspace(WorkspaceName::Other(dep_name)) => Some(dep_name.as_str()),
+        })
+        .collect();
+    workspace_dep_names.sort();
+
+    println!("{} depends on:", workspace_name);
+    for dep_name in workspace_dep_names {
         println!("- {}", dep_name);
     }
 
