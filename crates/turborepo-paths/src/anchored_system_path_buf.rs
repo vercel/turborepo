@@ -169,7 +169,7 @@ mod tests {
     #[test_case(&[], &["..", "..", ".."] ; "root")]
     fn test_relative_path_to(input: &[&str], expected: &[&str]) {
         #[cfg(unix)]
-        let root_token = "/";
+        let root_token = "";
         #[cfg(windows)]
         let root_token = "C:\\";
 
@@ -182,7 +182,9 @@ mod tests {
         let target = AbsoluteSystemPathBuf::new(parts.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
         let expected =
             AnchoredSystemPathBuf::from_raw(expected.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
+
         let result = AnchoredSystemPathBuf::relative_path_between(&root, &target);
+
         assert_eq!(result, expected);
     }
 }

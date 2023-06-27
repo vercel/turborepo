@@ -26,7 +26,8 @@ pub fn run(base: &mut CommandBase, workspace: Option<&str>) -> Result<()> {
 }
 
 fn print_repo_details(package_graph: &PackageGraph) -> Result<()> {
-    println!("{} packages found in workspace\n", package_graph.len());
+    // We subtract 1 for the root workspace
+    println!("{} packages found in workspace\n", package_graph.len() - 1);
 
     let mut workspaces: Vec<_> = package_graph.workspaces().collect();
     workspaces.sort_by(|a, b| a.0.cmp(b.0));

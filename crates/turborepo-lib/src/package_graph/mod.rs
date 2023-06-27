@@ -31,9 +31,6 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn package_json(&self) -> &PackageJson {
-        &self.json
-    }
     pub fn package_json_path(&self) -> &AnchoredSystemPathBuf {
         &self.package_json_path
     }
@@ -72,7 +69,7 @@ impl PackageGraph {
     }
 
     pub fn len(&self) -> usize {
-        self.workspace_graph.node_count()
+        self.workspaces.len()
     }
 
     pub fn package_manager(&self) -> &PackageManager {
@@ -97,8 +94,7 @@ impl PackageGraph {
             .expect("package graph was built without root package.json")
     }
 
-    #[allow(dead_code)]
-    fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+    pub fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
         let idx = self.node_lookup.get(node)?;
         let mut visited = HashSet::new();
         petgraph::visit::depth_first_search(&self.workspace_graph, Some(*idx), |event| {
