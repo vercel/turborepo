@@ -5,11 +5,12 @@
 use std::{
     backtrace::{self, Backtrace},
     io::Read,
-    process::Child,
+    process::{Child, Command},
 };
 
+use bstr::io::BufReadExt;
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPath, PathError};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
 pub mod git;
 mod hash_object;
@@ -105,4 +106,118 @@ pub(crate) fn wait_for_success<R: Read, T>(
         command, path_text, parse_error_text, exit_text, stderr_text
     );
     Err(Error::Git(err_text, Backtrace::capture()))
+}
+
+#[derive(Debug)]
+pub struct Git {
+    root: AbsoluteSystemPathBuf,
+    bin: AbsoluteSystemPathBuf,
+}
+
+impl Git {
+    pub(crate) fn find(path_in_repo: &AbsoluteSystemPath) -> Option<Self> {
+        let bin = which::which("git").ok()?;
+        let bin = AbsoluteSystemPathBuf::try_from(bin).ok()?;
+        let root = find_git_root(path_in_repo).ok()?;
+        Some(Self { root, bin })
+    }
+}
+
+fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBuf, Error> {
+    let rev_parse = Command::new("git")
+        .args(["rev-parse", "--show-cdup"])
+        .current_dir(turbo_root)
+        .output()?;
+    if !rev_parse.status.success() {
+        let stderr = String::from_utf8_lossy(&rev_parse.stderr);
+        return Err(Error::git_error(format!(
+            "git rev-parse --show-cdup error: {}",
+            stderr
+        )));
+    }
+    let cursor = std::io::Cursor::new(rev_parse.stdout);
+    let mut lines = cursor.byte_lines();
+    if let Some(line) = lines.next() {
+        let line = String::from_utf8(line?)?;
+        let tail = RelativeUnixPathBuf::new(line)?;
+        turbo_root.join_unix_path(tail).map_err(|e| e.into())
+    } else {
+        let stderr = String::from_utf8_lossy(&rev_parse.stderr);
+        Err(Error::git_error(format!(
+            "git rev-parse --show-cdup error: no values on stdout. stderr: {}",
+            stderr
+        )))
+    }
+}
+
+#[derive(Debug)]
+pub enum Hasher {
+    Git(Git),
+    Manual,
+}
+
+impl Hasher {
+    pub fn new(path_in_repo: &AbsoluteSystemPath) -> Hasher {
+        Git::find(path_in_repo)
+            .map(Hasher::Git)
+            .unwrap_or(Hasher::Manual)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{assert_matches::assert_matches, process::Command};
+
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+
+    use super::find_git_root;
+    use crate::Error;
+
+    fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let dir = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        (tmp_dir, dir)
+    }
+
+    fn require_git_cmd(repo_root: &AbsoluteSystemPath, args: &[&str]) {
+        let mut cmd = Command::new("git");
+        cmd.args(args).current_dir(repo_root);
+        assert!(cmd.output().unwrap().status.success());
+    }
+
+    fn setup_repository(repo_root: &AbsoluteSystemPath) {
+        let cmds: &[&[&str]] = &[
+            &["init", "."],
+            &["config", "--local", "user.name", "test"],
+            &["config", "--local", "user.email", "test@example.com"],
+        ];
+        for cmd in cmds {
+            require_git_cmd(repo_root, cmd);
+        }
+    }
+
+    #[test]
+    fn test_symlinked_git_root() {
+        let (_, tmp_root) = tmp_dir();
+        let git_root = tmp_root.join_component("actual_repo");
+        git_root.create_dir_all().unwrap();
+        setup_repository(&git_root);
+        git_root.join_component("inside").create_dir_all().unwrap();
+        let link = tmp_root.join_component("link");
+        link.symlink_to_dir("actual_repo").unwrap();
+        let turbo_root = link.join_component("inside");
+        let result = find_git_root(&turbo_root).unwrap();
+        assert_eq!(result, link);
+    }
+
+    #[test]
+    fn test_no_git_root() {
+        let (_, tmp_root) = tmp_dir();
+        tmp_root.create_dir_all().unwrap();
+        let result = find_git_root(&tmp_root);
+        assert_matches!(result, Err(Error::Git(_, _)));
+    }
 }
