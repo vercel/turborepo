@@ -41,11 +41,11 @@ func Test_HashObjectStability(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		expectedHash, err := HashObject(tc.obj)
+		expectedHash, err := hashObject(tc.obj)
 		assert.NilError(t, err, tc.name)
 
 		for n := 0; n < _numOfRuns; n++ {
-			hash, err := HashObject(tc.obj)
+			hash, err := hashObject(tc.obj)
 			assert.NilError(t, err, tc.name)
 			assert.Equal(t, expectedHash, hash, tc.name)
 		}
