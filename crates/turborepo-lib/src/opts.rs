@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use turbopath::AnchoredSystemPathBuf;
 
 use crate::{
     cli::{Command, DryRunMode, EnvMode, LogPrefix, RunArgs},
@@ -51,11 +52,11 @@ impl<'a> TryFrom<&'a Args> for Opts<'a> {
         };
         let run_opts = RunOpts::try_from(run_args.as_ref())?;
         let cache_opts = CacheOpts::from(run_args.as_ref());
-
+        let scope_opts = ScopeOpts::try_from(run_args.as_ref())?;
         Ok(Self {
             run_opts,
             cache_opts,
-            scope_opts: ScopeOpts::default(),
+            scope_opts,
             runcache_opts: RunCacheOpts::default(),
         })
     }
@@ -154,5 +155,20 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32> {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct ScopeOpts {}
+#[derive(Debug)]
+pub struct ScopeOpts {
+    pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
+}
+
+impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &'a RunArgs) -> std::result::Result<Self, Self::Error> {
+        let pkg_inference_root = args
+            .pkg_inference_root
+            .as_ref()
+            .map(|root| AnchoredSystemPathBuf::from_raw::<&str>(root.as_ref()))
+            .transpose()?;
+        Ok(Self { pkg_inference_root })
+    }
+}
