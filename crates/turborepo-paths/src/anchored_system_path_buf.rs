@@ -168,7 +168,7 @@ impl AnchoredSystemPathBuf {
         }
 
         // Remove trailing slash
-        let stripped_path = path.strip_suffix(std::path::MAIN_SEPARATOR).unwrap_or(path);
+        let stripped_path = path.strip_suffix('/').unwrap_or(path);
 
         let path;
         #[cfg(windows)]
@@ -265,7 +265,7 @@ mod tests {
     }
 
     #[test_case(Path::new("test.txt"), Ok("test.txt"), Ok("test.txt") ; "hello world")]
-    #[test_case(Path::new("something/"), Ok("something"), Ok("something/") ; "Unix directory")]
+    #[test_case(Path::new("something/"), Ok("something"), Ok("something") ; "Unix directory")]
     #[test_case(Path::new("something\\"), Ok("something\\"), Err("Path is not safe for windows: something\\".to_string()) ; "Windows unsafe")]
     #[test_case(Path::new("//"), Err("path is malformed: //".to_string()), Err("path is malformed: //".to_string()) ; "malformed name")]
     fn test_from_system_path(

@@ -116,9 +116,6 @@ impl Deref for RelativeUnixPathBuf {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(windows)]
-    use std::path::Path;
-
     use super::*;
 
     #[test]

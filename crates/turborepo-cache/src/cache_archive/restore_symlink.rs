@@ -66,9 +66,9 @@ fn actually_restore_symlink<'a>(
     })?;
 
     if Utf8Path::new(symlink_to).is_dir() {
-        symlink_from.symlink_to_file(symlink_to)?;
-    } else {
         symlink_from.symlink_to_dir(symlink_to)?;
+    } else {
+        symlink_from.symlink_to_file(symlink_to)?;
     }
 
     #[cfg(target_os = "macos")]
