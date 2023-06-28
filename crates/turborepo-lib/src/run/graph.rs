@@ -10,7 +10,6 @@ use crate::{
 };
 
 pub struct CompleteGraph<'run> {
-    // TODO: This should actually be an acyclic graph type
     // Expresses the dependencies between packages
     package_graph: &'run PackageGraph,
     // Config from turbo.json
