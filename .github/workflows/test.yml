@@ -643,7 +643,7 @@ jobs:
           comment_tag: check_next_swc_turbopack
 
   turborepo_rust_test:
-    needs: [determine_jobs, turborepo_rust_check]
+    needs: [turborepo_rust_check]
     strategy:
       fail-fast: false
       matrix:
@@ -685,7 +685,7 @@ jobs:
           cargo groups test turborepo-libraries
 
   turbopack_rust_test1:
-    needs: [determine_jobs, turbopack_rust_check]
+    needs: [turbopack_rust_check]
     runs-on: ubuntu-latest-16-core-oss
     name: Turbopack Rust testing on ubuntu
     steps:
@@ -732,7 +732,7 @@ jobs:
           path: target/nextest/**/*.xml
 
   turbopack_rust_test2:
-    needs: [determine_jobs, turbopack_rust_check]
+    needs: [turbopack_rust_check]
     strategy:
       fail-fast: false
       matrix:
@@ -812,7 +812,7 @@ jobs:
           path: target/nextest/**/*.xml
 
   turbopack_rust_test_bench1:
-    needs: [determine_jobs, turbopack_rust_check]
+    needs: [turbopack_rust_check]
     runs-on: ubuntu-latest-16-core-oss
     name: Turbopack Rust testing benchmarks on ubuntu
 
@@ -864,7 +864,7 @@ jobs:
           cargo test --benches --release -p turbopack-bench
 
   turbopack_rust_test_bench2:
-    needs: [determine_jobs, turbopack_rust_check]
+    needs: [turbopack_rust_check]
     strategy:
       fail-fast: false
       matrix:
@@ -1053,7 +1053,7 @@ jobs:
 
   turbopack_rust_bench_commit:
     needs: [determine_jobs, turbopack_rust_bench]
-    if: always() && needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true'
+    if: always() && needs.determine_jobs.outputs.push == 'true'
     name: Store benchmark result
     runs-on: ubuntu-latest
     permissions:
@@ -1162,7 +1162,7 @@ jobs:
             target/${{ matrix.os.target }}/release/turbopack-cli.exe
 
   turbopack_bench_pr:
-    needs: [determine_jobs, turbopack_rust_check]
+    needs: [turbopack_rust_check]
     if: github.event_name == 'pull_request'
     name: Benchmark and compare Turbopack performance on ${{ matrix.os.title }}
     strategy:
@@ -1235,8 +1235,8 @@ jobs:
       - name: Format check
         # This is the syntax for running the `//#lint` task specifically in turbo.json
         # It runs the taplo check on taplo.toml, and lint:prettier per workspace.
-        # Skip `cli` workspace for now. It has the lint task, but in Github CI
-        # we need to setup golangci-lint to make it work. Go linting is run in the "Go linting"
+        # Skip `cli` workspace for now. It has the lint task, but in GitHub CI
+        # we need to set up golangci-lint to make it work. Go linting is run in the "Go linting"
         # job in this workflow. We can move that in here in the next step.
         run: turbo run lint --filter=!cli
 
