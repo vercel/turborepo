@@ -1,5 +1,6 @@
 use std::{
     fmt,
+    fmt::Debug,
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context as TaskContext, Poll},
@@ -15,7 +16,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// writer (which can be sent to another thread). As new values are written, any
 /// pending readers will be woken up to receive the new value.
 #[derive(Clone, Debug)]
-pub struct Stream<T: Clone> {
+pub struct Stream<T: Clone + Debug> {
     inner: Arc<Mutex<StreamState<T>>>,
 }
 
@@ -25,7 +26,7 @@ struct StreamState<T> {
     pulled: Vec<T>,
 }
 
-impl<T: Clone> Stream<T> {
+impl<T: Clone + Debug> Stream<T> {
     /// Constructs a new Stream, and immediately closes it with only the passed
     /// values.
     pub fn new_closed(pulled: Vec<T>) -> Self {
@@ -72,13 +73,16 @@ impl<T: Clone> Stream<T> {
     }
 }
 
-impl<T: Clone, E: Clone> Stream<Result<T, E>> {
+impl<T: Clone + Debug, E: Clone + Debug> Stream<Result<T, E>> {
     /// Converts a TryStream into a single value when possible.
     pub async fn try_into_single(&self) -> Result<SingleValue<T>, E> {
+        println!("TIS");
         let mut stream = self.read();
+        println!("READ");
         let Some(first) = stream.try_next().await? else {
             return Ok(SingleValue::None);
         };
+        println!("FIRST");
 
         if stream.try_next().await?.is_some() {
             return Ok(SingleValue::Multiple);
@@ -99,19 +103,19 @@ pub enum SingleValue<T> {
     Single(T),
 }
 
-impl<T: Clone, S: StreamTrait<Item = T> + Send + Unpin + 'static> From<S> for Stream<T> {
+impl<T: Clone + Debug, S: StreamTrait<Item = T> + Send + Unpin + 'static> From<S> for Stream<T> {
     fn from(source: S) -> Self {
         Self::new_open(vec![], Box::new(source))
     }
 }
 
-impl<T: Clone> Default for Stream<T> {
+impl<T: Clone + Debug> Default for Stream<T> {
     fn default() -> Self {
         Self::new_closed(vec![])
     }
 }
 
-impl<T: Clone + PartialEq> PartialEq for Stream<T> {
+impl<T: Clone + PartialEq + Debug> PartialEq for Stream<T> {
     // A Stream is equal if it's the same internal pointer, or both streams are
     // closed with equivalent values.
     fn eq(&self, other: &Self) -> bool {
@@ -135,9 +139,9 @@ impl<T: Clone + PartialEq> PartialEq for Stream<T> {
         }
     }
 }
-impl<T: Clone + Eq> Eq for Stream<T> {}
+impl<T: Clone + Eq + Debug> Eq for Stream<T> {}
 
-impl<T: Clone + Serialize> Serialize for Stream<T> {
+impl<T: Clone + Serialize + Debug> Serialize for Stream<T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::Error;
         let lock = self.inner.lock().map_err(Error::custom)?;
@@ -151,7 +155,7 @@ impl<T: Clone + Serialize> Serialize for Stream<T> {
     }
 }
 
-impl<'de, T: Clone + Deserialize<'de>> Deserialize<'de> for Stream<T> {
+impl<'de, T: Clone + Debug + Deserialize<'de>> Deserialize<'de> for Stream<T> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let data = <Vec<T>>::deserialize(deserializer)?;
         Ok(Stream::new_closed(data))
@@ -168,12 +172,12 @@ impl<T: Clone + fmt::Debug> fmt::Debug for StreamState<T> {
 
 /// Implements [StreamTrait] over our Stream.
 #[derive(Debug)]
-pub struct StreamRead<T: Clone> {
+pub struct StreamRead<T: Clone + Debug> {
     index: usize,
     source: Stream<T>,
 }
 
-impl<T: Clone> StreamTrait for StreamRead<T> {
+impl<T: Clone + Debug> StreamTrait for StreamRead<T> {
     type Item = T;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<Self::Item>> {
@@ -198,6 +202,7 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
             // and return it to the caller. Any other readers will be able to read the value from
             // the already-pulled data.
             Poll::Ready(Some(v)) => {
+                // dbg!("some", &v);
                 this.index += 1;
                 inner.pulled.push(v.clone());
                 Poll::Ready(Some(v))
@@ -205,12 +210,16 @@ impl<T: Clone> StreamTrait for StreamRead<T> {
             // If the source stream is finished, then we can transition to the closed state
             // to drop the source stream.
             Poll::Ready(None) => {
+                // dbg!("none");
                 inner.source.take();
                 Poll::Ready(None)
             }
             // Else, we need to wait for the source stream to give us a new value. The
             // source stream will be responsible for waking the TaskContext.
-            Poll::Pending => Poll::Pending,
+            Poll::Pending => {
+                // dbg!("pending");
+                Poll::Pending
+            }
         }
     }
 }
