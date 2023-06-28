@@ -113,22 +113,12 @@ impl<'a> Resolution<'a> {
                 return None;
             }
 
-            // TODO flatten this out
+            // Since we have already checked the ident portion of the locator for equality
+            // we can avoid an allocation caused by constructing a locator by just checking
+            // the reference portion.
             if let Some(desc) = from.description {
-                match Version::parse(&desc).is_ok() || tag_regex().is_match(&desc) {
-                    true => {
-                        // we check if npm:{desc} is equiv, possible to avoid alloc
-                        if let Some(r) = locator.reference.strip_prefix("npm:") {
-                            if desc != r {
-                                return None;
-                            }
-                        }
-                    }
-                    false => {
-                        if desc != locator.reference {
-                            return None;
-                        }
-                    }
+                if !Self::eq_with_protocol(&locator.reference, desc, "npm:") {
+                    return None;
                 }
             }
         }
@@ -167,6 +157,31 @@ impl<'a> Resolution<'a> {
         }
 
         Some(dependency_override)
+    }
+
+    // Checks if two references are equal with a default protocol
+    // Avoids any allocations
+    fn eq_with_protocol(
+        reference: &str,
+        incomplete_reference: &str,
+        default_protocol: &str,
+    ) -> bool {
+        match Version::parse(incomplete_reference).is_ok()
+            || tag_regex().is_match(incomplete_reference)
+        {
+            // We need to inject a protocol
+            true => {
+                if let Some(stripped_reference) = reference.strip_prefix(default_protocol) {
+                    stripped_reference == incomplete_reference
+                } else {
+                    // The reference doesn't use the default protocol so adding it to the incomplete
+                    // reference would result in the references being different
+                    false
+                }
+            }
+            // The protocol is already present
+            false => reference == incomplete_reference,
+        }
     }
 }
 
@@ -208,6 +223,8 @@ impl fmt::Display for Specifier<'_> {
 
 #[cfg(test)]
 mod test {
+    use test_case::test_case;
+
     use super::*;
 
     #[test]
@@ -306,5 +323,15 @@ mod test {
             dependency,
             Some(Descriptor::try_from("lodash@npm:4.17.21").unwrap())
         );
+    }
+
+    #[test_case("proto:1.0.0", "proto:1.0.0", true ; "identical")]
+    #[test_case("proto:1.0.0", "1.0.0", true ; "use default")]
+    #[test_case("proto:1.0.0", "other:1.0.0", false ; "different protocols")]
+    #[test_case("other:1.0.0", "1.0.0", false ; "non-default protocols")]
+    #[test_case("proto:1.0.0", "proto:1.2.3", false ; "mismatched ref")]
+    #[test_case("proto:1.0.0", "1.2.3", false ; "mismatched ref with protocol")]
+    fn test_reference_eq(a: &str, b: &str, expected: bool) {
+        assert_eq!(Resolution::eq_with_protocol(a, b, "proto:"), expected);
     }
 }
