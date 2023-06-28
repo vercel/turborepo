@@ -495,7 +495,7 @@ jobs:
         run: |
           cargo groups check turborepo-libraries --features rustls-tls
 
-  turborepo_clippy:
+  turborepo_rust_clippy:
     needs: [turborepo_rust_check]
     name: Turborepo rust clippy
     runs-on: ubuntu-latest-16-core-oss
