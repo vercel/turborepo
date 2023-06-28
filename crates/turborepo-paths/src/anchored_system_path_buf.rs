@@ -169,7 +169,7 @@ mod tests {
     #[test_case(&[], &["..", "..", ".."] ; "root")]
     fn test_relative_path_to(input: &[&str], expected: &[&str]) {
         #[cfg(unix)]
-        let root_token = "";
+        let root_token = "/";
         #[cfg(windows)]
         let root_token = "C:\\";
 
