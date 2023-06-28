@@ -9,9 +9,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use dunce::canonicalize;
 use futures::StreamExt;
-use once_cell::sync::Lazy;
 use turbo_tasks::{debug::ValueDebug, CompletionVc, TryJoinIterExt, TurboTasks, Value};
 use turbo_tasks_env::CommandLineProcessEnvVc;
 use turbo_tasks_fs::{
