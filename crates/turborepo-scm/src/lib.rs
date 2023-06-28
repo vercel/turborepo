@@ -25,6 +25,11 @@ pub enum Error {
     Git2(git2::Error, String, #[backtrace] backtrace::Backtrace),
     #[error("git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
+    #[error(
+        "{0} is not part of a git repository. git is required for operations based on source \
+         control"
+    )]
+    GitRequired(AbsoluteSystemPathBuf),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error("path error: {0}")]

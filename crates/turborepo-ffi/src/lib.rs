@@ -4,7 +4,7 @@
 //! and in ffi.go before modifying this file.
 mod lockfile;
 
-use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
+use std::{collections::HashMap, mem::ManuallyDrop};
 
 use globwalk::globwalk;
 pub use lockfile::{patches, subgraph, transitive_closure};
@@ -120,7 +120,7 @@ pub extern "C" fn previous_content(buffer: Buffer) -> Buffer {
     let response = match turborepo_scm::git::previous_content(
         req.git_root.into(),
         &req.from_commit,
-        PathBuf::from(req.file_path),
+        req.file_path,
     ) {
         Ok(content) => proto::previous_content_resp::Response::Content(content),
         Err(err) => proto::previous_content_resp::Response::Error(err.to_string()),
