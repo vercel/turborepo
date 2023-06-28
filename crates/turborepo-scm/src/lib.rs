@@ -156,16 +156,14 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
 }
 
 #[derive(Debug)]
-pub enum Hasher {
+pub enum SCM {
     Git(Git),
     Manual,
 }
 
-impl Hasher {
-    pub fn new(path_in_repo: &AbsoluteSystemPath) -> Hasher {
-        Git::find(path_in_repo)
-            .map(Hasher::Git)
-            .unwrap_or(Hasher::Manual)
+impl SCM {
+    pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
+        Git::find(path_in_repo).map(SCM::Git).unwrap_or(SCM::Manual)
     }
 }
 

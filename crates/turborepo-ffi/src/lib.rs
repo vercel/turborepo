@@ -249,7 +249,7 @@ pub extern "C" fn get_package_file_hashes(buffer: Buffer) -> Buffer {
         }
     };
     let inputs = req.inputs.as_slice();
-    let hasher = turborepo_scm::Hasher::new(&turbo_root);
+    let hasher = turborepo_scm::SCM::new(&turbo_root);
     let response = match hasher.get_package_file_hashes(&turbo_root, &package_path, inputs) {
         Ok(hashes) => {
             let mut to_return = HashMap::new();
@@ -317,7 +317,7 @@ pub extern "C" fn get_hashes_for_files(buffer: Buffer) -> Buffer {
             return resp.into();
         }
     };
-    let hasher = turborepo_scm::Hasher::new(&turbo_root);
+    let hasher = turborepo_scm::SCM::new(&turbo_root);
     let result = if allow_missing {
         hasher.hash_existing_of(&turbo_root, files.into_iter())
     } else {

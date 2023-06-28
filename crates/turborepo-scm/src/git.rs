@@ -6,9 +6,9 @@ use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
 };
 
-use crate::{Error, Git, Hasher};
+use crate::{Error, Git, SCM};
 
-impl Hasher {
+impl SCM {
     pub fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -57,7 +57,7 @@ pub fn changed_files(
     to_commit: &str,
 ) -> Result<HashSet<String>, Error> {
     let git_root = AbsoluteSystemPath::from_std_path(&git_root)?;
-    let scm = Hasher::new(git_root);
+    let scm = SCM::new(git_root);
 
     let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root.as_path())?;
     let files = scm.changed_files(&turbo_root, from_commit, to_commit)?;
@@ -190,7 +190,7 @@ pub fn previous_content(
 ) -> Result<Vec<u8>, Error> {
     // If git root is not absolute, we error.
     let git_root = AbsoluteSystemPathBuf::try_from(git_root)?;
-    let scm = Hasher::new(&git_root);
+    let scm = SCM::new(&git_root);
 
     // However for file path we handle both absolute and relative paths
     // Note that we assume any relative file path is relative to the git root

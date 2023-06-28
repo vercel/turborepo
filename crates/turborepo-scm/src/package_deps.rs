@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use itertools::{Either, Itertools};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
-use crate::{hash_object::hash_objects, Error, Git, Hasher};
+use crate::{hash_object::hash_objects, Error, Git, SCM};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
-impl Hasher {
+impl SCM {
     pub fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -15,12 +15,12 @@ impl Hasher {
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         match self {
-            Hasher::Manual => crate::manual::get_package_file_hashes_from_processing_gitignore(
+            SCM::Manual => crate::manual::get_package_file_hashes_from_processing_gitignore(
                 turbo_root,
                 package_path,
                 inputs,
             ),
-            Hasher::Git(git) => git.get_package_file_hashes(turbo_root, package_path, inputs),
+            SCM::Git(git) => git.get_package_file_hashes(turbo_root, package_path, inputs),
         }
     }
 
@@ -30,8 +30,8 @@ impl Hasher {
         files: impl Iterator<Item = AnchoredSystemPathBuf>,
     ) -> Result<GitHashes, Error> {
         match self {
-            Hasher::Manual => crate::manual::hash_files(turbo_root, files, false),
-            Hasher::Git(git) => git.hash_files(turbo_root, files),
+            SCM::Manual => crate::manual::hash_files(turbo_root, files, false),
+            SCM::Git(git) => git.hash_files(turbo_root, files),
         }
     }
 
@@ -160,7 +160,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
-    use crate::{manual::get_package_file_hashes_from_processing_gitignore, Hasher};
+    use crate::{manual::get_package_file_hashes_from_processing_gitignore, SCM};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -252,8 +252,8 @@ mod tests {
 
         setup_repository(&repo_root);
         commit_all(&repo_root);
-        let git = Hasher::new(&repo_root);
-        let Hasher::Git(git) = git else {
+        let git = SCM::new(&repo_root);
+        let SCM::Git(git) = git else {
             panic!("expected git, found {:?}", git);
         };
 
