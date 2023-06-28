@@ -68,6 +68,8 @@ impl PackageGraph {
         Ok(())
     }
 
+    /// Returns the number of workspaces in the repo
+    /// *including* the root workspace.
     pub fn len(&self) -> usize {
         self.workspaces.len()
     }
