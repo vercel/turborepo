@@ -145,7 +145,7 @@ func (th *Tracker) CalculateFileHashes(
 				}
 
 				// Get the combined hash of all the files.
-				hash, err := fs.HashObject(hashObject)
+				hash, err := fs.HashFileHashes(hashObject)
 				if err != nil {
 					return err
 				}
@@ -172,35 +172,35 @@ func (th *Tracker) CalculateFileHashes(
 	return nil
 }
 
-type taskHashable struct {
-	globalHash           string
-	taskDependencyHashes []string
-	packageDir           turbopath.AnchoredUnixPath
-	hashOfFiles          string
-	externalDepsHash     string
-	task                 string
-	outputs              fs.TaskOutputs
-	passThruArgs         []string
-	env                  []string
-	resolvedEnvVars      env.EnvironmentVariablePairs
-	passThroughEnv       []string
-	envMode              util.EnvMode
-	dotEnv               turbopath.AnchoredUnixPathArray
-}
+// type taskHashable struct {
+// 	globalHash           string
+// 	taskDependencyHashes []string
+// 	packageDir           turbopath.AnchoredUnixPath
+// 	hashOfFiles          string
+// 	externalDepsHash     string
+// 	task                 string
+// 	outputs              fs.TaskOutputs
+// 	passThruArgs         []string
+// 	env                  []string
+// 	resolvedEnvVars      env.EnvironmentVariablePairs
+// 	passThroughEnv       []string
+// 	envMode              util.EnvMode
+// 	dotEnv               turbopath.AnchoredUnixPathArray
+// }
 
 // calculateTaskHashFromHashable returns a hash string from the taskHashable
-func calculateTaskHashFromHashable(full *taskHashable) (string, error) {
-	switch full.envMode {
+func calculateTaskHashFromHashable(full *fs.TaskHashable) (string, error) {
+	switch full.EnvMode {
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
-		full.passThroughEnv = nil
-		return fs.HashObject(full)
+		full.PassThroughEnv = nil
+		return fs.HashTask(full)
 	case util.Strict:
 		// Collapse `nil` and `[]` in strict mode.
-		if full.passThroughEnv == nil {
-			full.passThroughEnv = make([]string, 0)
+		if full.PassThroughEnv == nil {
+			full.PassThroughEnv = make([]string, 0)
 		}
-		return fs.HashObject(full)
+		return fs.HashTask(full)
 	case util.Infer:
 		panic("task inferred status should have already been resolved")
 	default:
@@ -322,20 +322,20 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 	// log any auto detected env vars
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
-	hash, err := calculateTaskHashFromHashable(&taskHashable{
-		globalHash:           th.globalHash,
-		taskDependencyHashes: taskDependencyHashes,
-		packageDir:           packageTask.Pkg.Dir.ToUnixPath(),
-		hashOfFiles:          hashOfFiles,
-		externalDepsHash:     packageTask.Pkg.ExternalDepsHash,
-		task:                 packageTask.Task,
-		outputs:              outputs,
-		passThruArgs:         args,
-		env:                  packageTask.TaskDefinition.Env,
-		resolvedEnvVars:      hashableEnvPairs,
-		passThroughEnv:       packageTask.TaskDefinition.PassThroughEnv,
-		envMode:              packageTask.EnvMode,
-		dotEnv:               packageTask.TaskDefinition.DotEnv,
+	hash, err := calculateTaskHashFromHashable(&fs.TaskHashable{
+		GlobalHash:           th.globalHash,
+		TaskDependencyHashes: taskDependencyHashes,
+		PackageDir:           packageTask.Pkg.Dir.ToUnixPath(),
+		HashOfFiles:          hashOfFiles,
+		ExternalDepsHash:     packageTask.Pkg.ExternalDepsHash,
+		Task:                 packageTask.Task,
+		Outputs:              outputs,
+		PassThruArgs:         args,
+		Env:                  packageTask.TaskDefinition.Env,
+		ResolvedEnvVars:      hashableEnvPairs,
+		PassThroughEnv:       packageTask.TaskDefinition.PassThroughEnv,
+		EnvMode:              packageTask.EnvMode,
+		DotEnv:               packageTask.TaskDefinition.DotEnv,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to hash task %v: %v", packageTask.TaskID, hash)

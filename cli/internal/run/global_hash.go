@@ -35,34 +35,20 @@ type GlobalHashableInputs struct {
 	dotEnv               turbopath.AnchoredUnixPathArray
 }
 
-type globalHashable struct {
-	globalCacheKey       string
-	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	rootExternalDepsHash string
-	env                  []string
-	resolvedEnvVars      env.EnvironmentVariablePairs
-	passThroughEnv       []string
-	envMode              util.EnvMode
-	frameworkInference   bool
-
-	// NOTE! This field is _explicitly_ ordered and should not be sorted.
-	dotEnv turbopath.AnchoredUnixPathArray
-}
-
 // calculateGlobalHash is a transformation of GlobalHashableInputs.
 // It's used for the situations where we have an `EnvMode` specified
 // as that is not compatible with existing global hashes.
 func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashObject(globalHashable{
-		globalCacheKey:       full.globalCacheKey,
-		globalFileHashMap:    full.globalFileHashMap,
-		rootExternalDepsHash: full.rootExternalDepsHash,
-		env:                  full.env,
-		resolvedEnvVars:      full.resolvedEnvVars.All.ToHashable(),
-		passThroughEnv:       full.passThroughEnv,
-		envMode:              full.envMode,
-		frameworkInference:   full.frameworkInference,
-		dotEnv:               full.dotEnv,
+	return fs.HashGlobal(fs.GlobalHashable{
+		GlobalCacheKey:       full.globalCacheKey,
+		GlobalFileHashMap:    full.globalFileHashMap,
+		RootExternalDepsHash: full.rootExternalDepsHash,
+		Env:                  full.env,
+		ResolvedEnvVars:      full.resolvedEnvVars.All.ToHashable(),
+		PassThroughEnv:       full.passThroughEnv,
+		EnvMode:              full.envMode,
+		FrameworkInference:   full.frameworkInference,
+		DotEnv:               full.dotEnv,
 	})
 }
 
