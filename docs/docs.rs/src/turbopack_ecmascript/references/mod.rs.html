@@ -2605,77 +2605,6 @@
 <a href="#2605" id="2605">2605</a>
 <a href="#2606" id="2606">2606</a>
 <a href="#2607" id="2607">2607</a>
-<a href="#2608" id="2608">2608</a>
-<a href="#2609" id="2609">2609</a>
-<a href="#2610" id="2610">2610</a>
-<a href="#2611" id="2611">2611</a>
-<a href="#2612" id="2612">2612</a>
-<a href="#2613" id="2613">2613</a>
-<a href="#2614" id="2614">2614</a>
-<a href="#2615" id="2615">2615</a>
-<a href="#2616" id="2616">2616</a>
-<a href="#2617" id="2617">2617</a>
-<a href="#2618" id="2618">2618</a>
-<a href="#2619" id="2619">2619</a>
-<a href="#2620" id="2620">2620</a>
-<a href="#2621" id="2621">2621</a>
-<a href="#2622" id="2622">2622</a>
-<a href="#2623" id="2623">2623</a>
-<a href="#2624" id="2624">2624</a>
-<a href="#2625" id="2625">2625</a>
-<a href="#2626" id="2626">2626</a>
-<a href="#2627" id="2627">2627</a>
-<a href="#2628" id="2628">2628</a>
-<a href="#2629" id="2629">2629</a>
-<a href="#2630" id="2630">2630</a>
-<a href="#2631" id="2631">2631</a>
-<a href="#2632" id="2632">2632</a>
-<a href="#2633" id="2633">2633</a>
-<a href="#2634" id="2634">2634</a>
-<a href="#2635" id="2635">2635</a>
-<a href="#2636" id="2636">2636</a>
-<a href="#2637" id="2637">2637</a>
-<a href="#2638" id="2638">2638</a>
-<a href="#2639" id="2639">2639</a>
-<a href="#2640" id="2640">2640</a>
-<a href="#2641" id="2641">2641</a>
-<a href="#2642" id="2642">2642</a>
-<a href="#2643" id="2643">2643</a>
-<a href="#2644" id="2644">2644</a>
-<a href="#2645" id="2645">2645</a>
-<a href="#2646" id="2646">2646</a>
-<a href="#2647" id="2647">2647</a>
-<a href="#2648" id="2648">2648</a>
-<a href="#2649" id="2649">2649</a>
-<a href="#2650" id="2650">2650</a>
-<a href="#2651" id="2651">2651</a>
-<a href="#2652" id="2652">2652</a>
-<a href="#2653" id="2653">2653</a>
-<a href="#2654" id="2654">2654</a>
-<a href="#2655" id="2655">2655</a>
-<a href="#2656" id="2656">2656</a>
-<a href="#2657" id="2657">2657</a>
-<a href="#2658" id="2658">2658</a>
-<a href="#2659" id="2659">2659</a>
-<a href="#2660" id="2660">2660</a>
-<a href="#2661" id="2661">2661</a>
-<a href="#2662" id="2662">2662</a>
-<a href="#2663" id="2663">2663</a>
-<a href="#2664" id="2664">2664</a>
-<a href="#2665" id="2665">2665</a>
-<a href="#2666" id="2666">2666</a>
-<a href="#2667" id="2667">2667</a>
-<a href="#2668" id="2668">2668</a>
-<a href="#2669" id="2669">2669</a>
-<a href="#2670" id="2670">2670</a>
-<a href="#2671" id="2671">2671</a>
-<a href="#2672" id="2672">2672</a>
-<a href="#2673" id="2673">2673</a>
-<a href="#2674" id="2674">2674</a>
-<a href="#2675" id="2675">2675</a>
-<a href="#2676" id="2676">2676</a>
-<a href="#2677" id="2677">2677</a>
-<a href="#2678" id="2678">2678</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2696,6 +2625,7 @@
     future::Future,
     mem::take,
     pin::Pin,
+    sync::Arc,
 };
 
 <span class="kw">use </span>anyhow::Result;
@@ -2711,7 +2641,7 @@
         errors::{DiagnosticId, Handler, HANDLER},
         pass::AstNodePath,
         source_map::Pos,
-        Span, Spanned, GLOBALS,
+        Globals, Span, Spanned, GLOBALS,
     },
     ecma::{
         ast::<span class="kw-2">*</span>,
@@ -2962,6 +2892,20 @@
     import_parts: bool,
 }
 
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; AnalysisState&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">async fn </span>link_value(<span class="kw-2">&amp;</span><span class="self">self</span>, value: JsValue, in_try: bool) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
+        <span class="kw">let </span>fun_args_values = <span class="self">self</span>.fun_args_values.lock().clone();
+        link(
+            <span class="self">self</span>.var_graph,
+            value,
+            <span class="kw-2">&amp;</span>early_value_visitor,
+            <span class="kw-2">&amp;</span>|value| value_visitor(<span class="self">self</span>.origin, value, <span class="self">self</span>.compile_time_info, in_try),
+            fun_args_values,
+        )
+        .<span class="kw">await
+    </span>}
+}
+
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>analyze_ecmascript_module(
     source: AssetVc,
@@ -3017,1449 +2961,1363 @@
 
     <span class="kw">let </span>parsed = parsed.<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">match </span><span class="kw-2">&amp;*</span>parsed {
-        ParseResult::Ok {
-            program,
-            globals,
-            eval_context,
-            comments,
-            source_map,
-            ..
-        } =&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>import_references = Vec::new();
+    <span class="kw">let </span>ParseResult::Ok {
+        program,
+        globals,
+        eval_context,
+        comments,
+        source_map,
+        ..
+    } = <span class="kw-2">&amp;*</span>parsed <span class="kw">else </span>{
+        <span class="kw">return </span>analysis.build().<span class="kw">await</span>;
+    };
 
-            <span class="kw">let </span>pos = program.span().lo;
-            <span class="kw">if </span>analyze_types {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(comments) = comments.leading.get(<span class="kw-2">&amp;</span>pos) {
-                    <span class="kw">for </span>comment <span class="kw">in </span>comments.iter() {
-                        <span class="kw">if let </span>CommentKind::Line = comment.kind {
-                            <span class="macro">lazy_static! </span>{
-                                <span class="kw">static </span><span class="kw-2">ref </span>REFERENCE_PATH: Regex = Regex::new(
-                                    <span class="string">r#&quot;^/\s*&lt;reference\s*path\s*=\s*[&quot;&#39;](.+)[&quot;&#39;]\s*/&gt;\s*$&quot;#
-                                </span>)
+    <span class="kw">let </span><span class="kw-2">mut </span>import_references = Vec::new();
+
+    <span class="kw">let </span>pos = program.span().lo;
+    <span class="kw">if </span>analyze_types {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(comments) = comments.leading.get(<span class="kw-2">&amp;</span>pos) {
+            <span class="kw">for </span>comment <span class="kw">in </span>comments.iter() {
+                <span class="kw">if let </span>CommentKind::Line = comment.kind {
+                    <span class="macro">lazy_static! </span>{
+                        <span class="kw">static </span><span class="kw-2">ref </span>REFERENCE_PATH: Regex =
+                            Regex::new(<span class="string">r#&quot;^/\s*&lt;reference\s*path\s*=\s*[&quot;&#39;](.+)[&quot;&#39;]\s*/&gt;\s*$&quot;#</span>)
                                 .unwrap();
-                                <span class="kw">static </span><span class="kw-2">ref </span>REFERENCE_TYPES: Regex = Regex::new(
-                                    <span class="string">r#&quot;^/\s*&lt;reference\s*types\s*=\s*[&quot;&#39;](.+)[&quot;&#39;]\s*/&gt;\s*$&quot;#
-                                </span>)
+                        <span class="kw">static </span><span class="kw-2">ref </span>REFERENCE_TYPES: Regex =
+                            Regex::new(<span class="string">r#&quot;^/\s*&lt;reference\s*types\s*=\s*[&quot;&#39;](.+)[&quot;&#39;]\s*/&gt;\s*$&quot;#</span>)
                                 .unwrap();
-                            }
-                            <span class="kw">let </span>text = <span class="kw-2">&amp;</span>comment.text;
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(m) = REFERENCE_PATH.captures(text) {
-                                <span class="kw">let </span>path = <span class="kw-2">&amp;</span>m[<span class="number">1</span>];
-                                analysis.add_reference(TsReferencePathAssetReferenceVc::new(
-                                    origin,
-                                    path.to_string(),
-                                ));
-                            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(m) = REFERENCE_TYPES.captures(text) {
-                                <span class="kw">let </span>types = <span class="kw-2">&amp;</span>m[<span class="number">1</span>];
-                                analysis.add_reference(TsReferenceTypeAssetReferenceVc::new(
-                                    origin,
-                                    types.to_string(),
-                                ));
-                            }
-                        }
+                    }
+                    <span class="kw">let </span>text = <span class="kw-2">&amp;</span>comment.text;
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(m) = REFERENCE_PATH.captures(text) {
+                        <span class="kw">let </span>path = <span class="kw-2">&amp;</span>m[<span class="number">1</span>];
+                        analysis.add_reference(TsReferencePathAssetReferenceVc::new(
+                            origin,
+                            path.to_string(),
+                        ));
+                    } <span class="kw">else if let </span><span class="prelude-val">Some</span>(m) = REFERENCE_TYPES.captures(text) {
+                        <span class="kw">let </span>types = <span class="kw-2">&amp;</span>m[<span class="number">1</span>];
+                        analysis.add_reference(TsReferenceTypeAssetReferenceVc::new(
+                            origin,
+                            types.to_string(),
+                        ));
                     }
                 }
             }
-            comments.trailing.iter().for_each(|r| {
-                r.value().iter().for_each(|comment| <span class="kw">match </span>comment.kind {
-                    CommentKind::Line =&gt; {
-                        <span class="macro">lazy_static! </span>{
-                            <span class="kw">static </span><span class="kw-2">ref </span>SOURCE_MAP_FILE_REFERENCE: Regex =
-                                Regex::new(<span class="string">r#&quot;# sourceMappingURL=(.*?\.map)$&quot;#</span>).unwrap();
-                        }
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(m) = SOURCE_MAP_FILE_REFERENCE.captures(<span class="kw-2">&amp;</span>comment.text) {
-                            <span class="kw">let </span>path = <span class="kw-2">&amp;</span>m[<span class="number">1</span>];
-                            <span class="comment">// TODO this probably needs to be a field in EcmascriptModuleAsset so it
-                            // knows to use that SourceMap when running code generation.
-                            // The reference is needed too for turbotrace
-                            </span><span class="kw">let </span>origin_path = origin.origin_path();
-                            analysis.add_reference(SourceMapReferenceVc::new(
-                                origin_path,
-                                origin_path.parent().join(path),
-                            ))
-                        }
-                    }
-                    CommentKind::Block =&gt; {}
-                });
-            });
+        }
+    }
 
-            <span class="kw">let </span>handler = Handler::with_emitter(
-                <span class="bool-val">true</span>,
-                <span class="bool-val">false</span>,
-                Box::new(IssueEmitter {
-                    source,
-                    source_map: source_map.clone(),
-                    title: <span class="prelude-val">None</span>,
-                }),
-            );
-            <span class="kw">let </span>var_graph = HANDLER.set(<span class="kw-2">&amp;</span>handler, || {
-                GLOBALS.set(globals, || create_graph(program, eval_context))
-            });
-
-            <span class="kw">for </span>r <span class="kw">in </span>eval_context.imports.references() {
-                <span class="kw">let </span>r = EsmAssetReferenceVc::new(
-                    origin,
-                    RequestVc::parse(Value::new(r.module_path.to_string().into())),
-                    Value::new(r.annotations.clone()),
-                    <span class="kw">if </span>options.import_parts {
-                        <span class="kw">match </span><span class="kw-2">&amp;</span>r.imported_symbol {
-                            ImportedSymbol::ModuleEvaluation =&gt; {
-                                <span class="prelude-val">Some</span>(ModulePartVc::module_evaluation())
-                            }
-                            ImportedSymbol::Symbol(name) =&gt; {
-                                <span class="prelude-val">Some</span>(ModulePartVc::export(name.to_string()))
-                            }
-                            ImportedSymbol::Namespace =&gt; <span class="prelude-val">None</span>,
-                        }
-                    } <span class="kw">else </span>{
-                        <span class="prelude-val">None
-                    </span>},
-                );
-                import_references.push(r);
+    comments.trailing.iter().for_each(|r| {
+        r.value().iter().for_each(|comment| <span class="kw">match </span>comment.kind {
+            CommentKind::Line =&gt; {
+                <span class="macro">lazy_static! </span>{
+                    <span class="kw">static </span><span class="kw-2">ref </span>SOURCE_MAP_FILE_REFERENCE: Regex =
+                        Regex::new(<span class="string">r#&quot;# sourceMappingURL=(.*?\.map)$&quot;#</span>).unwrap();
+                }
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(m) = SOURCE_MAP_FILE_REFERENCE.captures(<span class="kw-2">&amp;</span>comment.text) {
+                    <span class="kw">let </span>path = <span class="kw-2">&amp;</span>m[<span class="number">1</span>];
+                    <span class="comment">// TODO this probably needs to be a field in EcmascriptModuleAsset so it
+                    // knows to use that SourceMap when running code generation.
+                    // The reference is needed too for turbotrace
+                    </span><span class="kw">let </span>origin_path = origin.origin_path();
+                    analysis.add_reference(SourceMapReferenceVc::new(
+                        origin_path,
+                        origin_path.parent().join(path),
+                    ))
+                }
             }
+            CommentKind::Block =&gt; {}
+        });
+    });
 
-            <span class="kw">for </span>r <span class="kw">in </span>import_references.iter_mut() {
-                <span class="comment">// Resolving these references here avoids many resolve wrapper tasks when
-                // passing that to other turbo tasks functions later.
-                </span><span class="kw-2">*</span>r = r.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-            }
-            <span class="kw">for </span>r <span class="kw">in </span>import_references.iter() {
-                <span class="comment">// `add_reference` will avoid adding duplicate references
-                </span>analysis.add_reference(<span class="kw-2">*</span>r);
-            }
+    <span class="kw">let </span>handler = Handler::with_emitter(
+        <span class="bool-val">true</span>,
+        <span class="bool-val">false</span>,
+        Box::new(IssueEmitter {
+            source,
+            source_map: source_map.clone(),
+            title: <span class="prelude-val">None</span>,
+        }),
+    );
+    <span class="kw">let </span>var_graph = HANDLER.set(<span class="kw-2">&amp;</span>handler, || {
+        GLOBALS.set(globals, || create_graph(program, eval_context))
+    });
 
-            <span class="kw">let </span>(
-                <span class="kw-2">mut </span>var_graph,
-                webpack_runtime,
-                webpack_entry,
-                webpack_chunks,
-                esm_exports,
-                esm_star_exports,
-            ) = HANDLER.set(<span class="kw-2">&amp;</span>handler, || {
-                GLOBALS.set(globals, || {
-                    <span class="comment">// TODO migrate to effects
-                    </span><span class="kw">let </span><span class="kw-2">mut </span>visitor = AssetReferencesVisitor::new(
-                        eval_context,
-                        <span class="kw-2">&amp;</span>import_references,
-                        <span class="kw-2">&amp;mut </span>analysis,
+    <span class="kw">for </span>r <span class="kw">in </span>eval_context.imports.references() {
+        <span class="kw">let </span>r = EsmAssetReferenceVc::new(
+            origin,
+            RequestVc::parse(Value::new(r.module_path.to_string().into())),
+            Value::new(r.annotations.clone()),
+            <span class="kw">if </span>options.import_parts {
+                <span class="kw">match </span><span class="kw-2">&amp;</span>r.imported_symbol {
+                    ImportedSymbol::ModuleEvaluation =&gt; <span class="prelude-val">Some</span>(ModulePartVc::module_evaluation()),
+                    ImportedSymbol::Symbol(name) =&gt; <span class="prelude-val">Some</span>(ModulePartVc::export(name.to_string())),
+                    ImportedSymbol::Namespace =&gt; <span class="prelude-val">None</span>,
+                }
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None
+            </span>},
+        );
+        import_references.push(r);
+    }
+
+    <span class="kw">for </span>r <span class="kw">in </span>import_references.iter_mut() {
+        <span class="comment">// Resolving these references here avoids many resolve wrapper tasks when
+        // passing that to other turbo tasks functions later.
+        </span><span class="kw-2">*</span>r = r.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    <span class="kw">for </span>r <span class="kw">in </span>import_references.iter() {
+        <span class="comment">// `add_reference` will avoid adding duplicate references
+        </span>analysis.add_reference(<span class="kw-2">*</span>r);
+    }
+
+    <span class="kw">pub fn </span>set_handler_and_globals&lt;F, R&gt;(handler: <span class="kw-2">&amp;</span>Handler, globals: <span class="kw-2">&amp;</span>Arc&lt;Globals&gt;, f: F) -&gt; R
+    <span class="kw">where
+        </span>F: FnOnce() -&gt; R,
+    {
+        HANDLER.set(handler, || GLOBALS.set(globals, f))
+    }
+
+    <span class="kw">let </span>(
+        <span class="kw-2">mut </span>var_graph,
+        webpack_runtime,
+        webpack_entry,
+        webpack_chunks,
+        esm_exports,
+        esm_star_exports,
+    ) = set_handler_and_globals(<span class="kw-2">&amp;</span>handler, globals, || {
+        <span class="comment">// TODO migrate to effects
+        </span><span class="kw">let </span><span class="kw-2">mut </span>visitor =
+            AssetReferencesVisitor::new(eval_context, <span class="kw-2">&amp;</span>import_references, <span class="kw-2">&amp;mut </span>analysis);
+
+        <span class="kw">for </span>(i, reexport) <span class="kw">in </span>eval_context.imports.reexports() {
+            <span class="kw">let </span>import_ref = import_references[i];
+            <span class="kw">match </span>reexport {
+                Reexport::Star =&gt; {
+                    visitor.esm_star_exports.push(import_ref);
+                }
+                Reexport::Namespace { exported: n } =&gt; {
+                    visitor
+                        .esm_exports
+                        .insert(n.to_string(), EsmExport::ImportedNamespace(import_ref));
+                }
+                Reexport::Named {
+                    imported: i,
+                    exported: e,
+                } =&gt; {
+                    visitor.esm_exports.insert(
+                        e.to_string(),
+                        EsmExport::ImportedBinding(import_ref, i.to_string()),
                     );
-
-                    <span class="kw">for </span>(i, reexport) <span class="kw">in </span>eval_context.imports.reexports() {
-                        <span class="kw">let </span>import_ref = import_references[i];
-                        <span class="kw">match </span>reexport {
-                            Reexport::Star =&gt; {
-                                visitor.esm_star_exports.push(import_ref);
-                            }
-                            Reexport::Namespace { exported: n } =&gt; {
-                                visitor.esm_exports.insert(
-                                    n.to_string(),
-                                    EsmExport::ImportedNamespace(import_ref),
-                                );
-                            }
-                            Reexport::Named {
-                                imported: i,
-                                exported: e,
-                            } =&gt; {
-                                visitor.esm_exports.insert(
-                                    e.to_string(),
-                                    EsmExport::ImportedBinding(import_ref, i.to_string()),
-                                );
-                            }
-                        }
-                    }
-
-                    program.visit_with_path(<span class="kw-2">&amp;mut </span>visitor, <span class="kw-2">&amp;mut </span>Default::default());
-
-                    (
-                        var_graph,
-                        visitor.webpack_runtime,
-                        visitor.webpack_entry,
-                        visitor.webpack_chunks,
-                        visitor.esm_exports,
-                        visitor.esm_star_exports,
-                    )
-                })
-            });
-
-            <span class="kw">let </span><span class="kw-2">mut </span>ignore_effect_span = <span class="prelude-val">None</span>;
-            <span class="comment">// Check if it was a webpack entry
-            </span><span class="kw">if let </span><span class="prelude-val">Some</span>((request, span)) = webpack_runtime {
-                <span class="kw">let </span>request = RequestVc::parse(Value::new(request.into()));
-                <span class="kw">let </span>runtime = resolve_as_webpack_runtime(origin, request, transforms);
-                <span class="kw">match </span><span class="kw-2">&amp;*</span>runtime.<span class="kw">await</span><span class="question-mark">? </span>{
-                    WebpackRuntime::Webpack5 { .. } =&gt; {
-                        ignore_effect_span = <span class="prelude-val">Some</span>(span);
-                        analysis.add_reference(
-                            WebpackRuntimeAssetReference {
-                                origin,
-                                request,
-                                runtime,
-                                transforms,
-                            }
-                            .cell(),
-                        );
-                        <span class="kw">if </span>webpack_entry {
-                            analysis.add_reference(
-                                WebpackEntryAssetReference {
-                                    source,
-                                    runtime,
-                                    transforms,
-                                }
-                                .cell(),
-                            );
-                        }
-                        <span class="kw">for </span>chunk <span class="kw">in </span>webpack_chunks {
-                            analysis.add_reference(
-                                WebpackChunkAssetReference {
-                                    chunk_id: chunk,
-                                    runtime,
-                                    transforms,
-                                }
-                                .cell(),
-                            );
-                        }
-                    }
-                    WebpackRuntime::None =&gt; {}
                 }
             }
+        }
 
-            <span class="kw">let </span>exports = <span class="kw">if </span>!esm_exports.is_empty() || !esm_star_exports.is_empty() {
-                <span class="kw">if </span><span class="macro">matches!</span>(specified_type, SpecifiedModuleType::CommonJs) {
-                    SpecifiedModuleTypeIssue {
-                        path: source.ident().path(),
-                        specified_type,
-                    }
-                    .cell()
-                    .as_issue()
-                    .emit();
+        program.visit_with_path(<span class="kw-2">&amp;mut </span>visitor, <span class="kw-2">&amp;mut </span>Default::default());
+
+        (
+            var_graph,
+            visitor.webpack_runtime,
+            visitor.webpack_entry,
+            visitor.webpack_chunks,
+            visitor.esm_exports,
+            visitor.esm_star_exports,
+        )
+    });
+
+    <span class="kw">let </span><span class="kw-2">mut </span>ignore_effect_span = <span class="prelude-val">None</span>;
+    <span class="comment">// Check if it was a webpack entry
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>((request, span)) = webpack_runtime {
+        <span class="kw">let </span>request = RequestVc::parse(Value::new(request.into()));
+        <span class="kw">let </span>runtime = resolve_as_webpack_runtime(origin, request, transforms);
+
+        <span class="kw">if let </span>WebpackRuntime::Webpack5 { .. } = <span class="kw-2">&amp;*</span>runtime.<span class="kw">await</span><span class="question-mark">? </span>{
+            ignore_effect_span = <span class="prelude-val">Some</span>(span);
+            analysis.add_reference(
+                WebpackRuntimeAssetReference {
+                    origin,
+                    request,
+                    runtime,
+                    transforms,
                 }
-                <span class="kw">let </span>esm_exports: EsmExportsVc = EsmExports {
-                    exports: esm_exports,
-                    star_exports: esm_star_exports,
-                }
-                .cell();
-                analysis.add_code_gen(esm_exports);
-                EcmascriptExports::EsmExports(esm_exports)
-            } <span class="kw">else if </span><span class="macro">matches!</span>(specified_type, SpecifiedModuleType::EcmaScript) {
-                <span class="kw">if </span>has_cjs_export(program) {
-                    SpecifiedModuleTypeIssue {
-                        path: source.ident().path(),
-                        specified_type,
-                    }
-                    .cell()
-                    .as_issue()
-                    .emit();
-                }
-                EcmascriptExports::EsmExports(
-                    EsmExports {
-                        exports: Default::default(),
-                        star_exports: Default::default(),
+                .cell(),
+            );
+
+            <span class="kw">if </span>webpack_entry {
+                analysis.add_reference(
+                    WebpackEntryAssetReference {
+                        source,
+                        runtime,
+                        transforms,
                     }
                     .cell(),
-                )
-            } <span class="kw">else if </span>has_cjs_export(program) {
-                EcmascriptExports::CommonJs
-            } <span class="kw">else </span>{
-                EcmascriptExports::None
-            };
+                );
+            }
 
-            analysis.set_exports(exports);
+            <span class="kw">for </span>chunk <span class="kw">in </span>webpack_chunks {
+                analysis.add_reference(
+                    WebpackChunkAssetReference {
+                        chunk_id: chunk,
+                        runtime,
+                        transforms,
+                    }
+                    .cell(),
+                );
+            }
+        }
+    }
 
-            <span class="kw">fn </span>handle_call_boxed&lt;<span class="lifetime">&#39;a</span>, G: Fn(Vec&lt;Effect&gt;) + Send + Sync + <span class="lifetime">&#39;a</span>&gt;(
-                ast_path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>[AstParentKind],
-                span: Span,
-                func: JsValue,
-                this: JsValue,
-                args: Vec&lt;EffectArg&gt;,
-                state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>AnalysisState&lt;<span class="lifetime">&#39;a</span>&gt;,
-                add_effects: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>G,
-                analysis: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>AnalyzeEcmascriptModuleResultBuilder,
-                in_try: bool,
-            ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
-                Box::pin(handle_call(
-                    ast_path,
+    <span class="kw">let </span>exports = <span class="kw">if </span>!esm_exports.is_empty() || !esm_star_exports.is_empty() {
+        <span class="kw">if </span><span class="macro">matches!</span>(specified_type, SpecifiedModuleType::CommonJs) {
+            SpecifiedModuleTypeIssue {
+                path: source.ident().path(),
+                specified_type,
+            }
+            .cell()
+            .as_issue()
+            .emit();
+        }
+
+        <span class="kw">let </span>esm_exports: EsmExportsVc = EsmExports {
+            exports: esm_exports,
+            star_exports: esm_star_exports,
+        }
+        .cell();
+        analysis.add_code_gen(esm_exports);
+
+        EcmascriptExports::EsmExports(esm_exports)
+    } <span class="kw">else if </span><span class="macro">matches!</span>(specified_type, SpecifiedModuleType::EcmaScript) {
+        <span class="kw">if </span>has_cjs_export(program) {
+            SpecifiedModuleTypeIssue {
+                path: source.ident().path(),
+                specified_type,
+            }
+            .cell()
+            .as_issue()
+            .emit();
+        }
+
+        EcmascriptExports::EsmExports(
+            EsmExports {
+                exports: Default::default(),
+                star_exports: Default::default(),
+            }
+            .cell(),
+        )
+    } <span class="kw">else if </span>has_cjs_export(program) {
+        EcmascriptExports::CommonJs
+    } <span class="kw">else </span>{
+        EcmascriptExports::None
+    };
+
+    analysis.set_exports(exports);
+
+    <span class="kw">let </span>effects = take(<span class="kw-2">&amp;mut </span>var_graph.effects);
+
+    <span class="kw">let </span><span class="kw-2">mut </span>analysis_state = AnalysisState {
+        handler: <span class="kw-2">&amp;</span>handler,
+        source,
+        origin,
+        compile_time_info,
+        var_graph: <span class="kw-2">&amp;</span>var_graph,
+        fun_args_values: Mutex::new(HashMap::&lt;u32, Vec&lt;JsValue&gt;&gt;::new()),
+        first_import_meta: <span class="bool-val">true</span>,
+        import_parts: options.import_parts,
+    };
+
+    <span class="kw">enum </span>Action {
+        Effect(Effect),
+        LeaveScope(u32),
+    }
+
+    <span class="comment">// This is a stack of effects to process. We use a stack since during processing
+    // of an effect we might want to add more effects into the middle of the
+    // processing. Using a stack where effects are appended in reverse
+    // order allows us to do that. It&#39;s recursion implemented as Stack.
+    </span><span class="kw">let </span><span class="kw-2">mut </span>queue_stack = Mutex::new(Vec::new());
+    queue_stack
+        .get_mut()
+        .extend(effects.into_iter().map(Action::Effect).rev());
+
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(action) = queue_stack.get_mut().pop() {
+        <span class="kw">let </span>effect = <span class="kw">match </span>action {
+            Action::LeaveScope(func_ident) =&gt; {
+                analysis_state.fun_args_values.get_mut().remove(<span class="kw-2">&amp;</span>func_ident);
+                <span class="kw">continue</span>;
+            }
+            Action::Effect(effect) =&gt; effect,
+        };
+
+        <span class="kw">let </span>add_effects = |effects: Vec&lt;Effect&gt;| {
+            queue_stack
+                .lock()
+                .extend(effects.into_iter().map(Action::Effect).rev())
+        };
+
+        <span class="kw">match </span>effect {
+            Effect::Conditional {
+                condition,
+                kind,
+                ast_path: condition_ast_path,
+                span: <span class="kw">_</span>,
+                in_try,
+            } =&gt; {
+                <span class="kw">let </span>condition = analysis_state.link_value(condition, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="macro">macro_rules! </span>inactive {
+                    (<span class="macro-nonterminal">$block</span>:ident) =&gt; {
+                        analysis.add_code_gen(UnreachableVc::new(AstPathVc::cell(
+                            <span class="macro-nonterminal">$block</span>.ast_path.to_vec(),
+                        )));
+                    };
+                }
+                <span class="macro">macro_rules! </span>condition {
+                    (<span class="macro-nonterminal">$expr</span>:expr) =&gt; {
+                        analysis.add_code_gen(ConstantConditionVc::new(
+                            Value::new(<span class="macro-nonterminal">$expr</span>),
+                            AstPathVc::cell(condition_ast_path.to_vec()),
+                        ));
+                    };
+                }
+                <span class="macro">macro_rules! </span>active {
+                    (<span class="macro-nonterminal">$block</span>:ident) =&gt; {
+                        queue_stack
+                            .get_mut()
+                            .extend(<span class="macro-nonterminal">$block</span>.effects.into_iter().map(Action::Effect).rev())
+                    };
+                }
+                <span class="kw">match </span><span class="kw-2">*</span>kind {
+                    ConditionalKind::If { then } =&gt; <span class="kw">match </span>condition.is_truthy() {
+                        <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
+                            <span class="macro">condition!</span>(ConstantConditionValue::Truthy);
+                            <span class="macro">active!</span>(then);
+                        }
+                        <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
+                            <span class="macro">condition!</span>(ConstantConditionValue::Falsy);
+                            <span class="macro">inactive!</span>(then);
+                        }
+                        <span class="prelude-val">None </span>=&gt; {
+                            <span class="macro">active!</span>(then);
+                        }
+                    },
+                    ConditionalKind::IfElse { then, r#else }
+                    | ConditionalKind::Ternary { then, r#else } =&gt; <span class="kw">match </span>condition.is_truthy() {
+                        <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
+                            <span class="macro">condition!</span>(ConstantConditionValue::Truthy);
+                            <span class="macro">active!</span>(then);
+                            <span class="macro">inactive!</span>(r#else);
+                        }
+                        <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
+                            <span class="macro">condition!</span>(ConstantConditionValue::Falsy);
+                            <span class="macro">active!</span>(r#else);
+                            <span class="macro">inactive!</span>(then);
+                        }
+                        <span class="prelude-val">None </span>=&gt; {
+                            <span class="macro">active!</span>(then);
+                            <span class="macro">active!</span>(r#else);
+                        }
+                    },
+                    ConditionalKind::And { expr } =&gt; <span class="kw">match </span>condition.is_truthy() {
+                        <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
+                            <span class="macro">condition!</span>(ConstantConditionValue::Truthy);
+                            <span class="macro">active!</span>(expr);
+                        }
+                        <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
+                            <span class="comment">// The condition value needs to stay since it&#39;s used
+                            </span><span class="macro">inactive!</span>(expr);
+                        }
+                        <span class="prelude-val">None </span>=&gt; {
+                            <span class="macro">active!</span>(expr);
+                        }
+                    },
+                    ConditionalKind::Or { expr } =&gt; <span class="kw">match </span>condition.is_truthy() {
+                        <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
+                            <span class="comment">// The condition value needs to stay since it&#39;s used
+                            </span><span class="macro">inactive!</span>(expr);
+                        }
+                        <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
+                            <span class="macro">condition!</span>(ConstantConditionValue::Falsy);
+                            <span class="macro">active!</span>(expr);
+                        }
+                        <span class="prelude-val">None </span>=&gt; {
+                            <span class="macro">active!</span>(expr);
+                        }
+                    },
+                    ConditionalKind::NullishCoalescing { expr } =&gt; <span class="kw">match </span>condition.is_nullish() {
+                        <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
+                            <span class="macro">condition!</span>(ConstantConditionValue::Nullish);
+                            <span class="macro">active!</span>(expr);
+                        }
+                        <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
+                            <span class="macro">inactive!</span>(expr);
+                        }
+                        <span class="prelude-val">None </span>=&gt; {
+                            <span class="macro">active!</span>(expr);
+                        }
+                    },
+                }
+            }
+            Effect::Call {
+                func,
+                args,
+                ast_path,
+                span,
+                in_try,
+            } =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(ignored) = <span class="kw-2">&amp;</span>ignore_effect_span {
+                    <span class="kw">if </span><span class="kw-2">*</span>ignored == span {
+                        <span class="kw">continue</span>;
+                    }
+                }
+                <span class="kw">let </span>func = analysis_state.link_value(func, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                handle_call(
+                    <span class="kw-2">&amp;</span>ast_path,
                     span,
                     func,
-                    this,
+                    JsValue::unknown_empty(<span class="string">&quot;no this provided&quot;</span>),
                     args,
+                    <span class="kw-2">&amp;</span>analysis_state,
+                    <span class="kw-2">&amp;</span>add_effects,
+                    <span class="kw-2">&amp;mut </span>analysis,
+                    in_try,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+            Effect::MemberCall {
+                obj,
+                prop,
+                <span class="kw-2">mut </span>args,
+                ast_path,
+                span,
+                in_try,
+            } =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(ignored) = <span class="kw-2">&amp;</span>ignore_effect_span {
+                    <span class="kw">if </span><span class="kw-2">*</span>ignored == span {
+                        <span class="kw">continue</span>;
+                    }
+                }
+                <span class="kw">let </span><span class="kw-2">mut </span>obj = analysis_state.link_value(obj, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>prop = analysis_state.link_value(prop, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="kw">if let </span>JsValue::Array {
+                    items: <span class="kw-2">ref mut </span>values,
+                    mutable,
+                    ..
+                } = obj
+                {
+                    <span class="kw">if </span><span class="macro">matches!</span>(prop.as_str(), <span class="prelude-val">Some</span>(<span class="string">&quot;map&quot; </span>| <span class="string">&quot;forEach&quot; </span>| <span class="string">&quot;filter&quot;</span>)) {
+                        <span class="kw">if let </span>[EffectArg::Closure(value, block)] = <span class="kw-2">&amp;mut </span>args[..] {
+                            <span class="kw-2">*</span>value = analysis_state.link_value(take(value), in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="kw">if let </span>JsValue::Function(<span class="kw">_</span>, func_ident, <span class="kw">_</span>) = value {
+                                <span class="kw">let </span><span class="kw-2">mut </span>closure_arg = JsValue::alternatives(take(values));
+                                <span class="kw">if </span>mutable {
+                                    closure_arg.add_unknown_mutations();
+                                }
+                                analysis_state
+                                    .fun_args_values
+                                    .get_mut()
+                                    .insert(<span class="kw-2">*</span>func_ident, <span class="macro">vec!</span>[closure_arg]);
+                                queue_stack.get_mut().push(Action::LeaveScope(<span class="kw-2">*</span>func_ident));
+                                queue_stack.get_mut().extend(
+                                    take(<span class="kw-2">&amp;mut </span>block.effects)
+                                        .into_iter()
+                                        .map(Action::Effect)
+                                        .rev(),
+                                );
+                                <span class="kw">continue</span>;
+                            }
+                        }
+                    }
+                }
+
+                <span class="kw">let </span>func = analysis_state
+                    .link_value(
+                        JsValue::member(Box::new(obj.clone()), Box::new(prop)),
+                        in_try,
+                    )
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                handle_call(
+                    <span class="kw-2">&amp;</span>ast_path,
+                    span,
+                    func,
+                    obj,
+                    args,
+                    <span class="kw-2">&amp;</span>analysis_state,
+                    <span class="kw-2">&amp;</span>add_effects,
+                    <span class="kw-2">&amp;mut </span>analysis,
+                    in_try,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+            Effect::FreeVar {
+                var,
+                ast_path,
+                span: <span class="kw">_</span>,
+                in_try: <span class="kw">_</span>,
+            } =&gt; {
+                handle_free_var(<span class="kw-2">&amp;</span>ast_path, var, <span class="kw-2">&amp;</span>analysis_state, <span class="kw-2">&amp;mut </span>analysis).<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+            Effect::Member {
+                obj,
+                prop,
+                ast_path,
+                span: <span class="kw">_</span>,
+                in_try,
+            } =&gt; {
+                <span class="kw">let </span>obj = analysis_state.link_value(obj, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>prop = analysis_state.link_value(prop, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                handle_member(<span class="kw-2">&amp;</span>ast_path, obj, prop, <span class="kw-2">&amp;</span>analysis_state, <span class="kw-2">&amp;mut </span>analysis).<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+            Effect::ImportedBinding {
+                esm_reference_index,
+                export,
+                ast_path,
+                span: <span class="kw">_</span>,
+                in_try: <span class="kw">_</span>,
+            } =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(r) = import_references.get(esm_reference_index) {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="string">&quot;__turbopack_module_id__&quot;</span>) = export.as_deref() {
+                        analysis.add_reference(EsmModuleIdAssetReferenceVc::new(
+                            <span class="kw-2">*</span>r,
+                            AstPathVc::cell(ast_path),
+                        ))
+                    } <span class="kw">else </span>{
+                        analysis.add_code_gen(EsmBindingVc::new(
+                            <span class="kw-2">*</span>r,
+                            export,
+                            AstPathVc::cell(ast_path),
+                        ));
+                    }
+                }
+            }
+            Effect::ImportMeta {
+                ast_path,
+                span: <span class="kw">_</span>,
+                in_try: <span class="kw">_</span>,
+            } =&gt; {
+                <span class="kw">if </span>analysis_state.first_import_meta {
+                    analysis_state.first_import_meta = <span class="bool-val">false</span>;
+                    analysis.add_code_gen(ImportMetaBindingVc::new(source.ident().path()));
+                }
+
+                analysis.add_code_gen(ImportMetaRefVc::new(AstPathVc::cell(ast_path)));
+            }
+            Effect::Url {
+                input,
+                ast_path,
+                span,
+                in_try,
+            } =&gt; {
+                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>input);
+                <span class="kw">if </span>!pat.has_constant_parts() {
+                    handler.span_warn_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;new URL({input}, import.meta.url) is very dynamic&quot;</span>),
+                        DiagnosticId::Lint(
+                            errors::failed_to_analyse::ecmascript::NEW_URL_IMPORT_META.to_string(),
+                        ),
+                    )
+                }
+                analysis.add_reference(UrlAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(pat)),
+                    compile_time_info.environment().rendering(),
+                    AstPathVc::cell(ast_path),
+                    IssueSourceVc::from_byte_offset(source, span.lo.to_usize(), span.hi.to_usize()),
+                    in_try,
+                ));
+            }
+        }
+    }
+
+    analysis.set_successful(<span class="bool-val">true</span>);
+
+    analysis.build().<span class="kw">await
+</span>}
+
+<span class="kw">fn </span>handle_call_boxed&lt;<span class="lifetime">&#39;a</span>, G: Fn(Vec&lt;Effect&gt;) + Send + Sync + <span class="lifetime">&#39;a</span>&gt;(
+    ast_path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>[AstParentKind],
+    span: Span,
+    func: JsValue,
+    this: JsValue,
+    args: Vec&lt;EffectArg&gt;,
+    state: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>AnalysisState&lt;<span class="lifetime">&#39;a</span>&gt;,
+    add_effects: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>G,
+    analysis: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>AnalyzeEcmascriptModuleResultBuilder,
+    in_try: bool,
+) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;()&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;&gt; {
+    Box::pin(handle_call(
+        ast_path,
+        span,
+        func,
+        this,
+        args,
+        state,
+        add_effects,
+        analysis,
+        in_try,
+    ))
+}
+
+<span class="kw">async fn </span>handle_call&lt;G: Fn(Vec&lt;Effect&gt;) + Send + Sync&gt;(
+    ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
+    span: Span,
+    func: JsValue,
+    this: JsValue,
+    args: Vec&lt;EffectArg&gt;,
+    state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
+    add_effects: <span class="kw-2">&amp;</span>G,
+    analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
+    in_try: bool,
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">let </span><span class="kw-2">&amp;</span>AnalysisState {
+        handler,
+        origin,
+        source,
+        compile_time_info,
+        ..
+    } = state;
+    <span class="kw">fn </span>explain_args(args: <span class="kw-2">&amp;</span>[JsValue]) -&gt; (String, String) {
+        JsValue::explain_args(args, <span class="number">10</span>, <span class="number">2</span>)
+    }
+    <span class="kw">let </span>linked_args = |args: Vec&lt;EffectArg&gt;| <span class="kw">async move </span>{
+        args.into_iter()
+            .map(|arg| {
+                <span class="kw">let </span>add_effects = <span class="kw-2">&amp;</span>add_effects;
+                <span class="kw">async move </span>{
+                    <span class="kw">let </span>value = <span class="kw">match </span>arg {
+                        EffectArg::Value(value) =&gt; value,
+                        EffectArg::Closure(value, block) =&gt; {
+                            add_effects(block.effects);
+                            value
+                        }
+                        EffectArg::Spread =&gt; JsValue::unknown_empty(<span class="string">&quot;spread is not supported yet&quot;</span>),
+                    };
+                    state.link_value(value, in_try).<span class="kw">await
+                </span>}
+            })
+            .try_join()
+            .<span class="kw">await
+    </span>};
+    <span class="kw">match </span>func {
+        JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
+            <span class="kw">for </span>alt <span class="kw">in </span>alts {
+                handle_call_boxed(
+                    ast_path,
+                    span,
+                    alt,
+                    this.clone(),
+                    args.clone(),
                     state,
                     add_effects,
                     analysis,
                     in_try,
-                ))
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
             }
-
-            <span class="kw">async fn </span>handle_call&lt;G: Fn(Vec&lt;Effect&gt;) + Send + Sync&gt;(
-                ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
-                span: Span,
-                func: JsValue,
-                this: JsValue,
-                args: Vec&lt;EffectArg&gt;,
-                state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
-                add_effects: <span class="kw-2">&amp;</span>G,
-                analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
-                in_try: bool,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-                <span class="kw">let </span><span class="kw-2">&amp;</span>AnalysisState {
-                    handler,
-                    origin,
-                    source,
-                    compile_time_info,
-                    ..
-                } = state;
-                <span class="kw">fn </span>explain_args(args: <span class="kw-2">&amp;</span>[JsValue]) -&gt; (String, String) {
-                    JsValue::explain_args(args, <span class="number">10</span>, <span class="number">2</span>)
-                }
-                <span class="kw">let </span>linked_args = |args: Vec&lt;EffectArg&gt;| <span class="kw">async move </span>{
-                    args.into_iter()
-                        .map(|arg| {
-                            <span class="kw">let </span>add_effects = <span class="kw-2">&amp;</span>add_effects;
-                            <span class="kw">async move </span>{
-                                <span class="kw">let </span>value = <span class="kw">match </span>arg {
-                                    EffectArg::Value(value) =&gt; value,
-                                    EffectArg::Closure(value, block) =&gt; {
-                                        add_effects(block.effects);
-                                        value
-                                    }
-                                    EffectArg::Spread =&gt; {
-                                        JsValue::unknown_empty(<span class="string">&quot;spread is not supported yet&quot;</span>)
-                                    }
-                                };
-                                state.link_value(value, in_try).<span class="kw">await
-                            </span>}
-                        })
-                        .try_join()
-                        .<span class="kw">await
-                </span>};
-                <span class="kw">match </span>func {
-                    JsValue::Alternatives(<span class="kw">_</span>, alts) =&gt; {
-                        <span class="kw">for </span>alt <span class="kw">in </span>alts {
-                            handle_call_boxed(
-                                ast_path,
-                                span,
-                                alt,
-                                this.clone(),
-                                args.clone(),
-                                state,
-                                add_effects,
-                                analysis,
-                                in_try,
-                            )
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
-                        }
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::Import) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">1 </span>{
-                            <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
-                            <span class="kw">if </span>!pat.has_constant_parts() {
-                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                handler.span_warn_with_code(
-                                    span,
-                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;import({args}) is very dynamic{hints}&quot;</span>,),
-                                    DiagnosticId::Lint(
-                                        errors::failed_to_analyse::ecmascript::DYNAMIC_IMPORT
-                                            .to_string(),
-                                    ),
-                                )
-                            }
-                            analysis.add_reference(EsmAsyncAssetReferenceVc::new(
-                                origin,
-                                RequestVc::parse(Value::new(pat)),
-                                AstPathVc::cell(ast_path.to_vec()),
-                                issue_source(source, span),
-                                in_try,
-                            ));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;import({args}) is not statically analyse-able{hints}&quot;</span>,),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::DYNAMIC_IMPORT.to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::Require) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">1 </span>{
-                            <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
-                            <span class="kw">if </span>!pat.has_constant_parts() {
-                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                handler.span_warn_with_code(
-                                    span,
-                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require({args}) is very dynamic{hints}&quot;</span>,),
-                                    DiagnosticId::Lint(
-                                        errors::failed_to_analyse::ecmascript::REQUIRE.to_string(),
-                                    ),
-                                )
-                            }
-                            analysis.add_reference(CjsRequireAssetReferenceVc::new(
-                                origin,
-                                RequestVc::parse(Value::new(pat)),
-                                AstPathVc::cell(ast_path.to_vec()),
-                                issue_source(source, span),
-                                in_try,
-                            ));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require({args}) is not statically analyse-able{hints}&quot;</span>,),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::REQUIRE.to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::Define) =&gt; {
-                        analyze_amd_define(
-                            source,
-                            analysis,
-                            origin,
-                            handler,
-                            span,
-                            ast_path,
-                            linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>,
-                            in_try,
-                        );
-                    }
-
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">1 </span>{
-                            <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
-                            <span class="kw">if </span>!pat.has_constant_parts() {
-                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                handler.span_warn_with_code(
-                                    span,
-                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require.resolve({args}) is very dynamic{hints}&quot;</span>,),
-                                    DiagnosticId::Lint(
-                                        errors::failed_to_analyse::ecmascript::REQUIRE_RESOLVE
-                                            .to_string(),
-                                    ),
-                                )
-                            }
-                            analysis.add_reference(CjsRequireResolveAssetReferenceVc::new(
-                                origin,
-                                RequestVc::parse(Value::new(pat)),
-                                AstPathVc::cell(ast_path.to_vec()),
-                                issue_source(source, span),
-                                in_try,
-                            ));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;require.resolve({args}) is not statically analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::REQUIRE_RESOLVE.to_string(),
-                            ),
-                        )
-                    }
-
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">let </span>options = <span class="kw">match </span>parse_require_context(<span class="kw-2">&amp;</span>args) {
-                            <span class="prelude-val">Ok</span>(options) =&gt; options,
-                            <span class="prelude-val">Err</span>(err) =&gt; {
-                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                handler.span_err_with_code(
-                                    span,
-                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                        <span class="string">&quot;require.context({args}) is not statically analyze-able: \
-                                         {}{hints}&quot;</span>,
-                                        PrettyPrintError(<span class="kw-2">&amp;</span>err)
-                                    ),
-                                    DiagnosticId::Error(
-                                        errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT
-                                            .to_string(),
-                                    ),
-                                );
-                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                            }
-                        };
-
-                        analysis.add_reference(RequireContextAssetReferenceVc::new(
-                            source,
-                            origin,
-                            options.dir,
-                            options.include_subdirs,
-                            RegexVc::cell(options.filter),
-                            AstPathVc::cell(ast_path.to_vec()),
-                            OptionIssueSourceVc::some(issue_source(source, span)),
-                            in_try,
-                        ));
-                    }
-
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::FsReadMethod(name)) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>!args.is_empty() {
-                            <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
-                            <span class="kw">if </span>!pat.has_constant_parts() {
-                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                handler.span_warn_with_code(
-                                    span,
-                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;fs.{name}({args}) is very dynamic{hints}&quot;</span>,),
-                                    DiagnosticId::Lint(
-                                        errors::failed_to_analyse::ecmascript::FS_METHOD
-                                            .to_string(),
-                                    ),
-                                )
-                            }
-                            analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;fs.{name}({args}) is not statically analyse-able{hints}&quot;</span>,),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::FS_METHOD.to_string(),
-                            ),
-                        )
-                    }
-
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(..)) =&gt; {
-                        <span class="kw">let </span>parent_path = origin.origin_path().parent().<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-
-                        <span class="kw">let </span>linked_func_call = state
-                            .link_value(
-                                JsValue::call(
-                                    Box::new(JsValue::WellKnownFunction(
-                                        WellKnownFunctionKind::PathResolve(Box::new(
-                                            parent_path.path.as_str().into(),
-                                        )),
-                                    )),
-                                    args.clone(),
-                                ),
-                                in_try,
-                            )
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-                        <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>linked_func_call);
-                        <span class="kw">if </span>!pat.has_constant_parts() {
-                            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                            handler.span_warn_with_code(
-                                span,
-                                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;path.resolve({args}) is very dynamic{hints}&quot;</span>,),
-                                DiagnosticId::Lint(
-                                    errors::failed_to_analyse::ecmascript::PATH_METHOD.to_string(),
-                                ),
-                            )
-                        }
-                        analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                    }
-
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">let </span>linked_func_call = state
-                            .link_value(
-                                JsValue::call(
-                                    Box::new(JsValue::WellKnownFunction(
-                                        WellKnownFunctionKind::PathJoin,
-                                    )),
-                                    args.clone(),
-                                ),
-                                in_try,
-                            )
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>linked_func_call);
-                        <span class="kw">if </span>!pat.has_constant_parts() {
-                            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                            handler.span_warn_with_code(
-                                span,
-                                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;path.join({args}) is very dynamic{hints}&quot;</span>,),
-                                DiagnosticId::Lint(
-                                    errors::failed_to_analyse::ecmascript::PATH_METHOD.to_string(),
-                                ),
-                            )
-                        }
-                        analysis.add_reference(DirAssetReferenceVc::new(source, pat.into()));
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::ChildProcessSpawnMethod(
-                        name,
-                    )) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>!args.is_empty() {
-                            <span class="kw">let </span><span class="kw-2">mut </span>show_dynamic_warning = <span class="bool-val">false</span>;
-                            <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
-                            <span class="kw">if </span>pat.is_match(<span class="string">&quot;node&quot;</span>) &amp;&amp; args.len() &gt;= <span class="number">2 </span>{
-                                <span class="kw">let </span>first_arg = JsValue::member(
-                                    Box::new(args[<span class="number">1</span>].clone()),
-                                    Box::new(<span class="number">0_f64</span>.into()),
-                                );
-                                <span class="kw">let </span>first_arg = state.link_value(first_arg, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
-                                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>first_arg);
-                                <span class="kw">if </span>!pat.has_constant_parts() {
-                                    show_dynamic_warning = <span class="bool-val">true</span>;
-                                }
-                                analysis.add_reference(CjsAssetReferenceVc::new(
-                                    origin,
-                                    RequestVc::parse(Value::new(pat)),
-                                    issue_source(source, span),
-                                    in_try,
-                                ));
-                            }
-                            <span class="kw">if </span>show_dynamic_warning || !pat.has_constant_parts() {
-                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                handler.span_warn_with_code(
-                                    span,
-                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;child_process.{name}({args}) is very dynamic{hints}&quot;</span>,),
-                                    DiagnosticId::Lint(
-                                        errors::failed_to_analyse::ecmascript::CHILD_PROCESS_SPAWN
-                                            .to_string(),
-                                    ),
-                                );
-                            }
-                            analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;child_process.{name}({args}) is not statically \
-                                 analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::CHILD_PROCESS_SPAWN
-                                    .to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::ChildProcessFork) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>!args.is_empty() {
-                            <span class="kw">let </span>first_arg = <span class="kw-2">&amp;</span>args[<span class="number">0</span>];
-                            <span class="kw">let </span>pat = js_value_to_pattern(first_arg);
-                            <span class="kw">if </span>!pat.has_constant_parts() {
-                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                handler.span_warn_with_code(
-                                    span,
-                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;child_process.fork({args}) is very dynamic{hints}&quot;</span>,),
-                                    DiagnosticId::Lint(
-                                        errors::failed_to_analyse::ecmascript::CHILD_PROCESS_SPAWN
-                                            .to_string(),
-                                    ),
-                                );
-                            }
-                            analysis.add_reference(CjsAssetReferenceVc::new(
-                                origin,
-                                RequestVc::parse(Value::new(pat)),
-                                issue_source(source, span),
-                                in_try,
-                            ));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;child_process.fork({args}) is not statically analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::CHILD_PROCESS_SPAWN
-                                    .to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodePreGypFind) =&gt; {
-                        <span class="kw">use </span><span class="kw">crate</span>::resolve::node_native_binding::NodePreGypConfigReferenceVc;
-
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">1 </span>{
-                            <span class="kw">let </span>first_arg = <span class="kw-2">&amp;</span>args[<span class="number">0</span>];
-                            <span class="kw">let </span>pat = js_value_to_pattern(first_arg);
-                            <span class="kw">if </span>!pat.has_constant_parts() {
-                                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                handler.span_warn_with_code(
-                                    span,
-                                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;node-pre-gyp.find({args}) is very dynamic{hints}&quot;</span>,),
-                                    DiagnosticId::Lint(
-                                        errors::failed_to_analyse::ecmascript::NODE_PRE_GYP_FIND
-                                            .to_string(),
-                                    ),
-                                );
-                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                            }
-                            analysis.add_reference(NodePreGypConfigReferenceVc::new(
-                                origin.origin_path().parent(),
-                                pat.into(),
-                                compile_time_info.environment().compile_target(),
-                            ));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;require(&#39;@mapbox/node-pre-gyp&#39;).find({args}) is not statically \
-                                 analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::NODE_PRE_GYP_FIND
-                                    .to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeGypBuild) =&gt; {
-                        <span class="kw">use </span><span class="kw">crate</span>::resolve::node_native_binding::NodeGypBuildReferenceVc;
-
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">1 </span>{
-                            <span class="kw">let </span>first_arg = state.link_value(args[<span class="number">0</span>].clone(), in_try).<span class="kw">await</span><span class="question-mark">?</span>;
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = first_arg.as_str() {
-                                <span class="comment">// TODO this resolving should happen within NodeGypBuildReferenceVc
-                                </span><span class="kw">let </span>current_context = origin
-                                    .origin_path()
-                                    .root()
-                                    .join(s.trim_start_matches(<span class="string">&quot;/ROOT/&quot;</span>));
-                                analysis.add_reference(NodeGypBuildReferenceVc::new(
-                                    current_context,
-                                    compile_time_info.environment().compile_target(),
-                                ));
-                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                            }
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;require(&#39;node-gyp-build&#39;)({args}) is not statically \
-                                 analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::NODE_GYP_BUILD.to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeBindings) =&gt; {
-                        <span class="kw">use </span><span class="kw">crate</span>::resolve::node_native_binding::NodeBindingsReferenceVc;
-
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">1 </span>{
-                            <span class="kw">let </span>first_arg = state.link_value(args[<span class="number">0</span>].clone(), in_try).<span class="kw">await</span><span class="question-mark">?</span>;
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>s) = first_arg.as_str() {
-                                analysis.add_reference(NodeBindingsReferenceVc::new(
-                                    origin.origin_path(),
-                                    s.to_string(),
-                                ));
-                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                            }
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;require(&#39;bindings&#39;)({args}) is not statically analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::NODE_BINDINGS.to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeExpressSet) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">2 </span>{
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = args.get(<span class="number">0</span>).and_then(|arg| arg.as_str()) {
-                                <span class="kw">let </span>pkg_or_dir = args.get(<span class="number">1</span>).unwrap();
-                                <span class="kw">let </span>pat = js_value_to_pattern(pkg_or_dir);
-                                <span class="kw">if </span>!pat.has_constant_parts() {
-                                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                                    handler.span_warn_with_code(
-                                        span,
-                                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                            <span class="string">&quot;require(&#39;express&#39;)().set({args}) is very \
-                                             dynamic{hints}&quot;</span>,
-                                        ),
-                                        DiagnosticId::Lint(
-                                            errors::failed_to_analyse::ecmascript::NODE_EXPRESS
-                                                .to_string(),
-                                        ),
-                                    );
-                                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                                }
-                                <span class="kw">match </span>s {
-                                    <span class="string">&quot;views&quot; </span>=&gt; {
-                                        <span class="kw">if let </span>Pattern::Constant(p) = <span class="kw-2">&amp;</span>pat {
-                                            <span class="kw">let </span>abs_pattern = <span class="kw">if </span>p.starts_with(<span class="string">&quot;/ROOT/&quot;</span>) {
-                                                pat
-                                            } <span class="kw">else </span>{
-                                                <span class="kw">let </span>linked_func_call = state
-                                                    .link_value(
-                                                        JsValue::call(
-                                                            Box::new(JsValue::WellKnownFunction(
-                                                                WellKnownFunctionKind::PathJoin,
-                                                            )),
-                                                            <span class="macro">vec!</span>[
-                                                                JsValue::FreeVar(
-                                                                    <span class="string">&quot;__dirname&quot;</span>.into(),
-                                                                ),
-                                                                pkg_or_dir.clone(),
-                                                            ],
-                                                        ),
-                                                        in_try,
-                                                    )
-                                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                                                js_value_to_pattern(<span class="kw-2">&amp;</span>linked_func_call)
-                                            };
-                                            analysis.add_reference(DirAssetReferenceVc::new(
-                                                source,
-                                                abs_pattern.into(),
-                                            ));
-                                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                                        }
-                                    }
-                                    <span class="string">&quot;view engine&quot; </span>=&gt; {
-                                        <span class="kw">if let </span><span class="prelude-val">Some</span>(pkg) = pkg_or_dir.as_str() {
-                                            <span class="kw">if </span>pkg != <span class="string">&quot;html&quot; </span>{
-                                                <span class="kw">let </span>pat = js_value_to_pattern(pkg_or_dir);
-                                                analysis.add_reference(CjsAssetReferenceVc::new(
-                                                    origin,
-                                                    RequestVc::parse(Value::new(pat)),
-                                                    issue_source(source, span),
-                                                    in_try,
-                                                ));
-                                            }
-                                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                                        }
-                                    }
-                                    <span class="kw">_ </span>=&gt; {}
-                                }
-                            }
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;require(&#39;express&#39;)().set({args}) is not statically \
-                                 analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::NODE_EXPRESS.to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(
-                        WellKnownFunctionKind::NodeStrongGlobalizeSetRootDir,
-                    ) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = args.get(<span class="number">0</span>).and_then(|arg| arg.as_str()) {
-                            <span class="kw">let </span>abs_pattern = <span class="kw">if </span>p.starts_with(<span class="string">&quot;/ROOT/&quot;</span>) {
-                                Pattern::Constant(<span class="macro">format!</span>(<span class="string">&quot;{p}/intl&quot;</span>))
-                            } <span class="kw">else </span>{
-                                <span class="kw">let </span>linked_func_call = state
-                                    .link_value(
-                                        JsValue::call(
-                                            Box::new(JsValue::WellKnownFunction(
-                                                WellKnownFunctionKind::PathJoin,
-                                            )),
-                                            <span class="macro">vec!</span>[
-                                                JsValue::FreeVar(<span class="string">&quot;__dirname&quot;</span>.into()),
-                                                p.into(),
-                                                <span class="string">&quot;intl&quot;</span>.into(),
-                                            ],
-                                        ),
-                                        in_try,
-                                    )
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                                js_value_to_pattern(<span class="kw-2">&amp;</span>linked_func_call)
-                            };
-                            analysis.add_reference(DirAssetReferenceVc::new(
-                                source,
-                                abs_pattern.into(),
-                            ));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;require(&#39;strong-globalize&#39;).SetRootDir({args}) is not statically \
-                                 analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::NODE_GYP_BUILD.to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeResolveFrom) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">2 </span>&amp;&amp; args.get(<span class="number">1</span>).and_then(|arg| arg.as_str()).is_some() {
-                            analysis.add_reference(CjsAssetReferenceVc::new(
-                                origin,
-                                RequestVc::parse(Value::new(js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">1</span>]))),
-                                issue_source(source, span),
-                                in_try,
-                            ));
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;require(&#39;resolve-from&#39;)({args}) is not statically \
-                                 analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::NODE_RESOLVE_FROM
-                                    .to_string(),
-                            ),
-                        )
-                    }
-                    JsValue::WellKnownFunction(WellKnownFunctionKind::NodeProtobufLoad) =&gt; {
-                        <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">if </span>args.len() == <span class="number">2 </span>{
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(JsValue::Object { parts, .. }) = args.get(<span class="number">1</span>) {
-                                <span class="kw">for </span>dir <span class="kw">in </span>parts
-                                    .iter()
-                                    .filter_map(|object_part| {
-                                        <span class="kw">if let </span>ObjectPart::KeyValue(
-                                            JsValue::Constant(key),
-                                            JsValue::Array { items: dirs, .. },
-                                        ) = object_part
-                                        {
-                                            <span class="kw">if </span>key.as_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;includeDirs&quot;</span>) {
-                                                <span class="kw">return </span><span class="prelude-val">Some</span>(dirs.iter().filter_map(|dir| {
-                                                    dir.as_str().map(ToString::to_string)
-                                                }));
-                                            }
-                                        }
-                                        <span class="prelude-val">None
-                                    </span>})
-                                    .flatten()
-                                {
-                                    analysis.add_reference(DirAssetReferenceVc::new(
-                                        source,
-                                        Pattern::Constant(dir).into(),
-                                    ));
-                                }
-                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                            }
-                        }
-                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
-                        handler.span_warn_with_code(
-                            span,
-                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(
-                                <span class="string">&quot;require(&#39;@grpc/proto-loader&#39;).load({args}) is not statically \
-                                 analyse-able{hints}&quot;</span>,
-                            ),
-                            DiagnosticId::Error(
-                                errors::failed_to_analyse::ecmascript::NODE_PROTOBUF_LOADER
-                                    .to_string(),
-                            ),
-                        )
-                    }
-                    <span class="kw">_ </span>=&gt; {
-                        <span class="kw">for </span>arg <span class="kw">in </span>args {
-                            <span class="kw">if let </span>EffectArg::Closure(<span class="kw">_</span>, block) = arg {
-                                add_effects(block.effects);
-                            }
-                        }
-                    }
-                }
-                <span class="prelude-val">Ok</span>(())
-            }
-
-            <span class="kw">async fn </span>handle_member(
-                ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
-                obj: JsValue,
-                prop: JsValue,
-                state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
-                analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(prop) = prop.as_str() {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(def_name_len) = obj.get_defineable_name_len() {
-                        <span class="kw">let </span>compile_time_info = state.compile_time_info.<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">let </span>free_var_references = compile_time_info.free_var_references.<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="kw">for </span>(name, value) <span class="kw">in </span>free_var_references.iter() {
-                            <span class="kw">if </span>name.len() != def_name_len + <span class="number">1 </span>{
-                                <span class="kw">continue</span>;
-                            }
-                            <span class="kw">let </span><span class="kw-2">mut </span>it = name.iter().map(Cow::Borrowed).rev();
-                            <span class="kw">if </span>it.next().unwrap() != Cow::Borrowed(prop) {
-                                <span class="kw">continue</span>;
-                            }
-                            <span class="kw">if </span>obj.iter_defineable_name_rev().eq(it)
-                                &amp;&amp; handle_free_var_reference(ast_path, value, state, analysis)
-                                    .<span class="kw">await</span><span class="question-mark">?
-                            </span>{
-                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                            }
-                        }
-                    }
-                }
-                <span class="kw">match </span>(obj, prop) {
-                    (
-                        JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
-                        JsValue::Constant(s),
-                    ) <span class="kw">if </span>s.as_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;cache&quot;</span>) =&gt; {
-                        analysis.add_code_gen(
-                            CjsRequireCacheAccess {
-                                path: AstPathVc::cell(ast_path.to_vec()),
-                            }
-                            .cell(),
-                        );
-                    }
-                    <span class="kw">_ </span>=&gt; {}
-                }
-
-                <span class="prelude-val">Ok</span>(())
-            }
-
-            <span class="kw">async fn </span>handle_free_var(
-                ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
-                var: JsValue,
-                state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
-                analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(def_name_len) = var.get_defineable_name_len() {
-                    <span class="kw">let </span>compile_time_info = state.compile_time_info.<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span>free_var_references = compile_time_info.free_var_references.<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">for </span>(name, value) <span class="kw">in </span>free_var_references.iter() {
-                        <span class="kw">if </span>name.len() != def_name_len {
-                            <span class="kw">continue</span>;
-                        }
-                        <span class="kw">if </span>var
-                            .iter_defineable_name_rev()
-                            .eq(name.iter().map(Cow::Borrowed).rev())
-                            &amp;&amp; handle_free_var_reference(ast_path, value, state, analysis).<span class="kw">await</span><span class="question-mark">?
-                        </span>{
-                            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                        }
-                    }
-                }
-
-                <span class="prelude-val">Ok</span>(())
-            }
-
-            <span class="kw">async fn </span>handle_free_var_reference(
-                ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
-                value: <span class="kw-2">&amp;</span>FreeVarReference,
-                state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
-                analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
-            ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
-                <span class="comment">// We don&#39;t want to replace assignments as this would lead to invalid code.
-                </span><span class="kw">if </span><span class="macro">matches!</span>(
-                    ast_path,
-                    [
-                        ..,
-                        AstParentKind::AssignExpr(AssignExprField::Left),
-                        AstParentKind::PatOrExpr(PatOrExprField::Pat),
-                        AstParentKind::Pat(PatField::Expr),
-                        AstParentKind::Expr(ExprField::Member),
-                    ]
-                ) {
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">false</span>);
-                }
-                <span class="kw">match </span>value {
-                    FreeVarReference::Value(value) =&gt; {
-                        analysis.add_code_gen(ConstantValueVc::new(
-                            Value::new(value.clone()),
-                            AstPathVc::cell(ast_path.to_vec()),
-                        ));
-                    }
-                    FreeVarReference::EcmaScriptModule {
-                        request,
-                        context,
-                        export,
-                    } =&gt; {
-                        <span class="kw">let </span>esm_reference = EsmAssetReferenceVc::new(
-                            context.map_or(state.origin, |context| {
-                                PlainResolveOriginVc::new(state.origin.context(), context).into()
-                            }),
-                            RequestVc::parse(Value::new(request.clone().into())),
-                            Default::default(),
-                            state
-                                .import_parts
-                                .then(|| {
-                                    export
-                                        .as_ref()
-                                        .map(|export| ModulePartVc::export(export.to_string()))
-                                })
-                                .flatten(),
-                        )
-                        .resolve()
-                        .<span class="kw">await</span><span class="question-mark">?</span>;
-                        analysis.add_reference(esm_reference);
-                        analysis.add_code_gen(EsmBindingVc::new(
-                            esm_reference,
-                            export.clone(),
-                            AstPathVc::cell(ast_path.to_vec()),
-                        ));
-                    }
-                }
-                <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
-            }
-
-            <span class="kw">let </span>effects = take(<span class="kw-2">&amp;mut </span>var_graph.effects);
-
-            <span class="kw">enum </span>Action {
-                Effect(Effect),
-                LeaveScope(u32),
-            }
-
-            <span class="comment">// This is a stack of effects to process. We use a stack since during processing
-            // of an effect we might want to add more effects into the middle of the
-            // processing. Using a stack where effects are appended in reverse
-            // order allows us to do that. It&#39;s recursion implemented as Stack.
-            </span><span class="kw">let </span><span class="kw-2">mut </span>queue_stack = Mutex::new(Vec::new());
-            queue_stack
-                .get_mut()
-                .extend(effects.into_iter().map(Action::Effect).rev());
-
-            <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; AnalysisState&lt;<span class="lifetime">&#39;a</span>&gt; {
-                <span class="kw">async fn </span>link_value(<span class="kw-2">&amp;</span><span class="self">self</span>, value: JsValue, in_try: bool) -&gt; <span class="prelude-ty">Result</span>&lt;JsValue&gt; {
-                    <span class="kw">let </span>fun_args_values = <span class="self">self</span>.fun_args_values.lock().clone();
-                    link(
-                        <span class="self">self</span>.var_graph,
-                        value,
-                        <span class="kw-2">&amp;</span>early_value_visitor,
-                        <span class="kw-2">&amp;</span>|value| value_visitor(<span class="self">self</span>.origin, value, <span class="self">self</span>.compile_time_info, in_try),
-                        fun_args_values,
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::Import) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">1 </span>{
+                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
+                <span class="kw">if </span>!pat.has_constant_parts() {
+                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                    handler.span_warn_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;import({args}) is very dynamic{hints}&quot;</span>,),
+                        DiagnosticId::Lint(
+                            errors::failed_to_analyse::ecmascript::DYNAMIC_IMPORT.to_string(),
+                        ),
                     )
-                    .<span class="kw">await
-                </span>}
+                }
+                analysis.add_reference(EsmAsyncAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(pat)),
+                    AstPathVc::cell(ast_path.to_vec()),
+                    issue_source(source, span),
+                    in_try,
+                ));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
-
-            <span class="kw">let </span><span class="kw-2">mut </span>analysis_state = AnalysisState {
-                handler: <span class="kw-2">&amp;</span>handler,
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;import({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::DYNAMIC_IMPORT.to_string(),
+                ),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::Require) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">1 </span>{
+                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
+                <span class="kw">if </span>!pat.has_constant_parts() {
+                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                    handler.span_warn_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require({args}) is very dynamic{hints}&quot;</span>,),
+                        DiagnosticId::Lint(
+                            errors::failed_to_analyse::ecmascript::REQUIRE.to_string(),
+                        ),
+                    )
+                }
+                analysis.add_reference(CjsRequireAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(pat)),
+                    AstPathVc::cell(ast_path.to_vec()),
+                    issue_source(source, span),
+                    in_try,
+                ));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(errors::failed_to_analyse::ecmascript::REQUIRE.to_string()),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::Define) =&gt; {
+            analyze_amd_define(
                 source,
+                analysis,
                 origin,
-                compile_time_info,
-                var_graph: <span class="kw-2">&amp;</span>var_graph,
-                fun_args_values: Mutex::new(HashMap::&lt;u32, Vec&lt;JsValue&gt;&gt;::new()),
-                first_import_meta: <span class="bool-val">true</span>,
-                import_parts: options.import_parts,
+                handler,
+                span,
+                ast_path,
+                linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>,
+                in_try,
+            );
+        }
+
+        JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">1 </span>{
+                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
+                <span class="kw">if </span>!pat.has_constant_parts() {
+                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                    handler.span_warn_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require.resolve({args}) is very dynamic{hints}&quot;</span>,),
+                        DiagnosticId::Lint(
+                            errors::failed_to_analyse::ecmascript::REQUIRE_RESOLVE.to_string(),
+                        ),
+                    )
+                }
+                analysis.add_reference(CjsRequireResolveAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(pat)),
+                    AstPathVc::cell(ast_path.to_vec()),
+                    issue_source(source, span),
+                    in_try,
+                ));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require.resolve({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::REQUIRE_RESOLVE.to_string(),
+                ),
+            )
+        }
+
+        JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>options = <span class="kw">match </span>parse_require_context(<span class="kw-2">&amp;</span>args) {
+                <span class="prelude-val">Ok</span>(options) =&gt; options,
+                <span class="prelude-val">Err</span>(err) =&gt; {
+                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                    handler.span_err_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(
+                            <span class="string">&quot;require.context({args}) is not statically analyze-able: {}{hints}&quot;</span>,
+                            PrettyPrintError(<span class="kw-2">&amp;</span>err)
+                        ),
+                        DiagnosticId::Error(
+                            errors::failed_to_analyse::ecmascript::REQUIRE_CONTEXT.to_string(),
+                        ),
+                    );
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
             };
 
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(action) = queue_stack.get_mut().pop() {
-                <span class="kw">match </span>action {
-                    Action::LeaveScope(func_ident) =&gt; {
-                        analysis_state.fun_args_values.get_mut().remove(<span class="kw-2">&amp;</span>func_ident);
+            analysis.add_reference(RequireContextAssetReferenceVc::new(
+                source,
+                origin,
+                options.dir,
+                options.include_subdirs,
+                RegexVc::cell(options.filter),
+                AstPathVc::cell(ast_path.to_vec()),
+                OptionIssueSourceVc::some(issue_source(source, span)),
+                in_try,
+            ));
+        }
+
+        JsValue::WellKnownFunction(WellKnownFunctionKind::FsReadMethod(name)) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>!args.is_empty() {
+                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
+                <span class="kw">if </span>!pat.has_constant_parts() {
+                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                    handler.span_warn_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;fs.{name}({args}) is very dynamic{hints}&quot;</span>,),
+                        DiagnosticId::Lint(
+                            errors::failed_to_analyse::ecmascript::FS_METHOD.to_string(),
+                        ),
+                    )
+                }
+                analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;fs.{name}({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(errors::failed_to_analyse::ecmascript::FS_METHOD.to_string()),
+            )
+        }
+
+        JsValue::WellKnownFunction(WellKnownFunctionKind::PathResolve(..)) =&gt; {
+            <span class="kw">let </span>parent_path = origin.origin_path().parent().<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">let </span>linked_func_call = state
+                .link_value(
+                    JsValue::call(
+                        Box::new(JsValue::WellKnownFunction(
+                            WellKnownFunctionKind::PathResolve(Box::new(
+                                parent_path.path.as_str().into(),
+                            )),
+                        )),
+                        args.clone(),
+                    ),
+                    in_try,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>linked_func_call);
+            <span class="kw">if </span>!pat.has_constant_parts() {
+                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                handler.span_warn_with_code(
+                    span,
+                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;path.resolve({args}) is very dynamic{hints}&quot;</span>,),
+                    DiagnosticId::Lint(
+                        errors::failed_to_analyse::ecmascript::PATH_METHOD.to_string(),
+                    ),
+                )
+            }
+            analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+
+        JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>linked_func_call = state
+                .link_value(
+                    JsValue::call(
+                        Box::new(JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin)),
+                        args.clone(),
+                    ),
+                    in_try,
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>linked_func_call);
+            <span class="kw">if </span>!pat.has_constant_parts() {
+                <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                handler.span_warn_with_code(
+                    span,
+                    <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;path.join({args}) is very dynamic{hints}&quot;</span>,),
+                    DiagnosticId::Lint(
+                        errors::failed_to_analyse::ecmascript::PATH_METHOD.to_string(),
+                    ),
+                )
+            }
+            analysis.add_reference(DirAssetReferenceVc::new(source, pat.into()));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::ChildProcessSpawnMethod(name)) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>!args.is_empty() {
+                <span class="kw">let </span><span class="kw-2">mut </span>show_dynamic_warning = <span class="bool-val">false</span>;
+                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">0</span>]);
+                <span class="kw">if </span>pat.is_match(<span class="string">&quot;node&quot;</span>) &amp;&amp; args.len() &gt;= <span class="number">2 </span>{
+                    <span class="kw">let </span>first_arg =
+                        JsValue::member(Box::new(args[<span class="number">1</span>].clone()), Box::new(<span class="number">0_f64</span>.into()));
+                    <span class="kw">let </span>first_arg = state.link_value(first_arg, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>first_arg);
+                    <span class="kw">if </span>!pat.has_constant_parts() {
+                        show_dynamic_warning = <span class="bool-val">true</span>;
                     }
-                    Action::Effect(effect) =&gt; {
-                        <span class="kw">let </span>add_effects = |effects: Vec&lt;Effect&gt;| {
-                            queue_stack
-                                .lock()
-                                .extend(effects.into_iter().map(Action::Effect).rev())
-                        };
-                        <span class="kw">match </span>effect {
-                            Effect::Conditional {
-                                condition,
-                                kind,
-                                ast_path: condition_ast_path,
-                                span: <span class="kw">_</span>,
-                                in_try,
-                            } =&gt; {
-                                <span class="kw">let </span>condition =
-                                    analysis_state.link_value(condition, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+                    analysis.add_reference(CjsAssetReferenceVc::new(
+                        origin,
+                        RequestVc::parse(Value::new(pat)),
+                        issue_source(source, span),
+                        in_try,
+                    ));
+                }
+                <span class="kw">if </span>show_dynamic_warning || !pat.has_constant_parts() {
+                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                    handler.span_warn_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;child_process.{name}({args}) is very dynamic{hints}&quot;</span>,),
+                        DiagnosticId::Lint(
+                            errors::failed_to_analyse::ecmascript::CHILD_PROCESS_SPAWN.to_string(),
+                        ),
+                    );
+                }
+                analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;child_process.{name}({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::CHILD_PROCESS_SPAWN.to_string(),
+                ),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::ChildProcessFork) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>!args.is_empty() {
+                <span class="kw">let </span>first_arg = <span class="kw-2">&amp;</span>args[<span class="number">0</span>];
+                <span class="kw">let </span>pat = js_value_to_pattern(first_arg);
+                <span class="kw">if </span>!pat.has_constant_parts() {
+                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                    handler.span_warn_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;child_process.fork({args}) is very dynamic{hints}&quot;</span>,),
+                        DiagnosticId::Lint(
+                            errors::failed_to_analyse::ecmascript::CHILD_PROCESS_SPAWN.to_string(),
+                        ),
+                    );
+                }
+                analysis.add_reference(CjsAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(pat)),
+                    issue_source(source, span),
+                    in_try,
+                ));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;child_process.fork({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::CHILD_PROCESS_SPAWN.to_string(),
+                ),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::NodePreGypFind) =&gt; {
+            <span class="kw">use </span><span class="kw">crate</span>::resolve::node_native_binding::NodePreGypConfigReferenceVc;
 
-                                <span class="macro">macro_rules! </span>inactive {
-                                    (<span class="macro-nonterminal">$block</span>:ident) =&gt; {
-                                        analysis.add_code_gen(UnreachableVc::new(AstPathVc::cell(
-                                            <span class="macro-nonterminal">$block</span>.ast_path.to_vec(),
-                                        )));
-                                    };
-                                }
-                                <span class="macro">macro_rules! </span>condition {
-                                    (<span class="macro-nonterminal">$expr</span>:expr) =&gt; {
-                                        analysis.add_code_gen(ConstantConditionVc::new(
-                                            Value::new(<span class="macro-nonterminal">$expr</span>),
-                                            AstPathVc::cell(condition_ast_path.to_vec()),
-                                        ));
-                                    };
-                                }
-                                <span class="macro">macro_rules! </span>active {
-                                    (<span class="macro-nonterminal">$block</span>:ident) =&gt; {
-                                        queue_stack.get_mut().extend(
-                                            <span class="macro-nonterminal">$block</span>.effects.into_iter().map(Action::Effect).rev(),
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">1 </span>{
+                <span class="kw">let </span>first_arg = <span class="kw-2">&amp;</span>args[<span class="number">0</span>];
+                <span class="kw">let </span>pat = js_value_to_pattern(first_arg);
+                <span class="kw">if </span>!pat.has_constant_parts() {
+                    <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                    handler.span_warn_with_code(
+                        span,
+                        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;node-pre-gyp.find({args}) is very dynamic{hints}&quot;</span>,),
+                        DiagnosticId::Lint(
+                            errors::failed_to_analyse::ecmascript::NODE_PRE_GYP_FIND.to_string(),
+                        ),
+                    );
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+                analysis.add_reference(NodePreGypConfigReferenceVc::new(
+                    origin.origin_path().parent(),
+                    pat.into(),
+                    compile_time_info.environment().compile_target(),
+                ));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(
+                    <span class="string">&quot;require(&#39;@mapbox/node-pre-gyp&#39;).find({args}) is not statically \
+                     analyse-able{hints}&quot;</span>,
+                ),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::NODE_PRE_GYP_FIND.to_string(),
+                ),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeGypBuild) =&gt; {
+            <span class="kw">use </span><span class="kw">crate</span>::resolve::node_native_binding::NodeGypBuildReferenceVc;
+
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">1 </span>{
+                <span class="kw">let </span>first_arg = state.link_value(args[<span class="number">0</span>].clone(), in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = first_arg.as_str() {
+                    <span class="comment">// TODO this resolving should happen within NodeGypBuildReferenceVc
+                    </span><span class="kw">let </span>current_context = origin
+                        .origin_path()
+                        .root()
+                        .join(s.trim_start_matches(<span class="string">&quot;/ROOT/&quot;</span>));
+                    analysis.add_reference(NodeGypBuildReferenceVc::new(
+                        current_context,
+                        compile_time_info.environment().compile_target(),
+                    ));
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(
+                    <span class="string">&quot;require(&#39;node-gyp-build&#39;)({args}) is not statically analyse-able{hints}&quot;</span>,
+                ),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::NODE_GYP_BUILD.to_string(),
+                ),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeBindings) =&gt; {
+            <span class="kw">use </span><span class="kw">crate</span>::resolve::node_native_binding::NodeBindingsReferenceVc;
+
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">1 </span>{
+                <span class="kw">let </span>first_arg = state.link_value(args[<span class="number">0</span>].clone(), in_try).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>s) = first_arg.as_str() {
+                    analysis.add_reference(NodeBindingsReferenceVc::new(
+                        origin.origin_path(),
+                        s.to_string(),
+                    ));
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require(&#39;bindings&#39;)({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::NODE_BINDINGS.to_string(),
+                ),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeExpressSet) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">2 </span>{
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(s) = args.get(<span class="number">0</span>).and_then(|arg| arg.as_str()) {
+                    <span class="kw">let </span>pkg_or_dir = args.get(<span class="number">1</span>).unwrap();
+                    <span class="kw">let </span>pat = js_value_to_pattern(pkg_or_dir);
+                    <span class="kw">if </span>!pat.has_constant_parts() {
+                        <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+                        handler.span_warn_with_code(
+                            span,
+                            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require(&#39;express&#39;)().set({args}) is very dynamic{hints}&quot;</span>,),
+                            DiagnosticId::Lint(
+                                errors::failed_to_analyse::ecmascript::NODE_EXPRESS.to_string(),
+                            ),
+                        );
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                    }
+                    <span class="kw">match </span>s {
+                        <span class="string">&quot;views&quot; </span>=&gt; {
+                            <span class="kw">if let </span>Pattern::Constant(p) = <span class="kw-2">&amp;</span>pat {
+                                <span class="kw">let </span>abs_pattern = <span class="kw">if </span>p.starts_with(<span class="string">&quot;/ROOT/&quot;</span>) {
+                                    pat
+                                } <span class="kw">else </span>{
+                                    <span class="kw">let </span>linked_func_call = state
+                                        .link_value(
+                                            JsValue::call(
+                                                Box::new(JsValue::WellKnownFunction(
+                                                    WellKnownFunctionKind::PathJoin,
+                                                )),
+                                                <span class="macro">vec!</span>[
+                                                    JsValue::FreeVar(<span class="string">&quot;__dirname&quot;</span>.into()),
+                                                    pkg_or_dir.clone(),
+                                                ],
+                                            ),
+                                            in_try,
                                         )
-                                    };
-                                }
-                                <span class="kw">match </span><span class="kw-2">*</span>kind {
-                                    ConditionalKind::If { then } =&gt; <span class="kw">match </span>condition.is_truthy() {
-                                        <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
-                                            <span class="macro">condition!</span>(ConstantConditionValue::Truthy);
-                                            <span class="macro">active!</span>(then);
-                                        }
-                                        <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
-                                            <span class="macro">condition!</span>(ConstantConditionValue::Falsy);
-                                            <span class="macro">inactive!</span>(then);
-                                        }
-                                        <span class="prelude-val">None </span>=&gt; {
-                                            <span class="macro">active!</span>(then);
-                                        }
-                                    },
-                                    ConditionalKind::IfElse { then, r#else }
-                                    | ConditionalKind::Ternary { then, r#else } =&gt; {
-                                        <span class="kw">match </span>condition.is_truthy() {
-                                            <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
-                                                <span class="macro">condition!</span>(ConstantConditionValue::Truthy);
-                                                <span class="macro">active!</span>(then);
-                                                <span class="macro">inactive!</span>(r#else);
-                                            }
-                                            <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
-                                                <span class="macro">condition!</span>(ConstantConditionValue::Falsy);
-                                                <span class="macro">active!</span>(r#else);
-                                                <span class="macro">inactive!</span>(then);
-                                            }
-                                            <span class="prelude-val">None </span>=&gt; {
-                                                <span class="macro">active!</span>(then);
-                                                <span class="macro">active!</span>(r#else);
-                                            }
-                                        }
-                                    }
-                                    ConditionalKind::And { expr } =&gt; <span class="kw">match </span>condition.is_truthy() {
-                                        <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
-                                            <span class="macro">condition!</span>(ConstantConditionValue::Truthy);
-                                            <span class="macro">active!</span>(expr);
-                                        }
-                                        <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
-                                            <span class="comment">// The condition value needs to stay since it&#39;s used
-                                            </span><span class="macro">inactive!</span>(expr);
-                                        }
-                                        <span class="prelude-val">None </span>=&gt; {
-                                            <span class="macro">active!</span>(expr);
-                                        }
-                                    },
-                                    ConditionalKind::Or { expr } =&gt; <span class="kw">match </span>condition.is_truthy() {
-                                        <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
-                                            <span class="comment">// The condition value needs to stay since it&#39;s used
-                                            </span><span class="macro">inactive!</span>(expr);
-                                        }
-                                        <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
-                                            <span class="macro">condition!</span>(ConstantConditionValue::Falsy);
-                                            <span class="macro">active!</span>(expr);
-                                        }
-                                        <span class="prelude-val">None </span>=&gt; {
-                                            <span class="macro">active!</span>(expr);
-                                        }
-                                    },
-                                    ConditionalKind::NullishCoalescing { expr } =&gt; {
-                                        <span class="kw">match </span>condition.is_nullish() {
-                                            <span class="prelude-val">Some</span>(<span class="bool-val">true</span>) =&gt; {
-                                                <span class="macro">condition!</span>(ConstantConditionValue::Nullish);
-                                                <span class="macro">active!</span>(expr);
-                                            }
-                                            <span class="prelude-val">Some</span>(<span class="bool-val">false</span>) =&gt; {
-                                                <span class="macro">inactive!</span>(expr);
-                                            }
-                                            <span class="prelude-val">None </span>=&gt; {
-                                                <span class="macro">active!</span>(expr);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Effect::Call {
-                                func,
-                                args,
-                                ast_path,
-                                span,
-                                in_try,
-                            } =&gt; {
-                                <span class="kw">if let </span><span class="prelude-val">Some</span>(ignored) = <span class="kw-2">&amp;</span>ignore_effect_span {
-                                    <span class="kw">if </span><span class="kw-2">*</span>ignored == span {
-                                        <span class="kw">continue</span>;
-                                    }
-                                }
-                                <span class="kw">let </span>func = analysis_state.link_value(func, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
-
-                                handle_call(
-                                    <span class="kw-2">&amp;</span>ast_path,
-                                    span,
-                                    func,
-                                    JsValue::unknown_empty(<span class="string">&quot;no this provided&quot;</span>),
-                                    args,
-                                    <span class="kw-2">&amp;</span>analysis_state,
-                                    <span class="kw-2">&amp;</span>add_effects,
-                                    <span class="kw-2">&amp;mut </span>analysis,
-                                    in_try,
-                                )
-                                .<span class="kw">await</span><span class="question-mark">?</span>;
-                            }
-                            Effect::MemberCall {
-                                obj,
-                                prop,
-                                <span class="kw-2">mut </span>args,
-                                ast_path,
-                                span,
-                                in_try,
-                            } =&gt; {
-                                <span class="kw">if let </span><span class="prelude-val">Some</span>(ignored) = <span class="kw-2">&amp;</span>ignore_effect_span {
-                                    <span class="kw">if </span><span class="kw-2">*</span>ignored == span {
-                                        <span class="kw">continue</span>;
-                                    }
-                                }
-                                <span class="kw">let </span><span class="kw-2">mut </span>obj = analysis_state.link_value(obj, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
-                                <span class="kw">let </span>prop = analysis_state.link_value(prop, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
-
-                                <span class="kw">if let </span>JsValue::Array {
-                                    items: <span class="kw-2">ref mut </span>values,
-                                    mutable,
-                                    ..
-                                } = obj
-                                {
-                                    <span class="kw">if </span><span class="macro">matches!</span>(prop.as_str(), <span class="prelude-val">Some</span>(<span class="string">&quot;map&quot; </span>| <span class="string">&quot;forEach&quot; </span>| <span class="string">&quot;filter&quot;</span>)) {
-                                        <span class="kw">if let </span>[EffectArg::Closure(value, block)] = <span class="kw-2">&amp;mut </span>args[..] {
-                                            <span class="kw-2">*</span>value = analysis_state
-                                                .link_value(take(value), in_try)
-                                                .<span class="kw">await</span><span class="question-mark">?</span>;
-                                            <span class="kw">if let </span>JsValue::Function(<span class="kw">_</span>, func_ident, <span class="kw">_</span>) = value {
-                                                <span class="kw">let </span><span class="kw-2">mut </span>closure_arg =
-                                                    JsValue::alternatives(take(values));
-                                                <span class="kw">if </span>mutable {
-                                                    closure_arg.add_unknown_mutations();
-                                                }
-                                                analysis_state
-                                                    .fun_args_values
-                                                    .get_mut()
-                                                    .insert(<span class="kw-2">*</span>func_ident, <span class="macro">vec!</span>[closure_arg]);
-                                                queue_stack
-                                                    .get_mut()
-                                                    .push(Action::LeaveScope(<span class="kw-2">*</span>func_ident));
-                                                queue_stack.get_mut().extend(
-                                                    take(<span class="kw-2">&amp;mut </span>block.effects)
-                                                        .into_iter()
-                                                        .map(Action::Effect)
-                                                        .rev(),
-                                                );
-                                                <span class="kw">continue</span>;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                <span class="kw">let </span>func = analysis_state
-                                    .link_value(
-                                        JsValue::member(Box::new(obj.clone()), Box::new(prop)),
-                                        in_try,
-                                    )
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-
-                                handle_call(
-                                    <span class="kw-2">&amp;</span>ast_path,
-                                    span,
-                                    func,
-                                    obj,
-                                    args,
-                                    <span class="kw-2">&amp;</span>analysis_state,
-                                    <span class="kw-2">&amp;</span>add_effects,
-                                    <span class="kw-2">&amp;mut </span>analysis,
-                                    in_try,
-                                )
-                                .<span class="kw">await</span><span class="question-mark">?</span>;
-                            }
-                            Effect::FreeVar {
-                                var,
-                                ast_path,
-                                span: <span class="kw">_</span>,
-                                in_try: <span class="kw">_</span>,
-                            } =&gt; {
-                                handle_free_var(<span class="kw-2">&amp;</span>ast_path, var, <span class="kw-2">&amp;</span>analysis_state, <span class="kw-2">&amp;mut </span>analysis)
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                            }
-                            Effect::Member {
-                                obj,
-                                prop,
-                                ast_path,
-                                span: <span class="kw">_</span>,
-                                in_try,
-                            } =&gt; {
-                                <span class="kw">let </span>obj = analysis_state.link_value(obj, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
-                                <span class="kw">let </span>prop = analysis_state.link_value(prop, in_try).<span class="kw">await</span><span class="question-mark">?</span>;
-
-                                handle_member(<span class="kw-2">&amp;</span>ast_path, obj, prop, <span class="kw-2">&amp;</span>analysis_state, <span class="kw-2">&amp;mut </span>analysis)
-                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-                            }
-                            Effect::ImportedBinding {
-                                esm_reference_index,
-                                export,
-                                ast_path,
-                                span: <span class="kw">_</span>,
-                                in_try: <span class="kw">_</span>,
-                            } =&gt; {
-                                <span class="kw">if let </span><span class="prelude-val">Some</span>(r) = import_references.get(esm_reference_index) {
-                                    <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="string">&quot;__turbopack_module_id__&quot;</span>) = export.as_deref() {
-                                        analysis.add_reference(EsmModuleIdAssetReferenceVc::new(
-                                            <span class="kw-2">*</span>r,
-                                            AstPathVc::cell(ast_path),
-                                        ))
-                                    } <span class="kw">else </span>{
-                                        analysis.add_code_gen(EsmBindingVc::new(
-                                            <span class="kw-2">*</span>r,
-                                            export,
-                                            AstPathVc::cell(ast_path),
-                                        ));
-                                    }
-                                }
-                            }
-                            Effect::ImportMeta {
-                                ast_path,
-                                span: <span class="kw">_</span>,
-                                in_try: <span class="kw">_</span>,
-                            } =&gt; {
-                                <span class="kw">if </span>analysis_state.first_import_meta {
-                                    analysis_state.first_import_meta = <span class="bool-val">false</span>;
-                                    analysis.add_code_gen(ImportMetaBindingVc::new(
-                                        source.ident().path(),
-                                    ));
-                                }
-
-                                analysis
-                                    .add_code_gen(ImportMetaRefVc::new(AstPathVc::cell(ast_path)));
-                            }
-                            Effect::Url {
-                                input,
-                                ast_path,
-                                span,
-                                in_try,
-                            } =&gt; {
-                                <span class="kw">let </span>pat = js_value_to_pattern(<span class="kw-2">&amp;</span>input);
-                                <span class="kw">if </span>!pat.has_constant_parts() {
-                                    handler.span_warn_with_code(
-                                span,
-                                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;new URL({input}, import.meta.url) is very dynamic&quot;</span>),
-                                DiagnosticId::Lint(
-                                    errors::failed_to_analyse::ecmascript::NEW_URL_IMPORT_META
-                                        .to_string(),
-                                ),
-                            )
-                                }
-                                analysis.add_reference(UrlAssetReferenceVc::new(
-                                    origin,
-                                    RequestVc::parse(Value::new(pat)),
-                                    compile_time_info.environment().rendering(),
-                                    AstPathVc::cell(ast_path),
-                                    IssueSourceVc::from_byte_offset(
-                                        source,
-                                        span.lo.to_usize(),
-                                        span.hi.to_usize(),
-                                    ),
-                                    in_try,
+                                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                                    js_value_to_pattern(<span class="kw-2">&amp;</span>linked_func_call)
+                                };
+                                analysis.add_reference(DirAssetReferenceVc::new(
+                                    source,
+                                    abs_pattern.into(),
                                 ));
+                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                             }
                         }
+                        <span class="string">&quot;view engine&quot; </span>=&gt; {
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(pkg) = pkg_or_dir.as_str() {
+                                <span class="kw">if </span>pkg != <span class="string">&quot;html&quot; </span>{
+                                    <span class="kw">let </span>pat = js_value_to_pattern(pkg_or_dir);
+                                    analysis.add_reference(CjsAssetReferenceVc::new(
+                                        origin,
+                                        RequestVc::parse(Value::new(pat)),
+                                        issue_source(source, span),
+                                        in_try,
+                                    ));
+                                }
+                                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                            }
+                        }
+                        <span class="kw">_ </span>=&gt; {}
                     }
                 }
             }
-            analysis.set_successful(<span class="bool-val">true</span>);
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require(&#39;express&#39;)().set({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::NODE_EXPRESS.to_string(),
+                ),
+            )
         }
-        ParseResult::Unparseable | ParseResult::NotFound =&gt; {}
-    };
+        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeStrongGlobalizeSetRootDir) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(p) = args.get(<span class="number">0</span>).and_then(|arg| arg.as_str()) {
+                <span class="kw">let </span>abs_pattern = <span class="kw">if </span>p.starts_with(<span class="string">&quot;/ROOT/&quot;</span>) {
+                    Pattern::Constant(<span class="macro">format!</span>(<span class="string">&quot;{p}/intl&quot;</span>))
+                } <span class="kw">else </span>{
+                    <span class="kw">let </span>linked_func_call = state
+                        .link_value(
+                            JsValue::call(
+                                Box::new(JsValue::WellKnownFunction(
+                                    WellKnownFunctionKind::PathJoin,
+                                )),
+                                <span class="macro">vec!</span>[
+                                    JsValue::FreeVar(<span class="string">&quot;__dirname&quot;</span>.into()),
+                                    p.into(),
+                                    <span class="string">&quot;intl&quot;</span>.into(),
+                                ],
+                            ),
+                            in_try,
+                        )
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+                    js_value_to_pattern(<span class="kw-2">&amp;</span>linked_func_call)
+                };
+                analysis.add_reference(DirAssetReferenceVc::new(source, abs_pattern.into()));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(
+                    <span class="string">&quot;require(&#39;strong-globalize&#39;).SetRootDir({args}) is not statically \
+                     analyse-able{hints}&quot;</span>,
+                ),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::NODE_GYP_BUILD.to_string(),
+                ),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeResolveFrom) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">2 </span>&amp;&amp; args.get(<span class="number">1</span>).and_then(|arg| arg.as_str()).is_some() {
+                analysis.add_reference(CjsAssetReferenceVc::new(
+                    origin,
+                    RequestVc::parse(Value::new(js_value_to_pattern(<span class="kw-2">&amp;</span>args[<span class="number">1</span>]))),
+                    issue_source(source, span),
+                    in_try,
+                ));
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;require(&#39;resolve-from&#39;)({args}) is not statically analyse-able{hints}&quot;</span>,),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::NODE_RESOLVE_FROM.to_string(),
+                ),
+            )
+        }
+        JsValue::WellKnownFunction(WellKnownFunctionKind::NodeProtobufLoad) =&gt; {
+            <span class="kw">let </span>args = linked_args(args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">if </span>args.len() == <span class="number">2 </span>{
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(JsValue::Object { parts, .. }) = args.get(<span class="number">1</span>) {
+                    <span class="kw">for </span>dir <span class="kw">in
+                        </span>parts
+                            .iter()
+                            .filter_map(|object_part| {
+                                <span class="kw">if let </span>ObjectPart::KeyValue(
+                                    JsValue::Constant(key),
+                                    JsValue::Array { items: dirs, .. },
+                                ) = object_part
+                                {
+                                    <span class="kw">if </span>key.as_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;includeDirs&quot;</span>) {
+                                        <span class="kw">return </span><span class="prelude-val">Some</span>(dirs.iter().filter_map(|dir| {
+                                            dir.as_str().map(ToString::to_string)
+                                        }));
+                                    }
+                                }
+                                <span class="prelude-val">None
+                            </span>})
+                            .flatten()
+                    {
+                        analysis.add_reference(DirAssetReferenceVc::new(
+                            source,
+                            Pattern::Constant(dir).into(),
+                        ));
+                    }
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+            }
+            <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
+            handler.span_warn_with_code(
+                span,
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(
+                    <span class="string">&quot;require(&#39;@grpc/proto-loader&#39;).load({args}) is not statically \
+                     analyse-able{hints}&quot;</span>,
+                ),
+                DiagnosticId::Error(
+                    errors::failed_to_analyse::ecmascript::NODE_PROTOBUF_LOADER.to_string(),
+                ),
+            )
+        }
+        <span class="kw">_ </span>=&gt; {
+            <span class="kw">for </span>arg <span class="kw">in </span>args {
+                <span class="kw">if let </span>EffectArg::Closure(<span class="kw">_</span>, block) = arg {
+                    add_effects(block.effects);
+                }
+            }
+        }
+    }
+    <span class="prelude-val">Ok</span>(())
+}
 
-    analysis.build().<span class="kw">await
-</span>}
+<span class="kw">async fn </span>handle_member(
+    ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
+    obj: JsValue,
+    prop: JsValue,
+    state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
+    analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(prop) = prop.as_str() {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(def_name_len) = obj.get_defineable_name_len() {
+            <span class="kw">let </span>compile_time_info = state.compile_time_info.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>free_var_references = compile_time_info.free_var_references.<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">for </span>(name, value) <span class="kw">in </span>free_var_references.iter() {
+                <span class="kw">if </span>name.len() != def_name_len + <span class="number">1 </span>{
+                    <span class="kw">continue</span>;
+                }
+                <span class="kw">let </span><span class="kw-2">mut </span>it = name.iter().map(Cow::Borrowed).rev();
+                <span class="kw">if </span>it.next().unwrap() != Cow::Borrowed(prop) {
+                    <span class="kw">continue</span>;
+                }
+                <span class="kw">if </span>obj.iter_defineable_name_rev().eq(it)
+                    &amp;&amp; handle_free_var_reference(ast_path, value, state, analysis).<span class="kw">await</span><span class="question-mark">?
+                </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+            }
+        }
+    }
+    <span class="kw">match </span>(obj, prop) {
+        (JsValue::WellKnownFunction(WellKnownFunctionKind::Require), JsValue::Constant(s))
+            <span class="kw">if </span>s.as_str() == <span class="prelude-val">Some</span>(<span class="string">&quot;cache&quot;</span>) =&gt;
+        {
+            analysis.add_code_gen(
+                CjsRequireCacheAccess {
+                    path: AstPathVc::cell(ast_path.to_vec()),
+                }
+                .cell(),
+            );
+        }
+        <span class="kw">_ </span>=&gt; {}
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>handle_free_var(
+    ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
+    var: JsValue,
+    state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
+    analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
+) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(def_name_len) = var.get_defineable_name_len() {
+        <span class="kw">let </span>compile_time_info = state.compile_time_info.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>free_var_references = compile_time_info.free_var_references.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">for </span>(name, value) <span class="kw">in </span>free_var_references.iter() {
+            <span class="kw">if </span>name.len() != def_name_len {
+                <span class="kw">continue</span>;
+            }
+            <span class="kw">if </span>var
+                .iter_defineable_name_rev()
+                .eq(name.iter().map(Cow::Borrowed).rev())
+                &amp;&amp; handle_free_var_reference(ast_path, value, state, analysis).<span class="kw">await</span><span class="question-mark">?
+            </span>{
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+        }
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>handle_free_var_reference(
+    ast_path: <span class="kw-2">&amp;</span>[AstParentKind],
+    value: <span class="kw-2">&amp;</span>FreeVarReference,
+    state: <span class="kw-2">&amp;</span>AnalysisState&lt;<span class="lifetime">&#39;_</span>&gt;,
+    analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
+) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+    <span class="comment">// We don&#39;t want to replace assignments as this would lead to invalid code.
+    </span><span class="kw">if </span><span class="macro">matches!</span>(
+        ast_path,
+        [
+            ..,
+            AstParentKind::AssignExpr(AssignExprField::Left),
+            AstParentKind::PatOrExpr(PatOrExprField::Pat),
+            AstParentKind::Pat(PatField::Expr),
+            AstParentKind::Expr(ExprField::Member),
+        ]
+    ) {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">false</span>);
+    }
+    <span class="kw">match </span>value {
+        FreeVarReference::Value(value) =&gt; {
+            analysis.add_code_gen(ConstantValueVc::new(
+                Value::new(value.clone()),
+                AstPathVc::cell(ast_path.to_vec()),
+            ));
+        }
+        FreeVarReference::EcmaScriptModule {
+            request,
+            context,
+            export,
+        } =&gt; {
+            <span class="kw">let </span>esm_reference = EsmAssetReferenceVc::new(
+                context.map_or(state.origin, |context| {
+                    PlainResolveOriginVc::new(state.origin.context(), context).into()
+                }),
+                RequestVc::parse(Value::new(request.clone().into())),
+                Default::default(),
+                state
+                    .import_parts
+                    .then(|| {
+                        export
+                            .as_ref()
+                            .map(|export| ModulePartVc::export(export.to_string()))
+                    })
+                    .flatten(),
+            )
+            .resolve()
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+            analysis.add_reference(esm_reference);
+            analysis.add_code_gen(EsmBindingVc::new(
+                esm_reference,
+                export.clone(),
+                AstPathVc::cell(ast_path.to_vec()),
+            ));
+        }
+    }
+    <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
+}
 
 <span class="kw">fn </span>issue_source(source: AssetVc, span: Span) -&gt; IssueSourceVc {
     IssueSourceVc::from_byte_offset(source, span.lo.to_usize(), span.hi.to_usize())

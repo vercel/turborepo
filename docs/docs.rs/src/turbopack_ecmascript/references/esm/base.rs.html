@@ -325,6 +325,10 @@
 <a href="#325" id="325">325</a>
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>swc_core::{
@@ -570,7 +574,11 @@
                     }
                     ReferencedAsset::OriginalReferenceTypeExternal(request) =&gt; {
                         <span class="kw">if </span>!<span class="kw-2">*</span>context.environment().node_externals().<span class="kw">await</span><span class="question-mark">? </span>{
-                            <span class="macro">bail!</span>(<span class="string">&quot;the chunking context does not support Node.js external modules&quot;</span>);
+                            <span class="macro">bail!</span>(
+                                <span class="string">&quot;the chunking context does not support Node.js external modules \
+                                 (request: {})&quot;</span>,
+                                request
+                            );
                         }
                         <span class="kw">let </span>request = request.clone();
                         visitors.push(<span class="macro">create_visitor!</span>(visit_mut_program(program: <span class="kw-2">&amp;mut </span>Program) {
