@@ -314,6 +314,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
             eval_context,
             source_map,
             globals,
+            has_top_level_await,
             ..
         } => {
             let (mut dep_graph, items) = Analyzer::analyze(module);
@@ -338,6 +339,7 @@ pub(super) async fn split(path: FileSystemPathVc, parsed: ParseResultVc) -> Resu
                         comments: comments.clone(),
                         source_map: source_map.clone(),
                         eval_context,
+                        has_top_level_await: *has_top_level_await,
                     })
                 })
                 .collect();
