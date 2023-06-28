@@ -198,30 +198,7 @@ pub fn previous_content(
     // exactly
     let absolute_file_path = AbsoluteSystemPathBuf::from_unknown(&git_root, &file_path);
 
-    // let anchored_file_path = if file_path.is_absolute() {
-    //     let absolute_file_path = AbsoluteSystemPathBuf::try_from(file_path)?;
-    //     git_root.anchor(absolute_file_path)?
-    // } else {
-    //     file_path.as_path().try_into()?
-    // };
-
     scm.previous_content(from_commit, &absolute_file_path)
-    // let git_binary = which("git")?;
-    // let mut command = Command::new(git_binary);
-    // let command = command
-    //     .arg("show")
-    //     .arg(format!("{}:{}", from_commit, anchored_file_path.as_str()))
-    //     .current_dir(&git_root);
-
-    // let output = command.output()?;
-    // if output.status.success() {
-    //     Ok(output.stdout)
-    // } else {
-    //     Err(Error::Git(
-    //         String::from_utf8_lossy(&output.stderr).to_string(),
-    //         Backtrace::capture(),
-    //     ))
-    // }
 }
 
 #[cfg(test)]
