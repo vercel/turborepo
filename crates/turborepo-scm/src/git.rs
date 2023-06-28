@@ -1,13 +1,35 @@
-use std::{
-    backtrace::Backtrace, borrow::Borrow, collections::HashSet, path::PathBuf, process::Command,
-};
+use std::{backtrace::Backtrace, collections::HashSet, path::PathBuf, process::Command};
 
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
 };
-use which::which;
 
-use crate::Error;
+use crate::{Error, Git, SCM};
+
+impl SCM {
+    pub fn changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        from_commit: Option<&str>,
+        to_commit: &str,
+    ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
+        match self {
+            Self::Git(git) => git.changed_files(turbo_root, from_commit, to_commit),
+            Self::Manual => Err(Error::GitRequired(turbo_root.to_owned())),
+        }
+    }
+
+    pub fn previous_content(
+        &self,
+        from_commit: &str,
+        file_path: &AbsoluteSystemPath,
+    ) -> Result<Vec<u8>, Error> {
+        match self {
+            Self::Git(git) => git.previous_content(from_commit, file_path),
+            Self::Manual => Err(Error::GitRequired(file_path.to_owned())),
+        }
+    }
+}
 
 /// Finds the changed files in a repository between index and working directory
 /// (unstaged changes) and between two commits. Includes untracked files,
@@ -33,97 +55,120 @@ pub fn changed_files(
     to_commit: &str,
 ) -> Result<HashSet<String>, Error> {
     let git_root = AbsoluteSystemPath::from_std_path(&git_root)?;
+    let scm = SCM::new(git_root);
+
     let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root.as_path())?;
-    let turbo_root_relative_to_git_root = git_root.anchor(&turbo_root)?;
-    let pathspec = turbo_root_relative_to_git_root.as_str();
-
-    let mut files = HashSet::new();
-
-    let output = execute_git_command(
-        git_root.borrow(),
-        &["diff", "--name-only", to_commit],
-        pathspec,
-    )?;
-
-    add_files_from_stdout(&mut files, git_root, &turbo_root, output);
-
-    if let Some(from_commit) = from_commit {
-        let output = execute_git_command(
-            git_root.borrow(),
-            &[
-                "diff",
-                "--name-only",
-                &format!("{}...{}", from_commit, to_commit),
-            ],
-            pathspec,
-        )?;
-
-        add_files_from_stdout(&mut files, git_root, &turbo_root, output);
-    }
-
-    let output = execute_git_command(
-        git_root.borrow(),
-        &["ls-files", "--others", "--exclude-standard"],
-        pathspec,
-    )?;
-
-    add_files_from_stdout(&mut files, git_root, &turbo_root, output);
-
-    Ok(files)
+    let files = scm.changed_files(&turbo_root, from_commit, to_commit)?;
+    Ok(files
+        .into_iter()
+        .map(|f| f.to_string())
+        .collect::<HashSet<_>>())
 }
 
-fn execute_git_command(
-    git_root: &AbsoluteSystemPath,
-    args: &[&str],
-    pathspec: &str,
-) -> Result<Vec<u8>, Error> {
-    let git_binary = which("git")?;
-    let mut command = Command::new(git_binary);
-    command.args(args).current_dir(git_root);
+impl Git {
+    fn changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        from_commit: Option<&str>,
+        to_commit: &str,
+    ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
+        let turbo_root_relative_to_git_root = self.root.anchor(turbo_root)?;
+        let pathspec = turbo_root_relative_to_git_root.as_str();
 
-    add_pathspec(&mut command, pathspec);
+        let mut files = HashSet::new();
 
-    let output = command.output()?;
+        let output = self.execute_git_command(&["diff", "--name-only", to_commit], pathspec)?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8(output.stderr).unwrap();
-        Err(Error::Git(stderr, Backtrace::capture()))
-    } else {
-        Ok(output.stdout)
+        self.add_files_from_stdout(&mut files, &turbo_root, output);
+
+        if let Some(from_commit) = from_commit {
+            let output = self.execute_git_command(
+                &[
+                    "diff",
+                    "--name-only",
+                    &format!("{}...{}", from_commit, to_commit),
+                ],
+                pathspec,
+            )?;
+
+            self.add_files_from_stdout(&mut files, &turbo_root, output);
+        }
+
+        let output =
+            self.execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
+
+        self.add_files_from_stdout(&mut files, &turbo_root, output);
+
+        Ok(files)
     }
-}
 
-fn add_pathspec(command: &mut Command, pathspec: &str) {
-    if !pathspec.is_empty() {
-        command.arg("--").arg(pathspec);
+    fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
+        let mut command = Command::new(self.bin.as_std_path());
+        command.args(args).current_dir(&self.root);
+
+        if !pathspec.is_empty() {
+            command.arg("--").arg(pathspec);
+        }
+
+        let output = command.output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Err(Error::Git(stderr, Backtrace::capture()))
+        } else {
+            Ok(output.stdout)
+        }
     }
-}
 
-fn add_files_from_stdout(
-    files: &mut HashSet<String>,
-    git_root: impl AsRef<AbsoluteSystemPath>,
-    turbo_root: impl AsRef<AbsoluteSystemPath>,
-    stdout: Vec<u8>,
-) {
-    let git_root = git_root.as_ref();
-    let turbo_root = turbo_root.as_ref();
-    let stdout = String::from_utf8(stdout).unwrap();
-    for line in stdout.lines() {
-        let path = RelativeUnixPath::new(line).unwrap();
-        let anchored_to_turbo_root_file_path =
-            reanchor_path_from_git_root_to_turbo_root(git_root, turbo_root, path).unwrap();
-        files.insert(anchored_to_turbo_root_file_path.to_string());
+    fn add_files_from_stdout(
+        &self,
+        files: &mut HashSet<AnchoredSystemPathBuf>,
+        turbo_root: &AbsoluteSystemPath,
+        stdout: Vec<u8>,
+    ) {
+        let turbo_root = turbo_root.as_ref();
+        let stdout = String::from_utf8(stdout).unwrap();
+        for line in stdout.lines() {
+            let path = RelativeUnixPath::new(line).unwrap();
+            let anchored_to_turbo_root_file_path = self
+                .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
+                .unwrap();
+            files.insert(anchored_to_turbo_root_file_path);
+        }
     }
-}
 
-fn reanchor_path_from_git_root_to_turbo_root(
-    git_root: &AbsoluteSystemPath,
-    turbo_root: &AbsoluteSystemPath,
-    path: &RelativeUnixPath,
-) -> Result<AnchoredSystemPathBuf, Error> {
-    let absolute_file_path = git_root.join_unix_path(path)?;
-    let anchored_to_turbo_root_file_path = turbo_root.anchor(absolute_file_path.borrow())?;
-    Ok(anchored_to_turbo_root_file_path)
+    fn reanchor_path_from_git_root_to_turbo_root(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        path: &RelativeUnixPath,
+    ) -> Result<AnchoredSystemPathBuf, Error> {
+        let absolute_file_path = self.root.join_unix_path(path)?;
+        let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
+        Ok(anchored_to_turbo_root_file_path)
+    }
+
+    fn previous_content(
+        &self,
+        from_commit: &str,
+        file_path: &AbsoluteSystemPath,
+    ) -> Result<Vec<u8>, Error> {
+        let anchored_file_path = self.root.anchor(file_path)?;
+        let mut command = Command::new(self.bin.as_std_path());
+        let command = command
+            .arg("show")
+            .arg(format!("{}:{}", from_commit, anchored_file_path.as_str()))
+            .current_dir(&self.root);
+
+        let output = command.output()?;
+        if output.status.success() {
+            Ok(output.stdout)
+        } else {
+            Err(Error::Git(
+                String::from_utf8_lossy(&output.stderr).to_string(),
+                Backtrace::capture(),
+            ))
+        }
+    }
 }
 
 /// Finds the content of a file at a previous commit. Assumes file is in a git
@@ -139,51 +184,30 @@ fn reanchor_path_from_git_root_to_turbo_root(
 pub fn previous_content(
     git_root: PathBuf,
     from_commit: &str,
-    file_path: PathBuf,
+    file_path: String,
 ) -> Result<Vec<u8>, Error> {
     // If git root is not absolute, we error.
     let git_root = AbsoluteSystemPathBuf::try_from(git_root)?;
+    let scm = SCM::new(&git_root);
 
     // However for file path we handle both absolute and relative paths
     // Note that we assume any relative file path is relative to the git root
-    let anchored_file_path = if file_path.is_absolute() {
-        let absolute_file_path = AbsoluteSystemPathBuf::try_from(file_path)?;
-        git_root.anchor(absolute_file_path)?
-    } else {
-        file_path.as_path().try_into()?
-    };
+    // FIXME: this is probably wrong. We should know the path to the lockfile
+    // exactly
+    let absolute_file_path = AbsoluteSystemPathBuf::from_unknown(&git_root, &file_path);
 
-    let git_binary = which("git")?;
-    let mut command = Command::new(git_binary);
-    let command = command
-        .arg("show")
-        .arg(format!("{}:{}", from_commit, anchored_file_path.as_str()))
-        .current_dir(&git_root);
-
-    let output = command.output()?;
-    if output.status.success() {
-        Ok(output.stdout)
-    } else {
-        Err(Error::Git(
-            String::from_utf8_lossy(&output.stderr).to_string(),
-            Backtrace::capture(),
-        ))
-    }
+    scm.previous_content(from_commit, &absolute_file_path)
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
-        assert_matches::assert_matches,
-        collections::HashSet,
-        fs,
-        path::{Path, PathBuf},
-        process::Command,
+        assert_matches::assert_matches, collections::HashSet, fs, path::Path, process::Command,
     };
 
     use git2::{Oid, Repository};
     use tempfile::TempDir;
-    use turbopath::PathError;
+    use turbopath::{AbsoluteSystemPathBuf, PathError};
     use which::which;
 
     use super::previous_content;
@@ -507,8 +531,9 @@ mod tests {
     fn test_previous_content() -> Result<(), Error> {
         let (repo_root, repo) = setup_repository()?;
 
-        let file = repo_root.path().join("foo.js");
-        fs::write(&file, "let z = 0;")?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let file = root.join_component("foo.js");
+        file.create_with_contents("let z = 0;")?;
 
         let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
         fs::write(&file, "let z = 1;")?;
@@ -517,7 +542,7 @@ mod tests {
         let content = previous_content(
             repo_root.path().to_path_buf(),
             first_commit_oid.to_string().as_str(),
-            file.clone(),
+            file.to_string(),
         )?;
 
         assert_eq!(content, b"let z = 0;");
@@ -525,14 +550,14 @@ mod tests {
         let content = previous_content(
             repo_root.path().to_path_buf(),
             second_commit_oid.to_string().as_str(),
-            file,
+            file.to_string(),
         )?;
         assert_eq!(content, b"let z = 1;");
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
             second_commit_oid.to_string().as_str(),
-            PathBuf::from("foo.js"),
+            "foo.js".to_string(),
         )?;
         assert_eq!(content, b"let z = 1;");
 
@@ -542,9 +567,10 @@ mod tests {
     #[test]
     fn test_revparse() -> Result<(), Error> {
         let (repo_root, repo) = setup_repository()?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
-        let file = repo_root.path().join("foo.js");
-        fs::write(&file, "let z = 0;")?;
+        let file = root.join_component("foo.js");
+        file.create_with_contents("let z = 0;")?;
 
         let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
         fs::write(&file, "let z = 1;")?;
@@ -563,7 +589,7 @@ mod tests {
         )?;
         assert_eq!(files, HashSet::from(["foo.js".to_string()]));
 
-        let content = previous_content(repo_root.path().to_path_buf(), "HEAD^", file)?;
+        let content = previous_content(repo_root.path().to_path_buf(), "HEAD^", file.to_string())?;
         assert_eq!(content, b"let z = 0;");
 
         let new_file = repo_root.path().join("bar.js");
@@ -593,9 +619,10 @@ mod tests {
             "HEAD",
         );
 
-        assert_matches!(repo_does_not_exist, Err(Error::Git(_, _)));
+        assert_matches!(repo_does_not_exist, Err(Error::GitRequired(_)));
 
         let (repo_root, _repo) = setup_repository()?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let commit_does_not_exist = changed_files(
             repo_root.path().to_path_buf(),
@@ -609,7 +636,7 @@ mod tests {
         let file_does_not_exist = previous_content(
             repo_root.path().to_path_buf(),
             "HEAD",
-            repo_root.path().join("does-not-exist"),
+            root.join_component("does-not-exist").to_string(),
         );
         assert_matches!(file_does_not_exist, Err(Error::Git(_, _)));
 

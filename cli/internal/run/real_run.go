@@ -325,6 +325,10 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		WarnPrefix:   prettyPrefix,
 	}
 
+	if ec.rs.Opts.runOpts.IsGithubActions {
+		ui.Output(fmt.Sprintf("::group::%s", packageTask.OutputPrefix(ec.isSinglePackage)))
+	}
+
 	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
 
 	// It's safe to set the CacheStatus even if there's an error, because if there's
@@ -413,6 +417,11 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	closeOutputs := func() error {
 		var closeErrors []error
+		if ec.rs.Opts.runOpts.IsGithubActions {
+			// We don't use the prefixedUI here because the prefix in this case would include
+			// the ::group::<taskID>, and we explicitly want to close the github group
+			ui.Output("::endgroup::")
+		}
 
 		if err := logStreamerOut.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))

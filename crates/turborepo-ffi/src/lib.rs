@@ -4,7 +4,7 @@
 //! and in ffi.go before modifying this file.
 mod lockfile;
 
-use std::{collections::HashMap, mem::ManuallyDrop, path::PathBuf};
+use std::{collections::HashMap, mem::ManuallyDrop};
 
 use globwalk::globwalk;
 pub use lockfile::{patches, subgraph, transitive_closure};
@@ -120,7 +120,7 @@ pub extern "C" fn previous_content(buffer: Buffer) -> Buffer {
     let response = match turborepo_scm::git::previous_content(
         req.git_root.into(),
         &req.from_commit,
-        PathBuf::from(req.file_path),
+        req.file_path,
     ) {
         Ok(content) => proto::previous_content_resp::Response::Content(content),
         Err(err) => proto::previous_content_resp::Response::Error(err.to_string()),
@@ -249,7 +249,7 @@ pub extern "C" fn get_package_file_hashes(buffer: Buffer) -> Buffer {
         }
     };
     let inputs = req.inputs.as_slice();
-    let hasher = turborepo_scm::package_deps::Hasher::new(&turbo_root);
+    let hasher = turborepo_scm::SCM::new(&turbo_root);
     let response = match hasher.get_package_file_hashes(&turbo_root, &package_path, inputs) {
         Ok(hashes) => {
             let mut to_return = HashMap::new();
@@ -317,7 +317,7 @@ pub extern "C" fn get_hashes_for_files(buffer: Buffer) -> Buffer {
             return resp.into();
         }
     };
-    let hasher = turborepo_scm::package_deps::Hasher::new(&turbo_root);
+    let hasher = turborepo_scm::SCM::new(&turbo_root);
     let result = if allow_missing {
         hasher.hash_existing_of(&turbo_root, files.into_iter())
     } else {

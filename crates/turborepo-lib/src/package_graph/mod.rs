@@ -23,11 +23,17 @@ pub struct PackageGraph {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct Entry {
+pub struct Entry {
     package_json: PackageJson,
     package_json_path: AnchoredSystemPathBuf,
     unresolved_external_dependencies: Option<HashSet<Package>>,
     transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
+}
+
+impl Entry {
+    pub fn package_json_path(&self) -> &AnchoredSystemPathBuf {
+        &self.package_json_path
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
@@ -62,8 +68,10 @@ impl PackageGraph {
         Ok(())
     }
 
+    /// Returns the number of workspaces in the repo
+    /// *including* the root workspace.
     pub fn len(&self) -> usize {
-        self.workspace_graph.node_count()
+        self.workspaces.len()
     }
 
     pub fn package_manager(&self) -> &PackageManager {
@@ -79,13 +87,16 @@ impl PackageGraph {
         Some(&entry.package_json)
     }
 
+    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &Entry)> {
+        self.workspaces.iter()
+    }
+
     pub fn root_package_json(&self) -> &PackageJson {
         self.package_json(&WorkspaceName::Root)
             .expect("package graph was built without root package.json")
     }
 
-    #[allow(dead_code)]
-    fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+    pub fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
         let idx = self.node_lookup.get(node)?;
         let mut visited = HashSet::new();
         petgraph::visit::depth_first_search(&self.workspace_graph, Some(*idx), |event| {
