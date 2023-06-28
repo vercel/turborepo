@@ -28,10 +28,11 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
     type Error = anyhow::Error;
 
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
-        let root_package_json = PackageJson::load(&base.repo_root.join_component("package.json"))?;
+        let root_package_json =
+            PackageJson::load(&base.repo_root.join_component("package.json")).ok();
 
         let package_manager =
-            PackageManager::get_package_manager(&base.repo_root, Some(&root_package_json))?;
+            PackageManager::get_package_manager(&base.repo_root, root_package_json.as_ref())?;
         trace!("Found {} as package manager", package_manager);
 
         let repo_config = base.repo_config()?;

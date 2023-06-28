@@ -572,8 +572,8 @@ mod test {
         handle.abort();
 
         // verify space id is added to turbo.json
-        let turbo_json_file = fs::File::open(&turbo_json_file).unwrap();
-        let turbo_json: RawTurboJSON = serde_json::from_reader(turbo_json_file).unwrap();
+        let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
+        let turbo_json: RawTurboJSON = serde_json::from_str(&turbo_json_contents).unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
             vercel_api_mock::EXPECTED_SPACE_ID

@@ -1,7 +1,7 @@
 use std::{
     borrow::Borrow,
     fmt,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Display, Formatter},
     ops::Deref,
 };
 
@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::{IntoUnix, PathError, RelativeUnixPath};
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 #[serde(transparent)]
 pub struct RelativeUnixPathBuf(pub(crate) String);
 

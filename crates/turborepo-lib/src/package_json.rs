@@ -15,7 +15,7 @@ pub struct PackageJson {
     pub optional_dependencies: Option<BTreeMap<String, String>>,
     pub peer_dependencies: Option<BTreeMap<String, String>>,
     #[serde(rename = "turbo")]
-    pub legacy_turbo_config: Option<()>,
+    pub legacy_turbo_config: Option<serde_json::Value>,
     #[serde(default)]
     pub scripts: BTreeMap<String, String>,
 }
@@ -48,5 +48,27 @@ impl PackageJson {
             .flatten()
             .chain(self.dev_dependencies.iter().flatten())
             .chain(self.optional_dependencies.iter().flatten())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use anyhow::Result;
+
+    use crate::package_json::PackageJson;
+
+    #[test]
+    fn test_legacy_turbo_config() -> Result<()> {
+        let contents = r#"{"turbo": {}}"#;
+        let package_json = serde_json::from_str::<PackageJson>(contents)?;
+
+        assert!(package_json.legacy_turbo_config.is_some());
+
+        let contents = r#"{"turbo": { "globalDependencies": [".env"] } }"#;
+        let package_json = serde_json::from_str::<PackageJson>(contents)?;
+
+        assert!(package_json.legacy_turbo_config.is_some());
+
+        Ok(())
     }
 }

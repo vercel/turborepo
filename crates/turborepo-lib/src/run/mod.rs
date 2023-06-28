@@ -46,6 +46,10 @@ impl Run {
 
         let is_single_package = opts.run_opts.single_package;
 
+        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+            .with_single_package_mode(opts.run_opts.single_package)
+            .build()?;
+
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
@@ -54,11 +58,6 @@ impl Run {
         if opts.run_opts.experimental_space_id.is_none() {
             opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
         }
-
-        let pkg_dep_graph =
-            PackageGraph::builder(&self.base.repo_root, root_package_json, root_turbo_json)
-                .with_single_package_mode(opts.run_opts.single_package)
-                .build()?;
 
         // There's some warning handling code in Go that I'm ignoring
         if self.base.ui.is_ci() && !opts.run_opts.no_daemon {
@@ -80,13 +79,22 @@ impl Run {
             .validate()
             .context("Invalid package dependency graph")?;
 
-        let _filtered_pkgs = scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph)?;
-
         let scm = SCM::new(&self.base.repo_root);
 
         let _filtered_pkgs =
             scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph, &scm)?;
 
+        // TODO: Add this back once scope/filter is implemented.
+        //       Currently this code has lifetime issues
+        // if filtered_pkgs.len() != pkg_dep_graph.len() {
+        //     for target in targets {
+        //         let key = task_id::root_task_id(target);
+        //         if pipeline.contains_key(&key) {
+        //             filtered_pkgs.insert(task_id::ROOT_PKG_NAME.to_string());
+        //             break;
+        //         }
+        //     }
+        // }
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let _global_hash_inputs = get_global_hash_inputs(

@@ -44,26 +44,19 @@ pub struct TurboJson {
 // The raw deserialized turbo.json file.
 pub struct RawTurboJSON {
     // Global root filesystem dependencies
-    #[serde(default)]
-    global_dependencies: Vec<String>,
-    #[serde(default)]
-    global_env: Vec<String>,
-    #[serde(default)]
+    global_dependencies: Option<Vec<String>>,
+    global_env: Option<Vec<String>>,
     global_pass_through_env: Option<Vec<String>>,
     // .env files to consider, in order.
-    #[serde(default)]
     global_dot_env: Option<Vec<String>>,
     // Pipeline is a map of Turbo pipeline entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
-    #[serde(default)]
-    pipeline: RawPipeline,
+    pipeline: Option<RawPipeline>,
     // Configuration options when interfacing with the remote cache
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
 
-    #[serde(default)]
-    extends: Vec<String>,
+    extends: Option<Vec<String>>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental_spaces: Option<SpacesJson>,
 }
 
@@ -279,11 +272,13 @@ impl TryFrom<RawTurboJSON> for TurboJson {
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();
 
-        gather_env_vars(raw_turbo.global_env, "globalEnv", &mut global_env)?;
+        if let Some(global_env_from_turbo) = raw_turbo.global_env {
+            gather_env_vars(global_env_from_turbo, "globalEnv", &mut global_env)?;
+        }
 
         // TODO: In the rust port, warnings should be refactored to a post-parse
         // validation step
-        for value in raw_turbo.global_dependencies {
+        for value in raw_turbo.global_dependencies.into_iter().flatten() {
             if let Some(env_var) = value.strip_prefix(ENV_PIPELINE_DELIMITER) {
                 println!(
                     "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
@@ -345,13 +340,14 @@ impl TryFrom<RawTurboJSON> for TurboJson {
                 .unwrap_or_default(),
             pipeline: raw_turbo
                 .pipeline
-                .0
                 .into_iter()
+                .map(|p| p.0)
+                .flatten()
                 .map(|(task_name, task_definition)| Ok((task_name, task_definition.try_into()?)))
                 .collect::<Result<HashMap<_, _>, Error>>()?,
             // copy these over, we don't need any changes here.
             remote_cache_options: raw_turbo.remote_cache_options,
-            extends: raw_turbo.extends,
+            extends: raw_turbo.extends.unwrap_or_default(),
             // Directly to space_id, we don't need to keep the struct
             space_id: raw_turbo.experimental_spaces.and_then(|s| s.id),
         })

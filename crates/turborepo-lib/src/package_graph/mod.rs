@@ -13,8 +13,6 @@ mod builder;
 
 pub use builder::PackageGraphBuilder;
 
-use crate::config::TurboJson;
-
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
     #[allow(dead_code)]
@@ -28,7 +26,6 @@ pub struct PackageGraph {
 pub struct Entry {
     package_json: PackageJson,
     package_json_path: AnchoredSystemPathBuf,
-    turbo_json: TurboJson,
     unresolved_external_dependencies: Option<HashSet<Package>>,
     transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
@@ -62,9 +59,8 @@ impl PackageGraph {
     pub fn builder(
         repo_root: &AbsoluteSystemPath,
         root_package_json: PackageJson,
-        root_turbo_json: TurboJson,
     ) -> PackageGraphBuilder {
-        PackageGraphBuilder::new(repo_root, root_package_json, root_turbo_json)
+        PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -154,7 +150,7 @@ mod test {
     fn test_single_package_is_depends_on_root() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        let pkg_graph = PackageGraph::builder(&root, PackageJson::default(), TurboJson::default())
+        let pkg_graph = PackageGraph::builder(&root, PackageJson::default())
             .with_package_manger(Some(PackageManager::Npm))
             .with_single_package_mode(true)
             .build()
@@ -173,7 +169,6 @@ mod test {
         let pkg_graph = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
-            TurboJson::default(),
         )
         .with_package_manger(Some(PackageManager::Npm))
         .with_package_jsons(Some({
@@ -268,7 +263,6 @@ mod test {
         let pkg_graph = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
-            TurboJson::default(),
         )
         .with_package_manger(Some(PackageManager::Npm))
         .with_package_jsons(Some({
