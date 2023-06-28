@@ -62,6 +62,11 @@ struct JsResult {
     jest_result: JestRunResult,
 }
 
+enum IssueSnapshotMode {
+    Snapshots,
+    NoSnapshots,
+}
+
 fn register() {
     turbo_tasks::register();
     turbo_tasks_env::register();
@@ -85,7 +90,7 @@ fn test(resource: PathBuf) {
         return;
     }
 
-    let messages = get_messages(run(resource).unwrap());
+    let messages = get_messages(run(resource, IssueSnapshotMode::Snapshots).unwrap());
     if !messages.is_empty() {
         panic!(
             "Failed with error(s) in the following test(s):\n\n{}",
@@ -104,7 +109,7 @@ fn test_skipped_fails(resource: PathBuf) {
         uncaught_exceptions: _,
         unhandled_rejections: _,
         jest_result,
-    } = run(resource).unwrap();
+    } = run(resource, IssueSnapshotMode::NoSnapshots).unwrap();
 
     // Assert that this skipped test itself has at least one browser test which
     // fails.
@@ -151,15 +156,20 @@ fn get_messages(js_results: JsResult) -> Vec<String> {
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn run(resource: PathBuf) -> Result<JsResult> {
+async fn run(resource: PathBuf, snapshots: IssueSnapshotMode) -> Result<JsResult> {
     register();
 
     let tt = TurboTasks::new(MemoryBackend::default());
     tt.run_once(async move {
-        Ok((*run_test_and_snapshot_issues(resource.to_str().unwrap())
-            .await
-            .unwrap())
-        .clone())
+        let resource_str = resource.to_str().unwrap();
+        Ok(match snapshots {
+            IssueSnapshotMode::Snapshots => {
+                (*run_test_and_snapshot_issues(resource_str).await.unwrap()).clone()
+            }
+            IssueSnapshotMode::NoSnapshots => {
+                (*run_test(resource_str).await?.js_result.await?).clone()
+            }
+        })
     })
     .await
 }
