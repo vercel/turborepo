@@ -474,7 +474,7 @@ jobs:
       (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turborepo_rust == 'true') ||
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
-    name: Turborepo rust check / clippy
+    name: Turborepo rust check
     runs-on: ubuntu-latest-16-core-oss
     steps:
       - name: Checkout
@@ -495,6 +495,25 @@ jobs:
         run: |
           cargo groups check turborepo-libraries --features rustls-tls
 
+  turborepo_clippy:
+    needs: [turborepo_rust_check]
+    name: Turborepo rust clippy
+    runs-on: ubuntu-latest-16-core-oss
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Run cargo clippy
         run: |
           cargo groups clippy turborepo-libraries --features rustls-tls
@@ -506,7 +525,7 @@ jobs:
       (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turbopack == 'true') ||
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
-    name: Turbopack rust check / clippy
+    name: Turbopack rust check
     runs-on: ubuntu-latest-16-core-oss
     steps:
       - name: Checkout
@@ -526,6 +545,25 @@ jobs:
       - name: Run cargo check release
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
+
+  turbopack_rust_clippy:
+    needs: [turbopack_rust_check]
+    name: Turbopack rust clippy
+    runs-on: ubuntu-latest-16-core-oss
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo clippy
         run: |
@@ -1214,7 +1252,9 @@ jobs:
       - js_packages
       - rust_lint
       - turborepo_rust_check
+      - turborepo_rust_clippy
       - turbopack_rust_check
+      - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_typescript
       - turborepo_rust_test
@@ -1252,7 +1292,9 @@ jobs:
           subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
+          subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
+          subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "Turborepo Rust tests"
@@ -1365,7 +1407,9 @@ jobs:
       - go_integration
       - rust_lint
       - turborepo_rust_check
+      - turborepo_rust_clippy
       - turbopack_rust_check
+      - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_rust_test2
       - turbopack_typescript
@@ -1406,7 +1450,9 @@ jobs:
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
+          subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
+          subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
