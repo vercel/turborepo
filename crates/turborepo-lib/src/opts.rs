@@ -167,7 +167,7 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
         let pkg_inference_root = args
             .pkg_inference_root
             .as_ref()
-            .map(|root| AnchoredSystemPathBuf::from_raw::<&str>(root.as_ref()))
+            .map(|root| AnchoredSystemPathBuf::from_raw(root))
             .transpose()?;
         Ok(Self { pkg_inference_root })
     }
