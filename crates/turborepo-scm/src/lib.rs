@@ -10,6 +10,7 @@ use std::{
 
 use bstr::io::BufReadExt;
 use thiserror::Error;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
 pub mod git;
@@ -119,12 +120,27 @@ pub struct Git {
     bin: AbsoluteSystemPathBuf,
 }
 
+#[derive(Debug, Error)]
+enum GitError {
+    #[error("failed to find git binary: {0}")]
+    Binary(#[from] which::Error),
+    #[error("failed to find .git folder for path {0}: {1}")]
+    Root(AbsoluteSystemPathBuf, Error),
+}
+
 impl Git {
-    pub(crate) fn find(path_in_repo: &AbsoluteSystemPath) -> Option<Self> {
-        let bin = which::which("git").ok()?;
-        let bin = AbsoluteSystemPathBuf::try_from(bin).ok()?;
-        let root = find_git_root(path_in_repo).ok()?;
-        Some(Self { root, bin })
+    fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
+        let bin = which::which("git")?;
+        // If which produces an invalid absolute path, it's not an execution error, it's
+        // a programming error. We expect it to always give us an absolute path
+        // if it gives us any path. If that's not the case, we should crash.
+        let bin = AbsoluteSystemPathBuf::try_from(bin.as_path()).expect(&format!(
+            "which git produced an invalid absolute path {}",
+            bin.display()
+        ));
+        let root =
+            find_git_root(path_in_repo).map_err(|e| GitError::Root(path_in_repo.to_owned(), e))?;
+        Ok(Self { root, bin })
     }
 }
 
@@ -163,7 +179,10 @@ pub enum SCM {
 
 impl SCM {
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
-        Git::find(path_in_repo).map(SCM::Git).unwrap_or(SCM::Manual)
+        Git::find(path_in_repo).map(SCM::Git).unwrap_or_else(|e| {
+            debug!("{}, continuing with manual hashing", e);
+            SCM::Manual
+        })
     }
 }
 
