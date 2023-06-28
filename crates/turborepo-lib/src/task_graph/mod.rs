@@ -7,13 +7,9 @@ pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
 
 #[derive(Clone, Debug, Default, Serialize, PartialEq, Eq)]
 pub struct BookkeepingTaskDefinition {
-    #[serde(default)]
     pub defined_fields: HashSet<String>,
-    #[serde(default)]
     pub experimental_fields: HashSet<String>,
-    #[serde(default)]
     pub experimental: TaskDefinitionExperiments,
-    #[serde(flatten)]
     pub task_definition: TaskDefinitionHashable,
 }
 
@@ -22,7 +18,7 @@ pub struct BookkeepingTaskDefinition {
 // these.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskDefinitionExperiments {
-    passthrough_env: Vec<String>,
+    pub(crate) pass_through_env: Vec<String>,
 }
 
 // TaskOutputs represents the patterns for including and excluding files from
@@ -35,6 +31,7 @@ pub struct TaskOutputs {
 
 // TaskOutputMode defines the ways turbo can display task output during a run
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum TaskOutputMode {
     // FullTaskOutput will show all task output
     #[default]
@@ -55,7 +52,7 @@ pub enum TaskOutputMode {
 // used downstream for calculating the global hash. We want to exclude
 // experimental fields here because we don't want experimental fields to be part
 // of the global hash.
-#[derive(Clone, Debug, Default, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct TaskDefinitionHashable {
     pub(crate) outputs: TaskOutputs,
     pub(crate) cache: bool,
@@ -69,18 +66,33 @@ pub struct TaskDefinitionHashable {
     pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
 }
 
-// task_definition is a representation of the configFile pipeline for further
-// computation.
+impl Default for TaskDefinitionHashable {
+    fn default() -> Self {
+        Self {
+            outputs: TaskOutputs::default(),
+            cache: true,
+            topological_dependencies: Vec::new(),
+            task_dependencies: Vec::new(),
+            inputs: Vec::new(),
+            output_mode: TaskOutputMode::default(),
+            persistent: false,
+            env: Vec::new(),
+            pass_through_env: Vec::new(),
+            dot_env: Vec::new(),
+        }
+    }
+}
+
+// Constructed from a RawTaskDefinition
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct TaskDefinition {
     outputs: TaskOutputs,
     cache: bool,
 
-    // This field is custom-marshalled from rawTask.Env and rawTask.DependsOn
+    // This field is custom-marshalled from `env` and `depends_on``
     env_var_dependencies: Vec<String>,
 
-    // rawTask.PassthroughEnv
-    passthrough_env: Vec<String>,
+    pass_through_env: Vec<String>,
 
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:

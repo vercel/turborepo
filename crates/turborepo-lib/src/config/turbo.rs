@@ -4,6 +4,7 @@ use std::{
     path::Path,
 };
 
+use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
@@ -70,7 +71,7 @@ pub struct RawTurboJSON {
 #[serde(transparent)]
 struct RawPipeline(BTreeMap<String, RawTaskDefinition>);
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct RawTaskDefinition {
     outputs: Option<Vec<String>>,
@@ -88,6 +89,45 @@ const CONFIG_FILE: &str = "turbo.json";
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
+impl From<Vec<String>> for TaskOutputs {
+    fn from(outputs: Vec<String>) -> Self {
+        let mut inclusions = Vec::new();
+        let mut exclusions = Vec::new();
+
+        for glob in outputs {
+            if let Some(glob) = glob.strip_prefix('!') {
+                if Utf8Path::new(glob).is_absolute() {
+                    println!(
+                        "[WARNING] Using an absolute path in \"outputs\" ({}) will not work and \
+                         will be an error in a future version",
+                        glob
+                    )
+                }
+
+                exclusions.push(glob.to_string());
+            } else {
+                if Utf8Path::new(&glob).is_absolute() {
+                    println!(
+                        "[WARNING] Using an absolute path in \"outputs\" ({}) will not work and \
+                         will be an error in a future version",
+                        glob
+                    )
+                }
+
+                inclusions.push(glob);
+            }
+        }
+
+        inclusions.sort();
+        exclusions.sort();
+
+        TaskOutputs {
+            inclusions,
+            exclusions,
+        }
+    }
+}
+
 impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
     type Error = Error;
 
@@ -97,43 +137,11 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
         let outputs = raw_task
             .outputs
             .map(|outputs| {
-                let mut inclusions = Vec::new();
-                let mut exclusions = Vec::new();
                 // Assign a bookkeeping field so we know that there really were
                 // outputs configured in the underlying config file.
                 defined_fields.insert("Outputs".to_string());
 
-                for glob in outputs {
-                    if let Some(glob) = glob.strip_prefix('!') {
-                        if Path::new(glob).is_absolute() {
-                            println!(
-                                "[WARNING] Using an absolute path in \"outputs\" ({}) will not \
-                                 work and will be an error in a future version",
-                                glob
-                            )
-                        }
-
-                        exclusions.push(glob.to_string());
-                    } else {
-                        if Path::new(&glob).is_absolute() {
-                            println!(
-                                "[WARNING] Using an absolute path in \"outputs\" ({}) will not \
-                                 work and will be an error in a future version",
-                                glob
-                            )
-                        }
-
-                        inclusions.push(glob);
-                    }
-                }
-
-                inclusions.sort();
-                exclusions.sort();
-
-                TaskOutputs {
-                    inclusions,
-                    exclusions,
-                }
+                outputs.into()
             })
             .unwrap_or_default();
 
@@ -351,6 +359,8 @@ impl TryFrom<RawTurboJSON> for TurboJson {
 }
 
 impl TurboJson {
+    /// Loads turbo.json by reading the file at `dir` and optionally combining
+    /// with synthesized information from the provided package.json
     pub fn load(
         dir: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
@@ -441,6 +451,8 @@ impl TurboJson {
         false
     }
 
+    /// Reads a `RawTurboJson` from the given path
+    /// and then converts it into `TurboJson`
     fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
         let file = File::open(path)?;
         let turbo_json: RawTurboJSON = serde_json::from_reader(&file)?;
@@ -469,27 +481,237 @@ fn gather_env_vars(vars: Vec<String>, key: &str, into: &mut HashSet<String>) -> 
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{collections::HashSet, fs};
 
     use anyhow::Result;
     use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::AbsoluteSystemPath;
+    use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-    use crate::config::TurboJson;
+    use crate::{
+        config::{turbo::RawTaskDefinition, TurboJson},
+        package_json::PackageJson,
+        task_graph::{
+            BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionHashable,
+            TaskOutputMode, TaskOutputs,
+        },
+    };
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]
+    #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.js"] }"#,
+        TurboJson {
+            global_deps: vec!["jest.config.js".to_string(), "tsconfig.json".to_string()],
+            ..TurboJson::default()
+        }
+    ; "global dependencies (sorted)")]
+    #[test_case(r#"{ "globalDotEnv": [".env.local", ".env"] }"#,
+        TurboJson {
+            global_dot_env: vec![RelativeUnixPathBuf::new(".env.local").unwrap(), RelativeUnixPathBuf::new(".env").unwrap()],
+            ..TurboJson::default()
+        }
+    ; "global dot env (unsorted)")]
+    #[test_case(r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
+        TurboJson {
+            global_pass_through_env: vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()],
+            ..TurboJson::default()
+        }
+    )]
     fn test_get_root_turbo_no_synthesizing(
         turbo_json_content: &str,
         expected_turbo_json: TurboJson,
     ) -> Result<()> {
         let root_dir = tempdir()?;
-        let root_package_json = crate::package_json::PackageJson::default();
+        let root_package_json = PackageJson::default();
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
 
         let turbo_json = TurboJson::load(repo_root, &root_package_json, false)?;
         assert_eq!(turbo_json, expected_turbo_json);
+
+        Ok(())
+    }
+
+    #[test_case(
+        None,
+        PackageJson {
+             scripts: [("build".to_string(), "echo build".to_string())].into_iter().collect(),
+             ..PackageJson::default()
+        },
+        TurboJson {
+            pipeline: [(
+                "//#build".to_string(),
+                BookkeepingTaskDefinition {
+                    defined_fields: ["Cache".to_string()].into_iter().collect(),
+                    task_definition: TaskDefinitionHashable {
+                        cache: false,
+                        ..TaskDefinitionHashable::default()
+                    },
+                    ..BookkeepingTaskDefinition::default()
+                }
+            )].into_iter().collect(),
+            ..TurboJson::default()
+        }
+    )]
+    #[test_case(
+        Some(r#"{
+            "pipeline": {
+                "build": {
+                    "cache": true
+                }
+            }
+        }"#),
+        PackageJson {
+             scripts: [("test".to_string(), "echo test".to_string())].into_iter().collect(),
+             ..PackageJson::default()
+        },
+        TurboJson {
+            pipeline: [(
+                "//#build".to_string(),
+                BookkeepingTaskDefinition {
+                    defined_fields: ["Cache".to_string()].into_iter().collect(),
+                    task_definition: TaskDefinitionHashable {
+                        cache: true,
+                        ..TaskDefinitionHashable::default()
+                    },
+                    ..BookkeepingTaskDefinition::default()
+                }
+            ),
+            (
+                "//#test".to_string(),
+                BookkeepingTaskDefinition {
+                    defined_fields: ["Cache".to_string()].into_iter().collect(),
+                    task_definition: TaskDefinitionHashable {
+                        cache: false,
+                        ..TaskDefinitionHashable::default()
+                    },
+                    ..BookkeepingTaskDefinition::default()
+                }
+            )].into_iter().collect(),
+            ..TurboJson::default()
+        }
+    )]
+    fn test_get_root_turbo_with_synthesizing(
+        turbo_json_content: Option<&str>,
+        root_package_json: PackageJson,
+        expected_turbo_json: TurboJson,
+    ) -> Result<()> {
+        let root_dir = tempdir()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
+
+        if let Some(content) = turbo_json_content {
+            fs::write(repo_root.join_component("turbo.json"), content)?;
+        }
+
+        let turbo_json = TurboJson::load(repo_root, &root_package_json, true)?;
+        assert_eq!(turbo_json, expected_turbo_json);
+
+        Ok(())
+    }
+
+    #[test_case(
+        "{}",
+        RawTaskDefinition::default(),
+        BookkeepingTaskDefinition::default()
+    ; "empty")]
+    #[test_case(
+        r#"{ "persistent": false }"#,
+        RawTaskDefinition {
+            persistent: Some(false),
+            ..RawTaskDefinition::default()
+        },
+        BookkeepingTaskDefinition {
+            defined_fields: ["Persistent".to_string()].into_iter().collect(),
+            experimental_fields: HashSet::new(),
+            experimental: TaskDefinitionExperiments::default(),
+            task_definition: TaskDefinitionHashable::default()
+        }
+    )]
+    #[test_case(
+        r#"{ 
+          "dependsOn": ["cli#build"],
+          "dotEnv": ["package/a/.env"],
+          "env": ["OS"],
+          "passThroughEnv": ["AWS_SECRET_KEY"],
+          "outputs": ["package/a/dist"],
+          "cache": false,
+          "inputs": ["package/a/src/**"],
+          "outputMode": "full",
+          "persistent": true
+        }"#,
+        RawTaskDefinition {
+            depends_on: Some(vec!["cli#build".to_string()]),
+            dot_env: Some(vec!["package/a/.env".to_string()]),
+            env: Some(vec!["OS".to_string()]),
+            pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
+            outputs: Some(vec!["package/a/dist".to_string()]),
+            cache: Some(false),
+            inputs: Some(vec!["package/a/src/**".to_string()]),
+            output_mode: Some(TaskOutputMode::Full),
+            persistent: Some(true),
+        },
+        BookkeepingTaskDefinition {
+            defined_fields: [
+                "Outputs".to_string(),
+                "Env".to_string(),
+                "DotEnv".to_string(),
+                "OutputMode".to_string(),
+                "PassThroughEnv".to_string(),
+                "Cache".to_string(),
+                "Persistent".to_string(),
+                "Inputs".to_string(),
+                "DependsOn".to_string()
+            ].into_iter().collect(),
+            experimental_fields: HashSet::new(),
+            experimental: TaskDefinitionExperiments {
+                pass_through_env: vec![],
+            },
+            task_definition: TaskDefinitionHashable {
+                dot_env: vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()],
+                env: vec!["OS".to_string()],
+                outputs: TaskOutputs {
+                    inclusions: vec!["package/a/dist".to_string()],
+                    exclusions: vec![],
+                },
+                cache: false,
+                inputs: vec!["package/a/src/**".to_string()],
+                output_mode: TaskOutputMode::Full,
+                pass_through_env: vec!["AWS_SECRET_KEY".to_string()],
+                task_dependencies: vec!["cli#build".to_string()],
+                topological_dependencies: vec![],
+                persistent: true,
+            }
+        }
+    )]
+    fn test_deserialize_task_definition(
+        task_definition_content: &str,
+        expected_raw_task_definition: RawTaskDefinition,
+        expected_task_definition: BookkeepingTaskDefinition,
+    ) -> Result<()> {
+        let raw_task_definition: RawTaskDefinition = serde_json::from_str(task_definition_content)?;
+        assert_eq!(raw_task_definition, expected_raw_task_definition);
+
+        let task_definition: BookkeepingTaskDefinition = raw_task_definition.try_into()?;
+        assert_eq!(task_definition, expected_task_definition);
+
+        Ok(())
+    }
+
+    #[test_case("[]", TaskOutputs::default())]
+    #[test_case(r#"["target/**"]"#, TaskOutputs { inclusions: vec!["target/**".to_string()], exclusions: vec![] })]
+    #[test_case(
+        r#"[".next/**", "!.next/cache/**"]"#,
+        TaskOutputs {
+             inclusions: vec![".next/**".to_string()],
+             exclusions: vec![".next/cache/**".to_string()] 
+        }
+    )]
+    fn test_deserialize_task_outputs(
+        task_outputs_str: &str,
+        expected_task_outputs: TaskOutputs,
+    ) -> Result<()> {
+        let raw_task_outputs: Vec<String> = serde_json::from_str(task_outputs_str)?;
+        let task_outputs: TaskOutputs = raw_task_outputs.into();
+        assert_eq!(task_outputs, expected_task_outputs);
 
         Ok(())
     }

@@ -82,18 +82,6 @@ impl Run {
 
         let _filtered_pkgs = scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph)?;
 
-        let is_single_package = opts.run_opts.single_package;
-        let turbo_json =
-            TurboJSON::load(&self.base.repo_root, &root_package_json, is_single_package)?;
-
-        opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_options.clone();
-
-        if opts.run_opts.experimental_space_id.is_none() {
-            opts.run_opts.experimental_space_id = turbo_json.space_id.clone();
-        }
-
-        let pipeline = &turbo_json.pipeline;
-
         let scm = SCM::new(&self.base.repo_root);
 
         let _filtered_pkgs =
