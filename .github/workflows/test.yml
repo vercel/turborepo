@@ -176,6 +176,7 @@ jobs:
 
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
+      cargo_only: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && steps.turbopack.outputs.diff == '' && steps.turborepo_rust.outputs.diff == '') }}
       # We only test workspace dependency changes on main, not on PRs to speed up CI
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
@@ -440,11 +441,10 @@ jobs:
         working-directory: crates/turbopack-ecmascript-runtime/js
         run: pnpm run check
 
-  # Very quick checks that we want to run first before all the long-running checks.
-  rust_pre_check:
+  rust_lint:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.rust == 'true'
-    name: Rust pre-checks
+    name: Rust lints
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -468,8 +468,12 @@ jobs:
           command: check licenses
 
   turborepo_rust_check:
-    needs: [determine_jobs, rust_pre_check]
-    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turborepo_rust == 'true'
+    needs: [determine_jobs]
+    # We test dependency changes only on main
+    if: |
+      (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turborepo_rust == 'true') ||
+      needs.determine_jobs.outputs.cargo_on_main == 'true' ||
+      needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turborepo rust check / clippy
     runs-on: ubuntu-latest-16-core-oss
     steps:
@@ -496,8 +500,12 @@ jobs:
           cargo groups clippy turborepo-libraries --features rustls-tls
 
   turbopack_rust_check:
-    needs: [determine_jobs, rust_pre_check]
-    if: needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turbopack == 'true'
+    needs: [determine_jobs]
+    # We test dependency changes only on main
+    if: |
+      (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.turbopack == 'true') ||
+      needs.determine_jobs.outputs.cargo_on_main == 'true' ||
+      needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check / clippy
     runs-on: ubuntu-latest-16-core-oss
     steps:
@@ -598,8 +606,6 @@ jobs:
 
   turborepo_rust_test:
     needs: [determine_jobs, turborepo_rust_check]
-    # We test dependency changes only on main
-    if: needs.determine_jobs.outputs.turborepo_rust == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -642,7 +648,6 @@ jobs:
 
   turbopack_rust_test1:
     needs: [determine_jobs, turbopack_rust_check]
-    if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     runs-on: ubuntu-latest-16-core-oss
     name: Turbopack Rust testing on ubuntu
     steps:
@@ -690,7 +695,6 @@ jobs:
 
   turbopack_rust_test2:
     needs: [determine_jobs, turbopack_rust_check]
-    if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -771,7 +775,6 @@ jobs:
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, turbopack_rust_check]
-    if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     runs-on: ubuntu-latest-16-core-oss
     name: Turbopack Rust testing benchmarks on ubuntu
 
@@ -824,7 +827,6 @@ jobs:
 
   turbopack_rust_test_bench2:
     needs: [determine_jobs, turbopack_rust_check]
-    if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -892,7 +894,7 @@ jobs:
 
   turbopack_rust_bench:
     needs: [determine_jobs, turbopack_rust_check]
-    if: (needs.determine_jobs.outputs.rust == 'true' && needs.determine_jobs.outputs.push == 'true') || needs.determine_jobs.outputs.turbopack_bench == 'true'
+    if: needs.determine_jobs.outputs.push == 'true' || needs.determine_jobs.outputs.turbopack_bench == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -1055,7 +1057,7 @@ jobs:
 
   turbopack_build_release:
     needs: [determine_jobs, turbopack_rust_check]
-    if: needs.determine_jobs.outputs.turbopack == 'true' && needs.determine_jobs.outputs.push == 'true'
+    if: needs.determine_jobs.outputs.push == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -1123,7 +1125,7 @@ jobs:
 
   turbopack_bench_pr:
     needs: [determine_jobs, turbopack_rust_check]
-    if: needs.determine_jobs.outputs.turbopack == 'true' && github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request'
     name: Benchmark and compare Turbopack performance on ${{ matrix.os.title }}
     strategy:
       fail-fast: false
@@ -1210,7 +1212,7 @@ jobs:
       - turborepo_e2e
       - go_integration
       - js_packages
-      - rust_pre_check
+      - rust_lint
       - turborepo_rust_check
       - turbopack_rust_check
       - turbopack_rust_test1
@@ -1248,7 +1250,7 @@ jobs:
           subjob ${{needs.turborepo_e2e.result}} "Go e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.js_packages.result}} "JS Package tests"
-          subjob ${{needs.rust_pre_check.result}} "Rust pre-checks"
+          subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
@@ -1361,7 +1363,7 @@ jobs:
       - turborepo_examples
       - turborepo_e2e
       - go_integration
-      - rust_pre_check
+      - rust_lint
       - turborepo_rust_check
       - turbopack_rust_check
       - turbopack_rust_test1
@@ -1402,7 +1404,7 @@ jobs:
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_e2e.result}} "Turborepo e2e tests"
           subjob ${{needs.go_integration.result}} "Go integration tests"
-          subjob ${{needs.rust_pre_check.result}} "Rust pre-checks"
+          subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
