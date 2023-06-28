@@ -174,10 +174,8 @@ impl AbsoluteSystemPathBuf {
         self.0.components()
     }
 
-    pub fn parent(&self) -> Option<Self> {
-        self.0
-            .parent()
-            .map(|p| AbsoluteSystemPathBuf(p.to_path_buf()))
+    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
+        self.0.parent().map(AbsoluteSystemPath::new_unchecked)
     }
 
     pub fn starts_with<P: AsRef<Path>>(&self, base: P) -> bool {
@@ -234,12 +232,12 @@ impl AbsoluteSystemPathBuf {
         self.0.exists()
     }
 
-    pub fn extension(&self) -> Option<&str> {
-        self.0.extension()
+    pub fn try_exists(&self) -> Result<bool, PathError> {
+        Ok(fs::try_exists(&self.0)?)
     }
 
-    pub fn open(&self) -> Result<fs::File, PathError> {
-        Ok(fs::File::open(&self.0)?)
+    pub fn extension(&self) -> Option<&str> {
+        self.0.extension()
     }
 
     pub fn to_realpath(&self) -> Result<Self, PathError> {

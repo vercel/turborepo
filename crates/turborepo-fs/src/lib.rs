@@ -62,7 +62,10 @@ pub fn recursive_copy(
     }
 }
 
-fn make_dir_copy(dir: impl AsRef<AbsoluteSystemPath>, src_metadata: &Metadata) -> Result<()> {
+fn make_dir_copy(
+    dir: impl AsRef<AbsoluteSystemPath>,
+    #[allow(dead_code)] src_metadata: &Metadata,
+) -> Result<()> {
     let dir = dir.as_ref();
     let mut builder = DirBuilder::new();
     #[cfg(not(windows))]

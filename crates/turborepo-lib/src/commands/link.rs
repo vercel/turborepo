@@ -480,7 +480,10 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            repo_root: Default::default(),
+            repo_root: AbsoluteSystemPathBuf::new(
+                TempDir::new().unwrap().into_path().to_string_lossy(),
+            )
+            .unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(

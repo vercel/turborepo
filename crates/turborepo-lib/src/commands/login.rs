@@ -302,7 +302,7 @@ mod test {
 
     use reqwest::Url;
     use serde::Deserialize;
-    use tempfile::NamedTempFile;
+    use tempfile::{tempdir, NamedTempFile};
     use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
     use vercel_api_mock::start_test_server;
@@ -334,9 +334,10 @@ mod test {
             format!("{{ \"apiurl\": \"http://localhost:{}\" }}", port + 1),
         )
         .unwrap();
+        let root_dir = tempdir().unwrap();
 
         let mut base = CommandBase {
-            repo_root: Default::default(),
+            repo_root: AbsoluteSystemPathBuf::new(root_dir.path().to_string_lossy()).unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
@@ -387,8 +388,9 @@ mod test {
         )
         .unwrap();
 
+        let repo_root_dir = tempdir().unwrap();
         let mut base = CommandBase {
-            repo_root: Default::default(),
+            repo_root: AbsoluteSystemPathBuf::new(repo_root_dir.path().to_string_lossy()).unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
