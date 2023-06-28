@@ -1,6 +1,4 @@
-use std::{
-    backtrace::Backtrace, borrow::Borrow, collections::HashSet, path::PathBuf, process::Command,
-};
+use std::{backtrace::Backtrace, collections::HashSet, path::PathBuf, process::Command};
 
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
@@ -145,7 +143,7 @@ impl Git {
         path: &RelativeUnixPath,
     ) -> Result<AnchoredSystemPathBuf, Error> {
         let absolute_file_path = self.root.join_unix_path(path)?;
-        let anchored_to_turbo_root_file_path = turbo_root.anchor(absolute_file_path.borrow())?;
+        let anchored_to_turbo_root_file_path = turbo_root.anchor(&absolute_file_path)?;
         Ok(anchored_to_turbo_root_file_path)
     }
 
