@@ -43,7 +43,7 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::hash_objects;
-    use crate::package_deps::{find_git_root, GitHashes};
+    use crate::{find_git_root, package_deps::GitHashes};
 
     #[test]
     fn test_read_object_hashes() {

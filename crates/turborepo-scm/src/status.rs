@@ -6,37 +6,40 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error};
+use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
 
-pub(crate) fn append_git_status(
-    root_path: &AbsoluteSystemPath,
-    pkg_prefix: &RelativeUnixPathBuf,
-    hashes: &mut GitHashes,
-) -> Result<Vec<RelativeUnixPathBuf>, Error> {
-    let mut git = Command::new("git")
-        .args([
-            "status",
-            "--untracked-files",
-            "--no-renames",
-            "-z",
-            "--",
-            ".",
-        ])
-        .current_dir(root_path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+impl Git {
+    pub(crate) fn append_git_status(
+        &self,
+        root_path: &AbsoluteSystemPath,
+        pkg_prefix: &RelativeUnixPathBuf,
+        hashes: &mut GitHashes,
+    ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        let mut git = Command::new(self.bin.as_std_path())
+            .args([
+                "status",
+                "--untracked-files",
+                "--no-renames",
+                "-z",
+                "--",
+                ".",
+            ])
+            .current_dir(root_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
 
-    let stdout = git
-        .stdout
-        .as_mut()
-        .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
-    let mut stderr = git
-        .stderr
-        .take()
-        .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
-    let parse_result = read_status(stdout, pkg_prefix, hashes);
-    wait_for_success(git, &mut stderr, "git status", root_path, parse_result)
+        let stdout = git
+            .stdout
+            .as_mut()
+            .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
+        let parse_result = read_status(stdout, pkg_prefix, hashes);
+        wait_for_success(git, &mut stderr, "git status", root_path, parse_result)
+    }
 }
 
 fn read_status<R: Read>(

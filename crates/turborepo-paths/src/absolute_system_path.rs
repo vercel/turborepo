@@ -6,7 +6,7 @@ use std::os::unix::fs::symlink as symlink_dir;
 use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
     fmt, fs,
-    fs::{File, Metadata},
+    fs::{File, Metadata, OpenOptions},
     io,
     path::Path,
 };
@@ -14,8 +14,11 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use path_clean::PathClean;
 
-use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError, RelativeUnixPath};
+use crate::{
+    AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
+};
 
+#[derive(Debug)]
 pub struct AbsoluteSystemPath(Utf8Path);
 
 impl ToOwned for AbsoluteSystemPath {
@@ -112,6 +115,14 @@ impl AbsoluteSystemPath {
         self.0.ancestors().map(Self::new_unchecked)
     }
 
+    pub fn create_dir_all(&self) -> Result<(), io::Error> {
+        fs::create_dir_all(&self.0)
+    }
+
+    pub fn extension(&self) -> Option<&str> {
+        self.0.extension()
+    }
+
     // intended for joining literals or obviously single-token strings
     pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
@@ -162,10 +173,6 @@ impl AbsoluteSystemPath {
         }
     }
 
-    pub fn open(&self) -> Result<File, io::Error> {
-        File::open(self.0.as_std_path())
-    }
-
     pub fn symlink_to_file<P: AsRef<str>>(&self, to: P) -> Result<(), PathError> {
         let target = to.as_ref();
         symlink_file(target, &self.0)?;
@@ -179,9 +186,20 @@ impl AbsoluteSystemPath {
         Ok(())
     }
 
-    pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
+    pub fn resolve(&self, path: &AnchoredSystemPath) -> AbsoluteSystemPathBuf {
         let path = self.0.join(path);
         AbsoluteSystemPathBuf(path)
+    }
+
+    pub fn clean(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let cleaned_path = self
+            .0
+            .as_std_path()
+            .clean()
+            .try_into()
+            .map_err(|_| PathError::InvalidUnicode(self.0.as_str().to_owned()))?;
+
+        Ok(AbsoluteSystemPathBuf(cleaned_path))
     }
 
     // note that this is *not* lstat. If this is a symlink, it
@@ -248,6 +266,32 @@ impl AbsoluteSystemPath {
         let other = other.collapse();
         let rel = AnchoredSystemPathBuf::relative_path_between(&this, &other);
         rel.components().next() != Some(Utf8Component::ParentDir)
+    }
+
+    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
+        self.0.parent().map(Self::new_unchecked)
+    }
+
+    /// Opens file and sets the `FILE_FLAG_SEQUENTIAL_SCAN` flag on Windows to
+    /// help with performance
+    pub fn open(&self) -> Result<File, io::Error> {
+        let mut options = OpenOptions::new();
+        options.read(true);
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+
+            use crate::FILE_FLAG_SEQUENTIAL_SCAN;
+
+            options.custom_flags(FILE_FLAG_SEQUENTIAL_SCAN);
+        }
+
+        options.open(&self.0)
+    }
+
+    pub fn open_with_options(&self, open_options: OpenOptions) -> Result<File, io::Error> {
+        open_options.open(&self.0)
     }
 }
 

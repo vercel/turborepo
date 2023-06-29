@@ -1,12 +1,17 @@
 use std::{
+    borrow::Borrow,
     fmt,
+    ops::Deref,
     path::{Path, PathBuf},
 };
 
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{AbsoluteSystemPath, PathError, RelativeUnixPathBuf};
+use crate::{
+    check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation,
+    RelativeUnixPathBuf,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
@@ -21,6 +26,26 @@ impl TryFrom<&str> for AnchoredSystemPathBuf {
         }
 
         Ok(AnchoredSystemPathBuf(path.into()))
+    }
+}
+
+impl Borrow<AnchoredSystemPath> for AnchoredSystemPathBuf {
+    fn borrow(&self) -> &AnchoredSystemPath {
+        unsafe { AnchoredSystemPath::new_unchecked(self.0.as_path()) }
+    }
+}
+
+impl AsRef<AnchoredSystemPath> for AnchoredSystemPathBuf {
+    fn as_ref(&self) -> &AnchoredSystemPath {
+        self.borrow()
+    }
+}
+
+impl Deref for AnchoredSystemPathBuf {
+    type Target = AnchoredSystemPath;
+
+    fn deref(&self) -> &Self::Target {
+        self.borrow()
     }
 }
 
@@ -63,6 +88,10 @@ impl AnchoredSystemPathBuf {
             .into();
 
         Ok(AnchoredSystemPathBuf(stripped_path))
+    }
+
+    pub fn pop(&mut self) -> bool {
+        self.0.pop()
     }
 
     // Produces a path from start to end, which may include directory traversal
@@ -109,13 +138,58 @@ impl AnchoredSystemPathBuf {
         Self(path)
     }
 
-    pub fn from_raw<P: AsRef<str>>(raw: P) -> Result<Self, PathError> {
+    pub fn from_raw(raw: impl AsRef<str>) -> Result<Self, PathError> {
         let system_path = raw.as_ref();
         Ok(Self(system_path.into()))
     }
 
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+
+    // Takes in a path, validates that it is anchored and constructs an
+    // `AnchoredSystemPathBuf` with no trailing slashes.
+    pub fn from_system_path(path: &Path) -> Result<Self, PathError> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
+
+        #[allow(unused_variables)]
+        let PathValidation {
+            well_formed,
+            windows_safe,
+        } = check_path(path);
+
+        if !well_formed {
+            return Err(PathError::MalformedPath(path.to_string()));
+        }
+
+        #[cfg(windows)]
+        {
+            if !windows_safe {
+                return Err(PathError::WindowsUnsafePath(path.to_string()));
+            }
+        }
+
+        // Remove trailing slash
+        let stripped_path = path.strip_suffix('/').unwrap_or(path);
+
+        let path;
+        #[cfg(windows)]
+        {
+            let windows_path = stripped_path.replace('/', std::path::MAIN_SEPARATOR_STR);
+            path = Utf8PathBuf::from(windows_path);
+        }
+        #[cfg(unix)]
+        {
+            path = Utf8PathBuf::from(stripped_path);
+        }
+
+        Ok(AnchoredSystemPathBuf(path))
+    }
+
+    pub fn as_path(&self) -> &Path {
+        self.0.as_std_path()
     }
 
     pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
@@ -129,6 +203,10 @@ impl AnchoredSystemPathBuf {
             let unix_buf = self.0.as_path().into_unix();
             RelativeUnixPathBuf::new(unix_buf)
         }
+    }
+
+    pub fn push(&mut self, path: impl AsRef<Utf8Path>) {
+        self.0.push(path.as_ref());
     }
 
     pub fn components(&self) -> Utf8Components {
@@ -148,8 +226,16 @@ impl AsRef<Utf8Path> for AnchoredSystemPathBuf {
     }
 }
 
+impl AsRef<Path> for AnchoredSystemPathBuf {
+    fn as_ref(&self) -> &Path {
+        self.0.as_ref()
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use test_case::test_case;
 
     use crate::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
@@ -178,7 +264,33 @@ mod tests {
         let target = AbsoluteSystemPathBuf::new(parts.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
         let expected =
             AnchoredSystemPathBuf::from_raw(expected.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
+
         let result = AnchoredSystemPathBuf::relative_path_between(&root, &target);
+
         assert_eq!(result, expected);
+    }
+
+    #[test_case(Path::new("test.txt"), Ok("test.txt"), Ok("test.txt") ; "hello world")]
+    #[test_case(Path::new("something/"), Ok("something"), Ok("something") ; "Unix directory")]
+    #[test_case(Path::new("something\\"), Ok("something\\"), Err("Path is not safe for windows: something\\".to_string()) ; "Windows unsafe")]
+    #[test_case(Path::new("//"), Err("path is malformed: //".to_string()), Err("path is malformed: //".to_string()) ; "malformed name")]
+    fn test_from_system_path(
+        file_name: &Path,
+        expected_unix: Result<&'static str, String>,
+        expected_windows: Result<&'static str, String>,
+    ) {
+        let result = AnchoredSystemPathBuf::from_system_path(file_name).map_err(|e| e.to_string());
+        let expected = if cfg!(windows) {
+            expected_windows
+        } else {
+            expected_unix
+        };
+        match (result, expected) {
+            (Ok(result), Ok(expected)) => {
+                assert_eq!(result.as_str(), expected)
+            }
+            (Err(result), Err(expected)) => assert_eq!(result, expected),
+            (result, expected) => panic!("Expected {:?}, got {:?}", expected, result),
+        }
     }
 }

@@ -57,6 +57,8 @@ pub enum WalkError {
     WaxWalk(#[from] wax::WalkError),
     #[error("Internal error on glob {glob}: {error}")]
     InternalError { glob: String, error: String },
+    #[error("IO Error: {0}")]
+    IO(#[from] std::io::Error),
 }
 
 /// Performs a glob walk, yielding paths that _are_ included in the include list
@@ -361,7 +363,14 @@ pub fn globwalk(
                         Ok(entry) => Some(
                             AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
                         ),
-                        Err(e) => Some(Err(e.into())),
+                        Err(e) => {
+                            let io_err = std::io::Error::from(e);
+                            if io_err.kind() == std::io::ErrorKind::NotFound {
+                                None
+                            } else {
+                                Some(Err(io_err.into()))
+                            }
+                        }
                     })
                     .collect::<Vec<_>>()
             }
@@ -1357,6 +1366,7 @@ mod test {
         let include = &[
             "apps/*/package.json".to_string(),
             "docs/package.json".to_string(),
+            "empty/*/package.json".to_string(),
         ];
         let exclude = &["apps/ignored".to_string(), "**/node_modules/**".to_string()];
         let iter = globwalk(&root, include, exclude, WalkType::Files).unwrap();

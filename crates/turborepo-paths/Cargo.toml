@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-camino = { version = "1.1.4", features = ["serde1"] }
+camino = { workspace = true }
 dunce = { workspace = true }
 path-clean = "1.0.1"
 # TODO: Make this a crate feature
@@ -17,4 +17,4 @@ wax = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-test-case = "3.1.0"
+test-case = { workspace = true }

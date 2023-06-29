@@ -55,4 +55,7 @@ type RunOpts struct {
 	Summarize bool
 
 	ExperimentalSpaceID string
+
+	// Whether this run is in Github Actions
+	IsGithubActions bool
 }
