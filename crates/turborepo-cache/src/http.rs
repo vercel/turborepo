@@ -31,7 +31,7 @@ impl HttpCache {
     pub async fn put(
         &self,
         anchor: &AbsoluteSystemPath,
-        hash: String,
+        hash: &str,
         files: Vec<AnchoredSystemPathBuf>,
         duration: u32,
         token: &str,
@@ -46,7 +46,7 @@ impl HttpCache {
             .transpose()?;
 
         self.client
-            .put_artifact(&hash, &artifact_body, duration, tag.as_deref(), token)
+            .put_artifact(hash, &artifact_body, duration, tag.as_deref(), token)
             .await?;
 
         Ok(())
@@ -134,5 +134,50 @@ impl HttpCache {
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut cache_reader = CacheReader::from_reader(body, true)?;
         cache_reader.restore(root)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use anyhow::Result;
+    use tempfile::tempdir;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turborepo_api_client::APIClient;
+
+    use crate::http::HttpCache;
+
+    const DEFAULT_API_URL: &str = "https://vercel.com/api";
+
+    struct TestFile {
+        path: AnchoredSystemPathBuf,
+        contents: &'static str,
+    }
+
+    #[test_case(vec![
+        TestFile {
+            path: AnchoredSystemPathBuf::new("package.json"),
+            contents: "{}"
+        }
+    ])]
+    fn test_round_trip(files: Vec<TestFile>) -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::try_from(repo_root.path())?;
+
+        for file in &files {
+            let file_path = repo_root_path.resolve(&file.path);
+            std::fs::create_dir_all(file_path.parent().unwrap())?;
+            std::fs::write(file_path, file.contents)?;
+        }
+        let api_client = APIClient::new(DEFAULT_API_URL, 200, "2.0.0", true)?;
+
+        let cache = HttpCache::new(api_client, None, repo_root_path.to_owned());
+
+        cache.put(
+            &repo_root_path,
+            "this-is-my-hash",
+            files.iter().map(|f| f.path.clone()).collect(),
+            0,
+            "",
+        )?;
     }
 }

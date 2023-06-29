@@ -1,7 +1,13 @@
-use std::net::SocketAddr;
+use std::{fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
-use axum::{routing::get, Json, Router};
+use axum::{
+    extract::{BodyStream, Path},
+    http::StatusCode,
+    routing::{get, put},
+    Json, Router,
+};
+use futures_util::StreamExt;
 use turborepo_api_client::{
     CachingStatus, CachingStatusResponse, Membership, Role, Space, SpacesResponse, Team,
     TeamsResponse, User, UserResponse, VerificationResponse,
@@ -25,6 +31,7 @@ pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
 pub async fn start_test_server(port: u16) -> Result<()> {
+    let tempdir = Arc::new(tempfile::tempdir()?);
     let app = Router::new()
         .route(
             "/v2/user",
@@ -82,7 +89,29 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     team_id: Some(EXPECTED_SSO_TEAM_ID.to_string()),
                 })
             }),
+        )
+        .route(
+            "/v8/artifacts/:hash",
+            put(
+                |Path(hash): Path<String>, mut body: BodyStream| async move {
+                    let root_path = tempdir.path();
+                    let file_path = root_path.join(&hash);
+                    let mut file = OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&file_path)
+                        .unwrap();
+
+                    while let Some(item) = body.next().await {
+                        let chunk = item.unwrap();
+                        file.write_all(&chunk).unwrap();
+                    }
+
+                    (StatusCode::CREATED, Json(hash))
+                },
+            ),
         );
+
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     // We print the port so integration tests can use it
     println!("{}", port);
