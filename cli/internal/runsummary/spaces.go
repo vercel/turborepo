@@ -180,7 +180,7 @@ func (c *spacesClient) createRun(payload *spacesRunPayload) {
 	}()
 }
 
-func (c *spacesClient) postTask(task *TaskSummary) {
+func (c *spacesClient) postTask(task *TaskSummary, logs []byte) {
 	c.queueRequest(&spaceRequest{
 		method: "POST",
 		makeURL: func(self *spaceRequest, run *spaceRun) error {
@@ -190,7 +190,7 @@ func (c *spacesClient) postTask(task *TaskSummary) {
 			self.url = fmt.Sprintf(tasksEndpoint, c.spaceID, run.ID)
 			return nil
 		},
-		body: newSpacesTaskPayload(task),
+		body: newSpacesTaskPayload(task, logs),
 	})
 }
 
@@ -329,7 +329,7 @@ func newSpacesDonePayload(runsummary *RunSummary) *spacesRunPayload {
 	}
 }
 
-func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
+func newSpacesTaskPayload(taskSummary *TaskSummary, logs []byte) *spacesTask {
 	startTime := taskSummary.Execution.startAt.UnixMilli()
 	endTime := taskSummary.Execution.endTime().UnixMilli()
 
@@ -344,6 +344,6 @@ func newSpacesTaskPayload(taskSummary *TaskSummary) *spacesTask {
 		ExitCode:     *taskSummary.Execution.exitCode,
 		Dependencies: taskSummary.Dependencies,
 		Dependents:   taskSummary.Dependents,
-		Logs:         string(taskSummary.GetLogs()),
+		Logs:         string(logs),
 	}
 }
