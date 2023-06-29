@@ -168,7 +168,7 @@ pub enum ChunkingType {
     IsolatedParallel,
     /// An async loader is placed into the referencing chunk and loads the
     /// separate chunk group in which the asset is placed.
-    SeparateAsync,
+    Async,
 }
 
 #[turbo_tasks::value(transparent)]
@@ -405,7 +405,7 @@ where
                     ChunkContentGraphNode::Chunk(chunk),
                 ));
             }
-            ChunkingType::SeparateAsync => {
+            ChunkingType::Async => {
                 if let Some(manifest_loader_item) = I::from_async_asset(
                     context.chunking_context,
                     chunkable_asset,
