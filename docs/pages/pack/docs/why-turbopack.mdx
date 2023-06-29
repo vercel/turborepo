@@ -27,15 +27,15 @@ We decided to create a reusable Turbo build engine for distributed and increment
 
 The Turbo engine also caches the result of all the functions it schedules, meaning it never needs to do the same work twice. Put simply, **it does the minimum work at maximum speed**.
 
-### Vite and esbuild
+### Vite and Esbuild
 
 Other tools take a different attitude to ‘doing less work’. Vite minimizes work done by using Native ESM in development mode. We decided not to take this approach for the reasons listed above.
 
 Under the hood, Vite uses esbuild for many tasks. esbuild is a bundler - a superbly fast one. It doesn’t force you to use native ESM. But we decided not to adopt esbuild for a few reasons.
 
-esbuild’s code is hyper-optimized for one task - bundling fast. It doesn’t have HMR, which we don’t want to lose from our dev server.
+Esbuild’s code is hyper-optimized for one task - bundling fast. It doesn’t have HMR, which we don’t want to lose from our dev server.
 
-esbuild is an extremely fast bundler, but it doesn’t do much caching. This means you _will_ end up doing the same work again and again, even if that work is at the speed of native.
+Esbuild is an extremely fast bundler, but it doesn’t do much caching. This means you _will_ end up doing the same work again and again, even if that work is at the speed of native.
 
 Evan Wallace refers to esbuild as a [proof-of-concept for the next generation of bundlers](https://news.ycombinator.com/item?id=22336334). We think he’s right. We feel that a Rust-powered bundler _with_ incremental computation could perform better at a larger scale than esbuild.
 
@@ -45,7 +45,7 @@ Early versions of Next.js tried to bundle the _entire_ web app in development mo
 
 This more ‘lazy’ approach (only bundling assets when absolutely necessary) is key for a fast dev server. Native ESM handles this without much magic - you request a module, which requests other modules. However, we wanted to build a bundler, for the reasons explained above.
 
-esbuild doesn’t have a concept of ‘lazy’ bundling - it’s all-or-nothing, unless you specifically target only certain entry points.
+Esbuild doesn’t have a concept of ‘lazy’ bundling - it’s all-or-nothing, unless you specifically target only certain entry points.
 
 Turbopack’s development mode builds a minimal graph of your app’s imports and exports based on received requests and only bundles the minimal code necessary. Learn more in the [core concepts docs](/pack/docs/core-concepts#compiling-by-request).
 
