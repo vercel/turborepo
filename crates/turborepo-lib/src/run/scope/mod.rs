@@ -20,6 +20,9 @@ pub fn resolve_packages(
         PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
     });
     let _resolver = Resolver::new(pkg_graph, turbo_root, pkg_inference, scm);
+    let mut filter_patterns = opts.filter_patterns.clone();
+    filter_patterns.extend(opts.legacy_filter.as_filter_pattern());
+    let is_all_packages = filter_patterns.is_empty() && opts.pkg_inference_root.is_none();
     warn!("resolve packages not implemented yet");
     Ok(HashSet::new())
 }
