@@ -298,7 +298,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v3
         with:
           distribution: goreleaser-pro
-          version: latest
+          version: v1.18.2
           install-only: true
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
