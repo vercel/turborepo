@@ -10,7 +10,7 @@ use turbopath::{
 };
 use turborepo_lockfiles::Lockfile;
 
-use super::{Package, PackageGraph, WorkspaceEntry, WorkspaceName, WorkspaceNode};
+use super::{Entry, Package, PackageGraph, WorkspaceName, WorkspaceNode};
 use crate::{package_json::PackageJson, package_manager::PackageManager};
 
 pub struct PackageGraphBuilder<'a> {
@@ -103,7 +103,7 @@ struct BuildState<'a, S> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     package_manager: PackageManager,
-    workspaces: HashMap<WorkspaceName, WorkspaceEntry>,
+    workspaces: HashMap<WorkspaceName, Entry>,
     workspace_graph: Graph<WorkspaceNode, ()>,
     node_lookup: HashMap<WorkspaceNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -154,7 +154,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let mut workspaces = HashMap::new();
         workspaces.insert(
             WorkspaceName::Root,
-            WorkspaceEntry {
+            Entry {
                 package_json: root_package_json,
                 ..Default::default()
             },
@@ -182,7 +182,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
         let workspace_name =
             WorkspaceName::Other(json.name.clone().ok_or(Error::PackageJsonMissingName)?);
-        let entry = WorkspaceEntry {
+        let entry = Entry {
             package_json: json,
             package_json_path: relative_json_path,
             ..Default::default()
@@ -435,7 +435,7 @@ impl Dependencies {
     pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
-        workspaces: &HashMap<WorkspaceName, WorkspaceEntry>,
+        workspaces: &HashMap<WorkspaceName, Entry>,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -557,7 +557,7 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
     }
 }
 
-impl WorkspaceEntry {
+impl Entry {
     fn unix_dir_str(&self) -> Result<String, Error> {
         let unix = self.package_json_path.to_unix()?;
         Ok(unix.to_string())

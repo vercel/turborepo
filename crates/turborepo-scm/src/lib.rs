@@ -12,7 +12,10 @@ use std::{
 use bstr::io::BufReadExt;
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError,
+    RelativeUnixPathBuf,
+};
 
 pub mod git;
 mod hash_object;
@@ -65,19 +68,6 @@ impl Error {
     pub(crate) fn git2_error_context(error: git2::Error, context: String) -> Self {
         Error::Git2(error, context, Backtrace::capture())
     }
-}
-
-pub trait SCM {
-    fn changed_files(
-        turbo_root: &AbsoluteSystemPath,
-        from_commit: Option<&str>,
-        to_commit: &str,
-    ) -> Result<HashSet<AnchoredSystemPathBuf>, Error>;
-
-    fn previous_content(
-        from_commit: &str,
-        file_path: &AnchoredSystemPathBuf,
-    ) -> Result<Vec<u8>, Error>;
 }
 
 fn read_git_error_to_string<R: Read>(stderr: &mut R) -> Option<String> {
