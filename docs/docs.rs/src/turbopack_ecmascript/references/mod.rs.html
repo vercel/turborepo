@@ -2605,6 +2605,15 @@
 <a href="#2605" id="2605">2605</a>
 <a href="#2606" id="2606">2606</a>
 <a href="#2607" id="2607">2607</a>
+<a href="#2608" id="2608">2608</a>
+<a href="#2609" id="2609">2609</a>
+<a href="#2610" id="2610">2610</a>
+<a href="#2611" id="2611">2611</a>
+<a href="#2612" id="2612">2612</a>
+<a href="#2613" id="2613">2613</a>
+<a href="#2614" id="2614">2614</a>
+<a href="#2615" id="2615">2615</a>
+<a href="#2616" id="2616">2616</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2715,7 +2724,9 @@
         builtin::early_replace_builtin,
         graph::{ConditionalKind, EffectArg, EvalContext, VarGraph},
         imports::{ImportedSymbol, Reexport},
-        parse_require_context, ModuleValue, RequireContextValueVc,
+        parse_require_context,
+        top_level_await::has_top_level_await,
+        ModuleValue, RequireContextValueVc,
     },
     chunk::{EcmascriptExports, EcmascriptExportsVc},
     code_gen::{
@@ -2741,6 +2752,7 @@
     <span class="kw">pub </span>references: AssetReferencesVc,
     <span class="kw">pub </span>code_generation: CodeGenerateablesVc,
     <span class="kw">pub </span>exports: EcmascriptExportsVc,
+    <span class="kw">pub </span>has_top_level_await: bool,
     <span class="doccomment">/// `true` when the analysis was successful.
     </span><span class="kw">pub </span>successful: bool,
 }
@@ -2777,6 +2789,7 @@
     references: IndexSet&lt;AssetReferenceVc&gt;,
     code_gens: Vec&lt;CodeGen&gt;,
     exports: EcmascriptExports,
+    has_top_level_await: bool,
     successful: bool,
 }
 
@@ -2786,6 +2799,7 @@
             references: IndexSet::new(),
             code_gens: Vec::new(),
             exports: EcmascriptExports::None,
+            has_top_level_await: <span class="bool-val">false</span>,
             successful: <span class="bool-val">false</span>,
         }
     }
@@ -2824,6 +2838,11 @@
         <span class="self">self</span>.exports = exports;
     }
 
+    <span class="doccomment">/// Sets whether the analysed module has a top level await.
+    </span><span class="kw">pub fn </span>set_top_level_await(<span class="kw-2">&amp;mut </span><span class="self">self</span>, top_level_await: bool) {
+        <span class="self">self</span>.has_top_level_await = top_level_await;
+    }
+
     <span class="doccomment">/// Sets whether the analysis was successful.
     </span><span class="kw">pub fn </span>set_successful(<span class="kw-2">&amp;mut </span><span class="self">self</span>, successful: bool) {
         <span class="self">self</span>.successful = successful;
@@ -2851,6 +2870,7 @@
                 references: AssetReferencesVc::cell(references),
                 code_generation: CodeGenerateablesVc::cell(<span class="self">self</span>.code_gens),
                 exports: <span class="self">self</span>.exports.into(),
+                has_top_level_await: <span class="self">self</span>.has_top_level_await,
                 successful: <span class="self">self</span>.successful,
             },
         ))
@@ -2904,6 +2924,13 @@
         )
         .<span class="kw">await
     </span>}
+}
+
+<span class="kw">fn </span>set_handler_and_globals&lt;F, R&gt;(handler: <span class="kw-2">&amp;</span>Handler, globals: <span class="kw-2">&amp;</span>Arc&lt;Globals&gt;, f: F) -&gt; R
+<span class="kw">where
+    </span>F: FnOnce() -&gt; R,
+{
+    HANDLER.set(handler, || GLOBALS.set(globals, f))
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -3038,9 +3065,14 @@
             title: <span class="prelude-val">None</span>,
         }),
     );
-    <span class="kw">let </span>var_graph = HANDLER.set(<span class="kw-2">&amp;</span>handler, || {
-        GLOBALS.set(globals, || create_graph(program, eval_context))
-    });
+
+    <span class="kw">let </span>has_top_level_await =
+        set_handler_and_globals(<span class="kw-2">&amp;</span>handler, globals, || has_top_level_await(program));
+
+    analysis.set_top_level_await(has_top_level_await);
+
+    <span class="kw">let </span><span class="kw-2">mut </span>var_graph =
+        set_handler_and_globals(<span class="kw-2">&amp;</span>handler, globals, || create_graph(program, eval_context));
 
     <span class="kw">for </span>r <span class="kw">in </span>eval_context.imports.references() {
         <span class="kw">let </span>r = EsmAssetReferenceVc::new(
@@ -3070,59 +3102,45 @@
         </span>analysis.add_reference(<span class="kw-2">*</span>r);
     }
 
-    <span class="kw">pub fn </span>set_handler_and_globals&lt;F, R&gt;(handler: <span class="kw-2">&amp;</span>Handler, globals: <span class="kw-2">&amp;</span>Arc&lt;Globals&gt;, f: F) -&gt; R
-    <span class="kw">where
-        </span>F: FnOnce() -&gt; R,
-    {
-        HANDLER.set(handler, || GLOBALS.set(globals, f))
-    }
+    <span class="kw">let </span>(webpack_runtime, webpack_entry, webpack_chunks, esm_exports, esm_star_exports) =
+        set_handler_and_globals(<span class="kw-2">&amp;</span>handler, globals, || {
+            <span class="comment">// TODO migrate to effects
+            </span><span class="kw">let </span><span class="kw-2">mut </span>visitor =
+                AssetReferencesVisitor::new(eval_context, <span class="kw-2">&amp;</span>import_references, <span class="kw-2">&amp;mut </span>analysis);
 
-    <span class="kw">let </span>(
-        <span class="kw-2">mut </span>var_graph,
-        webpack_runtime,
-        webpack_entry,
-        webpack_chunks,
-        esm_exports,
-        esm_star_exports,
-    ) = set_handler_and_globals(<span class="kw-2">&amp;</span>handler, globals, || {
-        <span class="comment">// TODO migrate to effects
-        </span><span class="kw">let </span><span class="kw-2">mut </span>visitor =
-            AssetReferencesVisitor::new(eval_context, <span class="kw-2">&amp;</span>import_references, <span class="kw-2">&amp;mut </span>analysis);
-
-        <span class="kw">for </span>(i, reexport) <span class="kw">in </span>eval_context.imports.reexports() {
-            <span class="kw">let </span>import_ref = import_references[i];
-            <span class="kw">match </span>reexport {
-                Reexport::Star =&gt; {
-                    visitor.esm_star_exports.push(import_ref);
-                }
-                Reexport::Namespace { exported: n } =&gt; {
-                    visitor
-                        .esm_exports
-                        .insert(n.to_string(), EsmExport::ImportedNamespace(import_ref));
-                }
-                Reexport::Named {
-                    imported: i,
-                    exported: e,
-                } =&gt; {
-                    visitor.esm_exports.insert(
-                        e.to_string(),
-                        EsmExport::ImportedBinding(import_ref, i.to_string()),
-                    );
+            <span class="kw">for </span>(i, reexport) <span class="kw">in </span>eval_context.imports.reexports() {
+                <span class="kw">let </span>import_ref = import_references[i];
+                <span class="kw">match </span>reexport {
+                    Reexport::Star =&gt; {
+                        visitor.esm_star_exports.push(import_ref);
+                    }
+                    Reexport::Namespace { exported: n } =&gt; {
+                        visitor
+                            .esm_exports
+                            .insert(n.to_string(), EsmExport::ImportedNamespace(import_ref));
+                    }
+                    Reexport::Named {
+                        imported: i,
+                        exported: e,
+                    } =&gt; {
+                        visitor.esm_exports.insert(
+                            e.to_string(),
+                            EsmExport::ImportedBinding(import_ref, i.to_string()),
+                        );
+                    }
                 }
             }
-        }
 
-        program.visit_with_path(<span class="kw-2">&amp;mut </span>visitor, <span class="kw-2">&amp;mut </span>Default::default());
+            program.visit_with_path(<span class="kw-2">&amp;mut </span>visitor, <span class="kw-2">&amp;mut </span>Default::default());
 
-        (
-            var_graph,
-            visitor.webpack_runtime,
-            visitor.webpack_entry,
-            visitor.webpack_chunks,
-            visitor.esm_exports,
-            visitor.esm_star_exports,
-        )
-    });
+            (
+                visitor.webpack_runtime,
+                visitor.webpack_entry,
+                visitor.webpack_chunks,
+                visitor.esm_exports,
+                visitor.esm_star_exports,
+            )
+        });
 
     <span class="kw">let </span><span class="kw-2">mut </span>ignore_effect_span = <span class="prelude-val">None</span>;
     <span class="comment">// Check if it was a webpack entry

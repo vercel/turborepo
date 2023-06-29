@@ -671,6 +671,10 @@
 <a href="#671" id="671">671</a>
 <a href="#672" id="672">672</a>
 <a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(min_specialization)]
 #![feature(iter_intersperse)]
@@ -808,6 +812,7 @@
     operation: RawVc,
     references: AssetReferencesReadRef,
     exports: EcmascriptExportsReadRef,
+    has_top_level_await: bool,
 }
 
 <span class="kw">pub struct </span>EcmascriptModuleAssetBuilder {
@@ -985,11 +990,13 @@
                     <span class="comment">// We need to store the ReadRefs since we want to keep a snapshot.
                     </span>references: result_value.references.<span class="kw">await</span><span class="question-mark">?</span>,
                     exports: result_value.exports.<span class="kw">await</span><span class="question-mark">?</span>,
+                    has_top_level_await: result_value.has_top_level_await,
                 }));
         } <span class="kw">else if let </span><span class="prelude-val">Some</span>(MemoizedSuccessfulAnalysis {
             operation,
             references,
             exports,
+            has_top_level_await,
         }) = <span class="kw-2">&amp;*</span>this.last_successful_analysis.get()
         {
             <span class="comment">// It&#39;s important to connect to the last operation here to keep it active, so
@@ -999,6 +1006,7 @@
                 references: ReadRef::cell(references.clone()),
                 exports: ReadRef::cell(exports.clone()),
                 code_generation: result_value.code_generation,
+                has_top_level_await: <span class="kw-2">*</span>has_top_level_await,
                 successful: <span class="bool-val">false</span>,
             }
             .cell());
