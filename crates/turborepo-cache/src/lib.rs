@@ -5,11 +5,7 @@ pub mod cache_archive;
 pub mod http;
 pub mod signature_authentication;
 
-use std::{
-    backtrace,
-    backtrace::Backtrace,
-    sync::{MutexGuard, PoisonError},
-};
+use std::{backtrace, backtrace::Backtrace};
 
 use thiserror::Error;
 

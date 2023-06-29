@@ -11,11 +11,11 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
 
 use crate::CacheError;
 
-struct CacheWriter {
-    builder: tar::Builder<Box<dyn Write>>,
+pub struct CacheWriter<'a> {
+    builder: tar::Builder<Box<dyn Write + 'a>>,
 }
 
-impl CacheWriter {
+impl<'a> CacheWriter<'a> {
     // Appends data to tar builder.
     fn append_data(
         &mut self,
@@ -28,6 +28,19 @@ impl CacheWriter {
 
     pub fn finish(mut self) -> Result<(), CacheError> {
         Ok(self.builder.finish()?)
+    }
+
+    pub fn from_writer(writer: impl Write + 'a, use_compression: bool) -> Result<Self, CacheError> {
+        if use_compression {
+            let zw = zstd::Encoder::new(writer, 0)?.auto_finish();
+            Ok(CacheWriter {
+                builder: tar::Builder::new(Box::new(zw)),
+            })
+        } else {
+            Ok(CacheWriter {
+                builder: tar::Builder::new(Box::new(writer)),
+            })
+        }
     }
 
     // Makes a new CacheArchive at the specified path
@@ -58,7 +71,7 @@ impl CacheWriter {
     }
 
     // Adds a user-cached item to the tar
-    fn add_file(
+    pub(crate) fn add_file(
         &mut self,
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,

@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, io::Write, sync::Mutex};
+use std::{backtrace::Backtrace, io::Write};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIClient;
@@ -32,21 +32,20 @@ impl HttpCache {
         &self,
         anchor: &AbsoluteSystemPath,
         hash: String,
-        duration: u64,
         files: Vec<AnchoredSystemPathBuf>,
-        ci_constant: Option<&str>,
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
 
         let tag = self
             .signer_verifier
-            .map(|signer| signer.generate_tag(&hash, &artifact_body))
+            .as_ref()
+            .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
-        self.client
-            .put_artifact(&hash, &artifact_body, duration, tag, ci_constant)
-            .await?;
+        // self.client
+        //     .put_artifact(&hash, &artifact_body, duration, tag, ci_constant)
+        //     .await?;
 
         Ok(())
     }
@@ -57,9 +56,9 @@ impl HttpCache {
         anchor: &AbsoluteSystemPath,
         files: Vec<AnchoredSystemPathBuf>,
     ) -> Result<(), CacheError> {
-        let mut cache_archive = CacheWriter::from_writer(writer)?;
+        let mut cache_archive = CacheWriter::from_writer(writer, true)?;
         for file in files {
-            cache_archive.add_file(anchor, file.as_anchored_path())?;
+            cache_archive.add_file(anchor, &file)?;
         }
 
         Ok(())
@@ -106,7 +105,7 @@ impl HttpCache {
                     Backtrace::capture(),
                 )
             })?;
-            let is_valid = signer_verifier.validate(hash, &body, &expected_tag)?;
+            let is_valid = signer_verifier.validate(hash.as_bytes(), &body, &expected_tag)?;
 
             if !is_valid {
                 return Err(CacheError::InvalidTag(Backtrace::capture()));
@@ -122,7 +121,7 @@ impl HttpCache {
             })?
         };
 
-        let files = Self::restore_tar(self.repo_root.as_absolute_path(), &body)?;
+        let files = Self::restore_tar(&self.repo_root, &body)?;
 
         Ok((files, duration))
     }
