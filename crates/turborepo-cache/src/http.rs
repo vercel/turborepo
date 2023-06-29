@@ -141,12 +141,12 @@ impl HttpCache {
 mod test {
     use anyhow::Result;
     use tempfile::tempdir;
-    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use test_case::test_case;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_api_client::APIClient;
+    use vercel_api_mock::start_test_server;
 
     use crate::http::HttpCache;
-
-    const DEFAULT_API_URL: &str = "https://vercel.com/api";
 
     struct TestFile {
         path: AnchoredSystemPathBuf,
@@ -155,29 +155,42 @@ mod test {
 
     #[test_case(vec![
         TestFile {
-            path: AnchoredSystemPathBuf::new("package.json"),
-            contents: "{}"
+            path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
+            contents: "hello world"
         }
     ])]
-    fn test_round_trip(files: Vec<TestFile>) -> Result<()> {
+    #[tokio::test]
+    async fn test_round_trip(files: Vec<TestFile>) -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+
         let repo_root = tempdir()?;
-        let repo_root_path = AbsoluteSystemPath::try_from(repo_root.path())?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
 
         for file in &files {
             let file_path = repo_root_path.resolve(&file.path);
             std::fs::create_dir_all(file_path.parent().unwrap())?;
             std::fs::write(file_path, file.contents)?;
         }
-        let api_client = APIClient::new(DEFAULT_API_URL, 200, "2.0.0", true)?;
+        let api_client = APIClient::new(&format!("http://localhost:{}", port), 200, "2.0.0", true)?;
 
         let cache = HttpCache::new(api_client, None, repo_root_path.to_owned());
 
-        cache.put(
-            &repo_root_path,
-            "this-is-my-hash",
-            files.iter().map(|f| f.path.clone()).collect(),
-            0,
-            "",
-        )?;
+        cache
+            .put(
+                &repo_root_path,
+                "this-is-my-hash",
+                files.iter().map(|f| f.path.clone()).collect(),
+                0,
+                "",
+            )
+            .await?;
+
+        cache
+            .retrieve("this-is-my-hash", "", "", None, false)
+            .await?;
+
+        handle.abort();
+        Ok(())
     }
 }

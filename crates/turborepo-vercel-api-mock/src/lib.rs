@@ -32,6 +32,7 @@ pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
 pub async fn start_test_server(port: u16) -> Result<()> {
     let tempdir = Arc::new(tempfile::tempdir()?);
+    let tempdir2 = tempdir.clone();
     let app = Router::new()
         .route(
             "/v2/user",
@@ -110,6 +111,16 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     (StatusCode::CREATED, Json(hash))
                 },
             ),
+        )
+        .route(
+            "/v8/artifacts/:hash",
+            get(|Path(hash): Path<String>| async move {
+                let root_path = tempdir2.path();
+                let file_path = root_path.join(&hash);
+                let buffer = std::fs::read(file_path).unwrap();
+
+                (StatusCode::OK, buffer)
+            }),
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));

@@ -127,6 +127,7 @@ impl<'a> CacheWriter<'a> {
             header.set_entry_type(EntryType::Directory);
         } else if file_info.is_file() {
             header.set_entry_type(EntryType::Regular);
+            header.set_size(file_info.len());
         } else {
             // Throw an error if trying to create a cache that contains a type we don't
             // support.

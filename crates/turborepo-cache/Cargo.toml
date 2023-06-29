@@ -13,8 +13,10 @@ rustls-tls = ["turborepo-api-client/rustls-tls"]
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 libc = "0.2.146"
+port_scanner = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+vercel-api-mock = { workspace = true }
 
 [dependencies]
 base64 = "0.21.0"
@@ -33,6 +35,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 tar = "0.4.38"
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }
