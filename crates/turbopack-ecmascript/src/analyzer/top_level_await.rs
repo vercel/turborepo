@@ -22,7 +22,6 @@ macro_rules! noop {
     };
 }
 
-//noinspection ALL
 impl Visit for TopLevelAwaitVisitor {
     fn visit_await_expr(&mut self, _: &AwaitExpr) {
         self.has_top_level_await = true;
