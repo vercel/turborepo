@@ -58,9 +58,10 @@ func TestFailToCreateRun(t *testing.T) {
 			exitCode: &exitCode,
 		},
 	}
-	c.postTask(ts)
-	c.postTask(ts)
-	c.postTask(ts)
+	var logs []byte
+	c.postTask(ts, logs)
+	c.postTask(ts, logs)
+	c.postTask(ts, logs)
 	c.Close()
 
 	assert.True(t, api.sawFirst)
