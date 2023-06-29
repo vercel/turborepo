@@ -131,6 +131,8 @@ func NewRunSummary(
 	return rsm
 }
 
+// SpacesIsEnabled returns true if this run summary is going to send to a
+// spaces backend
 func (rsm *Meta) SpacesIsEnabled() bool {
 	return rsm.spacesClient.enabled
 }
