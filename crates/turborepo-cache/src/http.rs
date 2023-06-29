@@ -33,6 +33,8 @@ impl HttpCache {
         anchor: &AbsoluteSystemPath,
         hash: String,
         files: Vec<AnchoredSystemPathBuf>,
+        duration: u32,
+        token: &str,
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
@@ -43,9 +45,9 @@ impl HttpCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
-        // self.client
-        //     .put_artifact(&hash, &artifact_body, duration, tag, ci_constant)
-        //     .await?;
+        self.client
+            .put_artifact(&hash, &artifact_body, duration, tag.as_deref(), token)
+            .await?;
 
         Ok(())
     }

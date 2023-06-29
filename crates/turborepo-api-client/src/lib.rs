@@ -128,6 +128,7 @@ pub struct APIClient {
     client: reqwest::Client,
     base_url: String,
     user_agent: String,
+    use_preflight: bool,
 }
 
 impl APIClient {
@@ -253,6 +254,56 @@ impl APIClient {
         })
     }
 
+    pub async fn put_artifact(
+        &self,
+        hash: &str,
+        artifact_body: &[u8],
+        duration: u32,
+        tag: Option<&str>,
+        token: &str,
+    ) -> Result<()> {
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
+        let mut allow_auth = true;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(
+                    token,
+                    &request_url,
+                    "PUT",
+                    "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag",
+                )
+                .await?;
+
+            allow_auth = preflight_response.allow_auth;
+            request_url = preflight_response.location.to_string();
+        }
+
+        let mut request_builder = self
+            .client
+            .put(&request_url)
+            .header("Content-Type", "application/octet-stream")
+            .header("x-artifact-duration", duration.to_string())
+            .header("User-Agent", self.user_agent.clone())
+            .body(artifact_body.to_vec());
+
+        // TODO: Add CI header
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        if let Some(tag) = tag {
+            request_builder = request_builder.header("x-artifact-tag", tag);
+        }
+
+        retry::make_retryable_request(request_builder)
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+
     pub async fn fetch_artifact(
         &self,
         hash: &str,
@@ -328,7 +379,12 @@ impl APIClient {
         })
     }
 
-    pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &str) -> Result<Self> {
+    pub fn new(
+        base_url: impl AsRef<str>,
+        timeout: u64,
+        version: &str,
+        use_preflight: bool,
+    ) -> Result<Self> {
         let client = if timeout != 0 {
             reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout))
@@ -348,6 +404,7 @@ impl APIClient {
             client,
             base_url: base_url.as_ref().to_string(),
             user_agent,
+            use_preflight,
         })
     }
 
