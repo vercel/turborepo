@@ -101,7 +101,7 @@ pub async fn url_resolve(
     let result = if *rel_result.is_unresolveable().await? && rel_request.resolve().await? != request
     {
         resolve(origin.origin_path().parent(), request, resolve_options)
-            .add_references(rel_result.await?.get_references().clone())
+            .with_references(rel_result.await?.get_references().clone())
     } else {
         rel_result
     };
