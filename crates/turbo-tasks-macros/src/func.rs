@@ -212,12 +212,10 @@ pub fn split_signature(sig: &Signature) -> (Signature, Signature, Type, TokenStr
     if is_empty_type(raw_output_type) {
         // Can't emit a diagnostic on OutputType alone as it can be omitted from the
         // text for `()`. Use the whole signature span.
-        sig.span()
-            .unwrap()
-            .error(
-                "Cannot return `()` from a turbo_tasks function. Return Result<NothingVc> instead.",
-            )
-            .emit();
+        abort!(
+            sig.span(),
+            "Cannot return `()` from a turbo_tasks function. Return a NothingVc instead.",
+        )
     }
 
     let inline_ident = get_internal_function_ident(&sig.ident);
