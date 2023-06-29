@@ -153,7 +153,6 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			Outputs:                taskDefinition.Outputs.Inclusions,
 			ExcludedOutputs:        taskDefinition.Outputs.Exclusions,
 			LogFileRelativePath:    logFileRelativePath,
-			LogFileAbsolutePath:    logFileAbsolutePath,
 			ResolvedTaskDefinition: taskDefinition,
 			ExpandedInputs:         expandedInputs,
 			ExpandedOutputs:        []turbopath.AnchoredSystemPath{},

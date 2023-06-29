@@ -66,7 +66,6 @@ type TaskSummary struct {
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
 	LogFileRelativePath    string                                `json:"logFile"`
-	LogFileAbsolutePath    turbopath.AbsoluteSystemPath          `json:"-"`
 	Dir                    string                                `json:"directory,omitempty"`
 	Dependencies           []string                              `json:"dependencies"`
 	Dependents             []string                              `json:"dependents"`
@@ -77,15 +76,6 @@ type TaskSummary struct {
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	DotEnv                 turbopath.AnchoredUnixPathArray       `json:"dotEnv"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
-}
-
-// GetLogs reads the log file and returns the data
-func (ts *TaskSummary) GetLogs() []byte {
-	bytes, err := ts.LogFileAbsolutePath.ReadFile()
-	if err != nil {
-		return []byte{}
-	}
-	return bytes
 }
 
 // TaskEnvConfiguration contains the environment variable inputs for a task

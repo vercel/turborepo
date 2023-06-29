@@ -131,6 +131,10 @@ func NewRunSummary(
 	return rsm
 }
 
+func (rsm *Meta) SpacesIsEnabled() bool {
+	return rsm.spacesClient.enabled
+}
+
 // getPath returns a path to where the runSummary is written.
 // The returned path will always be relative to the dir passsed in.
 // We don't do a lot of validation, so `../../` paths are allowed.
@@ -245,9 +249,9 @@ func (rsm *Meta) save() error {
 }
 
 // CloseTask posts the result of the Task to Spaces
-func (rsm *Meta) CloseTask(task *TaskSummary) {
+func (rsm *Meta) CloseTask(task *TaskSummary, logs []byte) {
 	if rsm.spacesClient.enabled {
-		rsm.spacesClient.postTask(task)
+		rsm.spacesClient.postTask(task, logs)
 	}
 }
 
