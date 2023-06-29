@@ -16,7 +16,7 @@ use swc_core::{
             helpers::{Helpers, HELPERS},
             resolver,
         },
-        visit::{VisitMutWith, VisitWith},
+        visit::VisitMutWith,
     },
 };
 use turbo_tasks::{
@@ -38,12 +38,9 @@ use turbopack_swc_utils::emitter::IssueEmitter;
 use super::EcmascriptModuleAssetType;
 use crate::{
     analyzer::graph::EvalContext,
-    parse::top_level_await::TopLevelAwaitVisitor,
     transform::{EcmascriptInputTransformsVc, TransformContext},
     EcmascriptInputTransform,
 };
-
-mod top_level_await;
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 #[allow(clippy::large_enum_variant)]
@@ -59,7 +56,6 @@ pub enum ParseResult {
         globals: Arc<Globals>,
         #[turbo_tasks(debug_ignore, trace_ignore)]
         source_map: Arc<swc_core::common::SourceMap>,
-        has_top_level_await: bool,
     },
     Unparseable,
     NotFound,
@@ -334,10 +330,6 @@ async fn parse_content(
                 is_typescript,
             ));
 
-            let mut tla_visitor = TopLevelAwaitVisitor::default();
-
-            parsed_program.visit_with(&mut tla_visitor);
-
             let context = TransformContext {
                 comments: &comments,
                 source_map: &source_map,
@@ -366,12 +358,10 @@ async fn parse_content(
                 // borrowed
                 globals: Arc::new(Globals::new()),
                 source_map,
-                has_top_level_await: tla_visitor.has_top_level_await,
             })
         },
     )
     .await?;
-
     if let ParseResult::Ok {
         globals: ref mut g, ..
     } = result
@@ -379,7 +369,6 @@ async fn parse_content(
         // Assign the correct globals
         *g = globals;
     }
-
     Ok(result.cell())
 }
 
