@@ -15,6 +15,9 @@ process.on("unhandledRejection", (e) => {
 export default async function run() {
   const jestResult = await jest.run();
 
+  // Wait a full tick for unhandledRejection handlers to run -- a microtask is not sufficient.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
   return {
     jestResult,
     uncaughtExceptions,
