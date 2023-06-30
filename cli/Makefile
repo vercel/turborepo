@@ -35,6 +35,9 @@ turbo:
 turbo-prod:
 	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
 
+turbo-capnp:
+	cd ../crates/turborepo-lib/src/hash && capnp compile -I std -ogo proto.capnp && mv ./proto.capnp.go ../../../../cli/internal/fs/hash/capnp
+
 go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 	CGO_ENABLED=1 go build -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
 

@@ -21,7 +21,7 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                       
-    Hash                           = a6461c1683e4f102                                                                                                                            
+    Hash                           = 3f02bc73f1ab0cce                                                                                                                            
     Cached (Local)                 = false                                                                                                                                       
     Cached (Remote)                = false                                                                                                                                       
     Command                        = echo 'building' > foo                                                                                                                       
@@ -53,7 +53,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing a6461c1683e4f102
+  build: cache bypass, force executing 3f02bc73f1ab0cce
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -67,7 +67,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing a6461c1683e4f102
+  build: cache bypass, force executing 3f02bc73f1ab0cce
   build: 
   build: > build
   build: > echo 'building' > foo
