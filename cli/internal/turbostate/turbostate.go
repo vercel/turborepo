@@ -91,12 +91,19 @@ type ParsedArgsFromRust struct {
 	Command            Command `json:"command"`
 }
 
+// TaskHashTracker stores the hashes calculated in Rust
+type TaskHashTracker struct {
+	PackageTaskHashes map[string]string `json:"package_task_hashes"`
+}
+
 // ExecutionState is the entire state of a turbo execution that is passed from the Rust shim.
 type ExecutionState struct {
 	APIClientConfig       APIClientConfig    `json:"api_client_config"`
 	SpacesAPIClientConfig APIClientConfig    `json:"spaces_api_client_config"`
 	PackageManager        string             `json:"package_manager"`
 	CLIArgs               ParsedArgsFromRust `json:"cli_args"`
+	GlobalHash            *string            `json:"global_hash"`
+	TaskHashTracker       *TaskHashTracker   `json:"task_hash_tracker"`
 }
 
 // APIClientConfig holds the authentication and endpoint details for the API client

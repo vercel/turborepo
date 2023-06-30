@@ -19,7 +19,7 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                           
-    Hash                           = d2295def33764d46                                                                                                                                
+    Hash                           = f9360c1870434eb2                                                                                                                                
     Cached (Local)                 = false                                                                                                                                           
     Cached (Remote)                = false                                                                                                                                           
     Command                        = echo 'building' > foo                                                                                                                           
