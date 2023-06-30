@@ -6,6 +6,7 @@ use turbopath::AbsoluteSystemPath;
 use super::Engine;
 use crate::{
     config::{validate_extends, validate_no_package_task_syntax, TurboJson},
+    graph,
     package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
     run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
     task_graph::{BookkeepingTaskDefinition, TaskDefinition},
@@ -30,6 +31,8 @@ pub enum Error {
     Config(#[from] crate::config::Error),
     #[error("Invalid turbo.json:\n{error_lines}")]
     Validation { error_lines: String },
+    #[error(transparent)]
+    Graph(#[from] graph::Error),
 }
 
 pub struct EngineBuilder<'a> {
@@ -128,6 +131,13 @@ impl<'a> EngineBuilder<'a> {
         }
 
         if !missing_tasks.is_empty() {
+            let mut missing_tasks = missing_tasks
+                .into_iter()
+                .map(|task_name| task_name.to_string())
+                .collect::<Vec<_>>();
+            // We sort the tasks mostly to keep it deterministic for our tests
+            missing_tasks.sort();
+
             return Err(Error::MissingTasks(missing_tasks.into_iter().join(", ")));
         }
 
@@ -237,6 +247,8 @@ impl<'a> EngineBuilder<'a> {
                 engine.connect_to_root(&to_task_id);
             }
         }
+
+        graph::validate_graph(&engine.task_graph)?;
 
         Ok(engine.seal())
     }

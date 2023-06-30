@@ -18,7 +18,7 @@ pub struct BookkeepingTaskDefinition {
     pub defined_fields: HashSet<String>,
     pub experimental_fields: HashSet<String>,
     pub experimental: TaskDefinitionExperiments,
-    pub task_definition: TaskDefinitionHashable,
+    pub task_definition: TaskDefinitionStable,
 }
 
 // A list of config fields in a task definition that are considered
@@ -35,12 +35,11 @@ pub struct TaskOutputs {
     pub exclusions: Vec<String>,
 }
 
-// taskDefinitionHashable exists as a definition for PristinePipeline, which is
-// used downstream for calculating the global hash. We want to exclude
-// experimental fields here because we don't want experimental fields to be part
-// of the global hash.
+// These are the stable fields of a TaskDefinition, versus the experimental ones
+// TODO: Consolidate this and experiments, because the split is an artifact of
+// the Go implementation
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-pub struct TaskDefinitionHashable {
+pub struct TaskDefinitionStable {
     pub(crate) outputs: TaskOutputs,
     pub(crate) cache: bool,
     pub(crate) topological_dependencies: Vec<TaskName<'static>>,
@@ -49,11 +48,11 @@ pub struct TaskDefinitionHashable {
     pub(crate) output_mode: OutputLogsMode,
     pub(crate) persistent: bool,
     pub(crate) env: Vec<String>,
-    pub(crate) pass_through_env: Vec<String>,
+    pub(crate) pass_through_env: Option<Vec<String>>,
     pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
 }
 
-impl Default for TaskDefinitionHashable {
+impl Default for TaskDefinitionStable {
     fn default() -> Self {
         Self {
             outputs: TaskOutputs::default(),
@@ -64,7 +63,7 @@ impl Default for TaskDefinitionHashable {
             output_mode: OutputLogsMode::default(),
             persistent: false,
             env: Vec::new(),
-            pass_through_env: Vec::new(),
+            pass_through_env: None,
             dot_env: Vec::new(),
         }
     }
@@ -79,7 +78,7 @@ pub struct TaskDefinition {
     // This field is custom-marshalled from `env` and `depends_on``
     pub(crate) env: Vec<String>,
 
-    pub(crate) pass_through_env: Vec<String>,
+    pub(crate) pass_through_env: Option<Vec<String>>,
 
     pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
 
@@ -110,13 +109,7 @@ pub struct TaskDefinition {
 impl BookkeepingTaskDefinition {
     // Useful for splitting out the metadata vs fields which allows for easier
     // definition merging
-    fn split(
-        self,
-    ) -> (
-        Bookkeeping,
-        TaskDefinitionHashable,
-        TaskDefinitionExperiments,
-    ) {
+    fn split(self) -> (Bookkeeping, TaskDefinitionStable, TaskDefinitionExperiments) {
         let Self {
             defined_fields,
             experimental_fields,
@@ -230,7 +223,7 @@ impl TaskDefinition {
         // TODO(olszewski) simplify this construction and throw off the shackles of Go
         let (
             meta,
-            TaskDefinitionHashable {
+            TaskDefinitionStable {
                 outputs,
                 cache,
                 topological_dependencies,

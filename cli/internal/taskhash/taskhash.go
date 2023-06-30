@@ -11,6 +11,7 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -32,12 +33,12 @@ type Tracker struct {
 	EnvAtExecutionStart env.EnvironmentVariableMap
 	pipeline            fs.Pipeline
 
-	packageInputsHashes map[string]string
+	PackageInputsHashes map[string]string
 
-	// packageInputsExpandedHashes is a map of a hashkey to a list of files that are inputs to the task.
+	// PackageInputsExpandedHashes is a map of a hashkey to a list of files that are inputs to the task.
 	// Writes to this map happen during CalculateFileHash(). Since this happens synchronously
 	// before walking the task graph, it does not need to be protected by a mutex.
-	packageInputsExpandedHashes map[string]map[turbopath.AnchoredUnixPath]string
+	PackageInputsExpandedHashes map[string]map[turbopath.AnchoredUnixPath]string
 
 	// mu is a mutex that we can lock/unlock to read/write from maps
 	// the fields below should be protected by the mutex.
@@ -167,8 +168,8 @@ func (th *Tracker) CalculateFileHashes(
 	if err != nil {
 		return err
 	}
-	th.packageInputsHashes = hashes
-	th.packageInputsExpandedHashes = hashObjects
+	th.PackageInputsHashes = hashes
+	th.PackageInputsExpandedHashes = hashObjects
 	return nil
 }
 
@@ -179,7 +180,7 @@ func (th *Tracker) CalculateFileHashes(
 // 	hashOfFiles          string
 // 	externalDepsHash     string
 // 	task                 string
-// 	outputs              fs.TaskOutputs
+// 	outputs              hash.TaskOutputs
 // 	passThruArgs         []string
 // 	env                  []string
 // 	resolvedEnvVars      env.EnvironmentVariablePairs
@@ -189,7 +190,7 @@ func (th *Tracker) CalculateFileHashes(
 // }
 
 // calculateTaskHashFromHashable returns a hash string from the taskHashable
-func calculateTaskHashFromHashable(full *fs.TaskHashable) (string, error) {
+func calculateTaskHashFromHashable(full *hash.TaskHashable) (string, error) {
 	switch full.EnvMode {
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
@@ -240,7 +241,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
 func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.PackageTask, dependencySet dag.Set, frameworkInference bool, args []string) (string, error) {
-	hashOfFiles, ok := th.packageInputsHashes[packageTask.TaskID]
+	hashOfFiles, ok := th.PackageInputsHashes[packageTask.TaskID]
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", packageTask.TaskID)
 	}
@@ -292,7 +293,6 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 			if err != nil {
 				return "", err
 			}
-
 			explicitEnvVarMap.Union(allEnvVarMap)
 		}
 	} else {
@@ -322,7 +322,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 	// log any auto detected env vars
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
-	hash, err := calculateTaskHashFromHashable(&fs.TaskHashable{
+	hash, err := calculateTaskHashFromHashable(&hash.TaskHashable{
 		GlobalHash:           th.globalHash,
 		TaskDependencyHashes: taskDependencyHashes,
 		PackageDir:           packageTask.Pkg.Dir.ToUnixPath(),
@@ -352,7 +352,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 
 // GetExpandedInputs gets the expanded set of inputs for a given PackageTask
 func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopath.AnchoredUnixPath]string {
-	expandedInputs := th.packageInputsExpandedHashes[packageTask.TaskID]
+	expandedInputs := th.PackageInputsExpandedHashes[packageTask.TaskID]
 	inputsCopy := make(map[turbopath.AnchoredUnixPath]string, len(expandedInputs))
 
 	for path, hash := range expandedInputs {
@@ -394,6 +394,13 @@ func (th *Tracker) SetExpandedOutputs(taskID string, outputs []turbopath.Anchore
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.packageTaskOutputs[taskID] = outputs
+}
+
+// GetTaskHashes gets the package task hashes
+func (th *Tracker) GetTaskHashes() map[string]string {
+	th.mu.RLock()
+	defer th.mu.RUnlock()
+	return th.packageTaskHashes
 }
 
 // SetCacheStatus records the task status for the given taskID

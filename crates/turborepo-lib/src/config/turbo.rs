@@ -13,7 +13,7 @@ use crate::{
     config::Error,
     package_json::PackageJson,
     run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
-    task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable, TaskOutputs},
+    task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionStable, TaskOutputs},
 };
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
@@ -31,7 +31,7 @@ pub struct TurboJson {
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_dot_env: Vec<RelativeUnixPathBuf>,
     pub(crate) global_env: Vec<String>,
-    pub(crate) global_pass_through_env: Vec<String>,
+    pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) pipeline: Pipeline,
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
     pub(crate) space_id: Option<String>,
@@ -234,8 +234,7 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
                 pass_through_env.sort();
                 Ok(pass_through_env)
             })
-            .transpose()?
-            .unwrap_or_default();
+            .transpose()?;
 
         let dot_env = raw_task
             .dot_env
@@ -265,7 +264,7 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
             defined_fields,
             experimental_fields: Default::default(),
             experimental: Default::default(),
-            task_definition: TaskDefinitionHashable {
+            task_definition: TaskDefinitionStable {
                 outputs,
                 cache,
                 topological_dependencies,
@@ -351,8 +350,7 @@ impl TryFrom<RawTurboJSON> for TurboJson {
                     global_pass_through_env.sort();
                     Ok(global_pass_through_env)
                 })
-                .transpose()?
-                .unwrap_or_default(),
+                .transpose()?,
             global_deps: {
                 let mut global_deps: Vec<_> = global_file_dependencies.into_iter().collect();
                 global_deps.sort();
@@ -455,9 +453,9 @@ impl TurboJson {
                             set.insert("Cache".to_string());
                             set
                         },
-                        task_definition: TaskDefinitionHashable {
+                        task_definition: TaskDefinitionStable {
                             cache: false,
-                            ..TaskDefinitionHashable::default()
+                            ..TaskDefinitionStable::default()
                         },
                         ..BookkeepingTaskDefinition::default()
                     },
@@ -567,8 +565,7 @@ mod tests {
         package_json::PackageJson,
         run::task_id::TaskName,
         task_graph::{
-            BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionHashable,
-            TaskOutputs,
+            BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionStable, TaskOutputs,
         },
     };
 

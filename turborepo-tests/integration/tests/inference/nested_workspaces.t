@@ -9,15 +9,20 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: 459c029558afe716 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::scope::filter: Using  as a basis for selecting packages (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=623b793001bf2614 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=3334211b4e6cde03 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash matches between Rust and Go (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
   
   No tasks were executed as part of this run.
   
@@ -32,16 +37,21 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "apps" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: 459c029558afe716 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::scope::filter: Using apps as a basis for selecting packages (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Using apps as a basis for selecting packages (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=623b793001bf2614 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=3334211b4e6cde03 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash matches between Rust and Go (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
   
   No tasks were executed as part of this run.
   
@@ -56,15 +66,20 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer/inner (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: 459c029558afe716 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::scope::filter: Using  as a basis for selecting packages (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=623b793001bf2614 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=3334211b4e6cde03 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash matches between Rust and Go (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
   
   No tasks were executed as part of this run.
   
@@ -79,16 +94,21 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer/inner (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "apps" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: 459c029558afe716 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::scope::filter: Using apps as a basis for selecting packages (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Using apps as a basis for selecting packages (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=623b793001bf2614 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=3334211b4e6cde03 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash matches between Rust and Go (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
   
   No tasks were executed as part of this run.
   
@@ -103,16 +123,21 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "inner-no-turbo" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: 459c029558afe716 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::scope::filter: Using inner-no-turbo as a basis for selecting packages (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Using inner-no-turbo as a basis for selecting packages (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=623b793001bf2614 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=3334211b4e6cde03 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash matches between Rust and Go (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
   
   No tasks were executed as part of this run.
   
@@ -127,16 +152,21 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "inner-no-turbo/apps" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: 459c029558afe716 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::scope::filter: Using inner-no-turbo/apps as a basis for selecting packages (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Using inner-no-turbo/apps as a basis for selecting packages (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=623b793001bf2614 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=3334211b4e6cde03 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash matches between Rust and Go (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
   
   No tasks were executed as part of this run.
   
@@ -148,48 +178,43 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: [\-\w\/\.]+ (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
-  [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo\.json\. Follow directions at https://turbo\.build/repo/docs to create one: file does not exist (re)
-   ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
-  Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
+  Error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one
   [1]
 
   $ cd $TARGET_DIR/outer-no-turbo/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: [\-\w\/\.]+ (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "apps" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
-  [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo\.json\. Follow directions at https://turbo\.build/repo/docs to create one: file does not exist (re)
-   ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
-  Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
+  Error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one
   [1]
 
   $ cd $TARGET_DIR/outer-no-turbo/inner && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo/inner (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: [\-\w\/\.]+/inner (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: 459c029558afe716 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::scope::filter: Using  as a basis for selecting packages (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=623b793001bf2614 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=3334211b4e6cde03 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash matches between Rust and Go (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
   
   No tasks were executed as part of this run.
   
@@ -199,21 +224,26 @@ Setup
   
   $ cd $TARGET_DIR/outer-no-turbo/inner/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo/inner (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: [\-\w\/\.]+/inner (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "apps" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: 459c029558afe716 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::scope::filter: Using apps as a basis for selecting packages (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Using apps as a basis for selecting packages (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash env vars: vars=\[] (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=623b793001bf2614 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash: value=3334211b4e6cde03 (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: global hash matches between Rust and Go (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: local cache folder: path="" (re)
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
   
   No tasks were executed as part of this run.
   
@@ -228,12 +258,7 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo/inner-no-turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
-  [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo\.json\. Follow directions at https://turbo\.build/repo/docs to create one: file does not exist (re)
-   ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
-  Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
+  Error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one
   [1]
 
   $ cd $TARGET_DIR/outer-no-turbo/inner-no-turbo/apps && ${TURBO} run build --filter=nothing -vv
@@ -243,10 +268,5 @@ Setup
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo/inner-no-turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "apps" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
-  [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo\.json\. Follow directions at https://turbo\.build/repo/docs to create one: file does not exist (re)
-   ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
-  Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
+  Error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one
   [1]
