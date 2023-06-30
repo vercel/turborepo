@@ -1,4 +1,5 @@
 #![feature(assert_matches)]
+#![feature(once_cell)]
 
 mod empty_glob;
 
@@ -7,11 +8,13 @@ use std::{
     collections::HashSet,
     io::ErrorKind,
     path::{Path, PathBuf},
+    sync::OnceLock,
 };
 
 use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
+use regex::Regex;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 use wax::{Any, BuildError, Glob, Pattern};
 
@@ -175,7 +178,8 @@ fn preprocess_paths_and_globs(
 
     let (include_paths, lowest_segment) = include
         .iter()
-        .map(|s| join_unix_like_paths(&base_path_slash, s))
+        .map(|s| fix_glob_pattern(s))
+        .map(|s| join_unix_like_paths(&base_path_slash, &s))
         .filter_map(|s| collapse_path(&s).map(|(s, v)| (s.to_string(), v)))
         .fold(
             (vec![], usize::MAX),
@@ -221,6 +225,29 @@ fn preprocess_paths_and_globs(
     }
 
     Ok((base_path, include_paths, exclude_paths))
+}
+
+fn double_doublestar() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\*\*/\*\*").unwrap())
+}
+
+fn leading_doublestar() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\*\*(?P<suffix>[^*/]+)").unwrap())
+}
+
+fn trailing_doublestar() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?P<prefix>[^*/]+)\*\*").unwrap())
+}
+
+fn fix_glob_pattern(pattern: &str) -> String {
+    let p1 = double_doublestar().replace(pattern, "**");
+    let p2 = leading_doublestar().replace(&p1, "**/*$suffix");
+    let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
+
+    p3.to_string()
 }
 
 fn do_match(path: &Path, include: &InclusiveEmptyAny, exclude: &Any) -> MatchType {
@@ -585,6 +612,8 @@ mod test {
         tmp
     }
 
+    #[test_case("a*/**", 22, 22 => matches None ; "wildcard followed by doublestar")]
+    #[test_case("a**", 22, 22 => matches None ; "transform trailing doublestar")]
     #[test_case("abc", 1, 1 => matches None ; "exact match")]
     #[test_case("*", 19, 15 => matches None ; "single star match")]
     #[test_case("*c", 2, 2 => matches None ; "single star suffix match")]
