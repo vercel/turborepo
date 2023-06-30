@@ -44,6 +44,7 @@ impl StaticAssetsContentSourceVc {
     }
 }
 
+// TODO(WEB-1251) It would be better to lazily enumerate the directory
 #[turbo_tasks::function]
 async fn get_routes_from_directory(dir: FileSystemPathVc) -> Result<RouteTreeVc> {
     let dir = dir.read_dir().await?;
