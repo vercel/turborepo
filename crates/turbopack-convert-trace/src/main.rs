@@ -450,16 +450,21 @@ fn main() {
                     });
                     let mut items = take(&mut span.items);
                     if graph {
-                        items.sort_by_cached_key(|item| match item {
-                            SpanItem::SelfTime { start, .. } => (*start, ""),
-                            SpanItem::Child(id) => (0, &*spans[*id].name),
-                        });
+                        let group_func = |item: &SpanItem| match item {
+                            SpanItem::SelfTime { .. } => (true, "", None),
+                            SpanItem::Child(id) => {
+                                let span = &spans[*id];
+                                (
+                                    false,
+                                    &*span.name,
+                                    span.values.get("name").map(|v| v.to_string()),
+                                )
+                            }
+                        };
+                        items.sort_by_cached_key(group_func);
                         // merge childen with the same name
                         let mut new_items = Vec::new();
-                        let grouped_by = items.into_iter().group_by(|item| match item {
-                            SpanItem::SelfTime { .. } => (true, ""),
-                            SpanItem::Child(id) => (false, &*spans[*id].name),
-                        });
+                        let grouped_by = items.into_iter().group_by(group_func);
                         let groups = grouped_by
                             .into_iter()
                             .map(|(_, group)| group.collect::<Vec<_>>())
@@ -478,13 +483,13 @@ fn main() {
                                         let SpanItem::Child(id) = item else {
                                             unreachable!();
                                         };
+                                        assert!(spans[id].name == spans[new_item_id].name);
                                         let old_items = take(&mut spans[id].items);
                                         spans[new_item_id].items.extend(old_items);
                                     }
                                 }
                             }
                         }
-                        new_items.reverse();
                         items = new_items;
                     }
                     for item in items.iter().rev() {
