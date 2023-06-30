@@ -684,6 +684,7 @@
 <a href="#684" id="684">684</a>
 <a href="#685" id="685">685</a>
 <a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">mod </span>nft_json;
@@ -1187,7 +1188,8 @@
             <span class="kw">let </span>console_ui = ConsoleUiVc::new(log_options);
             console_ui
                 .as_issue_reporter()
-                .report_issues(TransientInstance::new(issues), source);
+                .report_issues(TransientInstance::new(issues), source)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">if </span>has_return_value {
                 <span class="kw">let </span>output_read_ref = output.<span class="kw">await</span><span class="question-mark">?</span>;

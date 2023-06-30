@@ -692,6 +692,7 @@
 <a href="#692" id="692">692</a>
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::Ident;
 <span class="kw">use </span>quote::quote;
@@ -1282,6 +1283,7 @@
         ///
         /// A reference is equal to another reference when it points to the same thing. No resolving is applied on comparison.
         </span><span class="attr">#[derive(Clone, Copy, Debug, std::cmp::PartialOrd, std::cmp::Ord, std::hash::Hash, std::cmp::Eq, std::cmp::PartialEq, serde::Serialize, serde::Deserialize)]
+        #[must_use]
         </span>#vis <span class="kw">struct </span>#ref_ident {
             node: turbo_tasks::RawVc,
         }

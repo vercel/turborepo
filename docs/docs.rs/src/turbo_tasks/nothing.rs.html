@@ -16,7 +16,7 @@
 </pre><pre class="rust"><code><span class="kw">use crate</span>::{<span class="self">self </span><span class="kw">as </span>turbo_tasks};
 
 <span class="doccomment">/// Just an empty type.
-/// [NothingVc] can be used as return value instead of `()`
+/// [NothingVc] should be used as return value instead of `()`
 /// to have a concrete reference that can be awaited.
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>Nothing;

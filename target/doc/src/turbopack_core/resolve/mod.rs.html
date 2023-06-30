@@ -1673,14 +1673,14 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ResolveResultVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>add_reference(<span class="self">self</span>, reference: AssetReferenceVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+    </span><span class="kw">pub async fn </span>with_reference(<span class="self">self</span>, reference: AssetReferenceVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
         this.add_reference(reference);
         <span class="prelude-val">Ok</span>(this.into())
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>add_references(<span class="self">self</span>, references: Vec&lt;AssetReferenceVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+    </span><span class="kw">pub async fn </span>with_references(<span class="self">self</span>, references: Vec&lt;AssetReferenceVc&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
         <span class="kw">for </span>reference <span class="kw">in </span>references {
             this.add_reference(reference);
@@ -1738,7 +1738,7 @@
                 .into_iter()
                 .next()
                 .unwrap()
-                .add_references(references));
+                .with_references(references));
         }
         <span class="kw">let </span><span class="kw-2">mut </span>iter = results.into_iter().try_join().<span class="kw">await</span><span class="question-mark">?</span>.into_iter();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(current) = iter.next() {
@@ -2036,7 +2036,7 @@
             .into_iter()
             .next()
             .unwrap()
-            .add_references(references),
+            .with_references(references),
         <span class="kw">_ </span>=&gt; ResolveResultVc::alternatives_with_references(results, references),
     }
 }
@@ -2629,7 +2629,7 @@
             RequestVc::parse(Value::new(Pattern::Constant(value.to_string()))),
             resolve_options,
         )
-        .add_references(refs));
+        .with_references(refs));
     }
     <span class="kw">let </span>issue: ResolvingIssueVc = ResolvingIssue {
         severity: IssueSeverity::Error.cell(),

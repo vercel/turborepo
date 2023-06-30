@@ -1045,7 +1045,7 @@
         <span class="kw">let </span>context_path = origin_path.parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>result = resolve(context_path, request, resolve_options);
-        <span class="kw">let </span>result = self_vc.process_resolve_result(result, reference_type);
+        <span class="kw">let </span><span class="kw-2">mut </span>result = self_vc.process_resolve_result(result, reference_type);
 
         <span class="kw">if </span><span class="kw-2">*</span>self_vc.is_types_resolving_enabled().<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">let </span>types_reference = TypescriptTypesAssetReferenceVc::new(
@@ -1053,7 +1053,7 @@
                 request,
             );
 
-            result.add_reference(types_reference.into());
+            result = result.with_reference(types_reference.into());
         }
 
         <span class="prelude-val">Ok</span>(result)

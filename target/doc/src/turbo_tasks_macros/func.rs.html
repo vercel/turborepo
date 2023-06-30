@@ -249,6 +249,9 @@
 <a href="#249" id="249">249</a>
 <a href="#250" id="250">250</a>
 <a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro2::{Ident, Span, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>proc_macro_error::abort;
 <span class="kw">use </span>quote::quote;
@@ -459,6 +462,16 @@
 
 <span class="kw">pub fn </span>split_signature(sig: <span class="kw-2">&amp;</span>Signature) -&gt; (Signature, Signature, Type, TokenStream2) {
     <span class="kw">let </span>output_type = get_return_type(<span class="kw-2">&amp;</span>sig.output);
+    <span class="kw">let </span>(raw_output_type, <span class="kw">_</span>) = unwrap_result_type(<span class="kw-2">&amp;</span>output_type);
+    <span class="kw">if </span>is_empty_type(raw_output_type) {
+        <span class="comment">// Can&#39;t emit a diagnostic on OutputType alone as it can be omitted from the
+        // text for `()`. Use the whole signature span.
+        </span><span class="macro">abort!</span>(
+            sig.span(),
+            <span class="string">&quot;Cannot return `()` from a turbo_tasks function. Return a NothingVc instead.&quot;</span>,
+        )
+    }
+
     <span class="kw">let </span>inline_ident = get_internal_function_ident(<span class="kw-2">&amp;</span>sig.ident);
     <span class="kw">let </span><span class="kw-2">mut </span>inline_sig = sig.clone();
     inline_sig.ident = inline_ident;
@@ -466,19 +479,12 @@
     <span class="kw">let </span><span class="kw-2">mut </span>external_sig = sig.clone();
     external_sig.asyncness = <span class="prelude-val">None</span>;
 
-    <span class="kw">let </span>(raw_output_type, <span class="kw">_</span>) = unwrap_result_type(<span class="kw-2">&amp;</span>output_type);
+    external_sig.output = ReturnType::Type(
+        <span class="macro">Token!</span>[-&gt;](raw_output_type.span()),
+        Box::new(raw_output_type.clone()),
+    );
 
-    <span class="kw">let </span>convert_result_code = <span class="kw">if </span>is_empty_type(raw_output_type) {
-        external_sig.output = ReturnType::Default;
-        <span class="macro">quote! </span>{}
-    } <span class="kw">else </span>{
-        external_sig.output = ReturnType::Type(
-            <span class="macro">Token!</span>[-&gt;](raw_output_type.span()),
-            Box::new(raw_output_type.clone()),
-        );
-        <span class="macro">quote! </span>{ std::convert::From::&lt;turbo_tasks::RawVc&gt;::from(result) }
-    };
-
+    <span class="kw">let </span>convert_result_code = <span class="macro">quote! </span>{ std::convert::From::&lt;turbo_tasks::RawVc&gt;::from(result) };
     <span class="kw">let </span>custom_self_type = <span class="kw">if let </span><span class="prelude-val">Some</span>(FnArg::Typed(PatType {
         pat: <span class="kw">box </span>Pat::Ident(PatIdent { ident, .. }),
         ..

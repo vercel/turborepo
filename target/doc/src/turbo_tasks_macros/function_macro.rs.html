@@ -52,6 +52,7 @@
 <a href="#52" id="52">52</a>
 <a href="#53" id="53">53</a>
 <a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::Ident;
 <span class="kw">use </span>quote::quote;
@@ -93,7 +94,8 @@
     );
 
     <span class="macro">quote! </span>{
-        #(#attrs)*
+        <span class="attr">#[must_use]
+        </span>#(#attrs)*
         #vis #external_sig {
             <span class="kw">let </span>result = turbo_tasks::dynamic_call(<span class="kw-2">*</span>#function_id_ident, <span class="macro">vec!</span>[#(#input_raw_vc_arguments),<span class="kw-2">*</span>]);
             #convert_result_code

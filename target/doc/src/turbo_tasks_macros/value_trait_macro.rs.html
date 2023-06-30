@@ -393,6 +393,7 @@
 <a href="#393" id="393">393</a>
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
 </pre><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, TokenStream <span class="kw">as </span>TokenStream2};
 <span class="kw">use </span>quote::quote;
@@ -639,7 +640,8 @@
     </span>};
 
     <span class="kw">let </span>expanded = <span class="macro">quote! </span>{
-        #(#attrs)*
+        <span class="attr">#[must_use]
+        </span>#(#attrs)*
         #vis #trait_token #ident #colon_token #(#supertraits)+* #where_clause {
             #(#items)*
         }

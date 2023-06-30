@@ -637,6 +637,8 @@
 <a href="#637" id="637">637</a>
 <a href="#638" id="638">638</a>
 <a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -654,7 +656,7 @@
     duration_span, mark_finished,
     primitives::{JsonValueVc, StringVc},
     util::SharedError,
-    CompletionVc, RawVc, TryJoinIterExt, Value, ValueToString,
+    CompletionVc, NothingVc, RawVc, TryJoinIterExt, Value, ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream};
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
@@ -891,7 +893,7 @@
     <span class="kw">let </span>initial = Mutex::new(<span class="prelude-val">Some</span>(sender));
 
     <span class="comment">// run the evaluation as side effect
-    </span>compute_evaluate_stream(
+    </span><span class="kw">let _ </span>= compute_evaluate_stream(
         module_asset,
         cwd,
         env,
@@ -938,11 +940,11 @@
     additional_invalidation: CompletionVc,
     debug: bool,
     sender: JavaScriptStreamSenderVc,
-) {
+) -&gt; <span class="prelude-ty">Result</span>&lt;NothingVc&gt; {
     mark_finished();
     <span class="kw">let </span><span class="prelude-val">Ok</span>(sender) = sender.<span class="kw">await else </span>{
         <span class="comment">// Impossible to handle the error in a good way.
-        </span><span class="kw">return</span>;
+        </span><span class="kw">return </span><span class="prelude-val">Ok</span>(NothingVc::new());
     };
 
     <span class="kw">let </span>stream = <span class="macro">generator! </span>{
@@ -1020,12 +1022,14 @@
     <span class="macro">pin_mut!</span>(stream);
     <span class="kw">while let </span><span class="prelude-val">Some</span>(value) = stream.next().<span class="kw">await </span>{
         <span class="kw">if </span>sender.send(value).<span class="kw">await</span>.is_err() {
-            <span class="kw">return</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(NothingVc::new());
         }
         <span class="kw">if </span>sender.flush().<span class="kw">await</span>.is_err() {
-            <span class="kw">return</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(NothingVc::new());
         }
     }
+
+    <span class="prelude-val">Ok</span>(NothingVc::new())
 }
 
 <span class="doccomment">/// Repeatedly pulls from the NodeJsOperation until we receive a

@@ -336,6 +336,9 @@
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>async_stream::try_stream <span class="kw">as </span>generator;
 <span class="kw">use </span>futures::{
@@ -344,7 +347,8 @@
 };
 <span class="kw">use </span>parking_lot::Mutex;
 <span class="kw">use </span>turbo_tasks::{
-    duration_span, mark_finished, primitives::StringVc, util::SharedError, RawVc, ValueToString,
+    duration_span, mark_finished, primitives::StringVc, util::SharedError, NothingVc, RawVc,
+    ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream};
 <span class="kw">use </span>turbo_tasks_env::ProcessEnvVc;
@@ -513,7 +517,7 @@
     <span class="kw">let </span>initial = Mutex::new(<span class="prelude-val">Some</span>(sender));
 
     <span class="comment">// run the evaluation as side effect
-    </span>render_stream_internal(
+    </span><span class="kw">let _ </span>= render_stream_internal(
         cwd,
         env,
         path,
@@ -561,11 +565,11 @@
     body: BodyVc,
     sender: RenderStreamSenderVc,
     debug: bool,
-) {
+) -&gt; <span class="prelude-ty">Result</span>&lt;NothingVc&gt; {
     mark_finished();
     <span class="kw">let </span><span class="prelude-val">Ok</span>(sender) = sender.<span class="kw">await else </span>{
         <span class="comment">// Impossible to handle the error in a good way.
-        </span><span class="kw">return</span>;
+        </span><span class="kw">return </span><span class="prelude-val">Ok</span>(NothingVc::new());
     };
 
     <span class="kw">let </span>stream = <span class="macro">generator! </span>{
@@ -667,12 +671,14 @@
     <span class="macro">pin_mut!</span>(stream);
     <span class="kw">while let </span><span class="prelude-val">Some</span>(value) = stream.next().<span class="kw">await </span>{
         <span class="kw">if </span>sender.send(value).<span class="kw">await</span>.is_err() {
-            <span class="kw">return</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(NothingVc::new());
         }
         <span class="kw">if </span>sender.flush().<span class="kw">await</span>.is_err() {
-            <span class="kw">return</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(NothingVc::new());
         }
     }
+
+    <span class="prelude-val">Ok</span>(NothingVc::new())
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_node" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

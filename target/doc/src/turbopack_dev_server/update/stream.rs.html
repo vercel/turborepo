@@ -344,6 +344,9 @@
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::pin::Pin;
 
 <span class="kw">use </span>anyhow::Result;
@@ -352,7 +355,8 @@
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
 <span class="kw">use </span>tracing::Instrument;
 <span class="kw">use </span>turbo_tasks::{
-    primitives::StringVc, CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance,
+    primitives::StringVc, CollectiblesSource, IntoTraitRef, NothingVc, State, TraitRef,
+    TransientInstance,
 };
 <span class="kw">use </span>turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
@@ -514,13 +518,15 @@
     from: VersionStateVc,
     get_content: TransientInstance&lt;GetContentFn&gt;,
     sender: TransientInstance&lt;Sender&lt;<span class="prelude-ty">Result</span>&lt;UpdateStreamItemReadRef&gt;&gt;&gt;,
-) {
+) -&gt; <span class="prelude-ty">Result</span>&lt;NothingVc&gt; {
     <span class="kw">let </span>item = get_update_stream_item(resource, from, get_content)
         .strongly_consistent()
         .<span class="kw">await</span>;
 
     <span class="comment">// Send update. Ignore channel closed error.
     </span><span class="kw">let _ </span>= sender.send(item).<span class="kw">await</span>;
+
+    <span class="prelude-val">Ok</span>(NothingVc::new())
 }
 
 <span class="attr">#[turbo_tasks::value]
@@ -577,7 +583,7 @@
         };
         <span class="kw">let </span>version_state = VersionStateVc::new(version.into_trait_ref().<span class="kw">await</span><span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        compute_update_stream(
+        <span class="kw">let _ </span>= compute_update_stream(
             <span class="kw-2">&amp;</span>resource,
             version_state,
             get_content,
