@@ -121,6 +121,10 @@ async fn expand(
         for asset in references.await?.iter() {
             if assets_set.insert(*asset) {
                 let expanded = if let Some(expanded) = &expanded {
+                    // We lookup the unresolved asset in the expanded set.
+                    // We could resolve the asset here, but that would require waiting on the
+                    // computation here and it doesn't seem to be neccessary in this case. We just
+                    // have to be sure that we consistently use the unresolved asset.
                     expanded.get().contains(asset)
                 } else {
                     true
@@ -171,6 +175,11 @@ impl ContentSource for AssetGraphContentSource {
                     RouteType::Exact,
                     AssetGraphGetContentSourceContentVc::new(
                         self_vc,
+                        // Passing the asset to a function would normally resolve that asset. But
+                        // in this special case we want to avoid that and just pass the unresolved
+                        // asset. So to enforce that we need to wrap it in this special value.
+                        // Technically it would be preferable to have some kind of `#[unresolved]`
+                        // attribute on function arguments, but we don't have that yet.
                         Value::new(UnresolvedAsset(*asset)),
                     )
                     .into(),
@@ -184,6 +193,7 @@ impl ContentSource for AssetGraphContentSource {
 #[turbo_tasks::value]
 struct AssetGraphGetContentSourceContent {
     source: AssetGraphContentSourceVc,
+    /// The unresolved asset.
     asset: AssetVc,
 }
 
@@ -222,7 +232,10 @@ impl ContentSourceSideEffect for AssetGraphGetContentSourceContent {
 
         if let Some(expanded) = &source.expanded {
             let asset = self.asset;
-            expanded.update_conditionally(|expanded| expanded.insert(asset));
+            expanded.update_conditionally(|expanded| {
+                // Insert the unresolved asset into the set
+                expanded.insert(asset)
+            });
         }
         Ok(CompletionVc::new())
     }
