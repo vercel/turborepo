@@ -77,9 +77,6 @@
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_env::ProcessEnv;
@@ -88,7 +85,7 @@
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::AssetContextVc,
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping},
 };
 <span class="kw">use </span>turbopack_node::execution_context::ExecutionContextVc;
@@ -100,12 +97,9 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub fn </span>node_build_environment() -&gt; EnvironmentVc {
-    EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::NodeJsBuildTime(
-            NodeJsEnvironment::default().cell(),
-        )),
-        Value::new(EnvironmentIntention::Build),
-    )
+    EnvironmentVc::new(Value::new(ExecutionEnvironment::NodeJsBuildTime(
+        NodeJsEnvironment::default().cell(),
+    )))
 }
 
 <span class="attr">#[turbo_tasks::function]

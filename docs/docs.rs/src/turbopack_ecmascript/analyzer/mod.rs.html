@@ -3543,9 +3543,6 @@
 <a href="#3543" id="3543">3543</a>
 <a href="#3544" id="3544">3544</a>
 <a href="#3545" id="3545">3545</a>
-<a href="#3546" id="3546">3546</a>
-<a href="#3547" id="3547">3547</a>
-<a href="#3548" id="3548">3548</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     cmp::Ordering,
@@ -6799,9 +6796,7 @@
     <span class="kw">use </span>turbo_tasks::{util::FormatDuration, Value};
     <span class="kw">use </span>turbopack_core::{
         compile_time_info::CompileTimeInfo,
-        environment::{
-            EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
-        },
+        environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
         target::{Arch, CompileTarget, Endianness, Libc, Platform},
     };
 
@@ -7064,8 +7059,8 @@
 
     <span class="kw">async fn </span>resolve(var_graph: <span class="kw-2">&amp;</span>VarGraph, val: JsValue) -&gt; JsValue {
         turbo_tasks_testing::VcStorage::with(<span class="kw">async </span>{
-            <span class="kw">let </span>compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(
-                Value::new(ExecutionEnvironment::NodeJsLambda(
+            <span class="kw">let </span>compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(Value::new(
+                ExecutionEnvironment::NodeJsLambda(
                     NodeJsEnvironment {
                         compile_target: CompileTarget {
                             arch: Arch::X64,
@@ -7077,9 +7072,8 @@
                         ..Default::default()
                     }
                     .into(),
-                )),
-                Value::new(EnvironmentIntention::ServerRendering),
-            ))
+                ),
+            )))
             .cell();
             link(
                 var_graph,

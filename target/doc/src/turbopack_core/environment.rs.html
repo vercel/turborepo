@@ -412,34 +412,6 @@
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
 <a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     fmt,
     net::SocketAddr,
@@ -601,44 +573,16 @@
 </span><span class="kw">pub struct </span>Environment {
     <span class="comment">// members must be private to avoid leaking non-custom types
     </span>execution: ExecutionEnvironment,
-    intention: EnvironmentIntention,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EnvironmentVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(
-        execution: Value&lt;ExecutionEnvironment&gt;,
-        intention: Value&lt;EnvironmentIntention&gt;,
-    ) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(execution: Value&lt;ExecutionEnvironment&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(Environment {
             execution: execution.into_value(),
-            intention: intention.into_value(),
         })
     }
-}
-
-<span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(PartialOrd, Ord, Debug, Hash, Clone, Copy)]
-</span><span class="kw">pub enum </span>EnvironmentIntention {
-    <span class="doccomment">/// Intent to compute data needed for rendering
-    </span>Data,
-    <span class="doccomment">/// Intent to intercept requests before server handling
-    </span>Middleware,
-    <span class="doccomment">/// Intent to handle api requests
-    </span>Api,
-    <span class="doccomment">/// Intent to prerender on a server for hydration on a client
-    </span>Prerendering,
-    <span class="doccomment">/// Intent to render on a server
-    </span>ServerRendering,
-    <span class="doccomment">/// Intent to render into static content
-    </span>StaticRendering,
-    <span class="doccomment">/// Intent to render on the client
-    </span>Client,
-    <span class="doccomment">/// Intent to evaluate build time javascript code like config, plugins, etc.
-    </span>Build,
-    <span class="comment">// TODO allow custom trait here
-    </span>Custom(u8),
 }
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
