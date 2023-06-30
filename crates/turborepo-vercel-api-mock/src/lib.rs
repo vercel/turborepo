@@ -1,13 +1,14 @@
-use std::{fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use axum::{
     extract::{BodyStream, Path},
-    http::StatusCode,
+    http::{HeaderMap, HeaderValue, StatusCode},
     routing::{get, put},
     Json, Router,
 };
 use futures_util::StreamExt;
+use tokio::sync::Mutex;
 use turborepo_api_client::{
     CachingStatus, CachingStatusResponse, Membership, Role, Space, SpacesResponse, Team,
     TeamsResponse, User, UserResponse, VerificationResponse,
@@ -31,6 +32,8 @@ pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
 pub async fn start_test_server(port: u16) -> Result<()> {
+    let durations = Arc::new(Mutex::new(HashMap::new()));
+    let durations2 = durations.clone();
     let tempdir = Arc::new(tempfile::tempdir()?);
     let tempdir2 = tempdir.clone();
     let app = Router::new()
@@ -94,7 +97,7 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         .route(
             "/v8/artifacts/:hash",
             put(
-                |Path(hash): Path<String>, mut body: BodyStream| async move {
+                |Path(hash): Path<String>, headers: HeaderMap, mut body: BodyStream| async move {
                     let root_path = tempdir.path();
                     let file_path = root_path.join(&hash);
                     let mut file = OpenOptions::new()
@@ -102,6 +105,15 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                         .create(true)
                         .open(&file_path)
                         .unwrap();
+
+                    let duration = headers
+                        .get("x-artifact-duration")
+                        .and_then(|header_value| header_value.to_str().ok())
+                        .and_then(|duration| duration.parse::<u64>().ok())
+                        .unwrap_or(0);
+
+                    let mut durations_map = durations.lock().await;
+                    durations_map.insert(hash.clone(), duration);
 
                     while let Some(item) = body.next().await {
                         let chunk = item.unwrap();
@@ -118,8 +130,14 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                 let root_path = tempdir2.path();
                 let file_path = root_path.join(&hash);
                 let buffer = std::fs::read(file_path).unwrap();
+                let duration = durations2.lock().await.remove(&hash).unwrap_or(0);
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "x-artifact-duration",
+                    HeaderValue::from_str(&duration.to_string()).unwrap(),
+                );
 
-                (StatusCode::OK, buffer)
+                (headers, buffer)
             }),
         );
 

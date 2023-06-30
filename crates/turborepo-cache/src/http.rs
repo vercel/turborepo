@@ -73,7 +73,7 @@ impl HttpCache {
         team_id: &str,
         team_slug: Option<&str>,
         use_preflight: bool,
-    ) -> Result<(Vec<AnchoredSystemPathBuf>, u64), CacheError> {
+    ) -> Result<(Vec<AnchoredSystemPathBuf>, u32), CacheError> {
         let response = self
             .client
             .fetch_artifact(hash, token, team_id, team_slug, use_preflight)
@@ -84,7 +84,7 @@ impl HttpCache {
                 .to_str()
                 .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))?;
             duration
-                .parse::<u64>()
+                .parse::<u32>()
                 .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))?
         } else {
             0
@@ -158,9 +158,33 @@ mod test {
             path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
             contents: "hello world"
         }
-    ])]
+    ], 58, "Faces Places")]
+    #[test_case(vec![
+        TestFile {
+            path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
+            contents: "Days of Heaven"
+        },
+        TestFile {
+            path: AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap(),
+            contents: "Badlands"
+        }
+    ], 1284, "Cleo from 5 to 7")]
+    #[test_case(vec![
+        TestFile {
+            path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
+            contents: "Days of Heaven"
+        },
+        TestFile {
+             path: AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap(),
+             contents: "Badlands"
+        },
+        TestFile {
+            path: AnchoredSystemPathBuf::from_raw("src/main.js").unwrap(),
+            contents: "Tree of Life"
+        }
+    ], 12845, "The Gleaners and I")]
     #[tokio::test]
-    async fn test_round_trip(files: Vec<TestFile>) -> Result<()> {
+    async fn test_round_trip(files: Vec<TestFile>, duration: u32, hash: &str) -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
 
@@ -172,6 +196,7 @@ mod test {
             std::fs::create_dir_all(file_path.parent().unwrap())?;
             std::fs::write(file_path, file.contents)?;
         }
+
         let api_client = APIClient::new(&format!("http://localhost:{}", port), 200, "2.0.0", true)?;
 
         let cache = HttpCache::new(api_client, None, repo_root_path.to_owned());
@@ -179,16 +204,21 @@ mod test {
         cache
             .put(
                 &repo_root_path,
-                "this-is-my-hash",
+                hash,
                 files.iter().map(|f| f.path.clone()).collect(),
-                0,
+                duration,
                 "",
             )
             .await?;
 
-        cache
-            .retrieve("this-is-my-hash", "", "", None, false)
-            .await?;
+        let (received_files, received_duration) = cache.retrieve(hash, "", "", None, false).await?;
+
+        assert_eq!(received_duration, duration);
+        for (test_file, received_file) in files.iter().zip(received_files) {
+            assert_eq!(received_file, test_file.path);
+            let file_path = repo_root_path.resolve(&received_file);
+            assert_eq!(std::fs::read_to_string(file_path)?, test_file.contents);
+        }
 
         handle.abort();
         Ok(())
