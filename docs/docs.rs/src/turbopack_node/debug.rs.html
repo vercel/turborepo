@@ -14,6 +14,8 @@
 <a href="#14" id="14">14</a>
 <a href="#15" id="15">15</a>
 <a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">const </span>DEBUG_JS_VAR: <span class="kw-2">&amp;</span>str = <span class="string">&quot;TURBOPACK_DEBUG_JS&quot;</span>;
@@ -24,7 +26,9 @@
 /// This is preferable to manually passing a boolean because recompiling won&#39;t
 /// be necessary.
 </span><span class="kw">pub fn </span>should_debug(operation: <span class="kw-2">&amp;</span>str) -&gt; bool {
-    <span class="kw">let </span><span class="prelude-val">Ok</span>(val) = env::var(DEBUG_JS_VAR) <span class="kw">else </span>{
+    <span class="comment">// TODO(sokra) It&#39;s not persistent caching safe to read an env var this way.
+    // This must use turbo_tasks_env instead.
+    </span><span class="kw">let </span><span class="prelude-val">Ok</span>(val) = env::var(DEBUG_JS_VAR) <span class="kw">else </span>{
         <span class="kw">return </span><span class="bool-val">false</span>;
     };
 

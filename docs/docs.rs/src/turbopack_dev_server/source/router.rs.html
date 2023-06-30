@@ -174,21 +174,41 @@
 <a href="#174" id="174">174</a>
 <a href="#175" id="175">175</a>
 <a href="#176" id="176">176</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+</pre><pre class="rust"><code><span class="kw">use </span>std::iter::once;
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
-<span class="kw">use super</span>::{ContentSource, ContentSourceData, ContentSourceResultVc, ContentSourceVc};
-<span class="kw">use </span><span class="kw">crate</span>::source::ContentSourcesVc;
-
-<span class="doccomment">/// Binds different ContentSources to different subpaths. A fallback
-/// ContentSource will serve all other subpaths.
-</span><span class="comment">// TODO(WEB-1151): Remove this and migrate all users to PrefixedRouterContentSource.
-</span><span class="attr">#[turbo_tasks::value(shared)]
-</span><span class="kw">pub struct </span>RouterContentSource {
-    <span class="kw">pub </span>routes: Vec&lt;(String, ContentSourceVc)&gt;,
-    <span class="kw">pub </span>fallback: ContentSourceVc,
-}
+<span class="kw">use super</span>::{
+    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc},
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataVaryVc,
+    ContentSourceVc, GetContentSourceContentVc,
+};
+<span class="kw">use </span><span class="kw">crate</span>::source::{
+    route_tree::{MapGetContentSourceContent, MapGetContentSourceContentVc},
+    ContentSourcesVc, GetContentSourceContent,
+};
 
 <span class="doccomment">/// Binds different ContentSources to different subpaths. The request path must
 /// begin with the prefix, which will be stripped (along with the subpath)
@@ -196,9 +216,9 @@
 /// other subpaths, including if the request path does not include the prefix.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>PrefixedRouterContentSource {
-    prefix: StringVc,
-    routes: Vec&lt;(String, ContentSourceVc)&gt;,
-    fallback: ContentSourceVc,
+    <span class="kw">pub </span>prefix: StringVc,
+    <span class="kw">pub </span>routes: Vec&lt;(String, ContentSourceVc)&gt;,
+    <span class="kw">pub </span>fallback: ContentSourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -209,11 +229,6 @@
         routes: Vec&lt;(String, ContentSourceVc)&gt;,
         fallback: ContentSourceVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">if </span><span class="macro">cfg!</span>(debug_assertions) {
-            <span class="kw">let </span>prefix_string = prefix.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">debug_assert!</span>(prefix_string.is_empty() || prefix_string.ends_with(<span class="string">&#39;/&#39;</span>));
-            <span class="macro">debug_assert!</span>(!prefix_string.starts_with(<span class="string">&#39;/&#39;</span>));
-        }
         <span class="prelude-val">Ok</span>(PrefixedRouterContentSource {
             prefix,
             routes,
@@ -221,32 +236,6 @@
         }
         .cell())
     }
-}
-
-<span class="doccomment">/// If the `path` starts with `prefix`, then it will search each route to see if
-/// any subpath matches. If so, the remaining path (after removing the prefix
-/// and subpath) is used to query the matching ContentSource. If no match is
-/// found, then the fallback is queried with the original path.
-</span><span class="kw">async fn </span>get(
-    routes: <span class="kw-2">&amp;</span>[(String, ContentSourceVc)],
-    fallback: <span class="kw-2">&amp;</span>ContentSourceVc,
-    prefix: <span class="kw-2">&amp;</span>str,
-    path: <span class="kw-2">&amp;</span>str,
-    data: Value&lt;ContentSourceData&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>found = <span class="prelude-val">None</span>;
-
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = path.strip_prefix(prefix) {
-        <span class="kw">for </span>(subpath, source) <span class="kw">in </span>routes {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = path.strip_prefix(subpath) {
-                found = <span class="prelude-val">Some</span>((source, path));
-                <span class="kw">break</span>;
-            }
-        }
-    }
-
-    <span class="kw">let </span>(source, path) = found.unwrap_or((fallback, path));
-    <span class="prelude-val">Ok</span>(source.resolve().<span class="kw">await</span><span class="question-mark">?</span>.get(path, data))
 }
 
 <span class="kw">fn </span>get_children(
@@ -285,50 +274,101 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ContentSource <span class="kw">for </span>RouterContentSource {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        path: <span class="kw-2">&amp;</span>str,
-        data: Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
-        get(<span class="kw-2">&amp;</span><span class="self">self</span>.routes, <span class="kw-2">&amp;</span><span class="self">self</span>.fallback, <span class="string">&quot;&quot;</span>, path, data).<span class="kw">await
-    </span>}
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
-        get_children(<span class="kw-2">&amp;</span><span class="self">self</span>.routes, <span class="kw-2">&amp;</span><span class="self">self</span>.fallback)
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>Introspectable <span class="kw">for </span>RouterContentSource {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>ty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
-        StringVc::cell(<span class="string">&quot;router content source&quot;</span>.to_string())
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
-        get_introspection_children(<span class="kw-2">&amp;</span><span class="self">self</span>.routes, <span class="kw-2">&amp;</span><span class="self">self</span>.fallback).<span class="kw">await
-    </span>}
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>PrefixedRouterContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        path: <span class="kw-2">&amp;</span>str,
-        data: Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
-        <span class="kw">let </span>prefix = <span class="self">self</span>.prefix.<span class="kw">await</span><span class="question-mark">?</span>;
-        get(<span class="kw-2">&amp;</span><span class="self">self</span>.routes, <span class="kw-2">&amp;</span><span class="self">self</span>.fallback, <span class="kw-2">&amp;</span>prefix, path, data).<span class="kw">await
-    </span>}
+    </span><span class="kw">async fn </span>get_routes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RouteTreeVc&gt; {
+        <span class="kw">let </span>prefix = <span class="kw-2">&amp;*</span><span class="self">self</span>.prefix.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span><span class="macro">cfg!</span>(debug_assertions) {
+            <span class="macro">debug_assert!</span>(prefix.is_empty() || prefix.ends_with(<span class="string">&#39;/&#39;</span>));
+            <span class="macro">debug_assert!</span>(!prefix.starts_with(<span class="string">&#39;/&#39;</span>));
+        }
+        <span class="kw">let </span>prefix = (!prefix.is_empty())
+            .then(|| BaseSegment::from_static_pathname(prefix.as_str()).collect())
+            .unwrap_or(Vec::new());
+        <span class="kw">let </span>inner_trees = <span class="self">self</span>.routes.iter().map(|(path, source)| {
+            <span class="kw">let </span>prepended_base = prefix
+                .iter()
+                .cloned()
+                .chain(BaseSegment::from_static_pathname(path))
+                .collect();
+            source
+                .get_routes()
+                .with_prepended_base(prepended_base)
+                .map_routes(
+                    PrefixedRouterContentSourceMapper {
+                        prefix: <span class="self">self</span>.prefix,
+                        path: path.clone(),
+                    }
+                    .cell()
+                    .into(),
+                )
+        });
+        <span class="prelude-val">Ok</span>(RouteTreesVc::cell(
+            inner_trees
+                .chain(once(<span class="self">self</span>.fallback.get_routes()))
+                .collect(),
+        )
+        .merge())
+    }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
         get_children(<span class="kw-2">&amp;</span><span class="self">self</span>.routes, <span class="kw-2">&amp;</span><span class="self">self</span>.fallback)
+    }
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>PrefixedRouterContentSourceMapper {
+    prefix: StringVc,
+    path: String,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>MapGetContentSourceContent <span class="kw">for </span>PrefixedRouterContentSourceMapper {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>map_get_content(
+        self_vc: PrefixedRouterContentSourceMapperVc,
+        get_content: GetContentSourceContentVc,
+    ) -&gt; GetContentSourceContentVc {
+        PrefixedRouterGetContentSourceContent {
+            mapper: self_vc,
+            get_content,
+        }
+        .cell()
+        .into()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>PrefixedRouterGetContentSourceContent {
+    mapper: PrefixedRouterContentSourceMapperVc,
+    get_content: GetContentSourceContentVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GetContentSourceContent <span class="kw">for </span>PrefixedRouterGetContentSourceContent {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>vary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourceDataVaryVc {
+        <span class="self">self</span>.get_content.vary()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>get(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        path: <span class="kw-2">&amp;</span>str,
+        data: Value&lt;ContentSourceData&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+        <span class="kw">let </span>prefix = <span class="self">self</span>.mapper.<span class="kw">await</span><span class="question-mark">?</span>.prefix.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = path.strip_prefix(<span class="kw-2">&amp;*</span>prefix) {
+            <span class="kw">if </span>path.is_empty() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.get_content.get(<span class="string">&quot;&quot;</span>, data));
+            } <span class="kw">else if </span>prefix.is_empty() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.get_content.get(path, data));
+            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(path) = path.strip_prefix(<span class="string">&#39;/&#39;</span>) {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.get_content.get(path, data));
+            }
+        }
+        <span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found())
     }
 }
 

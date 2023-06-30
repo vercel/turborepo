@@ -113,9 +113,23 @@
 <a href="#113" id="113">113</a>
 <a href="#114" id="114">114</a>
 <a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::iter::once;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
     graph::{GraphTraversal, ReverseTopological},
     primitives::{BoolVc, U64Vc},
@@ -200,29 +214,41 @@
     <span class="kw">let </span>assets = ReverseTopological::new()
         .skip_duplicates()
         .visit(once(root), |<span class="kw-2">&amp;</span>asset: <span class="kw-2">&amp;</span>AssetVc| <span class="kw">async move </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>results = Vec::new();
-            <span class="kw">for </span>reference <span class="kw">in </span>asset.references().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
-                    <span class="kw">if </span><span class="macro">matches!</span>(
-                        <span class="kw-2">&amp;*</span>chunkable.chunking_type().<span class="kw">await</span><span class="question-mark">?</span>,
-                        <span class="prelude-val">Some</span>(
-                            ChunkingType::Parallel
-                                | ChunkingType::PlacedOrParallel
-                                | ChunkingType::Placed
-                        )
-                    ) {
-                        results.extend(
-                            chunkable
+            <span class="prelude-val">Ok</span>(asset
+                .references()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.iter()
+                .copied()
+                .map(|reference| <span class="kw">async move </span>{
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) =
+                        ChunkableAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">?
+                    </span>{
+                        <span class="kw">if </span><span class="macro">matches!</span>(
+                            <span class="kw-2">&amp;*</span>chunkable.chunking_type().<span class="kw">await</span><span class="question-mark">?</span>,
+                            <span class="prelude-val">Some</span>(
+                                ChunkingType::Parallel
+                                    | ChunkingType::PlacedOrParallel
+                                    | ChunkingType::Placed
+                            )
+                        ) {
+                            <span class="kw">return </span>chunkable
                                 .resolve_reference()
                                 .primary_assets()
                                 .<span class="kw">await</span><span class="question-mark">?
                                 </span>.iter()
-                                .copied(),
-                        );
+                                .copied()
+                                .map(|asset| asset.resolve())
+                                .try_join()
+                                .<span class="kw">await</span>;
+                        }
                     }
-                }
-            }
-            <span class="prelude-val">Ok</span>(results)
+                    <span class="prelude-val">Ok</span>(Vec::new())
+                })
+                .try_join()
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.into_iter()
+                .flatten()
+                .collect::&lt;IndexSet&lt;<span class="kw">_</span>&gt;&gt;())
         })
         .<span class="kw">await
         </span>.completed()<span class="question-mark">?</span>;

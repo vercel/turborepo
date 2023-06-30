@@ -551,34 +551,6 @@
 <a href="#551" id="551">551</a>
 <a href="#552" id="552">552</a>
 <a href="#553" id="553">553</a>
-<a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
-<a href="#562" id="562">562</a>
-<a href="#563" id="563">563</a>
-<a href="#564" id="564">564</a>
-<a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a>
-<a href="#568" id="568">568</a>
-<a href="#569" id="569">569</a>
-<a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a>
-<a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a>
-<a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a>
-<a href="#577" id="577">577</a>
-<a href="#578" id="578">578</a>
-<a href="#579" id="579">579</a>
-<a href="#580" id="580">580</a>
-<a href="#581" id="581">581</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>asset_graph;
 <span class="kw">pub mod </span>combined;
 <span class="kw">pub mod </span>conditional;
@@ -588,9 +560,9 @@
 <span class="kw">pub mod </span>query;
 <span class="kw">pub mod </span>request;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>resolve;
+<span class="kw">pub mod </span>route_tree;
 <span class="kw">pub mod </span>router;
 <span class="kw">pub mod </span>source_maps;
-<span class="kw">pub mod </span>specificity;
 <span class="kw">pub mod </span>static_assets;
 <span class="kw">pub mod </span>wrapping_source;
 
@@ -599,7 +571,9 @@
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>futures::{stream::Stream <span class="kw">as </span>StreamTrait, TryStreamExt};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, util::SharedError, Value};
+<span class="kw">use </span>turbo_tasks::{
+    primitives::StringVc, trace::TraceRawVcs, util::SharedError, CompletionVc, Value,
+};
 <span class="kw">use </span>turbo_tasks_bytes::{Bytes, Stream, StreamRead};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbo_tasks_hash::{DeterministicHash, DeterministicHasher, Xxh3Hash64Hasher};
@@ -607,7 +581,7 @@
 
 <span class="kw">use </span><span class="self">self</span>::{
     headers::Headers, issue_context::IssueContextContentSourceVc, query::Query,
-    specificity::SpecificityVc,
+    route_tree::RouteTreeVc,
 };
 
 <span class="doccomment">/// The result of proxying a request to another HTTP server.
@@ -639,56 +613,6 @@
     }
 }
 
-<span class="doccomment">/// The return value of a content source when getting a path. A specificity is
-/// attached and when combining results this specificity should be used to order
-/// results.
-</span><span class="attr">#[turbo_tasks::value(shared)]
-</span><span class="kw">pub enum </span>ContentSourceResult {
-    NotFound,
-    NeedData(NeededData),
-    <span class="prelude-ty">Result </span>{
-        specificity: SpecificityVc,
-        get_content: GetContentSourceContentVc,
-    },
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ContentSource <span class="kw">for </span>ContentSourceResult {
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get(
-        self_vc: ContentSourceResultVc,
-        _path: <span class="kw-2">&amp;</span>str,
-        _data: Value&lt;ContentSourceData&gt;,
-    ) -&gt; ContentSourceResultVc {
-        self_vc
-    }
-}
-
-<span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ContentSourceResultVc {
-    <span class="doccomment">/// Wraps some content source content with exact match specificity.
-    </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>exact(get_content: GetContentSourceContentVc) -&gt; ContentSourceResultVc {
-        ContentSourceResult::Result {
-            specificity: SpecificityVc::exact(),
-            get_content,
-        }
-        .cell()
-    }
-
-    <span class="doccomment">/// Wraps some content source content with exact match specificity.
-    </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>need_data(data: Value&lt;NeededData&gt;) -&gt; ContentSourceResultVc {
-        ContentSourceResult::NeedData(data.into_value()).cell()
-    }
-
-    <span class="doccomment">/// Result when no match was found with the lowest specificity.
-    </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>not_found() -&gt; ContentSourceResultVc {
-        ContentSourceResult::NotFound.cell()
-    }
-}
-
 <span class="doccomment">/// A functor to receive the actual content of a content source result.
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>GetContentSourceContent {
@@ -699,8 +623,11 @@
     }
 
     <span class="doccomment">/// Get the content
-    </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceContentVc;
+    </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceContentVc;
 }
+
+<span class="attr">#[turbo_tasks::value(transparent)]
+</span><span class="kw">pub struct </span>GetContentSourceContents(Vec&lt;GetContentSourceContentVc&gt;);
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>StaticContent {
@@ -717,6 +644,16 @@
     Static(StaticContentVc),
     HttpProxy(ProxyResultVc),
     Rewrite(RewriteVc),
+    <span class="doccomment">/// Continue with the next route
+    </span>Next,
+}
+
+<span class="doccomment">/// This trait can be emitted as collectible and will be applied after the
+/// request is handled and it&#39;s ensured that it finishes before the next request
+/// is handled.
+</span><span class="attr">#[turbo_tasks::value_trait]
+</span><span class="kw">pub trait </span>ContentSourceSideEffect {
+    <span class="kw">fn </span>apply(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompletionVc;
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -724,6 +661,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>get(
         self_vc: ContentSourceContentVc,
+        _path: <span class="kw-2">&amp;</span>str,
         _data: Value&lt;ContentSourceData&gt;,
     ) -&gt; ContentSourceContentVc {
         self_vc
@@ -783,25 +721,6 @@
     </span><span class="kw">pub fn </span>empty() -&gt; <span class="self">Self </span>{
         HeaderList(<span class="macro">vec!</span>[]).cell()
     }
-}
-
-<span class="doccomment">/// Needed data content signals that the content source requires more
-/// information in order to serve the request. The held data allows us to
-/// partially compute some data, and resume computation after the needed vary
-/// data is supplied by the dev server.
-</span><span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
-#[derive(Debug, Clone, PartialOrd, Ord, Hash)]
-</span><span class="kw">pub struct </span>NeededData {
-    <span class="doccomment">/// A [ContentSource] to query once the data has been extracted from the
-    /// server. This _does not_ need to be the original content source.
-    </span><span class="kw">pub </span>source: ContentSourceVc,
-
-    <span class="doccomment">/// A path with which to call into that content source. This _does not_ need
-    /// to be the original path.
-    </span><span class="kw">pub </span>path: String,
-
-    <span class="doccomment">/// The vary data which is needed in order to process the request.
-    </span><span class="kw">pub </span>vary: ContentSourceDataVary,
 }
 
 <span class="doccomment">/// Additional info passed to the ContentSource. It was extracted from the http
@@ -1042,12 +961,7 @@
 <span class="doccomment">/// A source of content that the dev server uses to respond to http requests.
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>ContentSource {
-    <span class="doccomment">/// Gets content by `path` and request `data` from the source. `data` is
-    /// empty by default and will only be filled when returning `NeedData`.
-    /// This is useful as this method call will be cached based on it&#39;s
-    /// arguments, so we want to make the arguments contain as little
-    /// information as possible to increase cache hit ratio.
-    </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceResultVc;
+    <span class="kw">fn </span>get_routes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RouteTreeVc;
 
     <span class="doccomment">/// Gets any content sources wrapped in this content source.
     </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
@@ -1089,25 +1003,41 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>NoContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, _path: <span class="kw-2">&amp;</span>str, _data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceResultVc {
-        ContentSourceResultVc::not_found()
+    </span><span class="kw">fn </span>get_routes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RouteTreeVc {
+        RouteTreeVc::empty()
     }
 }
 
+<span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
+</span><span class="kw">pub enum </span>RewriteType {
+    Location {
+        <span class="doccomment">/// The new path and query used to lookup content. This _does not_ need
+        /// to be the original path or query.
+        </span>path_and_query: String,
+    },
+    ContentSource {
+        <span class="doccomment">/// [ContentSourceVc]s from which to restart the lookup
+        /// process. This _does not_ need to be the original content
+        /// source.
+        </span>source: ContentSourceVc,
+        <span class="doccomment">/// The new path and query used to lookup content. This _does not_ need
+        /// to be the original path or query.
+        </span>path_and_query: String,
+    },
+    Sources {
+        <span class="doccomment">/// [GetContentSourceContent]s from which to restart the lookup
+        /// process. This _does not_ need to be the original content
+        /// source.
+        </span>sources: GetContentSourceContentsVc,
+    },
+}
+
 <span class="doccomment">/// A rewrite returned from a [ContentSource]. This tells the dev server to
-/// update its parsed url, path, and queries with this new information, and any
-/// later [NeededData] will receive data out of these new values.
+/// update its parsed url, path, and queries with this new information.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 #[derive(Debug)]
 </span><span class="kw">pub struct </span>Rewrite {
-    <span class="doccomment">/// The new path and query used to lookup content. This _does not_ need to
-    /// be the original path or query.
-    </span><span class="kw">pub </span>path_and_query: String,
-
-    <span class="doccomment">/// A [ContentSource] from which to restart the lookup process. This _does
-    /// not_ need to be the original content source. Having [None] source will
-    /// restart the lookup process from the original root ContentSource.
-    </span><span class="kw">pub </span>source: <span class="prelude-ty">Option</span>&lt;ContentSourceVc&gt;,
+    <span class="kw">pub </span>ty: RewriteType,
 
     <span class="doccomment">/// A [Headers] which will be appended to the eventual, fully resolved
     /// content result. This overwrites any previous matching headers.
@@ -1126,21 +1056,35 @@
     <span class="kw">pub fn </span>new(path_and_query: String) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             rewrite: Rewrite {
-                path_and_query,
-                source: <span class="prelude-val">None</span>,
+                ty: RewriteType::Location { path_and_query },
                 response_headers: <span class="prelude-val">None</span>,
                 request_headers: <span class="prelude-val">None</span>,
             },
         }
     }
 
-    <span class="doccomment">/// Sets the [ContentSource] from which to restart the lookup process.
-    /// Without a source, the lookup will restart from the original root
-    /// ContentSource.
-    </span><span class="kw">pub fn </span>content_source(<span class="kw-2">mut </span><span class="self">self</span>, source: ContentSourceVc) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.rewrite.source = <span class="prelude-val">Some</span>(source);
-        <span class="self">self
-    </span>}
+    <span class="kw">pub fn </span>new_source_with_path_and_query(source: ContentSourceVc, path_and_query: String) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            rewrite: Rewrite {
+                ty: RewriteType::ContentSource {
+                    source,
+                    path_and_query,
+                },
+                response_headers: <span class="prelude-val">None</span>,
+                request_headers: <span class="prelude-val">None</span>,
+            },
+        }
+    }
+
+    <span class="kw">pub fn </span>new_sources(sources: GetContentSourceContentsVc) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            rewrite: Rewrite {
+                ty: RewriteType::Sources { sources },
+                response_headers: <span class="prelude-val">None</span>,
+                request_headers: <span class="prelude-val">None</span>,
+            },
+        }
+    }
 
     <span class="doccomment">/// Sets response headers to append to the eventual, fully resolved content
     /// result.

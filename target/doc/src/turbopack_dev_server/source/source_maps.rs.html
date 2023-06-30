@@ -151,6 +151,12 @@
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>mime::APPLICATION_JSON;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
@@ -163,13 +169,13 @@
 
 <span class="kw">use super</span>::{
     query::QueryValue,
+    route_tree::{BaseSegment, RouteTreeVc, RouteType},
     wrapping_source::{
-        encode_pathname_to_url, ContentSourceProcessor, ContentSourceProcessorVc,
-        WrappedContentSourceVc,
+        ContentSourceProcessor, ContentSourceProcessorVc, WrappedGetContentSourceContentVc,
     },
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
-    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc,
-    NeededData, RewriteBuilder,
+    ContentSourceDataFilter, ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceVc,
+    GetContentSourceContent, GetContentSourceContentVc, GetContentSourceContentsVc, RewriteBuilder,
 };
 
 <span class="doccomment">/// SourceMapContentSource allows us to serve full source maps, and individual
@@ -199,28 +205,36 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>SourceMapContentSource {
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_routes(self_vc: SourceMapContentSourceVc) -&gt; RouteTreeVc {
+        RouteTreeVc::new_route(<span class="macro">vec!</span>[BaseSegment::Dynamic], RouteType::Exact, self_vc.into())
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GetContentSourceContent <span class="kw">for </span>SourceMapContentSource {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>vary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourceDataVaryVc {
+        ContentSourceDataVary {
+            query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::Subset([<span class="string">&quot;id&quot;</span>.to_string()].into())),
+            ..Default::default()
+        }
+        .cell()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(
         self_vc: SourceMapContentSourceVc,
         path: <span class="kw-2">&amp;</span>str,
         data: Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
         <span class="kw">let </span>pathname = <span class="kw">match </span>path.strip_suffix(<span class="string">&quot;.map&quot;</span>) {
             <span class="prelude-val">Some</span>(p) =&gt; p,
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
         };
 
         <span class="kw">let </span>query = <span class="kw">match </span><span class="kw-2">&amp;</span>data.query {
             <span class="prelude-val">Some</span>(q) =&gt; q,
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::need_data(Value::new(NeededData {
-                    source: self_vc.into(),
-                    path: path.to_string(),
-                    vary: ContentSourceDataVary {
-                        query: <span class="prelude-val">Some</span>(ContentSourceDataFilter::Subset([<span class="string">&quot;id&quot;</span>.to_string()].into())),
-                        ..Default::default()
-                    },
-                })))
-            }
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
         };
 
         <span class="kw">let </span>id = <span class="kw">match </span>query.get(<span class="string">&quot;id&quot;</span>) {
@@ -228,19 +242,17 @@
             <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
         };
 
-        <span class="kw">let </span>wrapped = WrappedContentSourceVc::new(
-            self_vc.<span class="kw">await</span><span class="question-mark">?</span>.asset_source,
-            SourceMapContentProcessorVc::new(id).into(),
-        );
-        <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContent::Rewrite(
-                RewriteBuilder::new(encode_pathname_to_url(pathname))
-                    .content_source(wrapped.as_content_source())
-                    .build(),
-            )
-            .cell()
-            .into(),
-        ))
+        <span class="kw">let </span>sources = self_vc.<span class="kw">await</span><span class="question-mark">?</span>.asset_source.get_routes().get(pathname);
+        <span class="kw">let </span>processor = SourceMapContentProcessorVc::new(id).into();
+        <span class="kw">let </span>sources = sources
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
+            .map(|s| WrappedGetContentSourceContentVc::new(<span class="kw-2">*</span>s, processor).into())
+            .collect();
+        <span class="prelude-val">Ok</span>(ContentSourceContent::Rewrite(
+            RewriteBuilder::new_sources(GetContentSourceContentsVc::cell(sources)).build(),
+        )
+        .cell())
     }
 }
 

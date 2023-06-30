@@ -224,9 +224,19 @@
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io::{Error, ErrorKind};
 
 <span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>auto_hash_map::AutoSet;
 <span class="kw">use </span>futures::{StreamExt, TryStreamExt};
 <span class="kw">use </span>hyper::{
     header::{HeaderName, CONTENT_ENCODING, CONTENT_LENGTH},
@@ -236,7 +246,7 @@
 <span class="kw">use </span>mime::Mime;
 <span class="kw">use </span>mime_guess::mime;
 <span class="kw">use </span>tokio_util::io::{ReaderStream, StreamReader};
-<span class="kw">use </span>turbo_tasks::{util::SharedError, TransientInstance};
+<span class="kw">use </span>turbo_tasks::{util::SharedError, CollectiblesSource, TransientInstance};
 <span class="kw">use </span>turbo_tasks_bytes::Bytes;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileContentReadRef};
 <span class="kw">use </span>turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
@@ -246,7 +256,7 @@
     source::{
         request::SourceRequest,
         resolve::{resolve_source_request, ResolveSourceRequestResult},
-        Body, ContentSourceVc, HeaderListReadRef, ProxyResultReadRef,
+        Body, ContentSourceSideEffectVc, ContentSourceVc, HeaderListReadRef, ProxyResultReadRef,
     },
 };
 
@@ -297,11 +307,13 @@
     source: ContentSourceVc,
     request: Request&lt;hyper::Body&gt;,
     issue_reporter: IssueReporterVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;Response&lt;hyper::Body&gt;&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(Response&lt;hyper::Body&gt;, AutoSet&lt;ContentSourceSideEffectVc&gt;)&gt; {
     <span class="kw">let </span>original_path = request.uri().path().to_string();
     <span class="kw">let </span>request = http_request_to_source_request(request).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>result = get_from_source(source, TransientInstance::new(request));
     handle_issues(result, <span class="kw-2">&amp;</span>original_path, <span class="string">&quot;get_from_source&quot;</span>, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>side_effects: AutoSet&lt;ContentSourceSideEffectVc&gt; =
+        result.peek_collectibles().strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">match </span><span class="kw-2">&amp;*</span>result.strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>{
         GetFromSourceResult::Static {
             content,
@@ -404,7 +416,7 @@
                     response.body(hyper::Body::wrap_stream(content.read()))<span class="question-mark">?
                 </span>};
 
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(response);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>((response, side_effects));
             }
         }
         GetFromSourceResult::HttpProxy(proxy_result) =&gt; {
@@ -418,12 +430,18 @@
                 );
             }
 
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(response.body(hyper::Body::wrap_stream(proxy_result.body.read()))<span class="question-mark">?</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>((
+                response.body(hyper::Body::wrap_stream(proxy_result.body.read()))<span class="question-mark">?</span>,
+                side_effects,
+            ));
         }
         <span class="kw">_ </span>=&gt; {}
     }
 
-    <span class="prelude-val">Ok</span>(Response::builder().status(<span class="number">404</span>).body(hyper::Body::empty())<span class="question-mark">?</span>)
+    <span class="prelude-val">Ok</span>((
+        Response::builder().status(<span class="number">404</span>).body(hyper::Body::empty())<span class="question-mark">?</span>,
+        side_effects,
+    ))
 }
 
 <span class="kw">async fn </span>http_request_to_source_request(request: Request&lt;hyper::Body&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;SourceRequest&gt; {

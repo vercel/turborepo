@@ -177,6 +177,18 @@
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, collections::HashSet, fmt::Display};
 
 <span class="kw">use </span>anyhow::Result;
@@ -192,8 +204,9 @@
 <span class="kw">use </span>turbopack_ecmascript::utils::FormatIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::source::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
+    route_tree::{RouteTreeVc, RouteTreesVc, RouteType},
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
+    GetContentSourceContent, GetContentSourceContentVc,
 };
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -256,11 +269,25 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>IntrospectionSource {
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_routes(self_vc: IntrospectionSourceVc) -&gt; RouteTreeVc {
+        RouteTreesVc::cell(<span class="macro">vec!</span>[
+            RouteTreeVc::new_route(Vec::new(), RouteType::Exact, self_vc.into()),
+            RouteTreeVc::new_route(Vec::new(), RouteType::CatchAll, self_vc.into()),
+        ])
+        .merge()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GetContentSourceContent <span class="kw">for </span>IntrospectionSource {
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(
         self_vc: IntrospectionSourceVc,
         path: <span class="kw-2">&amp;</span>str,
         _data: turbo_tasks::Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+        <span class="comment">// ignore leading slash
+        </span><span class="kw">let </span>path = <span class="kw-2">&amp;</span>path[<span class="number">1</span>..];
         <span class="kw">let </span>introspectable = <span class="kw">if </span>path.is_empty() {
             <span class="kw">let </span>roots = <span class="kw-2">&amp;</span>self_vc.<span class="kw">await</span><span class="question-mark">?</span>.roots;
             <span class="kw">if </span>roots.len() == <span class="number">1 </span>{
@@ -343,15 +370,12 @@
             ty = HtmlEscaped(ty),
             children = FormatIter(|| children.iter())
         );
-        <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(
-                AssetContent::File(
-                    FileContent::Content(File::from(html).with_content_type(mime::TEXT_HTML_UTF_8))
-                        .cell(),
-                )
-                .cell()
-                .into(),
+        <span class="prelude-val">Ok</span>(ContentSourceContentVc::static_content(
+            AssetContent::File(
+                FileContent::Content(File::from(html).with_content_type(mime::TEXT_HTML_UTF_8))
+                    .cell(),
             )
+            .cell()
             .into(),
         ))
     }

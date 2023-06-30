@@ -177,12 +177,33 @@
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::btree_map::Entry,
     sync::atomic::{AtomicU64, Ordering},
 };
 
-<span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>hyper::{
     header::{HeaderName <span class="kw">as </span>HyperHeaderName, HeaderValue <span class="kw">as </span>HyperHeaderValue},
     Uri,
@@ -193,8 +214,8 @@
     headers::{HeaderValue, Headers},
     query::Query,
     request::SourceRequest,
-    ContentSourceContent, ContentSourceDataVary, ContentSourceResult, ContentSourceVc,
-    HeaderListVc, ProxyResultVc, StaticContentVc,
+    ContentSourceContent, ContentSourceDataVary, ContentSourceVc, HeaderListVc, ProxyResultVc,
+    RewriteType, StaticContentVc,
 };
 <span class="kw">use </span><span class="kw">crate</span>::source::{ContentSource, ContentSourceData, GetContentSourceContent};
 
@@ -210,47 +231,36 @@
 
 <span class="doccomment">/// Resolves a [SourceRequest] within a [super::ContentSource], returning the
 /// corresponding content.
+///
+/// This function is the boundary of consistency. All invoked methods should be
+/// invoked strongly consistent. This ensures that all requests serve the latest
+/// version of the content. We don&#39;t make resolve_source_request strongly
+/// consistent as we want get_routes and get to be independent consistent and
+/// any side effect in get should not wait for recomputing of get_routes.
 </span><span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>resolve_source_request(
     source: ContentSourceVc,
     request: TransientInstance&lt;SourceRequest&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveSourceRequestResultVc&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>data = ContentSourceData::default();
-    <span class="kw">let </span><span class="kw-2">mut </span>current_source = source;
+    <span class="kw">let </span>original_path = request.uri.path().to_string();
     <span class="comment">// Remove leading slash.
-    </span><span class="kw">let </span>original_path = request.uri.path().to_string();
-    <span class="kw">let </span><span class="kw-2">mut </span>current_asset_path = urlencoding::decode(<span class="kw-2">&amp;</span>original_path[<span class="number">1</span>..])<span class="question-mark">?</span>.into_owned();
+    </span><span class="kw">let </span><span class="kw-2">mut </span>current_asset_path = urlencoding::decode(<span class="kw-2">&amp;</span>original_path[<span class="number">1</span>..])<span class="question-mark">?</span>.into_owned();
     <span class="kw">let </span><span class="kw-2">mut </span>request_overwrites = (<span class="kw-2">*</span>request).clone();
     <span class="kw">let </span><span class="kw-2">mut </span>response_header_overwrites = Vec::new();
-    <span class="kw">loop </span>{
-        <span class="kw">let </span>result = current_source.get(<span class="kw-2">&amp;</span>current_asset_path, Value::new(data));
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>result.strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>{
-            ContentSourceResult::NotFound =&gt; <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell()),
-            ContentSourceResult::NeedData(needed) =&gt; {
-                current_source = needed.source.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-                current_asset_path = needed.path.clone();
-                data = request_to_data(<span class="kw-2">&amp;</span>request_overwrites, <span class="kw-2">&amp;</span>request, <span class="kw-2">&amp;</span>needed.vary).<span class="kw">await</span><span class="question-mark">?</span>;
-            }
-            ContentSourceResult::Result { get_content, .. } =&gt; {
-                <span class="kw">let </span>content_vary = get_content.vary().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>route_tree = source.get_routes().resolve_strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="lifetime">&#39;routes</span>: <span class="kw">loop </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>sources = route_tree.get(<span class="kw-2">&amp;</span>current_asset_path);
+        <span class="lifetime">&#39;sources</span>: <span class="kw">loop </span>{
+            <span class="kw">for </span>get_content <span class="kw">in </span>sources.strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>.iter() {
+                <span class="kw">let </span>content_vary = get_content.vary().strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">let </span>content_data =
                     request_to_data(<span class="kw-2">&amp;</span>request_overwrites, <span class="kw-2">&amp;</span>request, <span class="kw-2">&amp;</span>content_vary).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>content = get_content.get(Value::new(content_data));
-                <span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
+                <span class="kw">let </span>content = get_content.get(<span class="kw-2">&amp;</span>current_asset_path, Value::new(content_data));
+                <span class="kw">match </span><span class="kw-2">&amp;*</span>content.strongly_consistent().<span class="kw">await</span><span class="question-mark">? </span>{
                     ContentSourceContent::Rewrite(rewrite) =&gt; {
                         <span class="kw">let </span>rewrite = rewrite.<span class="kw">await</span><span class="question-mark">?</span>;
-                        <span class="comment">// If a source isn&#39;t specified, we restart at the top.
-                        </span><span class="kw">let </span>new_source = rewrite.source.unwrap_or(source);
-                        <span class="kw">let </span>new_uri = Uri::try_from(<span class="kw-2">&amp;</span>rewrite.path_and_query)<span class="question-mark">?</span>;
-                        <span class="kw">if </span>new_source == current_source &amp;&amp; new_uri == request_overwrites.uri {
-                            <span class="macro">bail!</span>(<span class="string">&quot;rewrite loop detected: {}&quot;</span>, new_uri);
-                        }
-                        <span class="kw">let </span>new_asset_path =
-                            urlencoding::decode(<span class="kw-2">&amp;</span>new_uri.path()[<span class="number">1</span>..])<span class="question-mark">?</span>.into_owned();
-
-                        current_source = new_source.resolve().<span class="kw">await</span><span class="question-mark">?</span>;
-                        request_overwrites.uri = new_uri;
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = <span class="kw-2">&amp;</span>rewrite.response_headers {
+                        <span class="comment">// apply rewrite extras
+                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = <span class="kw-2">&amp;</span>rewrite.response_headers {
                             response_header_overwrites.extend(headers.<span class="kw">await</span><span class="question-mark">?</span>.iter().cloned());
                         }
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(headers) = <span class="kw-2">&amp;</span>rewrite.request_headers {
@@ -262,26 +272,58 @@
                                 );
                             }
                         }
-                        current_asset_path = new_asset_path;
-                        data = ContentSourceData::default();
+                        <span class="comment">// do the rewrite
+                        </span><span class="kw">match </span><span class="kw-2">&amp;</span>rewrite.ty {
+                            RewriteType::Location { path_and_query } =&gt; {
+                                <span class="kw">let </span>new_uri = Uri::try_from(path_and_query)<span class="question-mark">?</span>;
+                                <span class="kw">let </span>new_asset_path =
+                                    urlencoding::decode(<span class="kw-2">&amp;</span>new_uri.path()[<span class="number">1</span>..])<span class="question-mark">?</span>.into_owned();
+                                request_overwrites.uri = new_uri;
+                                current_asset_path = new_asset_path;
+                                <span class="kw">continue </span><span class="lifetime">&#39;routes</span>;
+                            }
+                            RewriteType::ContentSource {
+                                source,
+                                path_and_query,
+                            } =&gt; {
+                                <span class="kw">let </span>new_uri = Uri::try_from(path_and_query)<span class="question-mark">?</span>;
+                                <span class="kw">let </span>new_asset_path =
+                                    urlencoding::decode(<span class="kw-2">&amp;</span>new_uri.path()[<span class="number">1</span>..])<span class="question-mark">?</span>.into_owned();
+                                request_overwrites.uri = new_uri;
+                                current_asset_path = new_asset_path;
+                                route_tree =
+                                    source.get_routes().resolve_strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
+                                <span class="kw">continue </span><span class="lifetime">&#39;routes</span>;
+                            }
+                            RewriteType::Sources {
+                                sources: new_sources,
+                            } =&gt; {
+                                sources = <span class="kw-2">*</span>new_sources;
+                                <span class="kw">continue </span><span class="lifetime">&#39;sources</span>;
+                            }
+                        }
                     }
                     ContentSourceContent::NotFound =&gt; {
-                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell());
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell())
                     }
                     ContentSourceContent::Static(static_content) =&gt; {
-                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::Static(
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::Static(
                             <span class="kw-2">*</span>static_content,
                             HeaderListVc::new(response_header_overwrites),
                         )
                         .cell());
                     }
                     ContentSourceContent::HttpProxy(proxy_result) =&gt; {
-                        <span class="kw">break </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::HttpProxy(<span class="kw-2">*</span>proxy_result).cell());
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(ResolveSourceRequestResult::HttpProxy(<span class="kw-2">*</span>proxy_result).cell());
                     }
+                    ContentSourceContent::Next =&gt; <span class="kw">continue</span>,
                 }
             }
+            <span class="kw">break</span>;
         }
+        <span class="kw">break</span>;
     }
+    <span class="prelude-val">Ok</span>(ResolveSourceRequestResult::NotFound.cell())
 }
 
 <span class="kw">static </span>CACHE_BUSTER: AtomicU64 = AtomicU64::new(<span class="number">0</span>);

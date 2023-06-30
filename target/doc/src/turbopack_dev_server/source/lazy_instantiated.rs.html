@@ -58,15 +58,11 @@
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
-<span class="kw">use super</span>::{ContentSource, ContentSourceData, ContentSourceResultVc, ContentSourceVc};
+<span class="kw">use super</span>::{route_tree::RouteTreeVc, ContentSource, ContentSourceVc};
 
 <span class="doccomment">/// A functor to get a [ContentSource]. Will be invoked when needed when using
 /// [LazyInstantiatedContentSource].
@@ -86,12 +82,8 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>LazyInstantiatedContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        path: <span class="kw-2">&amp;</span>str,
-        data: turbo_tasks::Value&lt;ContentSourceData&gt;,
-    ) -&gt; ContentSourceResultVc {
-        <span class="self">self</span>.get_source.content_source().get(path, data)
+    </span><span class="kw">fn </span>get_routes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RouteTreeVc {
+        <span class="self">self</span>.get_source.content_source().get_routes()
     }
 }
 

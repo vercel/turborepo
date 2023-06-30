@@ -244,6 +244,91 @@
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashMap, HashSet, VecDeque},
     iter::once,
@@ -251,7 +336,7 @@
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::{indexset, IndexSet};
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, State, Value, ValueToString};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, State, Value, ValueToString};
 <span class="kw">use </span>turbo_tasks_fs::{FileSystemPath, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
@@ -262,9 +347,11 @@
 };
 
 <span class="kw">use super</span>::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
+    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc, RouteType},
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceSideEffect,
+    ContentSourceVc, GetContentSourceContent,
 };
+<span class="kw">use </span><span class="kw">crate</span>::source::{ContentSourceSideEffectVc, GetContentSourceContentVc};
 
 <span class="attr">#[turbo_tasks::value(transparent)]
 </span><span class="kw">struct </span>AssetsMap(HashMap&lt;String, AssetVc&gt;);
@@ -365,7 +452,11 @@
         <span class="kw">for </span>asset <span class="kw">in </span>references.<span class="kw">await</span><span class="question-mark">?</span>.iter() {
             <span class="kw">if </span>assets_set.insert(<span class="kw-2">*</span>asset) {
                 <span class="kw">let </span>expanded = <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>expanded {
-                    expanded.get().contains(asset)
+                    <span class="comment">// We lookup the unresolved asset in the expanded set.
+                    // We could resolve the asset here, but that would require waiting on the
+                    // computation here and it doesn&#39;t seem to be neccessary in this case. We just
+                    // have to be sure that we consistently use the unresolved asset.
+                    </span>expanded.get().contains(asset)
                 } <span class="kw">else </span>{
                     <span class="bool-val">true
                 </span>};
@@ -394,28 +485,90 @@
     <span class="prelude-val">Ok</span>(map)
 }
 
+<span class="doccomment">/// A unresolve asset. We need to have a unresolve Asset here as we need to
+/// lookup the Vc identity in the expanded set.
+///
+/// This must not be a TaskInput since this would resolve the embedded asset.
+</span><span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;auto_for_input&quot;</span>)]
+#[derive(Hash, PartialOrd, Ord, Debug, Clone)]
+</span><span class="kw">struct </span>UnresolvedAsset(AssetVc);
+
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>AssetGraphContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(
-        self_vc: AssetGraphContentSourceVc,
-        path: <span class="kw-2">&amp;</span>str,
-        _data: Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
+    </span><span class="kw">async fn </span>get_routes(self_vc: AssetGraphContentSourceVc) -&gt; <span class="prelude-ty">Result</span>&lt;RouteTreeVc&gt; {
         <span class="kw">let </span>assets = self_vc.all_assets_map().strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>routes = assets
+            .iter()
+            .map(|(path, asset)| {
+                RouteTreeVc::new_route(
+                    BaseSegment::from_static_pathname(path).collect(),
+                    RouteType::Exact,
+                    AssetGraphGetContentSourceContentVc::new(
+                        self_vc,
+                        <span class="comment">// Passing the asset to a function would normally resolve that asset. But
+                        // in this special case we want to avoid that and just pass the unresolved
+                        // asset. So to enforce that we need to wrap it in this special value.
+                        // Technically it would be preferable to have some kind of `#[unresolved]`
+                        // attribute on function arguments, but we don&#39;t have that yet.
+                        </span>Value::new(UnresolvedAsset(<span class="kw-2">*</span>asset)),
+                    )
+                    .into(),
+                )
+            })
+            .collect();
+        <span class="prelude-val">Ok</span>(RouteTreesVc::cell(routes).merge())
+    }
+}
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = assets.get(path) {
-            {
-                <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>this.expanded {
-                    expanded.update_conditionally(|expanded| expanded.insert(<span class="kw-2">*</span>asset));
-                }
-            }
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                ContentSourceContentVc::static_content(asset.versioned_content()).into(),
-            ));
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>AssetGraphGetContentSourceContent {
+    source: AssetGraphContentSourceVc,
+    <span class="doccomment">/// The unresolved asset.
+    </span>asset: AssetVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>AssetGraphGetContentSourceContentVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new(source: AssetGraphContentSourceVc, asset: Value&lt;UnresolvedAsset&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(AssetGraphGetContentSourceContent {
+            source,
+            asset: asset.into_value().<span class="number">0</span>,
+        })
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GetContentSourceContent <span class="kw">for </span>AssetGraphGetContentSourceContent {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>get(
+        self_vc: AssetGraphGetContentSourceContentVc,
+        _path: <span class="kw-2">&amp;</span>str,
+        _data: Value&lt;ContentSourceData&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+        <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
+        turbo_tasks::emit(self_vc.as_content_source_side_effect());
+        <span class="prelude-val">Ok</span>(ContentSourceContentVc::static_content(
+            this.asset.versioned_content(),
+        ))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ContentSourceSideEffect <span class="kw">for </span>AssetGraphGetContentSourceContent {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>apply(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
+        <span class="kw">let </span>source = <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span>source.expanded {
+            <span class="kw">let </span>asset = <span class="self">self</span>.asset;
+            expanded.update_conditionally(|expanded| {
+                <span class="comment">// Insert the unresolved asset into the set
+                </span>expanded.insert(asset)
+            });
         }
-        <span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found())
+        <span class="prelude-val">Ok</span>(CompletionVc::new())
     }
 }
 
@@ -437,18 +590,35 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>details(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
+        StringVc::cell(<span class="kw">if let </span><span class="prelude-val">Some</span>(expanded) = <span class="kw-2">&amp;</span><span class="self">self</span>.expanded {
+            <span class="macro">format!</span>(<span class="string">&quot;{} assets expanded&quot;</span>, expanded.get().len())
+        } <span class="kw">else </span>{
+            <span class="string">&quot;eager&quot;</span>.to_string()
+        })
+    }
+
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>children(self_vc: AssetGraphContentSourceVc) -&gt; <span class="prelude-ty">Result</span>&lt;IntrospectableChildrenVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>key = StringVc::cell(<span class="string">&quot;root&quot;</span>.to_string());
+        <span class="kw">let </span>inner_key = StringVc::cell(<span class="string">&quot;inner&quot;</span>.to_string());
         <span class="kw">let </span>expanded_key = StringVc::cell(<span class="string">&quot;expanded&quot;</span>.to_string());
 
         <span class="kw">let </span>root_assets = this.root_assets.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>root_assets = root_assets
+        <span class="kw">let </span>root_asset_children = root_assets
             .iter()
             .map(|<span class="kw-2">&amp;</span>asset| (key, IntrospectableAssetVc::new(asset)));
 
+        <span class="kw">let </span>expanded_assets = self_vc.all_assets_map().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>expanded_asset_children = expanded_assets
+            .values()
+            .filter(|a| !root_assets.contains(<span class="kw-2">*</span>a))
+            .map(|asset| (inner_key, IntrospectableAssetVc::new(<span class="kw-2">*</span>asset)));
+
         <span class="prelude-val">Ok</span>(IntrospectableChildrenVc::cell(
-            root_assets
+            root_asset_children
+                .chain(expanded_asset_children)
                 .chain(once((expanded_key, FullyExpaned(self_vc).cell().into())))
                 .collect(),
         ))

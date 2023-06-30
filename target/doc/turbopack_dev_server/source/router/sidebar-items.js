@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["PrefixedRouterContentSource","PrefixedRouterContentSourceVc","RouterContentSource","RouterContentSourceVc"],"type":["PrefixedRouterContentSourceReadRef","RouterContentSourceReadRef"]};
+window.SIDEBAR_ITEMS = {"struct":["PrefixedRouterContentSource","PrefixedRouterContentSourceVc"],"type":["PrefixedRouterContentSourceReadRef"]};

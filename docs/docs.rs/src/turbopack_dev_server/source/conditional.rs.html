@@ -149,16 +149,45 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>turbo_tasks::{primitives::StringVc, State, Value};
+<span class="kw">use </span>turbo_tasks::{primitives::StringVc, CompletionVc, State, Value};
 <span class="kw">use </span>turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 
 <span class="kw">use super</span>::{
-    combined::CombinedContentSource, ContentSource, ContentSourceData, ContentSourceDataVaryVc,
-    ContentSourceResult, ContentSourceResultVc, ContentSourceVc, GetContentSourceContent,
-    GetContentSourceContentVc,
+    route_tree::{MapGetContentSourceContent, RouteTreeVc, RouteTreesVc},
+    ContentSource, ContentSourceData, ContentSourceDataVaryVc, ContentSourceSideEffect,
+    ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc,
 };
-<span class="kw">use </span><span class="kw">crate</span>::source::{ContentSourceContentVc, ContentSourcesVc};
+<span class="kw">use </span><span class="kw">crate</span>::source::{
+    route_tree::MapGetContentSourceContentVc, ContentSourceContentVc, ContentSourceSideEffectVc,
+    ContentSourcesVc,
+};
 
 <span class="doccomment">/// Combines two [ContentSource]s like the [CombinedContentSource], but only
 /// allows to serve from the second source when the first source has
@@ -193,42 +222,40 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>ConditionalContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(
-        self_vc: ConditionalContentSourceVc,
-        path: <span class="kw-2">&amp;</span>str,
-        data: turbo_tasks::Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
+    </span><span class="kw">async fn </span>get_routes(self_vc: ConditionalContentSourceVc) -&gt; <span class="prelude-ty">Result</span>&lt;RouteTreeVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if </span>!<span class="kw-2">*</span>this.activated.get() {
-            <span class="kw">let </span>first = this.activator.get(path, data.clone());
-            <span class="kw">let </span>first_value = first.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>first_value {
-                <span class="kw-2">&amp;</span>ContentSourceResult::Result {
-                    get_content,
-                    specificity,
-                } =&gt; ContentSourceResult::Result {
-                    get_content: ActivateOnGetContentSource {
-                        source: this,
-                        get_content,
-                    }
+        <span class="prelude-val">Ok</span>(<span class="kw">if </span>!<span class="kw-2">*</span>this.activated.get() {
+            this.activator.get_routes().map_routes(
+                ConditionalContentSourceMapper { source: self_vc }
                     .cell()
                     .into(),
-                    specificity,
-                }
-                .cell(),
-                <span class="kw">_ </span>=&gt; first,
-            });
-        }
-        <span class="prelude-val">Ok</span>(CombinedContentSource {
-            sources: <span class="macro">vec!</span>[this.activator, this.action],
-        }
-        .cell()
-        .get(path, data))
+            )
+        } <span class="kw">else </span>{
+            RouteTreesVc::cell(<span class="macro">vec!</span>[this.activator.get_routes(), this.action.get_routes()]).merge()
+        })
     }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
         ContentSourcesVc::cell(<span class="macro">vec!</span>[<span class="self">self</span>.activator, <span class="self">self</span>.action])
+    }
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>ConditionalContentSourceMapper {
+    source: ConditionalContentSourceVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>MapGetContentSourceContent <span class="kw">for </span>ConditionalContentSourceMapper {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>map_get_content(<span class="kw-2">&amp;</span><span class="self">self</span>, get_content: GetContentSourceContentVc) -&gt; GetContentSourceContentVc {
+        ActivateOnGetContentSource {
+            source: <span class="self">self</span>.source,
+            get_content,
+        }
+        .cell()
+        .into()
     }
 }
 
@@ -252,6 +279,18 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>ty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StringVc {
         introspectable_type()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>details(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
+        <span class="prelude-val">Ok</span>(StringVc::cell(
+            <span class="kw">if </span><span class="kw-2">*</span><span class="self">self</span>.activated.get() {
+                <span class="string">&quot;activated&quot;
+            </span>} <span class="kw">else </span>{
+                <span class="string">&quot;not activated&quot;
+            </span>}
+            .to_string(),
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -283,7 +322,7 @@
 
 <span class="attr">#[turbo_tasks::value(serialization = <span class="string">&quot;none&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>, cell = <span class="string">&quot;new&quot;</span>)]
 </span><span class="kw">struct </span>ActivateOnGetContentSource {
-    source: ConditionalContentSourceReadRef,
+    source: ConditionalContentSourceVc,
     get_content: GetContentSourceContentVc,
 }
 
@@ -295,9 +334,22 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceContentVc {
-        <span class="self">self</span>.source.activated.set(<span class="bool-val">true</span>);
-        <span class="self">self</span>.get_content.get(data)
+    </span><span class="kw">async fn </span>get(
+        self_vc: ActivateOnGetContentSourceVc,
+        path: <span class="kw-2">&amp;</span>str,
+        data: Value&lt;ContentSourceData&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+        turbo_tasks::emit(self_vc.as_content_source_side_effect());
+        <span class="prelude-val">Ok</span>(self_vc.<span class="kw">await</span><span class="question-mark">?</span>.get_content.get(path, data))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ContentSourceSideEffect <span class="kw">for </span>ActivateOnGetContentSource {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">async fn </span>apply(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CompletionVc&gt; {
+        <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>.activated.set(<span class="bool-val">true</span>);
+        <span class="prelude-val">Ok</span>(CompletionVc::new())
     }
 }
 </code></pre></div>

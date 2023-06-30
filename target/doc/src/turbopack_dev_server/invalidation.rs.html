@@ -49,6 +49,58 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 
 <span class="kw">use </span>hyper::{Method, Uri};
@@ -94,6 +146,58 @@
         <span class="macro">write!</span>(
             f,
             <span class="string">&quot;{} requests ({} {}, ...)&quot;</span>,
+            reasons.len(),
+            example.method,
+            example.uri.path()
+        )
+    }
+}
+
+<span class="doccomment">/// Side effect that was caused by a request to the server.
+</span><span class="attr">#[derive(PartialEq, Eq, Hash)]
+</span><span class="kw">pub struct </span>ServerRequestSideEffects {
+    <span class="kw">pub </span>method: Method,
+    <span class="kw">pub </span>uri: Uri,
+}
+
+<span class="kw">impl </span>InvalidationReason <span class="kw">for </span>ServerRequestSideEffects {
+    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;StaticOrArc&lt;<span class="kw">dyn </span>InvalidationReasonKind&gt;&gt; {
+        <span class="prelude-val">Some</span>(StaticOrArc::Static(<span class="kw-2">&amp;</span>SERVER_REQUEST_SIDE_EFFECTS_KIND))
+    }
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>ServerRequestSideEffects {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;side effects of {} {}&quot;</span>, <span class="self">self</span>.method, <span class="self">self</span>.uri.path())
+    }
+}
+
+<span class="doccomment">/// Invalidation kind for [ServerRequestSideEffects]
+</span><span class="attr">#[derive(PartialEq, Eq, Hash)]
+</span><span class="kw">struct </span>ServerRequestSideEffectsKind;
+
+<span class="kw">static </span>SERVER_REQUEST_SIDE_EFFECTS_KIND: ServerRequestSideEffectsKind =
+    ServerRequestSideEffectsKind;
+
+<span class="kw">impl </span>InvalidationReasonKind <span class="kw">for </span>ServerRequestSideEffectsKind {
+    <span class="kw">fn </span>fmt(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        reasons: <span class="kw-2">&amp;</span>IndexSet&lt;StaticOrArc&lt;<span class="kw">dyn </span>InvalidationReason&gt;&gt;,
+        f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;,
+    ) -&gt; std::fmt::Result {
+        <span class="kw">let </span>example = reasons
+            .into_iter()
+            .map(|reason| {
+                reason
+                    .as_any()
+                    .downcast_ref::&lt;ServerRequestSideEffects&gt;()
+                    .unwrap()
+            })
+            .min_by_key(|reason| reason.uri.path().len())
+            .unwrap();
+        <span class="macro">write!</span>(
+            f,
+            <span class="string">&quot;side effects of {} requests ({} {}, ...)&quot;</span>,
             reasons.len(),
             example.method,
             example.uri.path()

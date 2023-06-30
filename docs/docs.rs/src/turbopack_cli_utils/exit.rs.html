@@ -29,7 +29,7 @@
 <a href="#29" id="29">29</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 
-<span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>anyhow::Result;
 
 <span class="doccomment">/// A guard for the exit handler. When dropped, the exit guard will be dropped.
 /// It might also be dropped on Ctrl-C.
@@ -47,11 +47,11 @@
         <span class="kw">let </span>guard = Arc::new(Mutex::new(<span class="prelude-val">Some</span>(guard)));
         {
             <span class="kw">let </span>guard = guard.clone();
-            ctrlc::set_handler(<span class="kw">move </span>|| {
+            tokio::spawn(<span class="kw">async move </span>{
+                tokio::signal::ctrl_c().<span class="kw">await</span>.unwrap();
                 drop(guard.lock().unwrap().take());
                 std::process::exit(<span class="number">0</span>);
-            })
-            .context(<span class="string">&quot;Unable to set ctrl-c handler&quot;</span>)<span class="question-mark">?</span>;
+            });
         }
         <span class="prelude-val">Ok</span>(ExitGuard(guard))
     }

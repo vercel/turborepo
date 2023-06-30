@@ -262,10 +262,63 @@
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
 #![feature(iter_intersperse)]
+#![feature(str_split_remainder)]
 
 </span><span class="kw">pub mod </span>html;
 <span class="kw">mod </span>http;
@@ -275,6 +328,7 @@
 <span class="kw">pub mod </span>update;
 
 <span class="kw">use </span>std::{
+    collections::VecDeque,
     future::Future,
     net::{SocketAddr, TcpListener},
     pin::Pin,
@@ -288,7 +342,9 @@
     service::{make_service_fn, service_fn},
     Request, Response, Server,
 };
+<span class="kw">use </span>parking_lot::Mutex;
 <span class="kw">use </span>socket2::{Domain, Protocol, Socket, Type};
+<span class="kw">use </span>tokio::task::JoinHandle;
 <span class="kw">use </span>tracing::{event, info_span, Instrument, Level, Span};
 <span class="kw">use </span>turbo_tasks::{
     run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
@@ -299,19 +355,15 @@
     issue::{IssueReporter, IssueReporterVc, IssueVc},
 };
 
-<span class="kw">use </span><span class="self">self</span>::{
-    source::{ContentSourceResultVc, ContentSourceVc},
-    update::UpdateServer,
+<span class="kw">use </span><span class="self">self</span>::{source::ContentSourceVc, update::UpdateServer};
+<span class="kw">use crate</span>::{
+    invalidation::{ServerRequest, ServerRequestSideEffects},
+    source::ContentSourceSideEffect,
 };
-<span class="kw">use </span><span class="kw">crate</span>::invalidation::ServerRequest;
 
 <span class="kw">pub trait </span>SourceProvider: Send + Clone + <span class="lifetime">&#39;static </span>{
     <span class="doccomment">/// must call a turbo-tasks function internally
     </span><span class="kw">fn </span>get_source(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourceVc;
-}
-
-<span class="kw">pub trait </span>ContentProvider: Send + Clone + <span class="lifetime">&#39;static </span>{
-    <span class="kw">fn </span>get_content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourceResultVc;
 }
 
 <span class="kw">impl</span>&lt;T&gt; SourceProvider <span class="kw">for </span>T
@@ -404,20 +456,56 @@
         source_provider: <span class="kw">impl </span>SourceProvider + Clone + Send + Sync,
         get_issue_reporter: Arc&lt;<span class="kw">dyn </span>Fn() -&gt; IssueReporterVc + Send + Sync&gt;,
     ) -&gt; DevServer {
+        <span class="kw">let </span>ongoing_side_effects = Arc::new(Mutex::new(VecDeque::&lt;
+            Arc&lt;tokio::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;JoinHandle&lt;<span class="prelude-ty">Result</span>&lt;()&gt;&gt;&gt;&gt;&gt;,
+        &gt;::with_capacity(<span class="number">16</span>)));
         <span class="kw">let </span>make_svc = make_service_fn(<span class="kw">move </span>|<span class="kw">_</span>| {
             <span class="kw">let </span>tt = turbo_tasks.clone();
             <span class="kw">let </span>source_provider = source_provider.clone();
             <span class="kw">let </span>get_issue_reporter = get_issue_reporter.clone();
+            <span class="kw">let </span>ongoing_side_effects = ongoing_side_effects.clone();
             <span class="kw">async move </span>{
                 <span class="kw">let </span>handler = <span class="kw">move </span>|request: Request&lt;hyper::Body&gt;| {
                     <span class="kw">let </span>request_span = <span class="macro">info_span!</span>(parent: <span class="prelude-val">None</span>, <span class="string">&quot;request&quot;</span>, name = <span class="question-mark">?</span>request.uri());
                     <span class="kw">let </span>start = Instant::now();
                     <span class="kw">let </span>tt = tt.clone();
                     <span class="kw">let </span>get_issue_reporter = get_issue_reporter.clone();
+                    <span class="kw">let </span>ongoing_side_effects = ongoing_side_effects.clone();
                     <span class="kw">let </span>source_provider = source_provider.clone();
                     <span class="kw">let </span>future = <span class="kw">async move </span>{
                         <span class="macro">event!</span>(parent: Span::current(), Level::DEBUG, <span class="string">&quot;request start&quot;</span>);
+                        <span class="comment">// Wait until all ongoing side effects are completed
+                        // We only need to wait for the ongoing side effects that were started
+                        // before this request. Later added side effects are not relevant for this.
+                        </span><span class="kw">let </span>current_ongoing_side_effects = {
+                            <span class="comment">// Cleanup the ongoing_side_effects list
+                            </span><span class="kw">let </span><span class="kw-2">mut </span>guard = ongoing_side_effects.lock();
+                            <span class="kw">while let </span><span class="prelude-val">Some</span>(front) = guard.front() {
+                                <span class="kw">let </span><span class="prelude-val">Ok</span>(front_guard) = front.try_lock() <span class="kw">else </span>{
+                                    <span class="kw">break</span>;
+                                };
+                                <span class="kw">if </span>front_guard.is_some() {
+                                    <span class="kw">break</span>;
+                                }
+                                drop(front_guard);
+                                guard.pop_front();
+                            }
+                            <span class="comment">// Get a clone of the remaining list
+                            </span>(<span class="kw-2">*</span>guard).clone()
+                        };
+                        <span class="comment">// Wait for the side effects to complete
+                        </span><span class="kw">for </span>side_effect_mutex <span class="kw">in </span>current_ongoing_side_effects {
+                            <span class="kw">let </span><span class="kw-2">mut </span>guard = side_effect_mutex.lock().<span class="kw">await</span>;
+                            <span class="kw">if let </span><span class="prelude-val">Some</span>(join_handle) = guard.take() {
+                                join_handle.<span class="kw">await</span><span class="question-mark">??</span>;
+                            }
+                            drop(guard);
+                        }
                         <span class="kw">let </span>reason = ServerRequest {
+                            method: request.method().clone(),
+                            uri: request.uri().clone(),
+                        };
+                        <span class="kw">let </span>side_effects_reason = ServerRequestSideEffects {
                             method: request.method().clone(),
                             uri: request.uri().clone(),
                         };
@@ -462,12 +550,13 @@
                             <span class="kw">let </span>source = source_provider.get_source();
                             handle_issues(source, <span class="kw-2">&amp;</span>path, <span class="string">&quot;get source&quot;</span>, issue_reporter).<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">let </span>resolved_source = source.resolve_strongly_consistent().<span class="kw">await</span><span class="question-mark">?</span>;
-                            <span class="kw">let </span>response = http::process_request_with_content_source(
-                                resolved_source,
-                                request,
-                                issue_reporter,
-                            )
-                            .<span class="kw">await</span><span class="question-mark">?</span>;
+                            <span class="kw">let </span>(response, side_effects) =
+                                http::process_request_with_content_source(
+                                    resolved_source,
+                                    request,
+                                    issue_reporter,
+                                )
+                                .<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">let </span>status = response.status().as_u16();
                             <span class="kw">let </span>is_error = response.status().is_client_error()
                                 || response.status().is_server_error();
@@ -480,6 +569,21 @@
                                     <span class="string">&quot;[{status}] {path} ({duration})&quot;</span>,
                                     duration = FormatDuration(elapsed)
                                 );
+                            }
+                            <span class="kw">if </span>!side_effects.is_empty() {
+                                <span class="kw">let </span>join_handle = tokio::spawn(run_once_with_reason(
+                                    tt.clone(),
+                                    side_effects_reason,
+                                    <span class="kw">async move </span>{
+                                        <span class="kw">for </span>side_effect <span class="kw">in </span>side_effects {
+                                            side_effect.apply().<span class="kw">await</span><span class="question-mark">?</span>;
+                                        }
+                                        <span class="prelude-val">Ok</span>(())
+                                    },
+                                ));
+                                ongoing_side_effects.lock().push_back(Arc::new(
+                                    tokio::sync::Mutex::new(<span class="prelude-val">Some</span>(join_handle)),
+                                ));
                             }
                             <span class="prelude-val">Ok</span>(response)
                         })

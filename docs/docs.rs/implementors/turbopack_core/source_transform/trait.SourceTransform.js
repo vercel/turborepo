@@ -1,4 +1,4 @@
 (function() {var implementors = {
 "turbopack_core":[],
-"turbopack_node":[["impl SourceTransform for <a class=\"struct\" href=\"turbopack_node/transforms/postcss/struct.PostCssTransformVc.html\" title=\"struct turbopack_node::transforms::postcss::PostCssTransformVc\">PostCssTransformVc</a>"],["impl SourceTransform for <a class=\"struct\" href=\"turbopack_node/transforms/webpack/struct.WebpackLoadersVc.html\" title=\"struct turbopack_node::transforms::webpack::WebpackLoadersVc\">WebpackLoadersVc</a>"]]
+"turbopack_node":[["impl SourceTransform for <a class=\"struct\" href=\"turbopack_node/transforms/webpack/struct.WebpackLoadersVc.html\" title=\"struct turbopack_node::transforms::webpack::WebpackLoadersVc\">WebpackLoadersVc</a>"],["impl SourceTransform for <a class=\"struct\" href=\"turbopack_node/transforms/postcss/struct.PostCssTransformVc.html\" title=\"struct turbopack_node::transforms::postcss::PostCssTransformVc\">PostCssTransformVc</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -180,17 +180,29 @@
 <a href="#180" id="180">180</a>
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
-</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
     introspect::{Introspectable, IntrospectableVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc},
 };
 <span class="kw">use </span>turbopack_dev_server::source::{
-    wrapping_source::{ContentSourceProcessor, ContentSourceProcessorVc, WrappedContentSourceVc},
+    route_tree::{RouteTreeVc, RouteType},
+    wrapping_source::{
+        ContentSourceProcessor, ContentSourceProcessorVc, WrappedGetContentSourceContentVc,
+    },
     ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
-    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, ContentSourcesVc, NeededData,
-    RewriteBuilder,
+    ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceVc, ContentSourcesVc,
+    GetContentSourceContent, GetContentSourceContentVc, GetContentSourceContentsVc, RewriteBuilder,
 };
 <span class="kw">use </span>url::Url;
 
@@ -214,38 +226,50 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>NextSourceMapTraceContentSource {
     <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_routes(self_vc: NextSourceMapTraceContentSourceVc) -&gt; RouteTreeVc {
+        RouteTreeVc::new_route(Vec::new(), RouteType::CatchAll, self_vc.into())
+    }
+
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
+        ContentSourcesVc::cell(<span class="macro">vec!</span>[<span class="self">self</span>.asset_source])
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GetContentSourceContent <span class="kw">for </span>NextSourceMapTraceContentSource {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>vary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourceDataVaryVc {
+        ContentSourceDataVary {
+            raw_query: <span class="bool-val">true</span>,
+            ..Default::default()
+        }
+        .cell()
+    }
+
+    <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>get(
         self_vc: NextSourceMapTraceContentSourceVc,
-        path: <span class="kw-2">&amp;</span>str,
+        _path: <span class="kw-2">&amp;</span>str,
         data: Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
-        <span class="kw">let </span>raw_query = <span class="kw">match </span><span class="kw-2">&amp;</span>data.raw_query {
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::need_data(Value::new(NeededData {
-                    source: self_vc.into(),
-                    path: path.to_string(),
-                    vary: ContentSourceDataVary {
-                        raw_query: <span class="bool-val">true</span>,
-                        ..Default::default()
-                    },
-                })));
-            }
-            <span class="prelude-val">Some</span>(query) =&gt; query,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(raw_query) = data.raw_query.as_deref() <span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">&quot;Missing raw_query in data&quot;</span>)
         };
 
         <span class="kw">let </span>frame: StackFrame = <span class="kw">match </span>serde_qs::from_str(raw_query) {
             <span class="prelude-val">Ok</span>(f) =&gt; f,
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
         };
         <span class="kw">let </span>(line, column) = <span class="kw">match </span>frame.get_pos() {
             <span class="prelude-val">Some</span>((l, c)) =&gt; (l, c),
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
         };
 
         <span class="comment">// The file is some percent encoded `http://localhost:3000/_next/foo/bar.js`
         </span><span class="kw">let </span>file = <span class="kw">match </span>Url::parse(<span class="kw-2">&amp;</span>frame.file) {
             <span class="prelude-val">Ok</span>(u) =&gt; u,
-            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found()),
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceContentVc::not_found()),
         };
 
         <span class="kw">let </span>id = file.query_pairs().find_map(|(k, v)| {
@@ -256,30 +280,24 @@
             </span>}
         });
 
-        <span class="kw">let </span>wrapped = WrappedContentSourceVc::new(
-            self_vc.<span class="kw">await</span><span class="question-mark">?</span>.asset_source,
-            NextSourceMapTraceContentProcessorVc::new(
-                id,
-                line,
-                column,
-                frame.name.map(|c| c.to_string()),
-            )
-            .into(),
-        );
-        <span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-            ContentSourceContent::Rewrite(
-                RewriteBuilder::new(file.path().to_string())
-                    .content_source(wrapped.as_content_source())
-                    .build(),
-            )
-            .cell()
-            .into(),
-        ))
-    }
-
-    <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
-        ContentSourcesVc::cell(<span class="macro">vec!</span>[<span class="self">self</span>.asset_source])
+        <span class="kw">let </span>path = urlencoding::decode(file.path().trim_start_matches(<span class="string">&#39;/&#39;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>sources = self_vc.<span class="kw">await</span><span class="question-mark">?</span>.asset_source.get_routes().get(<span class="kw-2">&amp;</span>path);
+        <span class="kw">let </span>processor = NextSourceMapTraceContentProcessorVc::new(
+            id,
+            line,
+            column,
+            frame.name.map(|c| c.to_string()),
+        )
+        .into();
+        <span class="kw">let </span>sources = sources
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.iter()
+            .map(|s| WrappedGetContentSourceContentVc::new(<span class="kw-2">*</span>s, processor).into())
+            .collect();
+        <span class="prelude-val">Ok</span>(ContentSourceContent::Rewrite(
+            RewriteBuilder::new_sources(GetContentSourceContentsVc::cell(sources)).build(),
+        )
+        .cell())
     }
 }
 

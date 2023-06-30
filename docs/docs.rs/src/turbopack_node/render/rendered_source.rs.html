@@ -299,22 +299,6 @@
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
@@ -338,10 +322,10 @@
         asset_graph::AssetGraphContentSourceVc,
         conditional::ConditionalContentSourceVc,
         lazy_instantiated::{GetContentSource, GetContentSourceVc, LazyInstantiatedContentSource},
-        specificity::SpecificityVc,
+        route_tree::{BaseSegment, RouteTreeVc, RouteType},
         ContentSource, ContentSourceContent, ContentSourceContentVc, ContentSourceData,
-        ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceResult, ContentSourceResultVc,
-        ContentSourceVc, GetContentSourceContent, GetContentSourceContentVc, ProxyResult,
+        ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceVc, GetContentSourceContent,
+        GetContentSourceContentVc, ProxyResult,
     },
 };
 
@@ -365,7 +349,8 @@
 </span><span class="kw">pub fn </span>create_node_rendered_source(
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
-    specificity: SpecificityVc,
+    base_segments: Vec&lt;BaseSegment&gt;,
+    route_type: RouteType,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
     pathname: StringVc,
@@ -377,7 +362,8 @@
     <span class="kw">let </span>source = NodeRenderContentSource {
         cwd,
         env,
-        specificity,
+        base_segments,
+        route_type,
         server_root,
         route_match,
         pathname,
@@ -403,7 +389,8 @@
 </span><span class="kw">pub struct </span>NodeRenderContentSource {
     cwd: FileSystemPathVc,
     env: ProcessEnvVc,
-    specificity: SpecificityVc,
+    base_segments: Vec&lt;BaseSegment&gt;,
+    route_type: RouteType,
     server_root: FileSystemPathVc,
     route_match: RouteMatcherVc,
     pathname: StringVc,
@@ -469,40 +456,18 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>NodeRenderContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(
-        self_vc: NodeRenderContentSourceVc,
-        path: <span class="kw-2">&amp;</span>str,
-        _data: turbo_tasks::Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
+    </span><span class="kw">async fn </span>get_routes(self_vc: NodeRenderContentSourceVc) -&gt; <span class="prelude-ty">Result</span>&lt;RouteTreeVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if </span><span class="kw-2">*</span>this.route_match.matches(path).<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResult::Result {
-                specificity: this.specificity,
-                get_content: NodeRenderGetContentResult {
-                    source: self_vc,
-                    render_data: this.render_data,
-                    path: path.to_string(),
-                    debug: this.debug,
-                }
-                .cell()
-                .into(),
-            }
-            .cell());
-        }
-        <span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found())
+        <span class="prelude-val">Ok</span>(RouteTreeVc::new_route(
+            this.base_segments.clone(),
+            this.route_type.clone(),
+            self_vc.into(),
+        ))
     }
 }
 
-<span class="attr">#[turbo_tasks::value]
-</span><span class="kw">struct </span>NodeRenderGetContentResult {
-    source: NodeRenderContentSourceVc,
-    render_data: JsonValueVc,
-    path: String,
-    debug: bool,
-}
-
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>GetContentSourceContent <span class="kw">for </span>NodeRenderGetContentResult {
+</span><span class="kw">impl </span>GetContentSourceContent <span class="kw">for </span>NodeRenderContentSource {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>vary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourceDataVaryVc {
         ContentSourceDataVary {
@@ -517,10 +482,13 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
-        <span class="kw">let </span>source = <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="prelude-val">Some</span>(params) = <span class="kw-2">&amp;*</span>source.route_match.params(<span class="kw-2">&amp;</span><span class="self">self</span>.path).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Non matching path provided&quot;</span>));
+    </span><span class="kw">async fn </span>get(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        path: <span class="kw-2">&amp;</span>str,
+        data: Value&lt;ContentSourceData&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(params) = <span class="kw-2">&amp;*</span><span class="self">self</span>.route_match.params(path).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Non matching path ({}) provided for {}&quot;</span>, path, <span class="self">self</span>.pathname.<span class="kw">await</span><span class="question-mark">?</span>));
         };
         <span class="kw">let </span>ContentSourceData {
             method: <span class="prelude-val">Some</span>(method),
@@ -532,14 +500,14 @@
         } = <span class="kw-2">&amp;*</span>data <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">&quot;Missing request data&quot;</span>));
         };
-        <span class="kw">let </span>entry = source.entry.entry(data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>entry = <span class="self">self</span>.entry.entry(data.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>result = render_static(
-            source.cwd,
-            source.env,
-            source.server_root.join(<span class="kw-2">&amp;</span><span class="self">self</span>.path),
+            <span class="self">self</span>.cwd,
+            <span class="self">self</span>.env,
+            <span class="self">self</span>.server_root.join(path),
             entry.module,
             entry.runtime_entries,
-            source.fallback_page,
+            <span class="self">self</span>.fallback_page,
             entry.chunking_context,
             entry.intermediate_output_path,
             entry.output_root,
@@ -551,7 +519,7 @@
                 original_url: original_url.clone(),
                 raw_query: raw_query.clone(),
                 raw_headers: raw_headers.clone(),
-                path: source.pathname.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
+                path: <span class="self">self</span>.pathname.<span class="kw">await</span><span class="question-mark">?</span>.clone_value(),
                 data: <span class="prelude-val">Some</span>(<span class="self">self</span>.render_data.<span class="kw">await</span><span class="question-mark">?</span>),
             }
             .cell(),
@@ -559,7 +527,7 @@
         )
         .issue_context(
             entry.module.ident().path(),
-            <span class="macro">format!</span>(<span class="string">&quot;server-side rendering {}&quot;</span>, source.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
+            <span class="macro">format!</span>(<span class="string">&quot;server-side rendering {}&quot;</span>, <span class="self">self</span>.pathname.<span class="kw">await</span><span class="question-mark">?</span>),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">*</span>result.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -606,9 +574,9 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>details(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
-            <span class="string">&quot;Specificity: {}&quot;</span>,
-            <span class="self">self</span>.specificity.<span class="kw">await</span><span class="question-mark">?
-        </span>)))
+            <span class="string">&quot;base: {:?}\ntype: {:?}&quot;</span>,
+            <span class="self">self</span>.base_segments, <span class="self">self</span>.route_type
+        )))
     }
 
     <span class="attr">#[turbo_tasks::function]

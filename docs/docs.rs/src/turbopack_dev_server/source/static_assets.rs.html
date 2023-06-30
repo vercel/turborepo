@@ -106,9 +106,43 @@
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
-<span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc};
+<span class="kw">use </span>turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     introspect::{
@@ -118,9 +152,11 @@
 };
 
 <span class="kw">use super</span>::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
+    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc, RouteType},
+    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceVc,
+    GetContentSourceContent,
 };
+<span class="kw">use </span><span class="kw">crate</span>::source::GetContentSourceContentVc;
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>StaticAssetsContentSource {
@@ -150,31 +186,63 @@
     }
 }
 
+<span class="comment">// TODO(WEB-1251) It would be better to lazily enumerate the directory
+</span><span class="attr">#[turbo_tasks::function]
+</span><span class="kw">async fn </span>get_routes_from_directory(dir: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;RouteTreeVc&gt; {
+    <span class="kw">let </span>dir = dir.read_dir().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>DirectoryContent::Entries(entries) = <span class="kw-2">&amp;*</span>dir <span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(RouteTreeVc::empty());
+    };
+
+    <span class="kw">let </span>routes = entries
+        .iter()
+        .flat_map(|(name, entry)| <span class="kw">match </span>entry {
+            DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) =&gt; {
+                <span class="prelude-val">Some</span>(RouteTreeVc::new_route(
+                    <span class="macro">vec!</span>[BaseSegment::Static(name.clone())],
+                    RouteType::Exact,
+                    StaticAssetsContentSourceItemVc::new(<span class="kw-2">*</span>path).into(),
+                ))
+            }
+            DirectoryEntry::Directory(path) =&gt; <span class="prelude-val">Some</span>(
+                get_routes_from_directory(<span class="kw-2">*</span>path)
+                    .with_prepended_base(<span class="macro">vec!</span>[BaseSegment::Static(name.clone())]),
+            ),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+        })
+        .collect();
+    <span class="prelude-val">Ok</span>(RouteTreesVc::cell(routes).merge())
+}
+
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>StaticAssetsContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        path: <span class="kw-2">&amp;</span>str,
-        _data: Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
-        <span class="kw">if </span>!path.is_empty() {
-            <span class="kw">let </span>prefix = <span class="self">self</span>.prefix.<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = path.strip_prefix(<span class="kw-2">&amp;*</span>prefix) {
-                <span class="kw">let </span>path = <span class="self">self</span>.dir.join(path);
-                <span class="kw">let </span>ty = path.get_type().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">if </span><span class="macro">matches!</span>(
-                    <span class="kw-2">&amp;*</span>ty,
-                    FileSystemEntryType::File | FileSystemEntryType::Symlink
-                ) {
-                    <span class="kw">let </span>content = SourceAssetVc::new(path).as_asset().content();
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(ContentSourceResultVc::exact(
-                        ContentSourceContentVc::static_content(content.into()).into(),
-                    ));
-                }
-            }
-        }
-        <span class="prelude-val">Ok</span>(ContentSourceResultVc::not_found())
+    </span><span class="kw">async fn </span>get_routes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RouteTreeVc&gt; {
+        <span class="kw">let </span>prefix = <span class="self">self</span>.prefix.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>prefix = BaseSegment::from_static_pathname(prefix.as_str()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="prelude-val">Ok</span>(get_routes_from_directory(<span class="self">self</span>.dir).with_prepended_base(prefix))
+    }
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>StaticAssetsContentSourceItem {
+    path: FileSystemPathVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>StaticAssetsContentSourceItemVc {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">pub fn </span>new(path: FileSystemPathVc) -&gt; StaticAssetsContentSourceItemVc {
+        StaticAssetsContentSourceItem { path }.cell()
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>GetContentSourceContent <span class="kw">for </span>StaticAssetsContentSourceItem {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, _path: <span class="kw-2">&amp;</span>str, _data: Value&lt;ContentSourceData&gt;) -&gt; ContentSourceContentVc {
+        <span class="kw">let </span>content = SourceAssetVc::new(<span class="self">self</span>.path).as_asset().content();
+        ContentSourceContentVc::static_content(content.into())
     }
 }
 

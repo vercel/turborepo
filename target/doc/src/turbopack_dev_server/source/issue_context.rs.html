@@ -164,6 +164,12 @@
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -173,10 +179,11 @@
 };
 
 <span class="kw">use super</span>::{
+    route_tree::{MapGetContentSourceContent, RouteTreeVc},
     ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataVaryVc,
-    ContentSourceResult, ContentSourceResultVc, ContentSourceVc, ContentSourcesVc,
-    GetContentSourceContent, GetContentSourceContentVc,
+    ContentSourceVc, ContentSourcesVc, GetContentSourceContent, GetContentSourceContentVc,
 };
+<span class="kw">use </span><span class="kw">crate</span>::source::route_tree::MapGetContentSourceContentVc;
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>IssueContextContentSource {
@@ -215,40 +222,41 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ContentSource <span class="kw">for </span>IssueContextContentSource {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(
-        self_vc: IssueContextContentSourceVc,
-        path: <span class="kw-2">&amp;</span>str,
-        data: Value&lt;ContentSourceData&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceResultVc&gt; {
+    </span><span class="kw">async fn </span>get_routes(self_vc: IssueContextContentSourceVc) -&gt; <span class="prelude-ty">Result</span>&lt;RouteTreeVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>result = this
+        <span class="kw">let </span>routes = this
             .source
-            .get(path, data)
+            .get_routes()
             .issue_context(this.context, <span class="kw-2">&amp;</span>this.description)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if let </span>ContentSourceResult::Result {
-            get_content,
-            specificity,
-        } = <span class="kw-2">*</span>result.<span class="kw">await</span><span class="question-mark">?
-        </span>{
-            <span class="prelude-val">Ok</span>(ContentSourceResult::Result {
-                get_content: IssueContextGetContentSourceContent {
-                    get_content,
-                    source: self_vc,
-                }
+        <span class="prelude-val">Ok</span>(routes.map_routes(
+            IssueContextContentSourceMapper { source: self_vc }
                 .cell()
                 .into(),
-                specificity,
-            }
-            .cell())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(result)
-        }
+        ))
     }
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>get_children(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContentSourcesVc {
         ContentSourcesVc::cell(<span class="macro">vec!</span>[<span class="self">self</span>.source])
+    }
+}
+
+<span class="attr">#[turbo_tasks::value]
+</span><span class="kw">struct </span>IssueContextContentSourceMapper {
+    source: IssueContextContentSourceVc,
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>MapGetContentSourceContent <span class="kw">for </span>IssueContextContentSourceMapper {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>map_get_content(<span class="kw-2">&amp;</span><span class="self">self</span>, get_content: GetContentSourceContentVc) -&gt; GetContentSourceContentVc {
+        IssueContextGetContentSourceContent {
+            get_content,
+            source: <span class="self">self</span>.source,
+        }
+        .cell()
+        .into()
     }
 }
 
@@ -272,11 +280,15 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, data: Value&lt;ContentSourceData&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
+    </span><span class="kw">async fn </span>get(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        path: <span class="kw-2">&amp;</span>str,
+        data: Value&lt;ContentSourceData&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContentSourceContentVc&gt; {
         <span class="kw">let </span>source = <span class="self">self</span>.source.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>result = <span class="self">self
             </span>.get_content
-            .get(data)
+            .get(path, data)
             .issue_context(source.context, <span class="kw-2">&amp;</span>source.description)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(result)
