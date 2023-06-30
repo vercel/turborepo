@@ -8,6 +8,7 @@ use std::{
     collections::{HashMap, HashSet},
     iter,
     path::Path,
+    rc::Rc,
 };
 
 use de::SemverString;
@@ -43,7 +44,7 @@ pub struct BerryLockfile<'a> {
     resolutions: Map<Descriptor<'a>, Locator<'a>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver<'a>,
-    locator_package: Map<Locator<'a>, &'a BerryPackage>,
+    locator_package: Map<Locator<'a>, Rc<BerryPackage>>,
     // Map of regular locators to patch locators that apply to them
     patches: Map<Locator<'static>, Locator<'a>>,
     // Descriptors that come from default package extensions that ship with berry
@@ -59,7 +60,7 @@ pub struct LockfileData {
     #[serde(rename = "__metadata")]
     metadata: Metadata,
     #[serde(flatten)]
-    packages: Map<String, BerryPackage>,
+    packages: Map<String, Rc<BerryPackage>>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Clone)]
@@ -113,7 +114,7 @@ impl<'a> BerryLockfile<'a> {
                 patches.insert(original_locator.as_owned(), locator.clone());
             }
 
-            locator_package.insert(locator.clone(), package);
+            locator_package.insert(locator.clone(), package.clone());
 
             for descriptor in Descriptor::from_lockfile_key(key) {
                 let descriptor = descriptor?;
@@ -197,7 +198,7 @@ impl<'a> BerryLockfile<'a> {
 
     /// Constructs a new lockfile data ready to be serialized
     pub fn lockfile(&self) -> Result<LockfileData, Error> {
-        let mut packages: std::collections::BTreeMap<String, BerryPackage> = Map::new();
+        let mut packages = Map::new();
         let mut metadata = self.data.metadata.clone();
         let reverse_lookup = self.locator_to_descriptors();
 
@@ -213,7 +214,7 @@ impl<'a> BerryLockfile<'a> {
                 .locator_package
                 .get(locator)
                 .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
-            packages.insert(key, (*package).clone());
+            packages.insert(key, package.clone());
         }
 
         // If there aren't any checksums in the lockfile, then cache key is omitted
@@ -276,6 +277,7 @@ impl<'a> BerryLockfile<'a> {
             let package = self
                 .locator_package
                 .get(&locator)
+                .cloned()
                 .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
 
             for (name, range) in package.dependencies.iter().flatten() {
@@ -339,9 +341,9 @@ impl<'a> BerryLockfile<'a> {
     fn resolve_dependency(
         &self,
         locator: &Locator,
-        name: &'a str,
-        range: &'a str,
-    ) -> Result<Descriptor<'a>, Error> {
+        name: &str,
+        range: &str,
+    ) -> Result<Descriptor<'static>, Error> {
         let mut dependency = Descriptor::new(name, range)?;
         // If there's no protocol we attempt to find a known one
         if dependency.protocol().is_none() {
@@ -359,7 +361,8 @@ impl<'a> BerryLockfile<'a> {
             }
         }
 
-        Ok(dependency)
+        // TODO Could we dedupe and wrap in Rc?
+        Ok(dependency.into_owned())
     }
 }
 
