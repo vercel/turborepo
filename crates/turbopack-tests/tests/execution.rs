@@ -19,11 +19,7 @@ use turbo_tasks_fs::{
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::TransformPluginVc,
-    module_options::{
-        CustomEcmascriptTransformPlugins, CustomEcmascriptTransformPluginsVc, JsxTransformOptions,
-        JsxTransformOptionsVc, ModuleOptionsContext, TypescriptTransformOptionsVc,
-    },
+    module_options::{ModuleOptionsContext, TypescriptTransformOptionsVc},
     resolve_options_context::ResolveOptionsContext,
     transition::TransitionsByNameVc,
     ModuleAssetContextVc,
@@ -40,7 +36,6 @@ use turbopack_core::{
     source_asset::SourceAssetVc,
 };
 use turbopack_dev::DevChunkingContextVc;
-use turbopack_ecmascript_plugins::transform::styled_jsx::StyledJsxTransformer;
 use turbopack_node::evaluate::evaluate;
 use turbopack_test_utils::jest::JestRunResult;
 
@@ -160,7 +155,7 @@ async fn run(resource: PathBuf, snapshot_mode: IssueSnapshotMode) -> Result<JsRe
         let resource_str = resource.to_str().unwrap();
         let run_result = run_test(resource_str);
         if matches!(snapshot_mode, IssueSnapshotMode::Snapshots) {
-            snapshot_issues(run_result);
+            snapshot_issues(run_result).await?;
         }
 
         Ok((*run_result.await.unwrap().js_result.await.unwrap()).clone())
@@ -210,10 +205,6 @@ async fn run_test(resource: &str) -> Result<RunTestResultVc> {
         TransitionsByNameVc::cell(HashMap::new()),
         compile_time_info,
         ModuleOptionsContext {
-            enable_jsx: Some(JsxTransformOptionsVc::cell(JsxTransformOptions {
-                development: true,
-                ..Default::default()
-            })),
             enable_typescript_transform: Some(TypescriptTransformOptionsVc::default()),
             preset_env_versions: Some(env),
             rules: vec![(
@@ -223,20 +214,11 @@ async fn run_test(resource: &str) -> Result<RunTestResultVc> {
                 }
                 .cell(),
             )],
-            custom_ecma_transform_plugins: Some(CustomEcmascriptTransformPluginsVc::cell(
-                CustomEcmascriptTransformPlugins {
-                    source_transforms: vec![TransformPluginVc::cell(
-                        Box::<StyledJsxTransformer>::default(),
-                    )],
-                    output_transforms: vec![],
-                },
-            )),
             ..Default::default()
         }
         .into(),
         ResolveOptionsContext {
             enable_typescript: true,
-            enable_react: true,
             enable_node_modules: Some(project_root),
             custom_conditions: vec!["development".to_string()],
             rules: vec![(
