@@ -190,6 +190,49 @@ impl From<FileHashes> for Builder<HeapAllocator> {
     }
 }
 
+impl From<FileHashes> for Builder<HeapAllocator> {
+    fn from(FileHashes(file_hashes): FileHashes) -> Self {
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::file_hashes::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
+
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_file_hashes(file_hashes.len() as u32);
+
+            // get a sorted iterator over keys and values of the hashmap
+            // and set the entries in the capnp message
+
+            let mut hashable: Vec<_> = file_hashes.into_iter().collect();
+            hashable.sort_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key.as_str());
+                entry.set_value(value);
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
 type EnvVarPairs = Vec<String>;
 
 impl From<TaskHashable> for Builder<HeapAllocator> {
@@ -361,6 +404,95 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             + 1; // + 1 to solve an off by one error inside capnp
         let mut canon_builder =
             Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
+impl From<GlobalHashable> for Builder<HeapAllocator> {
+    fn from(hashable: GlobalHashable) -> Self {
+        let mut message =
+            ::capnp::message::TypedBuilder::<proto_capnp::global_hashable::Owned>::new_default();
+
+        let mut builder = message.init_root();
+
+        builder.set_global_cache_key(&hashable.global_cache_key);
+
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_global_file_hash_map(hashable.global_file_hash_map.len() as u32);
+
+            // get a sorted iterator over keys and values of the hashmap
+            // and set the entries in the capnp message
+
+            let mut hashable: Vec<_> = hashable.global_file_hash_map.into_iter().collect();
+            hashable.sort_by(|a, b| a.0.cmp(&b.0));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key.as_str());
+                entry.set_value(value);
+            }
+        }
+
+        builder.set_root_external_deps_hash(&hashable.root_external_deps_hash);
+
+        {
+            let mut entries = builder.reborrow().init_env(hashable.env.len() as u32);
+            for (i, env) in hashable.env.iter().enumerate() {
+                entries.set(i as u32, env);
+            }
+        }
+
+        {
+            let mut resolved_env_vars = builder
+                .reborrow()
+                .init_resolved_env_vars(hashable.resolved_env_vars.len() as u32);
+            for (i, env) in hashable.resolved_env_vars.iter().enumerate() {
+                resolved_env_vars.set(i as u32, env);
+            }
+        }
+
+        {
+            let mut pass_through_env = builder
+                .reborrow()
+                .init_pass_through_env(hashable.pass_through_env.len() as u32);
+            for (i, env) in hashable.pass_through_env.iter().enumerate() {
+                pass_through_env.set(i as u32, env);
+            }
+        }
+
+        builder.set_env_mode(match hashable.env_mode {
+            EnvMode::Infer => proto_capnp::global_hashable::EnvMode::Infer,
+            EnvMode::Loose => proto_capnp::global_hashable::EnvMode::Loose,
+            EnvMode::Strict => proto_capnp::global_hashable::EnvMode::Strict,
+        });
+
+        builder.set_framework_inference(hashable.framework_inference);
+
+        {
+            let mut dot_env = builder
+                .reborrow()
+                .init_dot_env(hashable.dot_env.len() as u32);
+            for (i, env) in hashable.dot_env.iter().enumerate() {
+                dot_env.set(i as u32, env.as_str());
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
@@ -401,6 +533,82 @@ mod test {
         };
 
         assert_eq!(task_hashable.hash(), "ff765ee2f83bc034");
+    }
+
+    #[test]
+    fn global_hashable() {
+        let global_hash = GlobalHashable {
+            global_cache_key: "global_cache_key".to_string(),
+            global_file_hash_map: vec![(
+                turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
+                "global_file_hash_map".to_string(),
+            )]
+            .into_iter()
+            .collect(),
+            root_external_deps_hash: "root_external_deps_hash".to_string(),
+            env: vec!["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: vec!["pass_through_env".to_string()],
+            env_mode: EnvMode::Infer,
+            framework_inference: true,
+
+            dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
+        };
+
+        assert_eq!(global_hash.hash(), "1d13a81d4c129bed");
+    }
+
+    #[test_case(vec![], "459c029558afe716" ; "empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }], "9e60782f386d8ff1" ; "non-empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }, Package {
+        key: "zey".to_string(),
+        version: "version".to_string(),
+    }], "765a46fa6c11f363" ; "multiple in-order")]
+    #[test_case(vec![Package {
+        key: "zey".to_string(),
+        version: "version".to_string(),
+    }, Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }], "1f5d2d372b4398db" ; "care about order")]
+    fn lock_file_packages(vec: Vec<Package>, expected: &str) {
+        let packages = LockFilePackages(vec);
+        assert_eq!(packages.hash(), expected);
+    }
+
+    #[test]
+    fn long_lock_file_packages() {
+        let packages = (0..100).map(|i| Package {
+            key: format!("key{}", i),
+            version: format!("version{}", i),
+        });
+
+        lock_file_packages(packages.collect(), "06bb5d05e53dd455");
+    }
+
+    #[test_case(vec![], "459c029558afe716" ; "empty")]
+    #[test_case(vec![
+        ("a".to_string(), "b".to_string()),
+        ("c".to_string(), "d".to_string()),
+    ], "c9301c0bf1899c07" ; "non-empty")]
+    #[test_case(vec![
+        ("c".to_string(), "d".to_string()),
+        ("a".to_string(), "b".to_string()),
+    ], "c9301c0bf1899c07" ; "order resistant")]
+    fn file_hashes(pairs: Vec<(String, String)>, expected: &str) {
+        let file_hashes = FileHashes(
+            pairs
+                .into_iter()
+                .map(|(a, b)| (turbopath::RelativeUnixPathBuf::new(a).unwrap(), b))
+                .collect(),
+        );
+        assert_eq!(file_hashes.hash(), expected);
     }
 
     #[test]
