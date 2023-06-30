@@ -6698,9 +6698,9 @@ dependencies = [
 
 [[package]]
 name = "subtle"
-version = "2.4.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
+checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
 name = "supports-color"
@@ -9125,12 +9125,12 @@ dependencies = [
  "clap 4.1.11",
  "crossbeam-channel",
  "crossterm 0.26.1",
- "ctrlc",
  "once_cell",
  "owo-colors",
  "postcard",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "turbo-tasks",
@@ -9149,6 +9149,7 @@ dependencies = [
  "futures",
  "indexmap",
  "intervaltree",
+ "itertools",
  "owo-colors",
  "postcard",
  "serde",
@@ -9247,6 +9248,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-compression",
+ "auto-hash-map",
  "futures",
  "hyper",
  "hyper-tungstenite",
@@ -9737,8 +9739,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
- "rand 0.8.5",
+ "cfg-if 0.1.10",
+ "rand 0.4.6",
  "static_assertions",
 ]
 
