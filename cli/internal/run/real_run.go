@@ -405,6 +405,11 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		ui.Output(fmt.Sprintf("::group::%s", packageTask.OutputPrefix(ec.isSinglePackage)))
 		prefixedUI.WarnPrefix = "::warn::"
 		prefixedUI.ErrorPrefix = "::error::"
+		defer func() {
+			// We don't use the prefixedUI here because the prefix in this case would include
+			// the ::group::<taskID>, and we explicitly want to close the github group
+			ui.Output("::endgroup::")
+		}()
 	}
 
 	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
@@ -506,11 +511,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		if err := writer.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log file"))
 		}
-		if ec.rs.Opts.runOpts.IsGithubActions {
-			// We don't use the prefixedUI here because the prefix in this case would include
-			// the ::group::<taskID>, and we explicitly want to close the github group
-			ui.Output("::endgroup::")
-		}
 		if len(closeErrors) > 0 {
 			msgs := make([]string, len(closeErrors))
 			for i, err := range closeErrors {
@@ -526,7 +526,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		// ensure we close off our outputs. We errored, so we mostly don't care if we fail to close
 		// We don't close them directly because we're potentially going to output some errors or
 		// warnings that we want grouped with the task output.
-		defer func() { _ = closeOutputs() }()
+		_ = closeOutputs()
 		// if we already know we're in the process of exiting,
 		// we don't need to record an error to that effect.
 		if errors.Is(err, process.ErrClosing) {
