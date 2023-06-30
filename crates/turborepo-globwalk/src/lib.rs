@@ -201,7 +201,8 @@ fn preprocess_paths_and_globs(
     let mut exclude_paths = vec![];
     for split in exclude
         .iter()
-        .map(|s| join_unix_like_paths(&base_path_slash, s))
+        .map(|s| fix_glob_pattern(s))
+        .map(|s| join_unix_like_paths(&base_path_slash, &s))
         .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
     {
         let split = split.to_string();
@@ -613,6 +614,8 @@ mod test {
     }
 
     #[test_case("a*/**", 22, 22 => matches None ; "wildcard followed by doublestar")]
+    #[test_case("**/*f", 4, 4 => matches None ; "leading doublestar expansion")]
+    #[test_case("**f", 4, 4 => matches None ; "transform leading doublestar")]
     #[test_case("a**", 22, 22 => matches None ; "transform trailing doublestar")]
     #[test_case("abc", 1, 1 => matches None ; "exact match")]
     #[test_case("*", 19, 15 => matches None ; "single star match")]
