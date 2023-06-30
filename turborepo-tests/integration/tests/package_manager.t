@@ -26,6 +26,10 @@ Run test run
 Set package manager to pnpm6 in package.json
   $ jq '.packageManager = "pnpm@6.0.0"' package.json > package.json.tmp && mv package.json.tmp package.json
 
+Set up pnpm-workspace.yaml
+  $ echo "packages:" >> pnpm-workspace.yaml
+  $ echo "  - apps/*" >> pnpm-workspace.yaml
+
 Run test run
   $ ${TURBO} run build --__test-run | jq .package_manager
   "pnpm6"

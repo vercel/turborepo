@@ -2,10 +2,12 @@ use serde::Serialize;
 use tracing::trace;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
-use crate::{cli::Args, commands::CommandBase};
+use crate::{cli::Args, commands::CommandBase, run::Run, task_hash::TaskHashTrackerState};
 
 #[derive(Debug, Serialize)]
 pub struct ExecutionState<'a> {
+    global_hash: Option<String>,
+    task_hash_tracker: Option<TaskHashTrackerState>,
     pub api_client_config: APIClientConfig<'a>,
     pub spaces_api_client_config: SpacesAPIClientConfig<'a>,
     package_manager: PackageManager,
@@ -38,8 +40,23 @@ pub struct SpacesAPIClientConfig<'a> {
 
 impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
     type Error = anyhow::Error;
-
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
+        let run = Run::new(base);
+
+        let global_hash;
+        let task_hash_tracker;
+        #[cfg(debug_assertions)]
+        {
+            let result = run.get_hashes()?;
+            global_hash = Some(result.0);
+            task_hash_tracker = Some(result.1);
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            global_hash = None;
+            task_hash_tracker = None;
+        }
+
         let root_package_json =
             PackageJson::load(&base.repo_root.join_component("package.json")).ok();
 
@@ -71,6 +88,8 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         };
 
         Ok(ExecutionState {
+            global_hash,
+            task_hash_tracker,
             api_client_config,
             spaces_api_client_config,
             package_manager,
