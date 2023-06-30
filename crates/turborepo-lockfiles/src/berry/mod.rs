@@ -49,7 +49,7 @@ pub struct BerryLockfile<'a> {
     // Descriptors that come from default package extensions that ship with berry
     extensions: HashSet<Descriptor<'static>>,
     // Package overrides
-    overrides: Map<Resolution<'a>, &'a str>,
+    overrides: Map<Resolution, String>,
 }
 
 // This is the direct representation of the lockfile as it appears on disk.
@@ -98,10 +98,7 @@ pub struct BerryManifest {
 }
 
 impl<'a> BerryLockfile<'a> {
-    pub fn new(
-        lockfile: &'a LockfileData,
-        manifest: Option<&'a BerryManifest>,
-    ) -> Result<Self, Error> {
+    pub fn new(lockfile: &'a LockfileData, manifest: Option<BerryManifest>) -> Result<Self, Error> {
         let mut patches = Map::new();
         let mut locator_package = Map::new();
         let mut descriptor_locator = Map::new();
@@ -449,13 +446,13 @@ impl BerryManifest {
         Self { resolutions }
     }
 
-    pub fn resolutions(&self) -> Option<Result<Map<Resolution, &str>, Error>> {
-        self.resolutions.as_ref().map(|resolutions| {
+    pub fn resolutions(self) -> Option<Result<Map<Resolution, String>, Error>> {
+        self.resolutions.map(|resolutions| {
             resolutions
-                .iter()
+                .into_iter()
                 .map(|(resolution, reference)| {
-                    let res = parse_resolution(resolution)?;
-                    Ok((res, reference.as_str()))
+                    let res = parse_resolution(&resolution)?;
+                    Ok((res, reference))
                 })
                 .collect()
         })
@@ -470,7 +467,7 @@ pub fn berry_subgraph(
 ) -> Result<Vec<u8>, Error> {
     let manifest = resolutions.map(BerryManifest::with_resolutions);
     let data = LockfileData::from_bytes(contents)?;
-    let lockfile = BerryLockfile::new(&data, manifest.as_ref())?;
+    let lockfile = BerryLockfile::new(&data, manifest)?;
     let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
     let new_contents = pruned_lockfile.lockfile()?.to_string().into_bytes();
     Ok(new_contents)
@@ -648,7 +645,7 @@ mod test {
             "lodash@^4.17.21".into(),
             "patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch".into(),
         )]);
-        let lockfile = BerryLockfile::new(&data, Some(&resolutions)).unwrap();
+        let lockfile = BerryLockfile::new(&data, Some(resolutions)).unwrap();
         let closure = crate::transitive_closure(
             &lockfile,
             "apps/docs",
@@ -676,7 +673,7 @@ mod test {
                     .collect(),
             ),
         };
-        let lockfile = BerryLockfile::new(&data, Some(&manifest)).unwrap();
+        let lockfile = BerryLockfile::new(&data, Some(manifest)).unwrap();
 
         let pkg = lockfile
             .resolve_package("packages/b", "debug", "^4.3.4")
@@ -709,7 +706,7 @@ mod test {
                 .collect(),
             ),
         };
-        let lockfile = BerryLockfile::new(&data, Some(&manifest)).unwrap();
+        let lockfile = BerryLockfile::new(&data, Some(manifest)).unwrap();
 
         let deps = lockfile
             .all_dependencies("debug@npm:1.0.0")
@@ -749,7 +746,7 @@ mod test {
                     .collect(),
             ),
         };
-        let lockfile = BerryLockfile::new(&data, Some(&manifest)).unwrap();
+        let lockfile = BerryLockfile::new(&data, Some(manifest)).unwrap();
 
         let unresolved_deps = vec![
             ("@types/react-dom", "^17.0.11"),
