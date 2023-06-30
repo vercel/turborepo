@@ -103,7 +103,7 @@ async fn chunkable_assets_set(root: AssetVc) -> Result<AssetsSetVc> {
                                     | ChunkingType::Placed
                             )
                         ) {
-                            return Ok(chunkable
+                            return chunkable
                                 .resolve_reference()
                                 .primary_assets()
                                 .await?
@@ -111,7 +111,7 @@ async fn chunkable_assets_set(root: AssetVc) -> Result<AssetsSetVc> {
                                 .copied()
                                 .map(|asset| asset.resolve())
                                 .try_join()
-                                .await?);
+                                .await;
                         }
                     }
                     Ok(Vec::new())
