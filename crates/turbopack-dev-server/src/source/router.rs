@@ -168,7 +168,7 @@ impl GetContentSourceContent for PrefixedRouterGetContentSourceContent {
                 return Ok(self.get_content.get("", data));
             } else if prefix.is_empty() {
                 return Ok(self.get_content.get(path, data));
-            } else if let Some(path) = path.strip_prefix("/") {
+            } else if let Some(path) = path.strip_prefix('/') {
                 return Ok(self.get_content.get(path, data));
             }
         }

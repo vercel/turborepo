@@ -91,6 +91,8 @@ pub enum ContentSourceContent {
     Static(StaticContentVc),
     HttpProxy(ProxyResultVc),
     Rewrite(RewriteVc),
+    /// Continue with the next route
+    Next,
 }
 
 /// This trait can be emitted as collectible and will be applied after the

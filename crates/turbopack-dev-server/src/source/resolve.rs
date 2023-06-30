@@ -116,6 +116,7 @@ pub async fn resolve_source_request(
                     ContentSourceContent::HttpProxy(proxy_result) => {
                         return Ok(ResolveSourceRequestResult::HttpProxy(*proxy_result).cell());
                     }
+                    ContentSourceContent::Next => continue,
                 }
             }
             break;

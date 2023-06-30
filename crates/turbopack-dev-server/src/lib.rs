@@ -142,7 +142,7 @@ impl DevServerBuilder {
     ) -> DevServer {
         let ongoing_side_effects = Arc::new(Mutex::new(VecDeque::<
             Arc<tokio::sync::Mutex<Option<JoinHandle<Result<()>>>>>,
-        >::new()));
+        >::with_capacity(16)));
         let make_svc = make_service_fn(move |_| {
             let tt = turbo_tasks.clone();
             let source_provider = source_provider.clone();
