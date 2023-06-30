@@ -64,12 +64,14 @@ func HashFileHashes(hashes FileHashes) (string, error) {
 
 // HashTask produces the hash for a particular task
 func HashTask(task *TaskHashable) (string, error) {
-	return hashObject(task)
+	// return proto.HashTaskHashable(task)
+	return "", nil
 }
 
 // HashGlobal produces the global hash value to be incorporated in every task hash
 func HashGlobal(global GlobalHashable) (string, error) {
-	return hashObject(global)
+	// return proto.HashGlobalHashable(&global)
+	return "", nil
 }
 
 // hashObject is the internal generic hash function. It should not be used directly,
