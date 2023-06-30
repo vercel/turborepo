@@ -1,5 +1,5 @@
 import { findRootSync } from "@manypkg/find-root";
-import searchUp from "./searchUp";
+import { searchUp } from "./searchUp";
 import JSON5 from "json5";
 
 interface Options {
@@ -13,7 +13,7 @@ function contentCheck(content: string): boolean {
 
 const configCache: Record<string, string> = {};
 
-function getTurboRoot(cwd?: string, opts?: Options): string | null {
+export function getTurboRoot(cwd?: string, opts?: Options): string | null {
   const cacheEnabled = opts?.cache ?? true;
   const currentDir = cwd || process.cwd();
 
@@ -45,5 +45,3 @@ function getTurboRoot(cwd?: string, opts?: Options): string | null {
 
   return root;
 }
-
-export default getTurboRoot;

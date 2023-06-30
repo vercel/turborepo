@@ -13,7 +13,7 @@ use crate::{
         EcmascriptChunkItem, EcmascriptChunkItemContentVc, EcmascriptChunkItemVc,
         EcmascriptChunkingContextVc,
     },
-    gen_content,
+    EcmascriptModuleContentVc,
 };
 
 /// This is an implementation of [ChunkItem] for [EcmascriptModulePartAssetVc].
@@ -48,13 +48,15 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
         let split_data = split_module(module.full_module);
         let parsed = part_of_module(split_data, module.part);
 
-        Ok(gen_content(
-            this.context,
-            this.module.analyze(),
+        let content = EcmascriptModuleContentVc::new(
             parsed,
             module.full_module.ident(),
+            this.context,
+            this.module.analyze(),
             availability_info,
-        ))
+        );
+
+        Ok(EcmascriptChunkItemContentVc::new(content, this.context))
     }
 
     #[turbo_tasks::function]

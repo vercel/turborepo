@@ -23,15 +23,16 @@ type PrunePayload struct {
 
 // RunPayload is the extra flags passed for the `run` subcommand
 type RunPayload struct {
-	CacheDir          string       `json:"cache_dir"`
-	CacheWorkers      int          `json:"cache_workers"`
-	Concurrency       string       `json:"concurrency"`
-	ContinueExecution bool         `json:"continue_execution"`
-	DryRun            string       `json:"dry_run"`
-	Filter            []string     `json:"filter"`
-	Force             bool         `json:"force"`
-	GlobalDeps        []string     `json:"global_deps"`
-	EnvMode           util.EnvMode `json:"env_mode"`
+	CacheDir           string       `json:"cache_dir"`
+	CacheWorkers       int          `json:"cache_workers"`
+	Concurrency        string       `json:"concurrency"`
+	ContinueExecution  bool         `json:"continue_execution"`
+	DryRun             string       `json:"dry_run"`
+	Filter             []string     `json:"filter"`
+	Force              bool         `json:"force"`
+	FrameworkInference bool         `json:"framework_inference"`
+	GlobalDeps         []string     `json:"global_deps"`
+	EnvMode            util.EnvMode `json:"env_mode"`
 	// NOTE: Graph has three effective states that is modeled using a *string:
 	//   nil -> no flag passed
 	//   ""  -> flag passed but no file name attached: print to stdout
@@ -46,6 +47,7 @@ type RunPayload struct {
 	NoDeps              bool     `json:"no_deps"`
 	Only                bool     `json:"only"`
 	OutputLogs          string   `json:"output_logs"`
+	LogOrder            string   `json:"log_order"`
 	PassThroughArgs     []string `json:"pass_through_args"`
 	Parallel            bool     `json:"parallel"`
 	Profile             string   `json:"profile"`
@@ -63,8 +65,9 @@ type RunPayload struct {
 // Command consists of the data necessary to run a command.
 // Only one of these fields should be initialized at a time.
 type Command struct {
-	Prune *PrunePayload `json:"prune"`
-	Run   *RunPayload   `json:"run"`
+	Daemon *DaemonPayload `json:"daemon"`
+	Prune  *PrunePayload  `json:"prune"`
+	Run    *RunPayload    `json:"run"`
 }
 
 // ParsedArgsFromRust are the parsed command line arguments passed
@@ -90,6 +93,7 @@ type ParsedArgsFromRust struct {
 // ExecutionState is the entire state of a turbo execution that is passed from the Rust shim.
 type ExecutionState struct {
 	APIClientConfig APIClientConfig    `json:"api_client_config"`
+	PackageManager  string             `json:"package_manager"`
 	CLIArgs         ParsedArgsFromRust `json:"cli_args"`
 }
 

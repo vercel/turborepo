@@ -127,6 +127,15 @@ type executionSummary struct {
 	exitCode  int
 }
 
+func (es *executionSummary) Duration() time.Duration {
+	ended := es.endedAt
+	if ended.IsZero() {
+		ended = time.Now()
+	}
+
+	return ended.Sub(es.startedAt)
+}
+
 // MarshalJSON munges the executionSummary into a format we want
 // We'll use an anonmyous, private struct for this, so it's not confusingly duplicated.
 func (es *executionSummary) MarshalJSON() ([]byte, error) {

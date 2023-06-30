@@ -5,3 +5,4 @@ ROOT_DIR="${THIS_DIR}/../.."
 
 TURBO=${ROOT_DIR}/target/debug/turbo
 VERSION=${ROOT_DIR}/version.txt
+TMPDIR=$(mktemp -d)

@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -9,11 +10,13 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
+	"gotest.tools/v3/assert"
 )
 
 func Test_sendToServer(t *testing.T) {
@@ -56,8 +59,9 @@ func Test_sendToServer(t *testing.T) {
 			"event":     "MISS",
 		},
 	}
-
-	apiClient.RecordAnalyticsEvents(events)
+	ctx := context.Background()
+	err = apiClient.RecordAnalyticsEvents(ctx, events)
+	assert.NilError(t, err, "RecordAnalyticsEvent")
 
 	body := <-ch
 
@@ -156,5 +160,27 @@ func Test_FetchWhenCachingDisabled(t *testing.T) {
 	}
 	if resp != nil {
 		t.Errorf("response got %v, want <nil>", resp)
+	}
+}
+
+func Test_Timeout(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		<-time.After(50 * time.Millisecond)
+	}))
+	defer ts.Close()
+
+	// Set up test expected values
+	apiClientConfig := turbostate.APIClientConfig{
+		TeamSlug: "my-team-slug",
+		APIURL:   ts.URL,
+		Token:    "my-token",
+	}
+	apiClient := NewClient(apiClientConfig, hclog.Default(), "v1")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+	_, err := apiClient.JSONPost(ctx, "/", []byte{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("JSONPost got %v, want DeadlineExceeded", err)
 	}
 }

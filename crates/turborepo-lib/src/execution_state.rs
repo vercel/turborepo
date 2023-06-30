@@ -1,10 +1,14 @@
 use serde::Serialize;
+use tracing::trace;
 
-use crate::{cli::Args, commands::CommandBase};
+use crate::{
+    cli::Args, commands::CommandBase, package_json::PackageJson, package_manager::PackageManager,
+};
 
 #[derive(Debug, Serialize)]
 pub struct ExecutionState<'a> {
     pub api_client_config: APIClientConfig<'a>,
+    package_manager: PackageManager,
     pub cli_args: &'a Args,
 }
 
@@ -24,6 +28,13 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
     type Error = anyhow::Error;
 
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
+        let root_package_json =
+            PackageJson::load(&base.repo_root.join_component("package.json")).ok();
+
+        let package_manager =
+            PackageManager::get_package_manager(&base.repo_root, root_package_json.as_ref())?;
+        trace!("Found {} as package manager", package_manager);
+
         let repo_config = base.repo_config()?;
         let user_config = base.user_config()?;
         let client_config = base.client_config()?;
@@ -40,6 +51,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
 
         Ok(ExecutionState {
             api_client_config,
+            package_manager,
             cli_args: base.args(),
         })
     }

@@ -1,26 +1,25 @@
-use std::{
-    io::ErrorKind,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::sync::{atomic::AtomicBool, Arc};
+#[cfg(windows)]
+use std::{io::ErrorKind, sync::atomic::Ordering, time::Duration};
 
 use futures::Stream;
-use log::debug;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::server::Connected;
-use turbopath::{AbsoluteSystemPathBuf, RelativeSystemPathBuf};
+use tracing::{debug, trace};
+use turbopath::AbsoluteSystemPathBuf;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SocketOpenError {
+    /// Returned when there is an IO error opening the socket,
+    /// such as the path being too long, or the path being
+    /// invalid.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("pidlock error")]
+    #[error("pidlock error: {0}")]
     LockError(#[from] pidlock::PidlockError),
 }
 
+#[cfg(windows)]
 const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 
 /// Gets a stream of incoming connections from a Unix socket.
@@ -29,9 +28,10 @@ const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 ///
 /// note: the running param is used by the windows
 ///       code path to shut down the non-blocking polling
-pub async fn open_socket(
+#[tracing::instrument]
+pub async fn listen_socket(
     path: AbsoluteSystemPathBuf,
-    running: Arc<AtomicBool>,
+    #[allow(unused)] running: Arc<AtomicBool>,
 ) -> Result<
     (
         pidlock::Pidlock,
@@ -39,15 +39,18 @@ pub async fn open_socket(
     ),
     SocketOpenError,
 > {
-    let pid_path = path.join_relative(RelativeSystemPathBuf::new("turbod.pid").unwrap());
-    let sock_path = path.join_relative(RelativeSystemPathBuf::new("turbod.sock").unwrap());
-    let mut lock = pidlock::Pidlock::new(pid_path.as_path().to_owned());
+    let pid_path = path.join_component("turbod.pid");
+    let sock_path = path.join_component("turbod.sock");
+    let mut lock = pidlock::Pidlock::new(pid_path.as_std_path().to_owned());
 
-    debug!("opening socket at {} {}", pid_path, sock_path);
-
+    trace!("acquiring pidlock");
     // this will fail if the pid is already owned
+    // todo: make sure we fall back and handle this
     lock.acquire()?;
     std::fs::remove_file(&sock_path).ok();
+
+    debug!("pidlock acquired at {}", pid_path);
+    debug!("listening on socket at {}", sock_path);
 
     #[cfg(unix)]
     {
@@ -169,4 +172,79 @@ impl<T: AsyncWrite> AsyncWrite for UdsWindowsStream<T> {
 impl<T> Connected for UdsWindowsStream<T> {
     type ConnectInfo = ();
     fn connect_info(&self) -> Self::ConnectInfo {}
+}
+
+#[cfg(test)]
+mod test {
+    use std::{
+        assert_matches::assert_matches,
+        path::Path,
+        process::Command,
+        sync::{atomic::AtomicBool, Arc},
+    };
+
+    use pidlock::PidlockError;
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::listen_socket;
+    use crate::daemon::endpoint::SocketOpenError;
+
+    fn pid_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::try_from(tmp_path.join("turbod.pid")).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_stale_pid() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+        let pid_path = pid_path(&tmp_path);
+        // A pid that will never be running and is guaranteed not to be us
+        pid_path.create_with_contents("100000").unwrap();
+
+        let running = Arc::new(AtomicBool::new(true));
+        let result = listen_socket(pid_path, running).await;
+
+        // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
+
+        // todo: update this test to gracefully connect if the lock file exists but has
+        // no process
+        if let Err(err) = result {
+            assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
+        } else {
+            panic!("expected an error")
+        }
+    }
+
+    #[tokio::test]
+    async fn test_existing_process() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let tmp_path = tmp_dir.path().to_owned();
+        let pid_path = pid_path(&tmp_path);
+
+        #[cfg(windows)]
+        let node_bin = "node.exe";
+        #[cfg(not(windows))]
+        let node_bin = "node";
+
+        let mut child = Command::new(node_bin).spawn().unwrap();
+        pid_path
+            .create_with_contents(format!("{}", child.id()).as_ref())
+            .unwrap();
+
+        let running = Arc::new(AtomicBool::new(true));
+        let result = listen_socket(pid_path, running).await;
+
+        // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
+
+        // todo: update this test. we should delete the socket file first, remove the
+        // pid file, and start a new daemon. the old one should just time
+        // out, and this should not error.
+        if let Err(err) = result {
+            assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
+        } else {
+            panic!("expected an error")
+        }
+
+        child.kill().unwrap();
+    }
 }

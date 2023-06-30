@@ -5,16 +5,18 @@ Thanks for your interest in contributing to Turbo!
 **Important note**: At the moment, Turbo is made up of two tools, Turborepo and Turbopack, built with different languages and toolchains. In the future, Turbo will become a single toolchain built on Rust and the Turbo engine. In the meantime, please follow the respective guide when contributing to each tool:
 
 - [Contributing to Turbo](#contributing-to-turbo)
+  - [General Dependencies](#general-dependencies)
   - [Contributing to Turborepo](#contributing-to-turborepo)
     - [Building Turborepo](#building-turborepo)
     - [TLS Implementation](#tls-implementation)
     - [Running Turborepo Tests](#running-turborepo-tests)
-      - [Go Tests](#go-tests)
+      - [Turborepo Tests](#turborepo-tests)
   - [Debugging Turborepo](#debugging-turborepo)
   - [Benchmarking Turborepo](#benchmarking-turborepo)
   - [Updating `turbo`](#updating-turbo)
   - [Manually testing `turbo`](#manually-testing-turbo)
   - [Publishing `turbo` to the npm registry](#publishing-turbo-to-the-npm-registry)
+  - [Creating a new release blog post](#creating-a-new-release-blog-post)
   - [Adding A New Crate](#adding-a-new-crate)
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
@@ -22,6 +24,11 @@ Thanks for your interest in contributing to Turbo!
     - [Benchmarking Turbopack](#benchmarking-turbopack)
     - [Profiling Turbopack](#profiling-turbopack)
   - [Troubleshooting](#troubleshooting)
+
+## General Dependencies
+
+- [Rust](https://www.rust-lang.org/tools/install)
+- [cargo-groups](https://github.com/nicholaslyang/cargo-groups) (used to group crates into Turborepo-specific ones and Turbopack-specific ones)
 
 ## Contributing to Turborepo
 
@@ -54,10 +61,10 @@ Install dependencies
 On macOS:
 
 ```bash
-brew install moreutils jq zstd # (moreutils is for sponge)
+brew install jq zstd
 ```
 
-#### Go Tests
+#### Turborepo Tests
 
 First: `npm install -g turbo`.
 
@@ -81,6 +88,14 @@ Then from the root directory, you can run:
   ```bash
   pnpm test -- --filter=turborepo-tests-integration
   ```
+- A single Integration test
+  e.g to run everything in `tests/run_summary`:
+  ```
+  # build first because the next command doesn't run through turbo
+  pnpm -- turbo run build --filter=cli
+  pnpm test -F turborepo-tests-integration -- "run_summary"
+  ```
+  Note: this is not through turbo, so you'll have to build turbo yourself first.
 - E2E test
   ```bash
   pnpm -- turbo e2e --filter=cli
@@ -97,8 +112,7 @@ Then from the root directory, you can run:
 
 ## Benchmarking Turborepo
 
-1. `make turbo-prod`
-2. From the `benchmark/` directory, run `pnpm run benchmark`.
+Follow the instructions in the [`benchmark/README.md`](./benchmark/README.md).
 
 ## Updating `turbo`
 
@@ -151,6 +165,24 @@ These lists are by no means exhaustive. Feel free to add to them with other stra
 ## Publishing `turbo` to the npm registry
 
 See [the publishing guide](./release.md#release-turborepo).
+
+## Creating a new release blog post
+
+Creating a new release post can be done via a turborepo generator. Run the following command from anywhere within the repo:
+
+```bash
+turbo generate run "blog - release post"
+```
+
+This will walk you through creating a new blog post from start to finish.
+
+NOTE: If you would like to update the stats (github stars / npm downloads / time saved) for an existing blog post that has yet to be published (useful if time has passed since the blog post was created, and up to date stats are required before publishing) - run:
+
+```bash
+turbo generate run "blog - "blog - update release post stats"
+```
+
+and choose the blog post you would like to update.
 
 ## Adding A New Crate
 
@@ -237,6 +269,10 @@ A high-level introduction to Turbopack's architecture, workspace crates, and Tur
 Install `cargo-nextest` (https://nexte.st/):
 
 `cargo install cargo-nextest`
+
+Then, install dependencies for testcases:
+
+`pnpm install -r --side-effects-cache -C crates/turbopack/tests/node-file-trace`
 
 Run via:
 

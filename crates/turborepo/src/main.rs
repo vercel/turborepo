@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use dunce::canonicalize as fs_canonicalize;
-use log::{debug, error, trace};
+use tracing::{debug, error, trace};
 use turborepo_lib::{spawn_child, ExecutionState, Payload};
 
 fn run_go_binary(execution_state: ExecutionState) -> Result<i32> {

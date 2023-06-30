@@ -13,6 +13,9 @@ default = ["rustls-tls"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
 http = ["turborepo-lib/http"]
+tracing-chrome = ["turborepo-lib/tracing-chrome"]
+go-daemon = ["turborepo-lib/go-daemon"]
+run-stub = ["turborepo-lib/run-stub"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
@@ -29,12 +32,12 @@ clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true }
 command-group = { version = "2.0.1", features = ["with-tokio"] }
 dunce = { workspace = true }
-log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tiny-gradient = { workspace = true }
 tokio-util = { version = "0.7.7", features = ["io"] }
+tracing = { workspace = true }
 turborepo-lib = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

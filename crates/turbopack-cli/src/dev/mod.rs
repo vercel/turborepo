@@ -12,12 +12,13 @@ use std::{
 use anyhow::{Context, Result};
 use dunce::canonicalize;
 use owo_colors::OwoColorize;
-use turbo_malloc::TurboMalloc;
 use turbo_tasks::{
+    primitives::StringVc,
     util::{FormatBytes, FormatDuration},
     StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value,
 };
 use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
+use turbo_tasks_malloc::TurboMalloc;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::evaluate_context::node_build_environment;
 use turbopack_cli_utils::issue::{ConsoleUiVc, LogOptions};
@@ -31,7 +32,7 @@ use turbopack_dev::DevChunkingContextVc;
 use turbopack_dev_server::{
     introspect::IntrospectionSource,
     source::{
-        combined::CombinedContentSourceVc, router::RouterContentSource,
+        combined::CombinedContentSourceVc, router::PrefixedRouterContentSourceVc,
         source_maps::SourceMapContentSourceVc, static_assets::StaticAssetsContentSourceVc,
         ContentSourceVc,
     },
@@ -312,15 +313,15 @@ async fn source(
     .into();
     let main_source = main_source.into();
     let source_maps = SourceMapContentSourceVc::new(main_source).into();
-    let source = RouterContentSource {
-        routes: vec![
-            ("__turbopack__/".to_string(), introspect),
-            ("__turbo_tasks__/".to_string(), viz),
-            ("__turbopack_sourcemap__/".to_string(), source_maps),
+    let source = PrefixedRouterContentSourceVc::new(
+        StringVc::empty(),
+        vec![
+            ("__turbopack__".to_string(), introspect),
+            ("__turbo_tasks__".to_string(), viz),
+            ("__turbopack_sourcemap__".to_string(), source_maps),
         ],
-        fallback: main_source,
-    }
-    .cell()
+        main_source,
+    )
     .into();
 
     Ok(source)
@@ -395,10 +396,9 @@ pub async fn start_server(args: &DevArguments) -> Result<()> {
     {
         let index_uri = ServerAddr::new(server.addr).to_string()?;
         println!(
-            "{} - started server on {}:{}, url: {}",
+            "{} - started server on {}, url: {}",
             "ready".green(),
-            server.addr.ip(),
-            server.addr.port(),
+            server.addr,
             index_uri
         );
         if !args.no_open {
@@ -413,12 +413,6 @@ pub async fn start_server(args: &DevArguments) -> Result<()> {
                 event_type = "event".purple(),
                 start = FormatDuration(start.elapsed()),
                 memory = FormatBytes(TurboMalloc::memory_usage())
-            );
-        } else {
-            println!(
-                "{event_type} - initial compilation {start}",
-                event_type = "event".purple(),
-                start = FormatDuration(start.elapsed()),
             );
         }
 

@@ -1,0 +1,11 @@
+{
+  "name": "turborepo-prune-removes-patched",
+  "version": "1.0.0",
+  "packageManager": "pnpm@7.15.0",
+  "workspaces": ["packages/*"],
+  "pnpm": {
+    "patchedDependencies": {
+      "is-odd@3.0.1": "patches/is-odd@3.0.1.patch"
+    }
+  }
+}

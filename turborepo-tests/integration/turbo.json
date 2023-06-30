@@ -7,8 +7,11 @@
       "dependsOn": ["^topo"]
     },
     "test": {
-      "dependsOn": ["cli#build", "topo"],
-      "env": ["GO_TAG"]
+      "dependsOn": ["cli#build", "topo", "test:setup"],
+      "passThroughEnv": ["CI"]
+    },
+    "test:setup": {
+      "cache": false
     }
   }
 }

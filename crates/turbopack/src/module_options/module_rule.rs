@@ -43,7 +43,6 @@ pub enum ModuleRuleEffect {
     ModuleType(ModuleType),
     AddEcmascriptTransforms(EcmascriptInputTransformsVc),
     SourceTransforms(SourceTransformsVc),
-    Custom,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input", shared)]
@@ -54,9 +53,21 @@ pub enum ModuleType {
         #[turbo_tasks(trace_ignore)]
         options: EcmascriptOptions,
     },
-    Typescript(EcmascriptInputTransformsVc),
-    TypescriptWithTypes(EcmascriptInputTransformsVc),
-    TypescriptDeclaration(EcmascriptInputTransformsVc),
+    Typescript {
+        transforms: EcmascriptInputTransformsVc,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
+    TypescriptWithTypes {
+        transforms: EcmascriptInputTransformsVc,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
+    TypescriptDeclaration {
+        transforms: EcmascriptInputTransformsVc,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
     Json,
     Raw,
     Mdx {

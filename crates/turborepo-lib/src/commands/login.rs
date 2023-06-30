@@ -5,12 +5,12 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
 use axum::{extract::Query, response::Redirect, routing::get, Router};
-use log::debug;
-#[cfg(not(test))]
-use log::warn;
 use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
+use tracing::debug;
+#[cfg(not(test))]
+use tracing::warn;
 
 use crate::{
     commands::{
@@ -302,8 +302,9 @@ mod test {
 
     use reqwest::Url;
     use serde::Deserialize;
-    use tempfile::NamedTempFile;
+    use tempfile::{tempdir, NamedTempFile};
     use tokio::sync::OnceCell;
+    use turbopath::AbsoluteSystemPathBuf;
     use vercel_api_mock::start_test_server;
 
     use crate::{
@@ -325,6 +326,7 @@ mod test {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
         // Explicitly pass the wrong port to confirm that we're reading it from the
         // manual override
         fs::write(
@@ -332,18 +334,19 @@ mod test {
             format!("{{ \"apiurl\": \"http://localhost:{}\" }}", port + 1),
         )
         .unwrap();
+        let root_dir = tempdir().unwrap();
 
         let mut base = CommandBase {
-            repo_root: Default::default(),
+            repo_root: AbsoluteSystemPathBuf::new(root_dir.path().to_string_lossy()).unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .load()
                     .unwrap(),
             ),
             repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                RepoConfigLoader::new(repo_config_path)
                     .with_api(Some(format!("http://localhost:{}", port)))
                     .load()
                     .unwrap(),
@@ -376,6 +379,7 @@ mod test {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
         // Explicitly pass the wrong port to confirm that we're reading it from the
         // manual override
         fs::write(
@@ -384,17 +388,18 @@ mod test {
         )
         .unwrap();
 
+        let repo_root_dir = tempdir().unwrap();
         let mut base = CommandBase {
-            repo_root: Default::default(),
+            repo_root: AbsoluteSystemPathBuf::new(repo_root_dir.path().to_string_lossy()).unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .load()
                     .unwrap(),
             ),
             repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_file.path().to_path_buf())
+                RepoConfigLoader::new(repo_config_path)
                     .with_api(Some(format!("http://localhost:{}", port)))
                     .load()
                     .unwrap(),

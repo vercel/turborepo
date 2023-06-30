@@ -21,6 +21,7 @@ use futures::FutureExt;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
+use tracing::{instrument, trace_span, Instrument, Level};
 
 use crate::{
     backend::{Backend, CellContent, PersistentTaskType, TransientTaskType},
@@ -118,6 +119,12 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
     fn mark_own_task_as_finished(&self, task: TaskId);
 
     fn connect_task(&self, task: TaskId);
+
+    /// Wraps the given future in the current task.
+    fn detached(
+        &self,
+        f: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>;
 }
 
 /// The type of stats reporting.
@@ -490,10 +497,12 @@ impl<B: Backend + 'static> TurboTasks<B> {
             anyhow::Ok(())
         };
 
-        let future = TURBO_TASKS.scope(
-            self.pin(),
-            CURRENT_TASK_ID.scope(task_id, self.backend.execution_scope(task_id, future)),
-        );
+        let future = TURBO_TASKS
+            .scope(
+                self.pin(),
+                CURRENT_TASK_ID.scope(task_id, self.backend.execution_scope(task_id, future)),
+            )
+            .in_current_span();
 
         #[cfg(feature = "tokio_tracing")]
         tokio::task::Builder::new()
@@ -572,7 +581,9 @@ impl<B: Backend + 'static> TurboTasks<B> {
         {
             return;
         }
-        listener.await;
+        listener
+            .instrument(trace_span!("wait_foreground_done"))
+            .await;
     }
 
     pub fn get_in_progress_count(&self) -> usize {
@@ -732,27 +743,31 @@ impl<B: Backend + 'static> TurboTasks<B> {
         let this = self.pin();
         self.currently_scheduled_background_jobs
             .fetch_add(1, Ordering::AcqRel);
-        tokio::spawn(TURBO_TASKS.scope(this.clone(), async move {
-            while this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
-                let listener = this
-                    .event
-                    .listen_with_note(|| "background job waiting for execution".to_string());
-                if this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
-                    listener.await;
-                }
-            }
-            let this2 = this.clone();
-            if !this.stopped.load(Ordering::Acquire) {
-                func(this).await;
-            }
-            if this2
-                .currently_scheduled_background_jobs
-                .fetch_sub(1, Ordering::AcqRel)
-                == 1
-            {
-                this2.event_background.notify(usize::MAX);
-            }
-        }));
+        tokio::spawn(
+            TURBO_TASKS
+                .scope(this.clone(), async move {
+                    while this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
+                        let listener = this.event.listen_with_note(|| {
+                            "background job waiting for execution".to_string()
+                        });
+                        if this.currently_scheduled_tasks.load(Ordering::Acquire) != 0 {
+                            listener.await;
+                        }
+                    }
+                    let this2 = this.clone();
+                    if !this.stopped.load(Ordering::Acquire) {
+                        func(this).await;
+                    }
+                    if this2
+                        .currently_scheduled_background_jobs
+                        .fetch_sub(1, Ordering::AcqRel)
+                        == 1
+                    {
+                        this2.event_background.notify(usize::MAX);
+                    }
+                })
+                .in_current_span(),
+        );
     }
 
     #[track_caller]
@@ -765,12 +780,16 @@ impl<B: Backend + 'static> TurboTasks<B> {
     ) {
         let this = self.pin();
         this.begin_foreground_job();
-        tokio::spawn(TURBO_TASKS.scope(this.clone(), async move {
-            if !this.stopped.load(Ordering::Acquire) {
-                func(this.clone()).await;
-            }
-            this.finish_foreground_job();
-        }));
+        tokio::spawn(
+            TURBO_TASKS
+                .scope(this.clone(), async move {
+                    if !this.stopped.load(Ordering::Acquire) {
+                        func(this.clone()).await;
+                    }
+                    this.finish_foreground_job();
+                })
+                .in_current_span(),
+        );
     }
 
     fn finish_current_task_state(&self) -> bool {
@@ -781,6 +800,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
             } = &mut *cell.borrow_mut();
             let tasks = take(tasks_to_notify);
             if !tasks.is_empty() {
+                let _guard = trace_span!("finish_current_task_state").entered();
                 self.backend.invalidate_tasks(tasks, self);
             }
             *stateful
@@ -851,16 +871,18 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
 }
 
 impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
+    #[instrument(level = Level::INFO, skip_all, name = "invalidate")]
     fn invalidate(&self, task: TaskId) {
         self.backend.invalidate_task(task, self);
     }
 
+    #[instrument(level = Level::INFO, skip_all, name = "invalidate", fields(name = display(&reason)))]
     fn invalidate_with_reason(&self, task: TaskId, reason: StaticOrArc<dyn InvalidationReason>) {
         {
             let (_, reason_set) = &mut *self.aggregated_update.lock().unwrap();
             reason_set.insert(reason);
         }
-        self.invalidate(task);
+        self.backend.invalidate_task(task, self);
     }
 
     fn notify_scheduled_tasks(&self) {
@@ -979,6 +1001,23 @@ impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
     fn mark_own_task_as_finished(&self, task: TaskId) {
         self.backend.mark_own_task_as_finished(task, self);
     }
+
+    fn detached(
+        &self,
+        f: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>> {
+        let current_task_id = CURRENT_TASK_ID.get();
+        Box::pin(TURBO_TASKS.scope(
+            turbo_tasks(),
+            CURRENT_TASK_ID.scope(
+                current_task_id,
+                CELL_COUNTERS.scope(
+                    Default::default(),
+                    self.backend.execution_scope(current_task_id, f),
+                ),
+            ),
+        ))
+    }
 }
 
 impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
@@ -1047,6 +1086,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
             tasks_to_notify.extend(tasks.iter());
         });
         if result.is_err() {
+            let _guard = trace_span!("schedule_notify_tasks", count = tasks.len()).entered();
             self.backend.invalidate_tasks(tasks.to_vec(), self);
         }
     }
@@ -1061,6 +1101,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
             tasks_to_notify.extend(tasks.iter());
         });
         if result.is_err() {
+            let _guard = trace_span!("schedule_notify_tasks_set", count = tasks.len()).entered();
             self.backend
                 .invalidate_tasks(tasks.iter().copied().collect(), self);
         };
@@ -1300,6 +1341,14 @@ pub fn with_turbo_tasks_for_testing<T>(
     )
 }
 
+/// Spawns the given future within the context of the current task.
+///
+/// Beware: this method is not safe to use in production code. It is only
+/// intended for use in tests and for debugging purposes.
+pub fn spawn_detached(f: impl Future<Output = Result<()>> + Send + 'static) {
+    tokio::spawn(turbo_tasks().detached(Box::pin(f.in_current_span())));
+}
+
 pub fn current_task_for_testing() -> TaskId {
     CURRENT_TASK_ID.with(|id| *id)
 }
@@ -1332,12 +1381,19 @@ pub fn mark_stateful() {
     })
 }
 
+/// Notifies scheduled tasks for execution.
+pub fn notify_scheduled_tasks() {
+    with_turbo_tasks(|tt| tt.notify_scheduled_tasks())
+}
+
 pub fn emit<T: ValueTraitVc>(collectible: T) {
     with_turbo_tasks(|tt| tt.emit_collectible(T::get_trait_type_id(), collectible.into()))
 }
 
 pub async fn spawn_blocking<T: Send + 'static>(func: impl FnOnce() -> T + Send + 'static) -> T {
+    let span = trace_span!("blocking operation").or_current();
     let (r, d) = tokio::task::spawn_blocking(|| {
+        let _guard = span.entered();
         let start = Instant::now();
         let r = func();
         (r, start.elapsed())
@@ -1350,10 +1406,13 @@ pub async fn spawn_blocking<T: Send + 'static>(func: impl FnOnce() -> T + Send +
 
 pub fn spawn_thread(func: impl FnOnce() + Send + 'static) {
     let handle = Handle::current();
+    let span = trace_span!("thread").or_current();
     thread::spawn(move || {
+        let span = span.entered();
         let guard = handle.enter();
         func();
         drop(guard);
+        drop(span);
     });
 }
 

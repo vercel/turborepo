@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use swc_core::{
     common::util::take::Take,
@@ -91,8 +92,9 @@ impl EmotionTransformer {
     }
 }
 
+#[async_trait]
 impl CustomTransformer for EmotionTransformer {
-    fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Option<Program> {
+    async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
         #[cfg(feature = "transform_emotion")]
         {
             let p = std::mem::replace(program, Program::Module(Module::dummy()));
@@ -111,16 +113,6 @@ impl CustomTransformer for EmotionTransformer {
             ));
         }
 
-        None
+        Ok(())
     }
-}
-
-pub async fn build_emotion_transformer(
-    config: &Option<EmotionTransformConfigVc>,
-) -> Result<Option<Box<EmotionTransformer>>> {
-    Ok(if let Some(config) = config {
-        EmotionTransformer::new(&*config.await?).map(Box::new)
-    } else {
-        None
-    })
 }

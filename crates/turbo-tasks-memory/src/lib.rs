@@ -6,6 +6,7 @@
 #![feature(int_roundings)]
 #![feature(result_option_inspect)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![allow(clippy::too_many_arguments)]
 
 mod cell;
 mod concurrent_priority_queue;

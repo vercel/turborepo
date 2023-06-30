@@ -18,6 +18,7 @@ pub struct BumpTimeout {
 }
 
 impl BumpTimeout {
+    #[allow(dead_code)]
     pub fn new(increment: Duration) -> Self {
         let start = Instant::now();
         let millis = increment.as_millis();
@@ -32,10 +33,12 @@ impl BumpTimeout {
         Duration::from_millis(self.deadline.load(Ordering::Relaxed))
     }
 
+    #[allow(dead_code)]
     pub fn deadline(&self) -> Instant {
         self.start + self.duration()
     }
 
+    #[allow(dead_code)]
     pub fn elapsed(&self) -> Duration {
         self.start.elapsed()
     }
@@ -47,12 +50,14 @@ impl BumpTimeout {
             .store(duration.as_millis() as u64, Ordering::Relaxed);
     }
 
+    #[allow(dead_code)]
     pub fn as_instant(&self) -> Instant {
         self.start + self.duration()
     }
 
     /// Waits until the deadline is reached, but if the deadline is
     /// changed while waiting, it will wait until the new deadline is reached.
+    #[allow(dead_code)]
     pub async fn wait(&self) {
         let mut deadline = self.as_instant();
         loop {

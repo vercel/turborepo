@@ -3,14 +3,19 @@
 mod berry;
 mod error;
 mod npm;
+mod pnpm;
+mod yarn1;
 
 use std::collections::{HashMap, HashSet};
 
-pub use berry::*;
+pub use berry::{Error as BerryError, *};
 pub use error::Error;
 pub use npm::*;
+pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
+use serde::Serialize;
+pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
     pub key: String,
     pub version: String,
@@ -33,8 +38,21 @@ pub trait Lockfile {
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
 }
 
+pub fn all_transitive_closures<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: HashMap<String, HashMap<String, String>>,
+) -> Result<HashMap<String, HashSet<Package>>, Error> {
+    workspaces
+        .into_iter()
+        .map(|(workspace, unresolved_deps)| {
+            let closure = transitive_closure(lockfile, &workspace, unresolved_deps)?;
+            Ok((workspace, closure))
+        })
+        .collect()
+}
+
 // this should get replaced by petgraph in the future :)
-pub fn transitive_closure<L: Lockfile>(
+pub fn transitive_closure<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
     unresolved_deps: HashMap<String, String>,
@@ -50,7 +68,7 @@ pub fn transitive_closure<L: Lockfile>(
     Ok(transitive_deps)
 }
 
-fn transitive_closure_helper<L: Lockfile>(
+fn transitive_closure_helper<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
     unresolved_deps: HashMap<String, impl AsRef<str>>,
@@ -77,4 +95,12 @@ fn transitive_closure_helper<L: Lockfile>(
     }
 
     Ok(())
+}
+
+impl Package {
+    pub fn new(key: impl Into<String>, version: impl Into<String>) -> Self {
+        let key = key.into();
+        let version = version.into();
+        Self { key, version }
+    }
 }

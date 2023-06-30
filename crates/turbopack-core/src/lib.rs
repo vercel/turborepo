@@ -16,7 +16,9 @@ pub mod error;
 pub mod ident;
 pub mod introspect;
 pub mod issue;
+pub mod package_json;
 pub mod plugin;
+pub mod proxied_asset;
 pub mod reference;
 pub mod reference_type;
 pub mod resolve;
@@ -29,9 +31,15 @@ pub mod target;
 mod utils;
 pub mod version;
 pub mod virtual_asset;
+pub mod virtual_fs;
 
 pub const PROJECT_FILESYSTEM_NAME: &str = "project";
 pub const SOURCE_MAP_ROOT_NAME: &str = "turbopack";
+
+#[doc(hidden)]
+pub mod __private {
+    pub use indexmap::IndexMap;
+}
 
 pub fn register() {
     turbo_tasks::register();

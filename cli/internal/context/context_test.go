@@ -141,7 +141,7 @@ func TestBuildPackageGraph_DuplicateNames(t *testing.T) {
 		PackageManager: "pnpm@7.15.0",
 	}
 
-	_, actualErr := BuildPackageGraph(path, pkgJSON)
+	_, actualErr := BuildPackageGraph(path, pkgJSON, "pnpm")
 
 	// Not asserting the full error message, because it includes a path with slashes and backslashes
 	// getting the regex incantation to check that is not worth it.
@@ -157,7 +157,7 @@ func Test_populateExternalDeps_NoTransitiveDepsWithoutLockfile(t *testing.T) {
 		PackageManager: "pnpm@7.15.0",
 	}
 
-	pm, err := packagemanager.GetPackageManager(path, pkgJSON)
+	pm, err := packagemanager.GetPackageManager("pnpm")
 	assert.NilError(t, err)
 	pm.UnmarshalLockfile = func(rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
 		return nil, errors.New("bad lockfile")

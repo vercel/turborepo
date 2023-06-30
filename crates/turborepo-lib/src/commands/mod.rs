@@ -1,8 +1,9 @@
-use std::path::PathBuf;
+use std::borrow::Borrow;
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIClient;
 
 use crate::{
@@ -16,13 +17,17 @@ use crate::{
 
 pub(crate) mod bin;
 pub(crate) mod daemon;
+pub(crate) mod generate;
+pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
+pub(crate) mod run;
 pub(crate) mod unlink;
 
+#[derive(Debug)]
 pub struct CommandBase {
-    pub repo_root: PathBuf,
+    pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
     user_config: OnceCell<UserConfig>,
     repo_config: OnceCell<RepoConfig>,
@@ -32,10 +37,15 @@ pub struct CommandBase {
 }
 
 impl CommandBase {
-    pub fn new(args: Args, repo_root: PathBuf, version: &'static str) -> Result<Self> {
+    pub fn new(
+        args: Args,
+        repo_root: AbsoluteSystemPathBuf,
+        version: &'static str,
+        ui: UI,
+    ) -> Result<Self> {
         Ok(Self {
             repo_root,
-            ui: args.ui(),
+            ui,
             args,
             repo_config: OnceCell::new(),
             user_config: OnceCell::new(),
@@ -45,7 +55,7 @@ impl CommandBase {
     }
 
     fn create_repo_config(&self) -> Result<()> {
-        let repo_config_path = get_repo_config_path(&self.repo_root);
+        let repo_config_path = get_repo_config_path(self.repo_root.borrow());
 
         let repo_config = RepoConfigLoader::new(repo_config_path)
             .with_api(self.args.api.clone())
@@ -63,7 +73,7 @@ impl CommandBase {
     // currently do not have any commands that delete the repo config file
     // and then attempt to read from it.
     pub fn delete_repo_config_file(&mut self) -> Result<()> {
-        let repo_config_path = get_repo_config_path(&self.repo_root);
+        let repo_config_path = get_repo_config_path(self.repo_root.borrow());
         if repo_config_path.exists() {
             std::fs::remove_file(repo_config_path)?;
         }
@@ -138,23 +148,19 @@ impl CommandBase {
 
         let api_url = repo_config.api_url();
         let timeout = client_config.remote_cache_timeout();
-        APIClient::new(api_url, timeout, self.version)
+        Ok(APIClient::new(api_url, timeout, self.version)?)
     }
 
-    pub fn daemon_file_root(&self) -> turbopath::AbsoluteSystemPathBuf {
-        turbopath::AbsoluteSystemPathBuf::new(std::env::temp_dir())
+    pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
             .expect("temp dir is valid")
-            .join_relative(
-                turbopath::RelativeSystemPathBuf::new("turbod").expect("turbod is valid"),
-            )
-            .join_relative(
-                turbopath::RelativeSystemPathBuf::new(self.repo_hash()).expect("hash is valid"),
-            )
+            .join_component("turbod")
+            .join_component(self.repo_hash().as_str())
     }
 
     fn repo_hash(&self) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(self.repo_root.to_str().unwrap().as_bytes());
+        hasher.update(self.repo_root.as_bytes());
         hex::encode(&hasher.finalize()[..8])
     }
 }
@@ -162,20 +168,35 @@ impl CommandBase {
 #[cfg(test)]
 mod test {
     use test_case::test_case;
+    use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::get_version;
+    use crate::{get_version, ui::UI};
 
+    #[cfg(not(target_os = "windows"))]
     #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]
-    #[test_case("", "e3b0c44298fc1c14"; "empty string ok")]
     fn test_repo_hash(path: &str, expected_hash: &str) {
-        use std::path::PathBuf;
-
         use super::CommandBase;
         use crate::Args;
 
         let args = Args::default();
-        let repo_root = PathBuf::from(path);
-        let command_base = CommandBase::new(args, repo_root, get_version()).unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true)).unwrap();
+
+        let hash = command_base.repo_hash();
+
+        assert_eq!(hash, expected_hash);
+        assert_eq!(hash.len(), 16);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test_case("C:\\\\tmp\\turborepo", "0103736e6883e35f"; "basic example")]
+    fn test_repo_hash_win(path: &str, expected_hash: &str) {
+        use super::CommandBase;
+        use crate::Args;
+
+        let args = Args::default();
+        let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true)).unwrap();
 
         let hash = command_base.repo_hash();
 

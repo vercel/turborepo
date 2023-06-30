@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::error;
+use tracing::error;
 
 use crate::{commands::CommandBase, ui::GREY};
 

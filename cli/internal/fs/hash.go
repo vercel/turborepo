@@ -5,13 +5,77 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 
+	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/lockfile"
+	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/xxhash"
 )
 
-func HashObject(i interface{}) (string, error) {
+// LockfilePackages is a hashable list of packages
+type LockfilePackages []lockfile.Package
+
+// FileHashes is a hashable map of files to the hash of their contents
+type FileHashes map[turbopath.AnchoredUnixPath]string
+
+// TaskHashable is a hashable representation of a task to be run
+type TaskHashable struct {
+	GlobalHash           string
+	TaskDependencyHashes []string
+	PackageDir           turbopath.AnchoredUnixPath
+	HashOfFiles          string
+	ExternalDepsHash     string
+	Task                 string
+	Outputs              TaskOutputs
+	PassThruArgs         []string
+	Env                  []string
+	ResolvedEnvVars      env.EnvironmentVariablePairs
+	PassThroughEnv       []string
+	EnvMode              util.EnvMode
+	DotEnv               turbopath.AnchoredUnixPathArray
+}
+
+// GlobalHashable is a hashable representation of global dependencies for tasks
+type GlobalHashable struct {
+	GlobalCacheKey       string
+	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	RootExternalDepsHash string
+	Env                  []string
+	ResolvedEnvVars      env.EnvironmentVariablePairs
+	PassThroughEnv       []string
+	EnvMode              util.EnvMode
+	FrameworkInference   bool
+
+	// NOTE! This field is _explicitly_ ordered and should not be sorted.
+	DotEnv turbopath.AnchoredUnixPathArray
+}
+
+// HashLockfilePackages hashes a list of packages
+func HashLockfilePackages(packages LockfilePackages) (string, error) {
+	return hashObject(packages)
+}
+
+// HashFileHashes produces a single hash for a set of file hashes
+func HashFileHashes(hashes FileHashes) (string, error) {
+	return hashObject(hashes)
+}
+
+// HashTask produces the hash for a particular task
+func HashTask(task *TaskHashable) (string, error) {
+	return hashObject(task)
+}
+
+// HashGlobal produces the global hash value to be incorporated in every task hash
+func HashGlobal(global GlobalHashable) (string, error) {
+	return hashObject(global)
+}
+
+// hashObject is the internal generic hash function. It should not be used directly,
+// but instead via a helper above to ensure that we are properly enumerating all of the
+// the kinds of data that we hash.
+func hashObject(i interface{}) (string, error) {
 	hash := xxhash.New()
 
 	_, err := hash.Write([]byte(fmt.Sprintf("%v", i)))
@@ -19,25 +83,10 @@ func HashObject(i interface{}) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), err
 }
 
-func HashFile(filePath string) (string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	hash := xxhash.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
 // GitLikeHashFile is a function that mimics how Git
 // calculates the SHA1 for a file (or, in Git terms, a "blob") (without git)
-func GitLikeHashFile(filePath string) (string, error) {
-	file, err := os.Open(filePath)
+func GitLikeHashFile(filePath turbopath.AbsoluteSystemPath) (string, error) {
+	file, err := filePath.Open()
 	if err != nil {
 		return "", err
 	}

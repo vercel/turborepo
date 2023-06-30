@@ -1,9 +1,11 @@
 const { withSentryConfig } = require("@sentry/nextjs");
 const withNextra = require("nextra")({
   theme: "nextra-theme-docs",
-  themeConfig: "./theme.config.js",
-  unstable_flexsearch: true,
-  unstable_staticImage: true,
+  themeConfig: "./theme.config.tsx",
+  // options
+  flexsearch: true,
+  staticImage: true,
+  defaultShowCopyCode: true,
 });
 
 const sentryWebpackPluginOptions = {
@@ -136,48 +138,48 @@ const nextConfig = withNextra({
       },
       {
         source: "/discord{/}?",
-        permanent: true,
         destination: "https://discord.gg/sSzyjxvbf5",
+        permanent: true,
       },
       {
         source: "/docs/changelog",
-        permanent: true,
         destination: "https://github.com/vercel/turbo/releases",
+        permanent: true,
       },
       {
         source: "/docs/guides/complimentary-tools",
-        permanent: true,
         destination: "/repo/docs/handbook",
+        permanent: true,
       },
       {
         source: "/docs/guides/monorepo-tools",
-        permanent: true,
         destination: "/repo/docs/handbook",
+        permanent: true,
       },
       {
         source: "/docs/glossary",
-        permanent: true,
         destination: "/repo/docs/handbook",
+        permanent: true,
       },
       {
         source: "/docs/guides/continuous-integration",
-        permanent: true,
         destination: "/repo/docs/ci",
+        permanent: true,
       },
       {
         source: "/repo/docs/handbook/prisma",
-        permanent: true,
         destination: "/repo/docs/handbook/tools/prisma",
+        permanent: true,
       },
       {
         source: "/pack/docs/comparisons/turbopack-vs-vite",
-        permanent: true,
         destination: "/pack/docs/comparisons/vite",
+        permanent: true,
       },
       {
         source: "/pack/docs/comparisons/turbopack-vs-webpack",
-        permanent: true,
         destination: "/pack/docs/comparisons/webpack",
+        permanent: true,
       },
       {
         // Accidentally created, eventually removable. See below.
@@ -209,8 +211,8 @@ const nextConfig = withNextra({
         // They've _never_ resolved, so _eventually_ we should be able to remove the
         // redirects we added above to fix them.
         source: "/docs/features/:path*",
-        permanent: true,
         destination: "/repo/docs/core-concepts/:path*",
+        permanent: true,
       },
       {
         // Accidentally created, eventually removable. See below.
@@ -230,8 +232,8 @@ const nextConfig = withNextra({
         // They've _never_ resolved, so _eventually_ we should be able to remove the
         // redirects we added above to fix them.
         source: "/docs/:path*",
-        permanent: true,
         destination: "/repo/docs/:path*",
+        permanent: true,
       },
     ];
   },

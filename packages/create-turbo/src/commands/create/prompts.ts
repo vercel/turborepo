@@ -1,50 +1,7 @@
-import path from "path";
-import fs from "fs-extra";
-import chalk from "chalk";
 import type { PackageManager } from "@turbo/workspaces";
 import type { CreateCommandArgument } from "./types";
-import { getAvailablePackageManagers } from "@turbo/utils";
-import { isFolderEmpty } from "../../utils/isFolderEmpty";
+import { getAvailablePackageManagers, validateDirectory } from "@turbo/utils";
 import inquirer from "inquirer";
-
-function validateDirectory(directory: string): {
-  valid: boolean;
-  root: string;
-  projectName: string;
-  error?: string;
-} {
-  const root = path.resolve(directory);
-  const projectName = path.basename(root);
-  const exists = fs.existsSync(root);
-
-  const stat = fs.lstatSync(root, { throwIfNoEntry: false });
-  if (stat && !stat.isDirectory()) {
-    return {
-      valid: false,
-      root,
-      projectName,
-      error: `${chalk.dim(
-        projectName
-      )} is not a directory - please try a different location`,
-    };
-  }
-
-  if (exists) {
-    const { isEmpty, conflicts } = isFolderEmpty(root);
-    if (!isEmpty) {
-      return {
-        valid: false,
-        root,
-        projectName,
-        error: `${chalk.dim(projectName)} has ${conflicts.length} conflicting ${
-          conflicts.length === 1 ? "file" : "files"
-        } - please try a different location`,
-      };
-    }
-  }
-
-  return { valid: true, root, projectName };
-}
 
 export async function directory({
   directory,
@@ -98,17 +55,13 @@ export async function packageManager({
       // prompt for package manager if it wasn't provided as an argument, or if it was
       // provided, but isn't available (always allow npm)
       !packageManager ||
-      (packageManager as PackageManager) !== "npm" ||
-      !Object.keys(availablePackageManagers).includes(packageManager),
+      !availablePackageManagers?.[packageManager as PackageManager]?.available,
     choices: ["npm", "pnpm", "yarn"].map((p) => ({
       name: p,
       value: p,
-      disabled:
-        // npm should always be available
-        p === "npm" ||
-        availablePackageManagers?.[p as PackageManager]?.available
-          ? false
-          : `not installed`,
+      disabled: availablePackageManagers?.[p as PackageManager]?.available
+        ? false
+        : `not installed`,
     })),
   });
 

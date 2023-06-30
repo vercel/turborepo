@@ -10,6 +10,7 @@ use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 use pin_project_lite::pin_project;
 use tokio::select;
 use tokio_stream::StreamMap;
+use tracing::{instrument, Level};
 use turbo_tasks::{TransientInstance, TurboTasksApi};
 use turbo_tasks_fs::json::parse_json_with_source_context;
 use turbopack_core::{error::PrettyPrintError, issue::IssueReporterVc, version::Update};
@@ -27,6 +28,7 @@ use crate::{
 /// A server that listens for updates and sends them to connected clients.
 pub(crate) struct UpdateServer<P: SourceProvider> {
     source_provider: P,
+    #[allow(dead_code)]
     issue_reporter: IssueReporterVc,
 }
 
@@ -49,6 +51,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
         }));
     }
 
+    #[instrument(level = Level::TRACE, skip_all, name = "UpdateServer::run_internal")]
     async fn run_internal(self, ws: HyperWebsocket) -> Result<()> {
         let mut client: UpdateClient = ws.await?.into();
 
@@ -135,7 +138,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                         client
                             .send(ClientUpdateInstruction::partial(
                                 &resource,
-                                &**partial_instruction,
+                                partial_instruction,
                                 &issues,
                             ))
                             .await?;

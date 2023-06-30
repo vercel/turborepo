@@ -15,19 +15,16 @@ use turbopack_core::{
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::IssueContextExt,
-    reference_type::{EntryReferenceSubType, ReferenceType},
+    reference_type::{EntryReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
-use turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc, InnerAssetsVc,
-};
 
 use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
 use crate::{
+    debug::should_debug,
     embed_js::embed_file,
     evaluate::evaluate,
     execution_context::{ExecutionContext, ExecutionContextVc},
@@ -146,17 +143,10 @@ async fn extra_configs(
         .map(|path| async move {
             Ok(
                 matches!(&*path.get_type().await?, FileSystemEntryType::File).then(|| {
-                    any_content_changed(
-                        EcmascriptModuleAssetVc::new(
-                            SourceAssetVc::new(path).into(),
-                            context,
-                            Value::new(EcmascriptModuleAssetType::Ecmascript),
-                            EcmascriptInputTransformsVc::cell(vec![]),
-                            Value::new(Default::default()),
-                            context.compile_time_info(),
-                        )
-                        .into(),
-                    )
+                    any_content_changed(context.process(
+                        SourceAssetVc::new(path).into(),
+                        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+                    ))
                 }),
             )
         })
@@ -176,24 +166,16 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );
 
-    EcmascriptModuleAssetVc::new_with_inner_assets(
+    context.process(
         VirtualAssetVc::new(
-            postcss_config_path.join("transform.js"),
+            postcss_config_path.join("transform.ts"),
             AssetContent::File(embed_file("transforms/postcss.ts")).cell(),
         )
         .into(),
-        context,
-        Value::new(EcmascriptModuleAssetType::Typescript),
-        EcmascriptInputTransformsVc::cell(vec![EcmascriptInputTransform::TypeScript {
-            use_define_for_class_fields: false,
-        }]),
-        Value::new(Default::default()),
-        context.compile_time_info(),
-        InnerAssetsVc::cell(indexmap! {
+        Value::new(ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
             "CONFIG".to_string() => config_asset
-        }),
+        }))),
     )
-    .into()
 }
 
 #[turbo_tasks::value_impl]
@@ -248,7 +230,7 @@ impl PostCssTransformedAssetVc {
                 JsonValueVc::cell(css_path.into()),
             ],
             extra_configs_changed,
-            /* debug */ false,
+            should_debug("postcss_transform"),
         )
         .await?;
 

@@ -4,12 +4,12 @@ import childProcess from "child_process";
 import { setupTestFixtures, spyConsole } from "@turbo/test-utils";
 import { create } from "../src/commands/create";
 import type { CreateCommandArgument } from "../src/commands/create/types";
-import { turboGradient } from "../src/logger";
+import { logger } from "@turbo/utils";
 import type { PackageManager } from "@turbo/workspaces";
 
 // imports for mocks
-import * as createProject from "../src/commands/create/createProject";
 import * as turboWorkspaces from "@turbo/workspaces";
+import * as turboUtils from "@turbo/utils";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock("@turbo/workspaces", () => ({
@@ -20,6 +20,7 @@ jest.mock("@turbo/workspaces", () => ({
 describe("create-turbo", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
+    options: { emptyFixture: true },
   });
 
   const mockConsole = spyConsole();
@@ -35,8 +36,25 @@ describe("create-turbo", () => {
 
       const availableScripts = ["build", "test", "dev"];
 
+      const mockAvailablePackageManagers = jest
+        .spyOn(turboUtils, "getAvailablePackageManagers")
+        .mockResolvedValue({
+          npm: {
+            available: true,
+            version: "8.19.2",
+          },
+          yarn: {
+            available: true,
+            version: "1.22.10",
+          },
+          pnpm: {
+            available: true,
+            version: "7.22.2",
+          },
+        });
+
       const mockCreateProject = jest
-        .spyOn(createProject, "createProject")
+        .spyOn(turboUtils, "createProject")
         .mockResolvedValue({
           cdPath: "",
           hasPackageJson: true,
@@ -68,7 +86,7 @@ describe("create-turbo", () => {
       );
 
       const expected = `${chalk.bold(
-        turboGradient(">>> Success!")
+        logger.turboGradient(">>> Success!")
       )} Created a new Turborepo at "${path.relative(process.cwd(), root)}".`;
 
       expect(mockConsole.log).toHaveBeenCalledWith(expected);
@@ -82,6 +100,7 @@ describe("create-turbo", () => {
         );
       });
 
+      mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
       mockExecSync.mockRestore();

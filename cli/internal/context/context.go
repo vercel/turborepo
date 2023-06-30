@@ -142,7 +142,7 @@ func isWorkspaceReference(packageVersion string, dependencyVersion string, cwd s
 }
 
 // SinglePackageGraph constructs a Context instance from a single package.
-func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
+func SinglePackageGraph(rootPackageJSON *fs.PackageJSON, packageManagerName string) (*Context, error) {
 	workspaceInfos := workspace.Catalog{
 		PackageJSONs: map[string]*fs.PackageJSON{util.RootPkgName: rootPackageJSON},
 		TurboConfigs: map[string]*fs.TurboJSON{},
@@ -152,7 +152,7 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 		RootNode:       core.ROOT_NODE_NAME,
 	}
 	c.WorkspaceGraph.Connect(dag.BasicEdge(util.RootPkgName, core.ROOT_NODE_NAME))
-	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
+	packageManager, err := packagemanager.GetPackageManager(packageManagerName)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func SinglePackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *
 }
 
 // BuildPackageGraph constructs a Context instance with information about the package dependency graph
-func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (*Context, error) {
+func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON, packageManagerName string) (*Context, error) {
 	c := &Context{}
 	rootpath := repoRoot.ToStringDuringMigration()
 	c.WorkspaceInfos = workspace.Catalog{
@@ -172,7 +172,7 @@ func BuildPackageGraph(repoRoot turbopath.AbsoluteSystemPath, rootPackageJSON *f
 
 	var warnings Warnings
 
-	packageManager, err := packagemanager.GetPackageManager(repoRoot, rootPackageJSON)
+	packageManager, err := packagemanager.GetPackageManager(packageManagerName)
 	if err != nil {
 		return nil, err
 	}

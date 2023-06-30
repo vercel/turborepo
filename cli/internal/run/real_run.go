@@ -1,9 +1,12 @@
 package run
 
 import (
+	"bytes"
 	gocontext "context"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -33,6 +36,25 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// threadsafeOutputBuffer implements io.Writer for multiple goroutines
+// to write to the same underlying buffer. Child processes use separate
+// goroutines to handle reading from stdout and stderr, but for now we
+// send both to the same buffer.
+type threadsafeOutputBuffer struct {
+	buf bytes.Buffer
+	mu  sync.Mutex
+}
+
+func (tsob *threadsafeOutputBuffer) Write(p []byte) (n int, err error) {
+	tsob.mu.Lock()
+	defer tsob.mu.Unlock()
+	return tsob.buf.Write(p)
+}
+
+func (tsob *threadsafeOutputBuffer) Bytes() []byte {
+	return tsob.buf.Bytes()
+}
+
 // RealRun executes a set of tasks
 func RealRun(
 	ctx gocontext.Context,
@@ -43,6 +65,8 @@ func RealRun(
 	turboCache cache.Cache,
 	turboJSON *fs.TurboJSON,
 	globalEnvMode util.EnvMode,
+	globalEnv env.EnvironmentVariableMap,
+	globalPassThroughEnv env.EnvironmentVariableMap,
 	packagesInScope []string,
 	base *cmdutil.CmdBase,
 	runSummary runsummary.Meta,
@@ -73,14 +97,18 @@ func RealRun(
 
 	runCache := runcache.New(turboCache, base.RepoRoot, rs.Opts.runcacheOpts, colorCache)
 
+	concurrentUIFactory := ui.ConcurrentUIFactory{
+		Base: base.UIFactory,
+	}
+
 	ec := &execContext{
 		colorCache:      colorCache,
 		runSummary:      runSummary,
 		rs:              rs,
-		ui:              &cli.ConcurrentUi{Ui: base.UI},
+		ui:              concurrentUIFactory.Build(os.Stdin, os.Stdout, os.Stderr),
 		runCache:        runCache,
-		env:             turboJSON.GlobalEnv,
-		passthroughEnv:  turboJSON.GlobalPassthroughEnv,
+		env:             globalEnv,
+		passThroughEnv:  globalPassThroughEnv,
 		logger:          base.Logger,
 		packageManager:  packageManager,
 		processes:       processes,
@@ -95,10 +123,55 @@ func RealRun(
 		Concurrency: rs.Opts.runOpts.Concurrency,
 	}
 
-	mu := sync.Mutex{}
+	taskCount := len(engine.TaskGraph.Vertices())
+	logChan := make(chan taskLogContext, taskCount)
+	logWaitGroup := sync.WaitGroup{}
+	isGrouped := rs.Opts.runOpts.LogOrder == "grouped"
+
+	if isGrouped {
+		logWaitGroup.Add(1)
+		go func() {
+			for logContext := range logChan {
+
+				outBytes := logContext.outBuf.Bytes()
+				errBytes := logContext.errBuf.Bytes()
+
+				_, errOut := os.Stdout.Write(outBytes)
+				_, errErr := os.Stderr.Write(errBytes)
+
+				if errOut != nil || errErr != nil {
+					ec.ui.Error("Failed to output some of the logs.")
+				}
+
+			}
+			logWaitGroup.Done()
+		}()
+	}
+
+	taskSummaryMutex := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		taskExecutionSummary, err := ec.exec(ctx, packageTask)
+		outBuf := &bytes.Buffer{}
+		errBuf := &bytes.Buffer{}
+
+		var outWriter io.Writer = os.Stdout
+		var errWriter io.Writer = os.Stderr
+
+		if isGrouped {
+			outWriter = outBuf
+			errWriter = errBuf
+		}
+
+		var spacesLogBuffer *threadsafeOutputBuffer
+		if runSummary.SpacesIsEnabled() {
+			spacesLogBuffer = &threadsafeOutputBuffer{}
+			outWriter = io.MultiWriter(spacesLogBuffer, outWriter)
+			errWriter = io.MultiWriter(spacesLogBuffer, errWriter)
+		}
+
+		ui := concurrentUIFactory.Build(os.Stdin, outWriter, errWriter)
+
+		taskExecutionSummary, err := ec.exec(ctx, packageTask, ui, outWriter)
 
 		// taskExecutionSummary will be nil if the task never executed
 		// (i.e. if the workspace didn't implement the script corresponding to the task)
@@ -109,10 +182,22 @@ func RealRun(
 			taskSummary.CacheSummary = taskHashTracker.GetCacheStatus(taskSummary.TaskID)
 
 			// lock since multiple things to be appending to this array at the same time
-			mu.Lock()
+			taskSummaryMutex.Lock()
 			taskSummaries = append(taskSummaries, taskSummary)
 			// not using defer, just release the lock
-			mu.Unlock()
+			taskSummaryMutex.Unlock()
+
+			var logBytes []byte
+			if spacesLogBuffer != nil {
+				logBytes = spacesLogBuffer.Bytes()
+			}
+			runSummary.CloseTask(taskSummary, logBytes)
+		}
+		if isGrouped {
+			logChan <- taskLogContext{
+				outBuf: outBuf,
+				errBuf: errBuf,
+			}
 		}
 
 		// Return the error when there is one
@@ -127,7 +212,7 @@ func RealRun(
 		return rs.ArgsForTask(taskID)
 	}
 
-	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, globalEnvMode, getArgs, base.Logger, execFunc)
+	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, rs.Opts.runOpts.FrameworkInference, globalEnvMode, getArgs, base.Logger, execFunc)
 	errs := engine.Execute(visitorFn, execOpts)
 
 	// Track if we saw any child with a non-zero exit code
@@ -172,7 +257,12 @@ func RealRun(
 		}
 	}
 
-	if err := runSummary.Close(ctx, exitCode, g.WorkspaceInfos); err != nil {
+	if isGrouped {
+		close(logChan)
+		logWaitGroup.Wait()
+	}
+
+	if err := runSummary.Close(ctx, exitCode, g.WorkspaceInfos, base.UI); err != nil {
 		// We don't need to throw an error, but we can warn on this.
 		// Note: this method doesn't actually return an error for Real Runs at the time of writing.
 		base.UI.Info(fmt.Sprintf("Failed to close Run Summary %v", err))
@@ -186,14 +276,19 @@ func RealRun(
 	return nil
 }
 
+type taskLogContext struct {
+	outBuf *bytes.Buffer
+	errBuf *bytes.Buffer
+}
+
 type execContext struct {
 	colorCache      *colorcache.ColorCache
 	runSummary      runsummary.Meta
 	rs              *runSpec
 	ui              cli.Ui
 	runCache        *runcache.RunCache
-	env             []string
-	passthroughEnv  []string
+	env             env.EnvironmentVariableMap
+	passThroughEnv  env.EnvironmentVariableMap
 	logger          hclog.Logger
 	packageManager  *packagemanager.PackageManager
 	processes       *process.Manager
@@ -212,11 +307,12 @@ func (ec *execContext) logError(prefix string, err error) {
 	ec.ui.Error(fmt.Sprintf("%s%s%s", ui.ERROR_PREFIX, prefix, color.RedString(" %v", err)))
 }
 
-func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask) (*runsummary.TaskExecutionSummary, error) {
+func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTask, ui cli.Ui, outWriter io.Writer) (*runsummary.TaskExecutionSummary, error) {
 	// Setup tracer. Every time tracer() is called the taskExecutionSummary's duration is updated
 	// So make sure to call it before returning.
-	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
+	successExitCode := 0 // We won't use this till later
 
+	tracer, taskExecutionSummary := ec.runSummary.RunSummary.TrackTask(packageTask.TaskID)
 	progressLogger := ec.logger.Named("")
 	progressLogger.Debug("start")
 
@@ -236,7 +332,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Set building status now that we know it's going to run.
-	tracer(runsummary.TargetBuilding, nil, &successCode)
+	tracer(runsummary.TargetBuilding, nil, &successExitCode)
 
 	var prefix string
 	var prettyPrefix string
@@ -252,29 +348,33 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	taskCache := ec.runCache.TaskCache(packageTask, hash)
 	// Create a logger for replaying
 	prefixedUI := &cli.PrefixedUi{
-		Ui:           ec.ui,
+		Ui:           ui,
 		OutputPrefix: prettyPrefix,
 		InfoPrefix:   prettyPrefix,
 		ErrorPrefix:  prettyPrefix,
 		WarnPrefix:   prettyPrefix,
 	}
 
-	cacheStatus, timeSaved, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
+	if ec.rs.Opts.runOpts.IsGithubActions {
+		ui.Output(fmt.Sprintf("::group::%s", packageTask.OutputPrefix(ec.isSinglePackage)))
+	}
+
+	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
 
 	// It's safe to set the CacheStatus even if there's an error, because if there's
 	// an error, the 0 values are actually what we want. We save cacheStatus and timeSaved
 	// for the task, so that even if there's an error, we have those values for the taskSummary.
 	ec.taskHashTracker.SetCacheStatus(
 		packageTask.TaskID,
-		runsummary.NewTaskCacheSummary(cacheStatus, &timeSaved),
+		runsummary.NewTaskCacheSummary(cacheStatus),
 	)
 
 	if err != nil {
 		prefixedUI.Error(fmt.Sprintf("error fetching from cache: %s", err))
-	} else if cacheStatus.Local || cacheStatus.Remote { // If there was a cache hit
+	} else if cacheStatus.Hit { // If there was a cache hit
 		ec.taskHashTracker.SetExpandedOutputs(packageTask.TaskID, taskCache.ExpandedOutputs)
-		// We only cache successful executions, so we can assume this is a successCode exit.
-		tracer(runsummary.TargetCached, nil, &successCode)
+		// We only cache successful executions, so we can assume this is a successExitCode exit.
+		tracer(runsummary.TargetCached, nil, &successExitCode)
 		return taskExecutionSummary, nil
 	}
 
@@ -289,34 +389,41 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	cmd := exec.Command(ec.packageManager.Command, argsactual...)
 	cmd.Dir = packageTask.Pkg.Dir.ToSystemPath().RestoreAnchor(ec.repoRoot).ToString()
 
-	currentState := env.GetEnvMap()
-	passthroughEnv := env.EnvironmentVariableMap{}
+	passThroughEnv := env.EnvironmentVariableMap{}
 
 	if packageTask.EnvMode == util.Strict {
-		defaultPassthrough := []string{
+		defaultPassThroughEnvVarMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards([]string{
 			"PATH",
 			"SHELL",
 			"SYSTEMROOT", // Go will always include this on Windows, but we're being explicit here
+		})
+		if err != nil {
+			return nil, err
 		}
 
-		passthroughEnv.Merge(env.FromKeys(currentState, defaultPassthrough))
-		passthroughEnv.Merge(env.FromKeys(currentState, ec.env))
-		passthroughEnv.Merge(env.FromKeys(currentState, ec.passthroughEnv))
-		passthroughEnv.Merge(env.FromKeys(currentState, packageTask.TaskDefinition.EnvVarDependencies))
-		passthroughEnv.Merge(env.FromKeys(currentState, packageTask.TaskDefinition.PassthroughEnv))
+		envVarPassThroughMap, err := ec.taskHashTracker.EnvAtExecutionStart.FromWildcards(packageTask.TaskDefinition.PassThroughEnv)
+		if err != nil {
+			return nil, err
+		}
+
+		passThroughEnv.Union(defaultPassThroughEnvVarMap)
+		passThroughEnv.Union(ec.env)
+		passThroughEnv.Union(ec.passThroughEnv)
+		passThroughEnv.Union(ec.taskHashTracker.GetEnvVars(packageTask.TaskID).All)
+		passThroughEnv.Union(envVarPassThroughMap)
 	} else {
-		passthroughEnv.Merge(currentState)
+		passThroughEnv.Union(ec.taskHashTracker.EnvAtExecutionStart)
 	}
 
 	// Always last to make sure it clobbers.
-	passthroughEnv.Add("TURBO_HASH", hash)
+	passThroughEnv.Add("TURBO_HASH", hash)
 
-	cmd.Env = passthroughEnv.ToHashable()
+	cmd.Env = passThroughEnv.ToHashable()
 
 	// Setup stdout/stderr
 	// If we are not caching anything, then we don't need to write logs to disk
 	// be careful about this conditional given the default of cache = true
-	writer, err := taskCache.OutputWriter(prettyPrefix)
+	writer, err := taskCache.OutputWriter(prettyPrefix, outWriter)
 	if err != nil {
 		tracer(runsummary.TargetBuildFailed, err, nil)
 
@@ -340,6 +447,11 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	closeOutputs := func() error {
 		var closeErrors []error
+		if ec.rs.Opts.runOpts.IsGithubActions {
+			// We don't use the prefixedUI here because the prefix in this case would include
+			// the ::group::<taskID>, and we explicitly want to close the github group
+			ui.Output("::endgroup::")
+		}
 
 		if err := logStreamerOut.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))
@@ -411,9 +523,8 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	}
 
 	// Clean up tracing
-	tracer(runsummary.TargetBuilt, nil, &successCode)
+
+	tracer(runsummary.TargetBuilt, nil, &successExitCode)
 	progressLogger.Debug("done", "status", "complete", "duration", taskExecutionSummary.Duration)
 	return taskExecutionSummary, nil
 }
-
-var successCode = 0

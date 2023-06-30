@@ -53,7 +53,7 @@ pub fn unlink(base: &mut CommandBase, target: LinkTarget) -> Result<()> {
 }
 
 fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResult> {
-    let turbo_json_path = base.repo_root.join("turbo.json");
+    let turbo_json_path = base.repo_root.join_component("turbo.json");
 
     let turbo_json_file = File::open(&turbo_json_path).context("unable to open turbo.json file")?;
     let mut turbo_json: TurboJson = serde_json::from_reader(turbo_json_file)?;

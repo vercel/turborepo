@@ -82,7 +82,6 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/repo/docs
 - Including environment variables in a `dependsOn` in your `pipeline` definition prefixed by a `$` will impact the cache fingerprint on a per-task or per-package-task basis.
 - Including environment variables in `globalDependencies` list prefixed by a `$` will impact the cache fingerprint of _all_ tasks.
 - Including files or globs of files in `globalDependencies` will impact the cache fingerprint of _all_ tasks.
-- The value of any environment variable that includes `THASH` in its name will impact the cache fingerprint of _all_ tasks.
 
 ```jsonc
 {

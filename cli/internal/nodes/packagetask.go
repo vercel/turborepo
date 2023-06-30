@@ -38,8 +38,10 @@ func (pt *PackageTask) HashableOutputs() fs.TaskOutputs {
 	inclusionOutputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.Task)}
 	inclusionOutputs = append(inclusionOutputs, pt.TaskDefinition.Outputs.Inclusions...)
 
-	return fs.TaskOutputs{
+	hashable := fs.TaskOutputs{
 		Inclusions: inclusionOutputs,
 		Exclusions: pt.TaskDefinition.Outputs.Exclusions,
 	}
+	hashable.Sort()
+	return hashable
 }
