@@ -242,7 +242,7 @@ fn trailing_doublestar() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"(?P<prefix>[^*/]+)\*\*").unwrap())
 }
 
-fn fix_glob_pattern(pattern: &str) -> String {
+pub fn fix_glob_pattern(pattern: &str) -> String {
     let p1 = double_doublestar().replace(pattern, "**");
     let p2 = leading_doublestar().replace(&p1, "**/*$suffix");
     let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
