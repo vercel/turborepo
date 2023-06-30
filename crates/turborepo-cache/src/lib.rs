@@ -2,6 +2,7 @@
 #![feature(provide_any)]
 
 pub mod cache_archive;
+pub mod fs;
 pub mod http;
 pub mod signature_authentication;
 
@@ -50,6 +51,21 @@ pub enum CacheError {
     WindowsUnsafeName(String, #[backtrace] Backtrace),
     #[error("tar attempts to write outside of directory: {0}")]
     LinkOutsideOfDirectory(String, #[backtrace] Backtrace),
+    #[error("Invalid cache metadata file")]
+    InvalidMetadata(serde_json::Error, #[backtrace] Backtrace),
+}
+
+enum CacheSource {
+    Local,
+    Remote,
+}
+
+enum ItemStatus {
+    Hit {
+        source: CacheSource,
+        time_saved: u32,
+    },
+    Miss,
 }
 
 #[derive(Debug, Clone, PartialEq)]
