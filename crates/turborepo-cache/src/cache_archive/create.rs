@@ -206,10 +206,7 @@ mod tests {
 
     #[cfg(windows)]
     fn create_fifo(_: &AbsoluteSystemPath, _: &CreateFileDefinition) -> Result<()> {
-        Err(CacheError::UnsupportedFileType(
-            EntryType::Fifo,
-            Backtrace::capture(),
-        ))
+        Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()).into())
     }
 
     fn create_file(anchor: &AbsoluteSystemPath, file: &CreateFileDefinition) -> Result<()> {
@@ -233,7 +230,7 @@ mod tests {
       ],
       "db05810ef8714bc849a27d2b78a267c03862cd5259a5c7fb916e92a1ef912da68a4c92032d8e984e241e12fb85a4b41574009922d740c7e66faf50a00682003c",
       "db05810ef8714bc849a27d2b78a267c03862cd5259a5c7fb916e92a1ef912da68a4c92032d8e984e241e12fb85a4b41574009922d740c7e66faf50a00682003c",
-      "e304d1ba8c51209f97bd11dabf27ca06996b70a850db592343942c49480de47bcbb4b7131fb3dd4d7564021d3bc0e648919e4876572b46ac1da97fca92b009c5",
+      "224fda5e3b1db1e4a7ede1024e09ea70add3243ce1227d28b3f8fc40bca98e14d381efe4e8affc4fef8eb21b4ff42753f9923aac60038680602c117b15748ca1",
       None
     )]
     #[test_case(
@@ -261,7 +258,7 @@ mod tests {
         ],
         "7cb91627c62368cfa15160f9f018de3320ee0cf267625d37265d162ae3b0dea64b8126aac9769922796e3eb864189efd7c5555c4eea8999c91cbbbe695852111",
         "04f27e900a4a189cf60ce21e1864ac3f77c3bc9276026a94329a5314e20a3f2671e2ac949025840f46dc9fe72f9f566f1f2c0848a3f203ba77564fae204e886c",
-        "e304d1ba8c51209f97bd11dabf27ca06996b70a850db592343942c49480de47bcbb4b7131fb3dd4d7564021d3bc0e648919e4876572b46ac1da97fca92b009c5",
+        "1a618c123f9f09bbca9052121d13eea3192fa3addc61eb11f6dcb794f1093abba204510d126ca1f974d5db9a6e728c1e5d3b7c099faf904e494476277178d657",
         None
     )]
     #[test_case(
@@ -279,7 +276,7 @@ mod tests {
         ],
         "919de777e4d43eb072939d2e0664f9df533bd24ec357eacab83dcb8a64e2723f3ee5ecb277d1cf24538339fe06d210563188052d08dab146a8463fdb6898d655",
         "919de777e4d43eb072939d2e0664f9df533bd24ec357eacab83dcb8a64e2723f3ee5ecb277d1cf24538339fe06d210563188052d08dab146a8463fdb6898d655",
-        "919de777e4d43eb072939d2e0664f9df533bd24ec357eacab83dcb8a64e2723f3ee5ecb277d1cf24538339fe06d210563188052d08dab146a8463fdb6898d655",
+        "f12ff4c12722f2c901885c67d232c325b604d54e5b67c35da01ab133fd36e637bf8d2501b463ffb6e4438efaf2a59526a85218e00c0f6b7b5594c8f4154c1ece",
         None
     )]
     #[test_case(
@@ -292,7 +289,7 @@ mod tests {
         ],
         "40ce0d42109bb5e5a6b1d4ba9087a317b4c1c6c51822a57c9cb983f878b0ff765637c05fadd4bac32c8dd2b496c2a24825b183d9720b0cdd5b33f9248b692cc1",
         "c113763393a9fb498cc676e1fe4843206cda665afe2144829fe7434da9e81f0cf6d11386fa79877d3c514d108f9696740256af952b57d32216fbed2eb2fb049d",
-        "40ce0d42109bb5e5a6b1d4ba9087a317b4c1c6c51822a57c9cb983f878b0ff765637c05fadd4bac32c8dd2b496c2a24825b183d9720b0cdd5b33f9248b692cc1",
+        "fe692a000551a60da6cc303a9552a16d7ed5c462e33153a96824e96596da6d642fc671448f06f34e9685a13fe5bbb4220f59db73a856626b8a0962916a8f5ea3",
         None
     )]
     #[test_case(
