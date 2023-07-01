@@ -478,6 +478,7 @@ func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
+	t.Logf("hashes %v", justFileHashes)
 	for path, spec := range files {
 		systemPath := path.ToSystemPath()
 		if systemPath.HasPrefix(pkgName) {
