@@ -9,6 +9,11 @@ pub struct PackageInference {
 }
 
 impl PackageInference {
+    // calculate, based on the directory that global turbo was invoked in,
+    // the pieces of a filter spec that we will infer. If turbo was invoked
+    // somewhere between the root and packages, scope turbo invocations to the
+    // packages below where turbo was invoked. If turbo was invoked at or within
+    // a particular package, scope the turbo invocation to just that package.
     pub fn calculate(
         turbo_root: &AbsoluteSystemPath,
         pkg_inference_path: &AnchoredSystemPathBuf,
