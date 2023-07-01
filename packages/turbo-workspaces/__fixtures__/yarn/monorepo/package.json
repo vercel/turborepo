@@ -2,10 +2,13 @@
   "name": "yarn-workspaces",
   "version": "0.0.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": {
+    "nohoist": [],
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ]
+  },
   "engines": {
     "node": ">=14.0.0"
   },
