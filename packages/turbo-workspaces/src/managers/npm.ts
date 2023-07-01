@@ -57,9 +57,9 @@ async function read(args: ReadArgs): Promise<Project> {
       lockFile: "package-lock.json",
     }),
     workspaceData: {
-      globs: packageJson.workspaces || [],
+      globs: (packageJson.workspaces as Array<string> | undefined) || [],
       workspaces: expandWorkspaces({
-        workspaceGlobs: packageJson.workspaces,
+        workspaceGlobs: packageJson.workspaces as Array<string> | undefined,
         ...args,
       }),
     },

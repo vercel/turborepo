@@ -80,6 +80,24 @@ function getWorkspaceInfo({
   };
 }
 
+function parseWorkspacePackages({
+  workspaceConfig,
+}: {
+  workspaceConfig: PackageJson["workspaces"];
+}): Array<string> {
+  if (
+    workspaceConfig instanceof Object &&
+    "packages" in workspaceConfig &&
+    Array.isArray(workspaceConfig.packages)
+  ) {
+    return workspaceConfig.packages as Array<string>;
+  } else if (Array.isArray(workspaceConfig)) {
+    return workspaceConfig as Array<string>;
+  }
+
+  return [];
+}
+
 function getPnpmWorkspaces({
   workspaceRoot,
 }: {
@@ -90,12 +108,8 @@ function getPnpmWorkspaces({
     try {
       const workspaceConfig = yaml.load(fs.readFileSync(workspaceFile, "utf8"));
       // validate it's the type we expect
-      if (
-        workspaceConfig instanceof Object &&
-        "packages" in workspaceConfig &&
-        Array.isArray(workspaceConfig.packages)
-      ) {
-        return workspaceConfig.packages as Array<string>;
+      if (workspaceConfig instanceof Object) {
+        return parseWorkspacePackages({ workspaceConfig });
       }
     } catch (err) {
       throw new ConvertError(`failed to parse ${workspaceFile}`, {
@@ -189,6 +203,7 @@ export {
   getPackageJson,
   getWorkspacePackageManager,
   getWorkspaceInfo,
+  parseWorkspacePackages,
   expandPaths,
   expandWorkspaces,
   getPnpmWorkspaces,

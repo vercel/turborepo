@@ -48,7 +48,12 @@ export type PackageJsonDependencies = {
 export type PackageJson = PackageJsonDependencies & {
   name?: string;
   description?: string;
-  workspaces?: Array<string>;
+  workspaces?:
+    | Array<string>
+    | {
+        packages?: Array<string>;
+        nohoist?: Array<string>;
+      };
   packageManager?: string;
 };
 
