@@ -244,7 +244,11 @@ fn trailing_doublestar() -> &'static Regex {
 }
 
 pub fn fix_glob_pattern(pattern: &str) -> String {
-    let p1 = double_doublestar().replace(pattern, "**");
+    // This is a no-op on unix systems, but converts to slashes on windows
+    let converted = Path::new(pattern)
+        .to_slash()
+        .expect("failed to roundtrip through Path");
+    let p1 = double_doublestar().replace(&converted, "**");
     let p2 = leading_doublestar().replace(&p1, "**/*$suffix");
     let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
 
