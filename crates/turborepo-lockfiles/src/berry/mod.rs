@@ -43,7 +43,7 @@ pub struct BerryLockfile<'a> {
     data: &'a LockfileData,
     resolutions: Map<Descriptor<'a>, Locator<'a>>,
     // A mapping from descriptors without protocols to a range with a protocol
-    resolver: DescriptorResolver<'a>,
+    resolver: DescriptorResolver,
     locator_package: Map<Locator<'static>, Rc<BerryPackage>>,
     // Map of regular locators to patch locators that apply to them
     patches: Map<Locator<'static>, Locator<'static>>,
