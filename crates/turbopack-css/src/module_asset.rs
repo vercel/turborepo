@@ -48,7 +48,7 @@ fn modifier() -> StringVc {
 #[turbo_tasks::value]
 #[derive(Clone)]
 pub struct ModuleCssAsset {
-    pub inner: AssetVc,
+    pub source: AssetVc,
     pub context: AssetContextVc,
 }
 
@@ -56,12 +56,7 @@ pub struct ModuleCssAsset {
 impl ModuleCssAssetVc {
     #[turbo_tasks::function]
     pub async fn new(source: AssetVc, context: AssetContextVc) -> Result<Self> {
-        let inner = context.process(
-            source,
-            Value::new(ReferenceType::Css(CssReferenceSubType::Internal)),
-        );
-
-        Ok(Self::cell(ModuleCssAsset { inner, context }))
+        Ok(Self::cell(ModuleCssAsset { source, context }))
     }
 }
 
@@ -69,7 +64,7 @@ impl ModuleCssAssetVc {
 impl Asset for ModuleCssAsset {
     #[turbo_tasks::function]
     fn ident(&self) -> AssetIdentVc {
-        self.inner.ident().with_modifier(modifier())
+        self.source.ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
@@ -79,14 +74,12 @@ impl Asset for ModuleCssAsset {
 
     #[turbo_tasks::function]
     async fn references(self_vc: ModuleCssAssetVc) -> Result<AssetReferencesVc> {
-        let this = self_vc.await?;
-
         // The inner reference must come first so it is processed before other potential
         // references inside of the CSS, like `@import` and `composes:`.
         // This affects the order in which the resulting CSS chunks will be loaded:
         // later references are processed first in the post-order traversal of the
         // reference tree, and as such they will be loaded first in the resulting HTML.
-        let references = once(InternalCssAssetReferenceVc::new(this.inner).into())
+        let references = once(InternalCssAssetReferenceVc::new(self_vc.inner()).into())
             .chain(self_vc.module_references().await?.iter().copied())
             .collect();
 
@@ -141,8 +134,17 @@ struct ModuleCssClasses(IndexMap<String, Vec<ModuleCssClass>>);
 #[turbo_tasks::value_impl]
 impl ModuleCssAssetVc {
     #[turbo_tasks::function]
+    async fn inner(self) -> Result<AssetVc> {
+        let this = self.await?;
+        Ok(this.context.process(
+            this.source,
+            Value::new(ReferenceType::Css(CssReferenceSubType::Internal)),
+        ))
+    }
+
+    #[turbo_tasks::function]
     async fn classes(self) -> Result<ModuleCssClassesVc> {
-        let inner = self.await?.inner;
+        let inner = self.inner();
 
         let Some(inner) = ParseCssVc::resolve_from(inner).await? else {
             bail!("inner asset should be CSS parseable");
@@ -237,7 +239,7 @@ impl EcmascriptChunkPlaceable for ModuleCssAsset {
 impl ResolveOrigin for ModuleCssAsset {
     #[turbo_tasks::function]
     fn origin_path(&self) -> FileSystemPathVc {
-        self.inner.ident().path()
+        self.source.ident().path()
     }
 
     #[turbo_tasks::function]
