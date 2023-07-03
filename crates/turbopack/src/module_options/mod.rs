@@ -11,7 +11,7 @@ pub use rule_condition::*;
 use turbo_tasks::primitives::OptionStringVc;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 use turbopack_core::{
-    reference_type::{CssReferenceSubType, ReferenceType, UrlReferenceSubType},
+    reference_type::{ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
     source_transform::SourceTransformsVc,
 };
