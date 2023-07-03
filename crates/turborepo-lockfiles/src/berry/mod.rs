@@ -41,7 +41,7 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 pub struct BerryLockfile<'a> {
     data: &'a LockfileData,
-    resolutions: Map<Descriptor<'a>, Locator<'static>>,
+    resolutions: Map<Descriptor<'static>, Locator<'static>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver,
     locator_package: Map<Locator<'static>, Rc<BerryPackage>>,
@@ -121,7 +121,7 @@ impl<'a> BerryLockfile<'a> {
                 if let Some(other) = resolver.insert(&descriptor) {
                     panic!("Descriptor collision {descriptor} and {other}");
                 }
-                descriptor_locator.insert(descriptor, locator.as_owned());
+                descriptor_locator.insert(descriptor.into_owned(), locator.as_owned());
             }
         }
 
@@ -182,7 +182,7 @@ impl<'a> BerryLockfile<'a> {
     }
 
     // Helper function for inverting the resolution map
-    fn locator_to_descriptors(&self) -> HashMap<&Locator<'a>, HashSet<&Descriptor<'a>>> {
+    fn locator_to_descriptors(&self) -> HashMap<&Locator<'static>, HashSet<&Descriptor<'static>>> {
         let mut reverse_lookup: HashMap<&Locator, HashSet<&Descriptor>> =
             HashMap::with_capacity(self.locator_package.len());
 
