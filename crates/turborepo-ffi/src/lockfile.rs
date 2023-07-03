@@ -85,7 +85,7 @@ fn berry_transitive_closure_inner(
     let resolutions =
         resolutions.map(|r| turborepo_lockfiles::BerryManifest::with_resolutions(r.resolutions));
     let data = LockfileData::from_bytes(contents.as_slice())?;
-    let lockfile = BerryLockfile::new(&data, resolutions)?;
+    let lockfile = BerryLockfile::new(data, resolutions)?;
     let dependencies = turborepo_lockfiles::all_transitive_closures(
         &lockfile,
         workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),

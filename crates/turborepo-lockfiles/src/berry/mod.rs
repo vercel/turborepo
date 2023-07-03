@@ -39,8 +39,8 @@ pub enum Error {
 // We depend on BTree iteration being sorted for correct serialization
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
-pub struct BerryLockfile<'a> {
-    data: &'a LockfileData,
+pub struct BerryLockfile {
+    data: Rc<LockfileData>,
     resolutions: Map<Descriptor<'static>, Locator<'static>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver,
@@ -98,8 +98,8 @@ pub struct BerryManifest {
     resolutions: Option<Map<String, String>>,
 }
 
-impl<'a> BerryLockfile<'a> {
-    pub fn new(lockfile: &'a LockfileData, manifest: Option<BerryManifest>) -> Result<Self, Error> {
+impl BerryLockfile {
+    pub fn new(lockfile: LockfileData, manifest: Option<BerryManifest>) -> Result<Self, Error> {
         let mut patches = Map::new();
         let mut locator_package = Map::new();
         let mut descriptor_locator = Map::new();
@@ -131,7 +131,7 @@ impl<'a> BerryLockfile<'a> {
             .unwrap_or_default();
 
         let mut this = Self {
-            data: lockfile,
+            data: Rc::new(lockfile),
             resolutions: descriptor_locator,
             locator_package,
             resolver,
@@ -240,7 +240,7 @@ impl<'a> BerryLockfile<'a> {
         &self,
         workspace_packages: &[String],
         packages: &[String],
-    ) -> Result<BerryLockfile<'a>, Error> {
+    ) -> Result<BerryLockfile, Error> {
         let reverse_lookup = self.locator_to_descriptors();
 
         let mut resolutions = Map::new();
@@ -326,7 +326,7 @@ impl<'a> BerryLockfile<'a> {
         }
 
         Ok(Self {
-            data: self.data,
+            data: self.data.clone(),
             resolutions,
             patches,
             // We clone the following structures without any alterations and
@@ -366,7 +366,7 @@ impl<'a> BerryLockfile<'a> {
     }
 }
 
-impl<'a> Lockfile for BerryLockfile<'a> {
+impl Lockfile for BerryLockfile {
     fn resolve_package(
         &self,
         workspace_path: &str,
@@ -470,7 +470,7 @@ pub fn berry_subgraph(
 ) -> Result<Vec<u8>, Error> {
     let manifest = resolutions.map(BerryManifest::with_resolutions);
     let data = LockfileData::from_bytes(contents)?;
-    let lockfile = BerryLockfile::new(&data, manifest)?;
+    let lockfile = BerryLockfile::new(data, manifest)?;
     let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
     let new_contents = pruned_lockfile.lockfile()?.to_string().into_bytes();
     Ok(new_contents)
@@ -510,7 +510,7 @@ mod test {
     fn test_resolve_package() {
         let data: LockfileData =
             serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
-        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
 
         assert_eq!(
             lockfile
@@ -551,7 +551,7 @@ mod test {
     fn test_all_dependencies() {
         let data: LockfileData =
             serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
-        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
 
         let pkg = lockfile
             .resolve_package("apps/docs", "react-dom", "18.2.0")
@@ -574,7 +574,7 @@ mod test {
     fn test_package_extension_detection() {
         let data: LockfileData =
             serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
-        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
 
         assert_eq!(
             &lockfile.extensions,
@@ -589,7 +589,7 @@ mod test {
     fn test_patch_list() {
         let data: LockfileData =
             serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
-        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
 
         let locator = Locator::try_from("resolve@npm:2.0.0-next.4").unwrap();
 
@@ -602,7 +602,7 @@ mod test {
     fn test_empty_patch_list() {
         let data =
             LockfileData::from_bytes(include_bytes!("../../fixtures/minimal-berry.lock")).unwrap();
-        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
 
         let empty_vec: Vec<&Path> = Vec::new();
         assert_eq!(lockfile.patches(), empty_vec);
@@ -612,7 +612,7 @@ mod test {
     fn test_basic_descriptor_prune() {
         let data: LockfileData =
             serde_yaml::from_str(include_str!("../../fixtures/minimal-berry.lock")).unwrap();
-        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
 
         let pruned_lockfile = lockfile
             .subgraph(
@@ -648,7 +648,7 @@ mod test {
             "lodash@^4.17.21".into(),
             "patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch".into(),
         )]);
-        let lockfile = BerryLockfile::new(&data, Some(resolutions)).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(resolutions)).unwrap();
         let closure = crate::transitive_closure(
             &lockfile,
             "apps/docs",
@@ -676,7 +676,7 @@ mod test {
                     .collect(),
             ),
         };
-        let lockfile = BerryLockfile::new(&data, Some(manifest)).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
 
         let pkg = lockfile
             .resolve_package("packages/b", "debug", "^4.3.4")
@@ -709,7 +709,7 @@ mod test {
                 .collect(),
             ),
         };
-        let lockfile = BerryLockfile::new(&data, Some(manifest)).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
 
         let deps = lockfile
             .all_dependencies("debug@npm:1.0.0")
@@ -749,7 +749,7 @@ mod test {
                     .collect(),
             ),
         };
-        let lockfile = BerryLockfile::new(&data, Some(manifest)).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
 
         let unresolved_deps = vec![
             ("@types/react-dom", "^17.0.11"),
@@ -780,7 +780,7 @@ mod test {
             "../../fixtures/berry-protocol-collision.lock"
         ))
         .unwrap();
-        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
         let no_proto = Descriptor::try_from("c@*").unwrap();
         let workspace_proto = Descriptor::try_from("c@workspace:*").unwrap();
         let full_path = Descriptor::try_from("c@workspace:packages/c").unwrap();
@@ -819,7 +819,7 @@ mod test {
     fn test_builtin_patch_descriptors() {
         let data =
             LockfileData::from_bytes(include_bytes!("../../fixtures/berry-builtin.lock")).unwrap();
-        let lockfile = BerryLockfile::new(&data, None).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
         let subgraph = lockfile
             .subgraph(
                 &["packages/a".into(), "packages/c".into()],
