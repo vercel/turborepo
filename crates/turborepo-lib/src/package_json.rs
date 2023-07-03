@@ -14,6 +14,7 @@ pub struct PackageJson {
     pub dev_dependencies: Option<BTreeMap<String, String>>,
     pub optional_dependencies: Option<BTreeMap<String, String>>,
     pub peer_dependencies: Option<BTreeMap<String, String>>,
+    pub resolutions: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -293,6 +293,10 @@ impl AbsoluteSystemPath {
     pub fn open_with_options(&self, open_options: OpenOptions) -> Result<File, io::Error> {
         open_options.open(&self.0)
     }
+
+    pub fn read(&self) -> Result<Vec<u8>, io::Error> {
+        std::fs::read(self.as_path())
+    }
 }
 
 #[cfg(test)]

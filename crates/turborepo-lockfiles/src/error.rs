@@ -18,4 +18,6 @@ pub enum Error {
     Pnpm(#[from] crate::pnpm::Error),
     #[error(transparent)]
     Yarn1(#[from] crate::yarn1::Error),
+    #[error(transparent)]
+    Berry(#[from] crate::berry::Error),
 }

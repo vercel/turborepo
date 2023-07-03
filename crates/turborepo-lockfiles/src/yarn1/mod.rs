@@ -37,12 +37,12 @@ struct Entry {
 }
 
 impl Yarn1Lockfile {
-    pub fn from_bytes(input: &[u8]) -> Result<Self, Error> {
-        let input = std::str::from_utf8(input)?;
+    pub fn from_bytes(input: &[u8]) -> Result<Self, super::Error> {
+        let input = std::str::from_utf8(input).map_err(Error::from)?;
         Self::from_str(input)
     }
 
-    pub fn subgraph(&self, packages: &[String]) -> Result<Self, Error> {
+    pub fn subgraph(&self, packages: &[String]) -> Result<Self, super::Error> {
         let mut inner = Map::new();
 
         for (key, entry) in packages.iter().filter_map(|key| {
@@ -57,7 +57,7 @@ impl Yarn1Lockfile {
 }
 
 impl FromStr for Yarn1Lockfile {
-    type Err = Error;
+    type Err = super::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = de::parse_syml(s)?;

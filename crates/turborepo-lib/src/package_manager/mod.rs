@@ -14,6 +14,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_lockfiles::Lockfile;
 use wax::{Any, Glob, Pattern};
 
 use crate::{
@@ -250,6 +251,8 @@ pub enum Error {
     InvalidPackageManager(String, String),
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
+    #[error(transparent)]
+    Lockfile(#[from] turborepo_lockfiles::Error),
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
@@ -404,6 +407,49 @@ impl PackageManager {
             globwalk::WalkType::Files,
         )?;
         Ok(files.into_iter())
+    }
+
+    pub fn lockfile_name(&self) -> &'static str {
+        match self {
+            PackageManager::Npm => "package-lock.json",
+            PackageManager::Pnpm | PackageManager::Pnpm6 => "pnpm-lock.yaml",
+            PackageManager::Yarn | PackageManager::Berry => "yarn.lock",
+        }
+    }
+
+    pub fn read_lockfile(
+        &self,
+        root_path: &AbsoluteSystemPath,
+        root_package_json: &PackageJson,
+    ) -> Result<Box<dyn Lockfile>, Error> {
+        let contents = root_path.join_component(self.lockfile_name()).read()?;
+        self.parse_lockfile(root_package_json, &contents)
+    }
+
+    pub fn parse_lockfile(
+        &self,
+        root_package_json: &PackageJson,
+        contents: &[u8],
+    ) -> Result<Box<dyn Lockfile>, Error> {
+        Ok(match self {
+            PackageManager::Npm => Box::new(turborepo_lockfiles::NpmLockfile::load(contents)?),
+            PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                Box::new(turborepo_lockfiles::PnpmLockfile::from_bytes(contents)?)
+            }
+            PackageManager::Yarn => {
+                Box::new(turborepo_lockfiles::Yarn1Lockfile::from_bytes(contents)?)
+            }
+            PackageManager::Berry => Box::new(turborepo_lockfiles::BerryLockfile::load(
+                contents,
+                Some(turborepo_lockfiles::BerryManifest::with_resolutions(
+                    root_package_json
+                        .resolutions
+                        .iter()
+                        .flatten()
+                        .map(|(k, v)| (k.clone(), v.clone())),
+                )),
+            )?),
+        })
     }
 }
 
