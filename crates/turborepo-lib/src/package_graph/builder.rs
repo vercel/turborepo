@@ -43,8 +43,6 @@ pub enum Error {
     PackageJsonMissingName,
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("TODO lockfile errors")]
-    Todo,
 }
 
 impl<'a> PackageGraphBuilder<'a> {
@@ -320,8 +318,20 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
     }
 
     fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
-        // TODO actual lockfile parsing
-        self.lockfile.take().map_or_else(|| Err(Error::Todo), Ok)
+        match self.lockfile.take() {
+            Some(lockfile) => Ok(lockfile),
+            None => {
+                let lockfile = self.package_manager.read_lockfile(
+                    self.repo_root,
+                    self.workspaces
+                        .get(&WorkspaceName::Root)
+                        .as_ref()
+                        .map(|e| &e.package_json)
+                        .expect("root workspace should have json"),
+                )?;
+                Ok(lockfile)
+            }
+        }
     }
 
     fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile>, Error> {
@@ -329,13 +339,12 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
 
         let lockfile = match self.populate_lockfile() {
             Ok(lockfile) => Some(lockfile),
-            Err(_) => {
-                // TODO: Re-enable this warning once we have lockfile parsing hooked up
-                // warn!(
-                //     "Issues occurred when constructing package graph. Turbo will function,
-                // but \      some features may not be available: {}",
-                //     e
-                // );
+            Err(e) => {
+                warn!(
+                    "Issues occurred when constructing package graph. Turbo will function, but \
+                     some features may not be available: {}",
+                    e
+                );
                 None
             }
         };
@@ -454,7 +463,7 @@ impl Dependencies {
                 .map_or(false, |workspace_version| {
                     DependencyVersion::new(version).matches_workspace_package(
                         workspace_version,
-                        &workspace_dir,
+                        workspace_dir,
                         repo_root,
                     )
                 });
