@@ -90,6 +90,10 @@ impl AnchoredSystemPathBuf {
         Ok(AnchoredSystemPathBuf(stripped_path))
     }
 
+    pub fn pop(&mut self) -> bool {
+        self.0.pop()
+    }
+
     // Produces a path from start to end, which may include directory traversal
     // tokens. Given that both parameters are absolute, we _should_ always be
     // able to produce such a path. The exception is when crossing drive letters
@@ -260,7 +264,9 @@ mod tests {
         let target = AbsoluteSystemPathBuf::new(parts.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
         let expected =
             AnchoredSystemPathBuf::from_raw(expected.join(std::path::MAIN_SEPARATOR_STR)).unwrap();
+
         let result = AnchoredSystemPathBuf::relative_path_between(&root, &target);
+
         assert_eq!(result, expected);
     }
 

@@ -8,6 +8,7 @@ use std::{
     fs,
 };
 
+use globwalk::fix_glob_pattern;
 use itertools::{Either, Itertools};
 use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
@@ -100,11 +101,26 @@ impl PartialEq for WorkspaceGlobs {
 
 impl Eq for WorkspaceGlobs {}
 
+fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, Error> {
+    let raw = raw.as_ref();
+    let fixed = fix_glob_pattern(raw);
+    Glob::new(&fixed)
+        .map(|g| g.into_owned())
+        .map_err(|e| Error::Glob(fixed, Box::new(e)))
+}
+
+fn any_with_contextual_error(
+    precompiled: Vec<Glob<'static>>,
+    text: Vec<String>,
+) -> Result<wax::Any<'static>, Error> {
+    wax::any(precompiled).map_err(|e| {
+        let text = text.iter().join(",");
+        Error::Glob(text, Box::new(e))
+    })
+}
+
 impl WorkspaceGlobs {
-    pub fn new<S: Into<String>>(
-        inclusions: Vec<S>,
-        exclusions: Vec<S>,
-    ) -> Result<Self, wax::BuildError> {
+    pub fn new<S: Into<String>>(inclusions: Vec<S>, exclusions: Vec<S>) -> Result<Self, Error> {
         // take ownership of the inputs
         let raw_inclusions: Vec<String> = inclusions
             .into_iter()
@@ -123,16 +139,19 @@ impl WorkspaceGlobs {
             .map(|s| s.into())
             .collect::<Vec<String>>();
         let inclusion_globs = raw_inclusions
-            .into_iter()
-            .map(|s| Glob::new(s.as_ref()).map(|g| g.into_owned()))
+            .iter()
+            .map(glob_with_contextual_error)
             .collect::<Result<Vec<_>, _>>()?;
         let exclusion_globs = raw_exclusions
             .iter()
-            .map(|s| Glob::new(s.as_ref()).map(|g| g.into_owned()))
+            .map(glob_with_contextual_error)
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            directory_inclusions: wax::any(inclusion_globs)?,
-            directory_exclusions: wax::any(exclusion_globs)?,
+            directory_inclusions: any_with_contextual_error(inclusion_globs, raw_inclusions)?,
+            directory_exclusions: any_with_contextual_error(
+                exclusion_globs,
+                raw_exclusions.clone(),
+            )?,
             package_json_inclusions,
             raw_exclusions,
         })
@@ -250,6 +269,8 @@ pub enum Error {
     InvalidPackageManager(String, String),
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
+    #[error("invalid workspace glob {0}: {1}")]
+    Glob(String, Box<wax::BuildError>),
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =

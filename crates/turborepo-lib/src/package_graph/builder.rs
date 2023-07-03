@@ -329,12 +329,13 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
 
         let lockfile = match self.populate_lockfile() {
             Ok(lockfile) => Some(lockfile),
-            Err(e) => {
-                warn!(
-                    "Issues occurred when constructing package graph. Turbo will function, but \
-                     some features may not be available: {}",
-                    e
-                );
+            Err(_) => {
+                // TODO: Re-enable this warning once we have lockfile parsing hooked up
+                // warn!(
+                //     "Issues occurred when constructing package graph. Turbo will function,
+                // but \      some features may not be available: {}",
+                //     e
+                // );
                 None
             }
         };

@@ -11,8 +11,8 @@ Make sure exit code is 2 when no args are passed
     bin         Get the path to the Turbo binary
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
-    link        Link your local directory to a Vercel organization and enable remote caching
     generate    Generate a new app / package
+    link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
     prune       Prepare a subset of your monorepo

@@ -1,35 +1,13 @@
-use std::{collections::HashMap, process::Command};
+use std::collections::HashMap;
 
-use bstr::io::BufReadExt;
 use itertools::{Either, Itertools};
-use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError,
-    RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
-use crate::{hash_object::hash_objects, ls_tree::git_ls_tree, status::append_git_status, Error};
+use crate::{hash_object::hash_objects, Error, Git, SCM};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
-#[derive(Debug)]
-pub struct Git {
-    root: AbsoluteSystemPathBuf,
-    _bin: AbsoluteSystemPathBuf,
-}
-
-#[derive(Debug)]
-pub enum Hasher {
-    Git(Git),
-    Manual,
-}
-
-impl Hasher {
-    pub fn new(path_in_repo: &AbsoluteSystemPath) -> Hasher {
-        Git::find(path_in_repo)
-            .map(Hasher::Git)
-            .unwrap_or(Hasher::Manual)
-    }
-
+impl SCM {
     pub fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -37,12 +15,12 @@ impl Hasher {
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         match self {
-            Hasher::Manual => crate::manual::get_package_file_hashes_from_processing_gitignore(
+            SCM::Manual => crate::manual::get_package_file_hashes_from_processing_gitignore(
                 turbo_root,
                 package_path,
                 inputs,
             ),
-            Hasher::Git(git) => git.get_package_file_hashes(turbo_root, package_path, inputs),
+            SCM::Git(git) => git.get_package_file_hashes(turbo_root, package_path, inputs),
         }
     }
 
@@ -52,8 +30,8 @@ impl Hasher {
         files: impl Iterator<Item = AnchoredSystemPathBuf>,
     ) -> Result<GitHashes, Error> {
         match self {
-            Hasher::Manual => crate::manual::hash_files(turbo_root, files, false),
-            Hasher::Git(git) => git.hash_files(turbo_root, files),
+            SCM::Manual => crate::manual::hash_files(turbo_root, files, false),
+            SCM::Git(git) => git.hash_files(turbo_root, files),
         }
     }
 
@@ -70,13 +48,6 @@ impl Hasher {
 }
 
 impl Git {
-    fn find(path_in_repo: &AbsoluteSystemPath) -> Option<Self> {
-        let bin = which::which("git").ok()?;
-        let bin = AbsoluteSystemPathBuf::try_from(bin).ok()?;
-        let root = find_git_root(path_in_repo).ok()?;
-        Some(Self { root, _bin: bin })
-    }
-
     fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -98,9 +69,9 @@ impl Git {
         let full_pkg_path = turbo_root.resolve(package_path);
         let git_to_pkg_path = self.root.anchor(&full_pkg_path)?;
         let pkg_prefix = git_to_pkg_path.to_unix()?;
-        let mut hashes = git_ls_tree(&full_pkg_path)?;
+        let mut hashes = self.git_ls_tree(&full_pkg_path)?;
         // Note: to_hash is *git repo relative*
-        let to_hash = append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
+        let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
         hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
         Ok(hashes)
     }
@@ -182,41 +153,14 @@ impl Git {
     }
 }
 
-pub(crate) fn find_git_root(
-    turbo_root: &AbsoluteSystemPath,
-) -> Result<AbsoluteSystemPathBuf, Error> {
-    let rev_parse = Command::new("git")
-        .args(["rev-parse", "--show-cdup"])
-        .current_dir(turbo_root)
-        .output()?;
-    if !rev_parse.status.success() {
-        let stderr = String::from_utf8_lossy(&rev_parse.stderr);
-        return Err(Error::git_error(format!(
-            "git rev-parse --show-cdup error: {}",
-            stderr
-        )));
-    }
-    let cursor = std::io::Cursor::new(rev_parse.stdout);
-    let mut lines = cursor.byte_lines();
-    if let Some(line) = lines.next() {
-        let line = String::from_utf8(line?)?;
-        let tail = RelativeUnixPathBuf::new(line)?;
-        turbo_root.join_unix_path(tail).map_err(|e| e.into())
-    } else {
-        let stderr = String::from_utf8_lossy(&rev_parse.stderr);
-        Err(Error::git_error(format!(
-            "git rev-parse --show-cdup error: no values on stdout. stderr: {}",
-            stderr
-        )))
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, process::Command};
+    use std::{collections::HashMap, process::Command};
+
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
-    use crate::manual::get_package_file_hashes_from_processing_gitignore;
+    use crate::{manual::get_package_file_hashes_from_processing_gitignore, SCM};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -275,28 +219,6 @@ mod tests {
     }
 
     #[test]
-    fn test_symlinked_git_root() {
-        let (_, tmp_root) = tmp_dir();
-        let git_root = tmp_root.join_component("actual_repo");
-        git_root.create_dir_all().unwrap();
-        setup_repository(&git_root);
-        git_root.join_component("inside").create_dir_all().unwrap();
-        let link = tmp_root.join_component("link");
-        link.symlink_to_dir("actual_repo").unwrap();
-        let turbo_root = link.join_component("inside");
-        let result = find_git_root(&turbo_root).unwrap();
-        assert_eq!(result, link);
-    }
-
-    #[test]
-    fn test_no_git_root() {
-        let (_, tmp_root) = tmp_dir();
-        tmp_root.create_dir_all().unwrap();
-        let result = find_git_root(&tmp_root);
-        assert_matches!(result, Err(Error::Git(_, _)));
-    }
-
-    #[test]
     fn test_get_package_deps() -> Result<(), Error> {
         // Directory structure:
         // <root>/
@@ -330,8 +252,8 @@ mod tests {
 
         setup_repository(&repo_root);
         commit_all(&repo_root);
-        let git = Hasher::new(&repo_root);
-        let Hasher::Git(git) = git else {
+        let git = SCM::new(&repo_root);
+        let SCM::Git(git) = git else {
             panic!("expected git, found {:?}", git);
         };
 
