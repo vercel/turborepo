@@ -14,18 +14,19 @@ interface Exports {
 
   [key: string]: any;
 }
+
 type EsmNamespaceObject = Record<string, any>;
 
 const REEXPORTED_OBJECTS = Symbol("reexported objects");
 
 interface BaseModule {
-  exports: Exports;
+  exports: Exports | AsyncModulePromise;
   error: Error | undefined;
   loaded: boolean;
   id: ModuleId;
   children: ModuleId[];
   parents: ModuleId[];
-  namespaceObject?: EsmNamespaceObject;
+  namespaceObject?: EsmNamespaceObject | AsyncModulePromise<EsmNamespaceObject>;
   [REEXPORTED_OBJECTS]?: any[];
 }
 
@@ -39,7 +40,9 @@ interface RequireContextEntry {
 
 interface RequireContext {
   (moduleId: ModuleId): Exports | EsmNamespaceObject;
+
   keys(): ModuleId[];
+
   resolve(moduleId: ModuleId): ModuleId;
 }
 
@@ -79,18 +82,26 @@ function esm(exports: Exports, getters: Record<string, () => any>) {
 /**
  * Makes the module an ESM with exports
  */
-function esmExport(module: Module, getters: Record<string, () => any>) {
-  esm((module.namespaceObject = module.exports), getters);
+function esmExport(
+  module: Module,
+  exports: Exports,
+  getters: Record<string, () => any>
+) {
+  esm((module.namespaceObject = exports), getters);
 }
 
 /**
  * Dynamically exports properties from an object
  */
-function dynamicExport(module: Module, object: Record<string, any>) {
+function dynamicExport(
+  module: Module,
+  exports: Exports,
+  object: Record<string, any>
+) {
   let reexportedObjects = module[REEXPORTED_OBJECTS];
   if (!reexportedObjects) {
     reexportedObjects = module[REEXPORTED_OBJECTS] = [];
-    module.exports = module.namespaceObject = new Proxy(module.exports, {
+    module.exports = module.namespaceObject = new Proxy(exports, {
       get(target, prop) {
         if (
           hasOwnProperty.call(target, prop) ||
@@ -142,6 +153,8 @@ const getProto: (obj: any) => any = Object.getPrototypeOf
 const LEAF_PROTOTYPES = [null, getProto({}), getProto([]), getProto(getProto)];
 
 /**
+ * @param raw
+ * @param ns
  * @param allowExportDefault
  *   * `false`: will have the raw module as default export
  *   * `true`: will have the default property as default export
@@ -168,11 +181,37 @@ function interopEsm(
   esm(ns, getters);
 }
 
-function esmImport(sourceModule: Module, id: ModuleId): EsmNamespaceObject {
+function esmImport(
+  sourceModule: Module,
+  id: ModuleId
+): EsmNamespaceObject | (Promise<EsmNamespaceObject> & AsyncModuleExt) {
   const module = getOrInstantiateModuleFromParent(id, sourceModule);
   if (module.error) throw module.error;
   if (module.namespaceObject) return module.namespaceObject;
   const raw = module.exports;
+
+  if (isPromise(raw)) {
+    const promise = raw.then((e) => {
+      const ns = {};
+      interopEsm(e, ns, e.__esModule);
+      return ns;
+    });
+
+    module.namespaceObject = Object.assign(promise, {
+      get [turbopackExports]() {
+        return raw[turbopackExports];
+      },
+      get [turbopackQueues]() {
+        return raw[turbopackQueues];
+      },
+      get [turbopackError]() {
+        return raw[turbopackError];
+      },
+    } satisfies AsyncModuleExt);
+
+    return module.namespaceObject;
+  }
+
   const ns = (module.namespaceObject = {});
   interopEsm(raw, ns, raw.__esModule);
   return ns;
@@ -226,4 +265,170 @@ function requireContext(
  */
 function getChunkPath(chunkData: ChunkData): ChunkPath {
   return typeof chunkData === "string" ? chunkData : chunkData.path;
+}
+
+function isPromise<T = any>(maybePromise: any): maybePromise is Promise<T> {
+  return (
+    maybePromise != null &&
+    typeof maybePromise === "object" &&
+    "then" in maybePromise &&
+    typeof maybePromise.then === "function"
+  );
+}
+
+function createPromise<T>() {
+  let resolve: (value: T | PromiseLike<T>) => void;
+  let reject: (reason?: any) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    reject = rej;
+    resolve = res;
+  });
+
+  return {
+    promise,
+    resolve: resolve!,
+    reject: reject!,
+  };
+}
+
+// everything below is adapted from webpack
+// https://github.com/webpack/webpack/blob/6be4065ade1e252c1d8dcba4af0f43e32af1bdc1/lib/runtime/AsyncModuleRuntimeModule.js#L13
+
+const turbopackQueues = Symbol("turbopack queues");
+const turbopackExports = Symbol("turbopack exports");
+const turbopackError = Symbol("turbopack error");
+
+type AsyncQueueFn = (() => void) & { queueCount: number };
+type AsyncQueue = AsyncQueueFn[] & { resolved: boolean };
+
+function resolveQueue(queue?: AsyncQueue) {
+  if (queue && !queue.resolved) {
+    queue.resolved = true;
+    queue.forEach((fn) => fn.queueCount--);
+    queue.forEach((fn) => (fn.queueCount-- ? fn.queueCount++ : fn()));
+  }
+}
+
+type Dep = Exports | AsyncModulePromise | Promise<Exports>;
+
+type AsyncModuleExt = {
+  [turbopackQueues]: (fn: (queue: AsyncQueue) => void) => void;
+  [turbopackExports]: Exports;
+  [turbopackError]?: any;
+};
+
+type AsyncModulePromise<T = Exports> = Promise<T> & AsyncModuleExt;
+
+function wrapDeps(deps: Dep[]): AsyncModuleExt[] {
+  return deps.map((dep) => {
+    if (dep !== null && typeof dep === "object") {
+      if (turbopackQueues in dep) return dep;
+      if (isPromise(dep)) {
+        const queue: AsyncQueue = Object.assign([], { resolved: false });
+
+        const obj: AsyncModuleExt = {
+          [turbopackExports]: {},
+          [turbopackQueues]: (fn: (queue: AsyncQueue) => void) => fn(queue),
+        };
+
+        dep.then(
+          (res) => {
+            obj[turbopackExports] = res;
+            resolveQueue(queue);
+          },
+          (err) => {
+            obj[turbopackError] = err;
+            resolveQueue(queue);
+          }
+        );
+
+        return obj;
+      }
+    }
+
+    const ret: AsyncModuleExt = {
+      [turbopackExports]: dep,
+      [turbopackQueues]: () => {},
+    };
+
+    return ret;
+  });
+}
+
+function asyncModule(
+  module: Module,
+  body: (
+    handleAsyncDependencies: (
+      deps: Dep[]
+    ) => Exports[] | Promise<() => Exports[]>,
+    asyncResult: (err?: any) => void
+  ) => void,
+  hasAwait: boolean
+) {
+  const queue: AsyncQueue | undefined = hasAwait
+    ? Object.assign([], { resolved: true })
+    : undefined;
+
+  const depQueues: Set<AsyncQueue> = new Set();
+  const exports = module.exports;
+
+  const { resolve, reject, promise: rawPromise } = createPromise<Exports>();
+
+  const promise: AsyncModulePromise = Object.assign(rawPromise, {
+    [turbopackExports]: exports,
+    [turbopackQueues]: (fn) => {
+      queue && fn(queue);
+      depQueues.forEach(fn);
+      promise["catch"](() => {});
+    },
+  } satisfies AsyncModuleExt);
+
+  module.exports = promise;
+
+  function handleAsyncDependencies(deps: Dep[]) {
+    const currentDeps = wrapDeps(deps);
+
+    const getResult = () =>
+      currentDeps.map((d) => {
+        if (d[turbopackError]) throw d[turbopackError];
+        return d[turbopackExports];
+      });
+
+    const { promise, resolve } = createPromise<() => Exports[]>();
+
+    const fn: AsyncQueueFn = Object.assign(() => resolve(getResult), {
+      queueCount: 0,
+    });
+
+    function fnQueue(q: AsyncQueue) {
+      if (q !== queue && !depQueues.has(q)) {
+        depQueues.add(q);
+        if (q && !q.resolved) {
+          fn.queueCount++;
+          q.push(fn);
+        }
+      }
+    }
+
+    currentDeps.map((dep) => dep[turbopackQueues](fnQueue));
+
+    return fn.queueCount ? promise : getResult();
+  }
+
+  function asyncResult(err?: any) {
+    if (err) {
+      reject((promise[turbopackError] = err));
+    } else {
+      resolve(exports);
+    }
+
+    resolveQueue(queue);
+  }
+
+  body(handleAsyncDependencies, asyncResult);
+
+  if (queue) {
+    queue.resolved = false;
+  }
 }

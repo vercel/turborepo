@@ -13,9 +13,11 @@ interface RequireContextEntry {
 }
 
 type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
+type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
 
 interface TurbopackDevContext {
   x: ExternalRequire;
+  y: ExternalImport;
 }
 
 function commonJsRequireContext(
@@ -25,6 +27,10 @@ function commonJsRequireContext(
   return entry.external
     ? externalRequire(entry.id(), false)
     : commonJsRequire(sourceModule, entry.id());
+}
+
+function externalImport(id: ModuleId) {
+  return import(id)
 }
 
 function externalRequire(
@@ -62,6 +68,7 @@ externalRequire.resolve = (
 function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
   const nodejsContext = context as TurbopackDevContext;
   nodejsContext.x = externalRequire;
+  nodejsContext.y = externalImport;
   return nodejsContext;
 }
 

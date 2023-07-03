@@ -1,4 +1,5 @@
 pub mod amd;
+pub mod async_module;
 pub mod cjs;
 pub mod constant_condition;
 pub mod constant_value;
@@ -49,7 +50,7 @@ use turbo_tasks_fs::{FileJsonContent, FileSystemPath};
 use turbopack_core::{
     compile_time_info::{CompileTimeInfo, FreeVarReference},
     error::PrettyPrintError,
-    issue::{IssueExt, IssueSource, OptionIssueSource},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSource, OptionIssueSource},
     module::Module,
     reference::{AssetReference, AssetReferences, SourceMapReference},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
@@ -114,6 +115,7 @@ use crate::{
     },
     magic_identifier,
     references::{
+        async_module::{AsyncModule, OptionAsyncModuleOptionsVc},
         cjs::{CjsRequireAssetReference, CjsRequireCacheAccess, CjsRequireResolveAssetReference},
         esm::{module_id::EsmModuleIdAssetReference, EsmBinding},
         require_context::{RequireContextAssetReference, RequireContextMap},
@@ -130,7 +132,7 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub references: Vc<AssetReferences>,
     pub code_generation: Vc<CodeGenerateables>,
     pub exports: Vc<EcmascriptExports>,
-    pub has_top_level_await: bool,
+    pub async_module_options: Vc<OptionAsyncModuleOptions>,
     /// `true` when the analysis was successful.
     pub successful: bool,
 }
@@ -167,7 +169,7 @@ pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
     references: IndexSet<Vc<Box<dyn AssetReference>>>,
     code_gens: Vec<CodeGen>,
     exports: EcmascriptExports,
-    has_top_level_await: bool,
+    async_module_options: Vc<OptionAsyncModuleOptions>,
     successful: bool,
 }
 
@@ -177,7 +179,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
             references: IndexSet::new(),
             code_gens: Vec::new(),
             exports: EcmascriptExports::None,
-            has_top_level_await: false,
+            async_module_options: Vc::cell(None),
             successful: false,
         }
     }
@@ -216,9 +218,9 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         self.exports = exports;
     }
 
-    /// Sets whether the analysed module has a top level await.
-    pub fn set_top_level_await(&mut self, top_level_await: bool) {
-        self.has_top_level_await = top_level_await;
+    /// Sets the analysis result ES export.
+    pub fn set_async_module_options(&mut self, options: OptionAsyncModuleOptionsVc) {
+        self.async_module_options = options;
     }
 
     /// Sets whether the analysis was successful.
@@ -248,7 +250,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
                 references: Vc::cell(references),
                 code_generation: Vc::cell(self.code_gens),
                 exports: self.exports.into(),
-                has_top_level_await: self.has_top_level_await,
+                async_module_options: self.async_module_options,
                 successful: self.successful,
             },
         ))
@@ -447,11 +449,6 @@ pub(crate) async fn analyze_ecmascript_module(
         }),
     );
 
-    let has_top_level_await =
-        set_handler_and_globals(&handler, globals, || has_top_level_await(program));
-
-    analysis.set_top_level_await(has_top_level_await);
-
     let mut var_graph =
         set_handler_and_globals(&handler, globals, || create_graph(program, eval_context));
 
@@ -565,6 +562,10 @@ pub(crate) async fn analyze_ecmascript_module(
         }
     }
 
+    let top_level_await_span =
+        set_handler_and_globals(&handler, globals, || has_top_level_await(program));
+    let has_top_level_await = top_level_await_span.is_some();
+
     let exports = if !esm_exports.is_empty() || !esm_star_exports.is_empty() {
         if matches!(specified_type, SpecifiedModuleType::CommonJs) {
             SpecifiedModuleTypeIssue {
@@ -575,15 +576,31 @@ pub(crate) async fn analyze_ecmascript_module(
             .emit();
         }
 
+        let async_module = AsyncModule {
+            references: import_references.iter().copied().collect(),
+            has_top_level_await,
+        }
+        .cell();
+        analysis.set_async_module_options(async_module.module_options());
+
         let esm_exports: Vc<EsmExports> = EsmExports {
             exports: esm_exports,
             star_exports: esm_star_exports,
         }
         .cell();
+
         analysis.add_code_gen(esm_exports);
+        analysis.add_code_gen(async_module);
 
         EcmascriptExports::EsmExports(esm_exports)
     } else if matches!(specified_type, SpecifiedModuleType::EcmaScript) {
+        let async_module = AsyncModule {
+            references: import_references.iter().copied().collect(),
+            has_top_level_await,
+        }
+        .cell();
+        analysis.set_async_module_options(async_module.module_options());
+
         match detect_dynamic_export(program) {
             DetectedDynamicExportType::CommonJs => {
                 SpecifiedModuleTypeIssue {
@@ -592,6 +609,9 @@ pub(crate) async fn analyze_ecmascript_module(
                 }
                 .cell()
                 .emit();
+
+                analysis.add_code_gen(async_module);
+
                 EcmascriptExports::EsmExports(
                     EsmExports {
                         exports: Default::default(),
@@ -603,29 +623,62 @@ pub(crate) async fn analyze_ecmascript_module(
             DetectedDynamicExportType::Namespace => EcmascriptExports::DynamicNamespace,
             DetectedDynamicExportType::Value => EcmascriptExports::Value,
             DetectedDynamicExportType::UsingModuleDeclarations
-            | DetectedDynamicExportType::None => EcmascriptExports::EsmExports(
-                EsmExports {
-                    exports: Default::default(),
-                    star_exports: Default::default(),
-                }
-                .cell(),
-            ),
+            | DetectedDynamicExportType::None => {
+                analysis.add_code_gen(async_module);
+
+                EcmascriptExports::EsmExports(
+                    EsmExports {
+                        exports: Default::default(),
+                        star_exports: Default::default(),
+                    }
+                    .cell(),
+                )
+            }
         }
     } else {
         match detect_dynamic_export(program) {
             DetectedDynamicExportType::CommonJs => EcmascriptExports::CommonJs,
             DetectedDynamicExportType::Namespace => EcmascriptExports::DynamicNamespace,
             DetectedDynamicExportType::Value => EcmascriptExports::Value,
-            DetectedDynamicExportType::UsingModuleDeclarations => EcmascriptExports::EsmExports(
-                EsmExports {
-                    exports: Default::default(),
-                    star_exports: Default::default(),
+            DetectedDynamicExportType::UsingModuleDeclarations => {
+                let async_module = AsyncModule {
+                    references: import_references.iter().copied().collect(),
+                    has_top_level_await,
                 }
-                .cell(),
-            ),
+                .cell();
+                analysis.add_code_gen(async_module);
+                analysis.set_async_module_options(async_module.module_options());
+
+                EcmascriptExports::EsmExports(
+                    EsmExports {
+                        exports: Default::default(),
+                        star_exports: Default::default(),
+                    }
+                    .cell(),
+                )
+            }
             DetectedDynamicExportType::None => EcmascriptExports::None,
         }
     };
+
+    if let Some(span) = top_level_await_span {
+        if !matches!(exports, EcmascriptExports::EsmExports(_)) {
+            AnalyzeIssue {
+                code: None,
+                category: StringVc::cell("analyze".to_string()),
+                message: StringVc::cell(
+                    "top level await is only supported in ESM modules.".to_string(),
+                ),
+                source_ident: source.ident(),
+                severity: IssueSeverity::Error.into(),
+                source: Some(issue_source(source, span)),
+                title: StringVc::cell("unexpected top level await".to_string()),
+            }
+            .cell()
+            .as_issue()
+            .emit();
+        }
+    }
 
     analysis.set_exports(exports);
 

@@ -30,21 +30,8 @@ interface RequireContextEntry {
 
 type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
 
-interface TurbopackNodeBuildContext {
-  e: Module["exports"];
-  r: CommonJsRequire;
+interface TurbopackNodeBuildContext extends TurbopackBaseContext {
   x: ExternalRequire;
-  f: RequireContextFactory;
-  i: EsmImport;
-  s: EsmExport;
-  j: typeof dynamicExport;
-  v: ExportValue;
-  n: typeof exportNamespace;
-  m: Module;
-  c: ModuleCache;
-  l: LoadChunk;
-  g: typeof globalThis;
-  __dirname: string;
 }
 
 type ModuleFactory = (
@@ -176,13 +163,14 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
   // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
   try {
     moduleFactory.call(module.exports, {
+      a: asyncModule.bind(null, module),
       e: module.exports,
       r: commonJsRequire.bind(null, module),
       x: externalRequire,
       f: requireContext.bind(null, module),
       i: esmImport.bind(null, module),
       s: esm.bind(null, module.exports),
-      j: dynamicExport.bind(null, module),
+      j: dynamicExport.bind(null, module, module.exports),
       v: exportValue.bind(null, module),
       n: exportNamespace.bind(null, module),
       m: module,

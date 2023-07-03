@@ -54,7 +54,13 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             availability_info,
         );
 
-        Ok(EcmascriptChunkItemContent::new(content, this.context))
+        let async_module_options = module.full_module.get_async_module_options();
+
+        Ok(EcmascriptChunkItemContent::new(
+            content,
+            this.context,
+            async_module_options,
+        ))
     }
 
     #[turbo_tasks::function]
