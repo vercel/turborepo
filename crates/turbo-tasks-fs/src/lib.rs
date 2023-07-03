@@ -1133,10 +1133,7 @@ impl FileSystemPathVc {
     #[turbo_tasks::function]
     pub async fn with_extension(self, extension: &str) -> Result<FileSystemPathVc> {
         let this = self.await?;
-        let path_without_extension = match this.split_extension() {
-            (path_without_extension, Some(_)) => path_without_extension,
-            (path_without_extension, None) => path_without_extension,
-        };
+        let (path_without_extension, _) = this.split_extension();
         Ok(Self::new_normalized(
             this.fs,
             // Like `Path::with_extension` and `PathBuf::set_extension`, if the extension is empty,
