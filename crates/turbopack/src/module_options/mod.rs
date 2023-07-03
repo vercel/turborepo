@@ -225,12 +225,9 @@ impl ModuleOptionsVc {
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Json)],
             ),
             ModuleRule::new(
-                ModuleRuleCondition::all(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
-                    ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
-                        ReferenceType::Css(CssReferenceSubType::Internal),
-                    )),
-                ]),
+                ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                    ".css".to_string(),
+                )]),
                 [
                     if let Some(options) = enable_postcss_transform {
                         let execution_context = execution_context
@@ -263,33 +260,24 @@ impl ModuleOptionsVc {
                 .collect(),
             ),
             ModuleRule::new(
-                ModuleRuleCondition::all(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
-                    ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
-                        ReferenceType::Css(CssReferenceSubType::Internal),
-                    )),
-                ]),
+                ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                    ".module.css".to_string(),
+                )]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::CssModule)],
             ),
-            ModuleRule::new(
-                ModuleRuleCondition::all(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
-                    ModuleRuleCondition::ReferenceType(ReferenceType::Css(
-                        CssReferenceSubType::Internal,
-                    )),
-                ]),
+            ModuleRule::new_internal(
+                ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                    ".css".to_string(),
+                )]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                     ty: CssModuleAssetType::Default,
                     transforms: css_transforms,
                 })],
             ),
-            ModuleRule::new(
-                ModuleRuleCondition::all(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
-                    ModuleRuleCondition::ReferenceType(ReferenceType::Css(
-                        CssReferenceSubType::Internal,
-                    )),
-                ]),
+            ModuleRule::new_internal(
+                ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                    ".module.css".to_string(),
+                )]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                     ty: CssModuleAssetType::Module,
                     transforms: css_transforms,

@@ -15,11 +15,44 @@ use super::{CustomModuleTypeVc, ModuleRuleCondition};
 pub struct ModuleRule {
     condition: ModuleRuleCondition,
     effects: Vec<ModuleRuleEffect>,
+    match_mode: MatchMode,
+}
+
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
+enum MatchMode {
+    // Match all but internal references.
+    #[default]
+    Default,
+    // Only match internal references.
+    Internal,
+}
+
+impl MatchMode {
+    fn matches(&self, reference_type: &ReferenceType) -> bool {
+        matches!(
+            (self, reference_type.is_internal()),
+            (MatchMode::Default, false) | (MatchMode::Internal, true)
+        )
+    }
 }
 
 impl ModuleRule {
+    /// Creates a new module rule. Will not match internal references.
     pub fn new(condition: ModuleRuleCondition, effects: Vec<ModuleRuleEffect>) -> Self {
-        ModuleRule { condition, effects }
+        ModuleRule {
+            condition,
+            effects,
+            match_mode: Default::default(),
+        }
+    }
+
+    /// Creates a new module rule. Will only matches internal references.
+    pub fn new_internal(condition: ModuleRuleCondition, effects: Vec<ModuleRuleEffect>) -> Self {
+        ModuleRule {
+            condition,
+            effects,
+            match_mode: MatchMode::Internal,
+        }
     }
 
     pub fn effects(&self) -> impl Iterator<Item = &ModuleRuleEffect> {
@@ -32,7 +65,8 @@ impl ModuleRule {
         path: &FileSystemPath,
         reference_type: &ReferenceType,
     ) -> Result<bool> {
-        self.condition.matches(source, path, reference_type).await
+        Ok(self.match_mode.matches(reference_type)
+            && self.condition.matches(source, path, reference_type).await?)
     }
 }
 

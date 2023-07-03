@@ -157,4 +157,14 @@ impl ReferenceType {
             ReferenceType::Undefined => true,
         }
     }
+
+    /// Returns true if this reference type is internal. This will be used in
+    /// combination with [`ModuleRuleCondition::Internal`] to determine if a
+    /// rule should be applied to an internal asset/reference.
+    pub fn is_internal(&self) -> bool {
+        matches!(
+            self,
+            ReferenceType::Internal(_) | ReferenceType::Css(CssReferenceSubType::Internal)
+        )
+    }
 }
