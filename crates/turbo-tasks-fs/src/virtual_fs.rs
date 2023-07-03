@@ -22,6 +22,12 @@ impl VirtualFileSystemVc {
     }
 }
 
+impl Default for VirtualFileSystemVc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[turbo_tasks::value_impl]
 impl FileSystem for VirtualFileSystem {
     #[turbo_tasks::function]

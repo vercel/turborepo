@@ -1139,7 +1139,7 @@ impl FileSystemPathVc {
             // Like `Path::with_extension` and `PathBuf::set_extension`, if the extension is empty,
             // we remove the extension altogether.
             match extension.is_empty() {
-                true => format!("{path_without_extension}"),
+                true => path_without_extension.to_string(),
                 false => format!("{path_without_extension}.{extension}"),
             },
         ))
