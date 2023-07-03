@@ -302,7 +302,7 @@
     NodeEntry, NodeEntryVc, NodeRenderingEntriesVc, NodeRenderingEntry, NodeRenderingEntryVc,
 };
 <span class="kw">use </span>turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological},
+    graph::{AdjacencyMap, GraphTraversal},
     CompletionVc, CompletionsVc, TryJoinIterExt, ValueToString,
 };
 <span class="kw">use </span>turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
@@ -462,7 +462,7 @@
             .<span class="kw">await
     </span>};
 
-    <span class="kw">let </span>graph = ReverseTopological::new()
+    <span class="kw">let </span>graph = AdjacencyMap::new()
         .skip_duplicates()
         .visit(once(Type::Internal(intermediate_asset)), get_asset_children)
         .<span class="kw">await
@@ -472,7 +472,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>internal_assets = IndexSet::new();
     <span class="kw">let </span><span class="kw-2">mut </span>external_asset_entrypoints = IndexSet::new();
 
-    <span class="kw">for </span>item <span class="kw">in </span>graph {
+    <span class="kw">for </span>item <span class="kw">in </span>graph.into_reverse_topological() {
         <span class="kw">match </span>item {
             Type::Internal(asset) =&gt; {
                 internal_assets.insert(asset);

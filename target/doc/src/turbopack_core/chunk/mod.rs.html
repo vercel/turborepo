@@ -660,7 +660,7 @@
 <span class="kw">use </span>tracing::{info_span, Span};
 <span class="kw">use </span>turbo_tasks::{
     debug::ValueDebugFormat,
-    graph::{GraphTraversal, GraphTraversalResult, ReverseTopological, Visit, VisitControlFlow},
+    graph::{AdjacencyMap, GraphTraversal, GraphTraversalResult, Visit, VisitControlFlow},
     primitives::{StringReadRef, StringVc},
     trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
@@ -1227,11 +1227,11 @@
         _phantom: PhantomData,
     };
 
-    <span class="kw">let </span>GraphTraversalResult::Completed(traversal_result) = ReverseTopological::new().visit(root_edges, visit).<span class="kw">await else </span>{
+    <span class="kw">let </span>GraphTraversalResult::Completed(traversal_result) = AdjacencyMap::new().visit(root_edges, visit).<span class="kw">await else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     };
 
-    <span class="kw">let </span>graph_nodes: Vec&lt;<span class="kw">_</span>&gt; = traversal_result<span class="question-mark">?</span>.into_iter().collect();
+    <span class="kw">let </span>graph_nodes: Vec&lt;<span class="kw">_</span>&gt; = traversal_result<span class="question-mark">?</span>.into_reverse_topological().collect();
 
     <span class="kw">let </span><span class="kw-2">mut </span>chunk_items = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();

@@ -126,12 +126,14 @@
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::iter::once;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological},
+    graph::{AdjacencyMap, GraphTraversal},
     primitives::{BoolVc, U64Vc},
     TryJoinIterExt, ValueToString,
 };
@@ -211,7 +213,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>chunkable_assets_set(root: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsSetVc&gt; {
-    <span class="kw">let </span>assets = ReverseTopological::new()
+    <span class="kw">let </span>assets = AdjacencyMap::new()
         .skip_duplicates()
         .visit(once(root), |<span class="kw-2">&amp;</span>asset: <span class="kw-2">&amp;</span>AssetVc| <span class="kw">async move </span>{
             <span class="prelude-val">Ok</span>(asset
@@ -252,7 +254,9 @@
         })
         .<span class="kw">await
         </span>.completed()<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(AssetsSetVc::cell(assets.into_inner().into_iter().collect()))
+    <span class="prelude-val">Ok</span>(AssetsSetVc::cell(
+        assets.into_inner().into_reverse_topological().collect(),
+    ))
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="turbopack_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

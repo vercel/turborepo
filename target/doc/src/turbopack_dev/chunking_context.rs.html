@@ -403,7 +403,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological},
+    graph::{AdjacencyMap, GraphTraversal},
     primitives::{BoolVc, StringVc},
     TryJoinIterExt, Value,
 };
@@ -753,7 +753,7 @@
 <span class="kw">where
     </span>I: IntoIterator&lt;Item = ChunkVc&gt;,
 {
-    <span class="prelude-val">Ok</span>(ReverseTopological::new()
+    <span class="prelude-val">Ok</span>(AdjacencyMap::new()
         .skip_duplicates()
         .visit(entries, |chunk: ChunkVc| <span class="kw">async move </span>{
             <span class="prelude-val">Ok</span>(chunk
@@ -767,7 +767,7 @@
         .<span class="kw">await
         </span>.completed()<span class="question-mark">?
         </span>.into_inner()
-        .into_iter())
+        .into_reverse_topological())
 }
 
 <span class="kw">async fn </span>get_optimized_chunks&lt;I&gt;(chunks: I) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksVc&gt;

@@ -5,7 +5,7 @@ var sourcesIndex = JSON.parse('{\
 "signposter_sys":["",[],["lib.rs"]],\
 "swc_ast_explorer":["",[],["main.rs"]],\
 "tracing_signpost":["",[],["lib.rs"]],\
-"turbo_tasks":["",[["debug",[],["internal.rs","mod.rs","vdbg.rs"]],["graph",[],["control_flow.rs","graph_store.rs","graph_traversal.rs","mod.rs","non_deterministic.rs","reverse_topological.rs","visit.rs","with_future.rs"]]],["backend.rs","collectibles.rs","completion.rs","display.rs","duration_span.rs","event.rs","id.rs","id_factory.rs","invalidation.rs","join_iter_ext.rs","lib.rs","macro_helpers.rs","magic_any.rs","manager.rs","native_function.rs","no_move_vec.rs","nothing.rs","once_map.rs","persisted_graph.rs","primitives.rs","raw_vc.rs","read_ref.rs","registry.rs","small_duration.rs","state.rs","task_input.rs","timed_future.rs","trace.rs","trait_ref.rs","util.rs","value.rs","value_type.rs"]],\
+"turbo_tasks":["",[["debug",[],["internal.rs","mod.rs","vdbg.rs"]],["graph",[],["adjacency_map.rs","control_flow.rs","graph_store.rs","graph_traversal.rs","mod.rs","non_deterministic.rs","visit.rs","with_future.rs"]]],["backend.rs","collectibles.rs","completion.rs","display.rs","duration_span.rs","event.rs","id.rs","id_factory.rs","invalidation.rs","join_iter_ext.rs","lib.rs","macro_helpers.rs","magic_any.rs","manager.rs","native_function.rs","no_move_vec.rs","nothing.rs","once_map.rs","persisted_graph.rs","primitives.rs","raw_vc.rs","read_ref.rs","registry.rs","small_duration.rs","state.rs","task_input.rs","timed_future.rs","trace.rs","trait_ref.rs","util.rs","value.rs","value_type.rs"]],\
 "turbo_tasks_build":["",[],["lib.rs"]],\
 "turbo_tasks_bytes":["",[],["bytes.rs","lib.rs","stream.rs"]],\
 "turbo_tasks_env":["",[],["command_line.rs","custom.rs","dotenv.rs","filter.rs","lib.rs"]],\
