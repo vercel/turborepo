@@ -9,9 +9,14 @@ use super::{
 #[turbo_tasks::value]
 pub struct VirtualFileSystem;
 
-#[turbo_tasks::value_impl]
 impl VirtualFileSystemVc {
-    #[turbo_tasks::function]
+    /// Creates a new [`VirtualFileSystemVc`].
+    ///
+    /// NOTE: This function is not a `turbo_tasks::function` to avoid instances
+    /// being equivalent identity-wise. This ensures that a [`FileSystemPathVc`]
+    /// created from this [`VirtualFileSystemVc`] will never be equivalent,
+    /// nor be interoperable, with a [`FileSystemPathVc`] created from another
+    /// [`VirtualFileSystemVc`].
     pub fn new() -> Self {
         Self::cell(VirtualFileSystem)
     }
