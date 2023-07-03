@@ -41,7 +41,7 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 pub struct BerryLockfile<'a> {
     data: &'a LockfileData,
-    resolutions: Map<Descriptor<'a>, Locator<'a>>,
+    resolutions: Map<Descriptor<'a>, Locator<'static>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver,
     locator_package: Map<Locator<'static>, Rc<BerryPackage>>,
@@ -121,7 +121,7 @@ impl<'a> BerryLockfile<'a> {
                 if let Some(other) = resolver.insert(&descriptor) {
                     panic!("Descriptor collision {descriptor} and {other}");
                 }
-                descriptor_locator.insert(descriptor, locator.clone());
+                descriptor_locator.insert(descriptor, locator.as_owned());
             }
         }
 
