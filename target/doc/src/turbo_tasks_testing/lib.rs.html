@@ -242,6 +242,24 @@
 <a href="#242" id="242">242</a>
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
 </pre><pre class="rust"><code><span class="doccomment">//! Testing utilities and macros for turbo-tasks and applications based on it.
 
 </span><span class="kw">mod </span>macros;
@@ -252,24 +270,26 @@
     collections::HashMap,
     future::Future,
     mem::replace,
+    panic::AssertUnwindSafe,
     sync::{Arc, Mutex, Weak},
 };
 
-<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>auto_hash_map::AutoSet;
+<span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>turbo_tasks::{
     backend::CellContent,
     event::{Event, EventListener},
     primitives::RawVcSetVc,
     registry,
     test_helpers::with_turbo_tasks_for_testing,
-    util::StaticOrArc,
+    util::{SharedError, StaticOrArc},
     CellId, InvalidationReason, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
 };
 
 <span class="kw">enum </span>Task {
     Spawned(Event),
-    Finished(RawVc),
+    Finished(<span class="prelude-ty">Result</span>&lt;RawVc, SharedError&gt;),
 }
 
 <span class="attr">#[derive(Default)]
@@ -301,7 +321,20 @@
             this.clone(),
             TaskId::from(i),
             <span class="kw">async move </span>{
-                <span class="kw">let </span>result = future.<span class="kw">await</span>.unwrap();
+                <span class="kw">let </span>result = AssertUnwindSafe(future).catch_unwind().<span class="kw">await</span>;
+
+                <span class="comment">// Convert the unwind panic to an anyhow error that can be cloned.
+                </span><span class="kw">let </span>result = result
+                    .map_err(|any| <span class="kw">match </span>any.downcast::&lt;String&gt;() {
+                        <span class="prelude-val">Ok</span>(owned) =&gt; <span class="macro">anyhow!</span>(owned),
+                        <span class="prelude-val">Err</span>(any) =&gt; <span class="kw">match </span>any.downcast::&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str&gt;() {
+                            <span class="prelude-val">Ok</span>(str) =&gt; <span class="macro">anyhow!</span>(str),
+                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="macro">anyhow!</span>(<span class="string">&quot;unknown panic&quot;</span>),
+                        },
+                    })
+                    .and_then(|r| r)
+                    .map_err(|err| SharedError::new(err));
+
                 <span class="kw">let </span><span class="kw-2">mut </span>tasks = this.tasks.lock().unwrap();
                 <span class="kw">if let </span>Task::Spawned(event) = replace(<span class="kw-2">&amp;mut </span>tasks[i], Task::Finished(result)) {
                     event.notify(usize::MAX);
@@ -377,7 +410,10 @@
         <span class="kw">let </span>task = tasks.get(<span class="kw-2">*</span>task).unwrap();
         <span class="kw">match </span>task {
             Task::Spawned(event) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(event.listen())),
-            Task::Finished(result) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(<span class="kw-2">*</span>result)),
+            Task::Finished(result) =&gt; <span class="kw">match </span>result {
+                <span class="prelude-val">Ok</span>(vc) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(vc.clone())),
+                <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(err.clone())),
+            },
         }
     }
 
