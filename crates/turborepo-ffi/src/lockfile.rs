@@ -183,7 +183,7 @@ fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
     let patches = match request.package_manager() {
         proto::PackageManager::Berry => {
             let data = LockfileData::from_bytes(&request.contents)?;
-            let lockfile = BerryLockfile::new(&data, None)?;
+            let lockfile = BerryLockfile::new(data, None)?;
             Ok(lockfile
                 .patches()
                 .into_iter()
