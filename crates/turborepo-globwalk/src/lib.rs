@@ -244,7 +244,25 @@ fn trailing_doublestar() -> &'static Regex {
 }
 
 pub fn fix_glob_pattern(pattern: &str) -> String {
-    let p1 = double_doublestar().replace(pattern, "**");
+    // This is a no-op on unix systems, but converts to slashes on windows
+    #[cfg(not(windows))]
+    let needs_trailing_slash = false;
+    #[cfg(windows)]
+    let needs_trailing_slash = pattern.ends_with('/') || pattern.ends_with('\\');
+    let converted = Path::new(pattern)
+        .to_slash()
+        .expect("failed to roundtrip through Path");
+    // TODO: consider inlining path-slash to handle this bug
+    // technically this won't happen on unix, the to_slash conversion
+    // is a no-op, so it doesn't strip trailing slashes. path-slash
+    // strips trailing _unix_ slashes from windows paths, rather than
+    // "converting" (leaving) them.
+    let p0 = if needs_trailing_slash {
+        format!("{}/", converted)
+    } else {
+        converted.to_string()
+    };
+    let p1 = double_doublestar().replace(&p0, "**");
     let p2 = leading_doublestar().replace(&p1, "**/*$suffix");
     let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
 
