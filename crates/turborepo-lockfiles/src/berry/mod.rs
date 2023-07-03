@@ -46,7 +46,7 @@ pub struct BerryLockfile<'a> {
     resolver: DescriptorResolver<'a>,
     locator_package: Map<Locator<'a>, Rc<BerryPackage>>,
     // Map of regular locators to patch locators that apply to them
-    patches: Map<Locator<'static>, Locator<'a>>,
+    patches: Map<Locator<'static>, Locator<'static>>,
     // Descriptors that come from default package extensions that ship with berry
     extensions: HashSet<Descriptor<'static>>,
     // Package overrides
@@ -111,7 +111,7 @@ impl<'a> BerryLockfile<'a> {
                 let original_locator = locator
                     .patched_locator()
                     .ok_or_else(|| Error::PatchMissingOriginalLocator(locator.as_owned()))?;
-                patches.insert(original_locator.as_owned(), locator.clone());
+                patches.insert(original_locator.as_owned(), locator.as_owned());
             }
 
             locator_package.insert(locator.clone(), package.clone());
