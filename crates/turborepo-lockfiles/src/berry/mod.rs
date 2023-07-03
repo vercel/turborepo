@@ -44,7 +44,7 @@ pub struct BerryLockfile<'a> {
     resolutions: Map<Descriptor<'a>, Locator<'a>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver<'a>,
-    locator_package: Map<Locator<'a>, Rc<BerryPackage>>,
+    locator_package: Map<Locator<'static>, Rc<BerryPackage>>,
     // Map of regular locators to patch locators that apply to them
     patches: Map<Locator<'static>, Locator<'static>>,
     // Descriptors that come from default package extensions that ship with berry
@@ -114,7 +114,7 @@ impl<'a> BerryLockfile<'a> {
                 patches.insert(original_locator.as_owned(), locator.as_owned());
             }
 
-            locator_package.insert(locator.clone(), package.clone());
+            locator_package.insert(locator.as_owned(), package.clone());
 
             for descriptor in Descriptor::from_lockfile_key(key) {
                 let descriptor = descriptor?;
