@@ -15,7 +15,7 @@ use crate::references::internal::InternalCssAssetReferenceVc;
 #[derive(Clone)]
 pub struct GlobalCssAsset {
     source: AssetVc,
-    inner: AssetVc,
+    context: AssetContextVc,
 }
 
 #[turbo_tasks::value_impl]
@@ -23,17 +23,23 @@ impl GlobalCssAssetVc {
     /// Creates a new CSS asset. The CSS is treated as global CSS.
     #[turbo_tasks::function]
     pub fn new(source: AssetVc, context: AssetContextVc) -> Self {
-        Self::cell(GlobalCssAsset {
-            source,
-            // The underlying CSS is processed through an internal CSS reference.
-            // This can then be picked up by other rules to treat CSS assets in
-            // a special way. For instance, in the Next App Router implementation,
-            // RSC CSS assets will be added to the client references manifest.
-            inner: context.process(
-                source,
-                Value::new(ReferenceType::Css(CssReferenceSubType::Internal)),
-            ),
-        })
+        Self::cell(GlobalCssAsset { source, context })
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GlobalCssAssetVc {
+    #[turbo_tasks::function]
+    async fn inner(self) -> Result<AssetVc> {
+        let this = self.await?;
+        // The underlying CSS is processed through an internal CSS reference.
+        // This can then be picked up by other rules to treat CSS assets in
+        // a special way. For instance, in the Next App Router implementation,
+        // RSC CSS assets will be added to the client references manifest.
+        Ok(this.context.process(
+            this.source,
+            Value::new(ReferenceType::Css(CssReferenceSubType::Internal)),
+        ))
     }
 }
 
@@ -50,8 +56,10 @@ impl Asset for GlobalCssAsset {
     }
 
     #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        AssetReferencesVc::cell(vec![InternalCssAssetReferenceVc::new(self.inner).into()])
+    fn references(self_vc: GlobalCssAssetVc) -> AssetReferencesVc {
+        AssetReferencesVc::cell(vec![
+            InternalCssAssetReferenceVc::new(self_vc.inner()).into()
+        ])
     }
 }
 
