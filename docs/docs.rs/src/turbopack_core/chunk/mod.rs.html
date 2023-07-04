@@ -616,6 +616,13 @@
 <a href="#616" id="616">616</a>
 <a href="#617" id="617">617</a>
 <a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
@@ -623,6 +630,7 @@
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>data;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>evaluate;
 <span class="kw">pub mod </span>optimize;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>passthrough_asset;
 
 <span class="kw">use </span>std::{
     collections::HashSet,
@@ -650,6 +658,7 @@
     chunking_context::{ChunkingContext, ChunkingContextVc},
     data::{ChunkData, ChunkDataOption, ChunkDataOptionVc, ChunkDataVc, ChunksData, ChunksDataVc},
     evaluate::{EvaluatableAsset, EvaluatableAssetVc, EvaluatableAssets, EvaluatableAssetsVc},
+    passthrough_asset::{PassthroughAsset, PassthroughAssetVc},
 };
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsVc},
@@ -895,6 +904,9 @@
 
 <span class="attr">#[derive(Eq, PartialEq, Clone, Hash)]
 </span><span class="kw">enum </span>ChunkContentGraphNode&lt;I&gt; {
+    <span class="comment">// An asset not placed in the current chunk, but whose references we will
+    // follow to find more graph nodes.
+    </span>PassthroughAsset { asset: AssetVc },
     <span class="comment">// Chunk items that are placed into the current chunk
     </span>ChunkItem { item: I, ident: StringReadRef },
     <span class="comment">// Asset that is already available and doesn&#39;t need to be included
@@ -949,6 +961,11 @@
                 ));
                 <span class="kw">continue</span>;
             }
+        }
+
+        <span class="kw">if </span>PassthroughAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">?</span>.is_some() {
+            graph_nodes.push((<span class="prelude-val">None</span>, ChunkContentGraphNode::PassthroughAsset { asset }));
+            <span class="kw">continue</span>;
         }
 
         <span class="kw">let </span>chunkable_asset = <span class="kw">match </span>ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
@@ -1104,24 +1121,20 @@
     }
 
     <span class="kw">fn </span>edges(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;</span>ChunkContentGraphNode&lt;I&gt;) -&gt; <span class="self">Self</span>::EdgesFuture {
-        <span class="kw">let </span>chunk_item = <span class="kw">if let </span>ChunkContentGraphNode::ChunkItem {
-            item: chunk_item, ..
-        } = node
-        {
-            <span class="prelude-val">Some</span>(chunk_item.clone())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">None
-        </span>};
+        <span class="kw">let </span>node = node.clone();
 
         <span class="kw">let </span>context = <span class="self">self</span>.context;
 
         <span class="kw">async move </span>{
-            <span class="kw">let </span><span class="prelude-val">Some</span>(chunk_item) = chunk_item <span class="kw">else </span>{
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[].into_iter().flatten());
+            <span class="kw">let </span>references = <span class="kw">match </span>node {
+                ChunkContentGraphNode::PassthroughAsset { asset } =&gt; asset.references(),
+                ChunkContentGraphNode::ChunkItem { item, .. } =&gt; item.references(),
+                <span class="kw">_ </span>=&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[].into_iter().flatten());
+                }
             };
 
-            <span class="prelude-val">Ok</span>(chunk_item
-                .references()
+            <span class="prelude-val">Ok</span>(references
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.into_iter()
                 .map(|reference| reference_to_graph_nodes::&lt;I&gt;(context, <span class="kw-2">*</span>reference))
@@ -1198,7 +1211,8 @@
 
     <span class="kw">for </span>graph_node <span class="kw">in </span>graph_nodes {
         <span class="kw">match </span>graph_node {
-            ChunkContentGraphNode::AvailableAsset(_asset) =&gt; {}
+            ChunkContentGraphNode::AvailableAsset(<span class="kw">_</span>)
+            | ChunkContentGraphNode::PassthroughAsset { .. } =&gt; {}
             ChunkContentGraphNode::ChunkItem { item, .. } =&gt; {
                 chunk_items.push(item);
             }

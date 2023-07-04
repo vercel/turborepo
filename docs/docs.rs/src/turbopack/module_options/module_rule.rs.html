@@ -79,29 +79,98 @@
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPath;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc, plugin::CustomModuleTypeVc, reference_type::ReferenceType,
-    source_transform::SourceTransformsVc,
+    asset::AssetVc, reference_type::ReferenceType, source_transform::SourceTransformsVc,
 };
-<span class="kw">use </span>turbopack_css::CssInputTransformsVc;
+<span class="kw">use </span>turbopack_css::{CssInputTransformsVc, CssModuleAssetType};
 <span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransformsVc, EcmascriptOptions};
 <span class="kw">use </span>turbopack_mdx::MdxTransformOptionsVc;
 
-<span class="kw">use </span><span class="kw">super</span>::ModuleRuleCondition;
+<span class="kw">use super</span>::{CustomModuleTypeVc, ModuleRuleCondition};
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>ModuleRule {
     condition: ModuleRuleCondition,
     effects: Vec&lt;ModuleRuleEffect&gt;,
+    match_mode: MatchMode,
+}
+
+<span class="attr">#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
+</span><span class="kw">enum </span>MatchMode {
+    <span class="comment">// Match all but internal references.
+    </span><span class="attr">#[default]
+    </span>Default,
+    <span class="comment">// Only match internal references.
+    </span>Internal,
+}
+
+<span class="kw">impl </span>MatchMode {
+    <span class="kw">fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, reference_type: <span class="kw-2">&amp;</span>ReferenceType) -&gt; bool {
+        <span class="macro">matches!</span>(
+            (<span class="self">self</span>, reference_type.is_internal()),
+            (MatchMode::Default, <span class="bool-val">false</span>) | (MatchMode::Internal, <span class="bool-val">true</span>)
+        )
+    }
 }
 
 <span class="kw">impl </span>ModuleRule {
-    <span class="kw">pub fn </span>new(condition: ModuleRuleCondition, effects: Vec&lt;ModuleRuleEffect&gt;) -&gt; <span class="self">Self </span>{
-        ModuleRule { condition, effects }
+    <span class="doccomment">/// Creates a new module rule. Will not match internal references.
+    </span><span class="kw">pub fn </span>new(condition: ModuleRuleCondition, effects: Vec&lt;ModuleRuleEffect&gt;) -&gt; <span class="self">Self </span>{
+        ModuleRule {
+            condition,
+            effects,
+            match_mode: Default::default(),
+        }
+    }
+
+    <span class="doccomment">/// Creates a new module rule. Will only matches internal references.
+    </span><span class="kw">pub fn </span>new_internal(condition: ModuleRuleCondition, effects: Vec&lt;ModuleRuleEffect&gt;) -&gt; <span class="self">Self </span>{
+        ModuleRule {
+            condition,
+            effects,
+            match_mode: MatchMode::Internal,
+        }
     }
 
     <span class="kw">pub fn </span>effects(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ModuleRuleEffect&gt; {
@@ -114,8 +183,9 @@
         path: <span class="kw-2">&amp;</span>FileSystemPath,
         reference_type: <span class="kw-2">&amp;</span>ReferenceType,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
-        <span class="self">self</span>.condition.matches(source, path, reference_type).<span class="kw">await
-    </span>}
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.match_mode.matches(reference_type)
+            &amp;&amp; <span class="self">self</span>.condition.matches(source, path, reference_type).<span class="kw">await</span><span class="question-mark">?</span>)
+    }
 }
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -155,8 +225,12 @@
         transforms: EcmascriptInputTransformsVc,
         options: MdxTransformOptionsVc,
     },
-    Css(CssInputTransformsVc),
-    CssModule(CssInputTransformsVc),
+    CssGlobal,
+    CssModule,
+    Css {
+        ty: CssModuleAssetType,
+        transforms: CssInputTransformsVc,
+    },
     Static,
     Custom(CustomModuleTypeVc),
 }

@@ -483,22 +483,108 @@
 <a href="#483" id="483">483</a>
 <a href="#484" id="484">484</a>
 <a href="#485" id="485">485</a>
-</pre><pre class="rust"><code><span class="kw">pub mod </span>module_options_context;
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
+<a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
+<a href="#507" id="507">507</a>
+<a href="#508" id="508">508</a>
+<a href="#509" id="509">509</a>
+<a href="#510" id="510">510</a>
+<a href="#511" id="511">511</a>
+<a href="#512" id="512">512</a>
+<a href="#513" id="513">513</a>
+<a href="#514" id="514">514</a>
+<a href="#515" id="515">515</a>
+<a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+</pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>custom_module_type;
+<span class="kw">pub mod </span>module_options_context;
 <span class="kw">pub mod </span>module_rule;
 <span class="kw">pub mod </span>rule_condition;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">pub use </span>custom_module_type::{CustomModuleType, CustomModuleTypeVc};
 <span class="kw">pub use </span>module_options_context::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>module_rule::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>rule_condition::<span class="kw-2">*</span>;
 <span class="kw">use </span>turbo_tasks::primitives::OptionStringVc;
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
-    reference_type::{ReferenceType, UrlReferenceSubType},
+    reference_type::{CssReferenceSubType, ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
     source_transform::SourceTransformsVc,
 };
-<span class="kw">use </span>turbopack_css::{CssInputTransform, CssInputTransformsVc};
+<span class="kw">use </span>turbopack_css::{CssInputTransform, CssInputTransformsVc, CssModuleAssetType};
 <span class="kw">use </span>turbopack_ecmascript::{
     EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType,
 };
@@ -553,6 +639,7 @@
             <span class="kw-2">ref </span>decorators,
             enable_mdx,
             enable_mdx_rs,
+            enable_raw_css,
             <span class="kw-2">ref </span>enable_postcss_transform,
             <span class="kw-2">ref </span>enable_webpack_loaders,
             preset_env_versions,
@@ -708,47 +795,6 @@
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Json)],
             ),
             ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.css&quot;</span>.to_string()),
-                [
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(options) = enable_postcss_transform {
-                        <span class="kw">let </span>execution_context = execution_context
-                            .context(<span class="string">&quot;execution_context is required for the postcss_transform&quot;</span>)<span class="question-mark">?
-                            </span>.with_layer(<span class="string">&quot;postcss&quot;</span>);
-
-                        <span class="kw">let </span>import_map = <span class="kw">if let </span><span class="prelude-val">Some</span>(postcss_package) = options.postcss_package {
-                            package_import_map_from_import_mapping(<span class="string">&quot;postcss&quot;</span>, postcss_package)
-                        } <span class="kw">else </span>{
-                            package_import_map_from_context(<span class="string">&quot;postcss&quot;</span>, path)
-                        };
-                        <span class="prelude-val">Some</span>(ModuleRuleEffect::SourceTransforms(
-                            SourceTransformsVc::cell(<span class="macro">vec!</span>[PostCssTransformVc::new(
-                                node_evaluate_asset_context(
-                                    execution_context,
-                                    <span class="prelude-val">Some</span>(import_map),
-                                    <span class="prelude-val">None</span>,
-                                ),
-                                execution_context,
-                            )
-                            .into()]),
-                        ))
-                    } <span class="kw">else </span>{
-                        <span class="prelude-val">None
-                    </span>},
-                    <span class="prelude-val">Some</span>(ModuleRuleEffect::ModuleType(ModuleType::Css(
-                        css_transforms,
-                    ))),
-                ]
-                .into_iter()
-                .flatten()
-                .collect(),
-            ),
-            ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.module.css&quot;</span>.to_string()),
-                <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::CssModule(
-                    css_transforms,
-                ))],
-            ),
-            ModuleRule::new(
                 ModuleRuleCondition::any(<span class="macro">vec!</span>[
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.js&quot;</span>.to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.jsx&quot;</span>.to_string()),
@@ -879,6 +925,128 @@
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Static)],
             ),
         ];
+
+        <span class="kw">if </span>enable_raw_css {
+            rules.extend([
+                ModuleRule::new(
+                    ModuleRuleCondition::all(<span class="macro">vec!</span>[ModuleRuleCondition::ResourcePathEndsWith(
+                        <span class="string">&quot;.css&quot;</span>.to_string(),
+                    )]),
+                    <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Default,
+                        transforms: css_transforms,
+                    })],
+                ),
+                ModuleRule::new(
+                    ModuleRuleCondition::all(<span class="macro">vec!</span>[ModuleRuleCondition::ResourcePathEndsWith(
+                        <span class="string">&quot;.module.css&quot;</span>.to_string(),
+                    )]),
+                    <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Module,
+                        transforms: css_transforms,
+                    })],
+                ),
+            ]);
+        } <span class="kw">else </span>{
+            rules.extend([
+                ModuleRule::new(
+                    ModuleRuleCondition::all(<span class="macro">vec!</span>[
+                        ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.css&quot;</span>.to_string()),
+                        <span class="comment">// Only create a global CSS asset if not `@import`ed from CSS already.
+                        </span>ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
+                            ReferenceType::Css(CssReferenceSubType::AtImport),
+                        )),
+                    ]),
+                    [
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(options) = enable_postcss_transform {
+                            <span class="kw">let </span>execution_context = execution_context
+                                .context(<span class="string">&quot;execution_context is required for the postcss_transform&quot;</span>)<span class="question-mark">?
+                                </span>.with_layer(<span class="string">&quot;postcss&quot;</span>);
+
+                            <span class="kw">let </span>import_map = <span class="kw">if let </span><span class="prelude-val">Some</span>(postcss_package) = options.postcss_package
+                            {
+                                package_import_map_from_import_mapping(<span class="string">&quot;postcss&quot;</span>, postcss_package)
+                            } <span class="kw">else </span>{
+                                package_import_map_from_context(<span class="string">&quot;postcss&quot;</span>, path)
+                            };
+                            <span class="prelude-val">Some</span>(ModuleRuleEffect::SourceTransforms(
+                                SourceTransformsVc::cell(<span class="macro">vec!</span>[PostCssTransformVc::new(
+                                    node_evaluate_asset_context(
+                                        execution_context,
+                                        <span class="prelude-val">Some</span>(import_map),
+                                        <span class="prelude-val">None</span>,
+                                    ),
+                                    execution_context,
+                                )
+                                .into()]),
+                            ))
+                        } <span class="kw">else </span>{
+                            <span class="prelude-val">None
+                        </span>},
+                        <span class="prelude-val">Some</span>(ModuleRuleEffect::ModuleType(ModuleType::CssGlobal)),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                ),
+                ModuleRule::new(
+                    ModuleRuleCondition::all(<span class="macro">vec!</span>[
+                        ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.module.css&quot;</span>.to_string()),
+                        <span class="comment">// Only create a module CSS asset if not `@import`ed from CSS already.
+                        // NOTE: `composes` references should not be treated as `@import`s and
+                        // should also create a module CSS asset.
+                        </span>ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
+                            ReferenceType::Css(CssReferenceSubType::AtImport),
+                        )),
+                    ]),
+                    <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::CssModule)],
+                ),
+                ModuleRule::new(
+                    ModuleRuleCondition::all(<span class="macro">vec!</span>[
+                        ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.css&quot;</span>.to_string()),
+                        <span class="comment">// Create a normal CSS asset if `@import`ed from CSS already.
+                        </span>ModuleRuleCondition::ReferenceType(ReferenceType::Css(
+                            CssReferenceSubType::AtImport,
+                        )),
+                    ]),
+                    <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Default,
+                        transforms: css_transforms,
+                    })],
+                ),
+                ModuleRule::new(
+                    ModuleRuleCondition::all(<span class="macro">vec!</span>[
+                        ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.module.css&quot;</span>.to_string()),
+                        <span class="comment">// Create a normal CSS asset if `@import`ed from CSS already.
+                        </span>ModuleRuleCondition::ReferenceType(ReferenceType::Css(
+                            CssReferenceSubType::AtImport,
+                        )),
+                    ]),
+                    <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Module,
+                        transforms: css_transforms,
+                    })],
+                ),
+                ModuleRule::new_internal(
+                    ModuleRuleCondition::all(<span class="macro">vec!</span>[ModuleRuleCondition::ResourcePathEndsWith(
+                        <span class="string">&quot;.css&quot;</span>.to_string(),
+                    )]),
+                    <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Default,
+                        transforms: css_transforms,
+                    })],
+                ),
+                ModuleRule::new_internal(
+                    ModuleRuleCondition::all(<span class="macro">vec!</span>[ModuleRuleCondition::ResourcePathEndsWith(
+                        <span class="string">&quot;.module.css&quot;</span>.to_string(),
+                    )]),
+                    <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Module,
+                        transforms: css_transforms,
+                    })],
+                ),
+            ]);
+        }
 
         <span class="kw">if </span>enable_mdx || enable_mdx_rs.is_some() {
             <span class="kw">let </span>(jsx_runtime, jsx_import_source) = <span class="kw">if let </span><span class="prelude-val">Some</span>(enable_jsx) = enable_jsx {

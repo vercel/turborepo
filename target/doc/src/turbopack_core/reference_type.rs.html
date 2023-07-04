@@ -152,6 +152,22 @@
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 
 <span class="kw">use </span>indexmap::IndexMap;
@@ -199,6 +215,12 @@
 </span><span class="kw">pub enum </span>CssReferenceSubType {
     AtImport,
     Compose,
+    <span class="doccomment">/// Reference from any asset to a CSS-parseable asset.
+    ///
+    /// This marks the boundary between non-CSS and CSS assets. The Next.js App
+    /// Router implementation uses this to inject client references in-between
+    /// Global/Module CSS assets and the underlying CSS assets.
+    </span>Internal,
     Custom(u8),
     Undefined,
 }
@@ -304,6 +326,16 @@
             }
             ReferenceType::Undefined =&gt; <span class="bool-val">true</span>,
         }
+    }
+
+    <span class="doccomment">/// Returns true if this reference type is internal. This will be used in
+    /// combination with [`ModuleRuleCondition::Internal`] to determine if a
+    /// rule should be applied to an internal asset/reference.
+    </span><span class="kw">pub fn </span>is_internal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(
+            <span class="self">self</span>,
+            ReferenceType::Internal(<span class="kw">_</span>) | ReferenceType::Css(CssReferenceSubType::Internal)
+        )
     }
 }
 </code></pre></div>

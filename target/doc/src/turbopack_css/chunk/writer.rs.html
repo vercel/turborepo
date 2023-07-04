@@ -87,6 +87,7 @@
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
 <a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{HashSet, VecDeque},
     io::Write,
@@ -99,7 +100,8 @@
 <span class="kw">use super</span>::{CssChunkItemVc, CssImport};
 <span class="kw">use </span><span class="kw">crate</span>::chunk::CssChunkItem;
 
-<span class="kw">pub async fn </span>expand_imports(
+<span class="comment">// TODO(WEB-1261)
+</span><span class="kw">pub async fn </span>expand_imports(
     code: <span class="kw-2">&amp;mut </span>CodeBuilder,
     chunk_item: CssChunkItemVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;StringVc&gt;&gt; {

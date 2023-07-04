@@ -250,6 +250,12 @@
 <a href="#250" id="250">250</a>
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -267,7 +273,7 @@
     },
     ecma::atoms::JsWord,
 };
-<span class="kw">use </span>turbo_tasks::{Value, ValueToString};
+<span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
@@ -285,7 +291,7 @@
 </span><span class="kw">static </span>BASENAME_RE: Lazy&lt;Regex&gt; = Lazy::new(|| Regex::new(<span class="string">r&quot;^[^.]*&quot;</span>).unwrap());
 
 <span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;none&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
-</span><span class="kw">pub enum </span>ParseResult {
+</span><span class="kw">pub enum </span>ParseCssResult {
     <span class="prelude-val">Ok </span>{
         <span class="attr">#[turbo_tasks(trace_ignore)]
         </span>stylesheet: Stylesheet,
@@ -300,7 +306,7 @@
     NotFound,
 }
 
-<span class="kw">impl </span>PartialEq <span class="kw">for </span>ParseResult {
+<span class="kw">impl </span>PartialEq <span class="kw">for </span>ParseCssResult {
     <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
         <span class="kw">match </span>(<span class="self">self</span>, other) {
             (<span class="self">Self</span>::Ok { .. }, <span class="self">Self</span>::Ok { .. }) =&gt; <span class="bool-val">false</span>,
@@ -310,7 +316,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value(shared, serialization = <span class="string">&quot;none&quot;</span>, eq = <span class="string">&quot;manual&quot;</span>)]
-</span><span class="kw">pub struct </span>ParseResultSourceMap {
+</span><span class="kw">pub struct </span>ParseCssResultSourceMap {
     <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
     </span>source_map: Arc&lt;SourceMap&gt;,
 
@@ -320,15 +326,15 @@
     </span>mappings: Vec&lt;(BytePos, LineCol)&gt;,
 }
 
-<span class="kw">impl </span>PartialEq <span class="kw">for </span>ParseResultSourceMap {
+<span class="kw">impl </span>PartialEq <span class="kw">for </span>ParseCssResultSourceMap {
     <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
         Arc::ptr_eq(<span class="kw-2">&amp;</span><span class="self">self</span>.source_map, <span class="kw-2">&amp;</span>other.source_map) &amp;&amp; <span class="self">self</span>.mappings == other.mappings
     }
 }
 
-<span class="kw">impl </span>ParseResultSourceMap {
+<span class="kw">impl </span>ParseCssResultSourceMap {
     <span class="kw">pub fn </span>new(source_map: Arc&lt;SourceMap&gt;, mappings: Vec&lt;(BytePos, LineCol)&gt;) -&gt; <span class="self">Self </span>{
-        ParseResultSourceMap {
+        ParseCssResultSourceMap {
             source_map,
             mappings,
         }
@@ -336,7 +342,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>ParseResultSourceMap {
+</span><span class="kw">impl </span>GenerateSourceMap <span class="kw">for </span>ParseCssResultSourceMap {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>generate_source_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OptionSourceMapVc {
         <span class="kw">let </span>map = <span class="self">self</span>.source_map.build_source_map_with_config(
@@ -369,21 +375,20 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">pub async fn </span>parse(
+</span><span class="kw">pub async fn </span>parse_css(
     source: AssetVc,
-    ty: Value&lt;CssModuleAssetType&gt;,
+    ty: CssModuleAssetType,
     transforms: CssInputTransformsVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;ParseCssResultVc&gt; {
     <span class="kw">let </span>content = source.content();
     <span class="kw">let </span>fs_path = <span class="kw-2">&amp;*</span>source.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>ident_str = <span class="kw-2">&amp;*</span>source.ident().to_string().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>ty = ty.into_value();
     <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="kw-2">&amp;*</span>content.<span class="kw">await</span><span class="question-mark">? </span>{
-        AssetContent::Redirect { .. } =&gt; ParseResult::Unparseable.cell(),
+        AssetContent::Redirect { .. } =&gt; ParseCssResult::Unparseable.cell(),
         AssetContent::File(file) =&gt; <span class="kw">match </span><span class="kw-2">&amp;*</span>file.<span class="kw">await</span><span class="question-mark">? </span>{
-            FileContent::NotFound =&gt; ParseResult::NotFound.cell(),
+            FileContent::NotFound =&gt; ParseCssResult::NotFound.cell(),
             FileContent::Content(file) =&gt; <span class="kw">match </span>file.content().to_str() {
-                <span class="prelude-val">Err</span>(_err) =&gt; ParseResult::Unparseable.cell(),
+                <span class="prelude-val">Err</span>(_err) =&gt; ParseCssResult::Unparseable.cell(),
                 <span class="prelude-val">Ok</span>(string) =&gt; {
                     <span class="kw">let </span>transforms = <span class="kw-2">&amp;*</span>transforms.<span class="kw">await</span><span class="question-mark">?</span>;
                     parse_content(
@@ -408,7 +413,7 @@
     source: AssetVc,
     ty: CssModuleAssetType,
     transforms: <span class="kw-2">&amp;</span>[CssInputTransform],
-) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;ParseCssResultVc&gt; {
     <span class="kw">let </span>source_map: Arc&lt;SourceMap&gt; = Default::default();
     <span class="kw">let </span>handler = Handler::with_emitter(
         <span class="bool-val">true</span>,
@@ -435,7 +440,7 @@
         <span class="prelude-val">Err</span>(e) =&gt; {
             <span class="comment">// TODO report in in a stream
             </span>e.to_diagnostics(<span class="kw-2">&amp;</span>handler).emit();
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(ParseResult::Unparseable.into());
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(ParseCssResult::Unparseable.into());
         }
     };
 
@@ -446,7 +451,7 @@
     </span>}
 
     <span class="kw">if </span>has_errors {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(ParseResult::Unparseable.into());
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(ParseCssResult::Unparseable.into());
     }
 
     <span class="kw">let </span>context = TransformContext {
@@ -457,7 +462,7 @@
     }
 
     <span class="kw">let </span>(imports, exports) = <span class="kw">match </span>ty {
-        CssModuleAssetType::Global =&gt; Default::default(),
+        CssModuleAssetType::Default =&gt; Default::default(),
         CssModuleAssetType::Module =&gt; {
             <span class="kw">let </span>imports = swc_core::css::modules::imports::analyze_imports(<span class="kw-2">&amp;</span>parsed_stylesheet);
             <span class="kw">let </span>basename = BASENAME_RE
@@ -484,7 +489,7 @@
         }
     };
 
-    <span class="prelude-val">Ok</span>(ParseResult::Ok {
+    <span class="prelude-val">Ok</span>(ParseCssResult::Ok {
         stylesheet: parsed_stylesheet,
         source_map,
         imports,
@@ -501,6 +506,13 @@
     <span class="kw">fn </span>new_name_for(<span class="kw-2">&amp;</span><span class="self">self</span>, local: <span class="kw-2">&amp;</span>JsWord) -&gt; JsWord {
         <span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, <span class="kw-2">*</span>local, <span class="self">self</span>.suffix).into()
     }
+}
+
+<span class="doccomment">/// Trait to be implemented by assets which can be parsed as CSS.
+</span><span class="attr">#[turbo_tasks::value_trait]
+</span><span class="kw">pub trait </span>ParseCss {
+    <span class="doccomment">/// Returns the parsed css.
+    </span><span class="kw">fn </span>parse_css(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ParseCssResultVc;
 }
 </code></pre></div>
 </section></main><div id="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="turbopack_css" data-themes="" data-resource-suffix="" data-rustdoc-version="1.70.0-nightly (900c35403 2023-03-08)" data-search-js="search-8a59a8356673ec1f.js" data-settings-js="settings-f0c5c39777a9a2f6.js" data-settings-css="settings-0bcba95ff279c1db.css" ></div></body></html>

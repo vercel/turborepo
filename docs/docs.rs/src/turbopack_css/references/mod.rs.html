@@ -203,6 +203,7 @@
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{
@@ -231,7 +232,7 @@
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
 
 <span class="kw">use crate</span>::{
-    parse::{parse, ParseResult},
+    parse::{parse_css, ParseCssResult},
     references::{
         import::{ImportAssetReferenceVc, ImportAttributes},
         url::UrlAssetReferenceVc,
@@ -241,20 +242,21 @@
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>compose;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>import;
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>internal;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>url;
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>analyze_css_stylesheet(
     source: AssetVc,
     origin: ResolveOriginVc,
-    ty: Value&lt;CssModuleAssetType&gt;,
+    ty: CssModuleAssetType,
     transforms: CssInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
 
-    <span class="kw">let </span>parsed = parse(source, ty, transforms).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>parsed = parse_css(source, ty, transforms).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">if let </span>ParseResult::Ok {
+    <span class="kw">if let </span>ParseCssResult::Ok {
         stylesheet,
         source_map,
         ..

@@ -614,8 +614,6 @@
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
 <a href="#616" id="616">616</a>
-<a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(trivial_bounds)]
 #![feature(min_specialization)]
@@ -631,7 +629,7 @@
 };
 
 <span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>css::{CssModuleAssetVc, ModuleCssModuleAssetVc};
+<span class="kw">use </span>css::{CssModuleAssetVc, GlobalCssAssetVc, ModuleCssAssetVc};
 <span class="kw">use </span>ecmascript::{
     typescript::resolve::TypescriptTypesAssetReferenceVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
@@ -652,7 +650,6 @@
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueVc},
-    plugin::CustomModuleType,
     reference::all_referenced_assets,
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{
@@ -680,6 +677,7 @@
 <span class="kw">use </span>turbopack_static::StaticModuleAssetVc;
 
 <span class="kw">use </span><span class="self">self</span>::{
+    module_options::CustomModuleType,
     resolve_options_context::ResolveOptionsContextVc,
     transition::{TransitionVc, TransitionsByNameVc},
 };
@@ -782,21 +780,19 @@
 
             builder.build()
         }
-
         ModuleType::Json =&gt; JsonModuleAssetVc::new(source).into(),
         ModuleType::Raw =&gt; source,
-        ModuleType::Css(transforms) =&gt; {
-            CssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
-        }
-        ModuleType::CssModule(transforms) =&gt; {
-            ModuleCssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms).into()
+        ModuleType::CssGlobal =&gt; GlobalCssAssetVc::new(source, context.into()).into(),
+        ModuleType::CssModule =&gt; ModuleCssAssetVc::new(source, context.into()).into(),
+        ModuleType::Css { ty, transforms } =&gt; {
+            CssModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms, <span class="kw-2">*</span>ty).into()
         }
         ModuleType::Static =&gt; StaticModuleAssetVc::new(source, context.into()).into(),
         ModuleType::Mdx {
             transforms,
             options,
         } =&gt; MdxModuleAssetVc::new(source, context.into(), <span class="kw-2">*</span>transforms, <span class="kw-2">*</span>options).into(),
-        ModuleType::Custom(custom) =&gt; custom.create_module(source, context.into(), part),
+        ModuleType::Custom(custom) =&gt; custom.create_module(source, context, part),
     })
 }
 

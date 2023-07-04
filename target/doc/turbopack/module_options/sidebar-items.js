@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["module_options_context","module_rule","rule_condition"],"struct":["ModuleOptions","ModuleOptionsVc"],"type":["ModuleOptionsReadRef"]};
+window.SIDEBAR_ITEMS = {"mod":["module_options_context","module_rule","rule_condition"],"struct":["CustomModuleTypeVc","ModuleOptions","ModuleOptionsVc"],"trait":["CustomModuleType"],"type":["ModuleOptionsReadRef"]};

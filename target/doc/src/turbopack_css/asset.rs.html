@@ -300,13 +300,6 @@
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{Globals, GLOBALS},
@@ -339,7 +332,9 @@
         CssChunkPlaceable, CssChunkPlaceableVc, CssChunkVc, CssImport,
     },
     code_gen::{CodeGenerateable, CodeGenerateableVc},
-    parse::{parse, ParseResult, ParseResultSourceMap, ParseResultVc},
+    parse::{
+        parse_css, ParseCss, ParseCssResult, ParseCssResultSourceMap, ParseCssResultVc, ParseCssVc,
+    },
     path_visitor::ApplyVisitors,
     references::{
         analyze_css_stylesheet, compose::CssModuleComposeReferenceVc,
@@ -357,51 +352,42 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
 </span><span class="kw">pub struct </span>CssModuleAsset {
-    <span class="kw">pub </span>source: AssetVc,
-    <span class="kw">pub </span>context: AssetContextVc,
-    <span class="kw">pub </span>transforms: CssInputTransformsVc,
-    <span class="kw">pub </span>ty: CssModuleAssetType,
+    source: AssetVc,
+    context: AssetContextVc,
+    transforms: CssInputTransformsVc,
+    ty: CssModuleAssetType,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CssModuleAssetVc {
-    <span class="doccomment">/// Creates a new CSS asset. The CSS is treated as global CSS.
+    <span class="doccomment">/// Creates a new CSS asset.
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(source: AssetVc, context: AssetContextVc, transforms: CssInputTransformsVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(CssModuleAsset {
-            source,
-            context,
-            transforms,
-            ty: CssModuleAssetType::Global,
-        })
-    }
-
-    <span class="doccomment">/// Creates a new CSS asset. The CSS is treated as CSS module.
-    </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new_module(
+    </span><span class="kw">pub fn </span>new(
         source: AssetVc,
         context: AssetContextVc,
         transforms: CssInputTransformsVc,
+        ty: CssModuleAssetType,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(CssModuleAsset {
             source,
             context,
             transforms,
-            ty: CssModuleAssetType::Module,
+            ty,
         })
-    }
-
-    <span class="doccomment">/// Returns the parsed css.
-    </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>parse(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
-        <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(parse(this.source, Value::new(this.ty), this.transforms))
     }
 
     <span class="doccomment">/// Retrns the asset ident of the source without the &quot;css&quot; modifier
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>source_ident(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>.source.ident())
+    }
+}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ParseCss <span class="kw">for </span>CssModuleAsset {
+    <span class="attr">#[turbo_tasks::function]
+    </span><span class="kw">fn </span>parse_css(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ParseCssResultVc {
+        parse_css(<span class="self">self</span>.source, <span class="self">self</span>.ty, <span class="self">self</span>.transforms)
     }
 }
 
@@ -424,7 +410,7 @@
         </span><span class="prelude-val">Ok</span>(analyze_css_stylesheet(
             this.source,
             self_vc.as_resolve_origin(),
-            Value::new(this.ty),
+            this.ty,
             this.transforms,
         ))
     }
@@ -446,7 +432,7 @@
 </span><span class="kw">impl </span>CssChunkPlaceable <span class="kw">for </span>CssModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk_item(self_vc: CssModuleAssetVc, context: ChunkingContextVc) -&gt; CssChunkItemVc {
-        ModuleChunkItemVc::cell(ModuleChunkItem {
+        CssModuleChunkItemVc::cell(CssModuleChunkItem {
             module: self_vc,
             context,
         })
@@ -468,13 +454,13 @@
 }
 
 <span class="attr">#[turbo_tasks::value]
-</span><span class="kw">struct </span>ModuleChunkItem {
+</span><span class="kw">struct </span>CssModuleChunkItem {
     module: CssModuleAssetVc,
     context: ChunkingContextVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>ModuleChunkItem {
+</span><span class="kw">impl </span>ChunkItem <span class="kw">for </span>CssModuleChunkItem {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>asset_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
         <span class="self">self</span>.module.ident()
@@ -487,7 +473,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>CssChunkItem <span class="kw">for </span>ModuleChunkItem {
+</span><span class="kw">impl </span>CssChunkItem <span class="kw">for </span>CssModuleChunkItem {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CssChunkItemContentVc&gt; {
         <span class="kw">let </span>references = <span class="kw-2">&amp;*</span><span class="self">self</span>.module.references().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -545,9 +531,9 @@
             }
         }
 
-        <span class="kw">let </span>parsed = <span class="self">self</span>.module.parse().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>parsed = <span class="self">self</span>.module.parse_css().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if let </span>ParseResult::Ok {
+        <span class="kw">if let </span>ParseCssResult::Ok {
             stylesheet,
             source_map,
             ..
@@ -589,7 +575,7 @@
 
             code_gen.emit(<span class="kw-2">&amp;</span>stylesheet)<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
+            <span class="kw">let </span>srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap).cell();
 
             <span class="prelude-val">Ok</span>(CssChunkItemContent {
                 inner_code: code_string.into(),

@@ -558,6 +558,7 @@
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
 <a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>single_item_chunk;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -594,7 +595,7 @@
 };
 <span class="kw">use crate</span>::{
     embed::{CssEmbed, CssEmbeddable, CssEmbeddableVc},
-    parse::ParseResultSourceMapVc,
+    parse::ParseCssResultSourceMapVc,
     util::stringify_js,
     ImportAssetReferenceVc,
 };
@@ -711,7 +712,8 @@
             <span class="kw">let </span>entry_placeable = CssChunkPlaceableVc::cast_from(entry);
             <span class="kw">let </span>entry_item = entry_placeable.as_chunk_item(this.context);
 
-            <span class="kw">for </span>external_import <span class="kw">in </span>expand_imports(<span class="kw-2">&amp;mut </span>body, entry_item).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="comment">// TODO(WEB-1261)
+            </span><span class="kw">for </span>external_import <span class="kw">in </span>expand_imports(<span class="kw-2">&amp;mut </span>body, entry_item).<span class="kw">await</span><span class="question-mark">? </span>{
                 external_imports.insert(external_import.<span class="kw">await</span><span class="question-mark">?</span>.to_owned());
             }
         }
@@ -1035,7 +1037,7 @@
 </span><span class="kw">pub struct </span>CssChunkItemContent {
     <span class="kw">pub </span>inner_code: Rope,
     <span class="kw">pub </span>imports: Vec&lt;CssImport&gt;,
-    <span class="kw">pub </span>source_map: <span class="prelude-ty">Option</span>&lt;ParseResultSourceMapVc&gt;,
+    <span class="kw">pub </span>source_map: <span class="prelude-ty">Option</span>&lt;ParseCssResultSourceMapVc&gt;,
 }
 
 <span class="attr">#[turbo_tasks::value_trait]
