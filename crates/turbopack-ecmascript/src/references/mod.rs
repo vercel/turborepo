@@ -2621,6 +2621,10 @@ fn detect_dynamic_export(p: &Program) -> DetectedDynamicExportType {
         visit_obj_and_computed!();
 
         fn visit_ident(&mut self, i: &Ident) {
+            // The detection is not perfect, it might have some false positives, e. g. in
+            // cases where `module` is used in some other way. e. g. `const module = 42;`.
+            // But a false positive doesn't break anything, it only opts out of some
+            // optimizations, which is acceptable.
             if &*i.sym == "module" || &*i.sym == "exports" {
                 self.cjs = true;
                 self.found = true;
