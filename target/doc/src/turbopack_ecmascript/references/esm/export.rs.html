@@ -259,6 +259,9 @@
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{
     borrow::Cow,
     collections::{BTreeMap, HashSet},
@@ -302,13 +305,13 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ExpandResults {
     star_exports: Vec&lt;String&gt;,
-    has_cjs_exports: bool,
+    has_dynamic_exports: bool,
 }
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>expand_star_exports(root_asset: EcmascriptChunkPlaceableVc) -&gt; <span class="prelude-ty">Result</span>&lt;ExpandResultsVc&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>set = HashSet::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>has_cjs_exports = <span class="bool-val">false</span>;
+    <span class="kw">let </span><span class="kw-2">mut </span>has_dynamic_exports = <span class="bool-val">false</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>checked_assets = HashSet::new();
     checked_assets.insert(root_asset);
     <span class="kw">let </span><span class="kw-2">mut </span>queue = <span class="macro">vec!</span>[(root_asset, root_asset.get_exports())];
@@ -361,7 +364,7 @@
             .as_issue()
             .emit(),
             EcmascriptExports::CommonJs =&gt; {
-                has_cjs_exports = <span class="bool-val">true</span>;
+                has_dynamic_exports = <span class="bool-val">true</span>;
                 AnalyzeIssue {
                     code: <span class="prelude-val">None</span>,
                     category: StringVc::cell(<span class="string">&quot;analyze&quot;</span>.to_string()),
@@ -381,11 +384,14 @@
                 .as_issue()
                 .emit()
             }
+            EcmascriptExports::DynamicNamespace =&gt; {
+                has_dynamic_exports = <span class="bool-val">true</span>;
+            }
         }
     }
     <span class="prelude-val">Ok</span>(ExpandResultsVc::cell(ExpandResults {
         star_exports: set.into_iter().collect(),
-        has_cjs_exports,
+        has_dynamic_exports,
     }))
 }
 
@@ -412,7 +418,7 @@
             .map(|(k, v)| (Cow::&lt;str&gt;::Borrowed(k), Cow::Borrowed(v)))
             .collect();
         <span class="kw">let </span><span class="kw-2">mut </span>props = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>cjs_exports = Vec::&lt;Box&lt;Expr&gt;&gt;::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>dynamic_exports = Vec::&lt;Box&lt;Expr&gt;&gt;::new();
 
         <span class="kw">for </span>esm_ref <span class="kw">in </span>this.star_exports.iter() {
             <span class="kw">if let </span>ReferencedAsset::Some(asset) = <span class="kw-2">&amp;*</span>esm_ref.get_referenced_asset().<span class="kw">await</span><span class="question-mark">? </span>{
@@ -427,11 +433,11 @@
                     }
                 }
 
-                <span class="kw">if </span>export_info.has_cjs_exports {
+                <span class="kw">if </span>export_info.has_dynamic_exports {
                     <span class="kw">let </span>ident = ReferencedAsset::get_ident_from_placeable(asset).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                    cjs_exports.push(<span class="macro">quote_expr!</span>(
-                        <span class="string">&quot;__turbopack_cjs__($arg)&quot;</span>,
+                    dynamic_exports.push(<span class="macro">quote_expr!</span>(
+                        <span class="string">&quot;__turbopack_dynamic__($arg)&quot;</span>,
                         arg: Expr = Ident::new(ident.into(), DUMMY_SP).into()
                     ));
                 }
@@ -491,10 +497,10 @@
             span: DUMMY_SP,
             props,
         });
-        <span class="kw">let </span>cjs_stmt = <span class="kw">if </span>!cjs_exports.is_empty() {
+        <span class="kw">let </span>dynamic_stmt = <span class="kw">if </span>!dynamic_exports.is_empty() {
             <span class="prelude-val">Some</span>(Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,
-                expr: Expr::from_exprs(cjs_exports),
+                expr: Expr::from_exprs(dynamic_exports),
             }))
         } <span class="kw">else </span>{
             <span class="prelude-val">None
@@ -512,8 +518,8 @@
                     body.insert(<span class="number">0</span>, stmt);
                 }
             }
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(cjs_stmt) = cjs_stmt.clone() {
-                insert_hoisted_stmt(program, cjs_stmt);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(dynamic_stmt) = dynamic_stmt.clone() {
+                insert_hoisted_stmt(program, dynamic_stmt);
             }
         }));
 

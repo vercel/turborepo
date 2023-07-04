@@ -31,6 +31,7 @@
 <a href="#31" id="31">31</a>
 <a href="#32" id="32">32</a>
 <a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
@@ -60,6 +61,7 @@
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub enum </span>EcmascriptExports {
     EsmExports(EsmExportsVc),
+    DynamicNamespace,
     CommonJs,
     Value,
     <span class="prelude-val">None</span>,
