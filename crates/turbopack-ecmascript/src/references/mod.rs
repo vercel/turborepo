@@ -46,7 +46,7 @@ use swc_core::{
 };
 use turbo_tasks::{
     primitives::{BoolVc, RegexVc},
-    TryJoinIterExt, Value, ValueToString,
+    TryJoinIterExt, Value,
 };
 use turbo_tasks_fs::{FileJsonContent, FileSystemPathVc};
 use turbopack_core::{
