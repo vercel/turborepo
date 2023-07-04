@@ -236,7 +236,7 @@ export const users: Array<TurboUser> = [
     pinned: true,
     style: {
       width: 150,
-    },
+    }, 
   },
   {
     caption: "Plex",
