@@ -8,6 +8,7 @@ if (!Array.isArray(globalThis.TURBOPACK)) {
     return;
 }
 ;
+const REEXPORTED_OBJECTS = Symbol("reexported objects");
 ;
 ;
 ;
@@ -34,13 +35,32 @@ function esm(exports, getters) {
 function esmExport(module, getters) {
     esm(module.namespaceObject = module.exports, getters);
 }
-function cjsExport(exports, props) {
-    for(const key in props){
-        defineProp(exports, key, {
-            get: ()=>props[key],
-            enumerable: true
+function dynamicExport(module, object) {
+    if (!module[REEXPORTED_OBJECTS]) {
+        module[REEXPORTED_OBJECTS] = [];
+        module.namespaceObject = new Proxy(module.exports, {
+            get (target, prop) {
+                if (hasOwnProperty.call(target, prop) || prop === "default" || prop === "__esModule") {
+                    return Reflect.get(target, prop);
+                }
+                for (const obj of module[REEXPORTED_OBJECTS]){
+                    const value = Reflect.get(obj, prop);
+                    if (value !== undefined) return value;
+                }
+                return undefined;
+            },
+            ownKeys (target) {
+                const keys = Reflect.ownKeys(target);
+                for (const obj of module[REEXPORTED_OBJECTS]){
+                    for (const key of Reflect.ownKeys(obj)){
+                        if (key !== "default" && !keys.includes(key)) keys.push(key);
+                    }
+                }
+                return keys;
+            }
         });
     }
+    module[REEXPORTED_OBJECTS].push(object);
 }
 function exportValue(module, value) {
     module.exports = value;
@@ -256,7 +276,7 @@ function instantiateModule(id, source) {
                 f: requireContext.bind(null, module),
                 i: esmImport.bind(null, module),
                 s: esmExport.bind(null, module),
-                j: cjsExport.bind(null, module.exports),
+                j: dynamicExport.bind(null, module),
                 v: exportValue.bind(null, module),
                 n: exportNamespace.bind(null, module),
                 m: module,
