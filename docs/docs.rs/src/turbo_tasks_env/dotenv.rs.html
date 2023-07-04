@@ -157,7 +157,7 @@
                 <span class="comment">// from_read will load parse and evalute the Read, and set variables
                 // into the global env. If a later dotenv defines an already defined
                 // var, it&#39;ll be ignored.
-                </span>res = dotenvy::from_read(f.read());
+                </span>res = dotenv::from_read(f.read()).map(|e| e.load());
 
                 vars = env::vars().collect();
                 restore_env(<span class="kw-2">&amp;</span>vars, <span class="kw-2">&amp;</span>initial, <span class="kw-2">&amp;</span>lock);
