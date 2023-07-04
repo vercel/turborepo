@@ -28,14 +28,15 @@ function esmExport(module, getters) {
     esm(module.namespaceObject = module.exports, getters);
 }
 function dynamicExport(module, object) {
-    if (!module[REEXPORTED_OBJECTS]) {
-        module[REEXPORTED_OBJECTS] = [];
+    let reexportedObjects = module[REEXPORTED_OBJECTS];
+    if (!reexportedObjects) {
+        reexportedObjects = module[REEXPORTED_OBJECTS] = [];
         module.namespaceObject = new Proxy(module.exports, {
             get (target, prop) {
                 if (hasOwnProperty.call(target, prop) || prop === "default" || prop === "__esModule") {
                     return Reflect.get(target, prop);
                 }
-                for (const obj of module[REEXPORTED_OBJECTS]){
+                for (const obj of reexportedObjects){
                     const value = Reflect.get(obj, prop);
                     if (value !== undefined) return value;
                 }
@@ -43,7 +44,7 @@ function dynamicExport(module, object) {
             },
             ownKeys (target) {
                 const keys = Reflect.ownKeys(target);
-                for (const obj of module[REEXPORTED_OBJECTS]){
+                for (const obj of reexportedObjects){
                     for (const key of Reflect.ownKeys(obj)){
                         if (key !== "default" && !keys.includes(key)) keys.push(key);
                     }
@@ -52,7 +53,7 @@ function dynamicExport(module, object) {
             }
         });
     }
-    module[REEXPORTED_OBJECTS].push(object);
+    reexportedObjects.push(object);
 }
 function exportValue(module, value) {
     module.exports = value;

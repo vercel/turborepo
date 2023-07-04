@@ -99,7 +99,7 @@ function dynamicExport(module: Module, object: Record<string, any>) {
         ) {
           return Reflect.get(target, prop);
         }
-        for (const obj of reexportedObjects) {
+        for (const obj of reexportedObjects!) {
           const value = Reflect.get(obj, prop);
           if (value !== undefined) return value;
         }
@@ -107,7 +107,7 @@ function dynamicExport(module: Module, object: Record<string, any>) {
       },
       ownKeys(target) {
         const keys = Reflect.ownKeys(target);
-        for (const obj of reexportedObjects) {
+        for (const obj of reexportedObjects!) {
           for (const key of Reflect.ownKeys(obj)) {
             if (key !== "default" && !keys.includes(key)) keys.push(key);
           }
