@@ -804,7 +804,7 @@
                     options: ecmascript_options,
                 })],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mjs&quot;</span>.to_string()),
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
@@ -814,7 +814,7 @@
                     },
                 })],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.cjs&quot;</span>.to_string()),
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
@@ -841,7 +841,7 @@
                     })
                 }],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::any(<span class="macro">vec!</span>[
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mts&quot;</span>.to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.mtsx&quot;</span>.to_string()),
@@ -864,7 +864,7 @@
                     })
                 }],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::any(<span class="macro">vec!</span>[
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.cts&quot;</span>.to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.ctsx&quot;</span>.to_string()),
