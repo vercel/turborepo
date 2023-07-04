@@ -794,7 +794,7 @@
                 ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.json&quot;</span>.to_string()),
                 <span class="macro">vec!</span>[ModuleRuleEffect::ModuleType(ModuleType::Json)],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::any(<span class="macro">vec!</span>[
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.js&quot;</span>.to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.jsx&quot;</span>.to_string()),
@@ -824,7 +824,7 @@
                     },
                 })],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::any(<span class="macro">vec!</span>[
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.ts&quot;</span>.to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(<span class="string">&quot;.tsx&quot;</span>.to_string()),

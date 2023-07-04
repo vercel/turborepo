@@ -116,6 +116,16 @@
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
@@ -136,20 +146,21 @@
     match_mode: MatchMode,
 }
 
-<span class="attr">#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
+<span class="attr">#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 </span><span class="kw">enum </span>MatchMode {
     <span class="comment">// Match all but internal references.
-    </span><span class="attr">#[default]
-    </span>Default,
+    </span>NonInternal,
     <span class="comment">// Only match internal references.
     </span>Internal,
+    <span class="comment">// Match both internal and non-internal references.
+    </span>All,
 }
 
 <span class="kw">impl </span>MatchMode {
     <span class="kw">fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, reference_type: <span class="kw-2">&amp;</span>ReferenceType) -&gt; bool {
         <span class="macro">matches!</span>(
             (<span class="self">self</span>, reference_type.is_internal()),
-            (MatchMode::Default, <span class="bool-val">false</span>) | (MatchMode::Internal, <span class="bool-val">true</span>)
+            (MatchMode::All, <span class="kw">_</span>) | (MatchMode::NonInternal, <span class="bool-val">false</span>) | (MatchMode::Internal, <span class="bool-val">true</span>)
         )
     }
 }
@@ -160,7 +171,7 @@
         ModuleRule {
             condition,
             effects,
-            match_mode: Default::default(),
+            match_mode: MatchMode::NonInternal,
         }
     }
 
@@ -170,6 +181,15 @@
             condition,
             effects,
             match_mode: MatchMode::Internal,
+        }
+    }
+
+    <span class="doccomment">/// Creates a new module rule. Will only matches internal references.
+    </span><span class="kw">pub fn </span>new_all(condition: ModuleRuleCondition, effects: Vec&lt;ModuleRuleEffect&gt;) -&gt; <span class="self">Self </span>{
+        ModuleRule {
+            condition,
+            effects,
+            match_mode: MatchMode::All,
         }
     }
 
