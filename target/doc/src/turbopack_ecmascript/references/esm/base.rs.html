@@ -328,7 +328,6 @@
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>swc_core::{
@@ -511,7 +510,6 @@
         <span class="prelude-val">Ok</span>(ChunkingTypeOptionVc::cell(
             <span class="kw">if let </span><span class="prelude-val">Some</span>(chunking_type) = <span class="self">self</span>.annotations.chunking_type() {
                 <span class="kw">match </span>chunking_type {
-                    <span class="string">&quot;separate&quot; </span>=&gt; <span class="prelude-val">Some</span>(ChunkingType::Separate),
                     <span class="string">&quot;parallel&quot; </span>=&gt; <span class="prelude-val">Some</span>(ChunkingType::Parallel),
                     <span class="string">&quot;isolatedParallel&quot; </span>=&gt; <span class="prelude-val">Some</span>(ChunkingType::IsolatedParallel),
                     <span class="string">&quot;none&quot; </span>=&gt; <span class="prelude-val">None</span>,
@@ -553,8 +551,8 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(CodeGeneration { visitors }.into());
         }
 
-        <span class="comment">// separate chunks can&#39;t be imported as the modules are not available
-        </span><span class="kw">if </span>!<span class="macro">matches!</span>(<span class="kw-2">*</span>chunking_type, <span class="prelude-val">None </span>| <span class="prelude-val">Some</span>(ChunkingType::Separate)) {
+        <span class="comment">// only chunked references can be imported
+        </span><span class="kw">if </span>chunking_type.is_some() {
             <span class="kw">let </span>referenced_asset = self_vc.get_referenced_asset().<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if let </span><span class="prelude-val">Some</span>(ident) = referenced_asset.get_ident().<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">match </span><span class="kw-2">&amp;*</span>referenced_asset {

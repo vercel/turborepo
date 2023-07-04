@@ -451,9 +451,6 @@
 <a href="#451" id="451">451</a>
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
 </pre><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>content;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>context;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>data;
@@ -472,8 +469,8 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkGroupReferenceVc, ChunkItem, ChunkVc,
-        ChunkingContextVc, ChunksVc, ModuleIdsVc,
+        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkVc, ChunkingContextVc,
+        ChunksVc, ModuleIdsVc,
     },
     ident::{AssetIdent, AssetIdentVc},
     introspect::{
@@ -847,9 +844,6 @@
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
         <span class="kw">for </span>r <span class="kw">in </span>content.external_asset_references.iter() {
             references.push(<span class="kw-2">*</span>r);
-        }
-        <span class="kw">for </span>entry <span class="kw">in </span>content.async_chunk_group_entries.iter() {
-            references.push(ChunkGroupReferenceVc::new(this.context.into(), <span class="kw-2">*</span>entry).into());
         }
 
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))

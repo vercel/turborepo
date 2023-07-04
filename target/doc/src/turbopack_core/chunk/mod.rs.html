@@ -616,29 +616,6 @@
 <a href="#616" id="616">616</a>
 <a href="#617" id="617">617</a>
 <a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a>
-<a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a>
-<a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
@@ -807,14 +784,9 @@
     /// Referenced asset will not inherit the available modules, but form a
     /// new availability root.
     </span>IsolatedParallel,
-    <span class="doccomment">/// Asset is placed in a separate chunk group that is referenced from the
-    /// referencing chunk group, but not loaded.
-    /// Note: Separate chunks need to be loaded by something external to current
-    /// reference.
-    </span>Separate,
     <span class="doccomment">/// An async loader is placed into the referencing chunk and loads the
     /// separate chunk group in which the asset is placed.
-    </span>SeparateAsync,
+    </span>Async,
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]
@@ -880,7 +852,6 @@
 <span class="kw">pub struct </span>ChunkContentResult&lt;I&gt; {
     <span class="kw">pub </span>chunk_items: Vec&lt;I&gt;,
     <span class="kw">pub </span>chunks: Vec&lt;ChunkVc&gt;,
-    <span class="kw">pub </span>async_chunk_group_entries: Vec&lt;ChunkVc&gt;,
     <span class="kw">pub </span>external_asset_references: Vec&lt;AssetReferenceVc&gt;,
     <span class="kw">pub </span>availability_info: AvailabilityInfo,
 }
@@ -930,9 +901,6 @@
     </span>AvailableAsset(AssetVc),
     <span class="comment">// Chunks that are loaded in parallel to the current chunk
     </span>Chunk(ChunkVc),
-    <span class="comment">// Chunk groups that are referenced from the current chunk, but
-    // not loaded in parallel
-    </span>AsyncChunkGroup { entry: ChunkVc },
     ExternalAssetReference(AssetReferenceVc),
 }
 
@@ -1055,16 +1023,7 @@
                     ChunkContentGraphNode::Chunk(chunk),
                 ));
             }
-            ChunkingType::Separate =&gt; {
-                graph_nodes.push((
-                    <span class="prelude-val">Some</span>((asset, chunking_type)),
-                    ChunkContentGraphNode::AsyncChunkGroup {
-                        entry: chunkable_asset
-                            .as_chunk(context.chunking_context, context.availability_info),
-                    },
-                ));
-            }
-            ChunkingType::SeparateAsync =&gt; {
+            ChunkingType::Async =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(manifest_loader_item) = I::from_async_asset(
                     context.chunking_context,
                     chunkable_asset,
@@ -1235,7 +1194,6 @@
 
     <span class="kw">let </span><span class="kw-2">mut </span>chunk_items = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>chunks = Vec::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>async_chunk_group_entries = Vec::new();
     <span class="kw">let </span><span class="kw-2">mut </span>external_asset_references = Vec::new();
 
     <span class="kw">for </span>graph_node <span class="kw">in </span>graph_nodes {
@@ -1247,9 +1205,6 @@
             ChunkContentGraphNode::Chunk(chunk) =&gt; {
                 chunks.push(chunk);
             }
-            ChunkContentGraphNode::AsyncChunkGroup { entry } =&gt; {
-                async_chunk_group_entries.push(entry);
-            }
             ChunkContentGraphNode::ExternalAssetReference(reference) =&gt; {
                 external_asset_references.push(reference);
             }
@@ -1259,7 +1214,6 @@
     <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(ChunkContentResult {
         chunk_items,
         chunks,
-        async_chunk_group_entries,
         external_asset_references,
         availability_info: availability_info.into_value(),
     }))
