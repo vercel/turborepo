@@ -41,8 +41,38 @@ pub struct AsyncModule {
 #[turbo_tasks::value(transparent)]
 pub struct OptionAsyncModule(Option<AsyncModuleVc>);
 
+#[turbo_tasks::value(transparent)]
+pub struct AsyncModuleIdents(IndexSet<String>);
+
 #[turbo_tasks::value_impl]
 impl AsyncModuleVc {
+    #[turbo_tasks::function]
+    pub(super) async fn get_async_idents(self) -> Result<AsyncModuleIdentsVc> {
+        let this = self.await?;
+
+        let reference_idents: Vec<Option<String>> = this
+            .references
+            .iter()
+            .map(|r| async {
+                let referenced_asset = r.get_referenced_asset().await?;
+                let ident = if *r.is_async().await? {
+                    referenced_asset.get_ident().await?
+                } else {
+                    None
+                };
+                anyhow::Ok(ident)
+            })
+            .try_join()
+            .await?;
+
+        let reference_idents = reference_idents
+            .into_iter()
+            .flatten()
+            .collect::<IndexSet<_>>();
+
+        Ok(AsyncModuleIdentsVc::cell(reference_idents))
+    }
+
     #[turbo_tasks::function]
     pub(super) async fn is_async(self) -> Result<BoolVc> {
         let this = self.await?;
@@ -51,14 +81,9 @@ impl AsyncModuleVc {
             return Ok(BoolVc::cell(this.has_top_level_await));
         }
 
-        let references_async = this
-            .references
-            .iter()
-            .map(|r| async { anyhow::Ok(*r.is_async().await?) })
-            .try_join()
-            .await?;
+        let async_idents = self.get_async_idents().await?;
 
-        Ok(BoolVc::cell(references_async.contains(&true)))
+        Ok(BoolVc::cell(!async_idents.is_empty()))
     }
 
     #[turbo_tasks::function]
@@ -80,29 +105,14 @@ impl CodeGenerateable for AsyncModule {
         self_vc: AsyncModuleVc,
         _context: EcmascriptChunkingContextVc,
     ) -> Result<CodeGenerationVc> {
-        let this = self_vc.await?;
         let mut visitors = Vec::new();
 
         if *self_vc.is_async().await? {
-            let reference_idents: Vec<Option<String>> = this
-                .references
-                .iter()
-                .map(|r| async {
-                    let referenced_asset = r.get_referenced_asset().await?;
-                    let ident = referenced_asset.get_ident().await?;
-                    anyhow::Ok(ident)
-                })
-                .try_join()
-                .await?;
+            let async_idents = self_vc.get_async_idents().await?;
 
-            let reference_idents = reference_idents
-                .into_iter()
-                .flatten()
-                .collect::<IndexSet<_>>();
-
-            if !reference_idents.is_empty() {
+            if !async_idents.is_empty() {
                 visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
-                    add_async_dependency_handler(program, &reference_idents);
+                    add_async_dependency_handler(program, &async_idents);
                 }));
             }
         }
