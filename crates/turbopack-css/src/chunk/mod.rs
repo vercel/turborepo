@@ -152,6 +152,7 @@ impl CssChunkContentVc {
             let entry_placeable = CssChunkPlaceableVc::cast_from(entry);
             let entry_item = entry_placeable.as_chunk_item(this.context);
 
+            // TODO(WEB-1261)
             for external_import in expand_imports(&mut body, entry_item).await? {
                 external_imports.insert(external_import.await?.to_owned());
             }

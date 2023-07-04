@@ -11,7 +11,7 @@ pub use rule_condition::*;
 use turbo_tasks::primitives::OptionStringVc;
 use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
 use turbopack_core::{
-    reference_type::{ReferenceType, UrlReferenceSubType},
+    reference_type::{CssReferenceSubType, ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
     source_transform::SourceTransformsVc,
 };
@@ -225,9 +225,13 @@ impl ModuleOptionsVc {
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Json)],
             ),
             ModuleRule::new(
-                ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
-                    ".css".to_string(),
-                )]),
+                ModuleRuleCondition::all(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
+                    // Only create a global CSS asset if not `@import`ed from CSS already.
+                    ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
+                        ReferenceType::Css(CssReferenceSubType::AtImport),
+                    )),
+                ]),
                 [
                     if let Some(options) = enable_postcss_transform {
                         let execution_context = execution_context
@@ -260,10 +264,42 @@ impl ModuleOptionsVc {
                 .collect(),
             ),
             ModuleRule::new(
-                ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
-                    ".module.css".to_string(),
-                )]),
+                ModuleRuleCondition::all(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
+                    // Only create a module CSS asset if not `@import`ed from CSS already.
+                    // NOTE: `composes` references should not be treated as `@import`s and should
+                    // also create a module CSS asset.
+                    ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
+                        ReferenceType::Css(CssReferenceSubType::AtImport),
+                    )),
+                ]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::CssModule)],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::all(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
+                    // Create a normal CSS asset if `@import`ed from CSS already.
+                    ModuleRuleCondition::ReferenceType(ReferenceType::Css(
+                        CssReferenceSubType::AtImport,
+                    )),
+                ]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                    ty: CssModuleAssetType::Default,
+                    transforms: css_transforms,
+                })],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::all(vec![
+                    ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
+                    // Create a normal CSS asset if `@import`ed from CSS already.
+                    ModuleRuleCondition::ReferenceType(ReferenceType::Css(
+                        CssReferenceSubType::AtImport,
+                    )),
+                ]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                    ty: CssModuleAssetType::Module,
+                    transforms: css_transforms,
+                })],
             ),
             ModuleRule::new_internal(
                 ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
