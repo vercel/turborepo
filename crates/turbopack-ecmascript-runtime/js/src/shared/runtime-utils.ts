@@ -90,7 +90,8 @@ function esmExport(
   exports: Exports,
   getters: Record<string, () => any>
 ) {
-  esm((module.namespaceObject = exports), getters);
+  module.namespaceObject = module.exports;
+  esm(exports, getters);
 }
 
 /**
@@ -131,12 +132,11 @@ function dynamicExport(
       },
     });
 
-    // `exports` passed to this function will always be an object,
-    // `module.exports` might have been turned into a promise
-    // if this is inside an async module.
-    if (isPromise(module.exports)) {
+    // If this is inside an async module `module.namespaceObject` is a promise,
+    // so we need to replace it with a new promise.
+    if (isPromise(module.namespaceObject)) {
       module.exports = module.namespaceObject = maybeWrapAsyncModulePromise(
-        module.exports,
+        module.namespaceObject,
         () => namespaceObject
       );
     } else {
@@ -204,18 +204,17 @@ function esmImport(
 ): Exclude<Module["namespaceObject"], undefined> {
   const module = getOrInstantiateModuleFromParent(id, sourceModule);
   if (module.error) throw module.error;
+
+  // any async module has to have `module.namespaceObject` defined
   if (module.namespaceObject) return module.namespaceObject;
+
+  // can't be an async module at this point
   const raw = module.exports;
-
-  if (isPromise(raw)) {
-    module.namespaceObject = maybeWrapAsyncModulePromise(raw, (e) =>
-      interopEsm(e, {}, e.__esModule)
-    );
-
-    return module.namespaceObject;
-  }
-
-  return (module.namespaceObject = interopEsm(raw, {}, raw.__esModule));
+  return (module.namespaceObject = interopEsm(
+    raw,
+    {},
+    (raw as any).__esModule
+  ));
 }
 
 function commonJsRequire(sourceModule: Module, id: ModuleId): Exports {
@@ -414,7 +413,7 @@ function asyncModule(
     },
   } satisfies AsyncModuleExt);
 
-  module.exports = promise;
+  module.exports = module.namespaceObject = promise;
 
   function handleAsyncDependencies(deps: Dep[]) {
     const currentDeps = wrapDeps(deps);
