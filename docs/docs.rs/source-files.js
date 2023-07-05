@@ -32,7 +32,7 @@ var sourcesIndex = JSON.parse('{\
 "turbopack_node":["",[["render",[],["error_page.rs","issue.rs","mod.rs","node_api_source.rs","render_proxy.rs","render_static.rs","rendered_source.rs"]],["source_map",[],["content_source.rs","mod.rs","trace.rs"]],["transforms",[],["mod.rs","postcss.rs","util.rs","webpack.rs"]]],["bootstrap.rs","debug.rs","embed_js.rs","evaluate.rs","execution_context.rs","lib.rs","node_entry.rs","pool.rs","route_matcher.rs"]],\
 "turbopack_static":["",[],["fixed.rs","lib.rs"]],\
 "turbopack_swc_utils":["",[],["emitter.rs","lib.rs"]],\
-"turbopack_test_utils":["",[],["lib.rs","snapshot.rs"]],\
+"turbopack_test_utils":["",[],["jest.rs","lib.rs","snapshot.rs"]],\
 "xtask":["",[["summarize_bench",[],["data.rs","mod.rs"]]],["command.rs","main.rs","nft_bench.rs","publish.rs","visualize_bundler_bench.rs"]]\
 }');
 createSourceSidebar();

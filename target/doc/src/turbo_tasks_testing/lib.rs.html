@@ -333,7 +333,7 @@
                         },
                     })
                     .and_then(|r| r)
-                    .map_err(|err| SharedError::new(err));
+                    .map_err(SharedError::new);
 
                 <span class="kw">let </span><span class="kw-2">mut </span>tasks = this.tasks.lock().unwrap();
                 <span class="kw">if let </span>Task::Spawned(event) = replace(<span class="kw-2">&amp;mut </span>tasks[i], Task::Finished(result)) {
@@ -411,7 +411,7 @@
         <span class="kw">match </span>task {
             Task::Spawned(event) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(event.listen())),
             Task::Finished(result) =&gt; <span class="kw">match </span>result {
-                <span class="prelude-val">Ok</span>(vc) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(vc.clone())),
+                <span class="prelude-val">Ok</span>(vc) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(<span class="kw-2">*</span>vc)),
                 <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(err.clone())),
             },
         }
