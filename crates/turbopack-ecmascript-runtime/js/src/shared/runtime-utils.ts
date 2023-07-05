@@ -20,13 +20,16 @@ type EsmNamespaceObject = Record<string, any>;
 const REEXPORTED_OBJECTS = Symbol("reexported objects");
 
 interface BaseModule {
-  exports: Exports | AsyncModulePromise;
+  exports: Exports | Promise<Exports> | AsyncModulePromise;
   error: Error | undefined;
   loaded: boolean;
   id: ModuleId;
   children: ModuleId[];
   parents: ModuleId[];
-  namespaceObject?: EsmNamespaceObject | AsyncModulePromise<EsmNamespaceObject>;
+  namespaceObject?:
+    | EsmNamespaceObject
+    | Promise<EsmNamespaceObject>
+    | AsyncModulePromise<EsmNamespaceObject>;
   [REEXPORTED_OBJECTS]?: any[];
 }
 
@@ -101,7 +104,8 @@ function dynamicExport(
   let reexportedObjects = module[REEXPORTED_OBJECTS];
   if (!reexportedObjects) {
     reexportedObjects = module[REEXPORTED_OBJECTS] = [];
-    module.exports = module.namespaceObject = new Proxy(exports, {
+
+    const namespaceObject = new Proxy(exports, {
       get(target, prop) {
         if (
           hasOwnProperty.call(target, prop) ||
@@ -126,6 +130,18 @@ function dynamicExport(
         return keys;
       },
     });
+
+    // `exports` passed to this function will always be an object,
+    // `module.exports` might have been turned into a promise
+    // if this is inside an async module.
+    if (isPromise(module.exports)) {
+      module.exports = module.namespaceObject = maybeWrapAsyncModulePromise(
+        module.exports,
+        () => namespaceObject
+      );
+    } else {
+      module.exports = module.namespaceObject = namespaceObject;
+    }
   }
   reexportedObjects.push(object);
 }
@@ -179,42 +195,27 @@ function interopEsm(
     getters["default"] = () => raw;
   }
   esm(ns, getters);
+  return ns;
 }
 
 function esmImport(
   sourceModule: Module,
   id: ModuleId
-): EsmNamespaceObject | (Promise<EsmNamespaceObject> & AsyncModuleExt) {
+): Exclude<Module["namespaceObject"], undefined> {
   const module = getOrInstantiateModuleFromParent(id, sourceModule);
   if (module.error) throw module.error;
   if (module.namespaceObject) return module.namespaceObject;
   const raw = module.exports;
 
   if (isPromise(raw)) {
-    const promise = raw.then((e) => {
-      const ns = {};
-      interopEsm(e, ns, e.__esModule);
-      return ns;
-    });
-
-    module.namespaceObject = Object.assign(promise, {
-      get [turbopackExports]() {
-        return raw[turbopackExports];
-      },
-      get [turbopackQueues]() {
-        return raw[turbopackQueues];
-      },
-      get [turbopackError]() {
-        return raw[turbopackError];
-      },
-    } satisfies AsyncModuleExt);
+    module.namespaceObject = maybeWrapAsyncModulePromise(raw, (e) =>
+      interopEsm(e, {}, e.__esModule)
+    );
 
     return module.namespaceObject;
   }
 
-  const ns = (module.namespaceObject = {});
-  interopEsm(raw, ns, raw.__esModule);
-  return ns;
+  return (module.namespaceObject = interopEsm(raw, {}, raw.__esModule));
 }
 
 function commonJsRequire(sourceModule: Module, id: ModuleId): Exports {
@@ -276,6 +277,35 @@ function isPromise<T = any>(maybePromise: any): maybePromise is Promise<T> {
   );
 }
 
+function isAsyncModuleExt<T extends {}>(obj: T): obj is AsyncModuleExt & T {
+  return turbopackQueues in obj;
+}
+
+function maybeWrapAsyncModulePromise<T, U>(
+  promise: Promise<T>,
+  then: (val: T) => U | PromiseLike<U>
+): typeof promise extends AsyncModulePromise
+  ? AsyncModulePromise<U>
+  : Promise<U> {
+  const newPromise = promise.then(then);
+
+  if (isAsyncModuleExt(promise)) {
+    Object.assign(newPromise, {
+      get [turbopackExports]() {
+        return promise[turbopackExports];
+      },
+      get [turbopackQueues]() {
+        return promise[turbopackQueues];
+      },
+      get [turbopackError]() {
+        return promise[turbopackError];
+      },
+    } satisfies AsyncModuleExt);
+  }
+
+  return newPromise as any;
+}
+
 function createPromise<T>() {
   let resolve: (value: T | PromiseLike<T>) => void;
   let reject: (reason?: any) => void;
@@ -323,7 +353,7 @@ type AsyncModulePromise<T = Exports> = Promise<T> & AsyncModuleExt;
 function wrapDeps(deps: Dep[]): AsyncModuleExt[] {
   return deps.map((dep) => {
     if (dep !== null && typeof dep === "object") {
-      if (turbopackQueues in dep) return dep;
+      if (isAsyncModuleExt(dep)) return dep;
       if (isPromise(dep)) {
         const queue: AsyncQueue = Object.assign([], { resolved: false });
 
