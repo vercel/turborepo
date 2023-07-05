@@ -4,7 +4,6 @@ mod util;
 
 use std::{
     collections::HashMap,
-    env,
     path::{Path, PathBuf},
 };
 
@@ -30,7 +29,7 @@ use turbopack_core::{
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     issue::IssueVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     source_asset::SourceAssetVc,
@@ -190,12 +189,9 @@ async fn run_test(resource: &str) -> Result<RunTestResultVc> {
     let chunk_root_path = path.join("output");
     let static_root_path = path.join("static");
 
-    let env = EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::NodeJsBuildTime(
-            NodeJsEnvironment::default().into(),
-        )),
-        Value::new(EnvironmentIntention::Client),
-    );
+    let env = EnvironmentVc::new(Value::new(ExecutionEnvironment::NodeJsBuildTime(
+        NodeJsEnvironment::default().into(),
+    )));
 
     let compile_time_info = CompileTimeInfo::builder(env)
         .defines(compile_time_defines!(process.env.NODE_ENV = "development",).cell())

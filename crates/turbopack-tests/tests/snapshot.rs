@@ -4,13 +4,12 @@ mod util;
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Context, Result};
 use dunce::canonicalize;
-//
 use serde::Deserialize;
 use turbo_tasks::{debug::ValueDebug, NothingVc, TryJoinIterExt, TurboTasks, Value, ValueToString};
 use turbo_tasks_env::DotenvProcessEnvVc;
