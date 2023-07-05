@@ -1,4 +1,5 @@
 /// <reference path="../shared/runtime-utils.ts" />
+/// <reference path="../shared-node/require.ts" />
 
 declare var RUNTIME_PUBLIC_PATH: string;
 
@@ -24,14 +25,12 @@ type SourceInfo =
       parentId: ModuleId;
     };
 
-interface RequireContextEntry {
-  external: boolean;
-}
-
 type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
+type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
 
 interface TurbopackNodeBuildContext extends TurbopackBaseContext {
   x: ExternalRequire;
+  y: ExternalImport;
 }
 
 type ModuleFactory = (
@@ -45,47 +44,6 @@ const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
 
 const moduleFactories: ModuleFactories = Object.create(null);
 const moduleCache: ModuleCache = Object.create(null);
-
-function commonJsRequireContext(
-  entry: RequireContextEntry,
-  sourceModule: Module
-): Exports {
-  return entry.external
-    ? externalRequire(entry.id(), false)
-    : commonJsRequire(sourceModule, entry.id());
-}
-
-function externalRequire(
-  id: ModuleId,
-  esm: boolean = false
-): Exports | EsmNamespaceObject {
-  let raw;
-  try {
-    raw = require(id);
-  } catch (err) {
-    // TODO(alexkirsz) This can happen when a client-side module tries to load
-    // an external module we don't provide a shim for (e.g. querystring, url).
-    // For now, we fail semi-silently, but in the future this should be a
-    // compilation error.
-    throw new Error(`Failed to load external module ${id}: ${err}`);
-  }
-  if (!esm || raw.__esModule) {
-    return raw;
-  }
-  const ns = {};
-  interopEsm(raw, ns, true);
-  return ns;
-}
-externalRequire.resolve = (
-  id: string,
-  options?:
-    | {
-        paths?: string[] | undefined;
-      }
-    | undefined
-) => {
-  return require.resolve(id, options);
-};
 
 function loadChunk(chunkPath: ChunkPath) {
   if (!chunkPath.endsWith(".js")) {
@@ -167,6 +125,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       e: module.exports,
       r: commonJsRequire.bind(null, module),
       x: externalRequire,
+      y: externalImport,
       f: requireContext.bind(null, module),
       i: esmImport.bind(null, module),
       s: esm.bind(null, module.exports),

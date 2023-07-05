@@ -121,38 +121,39 @@ function getChunkPath(chunkData) {
     return typeof chunkData === "string" ? chunkData : chunkData.path;
 }
 ;
-var SourceType;
-(function(SourceType) {
-    SourceType[SourceType["Runtime"] = 0] = "Runtime";
-    SourceType[SourceType["Parent"] = 1] = "Parent";
-})(SourceType || (SourceType = {}));
-;
-;
-const path = require("path");
-const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
-const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
-const moduleFactories = Object.create(null);
-const moduleCache = Object.create(null);
 function commonJsRequireContext(entry, sourceModule) {
     return entry.external ? externalRequire(entry.id(), false) : commonJsRequire(sourceModule, entry.id());
 }
-function externalRequire(id, esm1 = false) {
+function externalImport(id) {
+    return import(id);
+}
+function externalRequire(id, esm = false) {
     let raw;
     try {
         raw = require(id);
     } catch (err) {
         throw new Error(`Failed to load external module ${id}: ${err}`);
     }
-    if (!esm1 || raw.__esModule) {
+    if (!esm || raw.__esModule) {
         return raw;
     }
-    const ns = {};
-    interopEsm(raw, ns, true);
-    return ns;
+    return interopEsm(raw, {}, true);
 }
 externalRequire.resolve = (id, options)=>{
     return require.resolve(id, options);
 };
+;
+var SourceType;
+(function(SourceType) {
+    SourceType[SourceType["Runtime"] = 0] = "Runtime";
+    SourceType[SourceType["Parent"] = 1] = "Parent";
+})(SourceType || (SourceType = {}));
+;
+const path = require("path");
+const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
+const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
+const moduleFactories = Object.create(null);
+const moduleCache = Object.create(null);
 function loadChunk(chunkPath) {
     if (!chunkPath.endsWith(".js")) {
         return;
@@ -217,6 +218,7 @@ function instantiateModule(id, source) {
             e: module1.exports,
             r: commonJsRequire.bind(null, module1),
             x: externalRequire,
+            y: externalImport,
             f: requireContext.bind(null, module1),
             i: esmImport.bind(null, module1),
             s: esm.bind(null, module1.exports),
