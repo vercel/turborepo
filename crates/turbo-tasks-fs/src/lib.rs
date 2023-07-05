@@ -51,6 +51,7 @@ use serde_json::Value;
 use tokio::{
     fs,
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    sync::RwLock,
 };
 use tracing::{instrument, Level};
 use turbo_tasks::{
@@ -156,6 +157,11 @@ pub struct DiskFileSystem {
     invalidator_map: Arc<InvalidatorMap>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     dir_invalidator_map: Arc<InvalidatorMap>,
+    /// Lock that makes invalidation atomic. It will keep a write lock during
+    /// watcher invalidation and a read lock during other operations.
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    #[serde(skip)]
+    invalidation_lock: Arc<RwLock<()>>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
     watcher: Arc<DiskWatcher>,
@@ -233,6 +239,7 @@ impl DiskFileSystem {
         let report_invalidation_reason =
             report_invalidation_reason.then(|| (self.name.clone(), root_path.clone()));
 
+        let invalidation_lock = self.invalidation_lock.clone();
         // Create a channel to receive the events.
         let (tx, rx) = channel();
         // Create a watcher object, delivering debounced events.
@@ -410,6 +417,7 @@ impl DiskFileSystem {
                         let _ = disk_watcher.restore_if_watching(&path, &root_path);
                     }
                 }
+                let _lock = invalidation_lock.blocking_write();
                 {
                     let mut invalidator_map = invalidator_map.lock().unwrap();
                     invalidate_path(
@@ -491,6 +499,7 @@ impl DiskFileSystemVc {
             name,
             root,
             mutex_map: Default::default(),
+            invalidation_lock: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
             watcher: Default::default(),
@@ -513,6 +522,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
 
+        let _lock = self.invalidation_lock.read().await;
         let _lock = self.mutex_map.lock(full_path.clone()).await;
         let content = match retry_future(|| File::from_path(full_path.clone())).await {
             Ok(file) => FileContent::new(file),
@@ -539,7 +549,7 @@ impl FileSystem for DiskFileSystem {
                     || e.kind() == ErrorKind::NotADirectory
                     || e.kind() == ErrorKind::InvalidFilename =>
             {
-                return Ok(DirectoryContentVc::not_found())
+                return Ok(DirectoryContentVc::not_found());
             }
             Err(e) => {
                 bail!(anyhow!(e).context(format!("reading dir {}", full_path.display())))
@@ -583,6 +593,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
 
+        let _lock = self.invalidation_lock.read().await;
         let _lock = self.mutex_map.lock(full_path.clone()).await;
         let link_path = match retry_future(|| fs::read_link(&full_path)).await {
             Ok(res) => res,
@@ -679,6 +690,7 @@ impl FileSystem for DiskFileSystem {
         // Track the file, so that we will rewrite it if it ever changes.
         fs_path.track().await?;
 
+        let _lock = self.invalidation_lock.read().await;
         let _lock = self.mutex_map.lock(full_path.clone()).await;
 
         // We perform an untracked comparison here, so that this write is not dependent
@@ -768,6 +780,7 @@ impl FileSystem for DiskFileSystem {
                     })?;
             }
         }
+        let _lock = self.invalidation_lock.read().await;
         let _lock = self.mutex_map.lock(full_path.clone()).await;
         match &*target_link {
             LinkContent::Link { target, link_type } => {
@@ -820,6 +833,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
 
+        let _lock = self.invalidation_lock.read().await;
         let _lock = self.mutex_map.lock(full_path.clone()).await;
         let meta = retry_future(|| fs::metadata(full_path.clone()))
             .await
