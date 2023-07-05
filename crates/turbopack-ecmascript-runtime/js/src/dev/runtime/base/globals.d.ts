@@ -19,6 +19,7 @@ type ChunkUpdateProvider = {
   push: (registration: [ChunkPath, UpdateCallback]) => void;
 };
 
+declare var CHUNK_BASE_PATH: string;
 declare var TURBOPACK: ChunkRegistry | ChunkRegistration[] | undefined;
 declare var TURBOPACK_CHUNK_LISTS: ChunkListProvider | ChunkList[] | undefined;
 declare var TURBOPACK_CHUNK_UPDATE_LISTENERS:

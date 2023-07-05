@@ -197,7 +197,7 @@ function commonJsRequireContext(
     if (chunkPath.endsWith(".css")) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = `/${chunkPath}`;
+      link.href = `/${CHUNK_BASE_PATH}${chunkPath}`;
       link.onerror = () => {
         resolver.reject();
       };
@@ -209,7 +209,7 @@ function commonJsRequireContext(
       document.body.appendChild(link);
     } else if (chunkPath.endsWith(".js")) {
       const script = document.createElement("script");
-      script.src = `/${chunkPath}`;
+      script.src = `/${CHUNK_BASE_PATH}${chunkPath}`;
       // We'll only mark the chunk as loaded once the script has been executed,
       // which happens in `registerChunk`. Hence the absence of `resolve()` in
       // this branch.

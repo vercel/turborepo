@@ -41,6 +41,12 @@ impl DevChunkingContextBuilder {
         self
     }
 
+    pub fn chunk_base_path(mut self, chunk_base_path: &str) -> Self {
+        self.context.chunk_base_path =
+            (!chunk_base_path.is_empty()).then(|| chunk_base_path.to_string());
+        self
+    }
+
     pub fn layer(mut self, layer: &str) -> Self {
         self.context.layer = (!layer.is_empty()).then(|| layer.to_string());
         self
@@ -61,8 +67,8 @@ impl DevChunkingContextBuilder {
         self
     }
 
-    pub fn build(self) -> ChunkingContextVc {
-        DevChunkingContextVc::new(Value::new(self.context)).into()
+    pub fn build(self) -> DevChunkingContextVc {
+        DevChunkingContextVc::new(Value::new(self.context))
     }
 }
 
@@ -87,6 +93,9 @@ pub struct DevChunkingContext {
     reference_css_chunk_source_maps: bool,
     /// Static assets are placed at this path
     asset_root_path: FileSystemPathVc,
+    /// Base path that will be prepended to all chunk URLs when loading them.
+    /// This path will not appear in chunk paths or chunk data.
+    chunk_base_path: Option<String>,
     /// Layer name within this context
     layer: Option<String>,
     /// Enable HMR for this chunking
@@ -113,6 +122,7 @@ impl DevChunkingContextVc {
                 reference_chunk_source_maps: true,
                 reference_css_chunk_source_maps: true,
                 asset_root_path,
+                chunk_base_path: None,
                 layer: None,
                 enable_hot_module_replacement: false,
                 environment,
@@ -129,6 +139,11 @@ impl DevChunkingContext {
     /// `RuntimeType` has a single variant.
     pub fn runtime_type(&self) -> RuntimeType {
         self.runtime_type
+    }
+
+    /// Returns the chunk public path.
+    pub fn chunk_base_path(&self) -> Option<&String> {
+        self.chunk_base_path.as_ref()
     }
 }
 

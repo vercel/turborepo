@@ -457,7 +457,7 @@ impl CssChunkContextVc {
 }
 
 #[turbo_tasks::value_trait]
-pub trait CssChunkPlaceable: Asset {
+pub trait CssChunkPlaceable: ChunkableAsset + Asset {
     fn as_chunk_item(&self, context: ChunkingContextVc) -> CssChunkItemVc;
 }
 

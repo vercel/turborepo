@@ -3,7 +3,10 @@ use std::io::Write;
 use anyhow::{bail, Result};
 use indoc::writedoc;
 use serde::Serialize;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{
+    primitives::{OptionStringVc, StringVc},
+    TryJoinIterExt, Value, ValueToString, ValueToStringVc,
+};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
@@ -67,6 +70,7 @@ impl EcmascriptDevEvaluateChunkVc {
     #[turbo_tasks::function]
     async fn code(self) -> Result<CodeVc> {
         let this = self.await?;
+        let chunking_context = this.chunking_context.await?;
         let environment = this.chunking_context.environment();
 
         let output_root = this.chunking_context.output_root().await?;
@@ -137,9 +141,12 @@ impl EcmascriptDevEvaluateChunkVc {
             StringifyJs(&params),
         )?;
 
-        match this.chunking_context.await?.runtime_type() {
+        match chunking_context.runtime_type() {
             RuntimeType::Default => {
-                let runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(environment);
+                let runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(
+                    environment,
+                    OptionStringVc::cell(chunking_context.chunk_base_path().cloned()),
+                );
                 code.push_code(&*runtime_code.await?);
             }
             #[cfg(feature = "test")]
