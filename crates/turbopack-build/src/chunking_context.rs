@@ -216,7 +216,7 @@ impl ChunkingContext for BuildChunkingContext {
 
     #[turbo_tasks::function]
     fn reference_chunk_source_maps(&self, _chunk: AssetVc) -> BoolVc {
-        BoolVc::cell(false)
+        BoolVc::cell(true)
     }
 
     #[turbo_tasks::function]
