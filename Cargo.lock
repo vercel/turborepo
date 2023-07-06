@@ -906,6 +906,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "capnp"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95e65021d89250bbfe7c2791789ced2c4bdc21b0e8bb59c64f3fd6145a5fd678"
+
+[[package]]
+name = "capnpc"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbbc3763fb3e6635188e9cc51ee11a26f8777c553ca377430818dbebaaf6042b"
+dependencies = [
+ "capnp",
+]
+
+[[package]]
 name = "cargo-lock"
 version = "8.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9704,6 +9719,8 @@ dependencies = [
  "axum",
  "axum-server",
  "camino",
+ "capnp",
+ "capnpc",
  "chrono",
  "clap 4.1.11",
  "clap_complete",
@@ -9781,6 +9798,7 @@ dependencies = [
  "wax",
  "webbrowser",
  "which",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -11117,6 +11135,12 @@ dependencies = [
  "tabled",
  "walkdir",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "735a71d46c4d68d71d4b24d03fdc2b98e38cea81730595801db779c04fe80d70"
 
 [[package]]
 name = "y4m"

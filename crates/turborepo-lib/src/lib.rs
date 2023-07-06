@@ -11,6 +11,7 @@ mod config;
 mod daemon;
 mod execution_state;
 pub(crate) mod globwatcher;
+mod hash;
 mod manager;
 mod opts;
 mod package_graph;
