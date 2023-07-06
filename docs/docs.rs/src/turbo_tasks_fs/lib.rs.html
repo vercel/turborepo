@@ -2101,6 +2101,26 @@
 <a href="#2101" id="2101">2101</a>
 <a href="#2102" id="2102">2102</a>
 <a href="#2103" id="2103">2103</a>
+<a href="#2104" id="2104">2104</a>
+<a href="#2105" id="2105">2105</a>
+<a href="#2106" id="2106">2106</a>
+<a href="#2107" id="2107">2107</a>
+<a href="#2108" id="2108">2108</a>
+<a href="#2109" id="2109">2109</a>
+<a href="#2110" id="2110">2110</a>
+<a href="#2111" id="2111">2111</a>
+<a href="#2112" id="2112">2112</a>
+<a href="#2113" id="2113">2113</a>
+<a href="#2114" id="2114">2114</a>
+<a href="#2115" id="2115">2115</a>
+<a href="#2116" id="2116">2116</a>
+<a href="#2117" id="2117">2117</a>
+<a href="#2118" id="2118">2118</a>
+<a href="#2119" id="2119">2119</a>
+<a href="#2120" id="2120">2120</a>
+<a href="#2121" id="2121">2121</a>
+<a href="#2122" id="2122">2122</a>
+<a href="#2123" id="2123">2123</a>
 </pre><pre class="rust"><code><span class="attr">#![feature(trivial_bounds)]
 #![feature(hash_drain_filter)]
 #![feature(min_specialization)]
@@ -2154,6 +2174,7 @@
 <span class="kw">use </span>tokio::{
     fs,
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    sync::{RwLock, RwLockReadGuard},
 };
 <span class="kw">use </span>tracing::{instrument, Level};
 <span class="kw">use </span>turbo_tasks::{
@@ -2259,6 +2280,11 @@
     </span>invalidator_map: Arc&lt;InvalidatorMap&gt;,
     <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
     </span>dir_invalidator_map: Arc&lt;InvalidatorMap&gt;,
+    <span class="doccomment">/// Lock that makes invalidation atomic. It will keep a write lock during
+    /// watcher invalidation and a read lock during other operations.
+    </span><span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
+    #[serde(skip)]
+    </span>invalidation_lock: Arc&lt;RwLock&lt;()&gt;&gt;,
     <span class="attr">#[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
     </span>watcher: Arc&lt;DiskWatcher&gt;,
@@ -2291,6 +2317,12 @@
         <span class="attr">#[cfg(not(any(target_os = <span class="string">&quot;macos&quot;</span>, target_os = <span class="string">&quot;windows&quot;</span>)))]
         </span><span class="self">self</span>.watcher.ensure_watching(path, <span class="self">self</span>.root_path())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>lock_path(<span class="kw-2">&amp;</span><span class="self">self</span>, full_path: <span class="kw-2">&amp;</span>Path) -&gt; PathLockGuard&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="kw">let </span>lock1 = <span class="self">self</span>.invalidation_lock.read().<span class="kw">await</span>;
+        <span class="kw">let </span>lock2 = <span class="self">self</span>.mutex_map.lock(full_path.to_path_buf()).<span class="kw">await</span>;
+        PathLockGuard(lock1, lock2)
     }
 
     <span class="kw">pub fn </span>invalidate(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -2336,6 +2368,7 @@
         <span class="kw">let </span>report_invalidation_reason =
             report_invalidation_reason.then(|| (<span class="self">self</span>.name.clone(), root_path.clone()));
 
+        <span class="kw">let </span>invalidation_lock = <span class="self">self</span>.invalidation_lock.clone();
         <span class="comment">// Create a channel to receive the events.
         </span><span class="kw">let </span>(tx, rx) = channel();
         <span class="comment">// Create a watcher object, delivering debounced events.
@@ -2513,6 +2546,7 @@
                         <span class="kw">let _ </span>= disk_watcher.restore_if_watching(<span class="kw-2">&amp;</span>path, <span class="kw-2">&amp;</span>root_path);
                     }
                 }
+                <span class="kw">let </span>_lock = invalidation_lock.blocking_write();
                 {
                     <span class="kw">let </span><span class="kw-2">mut </span>invalidator_map = invalidator_map.lock().unwrap();
                     invalidate_path(
@@ -2563,6 +2597,11 @@
     }
 }
 
+<span class="kw">struct </span>PathLockGuard&lt;<span class="lifetime">&#39;a</span>&gt;(
+    RwLockReadGuard&lt;<span class="lifetime">&#39;a</span>, ()&gt;,
+    mutex_map::MutexMapGuard&lt;<span class="lifetime">&#39;a</span>, PathBuf&gt;,
+);
+
 <span class="kw">fn </span>format_absolute_fs_path(path: <span class="kw-2">&amp;</span>Path, name: <span class="kw-2">&amp;</span>str, root_path: <span class="kw-2">&amp;</span>PathBuf) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
     <span class="kw">let </span>path = <span class="kw">if let </span><span class="prelude-val">Ok</span>(rel_path) = path.strip_prefix(root_path) {
         <span class="kw">let </span>path = <span class="kw">if </span>MAIN_SEPARATOR != <span class="string">&#39;/&#39; </span>{
@@ -2594,6 +2633,7 @@
             name,
             root,
             mutex_map: Default::default(),
+            invalidation_lock: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
             watcher: Default::default(),
@@ -2616,7 +2656,7 @@
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_path(<span class="kw-2">&amp;</span>full_path).<span class="kw">await</span>;
         <span class="kw">let </span>content = <span class="kw">match </span>retry_future(|| File::from_path(full_path.clone())).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(file) =&gt; FileContent::new(file),
             <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.kind() == ErrorKind::NotFound =&gt; FileContent::NotFound,
@@ -2642,7 +2682,7 @@
                     || e.kind() == ErrorKind::NotADirectory
                     || e.kind() == ErrorKind::InvalidFilename =&gt;
             {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(DirectoryContentVc::not_found())
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(DirectoryContentVc::not_found());
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">bail!</span>(<span class="macro">anyhow!</span>(e).context(<span class="macro">format!</span>(<span class="string">&quot;reading dir {}&quot;</span>, full_path.display())))
@@ -2686,7 +2726,7 @@
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_path(<span class="kw-2">&amp;</span>full_path).<span class="kw">await</span>;
         <span class="kw">let </span>link_path = <span class="kw">match </span>retry_future(|| fs::read_link(<span class="kw-2">&amp;</span>full_path)).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(res) =&gt; res,
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(LinkContent::NotFound.cell()),
@@ -2782,7 +2822,7 @@
         <span class="comment">// Track the file, so that we will rewrite it if it ever changes.
         </span>fs_path.track().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_path(<span class="kw-2">&amp;</span>full_path).<span class="kw">await</span>;
 
         <span class="comment">// We perform an untracked comparison here, so that this write is not dependent
         // on a read&#39;s FileContentVc (and the memory it holds). Our untracked read can
@@ -2871,7 +2911,7 @@
                     })<span class="question-mark">?</span>;
             }
         }
-        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_path(<span class="kw-2">&amp;</span>full_path).<span class="kw">await</span>;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>target_link {
             LinkContent::Link { target, link_type } =&gt; {
                 <span class="kw">let </span>link_type = <span class="kw-2">*</span>link_type;
@@ -2923,7 +2963,7 @@
         <span class="kw">let </span>full_path = <span class="self">self</span>.to_sys_path(fs_path).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.register_invalidator(<span class="kw-2">&amp;</span>full_path)<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>_lock = <span class="self">self</span>.mutex_map.lock(full_path.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_path(<span class="kw-2">&amp;</span>full_path).<span class="kw">await</span>;
         <span class="kw">let </span>meta = retry_future(|| fs::metadata(full_path.clone()))
             .<span class="kw">await
             </span>.with_context(|| <span class="macro">format!</span>(<span class="string">&quot;reading metadata for {}&quot;</span>, full_path.display()))<span class="question-mark">?</span>;
