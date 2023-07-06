@@ -12,6 +12,7 @@ rustls-tls = ["turborepo-api-client/rustls-tls"]
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+libc = "0.2.146"
 tempfile = { workspace = true }
 test-case = { workspace = true }
 
@@ -21,6 +22,7 @@ bytes.workspace = true
 camino = { workspace = true }
 chrono = { workspace = true }
 dunce = { workspace = true }
+hex = { workspace = true }
 lazy_static = { workspace = true }
 os_str_bytes = "6.5.0"
 path-clean = { workspace = true }
