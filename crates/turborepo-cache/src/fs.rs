@@ -1,15 +1,18 @@
 use std::backtrace::Backtrace;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
-use crate::{cache_archive::CacheReader, CacheError, CacheSource, ItemStatus};
+use crate::{
+    cache_archive::{CacheReader, CacheWriter},
+    CacheError, CacheSource, ItemStatus,
+};
 
 struct FSCache {
     cache_directory: AbsoluteSystemPathBuf,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct CacheMetadata {
     hash: String,
     duration: u32,
@@ -81,5 +84,63 @@ impl FSCache {
             },
             restored_files,
         ))
+    }
+
+    fn exists(&self, hash: &str) -> Result<ItemStatus, CacheError> {
+        let uncompressed_cache_path = self
+            .cache_directory
+            .join_component(&format!("{}.tar", hash));
+        let compressed_cache_path = self
+            .cache_directory
+            .join_component(&format!("{}.tar.zst", hash));
+
+        if !uncompressed_cache_path.exists() && !compressed_cache_path.exists() {
+            return Ok(ItemStatus::Miss);
+        }
+
+        let duration = CacheMetadata::read(
+            &self
+                .cache_directory
+                .join_component(&format!("{}-meta.json", hash)),
+        )
+        .map(|meta| meta.duration)
+        .unwrap_or(0);
+
+        Ok(ItemStatus::Hit {
+            time_saved: duration,
+            source: CacheSource::Local,
+        })
+    }
+
+    fn put(
+        &self,
+        anchor: &AbsoluteSystemPath,
+        hash: &str,
+        duration: u32,
+        files: Vec<AnchoredSystemPathBuf>,
+    ) -> Result<(), CacheError> {
+        let cache_path = self
+            .cache_directory
+            .join_component(&format!("{}.tar.zst", hash));
+
+        let mut cache_item = CacheWriter::create(&cache_path)?;
+
+        for file in files {
+            cache_item.add_file(anchor, &file)?;
+        }
+
+        let meta_path = self
+            .cache_directory
+            .join_component(&format!("{}-meta.json", hash));
+
+        let meta = CacheMetadata {
+            hash: hash.to_string(),
+            duration,
+        };
+
+        serde_json::to_writer(meta_path.open()?, &meta)
+            .map_err(|e| CacheError::InvalidMetadata(e, Backtrace::capture()))?;
+
+        Ok(())
     }
 }

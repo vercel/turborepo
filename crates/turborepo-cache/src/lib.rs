@@ -53,6 +53,8 @@ pub enum CacheError {
     LinkOutsideOfDirectory(String, #[backtrace] Backtrace),
     #[error("Invalid cache metadata file")]
     InvalidMetadata(serde_json::Error, #[backtrace] Backtrace),
+    #[error("Failed to write cache metadata file")]
+    MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
 }
 
 enum CacheSource {

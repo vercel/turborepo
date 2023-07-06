@@ -46,7 +46,7 @@ impl<'a> CacheWriter<'a> {
     // Makes a new CacheArchive at the specified path
     // Wires up the chain of writers:
     // tar::Builder -> zstd::Encoder (optional) -> BufWriter -> File
-    fn create(path: &AbsoluteSystemPath) -> Result<Self, CacheError> {
+    pub fn create(path: &AbsoluteSystemPath) -> Result<Self, CacheError> {
         let mut options = OpenOptions::new();
         options.write(true).create(true).truncate(true);
 
