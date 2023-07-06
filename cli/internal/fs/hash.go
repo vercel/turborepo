@@ -7,10 +7,10 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/fs/hash"
+
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
-	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/xxhash"
 )
 
@@ -19,38 +19,6 @@ type LockfilePackages []lockfile.Package
 
 // FileHashes is a hashable map of files to the hash of their contents
 type FileHashes map[turbopath.AnchoredUnixPath]string
-
-// TaskHashable is a hashable representation of a task to be run
-type TaskHashable struct {
-	GlobalHash           string
-	TaskDependencyHashes []string
-	PackageDir           turbopath.AnchoredUnixPath
-	HashOfFiles          string
-	ExternalDepsHash     string
-	Task                 string
-	Outputs              TaskOutputs
-	PassThruArgs         []string
-	Env                  []string
-	ResolvedEnvVars      env.EnvironmentVariablePairs
-	PassThroughEnv       []string
-	EnvMode              util.EnvMode
-	DotEnv               turbopath.AnchoredUnixPathArray
-}
-
-// GlobalHashable is a hashable representation of global dependencies for tasks
-type GlobalHashable struct {
-	GlobalCacheKey       string
-	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	RootExternalDepsHash string
-	Env                  []string
-	ResolvedEnvVars      env.EnvironmentVariablePairs
-	PassThroughEnv       []string
-	EnvMode              util.EnvMode
-	FrameworkInference   bool
-
-	// NOTE! This field is _explicitly_ ordered and should not be sorted.
-	DotEnv turbopath.AnchoredUnixPathArray
-}
 
 // HashLockfilePackages hashes a list of packages
 func HashLockfilePackages(packages LockfilePackages) (string, error) {
@@ -63,15 +31,15 @@ func HashFileHashes(hashes FileHashes) (string, error) {
 }
 
 // HashTask produces the hash for a particular task
-func HashTask(task *TaskHashable) (string, error) {
+func HashTask(task *hash.TaskHashable) (string, error) {
 	// return proto.HashTaskHashable(task)
-	return "", nil
+	return hash.HashTaskHashable(task)
 }
 
 // HashGlobal produces the global hash value to be incorporated in every task hash
-func HashGlobal(global GlobalHashable) (string, error) {
+func HashGlobal(global hash.GlobalHashable) (string, error) {
 	// return proto.HashGlobalHashable(&global)
-	return "", nil
+	return hash.HashGlobalHashable(&global)
 }
 
 // hashObject is the internal generic hash function. It should not be used directly,

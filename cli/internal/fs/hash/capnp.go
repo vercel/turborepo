@@ -1,15 +1,60 @@
-package proto
+package hash
 
 import (
 	"encoding/hex"
 	"sort"
 
 	capnp "capnproto.org/go/capnp/v3"
-	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/env"
+	turbo_capnp "github.com/vercel/turbo/cli/internal/fs/hash/capnp"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/xxhash"
 )
+
+// TaskHashable is a hashable representation of a task to be run
+type TaskHashable struct {
+	GlobalHash           string
+	TaskDependencyHashes []string
+	PackageDir           turbopath.AnchoredUnixPath
+	HashOfFiles          string
+	ExternalDepsHash     string
+	Task                 string
+	Outputs              TaskOutputs
+	PassThruArgs         []string
+	Env                  []string
+	ResolvedEnvVars      env.EnvironmentVariablePairs
+	PassThroughEnv       []string
+	EnvMode              util.EnvMode
+	DotEnv               turbopath.AnchoredUnixPathArray
+}
+
+// GlobalHashable is a hashable representation of global dependencies for tasks
+type GlobalHashable struct {
+	GlobalCacheKey       string
+	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string
+	RootExternalDepsHash string
+	Env                  []string
+	ResolvedEnvVars      env.EnvironmentVariablePairs
+	PassThroughEnv       []string
+	EnvMode              util.EnvMode
+	FrameworkInference   bool
+
+	// NOTE! This field is _explicitly_ ordered and should not be sorted.
+	DotEnv turbopath.AnchoredUnixPathArray
+}
+
+// TaskOutputs represents the patterns for including and excluding files from outputs
+type TaskOutputs struct {
+	Inclusions []string
+	Exclusions []string
+}
+
+// Sort contents of task outputs
+func (to *TaskOutputs) Sort() {
+	sort.Strings(to.Inclusions)
+	sort.Strings(to.Exclusions)
+}
 
 // HashTaskHashable performs the hash for a TaskHashable, using capnproto for stable cross platform / language hashing
 //
@@ -29,7 +74,7 @@ import (
 //		- PassThroughEnv
 //	 - DotEnv
 //	 - ResolvedEnvVars
-func HashTaskHashable(task *fs.TaskHashable) (string, error) {
+func HashTaskHashable(task *TaskHashable) (string, error) {
 	arena := capnp.SingleSegment(nil)
 
 	_, seg, err := capnp.NewMessage(arena)
@@ -37,7 +82,7 @@ func HashTaskHashable(task *fs.TaskHashable) (string, error) {
 		return "", err
 	}
 
-	task_msg, err := NewRootTaskHashable(seg)
+	task_msg, err := turbo_capnp.NewRootTaskHashable(seg)
 	if err != nil {
 		return "", err
 	}
@@ -68,14 +113,14 @@ func HashTaskHashable(task *fs.TaskHashable) (string, error) {
 	}
 
 	{
-		var envMode TaskHashable_EnvMode
+		var envMode turbo_capnp.TaskHashable_EnvMode
 		switch task.EnvMode {
 		case util.Infer:
-			envMode = TaskHashable_EnvMode_infer
+			envMode = turbo_capnp.TaskHashable_EnvMode_infer
 		case util.Loose:
-			envMode = TaskHashable_EnvMode_loose
+			envMode = turbo_capnp.TaskHashable_EnvMode_loose
 		case util.Strict:
-			envMode = TaskHashable_EnvMode_strict
+			envMode = turbo_capnp.TaskHashable_EnvMode_strict
 		}
 
 		task_msg.SetEnvMode(envMode)
@@ -84,7 +129,7 @@ func HashTaskHashable(task *fs.TaskHashable) (string, error) {
 	{
 		arena := capnp.SingleSegment(nil)
 		_, seg, _ := capnp.NewMessage(arena)
-		deps, _ := NewTaskOutputs(seg)
+		deps, _ := turbo_capnp.NewTaskOutputs(seg)
 
 		err = assignList(task.Outputs.Inclusions, deps.SetInclusions, seg)
 		if err != nil {
@@ -149,7 +194,7 @@ func HashTaskHashable(task *fs.TaskHashable) (string, error) {
 //    - FrameworkInference
 //    - DotEnv
 
-func HashGlobalHashable(global *fs.GlobalHashable) (string, error) {
+func HashGlobalHashable(global *GlobalHashable) (string, error) {
 	arena := capnp.SingleSegment(nil)
 
 	_, seg, err := capnp.NewMessage(arena)
@@ -157,7 +202,7 @@ func HashGlobalHashable(global *fs.GlobalHashable) (string, error) {
 		return "", err
 	}
 
-	global_msg, err := NewRootGlobalHashable(seg)
+	global_msg, err := turbo_capnp.NewRootGlobalHashable(seg)
 	if err != nil {
 		return "", err
 	}
@@ -235,14 +280,14 @@ func HashGlobalHashable(global *fs.GlobalHashable) (string, error) {
 	}
 
 	{
-		var envMode GlobalHashable_EnvMode
+		var envMode turbo_capnp.GlobalHashable_EnvMode
 		switch global.EnvMode {
 		case util.Infer:
-			envMode = GlobalHashable_EnvMode_infer
+			envMode = turbo_capnp.GlobalHashable_EnvMode_infer
 		case util.Loose:
-			envMode = GlobalHashable_EnvMode_loose
+			envMode = turbo_capnp.GlobalHashable_EnvMode_loose
 		case util.Strict:
-			envMode = GlobalHashable_EnvMode_strict
+			envMode = turbo_capnp.GlobalHashable_EnvMode_strict
 		}
 
 		global_msg.SetEnvMode(envMode)
