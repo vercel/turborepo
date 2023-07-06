@@ -193,7 +193,7 @@ func HashGlobalHashable(global *fs.GlobalHashable) (string, error) {
 		})
 
 		for i, idx := range keyIndices {
-			entry, err := NewGlobalHashable_Entry(seg)
+			entry := entries.At(i)
 			if err != nil {
 				return "", err
 			}
@@ -204,11 +204,6 @@ func HashGlobalHashable(global *fs.GlobalHashable) (string, error) {
 			}
 
 			err = entry.SetValue(global.GlobalFileHashMap[keys[idx]])
-			if err != nil {
-				return "", err
-			}
-
-			err = entries.Set(i, entry)
 			if err != nil {
 				return "", err
 			}

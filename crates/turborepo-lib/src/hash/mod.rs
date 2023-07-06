@@ -4,6 +4,8 @@
 //! data-types. This is managed using capnproto for deterministic hashing across
 //! languages and platforms.
 
+use std::collections::HashMap;
+
 use capnp::{
     message::{HeapAllocator, TypedBuilder},
     serialize, serialize_packed,
@@ -46,7 +48,7 @@ struct TaskHashable {
     external_deps_hash: String,
 
     // task
-    package_dir: String,
+    package_dir: turbopath::RelativeUnixPathBuf,
     task: String,
     outputs: TaskOutputs,
     pass_thru_args: Vec<String>,
@@ -56,7 +58,19 @@ struct TaskHashable {
     resolved_env_vars: EnvVarPairs,
     pass_thru_env: Vec<String>,
     env_mode: EnvMode,
-    dot_env: Vec<String>,
+    dot_env: Vec<turbopath::RelativeUnixPathBuf>,
+}
+
+pub struct GlobalHashable {
+    global_cache_key: String,
+    global_file_hash_map: HashMap<turbopath::RelativeUnixPathBuf, String>,
+    root_external_deps_hash: String,
+    env: Vec<String>,
+    resolved_env_vars: Vec<String>,
+    pass_through_env: Vec<String>,
+    env_mode: EnvMode,
+    framework_inference: bool,
+    dot_env: Vec<turbopath::RelativeUnixPathBuf>,
 }
 
 struct TaskOutputs {
@@ -106,6 +120,18 @@ impl TaskHashable {
     }
 }
 
+impl GlobalHashable {
+    pub fn hash(self) -> u64 {
+        let mut buf = Vec::new();
+        let write = std::io::BufWriter::new(&mut buf);
+
+        let reader: TypedBuilder<_, _> = self.into();
+        serialize::write_message(write, &reader.into_inner()).expect("works");
+
+        xxh64(&buf, 0)
+    }
+}
+
 type EnvVarPairs = Vec<String>;
 
 impl From<TaskHashable> for TypedBuilder<proto_capnp::task_hashable::Owned, HeapAllocator> {
@@ -115,7 +141,7 @@ impl From<TaskHashable> for TypedBuilder<proto_capnp::task_hashable::Owned, Heap
         let mut builder = message.init_root();
 
         builder.set_global_hash(&task_hashable.global_hash);
-        builder.set_package_dir(&task_hashable.package_dir);
+        builder.set_package_dir(&task_hashable.package_dir.to_string());
         builder.set_hash_of_files(&task_hashable.hash_of_files);
         builder.set_external_deps_hash(&task_hashable.external_deps_hash);
         builder.set_task(&task_hashable.task);
@@ -167,7 +193,7 @@ impl From<TaskHashable> for TypedBuilder<proto_capnp::task_hashable::Owned, Heap
                 .reborrow()
                 .init_dot_env(task_hashable.dot_env.len() as u32);
             for (i, env) in task_hashable.dot_env.iter().enumerate() {
-                dotenv_builder.set(i as u32, env);
+                dotenv_builder.set(i as u32, env.as_str());
             }
         }
 
@@ -184,9 +210,86 @@ impl From<TaskHashable> for TypedBuilder<proto_capnp::task_hashable::Owned, Heap
     }
 }
 
+impl From<GlobalHashable> for TypedBuilder<proto_capnp::global_hashable::Owned, HeapAllocator> {
+    fn from(hashable: GlobalHashable) -> Self {
+        let mut message =
+            ::capnp::message::TypedBuilder::<proto_capnp::global_hashable::Owned>::new_default();
+
+        let mut global_hashable = message.init_root();
+
+        global_hashable.set_global_cache_key(&hashable.global_cache_key);
+
+        {
+            let mut entries = global_hashable
+                .reborrow()
+                .init_global_file_hash_map(hashable.global_file_hash_map.len() as u32);
+
+            // get a sorted iterator over keys and values of the hashmap
+            // and set the entries in the capnp message
+
+            let mut hashable: Vec<_> = hashable.global_file_hash_map.into_iter().collect();
+            hashable.sort_by(|a, b| a.0.cmp(&b.0));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key.as_str());
+                entry.set_value(&value);
+            }
+        }
+
+        global_hashable.set_root_external_deps_hash(&hashable.root_external_deps_hash);
+
+        {
+            let mut entries = global_hashable
+                .reborrow()
+                .init_env(hashable.env.len() as u32);
+            for (i, env) in hashable.env.iter().enumerate() {
+                entries.set(i as u32, env);
+            }
+        }
+
+        {
+            let mut resolved_env_vars = global_hashable
+                .reborrow()
+                .init_resolved_env_vars(hashable.resolved_env_vars.len() as u32);
+            for (i, env) in hashable.resolved_env_vars.iter().enumerate() {
+                resolved_env_vars.set(i as u32, env);
+            }
+        }
+
+        {
+            let mut pass_through_env = global_hashable
+                .reborrow()
+                .init_pass_through_env(hashable.pass_through_env.len() as u32);
+            for (i, env) in hashable.pass_through_env.iter().enumerate() {
+                pass_through_env.set(i as u32, env);
+            }
+        }
+
+        global_hashable.set_env_mode(match hashable.env_mode {
+            EnvMode::Infer => proto_capnp::global_hashable::EnvMode::Infer,
+            EnvMode::Loose => proto_capnp::global_hashable::EnvMode::Loose,
+            EnvMode::Strict => proto_capnp::global_hashable::EnvMode::Strict,
+        });
+
+        global_hashable.set_framework_inference(hashable.framework_inference);
+
+        {
+            let mut dot_env = global_hashable
+                .reborrow()
+                .init_dot_env(hashable.dot_env.len() as u32);
+            for (i, env) in hashable.dot_env.iter().enumerate() {
+                dot_env.set(i as u32, env.as_str());
+            }
+        }
+
+        message.into()
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::{TaskHashable, TaskOutputs};
+    use super::{GlobalHashable, TaskHashable, TaskOutputs};
     use crate::cli::EnvMode;
 
     #[test]
@@ -194,7 +297,7 @@ mod test {
         let task_hashable = TaskHashable {
             global_hash: "global_hash".to_string(),
             task_dependency_hashes: vec!["task_dependency_hash".to_string()],
-            package_dir: "package_dir".to_string(),
+            package_dir: turbopath::RelativeUnixPathBuf::new("package_dir").unwrap(),
             hash_of_files: "hash_of_files".to_string(),
             external_deps_hash: "external_deps_hash".to_string(),
             task: "task".to_string(),
@@ -207,9 +310,32 @@ mod test {
             resolved_env_vars: vec![],
             pass_thru_env: vec!["pass_thru_env".to_string()],
             env_mode: EnvMode::Infer,
-            dot_env: vec!["dotenv".to_string()],
+            dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
         assert_eq!(task_hashable.hash(), 0x5b222af1dea5828e);
+    }
+
+    #[test]
+    fn test_global_hash() {
+        let global_hash = GlobalHashable {
+            global_cache_key: "global_cache_key".to_string(),
+            global_file_hash_map: vec![(
+                turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
+                "global_file_hash_map".to_string(),
+            )]
+            .into_iter()
+            .collect(),
+            root_external_deps_hash: "root_external_deps_hash".to_string(),
+            env: vec!["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: vec!["pass_through_env".to_string()],
+            env_mode: EnvMode::Infer,
+            framework_inference: true,
+
+            dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
+        };
+
+        assert_eq!(global_hash.hash(), 0xafa6b9c8d52c2642);
     }
 }
