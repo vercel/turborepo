@@ -4,7 +4,7 @@ use anyhow::Result;
 use axum::{
     extract::{BodyStream, Path},
     http::{HeaderMap, HeaderValue, StatusCode},
-    routing::{get, put},
+    routing::{get, head, put},
     Json, Router,
 };
 use futures_util::StreamExt;
@@ -34,6 +34,7 @@ pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 pub async fn start_test_server(port: u16) -> Result<()> {
     let durations = Arc::new(Mutex::new(HashMap::new()));
     let durations2 = durations.clone();
+    let durations3 = durations.clone();
     let tempdir = Arc::new(tempfile::tempdir()?);
     let tempdir2 = tempdir.clone();
     let app = Router::new()
@@ -130,14 +131,29 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                 let root_path = tempdir2.path();
                 let file_path = root_path.join(&hash);
                 let buffer = std::fs::read(file_path).unwrap();
-                let duration = durations2.lock().await.remove(&hash).unwrap_or(0);
+                let duration = durations2.lock().await.get(&hash).cloned().unwrap_or(0);
                 let mut headers = HeaderMap::new();
+
                 headers.insert(
                     "x-artifact-duration",
                     HeaderValue::from_str(&duration.to_string()).unwrap(),
                 );
 
                 (headers, buffer)
+            }),
+        )
+        .route(
+            "/v8/artifacts/:hash",
+            head(|Path(hash): Path<String>| async move {
+                let duration = durations3.lock().await.get(&hash).cloned().unwrap_or(0);
+                let mut headers = HeaderMap::new();
+
+                headers.insert(
+                    "x-artifact-duration",
+                    HeaderValue::from_str(&duration.to_string()).unwrap(),
+                );
+
+                headers
             }),
         );
 

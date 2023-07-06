@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, io::Write};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_api_client::APIClient;
+use turborepo_api_client::{APIClient, Response};
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
@@ -66,6 +66,38 @@ impl HttpCache {
         Ok(())
     }
 
+    async fn exists(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+        use_preflight: bool,
+    ) -> Result<u32, CacheError> {
+        let response = self
+            .client
+            .artifact_exists(hash, token, team_id, team_slug, use_preflight)
+            .await?;
+
+        let duration = Self::get_duration_from_response(&response)?;
+
+        Ok(duration)
+    }
+
+    fn get_duration_from_response(response: &Response) -> Result<u32, CacheError> {
+        if let Some(duration) = response.headers().get("x-artifact-duration") {
+            let duration = duration
+                .to_str()
+                .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))?;
+
+            duration
+                .parse::<u32>()
+                .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))
+        } else {
+            Ok(0)
+        }
+    }
+
     pub async fn retrieve(
         &self,
         hash: &str,
@@ -79,16 +111,7 @@ impl HttpCache {
             .fetch_artifact(hash, token, team_id, team_slug, use_preflight)
             .await?;
 
-        let duration = if let Some(duration) = response.headers().get("x-artifact-duration") {
-            let duration = duration
-                .to_str()
-                .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))?;
-            duration
-                .parse::<u32>()
-                .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))?
-        } else {
-            0
-        };
+        let duration = Self::get_duration_from_response(&response)?;
 
         let body = if let Some(signer_verifier) = &self.signer_verifier {
             let expected_tag = response
@@ -211,9 +234,13 @@ mod test {
             )
             .await?;
 
-        let (received_files, received_duration) = cache.retrieve(hash, "", "", None, false).await?;
+        let received_duration = cache.exists(hash, "", "", None, false).await;
+        assert!(received_duration.is_ok());
+        assert_eq!(received_duration.unwrap(), duration);
 
+        let (received_files, received_duration) = cache.retrieve(hash, "", "", None, false).await?;
         assert_eq!(received_duration, duration);
+
         for (test_file, received_file) in files.iter().zip(received_files) {
             assert_eq!(received_file, test_file.path);
             let file_path = repo_root_path.resolve(&received_file);

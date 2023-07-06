@@ -4,7 +4,8 @@
 
 use std::env;
 
-use reqwest::{Method, RequestBuilder, Response};
+pub use reqwest::Response;
+use reqwest::{Method, RequestBuilder};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -312,6 +313,31 @@ impl APIClient {
         team_slug: Option<&str>,
         use_preflight: bool,
     ) -> Result<Response> {
+        self.get_artifact(hash, token, team_id, team_slug, use_preflight, Method::GET)
+            .await
+    }
+
+    pub async fn artifact_exists(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+        use_preflight: bool,
+    ) -> Result<Response> {
+        self.get_artifact(hash, token, team_id, team_slug, use_preflight, Method::HEAD)
+            .await
+    }
+
+    async fn get_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+        use_preflight: bool,
+        method: Method,
+    ) -> Result<Response> {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
         let mut allow_auth = true;
 
@@ -326,7 +352,7 @@ impl APIClient {
 
         let mut request_builder = self
             .client
-            .get(&request_url)
+            .request(method, request_url)
             .header("User-Agent", self.user_agent.clone());
 
         if allow_auth {
