@@ -87,6 +87,7 @@ uds_windows = "1.0.2"
 url = "2.3.1"
 
 camino = "1.1.4"
+capnp = "0.17.2"
 const_format = "0.2.30"
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 go-parse-duration = "0.1.1"
@@ -112,6 +113,7 @@ turborepo-ui = { workspace = true }
 wax = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
+xxhash-rust = { version = "0.8.6", features = ["xxh64"] }
 
 
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -119,4 +121,5 @@ uds_windows = "1.0.2"
 async-io = "1.12.0"
 
 [build-dependencies]
+capnpc = "0.17.2"
 tonic-build = "0.8.4"
