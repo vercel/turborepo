@@ -31,6 +31,10 @@ pub enum Error {
          control"
     )]
     GitRequired(AbsoluteSystemPathBuf),
+    #[error(
+        "git command failed due to unsupported git version. Upgrade to git 2.18 or newer: {0}"
+    )]
+    GitVersion(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error("path error: {0}")]
@@ -92,6 +96,9 @@ pub(crate) fn wait_for_success<R: Read, T>(
     let stderr_text = stderr_output
         .map(|stderr| format!(" stderr: {}", stderr))
         .unwrap_or_default();
+    if matches!(exit_status.code(), Some(129)) {
+        return Err(Error::GitVersion(stderr_text));
+    }
     let exit_text = if exit_status.success() {
         "".to_string()
     } else {
