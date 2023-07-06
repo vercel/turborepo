@@ -141,10 +141,12 @@ impl Git {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
         // if it gives us any path. If that's not the case, we should crash.
-        let bin = AbsoluteSystemPathBuf::try_from(bin.as_path()).expect(&format!(
-            "which git produced an invalid absolute path {}",
-            bin.display()
-        ));
+        let bin = AbsoluteSystemPathBuf::try_from(bin.as_path()).unwrap_or_else(|_| {
+            panic!(
+                "which git produced an invalid absolute path {}",
+                bin.display()
+            )
+        });
         let root =
             find_git_root(path_in_repo).map_err(|e| GitError::Root(path_in_repo.to_owned(), e))?;
         Ok(Self { root, bin })
