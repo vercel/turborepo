@@ -228,14 +228,14 @@ Just a quick overview.
 
 `type: string`
 
-Set type of task output order. Defaults to "auto" to let
-turbo decide based on its own heuristics.
+Set type of task output order. Defaults to "auto" which lets
+`turbo` detect if it's running in CI and group logs in that environment while streaming in others.
 
 | option  | description                               |
 | ------- | ----------------------------------------- |
-| auto    | turbo decides based on its own heuristics |
+| auto    | Turbo decides based on its own heuristics |
 | stream  | show output as soon as it is available    |
-| grouped | show output grouped by task               |
+| grouped | Show output grouped by task               |
 
 **Example**
 
@@ -245,9 +245,9 @@ turbo run build --log-order=grouped
 ```
 
 <Callout type="info">
-  If log order is set to auto and turbo detects that it is running on Github Actions, then turbo will
+  If log order is set to auto and `turbo` detects that it is running on GitHub Actions, then `turbo` will
   create [grouped logs](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines).
-  If this isn't desired, then the behavior can be opted out of by setting the log order to stream or grouped directly.
+  You can opt out of this behavior by setting a log order of your own.
 </Callout>
 
 ### `--no-cache`
