@@ -2157,10 +2157,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
-name = "dotenvy"
-version = "0.15.7"
+name = "dotenvs"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+checksum = "88e3201db19ec4199af513d38c49fcbc5f8ca31d268f942e97324a826c9e9fdb"
+dependencies = [
+ "nom",
+]
 
 [[package]]
 name = "dunce"
@@ -8778,7 +8781,7 @@ name = "turbo-tasks-env"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "dotenvy",
+ "dotenvs",
  "indexmap",
  "serde",
  "turbo-tasks",
@@ -9482,6 +9485,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "once_cell",
+ "serde",
  "similar",
  "turbo-tasks",
  "turbo-tasks-build",
@@ -9496,6 +9500,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dunce",
+ "futures",
  "once_cell",
  "serde",
  "serde_json",
@@ -9503,6 +9508,7 @@ dependencies = [
  "tokio",
  "turbo-tasks",
  "turbo-tasks-build",
+ "turbo-tasks-bytes",
  "turbo-tasks-env",
  "turbo-tasks-fs",
  "turbo-tasks-memory",
@@ -9513,6 +9519,7 @@ dependencies = [
  "turbopack-ecmascript-plugins",
  "turbopack-ecmascript-runtime",
  "turbopack-env",
+ "turbopack-node",
  "turbopack-test-utils",
 ]
 
@@ -9743,8 +9750,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.4.6",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
