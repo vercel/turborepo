@@ -98,9 +98,11 @@ impl ArtifactSignatureAuthenticator {
         artifact_body: &[u8],
         expected_tag: &str,
     ) -> Result<bool, SignatureError> {
-        let mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
-        let mut message = self.construct_metadata(hash)?;
-        message.extend(artifact_body);
+        let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
+        let message = self.construct_metadata(hash)?;
+        mac.update(&message);
+        mac.update(&artifact_body);
+
         let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
         Ok(mac.verify_slice(&expected_bytes).is_ok())
     }
@@ -119,10 +121,12 @@ mod tests {
             artifact_body: &[u8],
             expected_tag: &[u8],
         ) -> Result<bool, SignatureError> {
-            let secret_key = hmac::Key::new(TURBO_HMAC_ALGORITHM, &self.secret_key()?);
-            let mut message = self.construct_metadata(hash)?;
-            message.extend(artifact_body);
-            Ok(hmac::verify(&secret_key, &message, expected_tag).is_ok())
+            let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
+            let message = self.construct_metadata(hash)?;
+            mac.update(&message);
+            mac.update(&artifact_body);
+
+            Ok(mac.verify_slice(expected_tag).is_ok())
         }
     }
 
