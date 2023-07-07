@@ -364,7 +364,7 @@ impl PackageManager {
     // Attempts to read the package manager from the package.json
     fn read_package_manager(pkg: &PackageJson) -> Result<Option<Self>, Error> {
         let Some(package_manager) = &pkg.package_manager else {
-            return Ok(None)
+            return Ok(None);
         };
 
         let (manager, version) = Self::parse_package_manager_string(package_manager)?;
@@ -606,7 +606,7 @@ mod tests {
             let result = PackageManager::parse_package_manager_string(&case.package_manager);
             let Ok((received_manager, received_version)) = result else {
                 assert!(case.expected_error, "{}: received error", case.name);
-                continue
+                continue;
             };
 
             assert_eq!(received_manager, case.expected_manager);

@@ -155,7 +155,7 @@ impl CacheReader {
             let key = &graph[node];
 
             let Some(header) = header_lookup.get(key) else {
-                continue
+                continue;
             };
             let file = restore_symlink_allow_missing_target(dir_cache, anchor, header)?;
             restored.push(file);
