@@ -17,6 +17,7 @@ use turbopack_core::{
     },
     context::AssetContextVc,
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -113,6 +114,9 @@ impl Asset for CssModuleAsset {
         ))
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Module for CssModuleAsset {}
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for CssModuleAsset {

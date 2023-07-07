@@ -6,7 +6,7 @@ use swc_core::{
     common::DUMMY_SP,
     ecma::{
         ast::{
-            Expr, ExprStmt, KeyValueProp, Lit, Module, ModuleItem, ObjectLit, Prop, PropName,
+            self, Expr, ExprStmt, KeyValueProp, Lit, ModuleItem, ObjectLit, Prop, PropName,
             PropOrSpread, Stmt,
         },
         codegen::{text_writer::JsWriter, Emitter},
@@ -27,6 +27,7 @@ use turbopack_core::{
     },
     ident::AssetIdentVc,
     issue::{IssueSeverityVc, OptionIssueSourceVc},
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -378,6 +379,9 @@ impl Asset for RequireContextAsset {
 }
 
 #[turbo_tasks::value_impl]
+impl Module for RequireContextAsset {}
+
+#[turbo_tasks::value_impl]
 impl ChunkableAsset for RequireContextAsset {
     #[turbo_tasks::function]
     fn as_chunk(
@@ -481,7 +485,7 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
             obj: Expr = Expr::Object(context_map),
         );
 
-        let module = Module {
+        let module = ast::Module {
             span: DUMMY_SP,
             body: vec![ModuleItem::Stmt(Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,

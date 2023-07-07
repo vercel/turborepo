@@ -7,6 +7,7 @@ use turbopack_core::{
         ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 
@@ -112,6 +113,9 @@ impl Asset for ManifestChunkAsset {
         ))
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Module for ManifestChunkAsset {}
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for ManifestChunkAsset {

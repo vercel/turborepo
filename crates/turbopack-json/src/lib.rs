@@ -19,6 +19,7 @@ use turbopack_core::{
         ChunkableAssetVc, ChunkingContextVc,
     },
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::AssetReferencesVc,
 };
 use turbopack_ecmascript::chunk::{
@@ -57,6 +58,9 @@ impl Asset for JsonModuleAsset {
         self.source.content()
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Module for JsonModuleAsset {}
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for JsonModuleAsset {

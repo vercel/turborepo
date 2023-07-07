@@ -13,6 +13,7 @@ use turbopack_core::{
         asset::{content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
+    module::{Module, ModuleVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 
@@ -96,6 +97,9 @@ impl Asset for ChunkGroupFilesAsset {
         ))
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Module for ChunkGroupFilesAsset {}
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for ChunkGroupFilesAsset {

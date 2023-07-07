@@ -38,6 +38,7 @@ pub use self::{
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{PrimaryResolveResult, ResolveResult, ResolveResultVc},
 };
@@ -83,7 +84,7 @@ pub struct ModuleIds(Vec<ModuleIdVc>);
 
 /// An [Asset] that can be converted into a [Chunk].
 #[turbo_tasks::value_trait]
-pub trait ChunkableAsset: Asset {
+pub trait ChunkableAsset: Module + Asset {
     fn as_chunk(
         &self,
         context: ChunkingContextVc,

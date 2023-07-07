@@ -23,6 +23,7 @@ use turbopack_core::{
     },
     context::AssetContextVc,
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 use turbopack_css::embed::{CssEmbed, CssEmbedVc, CssEmbeddable, CssEmbeddableVc};
@@ -78,6 +79,9 @@ impl Asset for StaticModuleAsset {
         self.source.content()
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Module for StaticModuleAsset {}
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for StaticModuleAsset {

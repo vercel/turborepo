@@ -12,6 +12,7 @@ use turbopack_core::{
     },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
     virtual_asset::VirtualAssetVc,
@@ -180,6 +181,9 @@ impl Asset for MdxModuleAsset {
         Ok(self_vc.failsafe_analyze().await?.references)
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Module for MdxModuleAsset {}
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for MdxModuleAsset {

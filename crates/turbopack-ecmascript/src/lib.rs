@@ -63,6 +63,7 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesReadRef, AssetReferencesVc},
     reference_type::InnerAssetsVc,
     resolve::{
@@ -409,6 +410,9 @@ impl Asset for EcmascriptModuleAsset {
         Ok(self_vc.failsafe_analyze().await?.references)
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Module for EcmascriptModuleAsset {}
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for EcmascriptModuleAsset {

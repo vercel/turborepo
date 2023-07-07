@@ -7,6 +7,7 @@ use turbopack_core::{
         ChunkingContextVc,
     },
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     resolve::ModulePartVc,
 };
@@ -127,6 +128,9 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
         Ok(self_vc.analyze().await?.exports)
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Module for EcmascriptModulePartAsset {}
 
 #[turbo_tasks::value_impl]
 impl ChunkableAsset for EcmascriptModulePartAsset {
