@@ -114,7 +114,7 @@ First, open `./packages/ui/package.json`. You'll notice that the package's name 
 
 Next, open `./apps/web/package.json`. You'll notice that this package's name is `"name": "web"`. But also - take a look in its dependencies.
 
-You'll see that `"web"` depends on a package called `"ui"`. If you're using `pnpm`, you'll see it's declared like this:
+You'll see that `"web"` depends on a package called `"ui"`.
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -154,18 +154,18 @@ This pattern of sharing code across applications is extremely common in monorepo
 
 #### Understanding imports and exports
 
-Take a look inside `./apps/docs/pages/index.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
+Take a look inside `./apps/docs/app/page.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
 
-```tsx filename="apps/docs/pages/index.tsx"
-import { Button } from "ui";
-//       ^^^^^^         ^^
+```tsx filename="apps/docs/app/page.tsx"
+import { Button, Header } from "ui";
+//       ^^^^^^^^^^^^^^         ^^
 
-export default function Docs() {
+export default function Page() {
   return (
-    <div>
-      <h1>Docs</h1>
+    <>
+      <Header text="Docs">
       <Button />
-    </div>
+    <>
   );
 }
 ```
@@ -198,7 +198,7 @@ Everything inside this file will be able to be used by workspaces that depend on
 import * as React from "react";
 
 export const Button = () => {
-  return <button>Boop</button>;
+  return <button onClick={() => alert("boop")}>Boop</button>;
 };
 ```
 
@@ -275,7 +275,7 @@ You'll notice that this is named slightly differently to the other workspaces. I
 
 ```ts filename=".eslintrc.js"
 module.exports = {
-  // This tells ESLint to load the config from the workspace `eslint-config-custom`
+  // This tells ESLint to load the config from the package `eslint-config-custom`
   extends: ["custom"],
 };
 ```
@@ -324,7 +324,7 @@ Let's take a look inside `turbo.json`, at the root:
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {},
     "dev": {
@@ -392,7 +392,7 @@ The scripts that each run come from each workspace's `package.json`. Each worksp
 ```json filename="packages/ui/package.json"
 {
   "scripts": {
-    "lint": "eslint *.ts*"
+    "lint": "eslint \"**/*.ts*\""
   }
 }
 ```
@@ -413,16 +413,16 @@ It had saved the logs from the previous run, so it just replayed them.
 
 Let's try changing some code to see what happens. Make a change to a file inside `apps/docs`:
 
-```diff filename="apps/docs/pages/index.tsx"
-import { Button } from "ui";
+```diff filename="apps/docs/app/page.tsx"
+import { Button, Header } from "ui";
 
-export default function Docs() {
+export default function Page() {
   return (
-    <div>
--     <h1>Docs</h1>
-+     <h1>My great docs</h1>
+    <>
+-     <Header text="Docs" />
++     <Header text="My great docs" />
       <Button />
-    </div>
+    <>
   );
 }
 ```

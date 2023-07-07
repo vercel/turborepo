@@ -17,6 +17,7 @@ mod retry;
 pub mod rope;
 pub mod source_context;
 pub mod util;
+pub(crate) mod virtual_fs;
 
 use std::{
     borrow::Cow,
@@ -50,17 +51,19 @@ use serde_json::Value;
 use tokio::{
     fs,
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    sync::{RwLock, RwLockReadGuard},
 };
 use tracing::{instrument, Level};
 use turbo_tasks::{
     mark_stateful,
-    primitives::{BoolVc, StringReadRef, StringVc},
+    primitives::{BoolVc, OptionStringVc, StringReadRef, StringVc},
     spawn_thread,
     trace::TraceRawVcs,
     CompletionVc, InvalidationReason, Invalidator, ValueToString, ValueToStringVc,
 };
 use turbo_tasks_hash::hash_xxh3_hash64;
 use util::{extract_disk_access, join_path, normalize_path, sys_to_unix, unix_to_sys};
+pub use virtual_fs::VirtualFileSystemVc;
 
 use self::{invalidation::WatchStart, json::UnparseableJson, mutex_map::MutexMap};
 use crate::{
@@ -154,6 +157,11 @@ pub struct DiskFileSystem {
     invalidator_map: Arc<InvalidatorMap>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     dir_invalidator_map: Arc<InvalidatorMap>,
+    /// Lock that makes invalidation atomic. It will keep a write lock during
+    /// watcher invalidation and a read lock during other operations.
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    #[serde(skip)]
+    invalidation_lock: Arc<RwLock<()>>,
     #[turbo_tasks(debug_ignore, trace_ignore)]
     #[serde(skip)]
     watcher: Arc<DiskWatcher>,
@@ -186,6 +194,12 @@ impl DiskFileSystem {
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         self.watcher.ensure_watching(path, self.root_path())?;
         Ok(())
+    }
+
+    async fn lock_path(&self, full_path: &Path) -> PathLockGuard<'_> {
+        let lock1 = self.invalidation_lock.read().await;
+        let lock2 = self.mutex_map.lock(full_path.to_path_buf()).await;
+        PathLockGuard(lock1, lock2)
     }
 
     pub fn invalidate(&self) {
@@ -231,6 +245,7 @@ impl DiskFileSystem {
         let report_invalidation_reason =
             report_invalidation_reason.then(|| (self.name.clone(), root_path.clone()));
 
+        let invalidation_lock = self.invalidation_lock.clone();
         // Create a channel to receive the events.
         let (tx, rx) = channel();
         // Create a watcher object, delivering debounced events.
@@ -408,6 +423,7 @@ impl DiskFileSystem {
                         let _ = disk_watcher.restore_if_watching(&path, &root_path);
                     }
                 }
+                let _lock = invalidation_lock.blocking_write();
                 {
                     let mut invalidator_map = invalidator_map.lock().unwrap();
                     invalidate_path(
@@ -458,6 +474,11 @@ impl DiskFileSystem {
     }
 }
 
+struct PathLockGuard<'a>(
+    RwLockReadGuard<'a, ()>,
+    mutex_map::MutexMapGuard<'a, PathBuf>,
+);
+
 fn format_absolute_fs_path(path: &Path, name: &str, root_path: &PathBuf) -> Option<String> {
     let path = if let Ok(rel_path) = path.strip_prefix(root_path) {
         let path = if MAIN_SEPARATOR != '/' {
@@ -489,6 +510,7 @@ impl DiskFileSystemVc {
             name,
             root,
             mutex_map: Default::default(),
+            invalidation_lock: Default::default(),
             invalidator_map: Arc::new(InvalidatorMap::new()),
             dir_invalidator_map: Arc::new(InvalidatorMap::new()),
             watcher: Default::default(),
@@ -511,7 +533,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
 
-        let _lock = self.mutex_map.lock(full_path.clone()).await;
+        let _lock = self.lock_path(&full_path).await;
         let content = match retry_future(|| File::from_path(full_path.clone())).await {
             Ok(file) => FileContent::new(file),
             Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
@@ -537,7 +559,7 @@ impl FileSystem for DiskFileSystem {
                     || e.kind() == ErrorKind::NotADirectory
                     || e.kind() == ErrorKind::InvalidFilename =>
             {
-                return Ok(DirectoryContentVc::not_found())
+                return Ok(DirectoryContentVc::not_found());
             }
             Err(e) => {
                 bail!(anyhow!(e).context(format!("reading dir {}", full_path.display())))
@@ -581,7 +603,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
 
-        let _lock = self.mutex_map.lock(full_path.clone()).await;
+        let _lock = self.lock_path(&full_path).await;
         let link_path = match retry_future(|| fs::read_link(&full_path)).await {
             Ok(res) => res,
             Err(_) => return Ok(LinkContent::NotFound.cell()),
@@ -677,7 +699,7 @@ impl FileSystem for DiskFileSystem {
         // Track the file, so that we will rewrite it if it ever changes.
         fs_path.track().await?;
 
-        let _lock = self.mutex_map.lock(full_path.clone()).await;
+        let _lock = self.lock_path(&full_path).await;
 
         // We perform an untracked comparison here, so that this write is not dependent
         // on a read's FileContentVc (and the memory it holds). Our untracked read can
@@ -766,7 +788,7 @@ impl FileSystem for DiskFileSystem {
                     })?;
             }
         }
-        let _lock = self.mutex_map.lock(full_path.clone()).await;
+        let _lock = self.lock_path(&full_path).await;
         match &*target_link {
             LinkContent::Link { target, link_type } => {
                 let link_type = *link_type;
@@ -818,7 +840,7 @@ impl FileSystem for DiskFileSystem {
         let full_path = self.to_sys_path(fs_path).await?;
         self.register_invalidator(&full_path)?;
 
-        let _lock = self.mutex_map.lock(full_path.clone()).await;
+        let _lock = self.lock_path(&full_path).await;
         let meta = retry_future(|| fs::metadata(full_path.clone()))
             .await
             .with_context(|| format!("reading metadata for {}", full_path.display()))?;
@@ -928,17 +950,57 @@ impl FileSystemPath {
     /// Returns the final component of the FileSystemPath, or an empty string
     /// for the root path.
     pub fn file_name(&self) -> &str {
-        // rsplit will always give at least one item
-        self.path.rsplit('/').next().unwrap()
+        let (_, file_name) = self.split_file_name();
+        file_name
     }
 
     pub fn extension(&self) -> Option<&str> {
-        if let Some((_, ext)) = self.path.rsplit_once('.') {
-            if !ext.contains('/') {
-                return Some(ext);
+        let (_, extension) = self.split_extension();
+        extension
+    }
+
+    /// Splits the path into two components:
+    /// 1. The path without the extension;
+    /// 2. The extension, if any.
+    fn split_extension(&self) -> (&str, Option<&str>) {
+        if let Some((path_before_extension, extension)) = self.path.rsplit_once('.') {
+            if extension.contains('/') ||
+                // The file name begins with a `.` and has no other `.`s within.
+                path_before_extension.ends_with('/') || path_before_extension.is_empty()
+            {
+                (self.path.as_str(), None)
+            } else {
+                (path_before_extension, Some(extension))
             }
+        } else {
+            (self.path.as_str(), None)
         }
-        None
+    }
+
+    /// Splits the path into two components:
+    /// 1. The parent directory, if any;
+    /// 2. The file name;
+    fn split_file_name(&self) -> (Option<&str>, &str) {
+        // Since the path is normalized, we know `parent`, if any, must not be empty.
+        if let Some((parent, file_name)) = self.path.rsplit_once('/') {
+            (Some(parent), file_name)
+        } else {
+            (None, self.path.as_str())
+        }
+    }
+
+    /// Splits the path into three components:
+    /// 1. The parent directory, if any;
+    /// 2. The file stem;
+    /// 3. The extension, if any.
+    fn split_file_stem_extension(&self) -> (Option<&str>, &str, Option<&str>) {
+        let (path_before_extension, extension) = self.split_extension();
+
+        if let Some((parent, file_stem)) = path_before_extension.rsplit_once('/') {
+            (Some(parent), file_stem, extension)
+        } else {
+            (None, path_before_extension, extension)
+        }
     }
 }
 
@@ -1014,15 +1076,11 @@ impl FileSystemPathVc {
                 appending
             )
         }
-        if let Some((path, ext)) = this.path.rsplit_once('.') {
-            // check if `ext` is a real extension, and not a "." in a directory name or a
-            // .dotfile
-            if !(ext.contains('/') || (path.ends_with('/') && !path.is_empty())) {
-                return Ok(Self::new_normalized(
-                    this.fs,
-                    format!("{}{}.{}", path, appending, ext),
-                ));
-            }
+        if let (path, Some(ext)) = this.split_extension() {
+            return Ok(Self::new_normalized(
+                this.fs,
+                format!("{}{}.{}", path, appending, ext),
+            ));
         }
         Ok(Self::new_normalized(
             this.fs,
@@ -1088,6 +1146,42 @@ impl FileSystemPathVc {
     #[turbo_tasks::function]
     pub async fn is_inside_or_equal(self, other: FileSystemPathVc) -> Result<BoolVc> {
         Ok(BoolVc::cell(self.await?.is_inside_or_equal(&*other.await?)))
+    }
+
+    /// Creates a new [`FileSystemPathVc`] like `self` but with the given
+    /// extension.
+    #[turbo_tasks::function]
+    pub async fn with_extension(self, extension: &str) -> Result<FileSystemPathVc> {
+        let this = self.await?;
+        let (path_without_extension, _) = this.split_extension();
+        Ok(Self::new_normalized(
+            this.fs,
+            // Like `Path::with_extension` and `PathBuf::set_extension`, if the extension is empty,
+            // we remove the extension altogether.
+            match extension.is_empty() {
+                true => path_without_extension.to_string(),
+                false => format!("{path_without_extension}.{extension}"),
+            },
+        ))
+    }
+
+    /// Extracts the stem (non-extension) portion of self.file_name.
+    ///
+    /// The stem is:
+    ///
+    /// * [`None`], if there is no file name;
+    /// * The entire file name if there is no embedded `.`;
+    /// * The entire file name if the file name begins with `.` and has no other
+    ///   `.`s within;
+    /// * Otherwise, the portion of the file name before the final `.`
+    #[turbo_tasks::function]
+    pub async fn file_stem(self) -> Result<OptionStringVc> {
+        let this = self.await?;
+        let (_, file_stem, _) = this.split_file_stem_extension();
+        if file_stem.is_empty() {
+            return Ok(OptionStringVc::cell(None));
+        }
+        Ok(OptionStringVc::cell(Some(file_stem.to_string())))
     }
 }
 
@@ -1213,12 +1307,8 @@ impl FileSystemPathVc {
                 Ok(FileSystemEntryTypeVc::cell(FileSystemEntryType::NotFound))
             }
             DirectoryContent::Entries(entries) => {
-                let basename = if let Some((_, basename)) = this.path.rsplit_once('/') {
-                    basename
-                } else {
-                    &this.path
-                };
-                if let Some(entry) = entries.get(basename) {
+                let (_, file_name) = this.split_file_name();
+                if let Some(entry) = entries.get(file_name) {
                     Ok(FileSystemEntryTypeVc::cell(entry.into()))
                 } else {
                     Ok(FileSystemEntryTypeVc::cell(FileSystemEntryType::NotFound))
@@ -1959,4 +2049,75 @@ pub async fn to_sys_path(mut path: FileSystemPathVc) -> Result<Option<PathBuf>> 
 pub fn register() {
     turbo_tasks::register();
     include!(concat!(env!("OUT_DIR"), "/register.rs"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{virtual_fs::VirtualFileSystemVc, *};
+
+    #[tokio::test]
+    async fn with_extension() {
+        crate::register();
+
+        turbo_tasks_testing::VcStorage::with(async {
+            let fs = VirtualFileSystemVc::new().as_file_system();
+
+            let path_txt = FileSystemPathVc::new_normalized(fs, "foo/bar.txt".into());
+
+            let path_json = path_txt.with_extension("json");
+            assert_eq!(&*path_json.await.unwrap().path, "foo/bar.json");
+
+            let path_no_ext = path_txt.with_extension("");
+            assert_eq!(&*path_no_ext.await.unwrap().path, "foo/bar");
+
+            let path_new_ext = path_no_ext.with_extension("json");
+            assert_eq!(&*path_new_ext.await.unwrap().path, "foo/bar.json");
+
+            let path_no_slash_txt = FileSystemPathVc::new_normalized(fs, "bar.txt".into());
+
+            let path_no_slash_json = path_no_slash_txt.with_extension("json");
+            assert_eq!(path_no_slash_json.await.unwrap().path.as_str(), "bar.json");
+
+            let path_no_slash_no_ext = path_no_slash_txt.with_extension("");
+            assert_eq!(path_no_slash_no_ext.await.unwrap().path.as_str(), "bar");
+
+            let path_no_slash_new_ext = path_no_slash_no_ext.with_extension("json");
+            assert_eq!(
+                path_no_slash_new_ext.await.unwrap().path.as_str(),
+                "bar.json"
+            );
+
+            anyhow::Ok(())
+        })
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn file_stem() {
+        crate::register();
+
+        turbo_tasks_testing::VcStorage::with(async {
+            let fs = VirtualFileSystemVc::new().as_file_system();
+
+            let path = FileSystemPathVc::new_normalized(fs, "".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), None);
+
+            let path = FileSystemPathVc::new_normalized(fs, "foo/bar.txt".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), Some("bar"));
+
+            let path = FileSystemPathVc::new_normalized(fs, "bar.txt".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), Some("bar"));
+
+            let path = FileSystemPathVc::new_normalized(fs, "foo/bar".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), Some("bar"));
+
+            let path = FileSystemPathVc::new_normalized(fs, "foo/.bar".into());
+            assert_eq!(path.file_stem().await.unwrap().as_deref(), Some(".bar"));
+
+            anyhow::Ok(())
+        })
+        .await
+        .unwrap()
+    }
 }
