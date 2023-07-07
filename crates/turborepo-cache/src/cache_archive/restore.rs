@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, collections::HashMap, io::Read};
 
 use petgraph::graph::DiGraph;
-use ring::digest::{Context, SHA512};
+use sha2::{Digest, Sha512};
 use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -46,7 +46,7 @@ impl CacheReader {
     }
 
     pub fn get_sha(mut self) -> Result<Vec<u8>, CacheError> {
-        let mut context = Context::new(&SHA512);
+        let mut context = Sha512::new();
         let mut buffer = [0; 8192];
         loop {
             let n = self.reader.read(&mut buffer)?;
@@ -56,7 +56,7 @@ impl CacheReader {
             context.update(&buffer[..n]);
         }
 
-        Ok(context.finish().as_ref().to_vec())
+        Ok(context.finalize().to_vec())
     }
 
     pub fn restore(
