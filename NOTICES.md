@@ -4,8 +4,8 @@ This project incorporates components from the projects listed below. The origina
 
 ---
 
-- https://cs.opensource.google/go/go/+/refs/tags/go1.18.2:src/encoding/csv/reader.go
-- https://cs.opensource.google/go/go/+/refs/tags/go1.18.2:src/encoding/csv/reader_test.go
+- https://cs.opensource.google/go/go/+/refs/tags/go1.19.10:src/encoding/csv/reader.go
+- https://cs.opensource.google/go/go/+/refs/tags/go1.19.10:src/encoding/csv/reader_test.go
 
 Copyright (c) 2009 The Go Authors. All rights reserved.
 
