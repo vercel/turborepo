@@ -549,6 +549,14 @@ mod tests {
         }
     )]
     #[test_case(
+        Some("{}"),
+        PackageJson {
+            legacy_turbo_config: Some(serde_json::Value::String("build".to_string())),
+            ..PackageJson::default()
+        },
+        TurboJson::default()
+    )]
+    #[test_case(
         Some(r#"{
             "pipeline": {
                 "build": {
@@ -623,7 +631,7 @@ mod tests {
         }
     )]
     #[test_case(
-        r#"{ 
+        r#"{
           "dependsOn": ["cli#build"],
           "dotEnv": ["package/a/.env"],
           "env": ["OS"],
@@ -698,7 +706,7 @@ mod tests {
         r#"[".next/**", "!.next/cache/**"]"#,
         TaskOutputs {
              inclusions: vec![".next/**".to_string()],
-             exclusions: vec![".next/cache/**".to_string()] 
+             exclusions: vec![".next/cache/**".to_string()]
         }
     )]
     fn test_deserialize_task_outputs(
