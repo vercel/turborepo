@@ -14,7 +14,10 @@ use tokio_util::io::{ReaderStream, StreamReader};
 use turbo_tasks::{util::SharedError, CollectiblesSource, TransientInstance};
 use turbo_tasks_bytes::Bytes;
 use turbo_tasks_fs::{FileContent, FileContentReadRef};
-use turbopack_core::{asset::AssetContent, issue::IssueReporterVc, version::VersionedContent};
+use turbopack_core::{
+    asset::AssetContent, issue::IssueReporterVc, next_telemetry::TelemetryReporterVc,
+    version::VersionedContent,
+};
 
 use crate::{
     handle_issues,
@@ -72,11 +75,19 @@ pub async fn process_request_with_content_source(
     source: ContentSourceVc,
     request: Request<hyper::Body>,
     issue_reporter: IssueReporterVc,
+    telemetry_reporter: TelemetryReporterVc,
 ) -> Result<(Response<hyper::Body>, AutoSet<ContentSourceSideEffectVc>)> {
     let original_path = request.uri().path().to_string();
     let request = http_request_to_source_request(request).await?;
     let result = get_from_source(source, TransientInstance::new(request));
-    handle_issues(result, &original_path, "get_from_source", issue_reporter).await?;
+    handle_issues(
+        result,
+        &original_path,
+        "get_from_source",
+        issue_reporter,
+        telemetry_reporter,
+    )
+    .await?;
     let side_effects: AutoSet<ContentSourceSideEffectVc> =
         result.peek_collectibles().strongly_consistent().await?;
     match &*result.strongly_consistent().await? {

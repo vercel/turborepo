@@ -16,6 +16,7 @@ pub mod error;
 pub mod ident;
 pub mod introspect;
 pub mod issue;
+pub mod next_telemetry;
 pub mod package_json;
 pub mod proxied_asset;
 pub mod reference;

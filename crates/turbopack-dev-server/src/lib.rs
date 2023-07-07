@@ -37,6 +37,7 @@ use turbo_tasks::{
 use turbopack_core::{
     error::PrettyPrintError,
     issue::{IssueReporter, IssueReporterVc, IssueVc},
+    next_telemetry::{NextTelemetryVc, TelemetryReporter, TelemetryReporterVc},
 };
 
 use self::{source::ContentSourceVc, update::UpdateServer};
@@ -80,11 +81,22 @@ async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
     path: &str,
     operation: &str,
     issue_reporter: IssueReporterVc,
+    telemetry_reporter: turbopack_core::next_telemetry::TelemetryReporterVc,
 ) -> Result<()> {
     let issues = IssueVc::peek_issues_with_path(source)
         .await?
         .strongly_consistent()
         .await?;
+
+    let telemetries = NextTelemetryVc::peek_telemetries_with_path(source)
+        .await?
+        .strongly_consistent()
+        .await?;
+
+    let _ = telemetry_reporter.report_issues(
+        TransientInstance::new(telemetries.clone()),
+        TransientValue::new(source.into()),
+    );
 
     let has_fatal = issue_reporter.report_issues(
         TransientInstance::new(issues.clone()),
@@ -139,6 +151,7 @@ impl DevServerBuilder {
         turbo_tasks: Arc<dyn TurboTasksApi>,
         source_provider: impl SourceProvider + Clone + Send + Sync,
         get_issue_reporter: Arc<dyn Fn() -> IssueReporterVc + Send + Sync>,
+        get_telemetry_reporter: Arc<dyn Fn() -> TelemetryReporterVc + Send + Sync>,
     ) -> DevServer {
         let ongoing_side_effects = Arc::new(Mutex::new(VecDeque::<
             Arc<tokio::sync::Mutex<Option<JoinHandle<Result<()>>>>>,
@@ -147,6 +160,7 @@ impl DevServerBuilder {
             let tt = turbo_tasks.clone();
             let source_provider = source_provider.clone();
             let get_issue_reporter = get_issue_reporter.clone();
+            let get_telemetry_reporter = get_telemetry_reporter.clone();
             let ongoing_side_effects = ongoing_side_effects.clone();
             async move {
                 let handler = move |request: Request<hyper::Body>| {
@@ -154,6 +168,7 @@ impl DevServerBuilder {
                     let start = Instant::now();
                     let tt = tt.clone();
                     let get_issue_reporter = get_issue_reporter.clone();
+                    let get_telemetry_reporter = get_telemetry_reporter.clone();
                     let ongoing_side_effects = ongoing_side_effects.clone();
                     let source_provider = source_provider.clone();
                     let future = async move {
@@ -195,6 +210,7 @@ impl DevServerBuilder {
                         };
                         run_once_with_reason(tt.clone(), reason, async move {
                             let issue_reporter = get_issue_reporter();
+                            let telemetry_reporter = get_telemetry_reporter();
 
                             if hyper_tungstenite::is_upgrade_request(&request) {
                                 let uri = request.uri();
@@ -232,13 +248,21 @@ impl DevServerBuilder {
                             let uri = request.uri();
                             let path = uri.path().to_string();
                             let source = source_provider.get_source();
-                            handle_issues(source, &path, "get source", issue_reporter).await?;
+                            handle_issues(
+                                source,
+                                &path,
+                                "get source",
+                                issue_reporter,
+                                telemetry_reporter,
+                            )
+                            .await?;
                             let resolved_source = source.resolve_strongly_consistent().await?;
                             let (response, side_effects) =
                                 http::process_request_with_content_source(
                                     resolved_source,
                                     request,
                                     issue_reporter,
+                                    telemetry_reporter,
                                 )
                                 .await?;
                             let status = response.status().as_u16();

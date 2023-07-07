@@ -15,9 +15,12 @@ use turbo_tasks::{
     primitives::BoolVc, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
 };
 use turbo_tasks_fs::{source_context::get_source_context, FileLinesContent};
-use turbopack_core::issue::{
-    CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssue,
-    PlainIssueProcessingPathItem, PlainIssueProcessingPathItemReadRef, PlainIssueSource,
+use turbopack_core::{
+    issue::{
+        CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssue,
+        PlainIssueProcessingPathItem, PlainIssueProcessingPathItemReadRef, PlainIssueSource,
+    },
+    next_telemetry::NextTelemetry,
 };
 
 use crate::source_context::format_source_context_lines;
@@ -343,6 +346,26 @@ impl ConsoleUiVc {
             seen: Arc::new(Mutex::new(SeenIssues::new())),
         }
         .cell()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl turbopack_core::next_telemetry::TelemetryReporter for ConsoleUi {
+    #[turbo_tasks::function]
+    async fn report_issues(
+        &self,
+        issues: TransientInstance<ReadRef<turbopack_core::next_telemetry::CapturedTelemetry>>,
+        _source: TransientValue<RawVc>,
+    ) -> Result<BoolVc> {
+        let issues = &*issues;
+
+        for plain_issue in &issues.telemetry {
+            let i = plain_issue.event_name();
+            let i = i.await?;
+
+            println!("[telemetry]: ========================= {:#?}", i);
+        }
+        Ok(BoolVc::cell(false))
     }
 }
 
