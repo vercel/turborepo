@@ -66,7 +66,7 @@ impl HttpCache {
         Ok(())
     }
 
-    async fn exists(
+    pub async fn exists(
         &self,
         hash: &str,
         token: &str,
