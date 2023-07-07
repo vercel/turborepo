@@ -20,7 +20,7 @@ because otherwise prysk interprets them as multiline commands
   done
   ::endgroup::
   ::group::util:build
-  cache bypass, force executing 0bc36a8a234e31d4
+  cache bypass, force executing 90d7154e362e3386
   
   >\sbuild (re)
   >\ssleep 0.5 && echo 'building' && sleep 1 && echo 'completed' (re)
@@ -33,3 +33,33 @@ because otherwise prysk interprets them as multiline commands
   Cached:    0 cached, 2 total
     Time:\s*[\.0-9]+m?s  (re)
   
+Verify that errors are grouped properly
+  $ ${TURBO} run fail
+  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
+  \xe2\x80\xa2 Running fail in 2 packages (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
+  ::group::util:fail
+  cache miss, executing 9bf2c727d81cf834
+  
+  \> fail (re)
+  \> echo 'failing'; exit 1 (re)
+  
+  failing
+  npm ERR! Lifecycle script `fail` failed with error: 
+  npm ERR! Error: command failed 
+  npm ERR!   in workspace: util 
+  npm ERR\!   at location: (.*)/packages/util  (re)
+  ::error::ERROR: command finished with error: command \((.*)/packages/util\) npm run fail exited \(1\) (re)
+  ::endgroup::
+  command \(.*/packages/util\) npm run fail exited \(1\) (re)
+  
+   Tasks:    0 successful, 1 total
+  Cached:    0 cached, 1 total
+    Time:\s*[\.0-9]+m?s  (re)
+  Failed:    util#fail
+  
+   ERROR  run failed: command  exited (1)
+  [1]
+
+
+
