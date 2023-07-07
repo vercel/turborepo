@@ -19,6 +19,7 @@ pub mod issue;
 pub mod module;
 pub mod package_json;
 pub mod proxied_asset;
+pub mod raw_module;
 pub mod reference;
 pub mod reference_type;
 pub mod resolve;

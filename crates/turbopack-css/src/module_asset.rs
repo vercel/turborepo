@@ -135,7 +135,7 @@ struct ModuleCssClasses(IndexMap<String, Vec<ModuleCssClass>>);
 #[turbo_tasks::value_impl]
 impl ModuleCssAssetVc {
     #[turbo_tasks::function]
-    async fn inner(self) -> Result<AssetVc> {
+    async fn inner(self) -> Result<ModuleVc> {
         let this = self.await?;
         Ok(this.context.process(
             this.source,

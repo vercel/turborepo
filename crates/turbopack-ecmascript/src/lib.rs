@@ -166,7 +166,7 @@ impl EcmascriptModuleAssetBuilder {
         self
     }
 
-    pub fn build(self) -> AssetVc {
+    pub fn build(self) -> ModuleVc {
         let base = if let Some(inner_assets) = self.inner_assets {
             EcmascriptModuleAssetVc::new_with_inner_assets(
                 self.source,

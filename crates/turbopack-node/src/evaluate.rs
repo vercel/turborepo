@@ -134,7 +134,7 @@ pub async fn get_evaluate_pool(
         .into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
             "INNER".to_string() => module_asset,
-            "RUNTIME".to_string() => runtime_asset
+            "RUNTIME".to_string() => runtime_asset.into()
         }))),
     );
 
