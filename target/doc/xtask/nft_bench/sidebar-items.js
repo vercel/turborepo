@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["g","r","show_result"],"struct":["BenchSuite"]};
+window.SIDEBAR_ITEMS = {"fn":["show_result"],"struct":["BenchSuite"]};
