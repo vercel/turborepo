@@ -5,5 +5,6 @@ fn main() {
     // The test/snapshot crate need to be rebuilt if any snapshots are added.
     // Unfortunately, we can't have the build.rs file operate differently on
     // each file, so the entire turbopack crate needs to be rebuilt.
-    rerun_if_glob("tests/{execution,snapshot}/*/*", "tests/");
+    rerun_if_glob("tests/execution/*/*/*/input", "tests/");
+    rerun_if_glob("tests/snapshot/*/*/input", "tests/");
 }

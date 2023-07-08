@@ -191,9 +191,13 @@ function interopEsm(
       getters[key] = createGetter(raw, key);
     }
   }
+
+  // this is not really correct
+  // we should set the `default` getter if the imported module is a `.cjs file`
   if (!(allowExportDefault && "default" in getters)) {
     getters["default"] = () => raw;
   }
+
   esm(ns, getters);
   return ns;
 }

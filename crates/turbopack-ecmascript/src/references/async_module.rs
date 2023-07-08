@@ -1,4 +1,7 @@
+use std::future::IntoFuture;
+
 use anyhow::Result;
+use futures::{stream::FuturesOrdered, TryStreamExt};
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use swc_core::{
@@ -6,13 +9,16 @@ use swc_core::{
     ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Pat, Program},
     quote,
 };
-use turbo_tasks::{primitives::BoolVc, trace::TraceRawVcs, TryJoinIterExt};
+use turbo_tasks::{primitives::BoolVc, trace::TraceRawVcs, TryFlatJoinIterExt};
 
 use crate::{
-    chunk::EcmascriptChunkingContextVc,
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContextVc},
     code_gen::{CodeGenerateable, CodeGeneration, CodeGenerationVc},
     create_visitor,
-    references::esm::{base::insert_hoisted_stmt, EsmAssetReferenceVc},
+    references::esm::{
+        base::{insert_hoisted_stmt, ReferencedAsset},
+        EsmAssetReferenceVc,
+    },
     CodeGenerateableVc,
 };
 
@@ -27,7 +33,12 @@ pub struct OptionAsyncModuleOptions(Option<AsyncModuleOptions>);
 #[turbo_tasks::value_impl]
 impl OptionAsyncModuleOptionsVc {
     #[turbo_tasks::function]
-    pub(super) async fn is_async(self) -> Result<BoolVc> {
+    pub(crate) fn none() -> Self {
+        Self::cell(None)
+    }
+
+    #[turbo_tasks::function]
+    pub(crate) async fn is_async(self) -> Result<BoolVc> {
         Ok(BoolVc::cell(self.await?.is_some()))
     }
 }
@@ -39,51 +50,156 @@ pub struct AsyncModule {
 }
 
 #[turbo_tasks::value(transparent)]
+pub struct AsyncModules(IndexSet<AsyncModuleVc>);
+
+#[turbo_tasks::value(transparent)]
 pub struct OptionAsyncModule(Option<AsyncModuleVc>);
+
+#[turbo_tasks::value_impl]
+impl OptionAsyncModuleVc {
+    #[turbo_tasks::function]
+    pub(crate) fn none() -> Self {
+        Self::cell(None)
+    }
+
+    #[turbo_tasks::function]
+    pub(crate) async fn is_async(self) -> Result<BoolVc> {
+        Ok(BoolVc::cell(self.module_options().await?.is_some()))
+    }
+
+    #[turbo_tasks::function]
+    pub(crate) async fn module_options(self) -> Result<OptionAsyncModuleOptionsVc> {
+        if let Some(async_module) = &*self.await? {
+            return Ok(async_module.module_options());
+        }
+
+        Ok(OptionAsyncModuleOptionsVc::none())
+    }
+}
 
 #[turbo_tasks::value(transparent)]
 pub struct AsyncModuleIdents(IndexSet<String>);
 
 #[turbo_tasks::value_impl]
 impl AsyncModuleVc {
+    /// Collects all [AsyncModuleVc]s from the references and returns them
+    /// after resolving.
     #[turbo_tasks::function]
-    pub(super) async fn get_async_idents(self) -> Result<AsyncModuleIdentsVc> {
+    pub(crate) async fn collect_direct_async_module_children(self) -> Result<AsyncModulesVc> {
         let this = self.await?;
 
-        let reference_idents: Vec<Option<String>> = this
+        let async_modules = this
             .references
             .iter()
             .map(|r| async {
                 let referenced_asset = r.get_referenced_asset().await?;
-                let ident = if *r.is_async().await? {
+                let ReferencedAsset::Some(placeable) = &*referenced_asset else {
+                    return anyhow::Ok(None);
+                };
+
+                let Some(async_module) = &*placeable.get_async_module().await? else {
+                    return anyhow::Ok(None);
+                };
+
+                let resolved = async_module.resolve().await?;
+                if resolved == self {
+                    return anyhow::Ok(None);
+                };
+
+                anyhow::Ok(Some(resolved))
+            })
+            .try_flat_join()
+            .await?;
+
+        Ok(AsyncModulesVc::cell(IndexSet::from_iter(async_modules)))
+    }
+
+    /// Collects all [AsyncModuleVc]s referenced including the current
+    /// [AsyncModuleVc].
+    #[turbo_tasks::function]
+    pub(crate) async fn collect_all_async_modules(self) -> Result<AsyncModulesVc> {
+        let mut futures = FuturesOrdered::new();
+        futures.push_back(self.collect_direct_async_module_children().into_future());
+
+        let mut async_modules = IndexSet::from([self]);
+        while let Some(modules) = futures.try_next().await? {
+            for async_module in modules.iter().copied() {
+                if async_modules.insert(async_module) {
+                    futures.push_back(
+                        async_module
+                            .collect_direct_async_module_children()
+                            .into_future(),
+                    );
+                }
+            }
+        }
+
+        Ok(AsyncModulesVc::cell(async_modules))
+    }
+
+    #[turbo_tasks::function]
+    pub(crate) async fn get_async_idents(self) -> Result<AsyncModuleIdentsVc> {
+        let this = self.await?;
+
+        let reference_idents = this
+            .references
+            .iter()
+            .map(|r| async {
+                let referenced_asset = r.get_referenced_asset().await?;
+                let ident = if *r.is_async(true).await? {
                     referenced_asset.get_ident().await?
                 } else {
                     None
                 };
                 anyhow::Ok(ident)
             })
-            .try_join()
+            .try_flat_join()
             .await?;
 
-        let reference_idents = reference_idents
-            .into_iter()
-            .flatten()
-            .collect::<IndexSet<_>>();
-
-        Ok(AsyncModuleIdentsVc::cell(reference_idents))
+        Ok(AsyncModuleIdentsVc::cell(IndexSet::from_iter(
+            reference_idents,
+        )))
     }
 
     #[turbo_tasks::function]
-    pub(super) async fn is_async(self) -> Result<BoolVc> {
+    pub(crate) async fn is_self_async(self) -> Result<BoolVc> {
         let this = self.await?;
 
         if this.has_top_level_await {
-            return Ok(BoolVc::cell(this.has_top_level_await));
+            return Ok(BoolVc::cell(true));
         }
 
-        let async_idents = self.get_async_idents().await?;
+        let references = this
+            .references
+            .iter()
+            .map(|r| async { anyhow::Ok((*r.is_async(false).await?).then_some(())) })
+            .try_flat_join()
+            .await?;
 
-        Ok(BoolVc::cell(!async_idents.is_empty()))
+        Ok(BoolVc::cell(!references.is_empty()))
+    }
+
+    #[turbo_tasks::function]
+    pub(crate) async fn is_async(self) -> Result<BoolVc> {
+        if *self.is_self_async().await? {
+            return Ok(BoolVc::cell(true));
+        }
+
+        let async_modules = self
+            .collect_all_async_modules()
+            .await?
+            .iter()
+            .map(|a| async {
+                anyhow::Ok(if *a.is_self_async().await? {
+                    Some(*a)
+                } else {
+                    None
+                })
+            })
+            .try_flat_join()
+            .await?;
+
+        Ok(BoolVc::cell(!async_modules.is_empty()))
     }
 
     #[turbo_tasks::function]

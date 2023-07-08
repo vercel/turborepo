@@ -124,7 +124,7 @@ struct MemoizedSuccessfulAnalysis {
     operation: RawVc,
     references: ReadRef<AssetReferences>,
     exports: ReadRef<EcmascriptExports>,
-    async_module_options: ReadRef<OptionAsyncModuleOptions>,
+    async_module_options: ReadRef<OptionAsyncModule>,
 }
 
 pub struct EcmascriptModuleAssetBuilder {
@@ -310,13 +310,13 @@ impl EcmascriptModuleAsset {
                     // We need to store the ReadRefs since we want to keep a snapshot.
                     references: result_value.references.await?,
                     exports: result_value.exports.await?,
-                    async_module_options: result_value.async_module_options.await?,
+                    async_module: result_value.async_module.await?,
                 }));
         } else if let Some(MemoizedSuccessfulAnalysis {
             operation,
             references,
             exports,
-            async_module_options,
+            async_module,
         }) = &*this.last_successful_analysis.get()
         {
             // It's important to connect to the last operation here to keep it active, so
@@ -326,7 +326,7 @@ impl EcmascriptModuleAsset {
                 references: ReadRef::cell(references.clone()),
                 exports: ReadRef::cell(exports.clone()),
                 code_generation: result_value.code_generation,
-                async_module_options: ReadRef::cell(async_module_options.clone()),
+                async_module: ReadRef::cell(async_module.clone()),
                 successful: false,
             }
             .cell());
@@ -447,10 +447,8 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleAsset {
     }
 
     #[turbo_tasks::function]
-    async fn get_async_module_options(
-        self_vc: EcmascriptModuleAssetVc,
-    ) -> Result<OptionAsyncModuleOptionsVc> {
-        Ok(self_vc.failsafe_analyze().await?.async_module_options)
+    async fn get_async_module(self_vc: EcmascriptModuleAssetVc) -> Result<OptionAsyncModuleVc> {
+        Ok(self_vc.failsafe_analyze().await?.async_module)
     }
 }
 
@@ -521,7 +519,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
         let content = this.module.module_content(this.context, availability_info);
-        let async_module_options = this.module.get_async_module_options();
+        let async_module_options = this.module.get_async_module().module_options();
 
         Ok(EcmascriptChunkItemContent::new(
             content,

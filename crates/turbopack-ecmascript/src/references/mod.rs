@@ -115,7 +115,7 @@ use crate::{
     },
     magic_identifier,
     references::{
-        async_module::{AsyncModule, OptionAsyncModuleOptionsVc},
+        async_module::{AsyncModule, OptionAsyncModule},
         cjs::{CjsRequireAssetReference, CjsRequireCacheAccess, CjsRequireResolveAssetReference},
         esm::{module_id::EsmModuleIdAssetReference, EsmBinding},
         require_context::{RequireContextAssetReference, RequireContextMap},
@@ -132,7 +132,7 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub references: Vc<AssetReferences>,
     pub code_generation: Vc<CodeGenerateables>,
     pub exports: Vc<EcmascriptExports>,
-    pub async_module_options: Vc<OptionAsyncModuleOptions>,
+    pub async_module_options: Vc<OptionAsyncModule>,
     /// `true` when the analysis was successful.
     pub successful: bool,
 }
@@ -169,7 +169,7 @@ pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
     references: IndexSet<Vc<Box<dyn AssetReference>>>,
     code_gens: Vec<CodeGen>,
     exports: EcmascriptExports,
-    async_module_options: Vc<OptionAsyncModuleOptions>,
+    async_module_options: Vc<OptionAsyncModule>,
     successful: bool,
 }
 
@@ -219,8 +219,8 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     }
 
     /// Sets the analysis result ES export.
-    pub fn set_async_module_options(&mut self, options: OptionAsyncModuleOptionsVc) {
-        self.async_module_options = options;
+    pub fn set_async_module(&mut self, async_module: AsyncModuleVc) {
+        self.async_module = OptionAsyncModuleVc::cell(Some(async_module));
     }
 
     /// Sets whether the analysis was successful.
@@ -250,7 +250,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
                 references: Vc::cell(references),
                 code_generation: Vc::cell(self.code_gens),
                 exports: self.exports.into(),
-                async_module_options: self.async_module_options,
+                async_module: self.async_module,
                 successful: self.successful,
             },
         ))
@@ -581,7 +581,7 @@ pub(crate) async fn analyze_ecmascript_module(
             has_top_level_await,
         }
         .cell();
-        analysis.set_async_module_options(async_module.module_options());
+        analysis.set_async_module(async_module);
 
         let esm_exports: Vc<EsmExports> = EsmExports {
             exports: esm_exports,
@@ -599,7 +599,7 @@ pub(crate) async fn analyze_ecmascript_module(
             has_top_level_await,
         }
         .cell();
-        analysis.set_async_module_options(async_module.module_options());
+        analysis.set_async_module(async_module);
         analysis.add_code_gen(async_module);
 
         match detect_dynamic_export(program) {
@@ -641,8 +641,8 @@ pub(crate) async fn analyze_ecmascript_module(
                     has_top_level_await,
                 }
                 .cell();
+                analysis.set_async_module(async_module);
                 analysis.add_code_gen(async_module);
-                analysis.set_async_module_options(async_module.module_options());
 
                 EcmascriptExports::EsmExports(
                     EsmExports {
