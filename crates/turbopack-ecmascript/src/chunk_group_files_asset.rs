@@ -1,7 +1,7 @@
 use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
@@ -77,7 +77,7 @@ impl Asset for ChunkGroupFilesAsset {
 
     #[turbo_tasks::function]
     fn content(&self) -> AssetContentVc {
-        unimplemented!()
+        AssetContentVc::from(File::from("// Chunking only content".to_string()))
     }
 
     #[turbo_tasks::function]
