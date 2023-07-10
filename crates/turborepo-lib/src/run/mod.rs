@@ -1,24 +1,18 @@
 #![allow(dead_code)]
 
 mod global_hash;
-pub mod graph;
 mod scope;
-mod task_id;
+pub mod task_id;
 
 use anyhow::{Context as ErrorContext, Result};
-use graph::CompleteGraph;
 use tracing::{debug, info};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
 
 use crate::{
-    commands::CommandBase,
-    daemon::DaemonConnector,
-    manager::Manager,
-    opts::Opts,
-    package_graph::PackageGraph,
-    package_json::PackageJson,
-    run::{global_hash::get_global_hash_inputs, task_id::ROOT_PKG_NAME},
+    commands::CommandBase, config::TurboJson, daemon::DaemonConnector, manager::Manager,
+    opts::Opts, package_graph::PackageGraph, package_json::PackageJson,
+    run::global_hash::get_global_hash_inputs,
 };
 
 #[derive(Debug)]
@@ -46,17 +40,26 @@ impl Run {
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json =
             PackageJson::load(&package_json_path).context("failed to read package.json")?;
-        let targets = self.targets();
         let mut opts = self.opts()?;
 
         let _is_structured_output = opts.run_opts.graph_dot || opts.run_opts.dry_run_json;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json)
+        let is_single_package = opts.run_opts.single_package;
+
+        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
             .with_single_package_mode(opts.run_opts.single_package)
             .build()?;
 
-        // There's some warning handling code in Go that I'm ignoring
+        let root_turbo_json =
+            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
+        opts.cache_opts.remote_cache_opts = root_turbo_json.remote_cache_options.clone();
+
+        if opts.run_opts.experimental_space_id.is_none() {
+            opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
+        }
+
+        // There's some warning handling code in Go that I'm ignoring
         if self.base.ui.is_ci() && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
@@ -76,34 +79,22 @@ impl Run {
             .validate()
             .context("Invalid package dependency graph")?;
 
-        let g = CompleteGraph::new(&pkg_dep_graph, &self.base.repo_root);
-
-        let is_single_package = opts.run_opts.single_package;
-        let turbo_json = g.get_turbo_config_from_workspace(ROOT_PKG_NAME, is_single_package)?;
-
-        opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_opts.clone();
-
-        if opts.run_opts.experimental_space_id.is_none() {
-            opts.run_opts.experimental_space_id = turbo_json.space_id.clone();
-        }
-
-        let pipeline = &turbo_json.pipeline;
-
         let scm = SCM::new(&self.base.repo_root);
 
-        let mut filtered_pkgs =
+        let _filtered_pkgs =
             scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph, &scm)?;
 
-        if filtered_pkgs.len() == pkg_dep_graph.len() {
-            for target in targets {
-                let key = task_id::root_task_id(target);
-                if pipeline.contains_key(&key) {
-                    filtered_pkgs.insert(task_id::ROOT_PKG_NAME.to_string());
-                    break;
-                }
-            }
-        }
-
+        // TODO: Add this back once scope/filter is implemented.
+        //       Currently this code has lifetime issues
+        // if filtered_pkgs.len() != pkg_dep_graph.len() {
+        //     for target in targets {
+        //         let key = task_id::root_task_id(target);
+        //         if pipeline.contains_key(&key) {
+        //             filtered_pkgs.insert(task_id::ROOT_PKG_NAME.to_string());
+        //             break;
+        //         }
+        //     }
+        // }
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let _global_hash_inputs = get_global_hash_inputs(
@@ -164,6 +155,9 @@ mod test {
         repo_root
             .join_component("package-lock.json")
             .create_with_contents("")?;
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents("{}")?;
 
         let base = CommandBase::new(args, repo_root, get_version(), ui)?;
         let mut run = Run::new(base);
