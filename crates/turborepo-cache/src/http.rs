@@ -172,62 +172,38 @@ impl HttpCache {
 #[cfg(test)]
 mod test {
     use anyhow::Result;
+    use futures::future::try_join_all;
     use tempfile::tempdir;
-    use test_case::test_case;
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::APIClient;
     use vercel_api_mock::start_test_server;
 
-    use crate::{http::HttpCache, CacheSource};
+    use crate::{
+        http::HttpCache,
+        CacheSource
+        test_cases::{get_test_cases, TestCase},
+    };
 
-    struct TestFile {
-        path: AnchoredSystemPathBuf,
-        contents: &'static str,
+    #[tokio::test]
+    async fn test_http_cache() -> Result<()> {
+        try_join_all(get_test_cases().into_iter().map(round_trip_test)).await?;
+
+        Ok(())
     }
 
-    #[test_case(vec![
-        TestFile {
-            path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
-            contents: "hello world"
-        }
-    ], 58, "Faces Places")]
-    #[test_case(vec![
-        TestFile {
-            path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
-            contents: "Days of Heaven"
-        },
-        TestFile {
-            path: AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap(),
-            contents: "Badlands"
-        }
-    ], 1284, "Cleo from 5 to 7")]
-    #[test_case(vec![
-        TestFile {
-            path: AnchoredSystemPathBuf::from_raw("package.json").unwrap(),
-            contents: "Days of Heaven"
-        },
-        TestFile {
-             path: AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap(),
-             contents: "Badlands"
-        },
-        TestFile {
-            path: AnchoredSystemPathBuf::from_raw("src/main.js").unwrap(),
-            contents: "Tree of Life"
-        }
-    ], 12845, "The Gleaners and I")]
-    #[tokio::test]
-    async fn test_round_trip(files: Vec<TestFile>, duration: u32, hash: &str) -> Result<()> {
+    async fn round_trip_test(test_case: TestCase) -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
 
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        test_case.initialize(&repo_root_path)?;
 
-        for file in &files {
-            let file_path = repo_root_path.resolve(&file.path);
-            std::fs::create_dir_all(file_path.parent().unwrap())?;
-            std::fs::write(file_path, file.contents)?;
-        }
+        let TestCase {
+            hash,
+            files,
+            duration,
+        } = test_case;
 
         let api_client = APIClient::new(&format!("http://localhost:{}", port), 200, "2.0.0", true)?;
 

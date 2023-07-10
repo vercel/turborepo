@@ -1,4 +1,7 @@
-use std::backtrace::Backtrace;
+use std::{
+    backtrace::Backtrace,
+    fs::{metadata, OpenOptions},
+};
 
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
@@ -129,7 +132,7 @@ impl FSCache {
             cache_item.add_file(anchor, &file)?;
         }
 
-        let meta_path = self
+        let metadata_path = self
             .cache_directory
             .join_component(&format!("{}-meta.json", hash));
 
@@ -138,8 +141,75 @@ impl FSCache {
             duration,
         };
 
-        serde_json::to_writer(meta_path.open()?, &meta)
+        let mut metadata_options = OpenOptions::new();
+        metadata_options.create(true).write(true);
+
+        let mut metadata_file = metadata_path.open_with_options(metadata_options)?;
+
+        serde_json::to_writer(metadata_file, &meta)
             .map_err(|e| CacheError::InvalidMetadata(e, Backtrace::capture()))?;
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use anyhow::Result;
+    use futures::future::try_join_all;
+    use tempfile::tempdir;
+
+    use super::*;
+    use crate::test_cases::{get_test_cases, TestCase};
+
+    #[tokio::test]
+    async fn test_fs_cache() -> Result<()> {
+        try_join_all(get_test_cases().into_iter().map(round_trip_test)).await?;
+
+        Ok(())
+    }
+
+    async fn round_trip_test(test_case: TestCase) -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        test_case.initialize(repo_root_path)?;
+
+        let cache = FSCache::new(None, &repo_root_path)?;
+
+        let expected_miss = cache.exists(&test_case.hash)?;
+        assert_eq!(expected_miss, ItemStatus::Miss);
+
+        cache.put(
+            repo_root_path,
+            &test_case.hash,
+            test_case.duration,
+            test_case.files.iter().map(|f| f.path.clone()).collect(),
+        )?;
+
+        let expected_hit = cache.exists(&test_case.hash)?;
+        assert_eq!(
+            expected_hit,
+            ItemStatus::Hit {
+                time_saved: test_case.duration,
+                source: CacheSource::Local
+            }
+        );
+
+        let (status, files) = cache.fetch(&repo_root_path, &test_case.hash)?;
+        assert_eq!(
+            status,
+            ItemStatus::Hit {
+                time_saved: test_case.duration,
+                source: CacheSource::Local
+            }
+        );
+
+        assert_eq!(files.len(), test_case.files.len());
+        for (expected, actual) in test_case.files.iter().zip(files.iter()) {
+            assert_eq!(&expected.path, actual);
+            let actual_file = repo_root_path.resolve(actual);
+            assert_eq!(expected.contents, actual_file.read_to_string()?);
+        }
 
         Ok(())
     }

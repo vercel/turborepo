@@ -5,6 +5,8 @@ pub mod cache_archive;
 pub mod fs;
 pub mod http;
 pub mod signature_authentication;
+#[cfg(test)]
+mod test_cases;
 
 use std::{backtrace, backtrace::Backtrace};
 
@@ -57,11 +59,13 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
 }
 
+#[derive(Debug, Clone, PartialEq)]
 enum CacheSource {
     Local,
     Remote,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 enum ItemStatus {
     Hit {
         source: CacheSource,
