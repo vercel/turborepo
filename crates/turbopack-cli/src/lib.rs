@@ -2,6 +2,7 @@
 #![feature(min_specialization)]
 
 pub mod arguments;
+pub mod build;
 pub(crate) mod contexts;
 pub mod dev;
 pub(crate) mod embed_js;
