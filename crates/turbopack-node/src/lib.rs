@@ -19,7 +19,8 @@ use turbo_tasks_fs::{to_sys_path, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
     chunk::{
-        ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+        ChunkableModule, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc,
+        EvaluatableAssetsVc,
     },
     reference::primary_referenced_assets,
     source_map::GenerateSourceMapVc,
@@ -202,7 +203,7 @@ async fn separate_assets(
 /// Emit a basic package.json that sets the type of the package to commonjs.
 /// Currently code generated for Node is CommonJS, while authored code may be
 /// ESM, for example.
-pub(self) fn emit_package_json(dir: FileSystemPathVc) -> CompletionVc {
+fn emit_package_json(dir: FileSystemPathVc) -> CompletionVc {
     emit(
         VirtualAssetVc::new(
             dir.join("package.json"),
@@ -233,10 +234,16 @@ pub async fn get_renderer_pool(
     let entrypoint = intermediate_asset.ident().path();
 
     let Some(cwd) = to_sys_path(cwd).await? else {
-        bail!("can only render from a disk filesystem, but `cwd = {}`", cwd.to_string().await?);
+        bail!(
+            "can only render from a disk filesystem, but `cwd = {}`",
+            cwd.to_string().await?
+        );
     };
     let Some(entrypoint) = to_sys_path(entrypoint).await? else {
-        bail!("can only render from a disk filesystem, but `entrypoint = {}`", entrypoint.to_string().await?);
+        bail!(
+            "can only render from a disk filesystem, but `entrypoint = {}`",
+            entrypoint.to_string().await?
+        );
     };
 
     emit.await?;
