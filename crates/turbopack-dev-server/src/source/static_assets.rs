@@ -3,10 +3,10 @@ use turbo_tasks::{primitives::StringVc, Value};
 use turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemPathVc};
 use turbopack_core::{
     asset::Asset,
+    file_source::FileSourceVc,
     introspect::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
-    source_asset::FileSourceVc,
 };
 
 use super::{

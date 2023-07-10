@@ -27,6 +27,7 @@ use self::{
 };
 use crate::{
     asset::{Asset, AssetOptionVc, AssetVc, AssetsVc},
+    file_source::FileSourceVc,
     issue::resolve::{ResolvingIssue, ResolvingIssueVc},
     package_json::{read_package_json, PackageJsonIssue, PackageJsonIssueVc},
     reference::{AssetReference, AssetReferenceVc},
@@ -36,7 +37,6 @@ use crate::{
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
         plugin::ResolvePlugin,
     },
-    source_asset::FileSourceVc,
 };
 
 mod alias_map;

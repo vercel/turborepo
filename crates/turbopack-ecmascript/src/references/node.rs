@@ -9,12 +9,12 @@ use turbo_tasks_fs::{
 };
 use turbopack_core::{
     asset::{Asset, AssetVc},
+    file_source::FileSourceVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{
         pattern::{Pattern, PatternVc},
         ResolveResult, ResolveResultVc,
     },
-    source_asset::FileSourceVc,
 };
 
 #[turbo_tasks::value]

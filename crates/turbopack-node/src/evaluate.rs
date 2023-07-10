@@ -29,10 +29,10 @@ use turbopack_core::{
         EvaluatableAssetsVc,
     },
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference_type::{InnerAssetsVc, ReferenceType},
-    source_asset::FileSourceVc,
     virtual_asset::VirtualAssetVc,
 };
 

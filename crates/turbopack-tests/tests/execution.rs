@@ -30,10 +30,10 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSourceVc,
     issue::IssueVc,
     module::ModuleVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    source_asset::FileSourceVc,
 };
 use turbopack_dev::DevChunkingContextVc;
 use turbopack_node::evaluate::evaluate;

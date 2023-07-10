@@ -38,8 +38,8 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfoVc,
     context::AssetContext,
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSourceVc,
     reference_type::ReferenceType,
-    source_asset::FileSourceVc,
 };
 
 #[global_allocator]

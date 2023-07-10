@@ -40,10 +40,10 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
     environment::{BrowserEnvironment, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSourceVc,
     issue::IssueVc,
     reference::all_referenced_assets,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    source_asset::FileSourceVc,
 };
 use turbopack_dev::DevChunkingContextVc;
 use turbopack_ecmascript_plugins::transform::{

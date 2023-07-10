@@ -14,8 +14,8 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSourceVc,
     reference_type::ReferenceType,
-    source_asset::FileSourceVc,
 };
 
 // TODO this should move to the `node-file-trace` crate

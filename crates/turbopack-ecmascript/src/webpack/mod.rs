@@ -3,6 +3,7 @@ use swc_core::ecma::ast::Lit;
 use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
@@ -11,7 +12,6 @@ use turbopack_core::{
         parse::RequestVc,
         resolve, ResolveResult, ResolveResultVc,
     },
-    source_asset::FileSourceVc,
 };
 
 use self::{

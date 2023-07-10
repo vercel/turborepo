@@ -10,13 +10,13 @@ use turbo_tasks_fs::{
 };
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
+    file_source::FileSourceVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{
         pattern::{Pattern, PatternVc},
         resolve_raw, AffectingResolvingAssetReferenceVc, PrimaryResolveResult, ResolveResult,
         ResolveResultVc,
     },
-    source_asset::FileSourceVc,
     target::{CompileTargetVc, Platform},
 };
 

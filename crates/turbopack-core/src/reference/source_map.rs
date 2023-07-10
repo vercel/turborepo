@@ -4,8 +4,8 @@ use turbo_tasks_fs::{FileSystemEntryType, FileSystemPathVc};
 
 use super::{AssetReference, AssetReferenceVc};
 use crate::{
+    file_source::FileSourceVc,
     resolve::{ResolveResult, ResolveResultVc},
-    source_asset::FileSourceVc,
 };
 
 #[turbo_tasks::value]

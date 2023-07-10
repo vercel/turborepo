@@ -3,6 +3,7 @@ use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     context::AssetContext,
+    file_source::FileSourceVc,
     reference::{AssetReference, AssetReferenceVc},
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
@@ -11,7 +12,6 @@ use turbopack_core::{
         pattern::QueryMapVc,
         ResolveResult, ResolveResultVc,
     },
-    source_asset::FileSourceVc,
 };
 
 use crate::typescript::{resolve::type_resolve, TsConfigModuleAssetVc};

@@ -12,6 +12,7 @@ use turbo_tasks_fs::{
 use turbopack_core::{
     asset::{Asset, AssetOptionVc, AssetVc},
     context::AssetContext,
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
@@ -28,7 +29,6 @@ use turbopack_core::{
         pattern::{Pattern, QueryMapVc},
         resolve, AliasPattern, ResolveResultVc,
     },
-    source_asset::FileSourceVc,
 };
 
 #[turbo_tasks::value(shared)]

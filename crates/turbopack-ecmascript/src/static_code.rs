@@ -4,8 +4,8 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     code_builder::{CodeBuilder, CodeVc},
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     reference_type::ReferenceType,
-    source_asset::FileSourceVc,
 };
 
 use crate::EcmascriptModuleAssetVc;

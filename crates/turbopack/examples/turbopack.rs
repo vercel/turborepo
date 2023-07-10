@@ -27,7 +27,7 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfoVc,
     context::AssetContext,
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    source_asset::FileSourceVc,
+    file_source::FileSourceVc,
     PROJECT_FILESYSTEM_NAME,
 };
 
