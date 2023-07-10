@@ -36,7 +36,9 @@ pub enum Error {
     )]
     NoTurboJSON,
     #[error(transparent)]
-    Serde(#[from] serde_json::Error),
+    SerdeJson(#[from] serde_json::Error),
+    #[error(transparent)]
+    SerdeJsonC(#[from] serde_jsonc::Error),
     #[error(transparent)]
     Config(#[from] ConfigError),
     #[error(transparent)]
