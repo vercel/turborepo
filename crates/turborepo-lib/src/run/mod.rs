@@ -155,6 +155,9 @@ mod test {
         repo_root
             .join_component("package-lock.json")
             .create_with_contents("")?;
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents("{}")?;
 
         let base = CommandBase::new(args, repo_root, get_version(), ui)?;
         let mut run = Run::new(base);
