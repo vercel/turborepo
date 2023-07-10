@@ -25,7 +25,8 @@ use turbo_tasks_fs::{
 use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{
-        ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+        ChunkableModule, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc,
+        EvaluatableAssetsVc,
     },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,

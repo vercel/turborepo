@@ -5,8 +5,8 @@ use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
     },
     ident::AssetIdentVc,
     introspect::{
@@ -36,7 +36,7 @@ fn modifier() -> StringVc {
 /// ChunkGroup with the provided ChunkingContext.
 #[turbo_tasks::value(shared)]
 pub struct ChunkGroupFilesAsset {
-    pub module: ChunkableAssetVc,
+    pub module: ChunkableModuleVc,
     pub client_root: FileSystemPathVc,
     pub chunking_context: ChunkingContextVc,
     pub runtime_entries: Option<EvaluatableAssetsVc>,
@@ -85,7 +85,7 @@ impl Asset for ChunkGroupFilesAsset {
 impl Module for ChunkGroupFilesAsset {}
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for ChunkGroupFilesAsset {
+impl ChunkableModule for ChunkGroupFilesAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self_vc: ChunkGroupFilesAssetVc,

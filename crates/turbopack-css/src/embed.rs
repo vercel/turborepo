@@ -1,12 +1,12 @@
 use turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{ChunkableModule, ChunkableModuleVc, ChunkingContextVc},
     module::{Module, ModuleVc},
     reference::AssetReferencesVc,
 };
 
 #[turbo_tasks::value_trait]
-pub trait CssEmbeddable: ChunkableAsset + Module + Asset {
+pub trait CssEmbeddable: ChunkableModule + Module + Asset {
     fn as_css_embed(&self, context: ChunkingContextVc) -> CssEmbedVc;
 }
 

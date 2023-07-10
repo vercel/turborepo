@@ -57,8 +57,8 @@ use turbo_tasks_fs::{rope::Rope, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc, EvaluatableAsset, EvaluatableAssetVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc, EvaluatableAsset, EvaluatableAssetVc,
     },
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
@@ -415,7 +415,7 @@ impl Asset for EcmascriptModuleAsset {
 impl Module for EcmascriptModuleAsset {}
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for EcmascriptModuleAsset {
+impl ChunkableModule for EcmascriptModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self_vc: EcmascriptModuleAssetVc,

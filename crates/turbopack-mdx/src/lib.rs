@@ -7,8 +7,8 @@ use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc,
     },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
@@ -186,7 +186,7 @@ impl Asset for MdxModuleAsset {
 impl Module for MdxModuleAsset {}
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for MdxModuleAsset {
+impl ChunkableModule for MdxModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self_vc: MdxModuleAssetVc,

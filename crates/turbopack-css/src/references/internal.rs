@@ -2,7 +2,7 @@ use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::Asset,
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    chunk::{ChunkableModuleReference, ChunkableModuleReferenceVc},
     module::ModuleVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
@@ -44,4 +44,4 @@ impl ValueToString for InternalCssAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for InternalCssAssetReference {}
+impl ChunkableModuleReference for InternalCssAssetReference {}
