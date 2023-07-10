@@ -214,7 +214,7 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
         let pkg_inference_root = args
             .pkg_inference_root
             .as_ref()
-            .map(|root| AnchoredSystemPathBuf::from_raw(root))
+            .map(AnchoredSystemPathBuf::from_raw)
             .transpose()?;
         let legacy_filter = LegacyFilter {
             include_dependencies: args.include_dependencies,

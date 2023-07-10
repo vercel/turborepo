@@ -36,6 +36,25 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// threadsafeOutputBuffer implements io.Writer for multiple goroutines
+// to write to the same underlying buffer. Child processes use separate
+// goroutines to handle reading from stdout and stderr, but for now we
+// send both to the same buffer.
+type threadsafeOutputBuffer struct {
+	buf bytes.Buffer
+	mu  sync.Mutex
+}
+
+func (tsob *threadsafeOutputBuffer) Write(p []byte) (n int, err error) {
+	tsob.mu.Lock()
+	defer tsob.mu.Unlock()
+	return tsob.buf.Write(p)
+}
+
+func (tsob *threadsafeOutputBuffer) Bytes() []byte {
+	return tsob.buf.Bytes()
+}
+
 // RealRun executes a set of tasks
 func RealRun(
 	ctx gocontext.Context,
@@ -143,6 +162,13 @@ func RealRun(
 			errWriter = errBuf
 		}
 
+		var spacesLogBuffer *threadsafeOutputBuffer
+		if runSummary.SpacesIsEnabled() {
+			spacesLogBuffer = &threadsafeOutputBuffer{}
+			outWriter = io.MultiWriter(spacesLogBuffer, outWriter)
+			errWriter = io.MultiWriter(spacesLogBuffer, errWriter)
+		}
+
 		ui := concurrentUIFactory.Build(os.Stdin, outWriter, errWriter)
 
 		taskExecutionSummary, err := ec.exec(ctx, packageTask, ui, outWriter)
@@ -161,7 +187,11 @@ func RealRun(
 			// not using defer, just release the lock
 			taskSummaryMutex.Unlock()
 
-			runSummary.CloseTask(taskSummary)
+			var logBytes []byte
+			if spacesLogBuffer != nil {
+				logBytes = spacesLogBuffer.Bytes()
+			}
+			runSummary.CloseTask(taskSummary, logBytes)
 		}
 		if isGrouped {
 			logChan <- taskLogContext{
