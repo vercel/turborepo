@@ -43,6 +43,7 @@ pub struct TurboJson {
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJSON {
+    schema: Option<String>,
     // Global root filesystem dependencies
     global_dependencies: Option<Vec<String>>,
     global_env: Option<Vec<String>>,
