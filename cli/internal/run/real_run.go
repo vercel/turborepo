@@ -55,6 +55,68 @@ func (tsob *threadsafeOutputBuffer) Bytes() []byte {
 	return tsob.buf.Bytes()
 }
 
+type logLine struct {
+	isStdout bool
+	line     []byte
+}
+
+// logBuffer holds the log lines for a task, tagged to stdout or stderr
+type logBuffer struct {
+	mu    sync.Mutex
+	lines []logLine
+}
+
+// LogLine appends a log line to the log buffer
+func (lb *logBuffer) LogLine(line []byte, isStdout bool) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.lines = append(lb.lines, logLine{isStdout, line})
+}
+
+// Drain writes the contents of the logBuffer to the appropriate output stream
+func (lb *logBuffer) Drain(stdout io.Writer, stderr io.Writer) error {
+	for _, line := range lb.lines {
+		if line.isStdout {
+			if _, err := stdout.Write(line.line); err != nil {
+				return err
+			}
+		} else {
+			if _, err := stderr.Write(line.line); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// StdoutWriter returns a writer tagged to stdout
+func (lb *logBuffer) StdoutWriter() *logBufferWriter {
+	return &logBufferWriter{
+		isStdout:  true,
+		logBuffer: lb,
+	}
+}
+
+// StderrWriter returns a writer tagged to stderr
+func (lb *logBuffer) StderrWriter() *logBufferWriter {
+	return &logBufferWriter{
+		isStdout:  false,
+		logBuffer: lb,
+	}
+}
+
+type logBufferWriter struct {
+	isStdout  bool
+	logBuffer *logBuffer
+}
+
+// Write implements io.Writer.Write for logBufferWriter
+func (lbw *logBufferWriter) Write(bytes []byte) (int, error) {
+	n := len(bytes)
+	lbw.logBuffer.LogLine(bytes, lbw.isStdout)
+	return n, nil
+}
+
 // RealRun executes a set of tasks
 func RealRun(
 	ctx gocontext.Context,
@@ -124,25 +186,19 @@ func RealRun(
 	}
 
 	taskCount := len(engine.TaskGraph.Vertices())
-	logChan := make(chan taskLogContext, taskCount)
+	logChan := make(chan *logBuffer, taskCount)
 	logWaitGroup := sync.WaitGroup{}
 	isGrouped := rs.Opts.runOpts.LogOrder == "grouped"
 
 	if isGrouped {
 		logWaitGroup.Add(1)
 		go func() {
-			for logContext := range logChan {
+			for logBuffer := range logChan {
 
-				outBytes := logContext.outBuf.Bytes()
-				errBytes := logContext.errBuf.Bytes()
-
-				_, errOut := os.Stdout.Write(outBytes)
-				_, errErr := os.Stderr.Write(errBytes)
-
-				if errOut != nil || errErr != nil {
-					ec.ui.Error("Failed to output some of the logs.")
+				err := logBuffer.Drain(os.Stdout, os.Stderr)
+				if err != nil {
+					ec.ui.Error(fmt.Sprintf("Failed to output some of the logs: %v", err))
 				}
-
 			}
 			logWaitGroup.Done()
 		}()
@@ -151,15 +207,14 @@ func RealRun(
 	taskSummaryMutex := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		outBuf := &bytes.Buffer{}
-		errBuf := &bytes.Buffer{}
-
 		var outWriter io.Writer = os.Stdout
 		var errWriter io.Writer = os.Stderr
 
+		logBuffer := &logBuffer{}
+
 		if isGrouped {
-			outWriter = outBuf
-			errWriter = errBuf
+			outWriter = logBuffer.StdoutWriter()
+			errWriter = logBuffer.StderrWriter()
 		}
 
 		var spacesLogBuffer *threadsafeOutputBuffer
@@ -194,10 +249,7 @@ func RealRun(
 			runSummary.CloseTask(taskSummary, logBytes)
 		}
 		if isGrouped {
-			logChan <- taskLogContext{
-				outBuf: outBuf,
-				errBuf: errBuf,
-			}
+			logChan <- logBuffer
 		}
 
 		// Return the error when there is one
@@ -214,6 +266,10 @@ func RealRun(
 
 	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, rs.Opts.runOpts.FrameworkInference, globalEnvMode, getArgs, base.Logger, execFunc)
 	errs := engine.Execute(visitorFn, execOpts)
+	if isGrouped {
+		close(logChan)
+		logWaitGroup.Wait()
+	}
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
@@ -257,11 +313,6 @@ func RealRun(
 		}
 	}
 
-	if isGrouped {
-		close(logChan)
-		logWaitGroup.Wait()
-	}
-
 	if err := runSummary.Close(ctx, exitCode, g.WorkspaceInfos, base.UI); err != nil {
 		// We don't need to throw an error, but we can warn on this.
 		// Note: this method doesn't actually return an error for Real Runs at the time of writing.
@@ -274,11 +325,6 @@ func RealRun(
 		}
 	}
 	return nil
-}
-
-type taskLogContext struct {
-	outBuf *bytes.Buffer
-	errBuf *bytes.Buffer
 }
 
 type execContext struct {
@@ -357,6 +403,13 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	if ec.rs.Opts.runOpts.IsGithubActions {
 		ui.Output(fmt.Sprintf("::group::%s", packageTask.OutputPrefix(ec.isSinglePackage)))
+		prefixedUI.WarnPrefix = "::warn::"
+		prefixedUI.ErrorPrefix = "::error::"
+		defer func() {
+			// We don't use the prefixedUI here because the prefix in this case would include
+			// the ::group::<taskID>, and we explicitly want to close the github group
+			ui.Output("::endgroup::")
+		}()
 	}
 
 	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
@@ -447,11 +500,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	closeOutputs := func() error {
 		var closeErrors []error
-		if ec.rs.Opts.runOpts.IsGithubActions {
-			// We don't use the prefixedUI here because the prefix in this case would include
-			// the ::group::<taskID>, and we explicitly want to close the github group
-			ui.Output("::endgroup::")
-		}
 
 		if err := logStreamerOut.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))
@@ -475,7 +523,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	// Run the command
 	if err := ec.processes.Exec(cmd); err != nil {
-		// close off our outputs. We errored, so we mostly don't care if we fail to close
+		// ensure we close off our outputs. We errored, so we mostly don't care if we fail to close
+		// We don't close them directly because we're potentially going to output some errors or
+		// warnings that we want grouped with the task output.
 		_ = closeOutputs()
 		// if we already know we're in the process of exiting,
 		// we don't need to record an error to that effect.

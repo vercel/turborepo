@@ -1,7 +1,7 @@
 use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological},
+    graph::{AdjacencyMap, GraphTraversal},
     primitives::{BoolVc, StringVc},
     TryJoinIterExt, Value,
 };
@@ -9,7 +9,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        Chunk, ChunkVc, ChunkableAsset, ChunkingContext, ChunkingContextVc, ChunksVc,
+        Chunk, ChunkVc, ChunkableModule, ChunkingContext, ChunkingContextVc, ChunksVc,
         EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
@@ -351,7 +351,7 @@ async fn get_parallel_chunks<I>(entries: I) -> Result<impl Iterator<Item = Chunk
 where
     I: IntoIterator<Item = ChunkVc>,
 {
-    Ok(ReverseTopological::new()
+    Ok(AdjacencyMap::new()
         .skip_duplicates()
         .visit(entries, |chunk: ChunkVc| async move {
             Ok(chunk
@@ -365,7 +365,7 @@ where
         .await
         .completed()?
         .into_inner()
-        .into_iter())
+        .into_reverse_topological())
 }
 
 async fn get_optimized_chunks<I>(chunks: I) -> Result<ChunksVc>
@@ -395,7 +395,7 @@ where
         .copied()
         .map(|chunk| chunk.as_chunk())
         .chain(css_chunks.iter().copied().map(|chunk| chunk.as_chunk()))
-        .chain(other_chunks.into_iter())
+        .chain(other_chunks)
         .collect();
 
     Ok(ChunksVc::cell(chunks))

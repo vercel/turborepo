@@ -37,7 +37,7 @@ interface TurbopackNodeBuildContext {
   f: RequireContextFactory;
   i: EsmImport;
   s: EsmExport;
-  j: typeof cjsExport;
+  j: typeof dynamicExport;
   v: ExportValue;
   n: typeof exportNamespace;
   m: Module;
@@ -182,7 +182,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       f: requireContext.bind(null, module),
       i: esmImport.bind(null, module),
       s: esm.bind(null, module.exports),
-      j: cjsExport.bind(null, module.exports),
+      j: dynamicExport.bind(null, module),
       v: exportValue.bind(null, module),
       n: exportNamespace.bind(null, module),
       m: module,
@@ -197,7 +197,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
   }
 
   module.loaded = true;
-  if (module.namespaceObject) {
+  if (module.namespaceObject && module.exports !== module.namespaceObject) {
     // in case of a circular dependency: cjs1 -> esm2 -> cjs1
     interopEsm(module.exports, module.namespaceObject);
   }
