@@ -128,7 +128,6 @@ impl Run {
 
 #[cfg(test)]
 mod test {
-    use std::fs;
 
     use anyhow::Result;
     use tempfile::tempdir;
@@ -144,7 +143,6 @@ mod test {
     };
 
     #[tokio::test]
-    #[ignore]
     async fn test_run() -> Result<()> {
         let dir = tempdir()?;
         let repo_root = AbsoluteSystemPathBuf::try_from(dir.path())?;
@@ -152,6 +150,7 @@ mod test {
         // Daemon does not work with run stub yet
         let run_args = RunArgs {
             no_daemon: true,
+            pkg_inference_root: Some(["apps", "my-app"].join(std::path::MAIN_SEPARATOR_STR)),
             ..Default::default()
         };
         args.command = Some(Command::Run(Box::new(run_args)));
@@ -159,7 +158,12 @@ mod test {
         let ui = UI::infer();
 
         // Add package.json
-        fs::write(repo_root.join_component("package.json"), "{}")?;
+        repo_root
+            .join_component("package.json")
+            .create_with_contents("{\"workspaces\": [\"apps/*\"]}")?;
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")?;
 
         let base = CommandBase::new(args, repo_root, get_version(), ui)?;
         let mut run = Run::new(base);

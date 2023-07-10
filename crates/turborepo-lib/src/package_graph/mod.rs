@@ -121,7 +121,7 @@ impl PackageGraph {
 impl fmt::Display for WorkspaceName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WorkspaceName::Root => f.write_str("Root workspace"),
+            WorkspaceName::Root => f.write_str("//"),
             WorkspaceName::Other(other) => f.write_str(other),
         }
     }
