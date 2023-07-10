@@ -3,8 +3,8 @@ use swc_core::{
     ecma::{
         ast::{
             Expr, ExprStmt, Ident, ImportDecl, ImportDefaultSpecifier, ImportSpecifier,
-            KeyValueProp, Lit, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop, PropName,
-            PropOrSpread, Stmt, Str,
+            ImportStarAsSpecifier, KeyValueProp, Lit, Module, ModuleDecl, ModuleItem, ObjectLit,
+            Program, Prop, PropName, PropOrSpread, Stmt, Str,
         },
         utils::private_ident,
     },
