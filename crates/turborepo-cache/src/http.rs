@@ -180,8 +180,8 @@ mod test {
 
     use crate::{
         http::HttpCache,
-        CacheSource
         test_cases::{get_test_cases, TestCase},
+        CacheSource,
     };
 
     #[tokio::test]

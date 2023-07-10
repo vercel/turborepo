@@ -1,14 +1,11 @@
-use std::{
-    backtrace::Backtrace,
-    fs::{metadata, OpenOptions},
-};
+use std::{backtrace::Backtrace, fs::OpenOptions};
 
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
-    CacheError, CacheSource, ItemStatus,
+    CacheError, CacheResponse, CacheSource,
 };
 
 struct FSCache {
@@ -54,7 +51,7 @@ impl FSCache {
         &self,
         anchor: &AbsoluteSystemPath,
         hash: &str,
-    ) -> Result<(ItemStatus, Vec<AnchoredSystemPathBuf>), CacheError> {
+    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         let uncompressed_cache_path = self
             .cache_directory
             .join_component(&format!("{}.tar", hash));
@@ -67,7 +64,7 @@ impl FSCache {
         } else if compressed_cache_path.exists() {
             compressed_cache_path
         } else {
-            return Ok((ItemStatus::Miss, vec![]));
+            return Err(CacheError::CacheMiss);
         };
 
         let mut cache_reader = CacheReader::open(&cache_path)?;
@@ -81,7 +78,7 @@ impl FSCache {
         )?;
 
         Ok((
-            ItemStatus::Hit {
+            CacheResponse {
                 time_saved: meta.duration,
                 source: CacheSource::Local,
             },
@@ -89,7 +86,7 @@ impl FSCache {
         ))
     }
 
-    fn exists(&self, hash: &str) -> Result<ItemStatus, CacheError> {
+    fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
         let uncompressed_cache_path = self
             .cache_directory
             .join_component(&format!("{}.tar", hash));
@@ -98,7 +95,7 @@ impl FSCache {
             .join_component(&format!("{}.tar.zst", hash));
 
         if !uncompressed_cache_path.exists() && !compressed_cache_path.exists() {
-            return Ok(ItemStatus::Miss);
+            return Err(CacheError::CacheMiss);
         }
 
         let duration = CacheMetadata::read(
@@ -109,7 +106,7 @@ impl FSCache {
         .map(|meta| meta.duration)
         .unwrap_or(0);
 
-        Ok(ItemStatus::Hit {
+        Ok(CacheResponse {
             time_saved: duration,
             source: CacheSource::Local,
         })
@@ -144,7 +141,7 @@ impl FSCache {
         let mut metadata_options = OpenOptions::new();
         metadata_options.create(true).write(true);
 
-        let mut metadata_file = metadata_path.open_with_options(metadata_options)?;
+        let metadata_file = metadata_path.open_with_options(metadata_options)?;
 
         serde_json::to_writer(metadata_file, &meta)
             .map_err(|e| CacheError::InvalidMetadata(e, Backtrace::capture()))?;
@@ -155,6 +152,8 @@ impl FSCache {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches::assert_matches;
+
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
@@ -176,8 +175,10 @@ mod test {
 
         let cache = FSCache::new(None, &repo_root_path)?;
 
-        let expected_miss = cache.exists(&test_case.hash)?;
-        assert_eq!(expected_miss, ItemStatus::Miss);
+        let expected_miss = cache
+            .exists(&test_case.hash)
+            .expect_err("Expected cache miss");
+        assert_matches!(expected_miss, CacheError::CacheMiss);
 
         cache.put(
             repo_root_path,
@@ -189,7 +190,7 @@ mod test {
         let expected_hit = cache.exists(&test_case.hash)?;
         assert_eq!(
             expected_hit,
-            ItemStatus::Hit {
+            CacheResponse {
                 time_saved: test_case.duration,
                 source: CacheSource::Local
             }
@@ -198,7 +199,7 @@ mod test {
         let (status, files) = cache.fetch(&repo_root_path, &test_case.hash)?;
         assert_eq!(
             status,
-            ItemStatus::Hit {
+            CacheResponse {
                 time_saved: test_case.duration,
                 source: CacheSource::Local
             }

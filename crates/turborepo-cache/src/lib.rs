@@ -1,5 +1,6 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
+#![feature(assert_matches)]
 
 pub mod cache_archive;
 pub mod fs;
@@ -57,21 +58,8 @@ pub enum CacheError {
     InvalidMetadata(serde_json::Error, #[backtrace] Backtrace),
     #[error("Failed to write cache metadata file")]
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum CacheSource {
-    Local,
-    Remote,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum ItemStatus {
-    Hit {
-        source: CacheSource,
-        time_saved: u32,
-    },
-    Miss,
+    #[error("Cache miss")]
+    CacheMiss,
 }
 
 #[derive(Debug, Clone, PartialEq)]
