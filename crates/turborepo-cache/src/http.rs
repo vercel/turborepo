@@ -6,7 +6,7 @@ use turborepo_api_client::{APIClient, Response};
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
-    CacheError,
+    CacheError, CacheResponse, CacheSource,
 };
 
 pub struct HttpCache {
@@ -73,7 +73,7 @@ impl HttpCache {
         team_id: &str,
         team_slug: Option<&str>,
         use_preflight: bool,
-    ) -> Result<u32, CacheError> {
+    ) -> Result<CacheResponse, CacheError> {
         let response = self
             .client
             .artifact_exists(hash, token, team_id, team_slug, use_preflight)
@@ -81,7 +81,10 @@ impl HttpCache {
 
         let duration = Self::get_duration_from_response(&response)?;
 
-        Ok(duration)
+        Ok(CacheResponse {
+            source: CacheSource::Remote,
+            time_saved: duration,
+        })
     }
 
     fn get_duration_from_response(response: &Response) -> Result<u32, CacheError> {
@@ -105,7 +108,7 @@ impl HttpCache {
         team_id: &str,
         team_slug: Option<&str>,
         use_preflight: bool,
-    ) -> Result<(Vec<AnchoredSystemPathBuf>, u32), CacheError> {
+    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         let response = self
             .client
             .fetch_artifact(hash, token, team_id, team_slug, use_preflight)
@@ -148,7 +151,13 @@ impl HttpCache {
 
         let files = Self::restore_tar(&self.repo_root, &body)?;
 
-        Ok((files, duration))
+        Ok((
+            CacheResponse {
+                source: CacheSource::Remote,
+                time_saved: duration,
+            },
+            files,
+        ))
     }
 
     pub(crate) fn restore_tar(
@@ -169,7 +178,7 @@ mod test {
     use turborepo_api_client::APIClient;
     use vercel_api_mock::start_test_server;
 
-    use crate::http::HttpCache;
+    use crate::{http::HttpCache, CacheSource};
 
     struct TestFile {
         path: AnchoredSystemPathBuf,
@@ -234,12 +243,13 @@ mod test {
             )
             .await?;
 
-        let received_duration = cache.exists(hash, "", "", None, false).await;
-        assert!(received_duration.is_ok());
-        assert_eq!(received_duration.unwrap(), duration);
+        let cache_response = cache.exists(hash, "", "", None, false).await?;
 
-        let (received_files, received_duration) = cache.retrieve(hash, "", "", None, false).await?;
-        assert_eq!(received_duration, duration);
+        assert_eq!(cache_response.time_saved, duration);
+        assert_eq!(cache_response.source, CacheSource::Remote);
+
+        let (cache_response, received_files) = cache.retrieve(hash, "", "", None, false).await?;
+        assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {
             assert_eq!(received_file, test_file.path);

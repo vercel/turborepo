@@ -51,3 +51,15 @@ pub enum CacheError {
     #[error("tar attempts to write outside of directory: {0}")]
     LinkOutsideOfDirectory(String, #[backtrace] Backtrace),
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CacheSource {
+    Local,
+    Remote,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CacheResponse {
+    source: CacheSource,
+    time_saved: u32,
+}
