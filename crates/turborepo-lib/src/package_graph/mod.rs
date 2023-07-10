@@ -24,10 +24,10 @@ pub struct PackageGraph {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Entry {
-    package_json: PackageJson,
-    package_json_path: AnchoredSystemPathBuf,
-    unresolved_external_dependencies: Option<HashSet<Package>>,
-    transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
+    pub package_json: PackageJson,
+    pub package_json_path: AnchoredSystemPathBuf,
+    pub unresolved_external_dependencies: Option<HashSet<Package>>,
+    pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
 impl Entry {
@@ -87,6 +87,10 @@ impl PackageGraph {
         Some(&entry.package_json)
     }
 
+    pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&Entry> {
+        self.workspaces.get(workspace)
+    }
+
     pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &Entry)> {
         self.workspaces.iter()
     }
@@ -96,10 +100,16 @@ impl PackageGraph {
             .expect("package graph was built without root package.json")
     }
 
-    pub fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
-        let idx = self.node_lookup.get(node)?;
+    pub fn transitive_closure<'a, I: IntoIterator<Item = &'a WorkspaceNode>>(
+        &self,
+        nodes: I,
+    ) -> HashSet<&WorkspaceNode> {
+        let indexes = nodes
+            .into_iter()
+            .find_map(|node| self.node_lookup.get(node))
+            .copied();
         let mut visited = HashSet::new();
-        petgraph::visit::depth_first_search(&self.workspace_graph, Some(*idx), |event| {
+        petgraph::visit::depth_first_search(&self.workspace_graph, indexes, |event| {
             if let petgraph::visit::DfsEvent::Discover(n, _) = event {
                 visited.insert(
                     self.workspace_graph
@@ -108,7 +118,7 @@ impl PackageGraph {
                 );
             }
         });
-        Some(visited)
+        visited
     }
 
     #[allow(dead_code)]
@@ -156,9 +166,8 @@ mod test {
             .build()
             .unwrap();
 
-        let closure = pkg_graph
-            .transitive_closure(&WorkspaceNode::Workspace(WorkspaceName::Root))
-            .unwrap();
+        let closure =
+            pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace(WorkspaceName::Root)));
         assert!(closure.contains(&WorkspaceNode::Root));
     }
 
@@ -198,9 +207,7 @@ mod test {
         .build()
         .unwrap();
 
-        let closure = pkg_graph
-            .transitive_closure(&WorkspaceNode::Workspace("a".into()))
-            .unwrap();
+        let closure = pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace("a".into())));
         assert!(closure.contains(&WorkspaceNode::Workspace("b".into())));
         let b_external = pkg_graph
             .workspaces
