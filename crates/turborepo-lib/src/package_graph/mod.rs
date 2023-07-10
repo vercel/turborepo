@@ -148,6 +148,20 @@ impl PackageGraph {
         )
     }
 
+    pub fn dependents(&self, workspace: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+        let index = self.node_lookup.get(workspace)?;
+        Some(
+            self.workspace_graph
+                .neighbors_directed(*index, petgraph::Incoming)
+                .map(|index| {
+                    self.workspace_graph
+                        .node_weight(index)
+                        .expect("node index from neighbors should be present")
+                })
+                .collect(),
+        )
+    }
+
     pub fn transitive_closure<'a, I: IntoIterator<Item = &'a WorkspaceNode>>(
         &self,
         nodes: I,
