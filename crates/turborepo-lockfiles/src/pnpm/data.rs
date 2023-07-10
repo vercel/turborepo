@@ -214,16 +214,19 @@ impl PnpmLockfile {
     ) -> Result<Option<&'a str>, crate::Error> {
         let importer = self.get_workspace(workspace_path)?;
 
-        let Some((resolved_specifier, resolved_version)) = importer.dependencies.find_resolution(name) else {
+        let Some((resolved_specifier, resolved_version)) =
+            importer.dependencies.find_resolution(name)
+        else {
             // Check if the specifier is already an exact version
             return match self.get_packages(&self.format_key(name, specifier)) {
                 Some(_) => Ok(Some(specifier)),
-                None => Err(Error::MissingResolvedVersion{
+                None => Err(Error::MissingResolvedVersion {
                     name: name.into(),
                     specifier: specifier.into(),
                     workspace: workspace_path.into(),
-                }.into()),
-            }
+                }
+                .into()),
+            };
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
@@ -342,7 +345,7 @@ impl crate::Lockfile for PnpmLockfile {
         }
 
         let Some(resolved_version) = self.resolve_specifier(workspace_path, name, version)? else {
-            return Ok(None)
+            return Ok(None);
         };
 
         let key = self.format_key(name, resolved_version);
@@ -377,7 +380,7 @@ impl crate::Lockfile for PnpmLockfile {
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
         let Some(entry) = self.packages.as_ref().and_then(|pkgs| pkgs.get(key)) else {
-            return Ok(None)
+            return Ok(None);
         };
         Ok(Some(
             entry

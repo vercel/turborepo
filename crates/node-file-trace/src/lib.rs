@@ -44,7 +44,7 @@ use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     issue::{IssueContextExt, IssueReporter, IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
@@ -214,10 +214,14 @@ async fn add_glob_results(
     for entry in result.results.values() {
         if let DirectoryEntry::File(path) = entry {
             let source = SourceAssetVc::new(*path).into();
-            list.push(context.process(
-                source,
-                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
-            ));
+            list.push(
+                context
+                    .process(
+                        source,
+                        Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+                    )
+                    .into(),
+            );
         }
     }
     for result in result.inner.values() {
@@ -256,10 +260,14 @@ async fn input_to_modules<'a>(
     for input in input.iter() {
         if exact {
             let source = SourceAssetVc::new(root.join(input)).into();
-            list.push(context.process(
-                source,
-                Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
-            ));
+            list.push(
+                context
+                    .process(
+                        source,
+                        Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
+                    )
+                    .into(),
+            );
         } else {
             let glob = GlobVc::new(input);
             add_glob_results(context, root.read_glob(glob, false), &mut list).await?;
@@ -501,7 +509,8 @@ async fn run<B: Backend + 'static, F: Future<Output = ()>>(
             let console_ui = ConsoleUiVc::new(log_options);
             console_ui
                 .as_issue_reporter()
-                .report_issues(TransientInstance::new(issues), source);
+                .report_issues(TransientInstance::new(issues), source)
+                .await?;
 
             if has_return_value {
                 let output_read_ref = output.await?;
@@ -636,16 +645,13 @@ async fn create_module_asset(
     module_options: TransientInstance<ModuleOptionsContext>,
     resolve_options: TransientInstance<ResolveOptionsContext>,
 ) -> Result<ModuleAssetContextVc> {
-    let env = EnvironmentVc::new(
-        Value::new(ExecutionEnvironment::NodeJsLambda(
-            NodeJsEnvironment {
-                cwd: OptionStringVc::cell(process_cwd),
-                ..Default::default()
-            }
-            .into(),
-        )),
-        Value::new(EnvironmentIntention::Api),
-    );
+    let env = EnvironmentVc::new(Value::new(ExecutionEnvironment::NodeJsLambda(
+        NodeJsEnvironment {
+            cwd: OptionStringVc::cell(process_cwd),
+            ..Default::default()
+        }
+        .into(),
+    )));
     let compile_time_info = CompileTimeInfo::builder(env).cell();
     let glob_mappings = vec![
         (

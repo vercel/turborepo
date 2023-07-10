@@ -29,13 +29,10 @@ snapshot:
   name_template: "{{ incpatch .Version }}"
 archives:
   - id: github
-    name_template: >-
-      {{ .ProjectName }}-
-      {{ .Version }}-
-      {{- title .Os }}-
-      {{- if eq .Arch "amd64" }}64
-      {{- else }}{{ .Arch }}{{ end }}
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     wrap_in_directory: true
+    replacements:
+      amd64: 64
     format: tar.gz
     format_overrides:
       - goos: windows
@@ -44,12 +41,10 @@ archives:
       - LICENSE
       - README.md
   - id: npm
-    name_template: >-
-      {{ .ProjectName }}-
-      {{ - title .Os }}-
-      {{- if eq .Arch "amd64" }}64
-      {{- else }}{{ .Arch }}{{ end }}
+    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
     wrap_in_directory: true
+    replacements:
+      amd64: 64
     format: tar.gz
     files:
       - LICENSE

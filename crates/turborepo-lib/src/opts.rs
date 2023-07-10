@@ -48,7 +48,7 @@ impl<'a> TryFrom<&'a Args> for Opts<'a> {
 
     fn try_from(args: &'a Args) -> std::result::Result<Self, Self::Error> {
         let Some(Command::Run(run_args)) = &args.command else {
-          return Err(anyhow!("Expected run command"))
+            return Err(anyhow!("Expected run command"));
         };
         let run_opts = RunOpts::try_from(run_args.as_ref())?;
         let cache_opts = CacheOpts::from(run_args.as_ref());
