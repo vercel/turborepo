@@ -1,5 +1,4 @@
 #![feature(trivial_bounds)]
-#![feature(once_cell)]
 #![feature(min_specialization)]
 
 use std::{
@@ -38,7 +37,7 @@ async fn main() -> Result<()> {
             let glob = GlobVc::new("**/*.rs");
             let glob_result = input.read_glob(glob, true);
             let dir_hash = hash_glob_result(glob_result);
-            print_hash(dir_hash);
+            print_hash(dir_hash).await?;
             Ok(NothingVc::new().into())
         })
     });
@@ -61,9 +60,9 @@ pub fn empty_string() -> StringVc {
 }
 
 #[turbo_tasks::function]
-async fn print_hash(dir_hash: StringVc) -> Result<()> {
+async fn print_hash(dir_hash: StringVc) -> Result<NothingVc> {
     println!("DIR HASH: {}", dir_hash.await?.as_str());
-    Ok(())
+    Ok(NothingVc::new())
 }
 
 #[turbo_tasks::function]

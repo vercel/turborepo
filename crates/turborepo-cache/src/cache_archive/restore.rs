@@ -1,6 +1,7 @@
 use std::{backtrace::Backtrace, collections::HashMap, io::Read};
 
 use petgraph::graph::DiGraph;
+use sha2::{Digest, Sha512};
 use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -15,7 +16,7 @@ use crate::{
     CacheError,
 };
 
-struct CacheReader {
+pub struct CacheReader {
     reader: Box<dyn Read>,
 }
 
@@ -33,14 +34,29 @@ impl CacheReader {
 
     pub fn open(path: &AbsoluteSystemPathBuf) -> Result<Self, CacheError> {
         let file = path.open()?;
+        let is_compressed = path.extension() == Some("zst");
 
-        let reader: Box<dyn Read> = if path.extension() == Some("zst") {
+        let reader: Box<dyn Read> = if is_compressed {
             Box::new(zstd::Decoder::new(file)?)
         } else {
             Box::new(file)
         };
 
         Ok(CacheReader { reader })
+    }
+
+    pub fn get_sha(mut self) -> Result<Vec<u8>, CacheError> {
+        let mut context = Sha512::new();
+        let mut buffer = [0; 8192];
+        loop {
+            let n = self.reader.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            context.update(&buffer[..n]);
+        }
+
+        Ok(context.finalize().to_vec())
     }
 
     pub fn restore(
@@ -139,7 +155,7 @@ impl CacheReader {
             let key = &graph[node];
 
             let Some(header) = header_lookup.get(key) else {
-                continue
+                continue;
             };
             let file = restore_symlink_allow_missing_target(dir_cache, anchor, header)?;
             restored.push(file);

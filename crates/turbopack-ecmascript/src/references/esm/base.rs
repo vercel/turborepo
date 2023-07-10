@@ -9,7 +9,7 @@ use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContext, ChunkingType,
+        ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkingContext, ChunkingType,
         ChunkingTypeOptionVc, ModuleId,
     },
     issue::{IssueSeverity, OptionIssueSourceVc},
@@ -174,13 +174,12 @@ impl ValueToString for EsmAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for EsmAssetReference {
+impl ChunkableModuleReference for EsmAssetReference {
     #[turbo_tasks::function]
     fn chunking_type(&self) -> Result<ChunkingTypeOptionVc> {
         Ok(ChunkingTypeOptionVc::cell(
             if let Some(chunking_type) = self.annotations.chunking_type() {
                 match chunking_type {
-                    "separate" => Some(ChunkingType::Separate),
                     "parallel" => Some(ChunkingType::Parallel),
                     "isolatedParallel" => Some(ChunkingType::IsolatedParallel),
                     "none" => None,
@@ -222,8 +221,8 @@ impl CodeGenerateable for EsmAssetReference {
             return Ok(CodeGeneration { visitors }.into());
         }
 
-        // separate chunks can't be imported as the modules are not available
-        if !matches!(*chunking_type, None | Some(ChunkingType::Separate)) {
+        // only chunked references can be imported
+        if chunking_type.is_some() {
             let referenced_asset = self_vc.get_referenced_asset().await?;
             if let Some(ident) = referenced_asset.get_ident().await? {
                 match &*referenced_asset {

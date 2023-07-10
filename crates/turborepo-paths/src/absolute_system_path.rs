@@ -18,7 +18,7 @@ use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AbsoluteSystemPath(Utf8Path);
 
 impl ToOwned for AbsoluteSystemPath {
@@ -292,6 +292,16 @@ impl AbsoluteSystemPath {
 
     pub fn open_with_options(&self, open_options: OpenOptions) -> Result<File, io::Error> {
         open_options.open(&self.0)
+    }
+
+    #[cfg(unix)]
+    pub fn set_mode(&self, mode: u32) -> Result<(), io::Error> {
+        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+
+        let permissions = Permissions::from_mode(mode);
+        fs::set_permissions(&self.0, permissions)?;
+
+        Ok(())
     }
 }
 
