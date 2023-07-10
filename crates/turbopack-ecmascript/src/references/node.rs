@@ -15,6 +15,7 @@ use turbopack_core::{
         pattern::{Pattern, PatternVc},
         ResolveResult, ResolveResultVc,
     },
+    source::SourceVc,
 };
 
 #[turbo_tasks::value]
@@ -53,14 +54,14 @@ impl ValueToString for PackageJsonReference {
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct DirAssetReference {
-    pub source: AssetVc,
+    pub source: SourceVc,
     pub path: PatternVc,
 }
 
 #[turbo_tasks::value_impl]
 impl DirAssetReferenceVc {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc, path: PatternVc) -> Self {
+    pub fn new(source: SourceVc, path: PatternVc) -> Self {
         Self::cell(DirAssetReference { source, path })
     }
 }

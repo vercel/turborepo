@@ -12,6 +12,7 @@ use turbopack_core::{
         parse::RequestVc,
         resolve, ResolveResult, ResolveResultVc,
     },
+    source::{asset_to_source, SourceVc},
 };
 
 use self::{
@@ -31,7 +32,7 @@ fn modifier() -> StringVc {
 
 #[turbo_tasks::value]
 pub struct WebpackModuleAsset {
-    pub source: AssetVc,
+    pub source: SourceVc,
     pub runtime: WebpackRuntimeVc,
     pub transforms: EcmascriptInputTransformsVc,
 }
@@ -40,7 +41,7 @@ pub struct WebpackModuleAsset {
 impl WebpackModuleAssetVc {
     #[turbo_tasks::function]
     pub fn new(
-        source: AssetVc,
+        source: SourceVc,
         runtime: WebpackRuntimeVc,
         transforms: EcmascriptInputTransformsVc,
     ) -> Self {
@@ -122,7 +123,7 @@ impl ValueToString for WebpackChunkAssetReference {
 
 #[turbo_tasks::value(shared)]
 pub struct WebpackEntryAssetReference {
-    pub source: AssetVc,
+    pub source: SourceVc,
     pub runtime: WebpackRuntimeVc,
     pub transforms: EcmascriptInputTransformsVc,
 }
@@ -173,7 +174,12 @@ impl AssetReference for WebpackRuntimeAssetReference {
             .await?
             .map(
                 |source| async move {
-                    Ok(WebpackModuleAssetVc::new(source, self.runtime, self.transforms).into())
+                    Ok(WebpackModuleAssetVc::new(
+                        asset_to_source(source),
+                        self.runtime,
+                        self.transforms,
+                    )
+                    .into())
                 },
                 |r| async move { Ok(r) },
             )

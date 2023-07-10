@@ -15,6 +15,7 @@ use turbopack_core::{
     module::{Module, ModuleVc},
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
+    source::SourceVc,
     virtual_source::VirtualSourceVc,
 };
 use turbopack_ecmascript::{
@@ -73,7 +74,7 @@ impl Default for MdxTransformOptionsVc {
 #[turbo_tasks::value]
 #[derive(Clone, Copy)]
 pub struct MdxModuleAsset {
-    source: AssetVc,
+    source: SourceVc,
     context: AssetContextVc,
     transforms: EcmascriptInputTransformsVc,
     options: MdxTransformOptionsVc,
@@ -143,7 +144,7 @@ async fn into_ecmascript_module_asset(
 impl MdxModuleAssetVc {
     #[turbo_tasks::function]
     pub fn new(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         transforms: EcmascriptInputTransformsVc,
         options: MdxTransformOptionsVc,

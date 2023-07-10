@@ -19,6 +19,7 @@ use turbopack_core::{
     module::ModuleVc,
     reference_type::{EntryReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
+    source::{Source, SourceVc},
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_source::VirtualSourceVc,
 };
@@ -90,7 +91,7 @@ impl PostCssTransformVc {
 #[turbo_tasks::value_impl]
 impl SourceTransform for PostCssTransform {
     #[turbo_tasks::function]
-    fn transform(&self, source: AssetVc) -> AssetVc {
+    fn transform(&self, source: SourceVc) -> SourceVc {
         PostCssTransformedAsset {
             evaluate_context: self.evaluate_context,
             execution_context: self.execution_context,
@@ -105,8 +106,11 @@ impl SourceTransform for PostCssTransform {
 struct PostCssTransformedAsset {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
-    source: AssetVc,
+    source: SourceVc,
 }
+
+#[turbo_tasks::value_impl]
+impl Source for PostCssTransformedAsset {}
 
 #[turbo_tasks::value_impl]
 impl Asset for PostCssTransformedAsset {

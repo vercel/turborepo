@@ -1,22 +1,23 @@
 use anyhow::Result;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbopack_core::{
-    asset::{Asset, AssetVc},
+    asset::Asset,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{pattern::PatternVc, resolve_raw, ResolveResultVc},
+    source::SourceVc,
 };
 
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct FileSourceReference {
-    pub source: AssetVc,
+    pub source: SourceVc,
     pub path: PatternVc,
 }
 
 #[turbo_tasks::value_impl]
 impl FileSourceReferenceVc {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc, path: PatternVc) -> Self {
+    pub fn new(source: SourceVc, path: PatternVc) -> Self {
         Self::cell(FileSourceReference { source, path })
     }
 }

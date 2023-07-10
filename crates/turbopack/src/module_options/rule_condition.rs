@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::{primitives::Regex, trace::TraceRawVcs};
 use turbo_tasks_fs::{glob::GlobReadRef, FileSystemPath, FileSystemPathReadRef};
 use turbopack_core::{
-    asset::AssetVc, reference_type::ReferenceType, virtual_source::VirtualSourceVc,
+    reference_type::ReferenceType, source::SourceVc, virtual_source::VirtualSourceVc,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
@@ -53,7 +53,7 @@ impl ModuleRuleCondition {
     #[async_recursion]
     pub async fn matches(
         &self,
-        source: AssetVc,
+        source: SourceVc,
         path: &FileSystemPath,
         reference_type: &ReferenceType,
     ) -> Result<bool> {

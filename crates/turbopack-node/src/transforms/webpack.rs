@@ -11,6 +11,7 @@ use turbopack_core::{
     ident::AssetIdentVc,
     module::ModuleVc,
     reference_type::{InnerAssetsVc, ReferenceType},
+    source::{Source, SourceVc},
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_source::VirtualSourceVc,
 };
@@ -74,7 +75,7 @@ impl WebpackLoadersVc {
 #[turbo_tasks::value_impl]
 impl SourceTransform for WebpackLoaders {
     #[turbo_tasks::function]
-    fn transform(self_vc: WebpackLoadersVc, source: AssetVc) -> AssetVc {
+    fn transform(self_vc: WebpackLoadersVc, source: SourceVc) -> SourceVc {
         WebpackLoadersProcessedAsset {
             transform: self_vc,
             source,
@@ -87,8 +88,11 @@ impl SourceTransform for WebpackLoaders {
 #[turbo_tasks::value]
 struct WebpackLoadersProcessedAsset {
     transform: WebpackLoadersVc,
-    source: AssetVc,
+    source: SourceVc,
 }
+
+#[turbo_tasks::value_impl]
+impl Source for WebpackLoadersProcessedAsset {}
 
 #[turbo_tasks::value_impl]
 impl Asset for WebpackLoadersProcessedAsset {

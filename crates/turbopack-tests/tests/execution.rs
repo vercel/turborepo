@@ -243,8 +243,8 @@ async fn run_test(resource: &str) -> Result<RunTestResultVc> {
     .build();
 
     let jest_entry_asset = process_path_to_asset(jest_entry_path, context);
-    let jest_runtime_asset = process_path_to_asset(jest_runtime_path, context);
-    let test_asset = process_path_to_asset(test_path, context);
+    let jest_runtime_asset = FileSourceVc::new(jest_runtime_path);
+    let test_asset = FileSourceVc::new(test_path);
 
     let res = evaluate(
         jest_entry_asset.into(),
@@ -254,8 +254,8 @@ async fn run_test(resource: &str) -> Result<RunTestResultVc> {
         context,
         chunking_context,
         Some(EvaluatableAssetsVc::many(vec![
-            EvaluatableAssetVc::from_asset(jest_runtime_asset.into(), context),
-            EvaluatableAssetVc::from_asset(test_asset.into(), context),
+            EvaluatableAssetVc::from_source(jest_runtime_asset.into(), context),
+            EvaluatableAssetVc::from_source(test_asset.into(), context),
         ])),
         vec![],
         CompletionVc::immutable(),

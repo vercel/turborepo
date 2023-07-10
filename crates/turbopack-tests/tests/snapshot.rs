@@ -44,6 +44,7 @@ use turbopack_core::{
     issue::IssueVc,
     reference::all_referenced_assets,
     reference_type::{EntryReferenceSubType, ReferenceType},
+    source::SourceVc,
 };
 use turbopack_dev::DevChunkingContextVc;
 use turbopack_ecmascript_plugins::transform::{
@@ -286,7 +287,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
 
     let runtime_entries = maybe_load_env(context, project_path)
         .await?
-        .map(|asset| EvaluatableAssetsVc::one(EvaluatableAssetVc::from_asset(asset, context)));
+        .map(|asset| EvaluatableAssetsVc::one(EvaluatableAssetVc::from_source(asset, context)));
 
     let chunk_root_path = path.join("output");
     let static_root_path = path.join("static");
@@ -414,7 +415,7 @@ async fn walk_asset(
 async fn maybe_load_env(
     _context: AssetContextVc,
     path: FileSystemPathVc,
-) -> Result<Option<AssetVc>> {
+) -> Result<Option<SourceVc>> {
     let dotenv_path = path.join("input/.env");
 
     if !dotenv_path.read().await?.is_content() {
