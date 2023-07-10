@@ -669,9 +669,9 @@ dependencies = [
 
 [[package]]
 name = "binding_macros"
-version = "0.53.12"
+version = "0.53.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "624f5dbcd82b932d9f9f959fec4ce89a1fd67a6e4e141bad66f01673704045cb"
+checksum = "3ecbec28ed0caaee2843dd557762ded79b2ffddd72edcdda3d681f1f70499ffc"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -6737,9 +6737,9 @@ dependencies = [
 
 [[package]]
 name = "swc"
-version = "0.264.12"
+version = "0.264.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "176cdf854d438bd39aee0dec1f84c053cb7978402b11133f60fbb77453ed020d"
+checksum = "2f77c84d7bb17937099e7548ebe35ebf2f35f6d5071adb24ceb78b4dddcbaed3"
 dependencies = [
  "ahash 0.8.3",
  "anyhow",
@@ -6816,9 +6816,9 @@ dependencies = [
 
 [[package]]
 name = "swc_bundler"
-version = "0.217.10"
+version = "0.217.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d196673157f333f730602745b208feeee82da239b6defc5b962e68291bd570b"
+checksum = "c126fe44ef25de31c73db1874a0feeece8941bafbdfb3778e4af9367c3ac2c2b"
 dependencies = [
  "ahash 0.8.3",
  "anyhow",
@@ -6922,9 +6922,9 @@ dependencies = [
 
 [[package]]
 name = "swc_core"
-version = "0.79.13"
+version = "0.79.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fad8d1f1abb42719a841f76915e7d2d573e2f9f0462e26dedca847e9ad7b1e4"
+checksum = "0ac072ebc8e6bdaae0a0f93fa2ba2dc922a24ffbe9f58bd27f28109627e5cb3e"
 dependencies = [
  "binding_macros",
  "swc",
@@ -7209,9 +7209,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "0.184.10"
+version = "0.184.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87d541b5632bb93d71ea47518075c357afacb86adfe782922f1060f9a995fd29"
+checksum = "aecc16ea061975c71b5397a6a26281598bc5a95e30b5e77093c54f74fbbfcace"
 dependencies = [
  "ahash 0.8.3",
  "arrayvec 0.7.2",
@@ -9113,6 +9113,7 @@ dependencies = [
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-bench",
+ "turbopack-build",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-dev",

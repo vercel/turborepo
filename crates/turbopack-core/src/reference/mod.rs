@@ -1,7 +1,11 @@
 use std::collections::{HashSet, VecDeque};
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, ValueToString, ValueToStringVc};
+use turbo_tasks::{
+    graph::{AdjacencyMap, GraphTraversal},
+    primitives::StringVc,
+    TryJoinIterExt, ValueToString, ValueToStringVc,
+};
 
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
@@ -169,4 +173,35 @@ pub async fn all_assets(asset: AssetVc) -> Result<AssetsVc> {
         }
     }
     Ok(AssetsVc::cell(assets.into_iter().collect()))
+}
+
+/// Walks the asset graph from a single asset and collect all referenced assets.
+#[turbo_tasks::function]
+pub async fn all_assets_from_entry(entry: AssetVc) -> Result<AssetsVc> {
+    Ok(AssetsVc::cell(
+        AdjacencyMap::new()
+            .skip_duplicates()
+            .visit([entry], get_referenced_assets)
+            .await
+            .completed()?
+            .into_inner()
+            .into_reverse_topological()
+            .collect(),
+    ))
+}
+
+/// Computes the list of all chunk children of a given chunk.
+async fn get_referenced_assets(asset: AssetVc) -> Result<impl Iterator<Item = AssetVc> + Send> {
+    Ok(asset
+        .references()
+        .await?
+        .iter()
+        .map(|reference| async move {
+            let primary_assets = reference.resolve_reference().primary_assets().await?;
+            Ok(primary_assets.clone_value())
+        })
+        .try_join()
+        .await?
+        .into_iter()
+        .flatten())
 }

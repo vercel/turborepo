@@ -13,7 +13,7 @@ mod count_hash_set;
 mod gc;
 mod map_guard;
 mod memory_backend;
-mod memory_backend_with_pg;
+// mod memory_backend_with_pg;
 mod output;
 mod priority_pair;
 pub mod scope;
@@ -22,4 +22,4 @@ mod task;
 pub mod viz;
 
 pub use memory_backend::MemoryBackend;
-pub use memory_backend_with_pg::MemoryBackendWithPersistedGraph;
+// pub use memory_backend_with_pg::MemoryBackendWithPersistedGraph;

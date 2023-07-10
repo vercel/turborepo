@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use auto_hash_map::AutoSet;
 use turbo_tasks::{
@@ -667,10 +667,22 @@ pub struct PlainIssueProcessingPathItem {
 
 #[turbo_tasks::value_trait]
 pub trait IssueReporter {
+    /// Reports issues to the user (e.g. to stdio). Returns whether fatal
+    /// (program-ending) issues were present.
+    ///
+    /// # Arguments:
+    ///
+    /// * `issues` - A [ReadRef] of [CapturedIssues]. Typically obtained with
+    ///   `IssueVc::peek_issues_with_path(source)`.
+    /// * `source` - The root [RawVc] from which issues are traced. Can be used
+    ///   by implementers to determine which issues are new.
+    /// * `min_fatal_severity` - The minimum [IssueSeverityVc]
+    ///  The minimum issue severity level considered to fatally end the program.
     fn report_issues(
         &self,
         issues: TransientInstance<ReadRef<CapturedIssues>>,
         source: TransientValue<RawVc>,
+        min_fatal_severity: IssueSeverityVc,
     ) -> BoolVc;
 }
 
@@ -701,5 +713,37 @@ where
     }
     async fn issue_description(self, description: impl Into<String> + Send) -> Result<Self> {
         IssueVc::attach_description(description, self).await
+    }
+}
+
+pub async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
+    source: T,
+    issue_reporter: IssueReporterVc,
+    path: &Option<String>,
+    operation: &Option<String>,
+) -> Result<()> {
+    let issues = IssueVc::peek_issues_with_path(source)
+        .await?
+        .strongly_consistent()
+        .await?;
+
+    let has_fatal = issue_reporter.report_issues(
+        TransientInstance::new(issues.clone()),
+        TransientValue::new(source.into()),
+        IssueSeverity::Fatal.into(),
+    );
+
+    if *has_fatal.await? {
+        let mut message = "Fatal issue(s) occurred".to_owned();
+        if let Some(path) = path.as_ref() {
+            message += &format!(" in {path}");
+        };
+        if let Some(operation) = operation.as_ref() {
+            message += &format!(" ({operation})");
+        };
+
+        Err(anyhow!(message))
+    } else {
+        Ok(())
     }
 }

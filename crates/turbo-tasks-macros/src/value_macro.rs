@@ -608,6 +608,7 @@ pub fn value(args: TokenStream, input: TokenStream) -> TokenStream {
                 Ok(Self { node: self.node.resolve_strongly_consistent().await? })
             }
 
+            /// Downcasts the passed Trait Vc into this concrete Vc.
             pub async fn resolve_from(super_trait_vc: impl std::convert::Into<turbo_tasks::RawVc>) -> Result<Option<Self>, turbo_tasks::ResolveTypeError> {
                 let raw_vc: turbo_tasks::RawVc = super_trait_vc.into();
                 let raw_vc = raw_vc.resolve_value(*#value_type_id_ident).await?;

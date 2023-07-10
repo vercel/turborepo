@@ -16,7 +16,7 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::{source_context::get_source_context, FileLinesContent};
 use turbopack_core::issue::{
-    CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssue,
+    CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, IssueSeverityVc, PlainIssue,
     PlainIssueProcessingPathItem, PlainIssueProcessingPathItemReadRef, PlainIssueSource,
 };
 
@@ -353,6 +353,7 @@ impl IssueReporter for ConsoleUi {
         &self,
         issues: TransientInstance<ReadRef<CapturedIssues>>,
         source: TransientValue<RawVc>,
+        min_fatal_severity: IssueSeverityVc,
     ) -> Result<BoolVc> {
         let issues = &*issues;
         let LogOptions {
@@ -389,7 +390,7 @@ impl IssueReporter for ConsoleUi {
             }
 
             let severity = plain_issue.severity;
-            if severity == IssueSeverity::Fatal {
+            if severity <= *min_fatal_severity.await? {
                 has_fatal = true;
             }
 
