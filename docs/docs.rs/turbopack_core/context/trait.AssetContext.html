@@ -3,12 +3,12 @@
     fn <a href="#tymethod.compile_time_info" class="fn">compile_time_info</a>(&amp;self) -&gt; <a class="struct" href="../compile_time_info/struct.CompileTimeInfoVc.html" title="struct turbopack_core::compile_time_info::CompileTimeInfoVc">CompileTimeInfoVc</a>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.resolve_options" class="fn">resolve_options</a>(
         &amp;self,
-        origin_path: <a class="struct" href="../../turbo_tasks_fs/struct.FileSystemPathVc.html" title="struct turbo_tasks_fs::FileSystemPathVc">FileSystemPathVc</a>,
+        origin_path: FileSystemPathVc,
         reference_type: Value&lt;<a class="enum" href="../reference_type/enum.ReferenceType.html" title="enum turbopack_core::reference_type::ReferenceType">ReferenceType</a>&gt;
     ) -&gt; <a class="struct" href="../resolve/options/struct.ResolveOptionsVc.html" title="struct turbopack_core::resolve::options::ResolveOptionsVc">ResolveOptionsVc</a>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.resolve_asset" class="fn">resolve_asset</a>(
         &amp;self,
-        origin_path: <a class="struct" href="../../turbo_tasks_fs/struct.FileSystemPathVc.html" title="struct turbo_tasks_fs::FileSystemPathVc">FileSystemPathVc</a>,
+        origin_path: FileSystemPathVc,
         request: <a class="struct" href="../resolve/parse/struct.RequestVc.html" title="struct turbopack_core::resolve::parse::RequestVc">RequestVc</a>,
         resolve_options: <a class="struct" href="../resolve/options/struct.ResolveOptionsVc.html" title="struct turbopack_core::resolve::options::ResolveOptionsVc">ResolveOptionsVc</a>,
         reference_type: Value&lt;<a class="enum" href="../reference_type/enum.ReferenceType.html" title="enum turbopack_core::reference_type::ReferenceType">ReferenceType</a>&gt;
@@ -29,11 +29,11 @@ creating them. It’s needed to resolve assets and upgrade assets to a higher
 type (e. g. from SourceAsset to ModuleAsset).</p>
 </div></details><h2 id="required-methods" class="small-section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><section id="tymethod.compile_time_info" class="method"><a class="srclink rightside" href="../../src/turbopack_core/context.rs.html#18">source</a><h4 class="code-header">fn <a href="#tymethod.compile_time_info" class="fn">compile_time_info</a>(&amp;self) -&gt; <a class="struct" href="../compile_time_info/struct.CompileTimeInfoVc.html" title="struct turbopack_core::compile_time_info::CompileTimeInfoVc">CompileTimeInfoVc</a></h4></section><section id="tymethod.resolve_options" class="method"><a class="srclink rightside" href="../../src/turbopack_core/context.rs.html#19-23">source</a><h4 class="code-header">fn <a href="#tymethod.resolve_options" class="fn">resolve_options</a>(
     &amp;self,
-    origin_path: <a class="struct" href="../../turbo_tasks_fs/struct.FileSystemPathVc.html" title="struct turbo_tasks_fs::FileSystemPathVc">FileSystemPathVc</a>,
+    origin_path: FileSystemPathVc,
     reference_type: Value&lt;<a class="enum" href="../reference_type/enum.ReferenceType.html" title="enum turbopack_core::reference_type::ReferenceType">ReferenceType</a>&gt;
 ) -&gt; <a class="struct" href="../resolve/options/struct.ResolveOptionsVc.html" title="struct turbopack_core::resolve::options::ResolveOptionsVc">ResolveOptionsVc</a></h4></section><section id="tymethod.resolve_asset" class="method"><a class="srclink rightside" href="../../src/turbopack_core/context.rs.html#24-30">source</a><h4 class="code-header">fn <a href="#tymethod.resolve_asset" class="fn">resolve_asset</a>(
     &amp;self,
-    origin_path: <a class="struct" href="../../turbo_tasks_fs/struct.FileSystemPathVc.html" title="struct turbo_tasks_fs::FileSystemPathVc">FileSystemPathVc</a>,
+    origin_path: FileSystemPathVc,
     request: <a class="struct" href="../resolve/parse/struct.RequestVc.html" title="struct turbopack_core::resolve::parse::RequestVc">RequestVc</a>,
     resolve_options: <a class="struct" href="../resolve/options/struct.ResolveOptionsVc.html" title="struct turbopack_core::resolve::options::ResolveOptionsVc">ResolveOptionsVc</a>,
     reference_type: Value&lt;<a class="enum" href="../reference_type/enum.ReferenceType.html" title="enum turbopack_core::reference_type::ReferenceType">ReferenceType</a>&gt;
