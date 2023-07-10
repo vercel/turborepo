@@ -5,6 +5,7 @@ use crate::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
     reference::AssetReferencesVc,
+    source::{Source, SourceVc},
 };
 
 /// The raw [Asset]. It represents raw content from a path without any
@@ -21,6 +22,9 @@ impl FileSourceVc {
         Self::cell(FileSource { path })
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Source for FileSource {}
 
 #[turbo_tasks::value_impl]
 impl Asset for FileSource {

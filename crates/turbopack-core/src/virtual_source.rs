@@ -4,6 +4,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use crate::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
+    source::{Source, SourceVc},
 };
 
 /// An [Asset] that is created from some passed source code.
@@ -28,6 +29,9 @@ impl VirtualSourceVc {
         Self::cell(VirtualSource { ident, content })
     }
 }
+
+#[turbo_tasks::value_impl]
+impl Source for VirtualSource {}
 
 #[turbo_tasks::value_impl]
 impl Asset for VirtualSource {
