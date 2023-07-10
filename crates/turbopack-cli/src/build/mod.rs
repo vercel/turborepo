@@ -16,7 +16,7 @@ use turbopack_cli_utils::issue::{ConsoleUiVc, LogOptions};
 use turbopack_core::{
     asset::{Asset, AssetsVc},
     chunk::{
-        ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
+        ChunkableModule, ChunkableModuleVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
     },
     context::AssetContext,
     environment::{BrowserEnvironment, EnvironmentVc, ExecutionEnvironment},
@@ -183,7 +183,7 @@ async fn build_internal(
         }
         .into(),
     )));
-    let compile_time_info = get_client_compile_time_info(env, node_env, browserslist_query);
+    let compile_time_info = get_client_compile_time_info(env, node_env);
     let execution_context =
         ExecutionContextVc::new(project_path, chunking_context, load_env(project_path));
     let context =
@@ -254,7 +254,8 @@ async fn build_internal(
                             ecmascript.into(),
                             EvaluatableAssetsVc::one(ecmascript.into()),
                         )])
-                } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(entry_module).await?
+                } else if let Some(chunkable) =
+                    ChunkableModuleVc::resolve_from(entry_module).await?
                 {
                     chunking_context.chunk_group(chunkable.as_root_chunk(chunking_context))
                 } else {
