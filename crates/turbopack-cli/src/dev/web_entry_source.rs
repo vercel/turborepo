@@ -5,7 +5,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack::ecmascript::EcmascriptModuleAssetVc;
 use turbopack_cli_utils::runtime_entry::{RuntimeEntriesVc, RuntimeEntry};
 use turbopack_core::{
-    chunk::{ChunkableAssetVc, ChunkingContextVc},
+    chunk::{ChunkableModuleVc, ChunkingContextVc},
     environment::{BrowserEnvironment, EnvironmentVc, ExecutionEnvironment},
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
@@ -46,7 +46,7 @@ pub async fn create_web_entry_source(
         }
         .into(),
     )));
-    let compile_time_info = get_client_compile_time_info(env, node_env, browserslist_query);
+    let compile_time_info = get_client_compile_time_info(env, node_env);
     let context =
         get_client_asset_context(project_path, execution_context, compile_time_info, node_env);
     let chunking_context =
