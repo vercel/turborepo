@@ -29,13 +29,13 @@ pub struct SpacesJson {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 // The processed TurboJSON ready for use by Turborepo.
 pub struct TurboJson {
+    extends: Vec<String>,
     global_deps: Vec<String>,
+    global_dot_env: Vec<RelativeUnixPathBuf>,
     global_env: Vec<String>,
     global_pass_through_env: Vec<String>,
-    global_dot_env: Vec<RelativeUnixPathBuf>,
     pub(crate) pipeline: Pipeline,
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
-    extends: Vec<String>,
     pub(crate) space_id: Option<String>,
 }
 
@@ -43,7 +43,11 @@ pub struct TurboJson {
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJSON {
+    #[serde(rename = "$schema")]
     schema: Option<String>,
+
+    pub experimental_spaces: Option<SpacesJson>,
+    extends: Option<Vec<String>>,
     // Global root filesystem dependencies
     global_dependencies: Option<Vec<String>>,
     global_env: Option<Vec<String>>,
@@ -55,10 +59,6 @@ pub struct RawTurboJSON {
     pipeline: Option<RawPipeline>,
     // Configuration options when interfacing with the remote cache
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
-
-    extends: Option<Vec<String>>,
-
-    pub experimental_spaces: Option<SpacesJson>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
@@ -68,15 +68,15 @@ struct RawPipeline(BTreeMap<String, RawTaskDefinition>);
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct RawTaskDefinition {
-    outputs: Option<Vec<String>>,
     cache: Option<bool>,
     depends_on: Option<Vec<String>>,
-    inputs: Option<Vec<String>>,
-    output_mode: Option<TaskOutputMode>,
-    persistent: Option<bool>,
-    env: Option<Vec<String>>,
-    pass_through_env: Option<Vec<String>>,
     dot_env: Option<Vec<String>>,
+    env: Option<Vec<String>>,
+    inputs: Option<Vec<String>>,
+    pass_through_env: Option<Vec<String>>,
+    persistent: Option<bool>,
+    outputs: Option<Vec<String>>,
+    output_mode: Option<TaskOutputMode>,
 }
 
 const CONFIG_FILE: &str = "turbo.json";
