@@ -51,7 +51,7 @@ pub fn normalize_entries(entries: &Option<Vec<String>>) -> Vec<String> {
     entries
         .as_ref()
         .cloned()
-        .unwrap_or_else(|| vec!["src/index".to_owned()])
+        .unwrap_or_else(|| vec!["src/entry".to_owned()])
 }
 
 #[turbo_tasks::function]

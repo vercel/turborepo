@@ -85,7 +85,7 @@ fn berry_transitive_closure_inner(
     let resolutions =
         resolutions.map(|r| turborepo_lockfiles::BerryManifest::with_resolutions(r.resolutions));
     let data = LockfileData::from_bytes(contents.as_slice())?;
-    let lockfile = BerryLockfile::new(&data, resolutions.as_ref())?;
+    let lockfile = BerryLockfile::new(data, resolutions)?;
     let dependencies = turborepo_lockfiles::all_transitive_closures(
         &lockfile,
         workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),
@@ -183,7 +183,7 @@ fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
     let patches = match request.package_manager() {
         proto::PackageManager::Berry => {
             let data = LockfileData::from_bytes(&request.contents)?;
-            let lockfile = BerryLockfile::new(&data, None)?;
+            let lockfile = BerryLockfile::new(data, None)?;
             Ok(lockfile
                 .patches()
                 .into_iter()

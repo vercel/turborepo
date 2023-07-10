@@ -1,7 +1,6 @@
 use std::{collections::HashMap, fmt};
 
 use anyhow::Result;
-use turbo_tasks::Value;
 use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
 use turbopack::{
     condition::ContextCondition,
@@ -18,7 +17,7 @@ use turbopack_core::{
     compile_time_defines,
     compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     context::AssetContextVc,
-    environment::{BrowserEnvironment, Environment, EnvironmentVc, ExecutionEnvironment},
+    environment::EnvironmentVc,
     resolve::options::{ImportMap, ImportMapVc, ImportMapping},
 };
 use turbopack_dev::react_refresh::assert_can_resolve_react_refresh;
@@ -193,7 +192,6 @@ fn client_defines(node_env: &NodeEnv) -> CompileTimeDefinesVc {
 pub async fn get_client_compile_time_info(
     env: EnvironmentVc,
     node_env: NodeEnvVc,
-    browserslist_query: &str,
 ) -> Result<CompileTimeInfoVc> {
     Ok(CompileTimeInfo::builder(env)
         .defines(client_defines(&*node_env.await?))
