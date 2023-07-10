@@ -675,6 +675,10 @@
 <a href="#675" id="675">675</a>
 <a href="#676" id="676">676</a>
 <a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
 </pre></div><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(min_specialization)]
 #![feature(iter_intersperse)]
@@ -734,12 +738,13 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc, EvaluatableAsset, EvaluatableAssetVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc, EvaluatableAsset, EvaluatableAssetVc,
     },
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesReadRef, AssetReferencesVc},
     reference_type::InnerAssetsVc,
     resolve::{
@@ -842,7 +847,7 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; AssetVc {
+    <span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; ModuleVc {
         <span class="kw">let </span>base = <span class="kw">if let </span><span class="prelude-val">Some</span>(inner_assets) = <span class="self">self</span>.inner_assets {
             EcmascriptModuleAssetVc::new_with_inner_assets(
                 <span class="self">self</span>.source,
@@ -1088,7 +1093,10 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>EcmascriptModuleAsset {
+</span><span class="kw">impl </span>Module <span class="kw">for </span>EcmascriptModuleAsset {}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkableModule <span class="kw">for </span>EcmascriptModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk(
         self_vc: EcmascriptModuleAssetVc,

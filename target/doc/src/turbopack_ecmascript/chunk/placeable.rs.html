@@ -32,17 +32,19 @@
 <a href="#32" id="32">32</a>
 <a href="#33" id="33">33</a>
 <a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{ChunkableAsset, ChunkableAssetVc},
+    chunk::{ChunkableModule, ChunkableModuleVc},
+    module::{Module, ModuleVc},
 };
 
 <span class="kw">use super</span>::{item::EcmascriptChunkItemVc, EcmascriptChunkingContextVc};
 <span class="kw">use </span><span class="kw">crate</span>::references::esm::EsmExportsVc;
 
 <span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>EcmascriptChunkPlaceable: ChunkableAsset + Asset {
+</span><span class="kw">pub trait </span>EcmascriptChunkPlaceable: ChunkableModule + Module + Asset {
     <span class="kw">fn </span>as_chunk_item(<span class="kw-2">&amp;</span><span class="self">self</span>, context: EcmascriptChunkingContextVc) -&gt; EcmascriptChunkItemVc;
     <span class="kw">fn </span>get_exports(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; EcmascriptExportsVc;
 }

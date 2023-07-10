@@ -172,15 +172,20 @@
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        availability_info::AvailabilityInfo, ChunkVc, ChunkableModule, ChunkableModuleVc,
         ChunkingContextVc,
     },
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     resolve::ModulePartVc,
 };
@@ -224,7 +229,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>content(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetContentVc {
         <span class="comment">// This is not reachable because EcmascriptModulePartAsset implements
-        // ChunkableAsset and ChunkableAsset::as_chunk is called instead.
+        // ChunkableModule and ChunkableModule::as_chunk is called instead.
         </span><span class="macro">todo!</span>(<span class="string">&quot;EcmascriptModulePartAsset::content is not implemented&quot;</span>)
     }
 
@@ -303,7 +308,10 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>EcmascriptModulePartAsset {
+</span><span class="kw">impl </span>Module <span class="kw">for </span>EcmascriptModulePartAsset {}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkableModule <span class="kw">for </span>EcmascriptModulePartAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>as_chunk(
         self_vc: EcmascriptModulePartAssetVc,

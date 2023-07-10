@@ -338,7 +338,7 @@
 };
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    chunk::{ChunkableModuleReference, ChunkableModuleReferenceVc},
     issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
@@ -405,7 +405,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>CjsAssetReference {}
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>CjsAssetReference {}
 
 <span class="attr">#[turbo_tasks::value]
 #[derive(Hash, Debug)]
@@ -462,7 +462,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>CjsRequireAssetReference {}
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>CjsRequireAssetReference {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>CjsRequireAssetReference {
@@ -586,7 +586,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>CjsRequireResolveAssetReference {}
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>CjsRequireResolveAssetReference {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>CjsRequireResolveAssetReference {

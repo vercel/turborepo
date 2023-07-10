@@ -254,6 +254,13 @@
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -271,6 +278,7 @@
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::IssueContextExt,
+    module::ModuleVc,
     reference_type::{EntryReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_asset::SourceAssetVc,
@@ -399,10 +407,14 @@
         .map(|path| <span class="kw">async move </span>{
             <span class="prelude-val">Ok</span>(
                 <span class="macro">matches!</span>(<span class="kw-2">&amp;*</span>path.get_type().<span class="kw">await</span><span class="question-mark">?</span>, FileSystemEntryType::File).then(|| {
-                    any_content_changed(context.process(
-                        SourceAssetVc::new(path).into(),
-                        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
-                    ))
+                    any_content_changed(
+                        context
+                            .process(
+                                SourceAssetVc::new(path).into(),
+                                Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+                            )
+                            .into(),
+                    )
                 }),
             )
         })
@@ -416,11 +428,13 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">fn </span>postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPathVc) -&gt; AssetVc {
-    <span class="kw">let </span>config_asset = context.process(
-        SourceAssetVc::new(postcss_config_path).into(),
-        Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
-    );
+</span><span class="kw">fn </span>postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPathVc) -&gt; ModuleVc {
+    <span class="kw">let </span>config_asset = context
+        .process(
+            SourceAssetVc::new(postcss_config_path).into(),
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+        )
+        .into();
 
     context.process(
         VirtualAssetVc::new(
@@ -476,7 +490,7 @@
         <span class="kw">let </span>css_path = css_fs_path.path.as_str();
 
         <span class="kw">let </span>config_value = evaluate(
-            postcss_executor,
+            postcss_executor.into(),
             project_path,
             env,
             this.source.ident(),

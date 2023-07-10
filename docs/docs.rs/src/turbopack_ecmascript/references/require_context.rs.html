@@ -523,6 +523,10 @@
 <a href="#523" id="523">523</a>
 <a href="#524" id="524">524</a>
 <a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{collections::VecDeque, sync::Arc};
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -531,7 +535,7 @@
     common::DUMMY_SP,
     ecma::{
         ast::{
-            Expr, ExprStmt, KeyValueProp, Lit, Module, ModuleItem, ObjectLit, Prop, PropName,
+            <span class="self">self</span>, Expr, ExprStmt, KeyValueProp, Lit, ModuleItem, ObjectLit, Prop, PropName,
             PropOrSpread, Stmt,
         },
         codegen::{text_writer::JsWriter, Emitter},
@@ -546,12 +550,13 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkableModuleVc, ChunkingContext,
         ChunkingContextVc,
     },
     ident::AssetIdentVc,
     issue::{IssueSeverityVc, OptionIssueSourceVc},
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
@@ -806,7 +811,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>RequireContextAssetReference {}
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>RequireContextAssetReference {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>CodeGenerateable <span class="kw">for </span>RequireContextAssetReference {
@@ -854,7 +859,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>ResolvedAssetReference {}
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>ResolvedAssetReference {}
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>RequireContextAsset {
@@ -903,7 +908,10 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>RequireContextAsset {
+</span><span class="kw">impl </span>Module <span class="kw">for </span>RequireContextAsset {}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkableModule <span class="kw">for </span>RequireContextAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk(
         self_vc: ChunkGroupFilesAssetVc,
@@ -1006,7 +1014,7 @@
             obj: Expr = Expr::Object(context_map),
         );
 
-        <span class="kw">let </span>module = Module {
+        <span class="kw">let </span>module = ast::Module {
             span: DUMMY_SP,
             body: <span class="macro">vec!</span>[ModuleItem::Stmt(Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,

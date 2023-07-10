@@ -137,7 +137,7 @@
 <span class="kw">use super</span>::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType},
+    chunk::{ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkingType},
     reference::{AssetReference, AssetReferencesVc},
     resolve::PrimaryResolveResult,
 };
@@ -241,7 +241,7 @@
     <span class="kw">let </span>references = references.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">for </span>reference <span class="kw">in </span><span class="kw-2">&amp;*</span>references {
         <span class="kw">let </span><span class="kw-2">mut </span>key = key;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableModuleReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">match </span><span class="kw-2">&amp;*</span>chunkable.chunking_type().<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="prelude-val">None </span>=&gt; {}
                 <span class="prelude-val">Some</span>(ChunkingType::Placed) =&gt; key = placed_reference_ty(),

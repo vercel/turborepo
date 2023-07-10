@@ -633,6 +633,7 @@
 <a href="#633" id="633">633</a>
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
+<a href="#636" id="636">636</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
@@ -673,6 +674,7 @@
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsVc},
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{PrimaryResolveResult, ResolveResult, ResolveResultVc},
 };
@@ -718,14 +720,14 @@
 
 <span class="doccomment">/// An [Asset] that can be converted into a [Chunk].
 </span><span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>ChunkableAsset: Asset {
+</span><span class="kw">pub trait </span>ChunkableModule: Module + Asset {
     <span class="kw">fn </span>as_chunk(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: ChunkingContextVc,
         availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; ChunkVc;
 
-    <span class="kw">fn </span>as_root_chunk(self_vc: ChunkableAssetVc, context: ChunkingContextVc) -&gt; ChunkVc {
+    <span class="kw">fn </span>as_root_chunk(self_vc: ChunkableModuleVc, context: ChunkingContextVc) -&gt; ChunkVc {
         self_vc.as_chunk(
             context,
             Value::new(AvailabilityInfo::Root {
@@ -812,13 +814,13 @@
 </span><span class="kw">pub struct </span>ChunkingTypeOption(<span class="prelude-ty">Option</span>&lt;ChunkingType&gt;);
 
 <span class="doccomment">/// An [AssetReference] implementing this trait and returning true for
-/// [ChunkableAssetReference::is_chunkable] are considered as potentially
+/// [ChunkableModuleReference::is_chunkable] are considered as potentially
 /// chunkable references. When all [Asset]s of such a reference implement
-/// [ChunkableAsset] they are placed in [Chunk]s during chunking.
+/// [ChunkableModule] they are placed in [Chunk]s during chunking.
 /// They are even potentially placed in the same [Chunk] when a chunk type
 /// specific interface is implemented.
 </span><span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>ChunkableAssetReference: AssetReference + ValueToString {
+</span><span class="kw">pub trait </span>ChunkableModuleReference: AssetReference + ValueToString {
     <span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(<span class="prelude-val">Some</span>(ChunkingType::default()))
     }
@@ -876,11 +878,11 @@
 }
 
 <span class="attr">#[async_trait::async_trait]
-</span><span class="kw">pub trait </span>FromChunkableAsset: ChunkItem + Sized + Debug {
+</span><span class="kw">pub trait </span>FromChunkableModule: ChunkItem + Sized + Debug {
     <span class="kw">async fn </span>from_asset(context: ChunkingContextVc, asset: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt;;
     <span class="kw">async fn </span>from_async_asset(
         context: ChunkingContextVc,
-        asset: ChunkableAssetVc,
+        asset: ChunkableModuleVc,
         availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt;;
 }
@@ -892,7 +894,7 @@
     availability_info: Value&lt;AvailabilityInfo&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkContentResult&lt;I&gt;&gt;
 <span class="kw">where
-    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    </span>I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     chunk_content_internal_parallel(context, entry, additional_entries, availability_info, <span class="bool-val">true</span>)
         .<span class="kw">await
@@ -906,7 +908,7 @@
     availability_info: Value&lt;AvailabilityInfo&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ChunkContentResult&lt;I&gt;&gt;&gt;
 <span class="kw">where
-    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    </span>I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     chunk_content_internal_parallel(context, entry, additional_entries, availability_info, <span class="bool-val">false</span>)
         .<span class="kw">await
@@ -939,10 +941,10 @@
     reference: AssetReferenceVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(<span class="prelude-ty">Option</span>&lt;(AssetVc, ChunkingType)&gt;, ChunkContentGraphNode&lt;I&gt;)&gt;&gt;
 <span class="kw">where
-    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    </span>I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     <span class="kw">let </span><span class="prelude-val">Some</span>(chunkable_asset_reference) =
-        ChunkableAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">?
+        ChunkableModuleReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">?
     </span><span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[(
             <span class="prelude-val">None</span>,
@@ -986,7 +988,7 @@
             <span class="kw">continue</span>;
         }
 
-        <span class="kw">let </span>chunkable_asset = <span class="kw">match </span>ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">let </span>chunkable_asset = <span class="kw">match </span>ChunkableModuleVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="prelude-val">Some</span>(chunkable_asset) =&gt; chunkable_asset,
             <span class="kw">_ </span>=&gt; {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[(
@@ -1100,12 +1102,12 @@
 <span class="kw">type </span>ChunkItemToGraphNodesEdges&lt;I&gt; =
     <span class="kw">impl </span>Iterator&lt;Item = (<span class="prelude-ty">Option</span>&lt;(AssetVc, ChunkingType)&gt;, ChunkContentGraphNode&lt;I&gt;)&gt;;
 
-<span class="kw">type </span>ChunkItemToGraphNodesFuture&lt;I: FromChunkableAsset + Eq + std::hash::Hash + Clone&gt; =
+<span class="kw">type </span>ChunkItemToGraphNodesFuture&lt;I: FromChunkableModule + Eq + std::hash::Hash + Clone&gt; =
     <span class="kw">impl </span>Future&lt;Output = <span class="prelude-ty">Result</span>&lt;ChunkItemToGraphNodesEdges&lt;I&gt;&gt;&gt;;
 
 <span class="kw">impl</span>&lt;I&gt; Visit&lt;ChunkContentGraphNode&lt;I&gt;, ()&gt; <span class="kw">for </span>ChunkContentVisit&lt;I&gt;
 <span class="kw">where
-    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    </span>I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     <span class="kw">type </span>Edge = (<span class="prelude-ty">Option</span>&lt;(AssetVc, ChunkingType)&gt;, ChunkContentGraphNode&lt;I&gt;);
     <span class="kw">type </span>EdgesIntoIter = ChunkItemToGraphNodesEdges&lt;I&gt;;
@@ -1180,7 +1182,7 @@
     split: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ChunkContentResult&lt;I&gt;&gt;&gt;
 <span class="kw">where
-    </span>I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    </span>I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     <span class="kw">let </span>additional_entries = <span class="kw">if let </span><span class="prelude-val">Some</span>(additional_entries) = additional_entries {
         additional_entries.<span class="kw">await</span><span class="question-mark">?</span>.clone_value().into_iter()

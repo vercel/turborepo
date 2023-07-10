@@ -190,6 +190,7 @@
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -200,6 +201,7 @@
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
+    module::ModuleVc,
     reference_type::{InnerAssetsVc, ReferenceType},
     source_asset::SourceAssetVc,
     source_transform::{SourceTransform, SourceTransformVc},
@@ -307,7 +309,7 @@
 }
 
 <span class="attr">#[turbo_tasks::function]
-</span><span class="kw">fn </span>webpack_loaders_executor(context: AssetContextVc) -&gt; AssetVc {
+</span><span class="kw">fn </span>webpack_loaders_executor(context: AssetContextVc) -&gt; ModuleVc {
     context.process(
         SourceAssetVc::new(embed_file_path(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
@@ -345,7 +347,7 @@
         <span class="kw">let </span>resource_path = resource_fs_path.path.as_str();
         <span class="kw">let </span>loaders = transform.loaders.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>config_value = evaluate(
-            webpack_loaders_executor,
+            webpack_loaders_executor.into(),
             project_path,
             env,
             this.source.ident(),

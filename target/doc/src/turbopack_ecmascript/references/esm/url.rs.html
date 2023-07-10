@@ -213,7 +213,7 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType, ChunkingTypeOptionVc,
+        ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkingType, ChunkingTypeOptionVc,
     },
     environment::{Rendering, RenderingVc},
     issue::{code_gen::CodeGenerationIssue, IssueSeverity, IssueSourceVc},
@@ -309,7 +309,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>UrlAssetReference {
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>UrlAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(<span class="prelude-val">Some</span>(ChunkingType::PlacedOrParallel))

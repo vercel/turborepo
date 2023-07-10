@@ -220,8 +220,8 @@
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     chunk::{
-        availability_info::AvailabilityInfo, ChunkableAssetVc, ChunkingContextVc,
-        FromChunkableAsset, ModuleId,
+        availability_info::AvailabilityInfo, ChunkableModuleVc, ChunkingContextVc,
+        FromChunkableModule, ModuleId,
     },
     issue::{code_gen::CodeGenerationIssue, IssueSeverity},
     resolve::{
@@ -379,7 +379,7 @@
             }
         };
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) = ChunkableModuleVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">if let </span>ResolveType::EsmAsync(availability_info) = <span class="kw-2">*</span>resolve_type {
                 <span class="kw">let </span>available = <span class="kw">if let </span><span class="prelude-val">Some</span>(available_assets) = availability_info.available_assets()
                 {

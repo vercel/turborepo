@@ -275,6 +275,10 @@
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
 </pre></div><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -284,11 +288,12 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc,
     },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
     virtual_asset::VirtualAssetVc,
@@ -459,7 +464,10 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>MdxModuleAsset {
+</span><span class="kw">impl </span>Module <span class="kw">for </span>MdxModuleAsset {}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkableModule <span class="kw">for </span>MdxModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk(
         self_vc: MdxModuleAssetVc,

@@ -281,7 +281,7 @@
 };
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
+    chunk::{ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkingContextVc},
     issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     reference_type::CssReferenceSubType,
@@ -537,5 +537,5 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>ImportAssetReference {}
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>ImportAssetReference {}
 </code></pre></div></section></main></body></html>

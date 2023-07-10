@@ -244,6 +244,10 @@
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -264,11 +268,12 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContext, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContext, ChunkingContextVc,
     },
     context::AssetContextVc,
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 <span class="kw">use </span>turbopack_css::embed::{CssEmbed, CssEmbedVc, CssEmbeddable, CssEmbeddableVc};
@@ -326,7 +331,10 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>StaticModuleAsset {
+</span><span class="kw">impl </span>Module <span class="kw">for </span>StaticModuleAsset {}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkableModule <span class="kw">for </span>StaticModuleAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk(
         self_vc: StaticModuleAssetVc,

@@ -71,6 +71,10 @@
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
@@ -78,6 +82,7 @@
     chunk::{PassthroughAsset, PassthroughAssetVc},
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::AssetReferencesVc,
     reference_type::{CssReferenceSubType, ReferenceType},
 };
@@ -103,7 +108,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>GlobalCssAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>inner(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+    </span><span class="kw">async fn </span>inner(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// The underlying CSS is processed through an internal CSS reference.
         // This can then be picked up by other rules to treat CSS assets in
@@ -135,6 +140,9 @@
         ])
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Module <span class="kw">for </span>GlobalCssAsset {}
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>modifier() -&gt; StringVc {

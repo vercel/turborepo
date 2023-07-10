@@ -139,7 +139,7 @@
 };
 <span class="kw">use </span>turbo_tasks_hash::Xxh3Hash64Hasher;
 
-<span class="kw">use super</span>::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingType};
+<span class="kw">use super</span>::{ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkingType};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc, AssetsSetVc},
     reference::AssetReference,
@@ -223,7 +223,7 @@
                 .copied()
                 .map(|reference| <span class="kw">async move </span>{
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(chunkable) =
-                        ChunkableAssetReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">?
+                        ChunkableModuleReferenceVc::resolve_from(reference).<span class="kw">await</span><span class="question-mark">?
                     </span>{
                         <span class="kw">if </span><span class="macro">matches!</span>(
                             <span class="kw-2">&amp;*</span>chunkable.chunking_type().<span class="kw">await</span><span class="question-mark">?</span>,

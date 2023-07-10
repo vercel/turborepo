@@ -200,7 +200,7 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     chunk::{
-        availability_info::AvailabilityInfo, ChunkableAssetReference, ChunkableAssetReferenceVc,
+        availability_info::AvailabilityInfo, ChunkableModuleReference, ChunkableModuleReferenceVc,
         ChunkingType, ChunkingTypeOptionVc,
     },
     issue::{IssueSourceVc, OptionIssueSourceVc},
@@ -277,7 +277,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>EsmAsyncAssetReference {
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>EsmAsyncAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(<span class="prelude-val">Some</span>(ChunkingType::Async))

@@ -573,8 +573,8 @@
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
         availability_info::AvailabilityInfo, chunk_content, chunk_content_split, Chunk,
-        ChunkContentResult, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAssetVc, ChunkingContext,
-        ChunkingContextVc, ChunksVc, FromChunkableAsset, ModuleId, ModuleIdVc, ModuleIdsVc,
+        ChunkContentResult, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModuleVc, ChunkingContext,
+        ChunkingContextVc, ChunksVc, FromChunkableModule, ModuleId, ModuleIdVc, ModuleIdsVc,
         OutputChunk, OutputChunkRuntimeInfo, OutputChunkRuntimeInfoVc, OutputChunkVc,
     },
     code_builder::{CodeBuilder, CodeVc},
@@ -1050,7 +1050,7 @@
 }
 
 <span class="attr">#[async_trait::async_trait]
-</span><span class="kw">impl </span>FromChunkableAsset <span class="kw">for </span>CssChunkItemVc {
+</span><span class="kw">impl </span>FromChunkableModule <span class="kw">for </span>CssChunkItemVc {
     <span class="kw">async fn </span>from_asset(context: ChunkingContextVc, asset: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(placeable) = CssChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(placeable.as_chunk_item(context)));
@@ -1060,7 +1060,7 @@
 
     <span class="kw">async fn </span>from_async_asset(
         _context: ChunkingContextVc,
-        _asset: ChunkableAssetVc,
+        _asset: ChunkableModuleVc,
         _availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)

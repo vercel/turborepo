@@ -44,11 +44,13 @@
 <a href="#44" id="44">44</a>
 <a href="#45" id="45">45</a>
 <a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetVc},
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    asset::Asset,
+    chunk::{ChunkableModuleReference, ChunkableModuleReferenceVc},
+    module::ModuleVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
 };
@@ -57,15 +59,15 @@
 </span><span class="attr">#[turbo_tasks::value]
 #[derive(Hash, Debug)]
 </span><span class="kw">pub struct </span>InternalCssAssetReference {
-    asset: AssetVc,
+    module: ModuleVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>InternalCssAssetReferenceVc {
     <span class="doccomment">/// Creates a new [`InternalCssAssetReferenceVc`].
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(asset: AssetVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(InternalCssAssetReference { asset })
+    </span><span class="kw">pub fn </span>new(module: ModuleVc) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(InternalCssAssetReference { module })
     }
 }
 
@@ -73,7 +75,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>InternalCssAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::asset(<span class="self">self</span>.asset).cell()
+        ResolveResult::asset(<span class="self">self</span>.module.into()).cell()
     }
 }
 
@@ -83,11 +85,11 @@
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(
             <span class="string">&quot;internal css {}&quot;</span>,
-            <span class="self">self</span>.asset.ident().to_string().<span class="kw">await</span><span class="question-mark">?
+            <span class="self">self</span>.module.ident().to_string().<span class="kw">await</span><span class="question-mark">?
         </span>)))
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>InternalCssAssetReference {}
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>InternalCssAssetReference {}
 </code></pre></div></section></main></body></html>

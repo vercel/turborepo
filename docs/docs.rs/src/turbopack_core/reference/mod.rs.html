@@ -186,10 +186,10 @@
 
 <span class="doccomment">/// A reference to one or multiple [Asset]s or other special things.
 /// There are a bunch of optional traits that can influence how these references
-/// are handled. e. g. [ChunkableAssetReference]
+/// are handled. e. g. [ChunkableModuleReference]
 ///
 /// [Asset]: crate::asset::Asset
-/// [ChunkableAssetReference]: crate::chunk::ChunkableAssetReference
+/// [ChunkableModuleReference]: crate::chunk::ChunkableModuleReference
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>AssetReference: ValueToString {
     <span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc;

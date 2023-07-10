@@ -60,13 +60,15 @@
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{Value, ValueToString};
 
-<span class="kw">use super</span>::{ChunkableAsset, ChunkableAssetVc};
+<span class="kw">use super</span>::{ChunkableModule, ChunkableModuleVc};
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetVc},
     context::{AssetContext, AssetContextVc},
+    module::{Module, ModuleVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
 };
 
@@ -75,7 +77,7 @@
 /// The chunking context implementation will resolve the dynamic entry to a
 /// well-known value or trait object.
 </span><span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>EvaluatableAsset: Asset + ChunkableAsset {}
+</span><span class="kw">pub trait </span>EvaluatableAsset: Asset + Module + ChunkableModule {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EvaluatableAssetVc {

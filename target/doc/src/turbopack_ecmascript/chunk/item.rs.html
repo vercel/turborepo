@@ -257,7 +257,7 @@
     asset::AssetVc,
     chunk::{
         availability_info::AvailabilityInfo, available_assets::AvailableAssetsVc, ChunkItem,
-        ChunkItemVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, FromChunkableAsset,
+        ChunkItemVc, ChunkableModuleVc, ChunkingContext, ChunkingContextVc, FromChunkableModule,
         ModuleIdVc,
     },
     code_builder::{CodeBuilder, CodeVc},
@@ -446,7 +446,7 @@
 }
 
 <span class="attr">#[async_trait::async_trait]
-</span><span class="kw">impl </span>FromChunkableAsset <span class="kw">for </span>EcmascriptChunkItemVc {
+</span><span class="kw">impl </span>FromChunkableModule <span class="kw">for </span>EcmascriptChunkItemVc {
     <span class="kw">async fn </span>from_asset(context: ChunkingContextVc, asset: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
@@ -461,7 +461,7 @@
 
     <span class="kw">async fn </span>from_async_asset(
         context: ChunkingContextVc,
-        asset: ChunkableAssetVc,
+        asset: ChunkableModuleVc,
         availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(context) = EcmascriptChunkingContextVc::resolve_from(context).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{

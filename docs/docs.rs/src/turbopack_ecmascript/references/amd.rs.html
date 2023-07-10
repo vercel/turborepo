@@ -310,7 +310,7 @@
     ValueToString, ValueToStringVc,
 };
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
+    chunk::{ChunkableModuleReference, ChunkableModuleReferenceVc},
     issue::{IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
@@ -380,7 +380,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>AmdDefineAssetReference {}
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>AmdDefineAssetReference {}
 
 <span class="attr">#[derive(
     ValueDebugFormat, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, Copy, Clone,

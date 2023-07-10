@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ModuleVc","OptionModule","OptionModuleVc"],"trait":["Module"],"type":["ModuleTraitRef","OptionModuleReadRef"]};

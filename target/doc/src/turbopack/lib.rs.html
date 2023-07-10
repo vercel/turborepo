@@ -613,6 +613,11 @@
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
 </pre></div><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(trivial_bounds)]
 #![feature(min_specialization)]
@@ -648,6 +653,8 @@
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueVc},
+    module::ModuleVc,
+    raw_module::RawModuleVc,
     reference::all_referenced_assets,
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{
@@ -717,7 +724,7 @@
     module_type: ModuleTypeVc,
     part: <span class="prelude-ty">Option</span>&lt;ModulePartVc&gt;,
     inner_assets: <span class="prelude-ty">Option</span>&lt;InnerAssetsVc&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleVc&gt; {
     <span class="kw">let </span>module_type = <span class="kw-2">&amp;*</span>module_type.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(<span class="kw">match </span>module_type {
         ModuleType::Ecmascript {
@@ -779,7 +786,7 @@
             builder.build()
         }
         ModuleType::Json =&gt; JsonModuleAssetVc::new(source).into(),
-        ModuleType::Raw =&gt; source,
+        ModuleType::Raw =&gt; RawModuleVc::new(source).into(),
         ModuleType::CssGlobal =&gt; GlobalCssAssetVc::new(source, context.into()).into(),
         ModuleType::CssModule =&gt; ModuleCssAssetVc::new(source, context.into()).into(),
         ModuleType::Css { ty, transforms } =&gt; {
@@ -876,7 +883,7 @@
         self_vc: ModuleAssetContextVc,
         source: AssetVc,
         reference_type: Value&lt;ReferenceType&gt;,
-    ) -&gt; AssetVc {
+    ) -&gt; ModuleVc {
         process_default(self_vc, source, reference_type, Vec::new())
     }
 }
@@ -887,7 +894,7 @@
     source: AssetVc,
     reference_type: Value&lt;ReferenceType&gt;,
     processed_rules: Vec&lt;usize&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleVc&gt; {
     <span class="kw">let </span>ident = source.ident().resolve().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>options = ModuleOptionsVc::new(ident.path().parent(), context.module_options_context());
 
@@ -1062,7 +1069,10 @@
         <span class="prelude-val">Ok</span>(result
             .<span class="kw">await</span><span class="question-mark">?
             </span>.map(
-                |a| self_vc.process(a, reference_type.clone()).resolve(),
+                |a| {
+                    <span class="kw">let </span>reference_type = reference_type.clone();
+                    <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(self_vc.process(a, reference_type).resolve().<span class="kw">await</span><span class="question-mark">?</span>.into()) }
+                },
                 |i| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(i) },
             )
             .<span class="kw">await</span><span class="question-mark">?
@@ -1073,7 +1083,7 @@
         self_vc: ModuleAssetContextVc,
         asset: AssetVc,
         reference_type: Value&lt;ReferenceType&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(transition) = this.transition {
             <span class="prelude-val">Ok</span>(transition.process(asset, self_vc, reference_type))

@@ -417,6 +417,10 @@
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
 <a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{fmt::Write, iter::once, sync::Arc};
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -431,12 +435,13 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc,
     },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferencesVc},
     reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{
@@ -553,7 +558,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ModuleCssAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>inner(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+    </span><span class="kw">async fn </span>inner(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(this.context.process(
             this.source,
@@ -622,7 +627,10 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>ModuleCssAsset {
+</span><span class="kw">impl </span>Module <span class="kw">for </span>ModuleCssAsset {}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkableModule <span class="kw">for </span>ModuleCssAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk(
         self_vc: ModuleCssAssetVc,

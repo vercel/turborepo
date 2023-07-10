@@ -639,6 +639,7 @@
 <a href="#639" id="639">639</a>
 <a href="#640" id="640">640</a>
 <a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, <span class="prelude-ty">Result</span>};
@@ -666,7 +667,8 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{
-        ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+        ChunkableModule, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc,
+        EvaluatableAssetsVc,
     },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
@@ -775,7 +777,7 @@
         .into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::cell(<span class="macro">indexmap! </span>{
             <span class="string">&quot;INNER&quot;</span>.to_string() =&gt; module_asset,
-            <span class="string">&quot;RUNTIME&quot;</span>.to_string() =&gt; runtime_asset
+            <span class="string">&quot;RUNTIME&quot;</span>.to_string() =&gt; runtime_asset.into()
         }))),
     );
 

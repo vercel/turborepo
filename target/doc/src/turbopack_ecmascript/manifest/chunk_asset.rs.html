@@ -145,15 +145,20 @@
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkVc, ChunkableAsset, ChunkableAssetVc,
+        availability_info::AvailabilityInfo, ChunkVc, ChunkableModule, ChunkableModuleVc,
         ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 
@@ -180,7 +185,7 @@
 /// import appears in.
 </span><span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>ManifestChunkAsset {
-    <span class="kw">pub </span>asset: ChunkableAssetVc,
+    <span class="kw">pub </span>asset: ChunkableModuleVc,
     <span class="kw">pub </span>chunking_context: EcmascriptChunkingContextVc,
     <span class="kw">pub </span>availability_info: AvailabilityInfo,
 }
@@ -189,7 +194,7 @@
 </span><span class="kw">impl </span>ManifestChunkAssetVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
-        asset: ChunkableAssetVc,
+        asset: ChunkableModuleVc,
         chunking_context: EcmascriptChunkingContextVc,
         availability_info: Value&lt;AvailabilityInfo&gt;,
     ) -&gt; <span class="self">Self </span>{
@@ -261,7 +266,10 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAsset <span class="kw">for </span>ManifestChunkAsset {
+</span><span class="kw">impl </span>Module <span class="kw">for </span>ManifestChunkAsset {}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>ChunkableModule <span class="kw">for </span>ManifestChunkAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>as_chunk(
         self_vc: ManifestChunkAssetVc,

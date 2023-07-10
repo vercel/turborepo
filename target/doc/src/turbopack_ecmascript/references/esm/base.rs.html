@@ -339,7 +339,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContext, ChunkingType,
+        ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkingContext, ChunkingType,
         ChunkingTypeOptionVc, ModuleId,
     },
     issue::{IssueSeverity, OptionIssueSourceVc},
@@ -504,7 +504,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>EsmAssetReference {
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>EsmAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkingTypeOptionVc&gt; {
         <span class="prelude-val">Ok</span>(ChunkingTypeOptionVc::cell(

@@ -18,14 +18,16 @@
 <a href="#18" id="18">18</a>
 <a href="#19" id="19">19</a>
 <a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
-    chunk::{ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
+    chunk::{ChunkableModule, ChunkableModuleVc, ChunkingContextVc},
+    module::{Module, ModuleVc},
     reference::AssetReferencesVc,
 };
 
 <span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>CssEmbeddable: ChunkableAsset + Asset {
+</span><span class="kw">pub trait </span>CssEmbeddable: ChunkableModule + Module + Asset {
     <span class="kw">fn </span>as_css_embed(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; CssEmbedVc;
 }
 

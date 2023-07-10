@@ -94,7 +94,7 @@
 <span class="kw">use </span>swc_core::{ecma::ast::Expr, quote};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingTypeOptionVc, ModuleId},
+    chunk::{ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkingTypeOptionVc, ModuleId},
     reference::{AssetReference, AssetReferenceVc},
     resolve::ResolveResultVc,
 };
@@ -142,7 +142,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ChunkableAssetReference <span class="kw">for </span>EsmModuleIdAssetReference {
+</span><span class="kw">impl </span>ChunkableModuleReference <span class="kw">for </span>EsmModuleIdAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>chunking_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChunkingTypeOptionVc {
         <span class="self">self</span>.inner.chunking_type()

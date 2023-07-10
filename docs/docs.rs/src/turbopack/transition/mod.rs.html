@@ -77,12 +77,14 @@
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc, compile_time_info::CompileTimeInfoVc, reference_type::ReferenceType,
+    asset::AssetVc, compile_time_info::CompileTimeInfoVc, module::ModuleVc,
+    reference_type::ReferenceType,
 };
 
 <span class="kw">use crate</span>::{
@@ -118,8 +120,8 @@
         context
     }
     <span class="doccomment">/// Apply modifications/wrapping to the final asset
-    </span><span class="kw">fn </span>process_module(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: AssetVc, _context: ModuleAssetContextVc) -&gt; AssetVc {
-        asset
+    </span><span class="kw">fn </span>process_module(<span class="kw-2">&amp;</span><span class="self">self</span>, module: ModuleVc, _context: ModuleAssetContextVc) -&gt; ModuleVc {
+        module
     }
     <span class="doccomment">/// Apply modifications to the context
     </span><span class="kw">async fn </span>process_context(
@@ -146,7 +148,7 @@
         asset: AssetVc,
         context: ModuleAssetContextVc,
         reference_type: Value&lt;ReferenceType&gt;,
-    ) -&gt; AssetVc {
+    ) -&gt; ModuleVc {
         <span class="kw">let </span>asset = self_vc.process_source(asset);
         <span class="kw">let </span>context = self_vc.process_context(context);
         <span class="kw">let </span>m = context.process_default(asset, reference_type);

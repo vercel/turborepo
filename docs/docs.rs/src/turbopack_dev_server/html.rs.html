@@ -264,7 +264,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
-        ChunkableAsset, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
+        ChunkableModule, ChunkableModuleVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
     },
     ident::AssetIdentVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
@@ -281,7 +281,7 @@
     <span class="comment">// TODO(WEB-945) This should become a `Vec&lt;DevHtmlEntry&gt;` once we have a
     // `turbo_tasks::input` attribute macro/`Input` derive macro.
     </span>entries: Vec&lt;(
-        ChunkableAssetVc,
+        ChunkableModuleVc,
         ChunkingContextVc,
         <span class="prelude-ty">Option</span>&lt;EvaluatableAssetsVc&gt;,
     )&gt;,
@@ -327,7 +327,7 @@
     </span><span class="kw">pub fn </span>new(
         path: FileSystemPathVc,
         entries: Vec&lt;(
-            ChunkableAssetVc,
+            ChunkableModuleVc,
             ChunkingContextVc,
             <span class="prelude-ty">Option</span>&lt;EvaluatableAssetsVc&gt;,
         )&gt;,
@@ -344,7 +344,7 @@
     </span><span class="kw">pub fn </span>new_with_body(
         path: FileSystemPathVc,
         entries: Vec&lt;(
-            ChunkableAssetVc,
+            ChunkableModuleVc,
             ChunkingContextVc,
             <span class="prelude-ty">Option</span>&lt;EvaluatableAssetsVc&gt;,
         )&gt;,
