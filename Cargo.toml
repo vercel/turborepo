@@ -133,7 +133,7 @@ turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-env = { path = "crates/turborepo-env" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-fs = { path = "crates/turborepo-fs" }
-turborepo-lib = { path = "crates/turborepo-lib" }
+turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-scm = { path = "crates/turborepo-scm" }
 wax = { path = "crates/turborepo-wax" }
