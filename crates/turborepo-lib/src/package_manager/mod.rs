@@ -417,6 +417,13 @@ impl PackageManager {
         }
     }
 
+    pub fn workspace_configuration_path(&self) -> Option<&'static str> {
+        match self {
+            PackageManager::Pnpm | PackageManager::Pnpm6 => Some("pnpm-workspace.yaml"),
+            PackageManager::Npm | PackageManager::Berry | PackageManager::Yarn => None,
+        }
+    }
+
     pub fn read_lockfile(
         &self,
         root_path: &AbsoluteSystemPath,
