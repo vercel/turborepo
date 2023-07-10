@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use turbo_tasks::{
     primitives::StringVc, NothingVc, TransientInstance, TryJoinIterExt, TurboTasks, Value,
 };
@@ -111,6 +111,9 @@ impl TurbopackBuildBuilder {
                 StringVc::cell(self.browserslist_query),
             );
 
+            // Await the result to propagate any errors.
+            build_result.await?;
+
             let issue_reporter: IssueReporterVc =
                 ConsoleUiVc::new(TransientInstance::new(LogOptions {
                     project_dir: PathBuf::from(self.project_dir),
@@ -211,14 +214,21 @@ async fn build_internal(
 
     let entries = entry_requests
         .into_iter()
-        .map(|request| async move {
+        .map(|request_vc| async move {
             let ty = Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined));
+            let request = request_vc.await?;
             Ok(*origin
-                .resolve_asset(request, origin.resolve_options(ty.clone()), ty)
+                .resolve_asset(request_vc, origin.resolve_options(ty.clone()), ty)
                 .primary_assets()
                 .await?
                 .first()
-                .unwrap())
+                .with_context(|| {
+                    format!(
+                        "Unable to resolve entry {} from directory {}.",
+                        request.request().unwrap(),
+                        project_dir
+                    )
+                })?)
         })
         .try_join()
         .await?;
