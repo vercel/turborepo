@@ -43,7 +43,7 @@ use turbopack_core::{
     issue::IssueVc,
     reference::all_referenced_assets,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 use turbopack_dev::DevChunkingContextVc;
 use turbopack_ecmascript_plugins::transform::{
@@ -320,7 +320,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
         .collect();
 
     let entry_module = context.process(
-        SourceAssetVc::new(entry_asset).into(),
+        FileSourceVc::new(entry_asset).into(),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );
 

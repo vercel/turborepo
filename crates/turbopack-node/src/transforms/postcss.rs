@@ -18,7 +18,7 @@ use turbopack_core::{
     module::ModuleVc,
     reference_type::{EntryReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
     source_transform::{SourceTransform, SourceTransformVc},
     virtual_asset::VirtualAssetVc,
 };
@@ -147,7 +147,7 @@ async fn extra_configs(
                     any_content_changed(
                         context
                             .process(
-                                SourceAssetVc::new(path).into(),
+                                FileSourceVc::new(path).into(),
                                 Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
                             )
                             .into(),
@@ -168,7 +168,7 @@ async fn extra_configs(
 fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPathVc) -> ModuleVc {
     let config_asset = context
         .process(
-            SourceAssetVc::new(postcss_config_path).into(),
+            FileSourceVc::new(postcss_config_path).into(),
             Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
         )
         .into();

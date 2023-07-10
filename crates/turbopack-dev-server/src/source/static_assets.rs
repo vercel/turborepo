@@ -6,7 +6,7 @@ use turbopack_core::{
     introspect::{
         asset::IntrospectableAssetVc, Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 
 use super::{
@@ -99,7 +99,7 @@ impl StaticAssetsContentSourceItemVc {
 impl GetContentSourceContent for StaticAssetsContentSourceItem {
     #[turbo_tasks::function]
     fn get(&self, _path: &str, _data: Value<ContentSourceData>) -> ContentSourceContentVc {
-        let content = SourceAssetVc::new(self.path).as_asset().content();
+        let content = FileSourceVc::new(self.path).as_asset().content();
         ContentSourceContentVc::static_content(content.into())
     }
 }
@@ -124,7 +124,7 @@ impl Introspectable for StaticAssetsContentSource {
             .map(|(name, entry)| {
                 let child = match entry {
                     DirectoryEntry::File(path) | DirectoryEntry::Symlink(path) => {
-                        IntrospectableAssetVc::new(SourceAssetVc::new(*path).as_asset())
+                        IntrospectableAssetVc::new(FileSourceVc::new(*path).as_asset())
                     }
                     DirectoryEntry::Directory(path) => StaticAssetsContentSourceVc::with_prefix(
                         StringVc::cell(format!("{}{name}/", &*prefix)),

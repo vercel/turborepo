@@ -33,7 +33,7 @@ use turbopack_core::{
     issue::IssueVc,
     module::ModuleVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 use turbopack_dev::DevChunkingContextVc;
 use turbopack_node::evaluate::evaluate;
@@ -308,7 +308,7 @@ async fn snapshot_issues(run_result: RunTestResultVc) -> Result<NothingVc> {
 #[turbo_tasks::function]
 fn process_path_to_asset(path: FileSystemPathVc, context: AssetContextVc) -> ModuleVc {
     context.process(
-        SourceAssetVc::new(path).into(),
+        FileSourceVc::new(path).into(),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     )
 }

@@ -32,7 +32,7 @@ use turbopack_core::{
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference_type::{InnerAssetsVc, ReferenceType},
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
     virtual_asset::VirtualAssetVc,
 };
 
@@ -109,7 +109,7 @@ pub async fn get_evaluate_pool(
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
     let runtime_asset = context.process(
-        SourceAssetVc::new(embed_file_path("ipc/evaluate.ts")).into(),
+        FileSourceVc::new(embed_file_path("ipc/evaluate.ts")).into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
     );
 
@@ -149,7 +149,7 @@ pub async fn get_evaluate_pool(
 
     let runtime_entries = {
         let globals_module = context.process(
-            SourceAssetVc::new(embed_file_path("globals.ts")).into(),
+            FileSourceVc::new(embed_file_path("globals.ts")).into(),
             Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
         );
 

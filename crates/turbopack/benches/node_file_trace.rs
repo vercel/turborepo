@@ -15,7 +15,7 @@ use turbopack_core::{
     context::AssetContext,
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     reference_type::ReferenceType,
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 
 // TODO this should move to the `node-file-trace` crate
@@ -79,7 +79,7 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
                 let output_fs: NullFileSystemVc = NullFileSystem.into();
                 let output_dir = output_fs.root();
 
-                let source = SourceAssetVc::new(input);
+                let source = FileSourceVc::new(input);
                 let compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(Value::new(
                     ExecutionEnvironment::NodeJsLambda(NodeJsEnvironment::default().into()),
                 )))

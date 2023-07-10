@@ -36,7 +36,7 @@ use crate::{
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
         plugin::ResolvePlugin,
     },
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 
 mod alias_map;
@@ -591,7 +591,7 @@ pub async fn resolve_raw(
     async fn to_result(path: FileSystemPathVc) -> Result<ResolveResultVc> {
         let RealPathResult { path, symlinks } = &*path.realpath_with_links().await?;
         Ok(ResolveResult::asset_with_references(
-            SourceAssetVc::new(*path).into(),
+            FileSourceVc::new(*path).into(),
             symlinks
                 .iter()
                 .map(|p| AffectingResolvingAssetReferenceVc::new(*p).into())
@@ -1253,7 +1253,7 @@ async fn resolved(
     }
 
     Ok(ResolveResult::asset_with_references(
-        SourceAssetVc::new(*path).into(),
+        FileSourceVc::new(*path).into(),
         symlinks
             .iter()
             .map(|p| AffectingResolvingAssetReferenceVc::new(*p).into())
@@ -1370,7 +1370,7 @@ impl AffectingResolvingAssetReferenceVc {
 impl AssetReference for AffectingResolvingAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(SourceAssetVc::new(self.path).into()).into()
+        ResolveResult::asset(FileSourceVc::new(self.path).into()).into()
     }
 }
 

@@ -79,7 +79,7 @@ use self::{
         EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc, UrlAssetReferenceVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
-    raw::SourceAssetReferenceVc,
+    raw::FileSourceReferenceVc,
     typescript::{
         TsConfigReferenceVc, TsReferencePathAssetReferenceVc, TsReferenceTypeAssetReferenceVc,
     },
@@ -1196,7 +1196,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         ),
                     )
                 }
-                analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+                analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1236,7 +1236,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     ),
                 )
             }
-            analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+            analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
             return Ok(());
         }
 
@@ -1295,7 +1295,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         ),
                     );
                 }
-                analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+                analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);

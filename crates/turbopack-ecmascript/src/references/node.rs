@@ -14,7 +14,7 @@ use turbopack_core::{
         pattern::{Pattern, PatternVc},
         ResolveResult, ResolveResultVc,
     },
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 
 #[turbo_tasks::value]
@@ -35,7 +35,7 @@ impl PackageJsonReferenceVc {
 impl AssetReference for PackageJsonReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(SourceAssetVc::new(self.package_json).into()).into()
+        ResolveResult::asset(FileSourceVc::new(self.package_json).into()).into()
     }
 }
 
@@ -124,7 +124,7 @@ async fn extend_with_constant_pattern(
         realpath_with_links
             .symlinks
             .iter()
-            .map(|l| SourceAssetVc::new(*l).as_asset()),
+            .map(|l| FileSourceVc::new(*l).as_asset()),
     );
     let entry_type = match dest_file_path.get_type().await {
         Ok(e) => e,
@@ -135,7 +135,7 @@ async fn extend_with_constant_pattern(
             result.extend(read_dir(dest_file_path).await?);
         }
         FileSystemEntryType::File | FileSystemEntryType::Symlink => {
-            result.insert(SourceAssetVc::new(dest_file_path).into());
+            result.insert(FileSourceVc::new(dest_file_path).into());
         }
         _ => {}
     }
@@ -151,7 +151,7 @@ async fn read_dir(p: FileSystemPathVc) -> Result<IndexSet<AssetVc>> {
         for (_, entry) in entries {
             match entry {
                 DirectoryEntry::File(file) => {
-                    result.insert(SourceAssetVc::new(*file).into());
+                    result.insert(FileSourceVc::new(*file).into());
                 }
                 DirectoryEntry::Directory(dir) => {
                     let sub = read_dir_boxed(*dir).await?;

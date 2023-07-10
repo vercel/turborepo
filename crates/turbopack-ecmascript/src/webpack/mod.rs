@@ -11,7 +11,7 @@ use turbopack_core::{
         parse::RequestVc,
         resolve, ResolveResult, ResolveResultVc,
     },
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 
 use self::{
@@ -95,7 +95,7 @@ impl AssetReference for WebpackChunkAssetReference {
                     _ => todo!(),
                 };
                 let filename = format!("./chunks/{}.js", chunk_id);
-                let source = SourceAssetVc::new(context_path.join(&filename)).into();
+                let source = FileSourceVc::new(context_path.join(&filename)).into();
 
                 ResolveResult::asset(
                     WebpackModuleAssetVc::new(source, self.runtime, self.transforms).into(),

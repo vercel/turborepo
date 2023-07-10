@@ -28,7 +28,7 @@ use turbopack_core::{
         pattern::{Pattern, QueryMapVc},
         resolve, AliasPattern, ResolveResultVc,
     },
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 
 #[turbo_tasks::value(shared)]
@@ -214,7 +214,7 @@ pub async fn tsconfig_resolve_options(
 ) -> Result<TsConfigResolveOptionsVc> {
     let configs = read_tsconfigs(
         tsconfig.read(),
-        SourceAssetVc::new(tsconfig).into(),
+        FileSourceVc::new(tsconfig).into(),
         node_cjs_resolve_options(tsconfig.root()),
     )
     .await?;

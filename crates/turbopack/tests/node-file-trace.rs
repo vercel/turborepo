@@ -39,7 +39,7 @@ use turbopack_core::{
     context::AssetContext,
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
     reference_type::ReferenceType,
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 
 #[global_allocator]
@@ -410,7 +410,7 @@ fn node_file_trace<B: Backend + 'static>(
                 let output_fs = DiskFileSystemVc::new("output".to_string(), directory.clone());
                 let output_dir = output_fs.root();
 
-                let source = SourceAssetVc::new(input);
+                let source = FileSourceVc::new(input);
                 let context = ModuleAssetContextVc::new(
                     TransitionsByNameVc::cell(HashMap::new()),
                     // TODO It's easy to make a mistake here as this should match the config in the

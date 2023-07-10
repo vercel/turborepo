@@ -12,7 +12,7 @@ use crate::{
 
 /// A context for building an asset graph. It's passed through the assets while
 /// creating them. It's needed to resolve assets and upgrade assets to a higher
-/// type (e. g. from SourceAsset to ModuleAsset).
+/// type (e. g. from FileSource to ModuleAsset).
 #[turbo_tasks::value_trait]
 pub trait AssetContext {
     fn compile_time_info(&self) -> CompileTimeInfoVc;

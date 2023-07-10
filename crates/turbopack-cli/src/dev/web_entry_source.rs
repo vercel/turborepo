@@ -28,7 +28,7 @@ use turbopack_core::{
         origin::PlainResolveOriginVc,
         parse::RequestVc,
     },
-    source_asset::SourceAssetVc,
+    source_asset::FileSourceVc,
 };
 use turbopack_dev::{react_refresh::assert_can_resolve_react_refresh, DevChunkingContextVc};
 use turbopack_dev_server::{
@@ -239,7 +239,7 @@ pub async fn get_client_runtime_entries(
     };
 
     runtime_entries.push(
-        RuntimeEntry::Source(SourceAssetVc::new(embed_file_path("entry/bootstrap.ts")).into())
+        RuntimeEntry::Source(FileSourceVc::new(embed_file_path("entry/bootstrap.ts")).into())
             .cell(),
     );
 
