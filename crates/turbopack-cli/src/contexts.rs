@@ -109,8 +109,8 @@ async fn get_client_module_options_context(
 
     let resolve_options_context = get_client_resolve_options_context(project_path, node_env);
 
-    let enable_react_refresh =
-        assert_can_resolve_react_refresh(project_path, resolve_options_context)
+    let enable_react_refresh = matches!(*node_env.await?, NodeEnv::Development)
+        && assert_can_resolve_react_refresh(project_path, resolve_options_context)
             .await?
             .is_found();
 
