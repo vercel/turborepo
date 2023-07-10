@@ -7,6 +7,8 @@
 if (!Array.isArray(globalThis.TURBOPACK)) {
     return;
 }
+
+const CHUNK_BASE_PATH = "";
 ;
 const REEXPORTED_OBJECTS = Symbol("reexported objects");
 ;
@@ -39,7 +41,7 @@ function dynamicExport(module, object) {
     let reexportedObjects = module[REEXPORTED_OBJECTS];
     if (!reexportedObjects) {
         reexportedObjects = module[REEXPORTED_OBJECTS] = [];
-        module.namespaceObject = new Proxy(module.exports, {
+        module.exports = module.namespaceObject = new Proxy(module.exports, {
             get (target, prop) {
                 if (hasOwnProperty.call(target, prop) || prop === "default" || prop === "__esModule") {
                     return Reflect.get(target, prop);
@@ -1043,7 +1045,7 @@ function commonJsRequireContext(entry1, sourceModule1) {
         if (chunkPath1.endsWith(".css")) {
             const link1 = document.createElement("link");
             link1.rel = "stylesheet";
-            link1.href = `/${chunkPath1}`;
+            link1.href = `/${CHUNK_BASE_PATH}${chunkPath1}`;
             link1.onerror = ()=>{
                 resolver1.reject();
             };
@@ -1053,7 +1055,7 @@ function commonJsRequireContext(entry1, sourceModule1) {
             document.body.appendChild(link1);
         } else if (chunkPath1.endsWith(".js")) {
             const script1 = document.createElement("script");
-            script1.src = `/${chunkPath1}`;
+            script1.src = `/${CHUNK_BASE_PATH}${chunkPath1}`;
             script1.onerror = ()=>{
                 resolver1.reject();
             };
