@@ -20,10 +20,10 @@ use turbopack_core::{
     reference_type::{EntryReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source_transform::{SourceTransform, SourceTransformVc},
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
-use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
+use super::util::{emitted_assets_to_virtual_sources, EmittedAsset};
 use crate::{
     debug::should_debug,
     embed_js::embed_file,
@@ -130,7 +130,7 @@ impl Asset for PostCssTransformedAsset {
 #[turbo_tasks::value]
 struct ProcessPostCssResult {
     content: AssetContentVc,
-    assets: Vec<VirtualAssetVc>,
+    assets: Vec<VirtualSourceVc>,
 }
 
 #[turbo_tasks::function]
@@ -174,7 +174,7 @@ fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPath
         .into();
 
     context.process(
-        VirtualAssetVc::new(
+        VirtualSourceVc::new(
             postcss_config_path.join("transform.ts"),
             AssetContent::File(embed_file("transforms/postcss.ts")).cell(),
         )
@@ -256,7 +256,7 @@ impl PostCssTransformedAssetVc {
 
         // TODO handle SourceMap
         let file = File::from(processed_css.css);
-        let assets = emitted_assets_to_virtual_assets(processed_css.assets);
+        let assets = emitted_assets_to_virtual_sources(processed_css.assets);
         let content = AssetContent::File(FileContent::Content(file).cell()).cell();
         Ok(ProcessPostCssResult { content, assets }.cell())
     }

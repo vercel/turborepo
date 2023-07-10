@@ -15,7 +15,7 @@ use turbopack_core::{
     module::{Module, ModuleVc},
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 use turbopack_ecmascript::{
     chunk::{
@@ -125,7 +125,7 @@ async fn into_ecmascript_module_asset(
     let mdx_jsx_component =
         compile(&file.content().to_str()?, &options).map_err(|e| anyhow!("{}", e))?;
 
-    let source = VirtualAssetVc::new_with_ident(
+    let source = VirtualSourceVc::new_with_ident(
         this.source.ident(),
         File::from(Rope::from(mdx_jsx_component)).into(),
     );

@@ -12,10 +12,10 @@ use turbopack_core::{
     module::ModuleVc,
     reference_type::{InnerAssetsVc, ReferenceType},
     source_transform::{SourceTransform, SourceTransformVc},
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
-use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
+use super::util::{emitted_assets_to_virtual_sources, EmittedAsset};
 use crate::{
     debug::should_debug,
     embed_js::embed_file_path,
@@ -112,7 +112,7 @@ impl Asset for WebpackLoadersProcessedAsset {
 #[turbo_tasks::value]
 struct ProcessWebpackLoadersResult {
     content: AssetContentVc,
-    assets: Vec<VirtualAssetVc>,
+    assets: Vec<VirtualSourceVc>,
 }
 
 #[turbo_tasks::function]
@@ -186,7 +186,7 @@ impl WebpackLoadersProcessedAssetVc {
 
         // TODO handle SourceMap
         let file = File::from(processed.source);
-        let assets = emitted_assets_to_virtual_assets(processed.assets);
+        let assets = emitted_assets_to_virtual_sources(processed.assets);
         let content = AssetContent::File(FileContent::Content(file).cell()).cell();
         Ok(ProcessWebpackLoadersResult { content, assets }.cell())
     }

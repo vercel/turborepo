@@ -33,7 +33,7 @@ use turbopack_core::{
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference_type::{InnerAssetsVc, ReferenceType},
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
 use crate::{
@@ -124,7 +124,7 @@ pub async fn get_evaluate_pool(
     };
     let path = chunking_context.output_root().join(file_name.as_ref());
     let entry_module = context.process(
-        VirtualAssetVc::new(
+        VirtualSourceVc::new(
             runtime_asset.ident().path().join("evaluate.js"),
             File::from(
                 "import { run } from 'RUNTIME'; run((...args) => \

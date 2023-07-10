@@ -31,7 +31,7 @@ pub mod source_transform;
 pub mod target;
 mod utils;
 pub mod version;
-pub mod virtual_asset;
+pub mod virtual_source;
 
 pub mod virtual_fs {
     pub use turbo_tasks_fs::VirtualFileSystemVc;
