@@ -33,7 +33,7 @@ use turbopack_build::BuildChunkingContextVc;
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        ChunkableModule, ChunkableModuleVc, ChunkingContextVc, EvaluatableAssetVc,
+        ChunkableModule, ChunkableModuleVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc,
         EvaluatableAssetsVc,
     },
     compile_time_defines,
@@ -341,7 +341,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
                     AssetsVc::cell(vec![BuildChunkingContextVc::resolve_from(chunking_context)
                         .await?
                         .unwrap()
-                        .generate_entry_chunk(
+                        .entry_chunk(
                             // `expected` expects a completely flat output directory.
                             chunk_root_path
                                 .join(
