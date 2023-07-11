@@ -6,7 +6,7 @@ use std::os::unix::fs::symlink as symlink_dir;
 use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
     fmt, fs,
-    fs::{File, Metadata, OpenOptions},
+    fs::{File, Metadata, OpenOptions, Permissions},
     io,
     path::Path,
 };
@@ -117,6 +117,34 @@ impl AbsoluteSystemPath {
 
     pub fn create_dir_all(&self) -> Result<(), io::Error> {
         fs::create_dir_all(&self.0)
+    }
+
+    pub fn create_dir_all_with_permissions(
+        &self,
+        permissions: Permissions,
+    ) -> Result<(), io::Error> {
+        let (create, change_perms) = match fs::metadata(&self.0) {
+            Ok(info) if info.is_dir() && info.permissions() == permissions => {
+                // Directory already exists with correct permissions
+                (false, false)
+            }
+            Ok(info) if info.is_dir() => (false, true),
+            Ok(_) => {
+                // Path exists as a file
+                self.remove_file()?;
+                (true, true)
+            }
+            // If this errors then the path doesn't exist and we can create it as expected
+            Err(_) => (true, true),
+        };
+        if create {
+            self.create_dir_all()?;
+        }
+        if change_perms {
+            fs::set_permissions(&self.0, permissions)?;
+        }
+
+        Ok(())
     }
 
     pub fn extension(&self) -> Option<&str> {
@@ -302,6 +330,7 @@ impl AbsoluteSystemPath {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
+    use tempdir::TempDir;
     use test_case::test_case;
 
     use super::*;
@@ -375,5 +404,54 @@ mod tests {
         .unwrap();
 
         assert_eq!(base.contains(&other), expected);
+    }
+
+    // Constructing a windows permissions struct is only possible by calling
+    // fs::metadata so we only run these tests on unix.
+    #[cfg(unix)]
+    mod unix {
+        use std::os::unix::fs::PermissionsExt;
+
+        use test_case::test_case;
+
+        use super::*;
+        const PERMISSION_MASK: u32 = 0o777;
+
+        #[test_case(false, None, Permissions::from_mode(0o777) ; "dir doesn't exist")]
+        #[test_case(false, Some(Permissions::from_mode(0o666)), Permissions::from_mode(0o755) ; "path exists as file")]
+        #[test_case(true, Some(Permissions::from_mode(0o755)), Permissions::from_mode(0o655) ; "dir exists with incorrect mode")]
+        #[test_case(false, Some(Permissions::from_mode(0o755)), Permissions::from_mode(0o755) ; "dir exists with correct mode")]
+        fn test_mkdir_all_with_perms(
+            is_dir: bool,
+            mode: Option<Permissions>,
+            expected: Permissions,
+        ) -> Result<()> {
+            let test_dir = TempDir::new("mkdir-all")?;
+
+            let test_path = test_dir.path().join("foo");
+
+            if let Some(perm) = mode {
+                if is_dir {
+                    fs::create_dir(&test_path)?;
+                } else {
+                    fs::File::create(&test_path)?;
+                }
+                fs::set_permissions(&test_path, perm)?;
+            }
+
+            let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+            path.create_dir_all_with_permissions(expected.clone())?;
+
+            let actual = fs::metadata(path.as_path())?;
+
+            assert!(actual.is_dir());
+
+            assert_eq!(
+                actual.permissions().mode() & PERMISSION_MASK,
+                expected.mode()
+            );
+
+            Ok(())
+        }
     }
 }
