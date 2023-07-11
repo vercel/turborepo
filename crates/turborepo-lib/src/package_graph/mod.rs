@@ -17,20 +17,20 @@ pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
     #[allow(dead_code)]
     node_lookup: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
-    workspaces: HashMap<WorkspaceName, Entry>,
+    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Entry {
+pub struct WorkspaceInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
     pub unresolved_external_dependencies: Option<HashSet<Package>>,
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
-impl Entry {
+impl WorkspaceInfo {
     pub fn package_json_path(&self) -> &AnchoredSystemPathBuf {
         &self.package_json_path
     }
@@ -87,11 +87,11 @@ impl PackageGraph {
         Some(&entry.package_json)
     }
 
-    pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&Entry> {
+    pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&WorkspaceInfo> {
         self.workspaces.get(workspace)
     }
 
-    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &Entry)> {
+    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &WorkspaceInfo)> {
         self.workspaces.iter()
     }
 
