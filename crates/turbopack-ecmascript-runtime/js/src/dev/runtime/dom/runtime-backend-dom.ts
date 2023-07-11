@@ -65,7 +65,9 @@ function commonJsRequireContext(
       deleteResolver(chunkPath);
 
       if (chunkPath.endsWith(".css")) {
-        const links = document.querySelectorAll(`link[href="/${chunkPath}"]`);
+        const links = document.querySelectorAll(
+          `link[href="/${CHUNK_BASE_PATH}${chunkPath}"]`
+        );
         for (const link of Array.from(links)) {
           link.remove();
         }
@@ -75,7 +77,7 @@ function commonJsRequireContext(
         // However, we still want to remove the script tag from the DOM to keep
         // the HTML somewhat consistent from the user's perspective.
         const scripts = document.querySelectorAll(
-          `script[src="/${chunkPath}"]`
+          `script[src="/${CHUNK_BASE_PATH}${chunkPath}"]`
         );
         for (const script of Array.from(scripts)) {
           script.remove();
@@ -98,7 +100,7 @@ function commonJsRequireContext(
           .join("/");
 
         const previousLink = document.querySelector(
-          `link[rel=stylesheet][href^="/${encodedChunkPath}"]`
+          `link[rel=stylesheet][href^="/${CHUNK_BASE_PATH}${encodedChunkPath}"]`
         );
 
         if (previousLink == null) {
@@ -226,7 +228,7 @@ function commonJsRequireContext(
 })();
 
 function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
-  code += `\n\n//# sourceURL=${location.origin}${url}`;
+  code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
   if (map) code += `\n//# sourceMappingURL=${map}`;
   return eval(code);
 }
