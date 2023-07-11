@@ -187,6 +187,8 @@ fn wrap_string(s: &str) -> Cow<str> {
 
 #[cfg(test)]
 mod test {
+    use std::rc::Rc;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -229,10 +231,10 @@ mod test {
             },
             packages: [(
                 long_key.clone(),
-                BerryPackage {
+                Rc::new(BerryPackage {
                     version: SemverString("1.2.3".to_string()),
                     ..Default::default()
-                },
+                }),
             )]
             .iter()
             .cloned()

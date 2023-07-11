@@ -7,14 +7,16 @@ use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
+    module::ModuleVc,
     reference_type::{InnerAssetsVc, ReferenceType},
-    source_asset::SourceAssetVc,
+    source::{Source, SourceVc},
     source_transform::{SourceTransform, SourceTransformVc},
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
-use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
+use super::util::{emitted_assets_to_virtual_sources, EmittedAsset};
 use crate::{
     debug::should_debug,
     embed_js::embed_file_path,
@@ -73,7 +75,7 @@ impl WebpackLoadersVc {
 #[turbo_tasks::value_impl]
 impl SourceTransform for WebpackLoaders {
     #[turbo_tasks::function]
-    fn transform(self_vc: WebpackLoadersVc, source: AssetVc) -> AssetVc {
+    fn transform(self_vc: WebpackLoadersVc, source: SourceVc) -> SourceVc {
         WebpackLoadersProcessedAsset {
             transform: self_vc,
             source,
@@ -86,8 +88,11 @@ impl SourceTransform for WebpackLoaders {
 #[turbo_tasks::value]
 struct WebpackLoadersProcessedAsset {
     transform: WebpackLoadersVc,
-    source: AssetVc,
+    source: SourceVc,
 }
+
+#[turbo_tasks::value_impl]
+impl Source for WebpackLoadersProcessedAsset {}
 
 #[turbo_tasks::value_impl]
 impl Asset for WebpackLoadersProcessedAsset {
@@ -111,13 +116,13 @@ impl Asset for WebpackLoadersProcessedAsset {
 #[turbo_tasks::value]
 struct ProcessWebpackLoadersResult {
     content: AssetContentVc,
-    assets: Vec<VirtualAssetVc>,
+    assets: Vec<VirtualSourceVc>,
 }
 
 #[turbo_tasks::function]
-fn webpack_loaders_executor(context: AssetContextVc) -> AssetVc {
+fn webpack_loaders_executor(context: AssetContextVc) -> ModuleVc {
     context.process(
-        SourceAssetVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
+        FileSourceVc::new(embed_file_path("transforms/webpack-loaders.ts")).into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
     )
 }
@@ -141,8 +146,9 @@ impl WebpackLoadersProcessedAssetVc {
         let FileContent::Content(content) = &*file.await? else {
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
-                assets: Vec::new()
-            }.cell());
+                assets: Vec::new(),
+            }
+            .cell());
         };
         let content = content.content().to_str()?;
         let context = transform.evaluate_context;
@@ -152,7 +158,7 @@ impl WebpackLoadersProcessedAssetVc {
         let resource_path = resource_fs_path.path.as_str();
         let loaders = transform.loaders.await?;
         let config_value = evaluate(
-            webpack_loaders_executor,
+            webpack_loaders_executor.into(),
             project_path,
             env,
             this.source.ident(),
@@ -173,8 +179,9 @@ impl WebpackLoadersProcessedAssetVc {
             // An error happened, which has already been converted into an issue.
             return Ok(ProcessWebpackLoadersResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
-                assets: Vec::new()
-            }.cell());
+                assets: Vec::new(),
+            }
+            .cell());
         };
         let processed: WebpackLoadersProcessingResult = parse_json_with_source_context(
             val.to_str()?,
@@ -183,7 +190,7 @@ impl WebpackLoadersProcessedAssetVc {
 
         // TODO handle SourceMap
         let file = File::from(processed.source);
-        let assets = emitted_assets_to_virtual_assets(processed.assets);
+        let assets = emitted_assets_to_virtual_sources(processed.assets);
         let content = AssetContent::File(FileContent::Content(file).cell()).cell();
         Ok(ProcessWebpackLoadersResult { content, assets }.cell())
     }

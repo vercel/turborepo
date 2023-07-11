@@ -7,14 +7,16 @@ use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc,
     },
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
-    virtual_asset::VirtualAssetVc,
+    source::SourceVc,
+    virtual_source::VirtualSourceVc,
 };
 use turbopack_ecmascript::{
     chunk::{
@@ -72,7 +74,7 @@ impl Default for MdxTransformOptionsVc {
 #[turbo_tasks::value]
 #[derive(Clone, Copy)]
 pub struct MdxModuleAsset {
-    source: AssetVc,
+    source: SourceVc,
     context: AssetContextVc,
     transforms: EcmascriptInputTransformsVc,
     options: MdxTransformOptionsVc,
@@ -124,7 +126,7 @@ async fn into_ecmascript_module_asset(
     let mdx_jsx_component =
         compile(&file.content().to_str()?, &options).map_err(|e| anyhow!("{}", e))?;
 
-    let source = VirtualAssetVc::new_with_ident(
+    let source = VirtualSourceVc::new_with_ident(
         this.source.ident(),
         File::from(Rope::from(mdx_jsx_component)).into(),
     );
@@ -142,7 +144,7 @@ async fn into_ecmascript_module_asset(
 impl MdxModuleAssetVc {
     #[turbo_tasks::function]
     pub fn new(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         transforms: EcmascriptInputTransformsVc,
         options: MdxTransformOptionsVc,
@@ -182,7 +184,10 @@ impl Asset for MdxModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for MdxModuleAsset {
+impl Module for MdxModuleAsset {}
+
+#[turbo_tasks::value_impl]
+impl ChunkableModule for MdxModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self_vc: MdxModuleAssetVc,

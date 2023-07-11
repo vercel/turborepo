@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
+use turbopath::AnchoredSystemPathBuf;
 
 use crate::{
     cli::{Command, DryRunMode, EnvMode, LogPrefix, RunArgs},
@@ -36,7 +37,7 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
     }
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteCacheOpts {
     team_id: String,
     signature: bool,
@@ -47,15 +48,15 @@ impl<'a> TryFrom<&'a Args> for Opts<'a> {
 
     fn try_from(args: &'a Args) -> std::result::Result<Self, Self::Error> {
         let Some(Command::Run(run_args)) = &args.command else {
-          return Err(anyhow!("Expected run command"))
+            return Err(anyhow!("Expected run command"));
         };
         let run_opts = RunOpts::try_from(run_args.as_ref())?;
         let cache_opts = CacheOpts::from(run_args.as_ref());
-
+        let scope_opts = ScopeOpts::try_from(run_args.as_ref())?;
         Ok(Self {
             run_opts,
             cache_opts,
-            scope_opts: ScopeOpts::default(),
+            scope_opts,
             runcache_opts: RunCacheOpts::default(),
         })
     }
@@ -154,5 +155,20 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32> {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct ScopeOpts {}
+#[derive(Debug)]
+pub struct ScopeOpts {
+    pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
+}
+
+impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &'a RunArgs) -> std::result::Result<Self, Self::Error> {
+        let pkg_inference_root = args
+            .pkg_inference_root
+            .as_ref()
+            .map(AnchoredSystemPathBuf::from_raw)
+            .transpose()?;
+        Ok(Self { pkg_inference_root })
+    }
+}

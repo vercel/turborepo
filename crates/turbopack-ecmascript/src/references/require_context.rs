@@ -6,7 +6,7 @@ use swc_core::{
     common::DUMMY_SP,
     ecma::{
         ast::{
-            Expr, ExprStmt, KeyValueProp, Lit, Module, ModuleItem, ObjectLit, Prop, PropName,
+            self, Expr, ExprStmt, KeyValueProp, Lit, ModuleItem, ObjectLit, Prop, PropName,
             PropOrSpread, Stmt,
         },
         codegen::{text_writer::JsWriter, Emitter},
@@ -21,18 +21,20 @@ use turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkableAssetVc, ChunkingContext,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleReference, ChunkableModuleReferenceVc, ChunkableModuleVc, ChunkingContext,
         ChunkingContextVc,
     },
     ident::AssetIdentVc,
     issue::{IssueSeverityVc, OptionIssueSourceVc},
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
         ResolveResult, ResolveResultVc,
     },
+    source::SourceVc,
 };
 
 use crate::{
@@ -222,7 +224,7 @@ pub struct RequireContextAssetReference {
 impl RequireContextAssetReferenceVc {
     #[turbo_tasks::function]
     pub fn new(
-        source: AssetVc,
+        source: SourceVc,
         origin: ResolveOriginVc,
         dir: String,
         include_subdirs: bool,
@@ -281,7 +283,7 @@ impl ValueToString for RequireContextAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for RequireContextAssetReference {}
+impl ChunkableModuleReference for RequireContextAssetReference {}
 
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for RequireContextAssetReference {
@@ -329,11 +331,11 @@ impl ValueToString for ResolvedAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for ResolvedAssetReference {}
+impl ChunkableModuleReference for ResolvedAssetReference {}
 
 #[turbo_tasks::value]
 pub struct RequireContextAsset {
-    source: AssetVc,
+    source: SourceVc,
 
     origin: ResolveOriginVc,
     map: RequireContextMapVc,
@@ -378,7 +380,10 @@ impl Asset for RequireContextAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for RequireContextAsset {
+impl Module for RequireContextAsset {}
+
+#[turbo_tasks::value_impl]
+impl ChunkableModule for RequireContextAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self_vc: ChunkGroupFilesAssetVc,
@@ -481,7 +486,7 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
             obj: Expr = Expr::Object(context_map),
         );
 
-        let module = Module {
+        let module = ast::Module {
             span: DUMMY_SP,
             body: vec![ModuleItem::Stmt(Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,

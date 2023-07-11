@@ -18,7 +18,7 @@
     unused_must_use,
     unsafe_code
 )]
-#![feature(drain_filter)]
+#![feature(extract_if)]
 
 use std::{
     collections::HashMap,
@@ -198,7 +198,7 @@ impl GlobWatcher {
                                 // requestor. flushes should not be considered as events.
                                 for flush_id in e
                                     .paths
-                                    .drain_filter(|p| p.starts_with(flush_dir.as_path()))
+                                    .extract_if(|p| p.starts_with(flush_dir.as_path()))
                                     .filter_map(|p| {
                                         get_flush_id(
                                             p.strip_prefix(flush_dir.as_path())

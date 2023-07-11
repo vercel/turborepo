@@ -9,7 +9,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        Chunk, ChunkVc, ChunkableAsset, ChunkingContext, ChunkingContextVc, ChunksVc,
+        Chunk, ChunkVc, ChunkableModule, ChunkingContext, ChunkingContextVc, ChunksVc,
         EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
@@ -346,7 +346,7 @@ where
         .copied()
         .map(|chunk| chunk.as_chunk())
         .chain(css_chunks.iter().copied().map(|chunk| chunk.as_chunk()))
-        .chain(other_chunks.into_iter())
+        .chain(other_chunks)
         .collect();
 
     Ok(ChunksVc::cell(chunks))
