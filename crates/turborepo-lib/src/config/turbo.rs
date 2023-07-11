@@ -342,8 +342,7 @@ impl TryFrom<RawTurboJSON> for TurboJson {
             pipeline: raw_turbo
                 .pipeline
                 .into_iter()
-                .map(|p| p.0)
-                .flatten()
+                .flat_map(|p| p.0)
                 .map(|(task_name, task_definition)| Ok((task_name, task_definition.try_into()?)))
                 .collect::<Result<HashMap<_, _>, Error>>()?,
             // copy these over, we don't need any changes here.

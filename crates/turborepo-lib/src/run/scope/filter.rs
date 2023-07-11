@@ -25,7 +25,7 @@ impl PackageInference {
         );
         let full_inference_path = turbo_root.resolve(pkg_inference_path);
         for (workspace_name, workspace_entry) in pkg_graph.workspaces() {
-            let pkg_path = turbo_root.resolve(&workspace_entry.package_json_path());
+            let pkg_path = turbo_root.resolve(workspace_entry.package_json_path());
             let inferred_path_is_below = pkg_path.contains(&full_inference_path);
             // We skip over the root package as the inferred path will always be below it
             if inferred_path_is_below && (&pkg_path as &AbsoluteSystemPath) != turbo_root {

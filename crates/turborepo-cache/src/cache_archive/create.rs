@@ -161,7 +161,7 @@ mod tests {
     fn create_entry(anchor: &AbsoluteSystemPath, file: &CreateFileDefinition) -> Result<()> {
         match &file.file_type {
             FileType::Dir => create_dir(anchor, file),
-            FileType::Symlink { linkname } => create_symlink(anchor, file, &linkname),
+            FileType::Symlink { linkname } => create_symlink(anchor, file, linkname),
             FileType::Fifo => create_fifo(anchor, file),
             FileType::File => create_file(anchor, file),
         }
@@ -185,7 +185,7 @@ mod tests {
         linkname: &str,
     ) -> Result<()> {
         let path = anchor.resolve(&file.path);
-        path.symlink_to_file(&linkname)?;
+        path.symlink_to_file(linkname)?;
 
         Ok(())
     }
@@ -407,7 +407,7 @@ mod tests {
     fn test_compression() -> Result<()> {
         let mut buffer = Vec::new();
         let mut encoder = zstd::Encoder::new(&mut buffer, 0)?.auto_finish();
-        encoder.write(b"hello world")?;
+        encoder.write_all(b"hello world")?;
         // Should finish encoding on drop
         drop(encoder);
 
