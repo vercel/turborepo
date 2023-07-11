@@ -118,6 +118,8 @@ await session.softNavigationByClick("metric name", ".selector-to-click");
 await session.close();
 ```
 
+Run with `BROWSER_OUTPUT=1` to show the output of the browser.
+
 ## Shell operations
 
 The `devlow-bench` package provides a few helper functions to run operations in the shell.
@@ -150,6 +152,8 @@ shell.output
 // Kill the process tree
 await shell.kill();
 ```
+
+Run with `SHELL_OUTPUT=1` to show the output of the shell commands.
 
 ## File operations
 

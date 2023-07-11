@@ -1,20 +1,22 @@
 import type {
   Browser,
   BrowserContext,
+  ConsoleMessage,
   Page,
   Request,
   Response,
 } from "playwright-chromium";
 import { chromium } from "playwright-chromium";
 import { measureTime, reportMeasurement } from "./index.js";
-import { resolve } from "path";
 
 interface BrowserSession {
   close(): Promise<void>;
-  hardNavigation(url: string, metricName?: string): Promise<Page>;
+  hardNavigation(metricName: string, url: string): Promise<Page>;
   softNavigationByClick(metricName: string, selector: string): Promise<void>;
   reload(metricName: string): Promise<void>;
 }
+
+const browserOutput = !!process.env.BROWSER_OUTPUT;
 
 async function withRequestMetrics(
   metricName: string,
@@ -47,8 +49,42 @@ async function withRequestMetrics(
       })()
     );
   };
+  let errorCount = 0;
+  let warningCount = 0;
+  let logCount = 0;
+  const consoleHandler = (message: ConsoleMessage) => {
+    const type = message.type();
+    if (type === "error") {
+      errorCount++;
+    } else if (type === "warning") {
+      warningCount++;
+    } else {
+      logCount++;
+    }
+    if (browserOutput) {
+      activePromises.push(
+        (async () => {
+          const args = [];
+          const text = message.text();
+          for (const arg of message.args()) {
+            args.push(await arg.jsonValue());
+          }
+          console.log(`[${type}] ${text}`, ...args);
+        })()
+      );
+    }
+  };
+  let uncaughtCount = 0;
+  const exceptionHandler = (error: Error) => {
+    uncaughtCount++;
+    if (browserOutput) {
+      console.error(`[UNCAUGHT]`, error);
+    }
+  };
   try {
     page.on("response", responseHandler);
+    page.on("console", consoleHandler);
+    page.on("pageerror", exceptionHandler);
     await fn();
     await Promise.all(activePromises);
     let totalDownload = 0;
@@ -71,6 +107,23 @@ async function withRequestMetrics(
       totalRequests += count;
     }
     reportMeasurement(`${metricName}/requests`, totalRequests, "requests");
+    reportMeasurement(`${metricName}/console/logs`, logCount, "messages");
+    reportMeasurement(
+      `${metricName}/console/warnings`,
+      warningCount,
+      "messages"
+    );
+    reportMeasurement(`${metricName}/console/errors`, errorCount, "messages");
+    reportMeasurement(
+      `${metricName}/console/uncaught`,
+      uncaughtCount,
+      "messages"
+    );
+    reportMeasurement(
+      `${metricName}/console`,
+      logCount + warningCount + errorCount + uncaughtCount,
+      "messages"
+    );
   } finally {
     page.off("response", responseHandler);
   }
