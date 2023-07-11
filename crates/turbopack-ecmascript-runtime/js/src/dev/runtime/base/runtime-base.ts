@@ -1295,7 +1295,9 @@ function registerChunkList(
   chunkList: ChunkList
 ) {
   chunkUpdateProvider.push([
-    chunkList.path,
+    // The chunk base path is required here for the update server to match it with
+    // the correct asset in the content source.
+    `${CHUNK_BASE_PATH}${chunkList.path}`,
     handleApply.bind(null, chunkList.path),
   ]);
 
