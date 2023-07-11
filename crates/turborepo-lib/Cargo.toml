@@ -65,7 +65,8 @@ reqwest = { workspace = true, default-features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { version = "1.0.96", package = "serde_jsonc" }
+serde_json = { workspace = true }
+serde_jsonc = { workspace = true }
 serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 shared_child = "1.0.0"

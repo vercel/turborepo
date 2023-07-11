@@ -38,6 +38,8 @@ pub enum Error {
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
+    SerdeJsonC(#[from] serde_jsonc::Error),
+    #[error(transparent)]
     Config(#[from] ConfigError),
     #[error(transparent)]
     Io(#[from] std::io::Error),

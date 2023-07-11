@@ -23,7 +23,7 @@ use crate::{
 pub struct SpacesJson {
     pub id: Option<String>,
     #[serde(flatten)]
-    pub other: Option<serde_json::Value>,
+    pub other: Option<serde_jsonc::Value>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -452,7 +452,7 @@ impl TurboJson {
     /// and then converts it into `TurboJson`
     fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
         let contents = fs::read_to_string(path)?;
-        let turbo_json: RawTurboJSON = serde_json::from_str(&contents)?;
+        let turbo_json: RawTurboJSON = serde_jsonc::from_str(&contents)?;
 
         turbo_json.try_into()
     }
@@ -697,7 +697,8 @@ mod tests {
         expected_raw_task_definition: RawTaskDefinition,
         expected_task_definition: BookkeepingTaskDefinition,
     ) -> Result<()> {
-        let raw_task_definition: RawTaskDefinition = serde_json::from_str(task_definition_content)?;
+        let raw_task_definition: RawTaskDefinition =
+            serde_jsonc::from_str(task_definition_content)?;
         assert_eq!(raw_task_definition, expected_raw_task_definition);
 
         let task_definition: BookkeepingTaskDefinition = raw_task_definition.try_into()?;
@@ -719,7 +720,7 @@ mod tests {
         task_outputs_str: &str,
         expected_task_outputs: TaskOutputs,
     ) -> Result<()> {
-        let raw_task_outputs: Vec<String> = serde_json::from_str(task_outputs_str)?;
+        let raw_task_outputs: Vec<String> = serde_jsonc::from_str(task_outputs_str)?;
         let task_outputs: TaskOutputs = raw_task_outputs.into();
         assert_eq!(task_outputs, expected_task_outputs);
 
