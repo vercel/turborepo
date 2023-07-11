@@ -41,16 +41,16 @@
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use crate</span>::{
-    asset::AssetVc,
     compile_time_info::CompileTimeInfoVc,
     module::ModuleVc,
     reference_type::ReferenceType,
     resolve::{options::ResolveOptionsVc, parse::RequestVc, ResolveResultVc},
+    source::SourceVc,
 };
 
 <span class="doccomment">/// A context for building an asset graph. It&#39;s passed through the assets while
 /// creating them. It&#39;s needed to resolve assets and upgrade assets to a higher
-/// type (e. g. from SourceAsset to ModuleAsset).
+/// type (e. g. from FileSource to ModuleAsset).
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>AssetContext {
     <span class="kw">fn </span>compile_time_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompileTimeInfoVc;
@@ -66,7 +66,7 @@
         resolve_options: ResolveOptionsVc,
         reference_type: Value&lt;ReferenceType&gt;,
     ) -&gt; ResolveResultVc;
-    <span class="kw">fn </span>process(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: AssetVc, reference_type: Value&lt;ReferenceType&gt;) -&gt; ModuleVc;
+    <span class="kw">fn </span>process(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: SourceVc, reference_type: Value&lt;ReferenceType&gt;) -&gt; ModuleVc;
     <span class="kw">fn </span>process_resolve_result(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         result: ResolveResultVc,

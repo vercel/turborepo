@@ -131,7 +131,7 @@
 <span class="kw">use </span>turbo_tasks::trace::TraceRawVcs;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPath;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc, reference_type::ReferenceType, source_transform::SourceTransformsVc,
+    reference_type::ReferenceType, source::SourceVc, source_transform::SourceTransformsVc,
 };
 <span class="kw">use </span>turbopack_css::{CssInputTransformsVc, CssModuleAssetType};
 <span class="kw">use </span>turbopack_ecmascript::{EcmascriptInputTransformsVc, EcmascriptOptions};
@@ -199,7 +199,7 @@
 
     <span class="kw">pub async fn </span>matches(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        source: AssetVc,
+        source: SourceVc,
         path: <span class="kw-2">&amp;</span>FileSystemPath,
         reference_type: <span class="kw-2">&amp;</span>ReferenceType,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {

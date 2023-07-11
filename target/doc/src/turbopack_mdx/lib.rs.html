@@ -279,6 +279,7 @@
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
 <a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
 </pre></div><pre class="rust"><code><span class="attr">#![feature(min_specialization)]
 
 </span><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
@@ -296,7 +297,8 @@
     module::{Module, ModuleVc},
     reference::AssetReferencesVc,
     resolve::origin::{ResolveOrigin, ResolveOriginVc},
-    virtual_asset::VirtualAssetVc,
+    source::SourceVc,
+    virtual_source::VirtualSourceVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
     chunk::{
@@ -354,7 +356,7 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone, Copy)]
 </span><span class="kw">pub struct </span>MdxModuleAsset {
-    source: AssetVc,
+    source: SourceVc,
     context: AssetContextVc,
     transforms: EcmascriptInputTransformsVc,
     options: MdxTransformOptionsVc,
@@ -406,7 +408,7 @@
     </span><span class="kw">let </span>mdx_jsx_component =
         compile(<span class="kw-2">&amp;</span>file.content().to_str()<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>options).map_err(|e| <span class="macro">anyhow!</span>(<span class="string">&quot;{}&quot;</span>, e))<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>source = VirtualAssetVc::new_with_ident(
+    <span class="kw">let </span>source = VirtualSourceVc::new_with_ident(
         this.source.ident(),
         File::from(Rope::from(mdx_jsx_component)).into(),
     );
@@ -424,7 +426,7 @@
 </span><span class="kw">impl </span>MdxModuleAssetVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         transforms: EcmascriptInputTransformsVc,
         options: MdxTransformOptionsVc,

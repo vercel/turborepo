@@ -390,17 +390,17 @@
 };
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetVc},
+    file_source::FileSourceVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{
         pattern::{Pattern, PatternVc},
         resolve_raw, AffectingResolvingAssetReferenceVc, PrimaryResolveResult, ResolveResult,
         ResolveResultVc,
     },
-    source_asset::SourceAssetVc,
     target::{CompileTargetVc, Platform},
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::references::raw::SourceAssetReferenceVc;
+<span class="kw">use </span><span class="kw">crate</span>::references::raw::FileSourceReferenceVc;
 
 <span class="attr">#[derive(Serialize, Deserialize, Debug)]
 </span><span class="kw">struct </span>NodePreGypConfigJson {
@@ -526,10 +526,10 @@
                     {
                         <span class="kw">if let </span>DirectoryEntry::File(dylib) | DirectoryEntry::Symlink(dylib) = entry
                         {
-                            assets.insert(SourceAssetVc::new(<span class="kw-2">*</span>dylib).into());
+                            assets.insert(FileSourceVc::new(<span class="kw-2">*</span>dylib).into());
                         }
                     }
-                    assets.insert(SourceAssetVc::new(resolved_file_vc).into());
+                    assets.insert(FileSourceVc::new(resolved_file_vc).into());
                 }
                 <span class="kw">for </span>entry <span class="kw">in </span>config_asset
                     .ident()
@@ -545,14 +545,14 @@
                 {
                     <span class="kw">match </span>entry {
                         DirectoryEntry::File(dylib) =&gt; {
-                            assets.insert(SourceAssetVc::new(<span class="kw-2">*</span>dylib).into());
+                            assets.insert(FileSourceVc::new(<span class="kw-2">*</span>dylib).into());
                         }
                         DirectoryEntry::Symlink(dylib) =&gt; {
                             <span class="kw">let </span>realpath_with_links = dylib.realpath_with_links().<span class="kw">await</span><span class="question-mark">?</span>;
                             <span class="kw">for </span>symlink <span class="kw">in </span>realpath_with_links.symlinks.iter() {
-                                assets.insert(SourceAssetVc::new(<span class="kw-2">*</span>symlink).into());
+                                assets.insert(FileSourceVc::new(<span class="kw-2">*</span>symlink).into());
                             }
-                            assets.insert(SourceAssetVc::new(<span class="kw-2">*</span>dylib).into());
+                            assets.insert(FileSourceVc::new(<span class="kw-2">*</span>dylib).into());
                         }
                         <span class="kw">_ </span>=&gt; {}
                     }
@@ -744,14 +744,14 @@
     <span class="kw">let </span>bindings_try: Vec&lt;AssetVc&gt; = BINDINGS_TRY
         .iter()
         .map(|try_dir| {
-            SourceAssetVc::new(root_context.join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}/{}&quot;</span>, try_dir, <span class="kw-2">&amp;</span>file_name))).into()
+            FileSourceVc::new(root_context.join(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}/{}&quot;</span>, try_dir, <span class="kw-2">&amp;</span>file_name))).into()
         })
         .collect();
 
     <span class="prelude-val">Ok</span>(ResolveResult::assets_with_references(
         bindings_try,
-        <span class="macro">vec!</span>[SourceAssetReferenceVc::new(
-            SourceAssetVc::new(root_context).into(),
+        <span class="macro">vec!</span>[FileSourceReferenceVc::new(
+            FileSourceVc::new(root_context).into(),
             Pattern::Concatenation(<span class="macro">vec!</span>[Pattern::Dynamic, Pattern::Constant(file_name)]).into(),
         )
         .into()],

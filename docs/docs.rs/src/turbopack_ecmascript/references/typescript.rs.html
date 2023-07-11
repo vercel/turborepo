@@ -150,12 +150,12 @@
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     context::AssetContext,
+    file_source::FileSourceVc,
     reference::{AssetReference, AssetReferenceVc},
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
@@ -164,7 +164,6 @@
         pattern::QueryMapVc,
         ResolveResult, ResolveResultVc,
     },
-    source_asset::SourceAssetVc,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::typescript::{resolve::type_resolve, TsConfigModuleAssetVc};
@@ -189,8 +188,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
         ResolveResult::asset(
-            TsConfigModuleAssetVc::new(<span class="self">self</span>.origin, SourceAssetVc::new(<span class="self">self</span>.tsconfig).into())
-                .into(),
+            TsConfigModuleAssetVc::new(<span class="self">self</span>.origin, FileSourceVc::new(<span class="self">self</span>.tsconfig).into()).into(),
         )
         .into()
     }
@@ -238,7 +236,7 @@
                     <span class="self">self</span>.origin
                         .context()
                         .process(
-                            SourceAssetVc::new(<span class="kw-2">*</span>path).into(),
+                            FileSourceVc::new(<span class="kw-2">*</span>path).into(),
                             Value::new(ReferenceType::TypeScript(
                                 TypeScriptReferenceSubType::Undefined,
                             )),

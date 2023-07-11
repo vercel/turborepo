@@ -414,6 +414,7 @@
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{future::Future, sync::Arc};
 
 <span class="kw">use </span>anyhow::{anyhow, Context, <span class="prelude-ty">Result</span>};
@@ -443,9 +444,10 @@
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::hash_xxh3_hash64;
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContent, AssetVc},
+    asset::{Asset, AssetContent},
     error::PrettyPrintError,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    source::SourceVc,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
     SOURCE_MAP_ROOT_NAME,
 };
@@ -555,7 +557,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>parse(
-    source: AssetVc,
+    source: SourceVc,
     ty: Value&lt;EcmascriptModuleAssetType&gt;,
     transforms: EcmascriptInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
@@ -569,7 +571,7 @@
 }
 
 <span class="kw">async fn </span>parse_internal(
-    source: AssetVc,
+    source: SourceVc,
     ty: Value&lt;EcmascriptModuleAssetType&gt;,
     transforms: EcmascriptInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
@@ -641,7 +643,7 @@
     fs_path: <span class="kw-2">&amp;</span>FileSystemPath,
     ident: <span class="kw-2">&amp;</span>str,
     file_path_hash: u128,
-    source: AssetVc,
+    source: SourceVc,
     ty: EcmascriptModuleAssetType,
     transforms: <span class="kw-2">&amp;</span>[EcmascriptInputTransform],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseResultVc&gt; {
@@ -796,7 +798,7 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ReadSourceIssue {
-    source: AssetVc,
+    source: SourceVc,
     error: String,
 }
 

@@ -740,10 +740,10 @@
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSourceVc,
     issue::{IssueContextExt, IssueReporter, IssueSeverity, IssueVc},
     reference::all_assets,
     resolve::options::{ImportMapping, ResolvedMap},
-    source_asset::SourceAssetVc,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::nft_json::NftJsonAssetVc;
@@ -908,7 +908,7 @@
     <span class="kw">let </span>result = result.<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">for </span>entry <span class="kw">in </span>result.results.values() {
         <span class="kw">if let </span>DirectoryEntry::File(path) = entry {
-            <span class="kw">let </span>source = SourceAssetVc::new(<span class="kw-2">*</span>path).into();
+            <span class="kw">let </span>source = FileSourceVc::new(<span class="kw-2">*</span>path).into();
             list.push(
                 context
                     .process(
@@ -954,7 +954,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>list = Vec::new();
     <span class="kw">for </span>input <span class="kw">in </span>input.iter() {
         <span class="kw">if </span>exact {
-            <span class="kw">let </span>source = SourceAssetVc::new(root.join(input)).into();
+            <span class="kw">let </span>source = FileSourceVc::new(root.join(input)).into();
             list.push(
                 context
                     .process(

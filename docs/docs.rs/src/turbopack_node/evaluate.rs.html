@@ -671,11 +671,11 @@
         EvaluatableAssetsVc,
     },
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference_type::{InnerAssetsVc, ReferenceType},
-    source_asset::SourceAssetVc,
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -751,7 +751,7 @@
     debug: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;NodeJsPoolVc&gt; {
     <span class="kw">let </span>runtime_asset = context.process(
-        SourceAssetVc::new(embed_file_path(<span class="string">&quot;ipc/evaluate.ts&quot;</span>)).into(),
+        FileSourceVc::new(embed_file_path(<span class="string">&quot;ipc/evaluate.ts&quot;</span>)).into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
     );
 
@@ -766,7 +766,7 @@
     };
     <span class="kw">let </span>path = chunking_context.output_root().join(file_name.as_ref());
     <span class="kw">let </span>entry_module = context.process(
-        VirtualAssetVc::new(
+        VirtualSourceVc::new(
             runtime_asset.ident().path().join(<span class="string">&quot;evaluate.js&quot;</span>),
             File::from(
                 <span class="string">&quot;import { run } from &#39;RUNTIME&#39;; run((...args) =&gt; \
@@ -791,7 +791,7 @@
 
     <span class="kw">let </span>runtime_entries = {
         <span class="kw">let </span>globals_module = context.process(
-            SourceAssetVc::new(embed_file_path(<span class="string">&quot;globals.ts&quot;</span>)).into(),
+            FileSourceVc::new(embed_file_path(<span class="string">&quot;globals.ts&quot;</span>)).into(),
             Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
         );
 

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["TextContentSourceAsset","TextContentSourceAssetVc"],"type":["TextContentSourceAssetReadRef"]};
+window.SIDEBAR_ITEMS = {"struct":["TextContentFileSource","TextContentFileSourceVc"],"type":["TextContentFileSourceReadRef"]};

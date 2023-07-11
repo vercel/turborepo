@@ -1486,6 +1486,7 @@
 };
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetOptionVc, AssetVc, AssetsVc},
+    file_source::FileSourceVc,
     issue::resolve::{ResolvingIssue, ResolvingIssueVc},
     package_json::{read_package_json, PackageJsonIssue, PackageJsonIssueVc},
     reference::{AssetReference, AssetReferenceVc},
@@ -1495,7 +1496,6 @@
         pattern::{read_matches, Pattern, PatternMatch, PatternVc},
         plugin::ResolvePlugin,
     },
-    source_asset::SourceAssetVc,
 };
 
 <span class="kw">mod </span>alias_map;
@@ -2050,7 +2050,7 @@
     <span class="kw">async fn </span>to_result(path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
         <span class="kw">let </span>RealPathResult { path, symlinks } = <span class="kw-2">&amp;*</span>path.realpath_with_links().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(ResolveResult::asset_with_references(
-            SourceAssetVc::new(<span class="kw-2">*</span>path).into(),
+            FileSourceVc::new(<span class="kw-2">*</span>path).into(),
             symlinks
                 .iter()
                 .map(|p| AffectingResolvingAssetReferenceVc::new(<span class="kw-2">*</span>p).into())
@@ -2712,7 +2712,7 @@
     }
 
     <span class="prelude-val">Ok</span>(ResolveResult::asset_with_references(
-        SourceAssetVc::new(<span class="kw-2">*</span>path).into(),
+        FileSourceVc::new(<span class="kw-2">*</span>path).into(),
         symlinks
             .iter()
             .map(|p| AffectingResolvingAssetReferenceVc::new(<span class="kw-2">*</span>p).into())
@@ -2829,7 +2829,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>AffectingResolvingAssetReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::asset(SourceAssetVc::new(<span class="self">self</span>.path).into()).into()
+        ResolveResult::asset(FileSourceVc::new(<span class="self">self</span>.path).into()).into()
     }
 }
 

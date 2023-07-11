@@ -58,8 +58,8 @@
 <span class="kw">use </span>turbopack_core::{
     code_builder::{CodeBuilder, CodeVc},
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     reference_type::ReferenceType,
-    source_asset::SourceAssetVc,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::EcmascriptModuleAssetVc;
@@ -80,7 +80,7 @@
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>new(asset_context: AssetContextVc, asset_path: FileSystemPathVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>asset = asset_context.process(
-            SourceAssetVc::new(asset_path).into(),
+            FileSourceVc::new(asset_path).into(),
             Value::new(ReferenceType::Undefined),
         );
         <span class="kw">let </span><span class="prelude-val">Some</span>(asset) = EcmascriptModuleAssetVc::resolve_from(<span class="kw-2">&amp;</span>asset).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{

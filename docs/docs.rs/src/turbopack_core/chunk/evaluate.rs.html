@@ -61,6 +61,10 @@
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{Value, ValueToString};
 
@@ -70,6 +74,7 @@
     context::{AssetContext, AssetContextVc},
     module::{Module, ModuleVc},
     reference_type::{EntryReferenceSubType, ReferenceType},
+    source::SourceVc,
 };
 
 <span class="doccomment">/// Marker trait for the chunking context to accept evaluated entries.
@@ -82,9 +87,12 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>EvaluatableAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>from_asset(asset: AssetVc, context: AssetContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;EvaluatableAssetVc&gt; {
+    </span><span class="kw">pub async fn </span>from_source(
+        source: SourceVc,
+        context: AssetContextVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EvaluatableAssetVc&gt; {
         <span class="kw">let </span>asset = context.process(
-            asset,
+            source,
             Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)),
         );
         <span class="kw">let </span><span class="prelude-val">Some</span>(entry) = EvaluatableAssetVc::resolve_from(asset).<span class="kw">await</span><span class="question-mark">? </span><span class="kw">else </span>{

@@ -421,6 +421,7 @@
 <a href="#421" id="421">421</a>
 <a href="#422" id="422">422</a>
 <a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{fmt::Write, iter::once, sync::Arc};
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -448,6 +449,7 @@
         origin::{ResolveOrigin, ResolveOriginVc},
         parse::RequestVc,
     },
+    source::SourceVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::{
     chunk::{
@@ -472,14 +474,14 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
 </span><span class="kw">pub struct </span>ModuleCssAsset {
-    <span class="kw">pub </span>source: AssetVc,
+    <span class="kw">pub </span>source: SourceVc,
     <span class="kw">pub </span>context: AssetContextVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>ModuleCssAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>new(source: AssetVc, context: AssetContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+    </span><span class="kw">pub async fn </span>new(source: SourceVc, context: AssetContextVc) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(ModuleCssAsset { source, context }))
     }
 }

@@ -52,8 +52,8 @@
 
 <span class="kw">use super</span>::{AssetReference, AssetReferenceVc};
 <span class="kw">use crate</span>::{
+    file_source::FileSourceVc,
     resolve::{ResolveResult, ResolveResultVc},
-    source_asset::SourceAssetVc,
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -77,7 +77,7 @@
         <span class="kw">let </span>file_type = <span class="self">self</span>.file.get_type().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Ok</span>(file_type_result) = file_type.as_ref() {
             <span class="kw">if let </span>FileSystemEntryType::File = <span class="kw-2">&amp;**</span>file_type_result {
-                <span class="kw">return </span>ResolveResult::asset(SourceAssetVc::new(<span class="self">self</span>.file).into()).into();
+                <span class="kw">return </span>ResolveResult::asset(FileSourceVc::new(<span class="self">self</span>.file).into()).into();
             }
         }
         ResolveResult::unresolveable().into()

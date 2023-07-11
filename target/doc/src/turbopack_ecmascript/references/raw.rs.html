@@ -41,31 +41,33 @@
 <a href="#41" id="41">41</a>
 <a href="#42" id="42">42</a>
 <a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetVc},
+    asset::Asset,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{pattern::PatternVc, resolve_raw, ResolveResultVc},
+    source::SourceVc,
 };
 
 <span class="attr">#[turbo_tasks::value]
 #[derive(Hash, Debug)]
-</span><span class="kw">pub struct </span>SourceAssetReference {
-    <span class="kw">pub </span>source: AssetVc,
+</span><span class="kw">pub struct </span>FileSourceReference {
+    <span class="kw">pub </span>source: SourceVc,
     <span class="kw">pub </span>path: PatternVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>SourceAssetReferenceVc {
+</span><span class="kw">impl </span>FileSourceReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(source: AssetVc, path: PatternVc) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::cell(SourceAssetReference { source, path })
+    </span><span class="kw">pub fn </span>new(source: SourceVc, path: PatternVc) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::cell(FileSourceReference { source, path })
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>AssetReference <span class="kw">for </span>SourceAssetReference {
+</span><span class="kw">impl </span>AssetReference <span class="kw">for </span>FileSourceReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.source.ident().path().parent();
@@ -75,7 +77,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>SourceAssetReference {
+</span><span class="kw">impl </span>ValueToString <span class="kw">for </span>FileSourceReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>to_string(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StringVc&gt; {
         <span class="prelude-val">Ok</span>(StringVc::cell(<span class="macro">format!</span>(

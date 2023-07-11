@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["asset_to_source","asset_to_source_inline","option_asset_to_source","option_asset_to_source_inline"],"struct":["OptionSource","OptionSourceVc","SourceVc","Sources","SourcesVc"],"trait":["Source"],"type":["OptionSourceReadRef","SourceTraitRef","SourcesReadRef"]};

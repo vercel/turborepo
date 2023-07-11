@@ -304,6 +304,9 @@
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>turbo_tasks::{ValueToString, ValueToStringVc};
 <span class="kw">pub mod </span>resolve;
 
@@ -321,6 +324,7 @@
         origin::ResolveOriginVc, parse::RequestVc, pattern::QueryMapVc, ResolveResult,
         ResolveResultVc,
     },
+    source::SourceVc,
 };
 
 <span class="kw">use </span><span class="self">self</span>::resolve::{read_from_tsconfigs, read_tsconfigs, type_resolve};
@@ -329,14 +333,14 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>TsConfigModuleAsset {
-    <span class="kw">pub </span>source: AssetVc,
+    <span class="kw">pub </span>source: SourceVc,
     <span class="kw">pub </span>origin: ResolveOriginVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>TsConfigModuleAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(origin: ResolveOriginVc, source: AssetVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(origin: ResolveOriginVc, source: SourceVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(TsConfigModuleAsset { origin, source })
     }
 }
@@ -375,7 +379,9 @@
                     .map(|s| (source, s.to_string()))
             })
             .<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>(<span class="kw">_</span>, compiler) = compiler.unwrap_or_else(|| (<span class="self">self</span>.source, <span class="string">&quot;typescript&quot;</span>.to_string()));
+            <span class="kw">let </span>compiler = compiler
+                .map(|(<span class="kw">_</span>, c)| c)
+                .unwrap_or_else(|| <span class="string">&quot;typescript&quot;</span>.to_string());
             references.push(
                 CompilerReferenceVc::new(
                     <span class="self">self</span>.origin,
@@ -508,13 +514,13 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Hash, Debug)]
 </span><span class="kw">pub struct </span>TsExtendsReference {
-    <span class="kw">pub </span>config: AssetVc,
+    <span class="kw">pub </span>config: SourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>TsExtendsReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(config: AssetVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(config: SourceVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(TsExtendsReference { config })
     }
 }
@@ -523,7 +529,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>TsExtendsReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::asset(<span class="self">self</span>.config).into()
+        ResolveResult::asset(<span class="self">self</span>.config.into()).into()
     }
 }
 

@@ -34,17 +34,19 @@
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
     module::{Module, ModuleVc},
+    source::SourceVc,
 };
 
 <span class="doccomment">/// A module where source code doesn&#39;t need to be parsed but can be usd as is.
 /// This module has no references to other modules.
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>RawModule {
-    source: AssetVc,
+    source: SourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -66,7 +68,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>RawModuleVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(source: AssetVc) -&gt; RawModuleVc {
+    </span><span class="kw">pub fn </span>new(source: SourceVc) -&gt; RawModuleVc {
         RawModule { source }.cell()
     }
 }

@@ -322,7 +322,7 @@
     },
     reference::primary_referenced_assets,
     source_map::GenerateSourceMapVc,
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
 <span class="kw">use </span><span class="self">self</span>::{
@@ -503,7 +503,7 @@
 /// ESM, for example.
 </span><span class="kw">fn </span>emit_package_json(dir: FileSystemPathVc) -&gt; CompletionVc {
     emit(
-        VirtualAssetVc::new(
+        VirtualSourceVc::new(
             dir.join(<span class="string">&quot;package.json&quot;</span>),
             FileContent::Content(File::from(<span class="string">&quot;{\&quot;type\&quot;: \&quot;commonjs\&quot;}&quot;</span>)).into(),
         )

@@ -22,11 +22,11 @@
 <a href="#22" id="22">22</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 
-<span class="kw">use </span><span class="kw">crate</span>::asset::AssetVc;
+<span class="kw">use </span><span class="kw">crate</span>::source::SourceVc;
 
 <span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>SourceTransform {
-    <span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, source: AssetVc) -&gt; AssetVc;
+    <span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, source: SourceVc) -&gt; SourceVc;
 }
 
 <span class="attr">#[turbo_tasks::value(transparent)]
@@ -35,7 +35,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>SourceTransformsVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>transform(<span class="self">self</span>, source: AssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+    </span><span class="kw">pub async fn </span>transform(<span class="self">self</span>, source: SourceVc) -&gt; <span class="prelude-ty">Result</span>&lt;SourceVc&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.<span class="kw">await</span><span class="question-mark">?
             </span>.iter()

@@ -304,6 +304,7 @@
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::{
     common::{Globals, GLOBALS},
@@ -329,6 +330,7 @@
         origin::{ResolveOrigin, ResolveOriginVc},
         PrimaryResolveResult,
     },
+    source::SourceVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -357,7 +359,7 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
 </span><span class="kw">pub struct </span>CssModuleAsset {
-    source: AssetVc,
+    source: SourceVc,
     context: AssetContextVc,
     transforms: CssInputTransformsVc,
     ty: CssModuleAssetType,
@@ -368,7 +370,7 @@
     <span class="doccomment">/// Creates a new CSS asset.
     </span><span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         transforms: CssInputTransformsVc,
         ty: CssModuleAssetType,

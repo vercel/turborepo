@@ -218,7 +218,6 @@
 };
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc,
     issue::{IssueSeverity, IssueSourceVc, OptionIssueSourceVc},
     reference::{AssetReferenceVc, AssetReferencesVc},
     reference_type::{CssReferenceSubType, ReferenceType},
@@ -228,6 +227,7 @@
         parse::RequestVc,
         ResolveResultVc,
     },
+    source::SourceVc,
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -247,7 +247,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>analyze_css_stylesheet(
-    source: AssetVc,
+    source: SourceVc,
     origin: ResolveOriginVc,
     ty: CssModuleAssetType,
     transforms: CssInputTransformsVc,
@@ -284,7 +284,7 @@
 }
 
 <span class="kw">struct </span>AssetReferencesVisitor&lt;<span class="lifetime">&#39;a</span>&gt; {
-    source: AssetVc,
+    source: SourceVc,
     origin: ResolveOriginVc,
     references: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>Vec&lt;AssetReferenceVc&gt;,
     is_import: bool,
@@ -292,7 +292,7 @@
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; AssetReferencesVisitor&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">fn </span>new(
-        source: AssetVc,
+        source: SourceVc,
         origin: ResolveOriginVc,
         references: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>Vec&lt;AssetReferenceVc&gt;,
     ) -&gt; <span class="self">Self </span>{
@@ -341,7 +341,7 @@
                 AstPathVc::cell(as_parent_path(ast_path)),
                 ImportAttributes::new_from_prelude(i).into(),
                 IssueSourceVc::from_byte_offset(
-                    <span class="self">self</span>.source,
+                    <span class="self">self</span>.source.into(),
                     issue_span.lo.to_usize(),
                     issue_span.hi.to_usize(),
                 ),
@@ -371,7 +371,7 @@
                     RequestVc::parse(Value::new(src.to_string().into())),
                     AstPathVc::cell(as_parent_path(ast_path)),
                     IssueSourceVc::from_byte_offset(
-                        <span class="self">self</span>.source,
+                        <span class="self">self</span>.source.into(),
                         issue_span.lo.to_usize(),
                         issue_span.hi.to_usize(),
                     ),

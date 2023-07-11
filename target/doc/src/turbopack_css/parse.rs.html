@@ -256,6 +256,7 @@
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
@@ -276,7 +277,8 @@
 <span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbo_tasks_fs::{FileContent, FileSystemPath};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContent, AssetVc},
+    asset::{Asset, AssetContent},
+    source::SourceVc,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
     SOURCE_MAP_ROOT_NAME,
 };
@@ -376,7 +378,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>parse_css(
-    source: AssetVc,
+    source: SourceVc,
     ty: CssModuleAssetType,
     transforms: CssInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseCssResultVc&gt; {
@@ -410,7 +412,7 @@
     string: String,
     fs_path: <span class="kw-2">&amp;</span>FileSystemPath,
     ident_str: <span class="kw-2">&amp;</span>str,
-    source: AssetVc,
+    source: SourceVc,
     ty: CssModuleAssetType,
     transforms: <span class="kw-2">&amp;</span>[CssInputTransform],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ParseCssResultVc&gt; {

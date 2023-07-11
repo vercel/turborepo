@@ -83,8 +83,8 @@
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc, compile_time_info::CompileTimeInfoVc, module::ModuleVc,
-    reference_type::ReferenceType,
+    compile_time_info::CompileTimeInfoVc, module::ModuleVc, reference_type::ReferenceType,
+    source::SourceVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -98,7 +98,7 @@
 </span><span class="attr">#[turbo_tasks::value_trait]
 </span><span class="kw">pub trait </span>Transition {
     <span class="doccomment">/// Apply modifications/wrapping to the source asset
-    </span><span class="kw">fn </span>process_source(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: AssetVc) -&gt; AssetVc {
+    </span><span class="kw">fn </span>process_source(<span class="kw-2">&amp;</span><span class="self">self</span>, asset: SourceVc) -&gt; SourceVc {
         asset
     }
     <span class="doccomment">/// Apply modifications to the compile-time information
@@ -145,7 +145,7 @@
     <span class="doccomment">/// Apply modification on the processing of the asset
     </span><span class="kw">fn </span>process(
         self_vc: TransitionVc,
-        asset: AssetVc,
+        asset: SourceVc,
         context: ModuleAssetContextVc,
         reference_type: Value&lt;ReferenceType&gt;,
     ) -&gt; ModuleVc {

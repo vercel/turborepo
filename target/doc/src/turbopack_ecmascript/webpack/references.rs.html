@@ -101,8 +101,8 @@
 };
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc,
     reference::{AssetReferenceVc, AssetReferencesVc},
+    source::SourceVc,
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
 
@@ -114,7 +114,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>module_references(
-    source: AssetVc,
+    source: SourceVc,
     runtime: WebpackRuntimeVc,
     transforms: EcmascriptInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {

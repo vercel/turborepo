@@ -169,6 +169,7 @@
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{future::Future, pin::Pin};
 
 <span class="kw">use </span>anyhow::Result;
@@ -180,12 +181,13 @@
 };
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetVc},
+    file_source::FileSourceVc,
     reference::{AssetReference, AssetReferenceVc},
     resolve::{
         pattern::{Pattern, PatternVc},
         ResolveResult, ResolveResultVc,
     },
-    source_asset::SourceAssetVc,
+    source::SourceVc,
 };
 
 <span class="attr">#[turbo_tasks::value]
@@ -206,7 +208,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>PackageJsonReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>resolve_reference(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ResolveResultVc {
-        ResolveResult::asset(SourceAssetVc::new(<span class="self">self</span>.package_json).into()).into()
+        ResolveResult::asset(FileSourceVc::new(<span class="self">self</span>.package_json).into()).into()
     }
 }
 
@@ -224,14 +226,14 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Hash, Debug)]
 </span><span class="kw">pub struct </span>DirAssetReference {
-    <span class="kw">pub </span>source: AssetVc,
+    <span class="kw">pub </span>source: SourceVc,
     <span class="kw">pub </span>path: PatternVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>DirAssetReferenceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(source: AssetVc, path: PatternVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(source: SourceVc, path: PatternVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(DirAssetReference { source, path })
     }
 }
@@ -295,7 +297,7 @@
         realpath_with_links
             .symlinks
             .iter()
-            .map(|l| SourceAssetVc::new(<span class="kw-2">*</span>l).as_asset()),
+            .map(|l| FileSourceVc::new(<span class="kw-2">*</span>l).as_asset()),
     );
     <span class="kw">let </span>entry_type = <span class="kw">match </span>dest_file_path.get_type().<span class="kw">await </span>{
         <span class="prelude-val">Ok</span>(e) =&gt; e,
@@ -306,7 +308,7 @@
             result.extend(read_dir(dest_file_path).<span class="kw">await</span><span class="question-mark">?</span>);
         }
         FileSystemEntryType::File | FileSystemEntryType::Symlink =&gt; {
-            result.insert(SourceAssetVc::new(dest_file_path).into());
+            result.insert(FileSourceVc::new(dest_file_path).into());
         }
         <span class="kw">_ </span>=&gt; {}
     }
@@ -322,7 +324,7 @@
         <span class="kw">for </span>(<span class="kw">_</span>, entry) <span class="kw">in </span>entries {
             <span class="kw">match </span>entry {
                 DirectoryEntry::File(file) =&gt; {
-                    result.insert(SourceAssetVc::new(<span class="kw-2">*</span>file).into());
+                    result.insert(FileSourceVc::new(<span class="kw-2">*</span>file).into());
                 }
                 DirectoryEntry::Directory(dir) =&gt; {
                     <span class="kw">let </span>sub = read_dir_boxed(<span class="kw-2">*</span>dir).<span class="kw">await</span><span class="question-mark">?</span>;

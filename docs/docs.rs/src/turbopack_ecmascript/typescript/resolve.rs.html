@@ -474,6 +474,8 @@
 <a href="#474" id="474">474</a>
 <a href="#475" id="475">475</a>
 <a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{collections::HashMap, fmt::Write};
 
 <span class="kw">use </span>anyhow::Result;
@@ -486,8 +488,9 @@
     FileContent, FileContentVc, FileJsonContent, FileJsonContentVc, FileSystemPathVc,
 };
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetOptionVc, AssetVc},
+    asset::Asset,
     context::AssetContext,
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc, OptionIssueSourceVc},
     reference::{AssetReference, AssetReferenceVc},
@@ -504,7 +507,7 @@
         pattern::{Pattern, QueryMapVc},
         resolve, AliasPattern, ResolveResultVc,
     },
-    source_asset::SourceAssetVc,
+    source::{option_asset_to_source, OptionSourceVc, SourceVc},
 };
 
 <span class="attr">#[turbo_tasks::value(shared)]
@@ -523,9 +526,9 @@
 
 <span class="kw">pub async fn </span>read_tsconfigs(
     <span class="kw-2">mut </span>data: FileContentVc,
-    <span class="kw-2">mut </span>tsconfig: AssetVc,
+    <span class="kw-2">mut </span>tsconfig: SourceVc,
     resolve_options: ResolveOptionsVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(FileJsonContentVc, AssetVc)&gt;&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;(FileJsonContentVc, SourceVc)&gt;&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>configs = Vec::new();
     <span class="kw">let </span>resolve_options = json_only(resolve_options);
     <span class="kw">loop </span>{
@@ -562,9 +565,9 @@
                 configs.push((parsed_data, tsconfig));
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(extends) = json[<span class="string">&quot;extends&quot;</span>].as_str() {
                     <span class="kw">let </span>resolved = resolve_extends(tsconfig, extends, resolve_options).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(asset) = <span class="kw-2">&amp;*</span>resolved.<span class="kw">await</span><span class="question-mark">? </span>{
-                        data = asset.content().file_content();
-                        tsconfig = <span class="kw-2">*</span>asset;
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(source) = <span class="kw-2">*</span>resolved.<span class="kw">await</span><span class="question-mark">? </span>{
+                        data = source.content().file_content();
+                        tsconfig = source;
                         <span class="kw">continue</span>;
                     } <span class="kw">else </span>{
                         TsConfigIssue {
@@ -589,10 +592,10 @@
 <span class="doccomment">/// Resolves tsconfig files according to TS&#39;s implementation:
 /// https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3294-L3326
 </span><span class="kw">async fn </span>resolve_extends(
-    tsconfig: AssetVc,
+    tsconfig: SourceVc,
     extends: <span class="kw-2">&amp;</span>str,
     resolve_options: ResolveOptionsVc,
-) -&gt; <span class="prelude-ty">Result</span>&lt;AssetOptionVc&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;OptionSourceVc&gt; {
     <span class="kw">let </span>context = tsconfig.ident().path().parent();
     <span class="kw">let </span>request = RequestVc::parse_string(extends.to_string());
 
@@ -621,16 +624,16 @@
         <span class="comment">// An empty extends is treated as &quot;./tsconfig&quot;
         </span>Request::Empty =&gt; {
             <span class="kw">let </span>request = RequestVc::parse_string(<span class="string">&quot;./tsconfig&quot;</span>.to_string());
-            <span class="prelude-val">Ok</span>(resolve(context, request, resolve_options).first_asset())
+            <span class="prelude-val">Ok</span>(option_asset_to_source(resolve(context, request, resolve_options).first_asset()))
         }
 
         <span class="comment">// All other types are treated as module imports, and potentially joined with
         // &quot;tsconfig.json&quot;. This includes &quot;relative&quot; imports like &#39;.&#39; and &#39;..&#39;.
         </span><span class="kw">_ </span>=&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>result = resolve(context, request, resolve_options).first_asset();
+            <span class="kw">let </span><span class="kw-2">mut </span>result = option_asset_to_source(resolve(context, request, resolve_options).first_asset());
             <span class="kw">if </span>result.<span class="kw">await</span><span class="question-mark">?</span>.is_none() {
                 <span class="kw">let </span>request = RequestVc::parse_string(<span class="macro">format!</span>(<span class="string">&quot;{extends}/tsconfig&quot;</span>));
-                result = resolve(context, request, resolve_options).first_asset();
+                result = option_asset_to_source(resolve(context, request, resolve_options).first_asset());
             }
             <span class="prelude-val">Ok</span>(result)
         }
@@ -642,22 +645,23 @@
     request: RequestVc,
     resolve_options: ResolveOptionsVc,
     path: <span class="kw-2">&amp;</span>str,
-) -&gt; <span class="prelude-ty">Result</span>&lt;AssetOptionVc&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>result = resolve(context, request, resolve_options).first_asset();
+) -&gt; <span class="prelude-ty">Result</span>&lt;OptionSourceVc&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>result =
+        option_asset_to_source(resolve(context, request, resolve_options).first_asset());
 
     <span class="comment">// If the file doesn&#39;t end with &quot;.json&quot; and we can&#39;t find the file, then we have
     // to try again with it.
     // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3305
     </span><span class="kw">if </span>!path.ends_with(<span class="string">&quot;.json&quot;</span>) &amp;&amp; result.<span class="kw">await</span><span class="question-mark">?</span>.is_none() {
         <span class="kw">let </span>request = RequestVc::parse_string(<span class="macro">format!</span>(<span class="string">&quot;{path}.json&quot;</span>));
-        result = resolve(context, request, resolve_options).first_asset();
+        result = option_asset_to_source(resolve(context, request, resolve_options).first_asset());
     }
     <span class="prelude-val">Ok</span>(result)
 }
 
 <span class="kw">pub async fn </span>read_from_tsconfigs&lt;T&gt;(
-    configs: <span class="kw-2">&amp;</span>[(FileJsonContentVc, AssetVc)],
-    accessor: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>JsonValue, AssetVc) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;,
+    configs: <span class="kw-2">&amp;</span>[(FileJsonContentVc, SourceVc)],
+    accessor: <span class="kw">impl </span>Fn(<span class="kw-2">&amp;</span>JsonValue, SourceVc) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt; {
     <span class="kw">for </span>(config, source) <span class="kw">in </span>configs.iter() {
         <span class="kw">if let </span>FileJsonContent::Content(json) = <span class="kw-2">&amp;*</span>config.<span class="kw">await</span><span class="question-mark">? </span>{
@@ -690,7 +694,7 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;TsConfigResolveOptionsVc&gt; {
     <span class="kw">let </span>configs = read_tsconfigs(
         tsconfig.read(),
-        SourceAssetVc::new(tsconfig).into(),
+        FileSourceVc::new(tsconfig).into(),
         node_cjs_resolve_options(tsconfig.root()),
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;

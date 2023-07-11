@@ -1104,7 +1104,7 @@
                                 glob: GlobVc::new(glob).<span class="kw">await</span><span class="question-mark">?</span>,
                             }
                         },
-                        ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
+                        ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualSource),
                     ]),
                     <span class="macro">vec!</span>[
                         <span class="comment">// By default, loaders are expected to return ecmascript code.

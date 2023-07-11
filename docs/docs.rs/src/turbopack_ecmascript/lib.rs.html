@@ -679,6 +679,7 @@
 <a href="#679" id="679">679</a>
 <a href="#680" id="680">680</a>
 <a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
 </pre></div><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(min_specialization)]
 #![feature(iter_intersperse)]
@@ -752,6 +753,7 @@
         parse::RequestVc,
         ModulePartVc,
     },
+    source::SourceVc,
 };
 
 <span class="kw">pub use </span><span class="self">self</span>::references::AnalyzeEcmascriptModuleResultVc;
@@ -821,7 +823,7 @@
 }
 
 <span class="kw">pub struct </span>EcmascriptModuleAssetBuilder {
-    source: AssetVc,
+    source: SourceVc,
     context: AssetContextVc,
     ty: EcmascriptModuleAssetType,
     transforms: EcmascriptInputTransformsVc,
@@ -878,7 +880,7 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>EcmascriptModuleAsset {
-    <span class="kw">pub </span>source: AssetVc,
+    <span class="kw">pub </span>source: SourceVc,
     <span class="kw">pub </span>context: AssetContextVc,
     <span class="kw">pub </span>ty: EcmascriptModuleAssetType,
     <span class="kw">pub </span>transforms: EcmascriptInputTransformsVc,
@@ -896,7 +898,7 @@
 
 <span class="kw">impl </span>EcmascriptModuleAssetVc {
     <span class="kw">pub fn </span>builder(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         transforms: EcmascriptInputTransformsVc,
         options: EcmascriptOptions,
@@ -919,7 +921,7 @@
 </span><span class="kw">impl </span>EcmascriptModuleAssetVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         ty: Value&lt;EcmascriptModuleAssetType&gt;,
         transforms: EcmascriptInputTransformsVc,
@@ -940,7 +942,7 @@
 
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new_with_inner_assets(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         ty: Value&lt;EcmascriptModuleAssetType&gt;,
         transforms: EcmascriptInputTransformsVc,

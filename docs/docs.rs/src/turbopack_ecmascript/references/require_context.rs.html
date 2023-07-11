@@ -527,6 +527,7 @@
 <a href="#527" id="527">527</a>
 <a href="#528" id="528">528</a>
 <a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{collections::VecDeque, sync::Arc};
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -563,6 +564,7 @@
         parse::RequestVc,
         ResolveResult, ResolveResultVc,
     },
+    source::SourceVc,
 };
 
 <span class="kw">use crate</span>::{
@@ -752,7 +754,7 @@
 </span><span class="kw">impl </span>RequireContextAssetReferenceVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
-        source: AssetVc,
+        source: SourceVc,
         origin: ResolveOriginVc,
         dir: String,
         include_subdirs: bool,
@@ -863,7 +865,7 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>RequireContextAsset {
-    source: AssetVc,
+    source: SourceVc,
 
     origin: ResolveOriginVc,
     map: RequireContextMapVc,

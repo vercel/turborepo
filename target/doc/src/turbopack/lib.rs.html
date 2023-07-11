@@ -618,6 +618,13 @@
 <a href="#618" id="618">618</a>
 <a href="#619" id="619">619</a>
 <a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
+<a href="#627" id="627">627</a>
 </pre></div><pre class="rust"><code><span class="attr">#![feature(box_patterns)]
 #![feature(trivial_bounds)]
 #![feature(min_specialization)]
@@ -661,6 +668,7 @@
         options::ResolveOptionsVc, origin::PlainResolveOriginVc, parse::RequestVc, resolve,
         ModulePartVc, ResolveResultVc,
     },
+    source::{asset_to_source, SourceVc},
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::transition::Transition;
@@ -719,7 +727,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>apply_module_type(
-    source: AssetVc,
+    source: SourceVc,
     context: ModuleAssetContextVc,
     module_type: ModuleTypeVc,
     part: <span class="prelude-ty">Option</span>&lt;ModulePartVc&gt;,
@@ -881,7 +889,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>process_default(
         self_vc: ModuleAssetContextVc,
-        source: AssetVc,
+        source: SourceVc,
         reference_type: Value&lt;ReferenceType&gt;,
     ) -&gt; ModuleVc {
         process_default(self_vc, source, reference_type, Vec::new())
@@ -891,7 +899,7 @@
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">async fn </span>process_default(
     context: ModuleAssetContextVc,
-    source: AssetVc,
+    source: SourceVc,
     reference_type: Value&lt;ReferenceType&gt;,
     processed_rules: Vec&lt;usize&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleVc&gt; {
@@ -1071,7 +1079,13 @@
             </span>.map(
                 |a| {
                     <span class="kw">let </span>reference_type = reference_type.clone();
-                    <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(self_vc.process(a, reference_type).resolve().<span class="kw">await</span><span class="question-mark">?</span>.into()) }
+                    <span class="kw">async move </span>{
+                        <span class="prelude-val">Ok</span>(self_vc
+                            .process(asset_to_source(a), reference_type)
+                            .resolve()
+                            .<span class="kw">await</span><span class="question-mark">?
+                            </span>.into())
+                    }
                 },
                 |i| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(i) },
             )
@@ -1081,7 +1095,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>process(
         self_vc: ModuleAssetContextVc,
-        asset: AssetVc,
+        asset: SourceVc,
         reference_type: Value&lt;ReferenceType&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ModuleVc&gt; {
         <span class="kw">let </span>this = self_vc.<span class="kw">await</span><span class="question-mark">?</span>;

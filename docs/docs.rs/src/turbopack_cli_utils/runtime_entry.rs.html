@@ -73,15 +73,17 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::ValueToString;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetVc},
+    asset::Asset,
     chunk::{EvaluatableAssetVc, EvaluatableAssetsVc},
     context::AssetContextVc,
     issue::{IssueSeverity, OptionIssueSourceVc},
     resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
+    source::SourceVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::resolve::cjs_resolve;
 
@@ -89,7 +91,7 @@
 </span><span class="kw">pub enum </span>RuntimeEntry {
     Request(RequestVc, FileSystemPathVc),
     Evaluatable(EvaluatableAssetVc),
-    Source(AssetVc),
+    Source(SourceVc),
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
@@ -99,7 +101,7 @@
         <span class="kw">let </span>(request, path) = <span class="kw">match </span><span class="kw-2">*</span><span class="self">self</span>.<span class="kw">await</span><span class="question-mark">? </span>{
             RuntimeEntry::Evaluatable(e) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(EvaluatableAssetsVc::one(e)),
             RuntimeEntry::Source(source) =&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(EvaluatableAssetsVc::one(EvaluatableAssetVc::from_asset(
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(EvaluatableAssetsVc::one(EvaluatableAssetVc::from_source(
                     source, context,
                 )));
             }

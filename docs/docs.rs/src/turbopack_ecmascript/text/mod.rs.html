@@ -50,12 +50,17 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::FileContent;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
+    source::{Source, SourceVc},
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::utils::StringifyJs;
@@ -68,20 +73,23 @@
 <span class="doccomment">/// A source asset that exports the string content of an asset as the default
 /// export of a JS module.
 </span><span class="attr">#[turbo_tasks::value]
-</span><span class="kw">pub struct </span>TextContentSourceAsset {
-    <span class="kw">pub </span>source: AssetVc,
+</span><span class="kw">pub struct </span>TextContentFileSource {
+    <span class="kw">pub </span>source: SourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>TextContentSourceAssetVc {
+</span><span class="kw">impl </span>TextContentFileSourceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(source: AssetVc) -&gt; <span class="self">Self </span>{
-        TextContentSourceAsset { source }.cell()
+    </span><span class="kw">pub fn </span>new(source: SourceVc) -&gt; <span class="self">Self </span>{
+        TextContentFileSource { source }.cell()
     }
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
-</span><span class="kw">impl </span>Asset <span class="kw">for </span>TextContentSourceAsset {
+</span><span class="kw">impl </span>Source <span class="kw">for </span>TextContentFileSource {}
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Asset <span class="kw">for </span>TextContentFileSource {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
         <span class="self">self</span>.source

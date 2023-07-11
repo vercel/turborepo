@@ -37,11 +37,13 @@
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
 <a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
+    source::SourceVc,
 };
 
 <span class="doccomment">/// A static asset that is served at a fixed output path. It won&#39;t use
@@ -49,13 +51,13 @@
 </span><span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>FixedStaticAsset {
     output_path: FileSystemPathVc,
-    source: AssetVc,
+    source: SourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>FixedStaticAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(output_path: FileSystemPathVc, source: AssetVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(output_path: FileSystemPathVc, source: SourceVc) -&gt; <span class="self">Self </span>{
         FixedStaticAsset {
             output_path,
             source,

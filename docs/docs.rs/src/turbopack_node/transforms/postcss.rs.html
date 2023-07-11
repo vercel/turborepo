@@ -261,6 +261,10 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::indexmap;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -276,17 +280,18 @@
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     changed::any_content_changed,
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     issue::IssueContextExt,
     module::ModuleVc,
     reference_type::{EntryReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
-    source_asset::SourceAssetVc,
+    source::{Source, SourceVc},
     source_transform::{SourceTransform, SourceTransformVc},
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
-<span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_assets, EmittedAsset};
+<span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_sources, EmittedAsset};
 <span class="kw">use crate</span>::{
     debug::should_debug,
     embed_js::embed_file,
@@ -353,7 +358,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>SourceTransform <span class="kw">for </span>PostCssTransform {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, source: AssetVc) -&gt; AssetVc {
+    </span><span class="kw">fn </span>transform(<span class="kw-2">&amp;</span><span class="self">self</span>, source: SourceVc) -&gt; SourceVc {
         PostCssTransformedAsset {
             evaluate_context: <span class="self">self</span>.evaluate_context,
             execution_context: <span class="self">self</span>.execution_context,
@@ -368,8 +373,11 @@
 </span><span class="kw">struct </span>PostCssTransformedAsset {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
-    source: AssetVc,
+    source: SourceVc,
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Source <span class="kw">for </span>PostCssTransformedAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>PostCssTransformedAsset {
@@ -393,7 +401,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ProcessPostCssResult {
     content: AssetContentVc,
-    assets: Vec&lt;VirtualAssetVc&gt;,
+    assets: Vec&lt;VirtualSourceVc&gt;,
 }
 
 <span class="attr">#[turbo_tasks::function]
@@ -410,7 +418,7 @@
                     any_content_changed(
                         context
                             .process(
-                                SourceAssetVc::new(path).into(),
+                                FileSourceVc::new(path).into(),
                                 Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
                             )
                             .into(),
@@ -431,13 +439,13 @@
 </span><span class="kw">fn </span>postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPathVc) -&gt; ModuleVc {
     <span class="kw">let </span>config_asset = context
         .process(
-            SourceAssetVc::new(postcss_config_path).into(),
+            FileSourceVc::new(postcss_config_path).into(),
             Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
         )
         .into();
 
     context.process(
-        VirtualAssetVc::new(
+        VirtualSourceVc::new(
             postcss_config_path.join(<span class="string">&quot;transform.ts&quot;</span>),
             AssetContent::File(embed_file(<span class="string">&quot;transforms/postcss.ts&quot;</span>)).cell(),
         )
@@ -519,7 +527,7 @@
 
         <span class="comment">// TODO handle SourceMap
         </span><span class="kw">let </span>file = File::from(processed_css.css);
-        <span class="kw">let </span>assets = emitted_assets_to_virtual_assets(processed_css.assets);
+        <span class="kw">let </span>assets = emitted_assets_to_virtual_sources(processed_css.assets);
         <span class="kw">let </span>content = AssetContent::File(FileContent::Content(file).cell()).cell();
         <span class="prelude-val">Ok</span>(ProcessPostCssResult { content, assets }.cell())
     }

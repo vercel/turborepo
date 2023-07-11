@@ -171,6 +171,7 @@
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! JSON asset support for turbopack.
 //!
 //! JSON assets are parsed to ensure they contain valid JSON.
@@ -194,6 +195,7 @@
     ident::AssetIdentVc,
     module::{Module, ModuleVc},
     reference::AssetReferencesVc,
+    source::SourceVc,
 };
 <span class="kw">use </span>turbopack_ecmascript::chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
@@ -208,13 +210,13 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>JsonModuleAsset {
-    source: AssetVc,
+    source: SourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>JsonModuleAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(source: AssetVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(source: SourceVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(JsonModuleAsset { source })
     }
 }

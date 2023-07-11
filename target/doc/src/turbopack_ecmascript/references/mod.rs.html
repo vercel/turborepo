@@ -2671,6 +2671,11 @@
 <a href="#2671" id="2671">2671</a>
 <a href="#2672" id="2672">2672</a>
 <a href="#2673" id="2673">2673</a>
+<a href="#2674" id="2674">2674</a>
+<a href="#2675" id="2675">2675</a>
+<a href="#2676" id="2676">2676</a>
+<a href="#2677" id="2677">2677</a>
+<a href="#2678" id="2678">2678</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>amd;
 <span class="kw">pub mod </span>cjs;
 <span class="kw">pub mod </span>constant_condition;
@@ -2723,7 +2728,7 @@
 };
 <span class="kw">use </span>turbo_tasks_fs::{FileJsonContent, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetVc},
+    asset::Asset,
     compile_time_info::{CompileTimeInfoVc, FreeVarReference},
     error::PrettyPrintError,
     issue::{IssueSourceVc, OptionIssueSourceVc},
@@ -2737,6 +2742,7 @@
         pattern::Pattern,
         resolve, FindContextFileResult, ModulePartVc, PrimaryResolveResult,
     },
+    source::{asset_to_source, SourceVc},
 };
 <span class="kw">use </span>turbopack_swc_utils::emitter::IssueEmitter;
 <span class="kw">use </span>unreachable::UnreachableVc;
@@ -2752,7 +2758,7 @@
         EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc, UrlAssetReferenceVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
-    raw::SourceAssetReferenceVc,
+    raw::FileSourceReferenceVc,
     typescript::{
         TsConfigReferenceVc, TsReferencePathAssetReferenceVc, TsReferenceTypeAssetReferenceVc,
     },
@@ -2956,7 +2962,7 @@
 
 <span class="kw">struct </span>AnalysisState&lt;<span class="lifetime">&#39;a</span>&gt; {
     handler: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Handler,
-    source: AssetVc,
+    source: SourceVc,
     origin: ResolveOriginVc,
     compile_time_info: CompileTimeInfoVc,
     var_graph: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>VarGraph,
@@ -2992,7 +2998,7 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>analyze_ecmascript_module(
-    source: AssetVc,
+    source: SourceVc,
     origin: ResolveOriginVc,
     ty: Value&lt;EcmascriptModuleAssetType&gt;,
     transforms: EcmascriptInputTransformsVc,
@@ -3622,7 +3628,11 @@
                     RequestVc::parse(Value::new(pat)),
                     compile_time_info.environment().rendering(),
                     AstPathVc::cell(ast_path),
-                    IssueSourceVc::from_byte_offset(source, span.lo.to_usize(), span.hi.to_usize()),
+                    IssueSourceVc::from_byte_offset(
+                        source.into(),
+                        span.lo.to_usize(),
+                        span.hi.to_usize(),
+                    ),
                     in_try,
                 ));
             }
@@ -3869,7 +3879,7 @@
                         ),
                     )
                 }
-                analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+                analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
             <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
@@ -3909,7 +3919,7 @@
                     ),
                 )
             }
-            analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+            analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
@@ -3968,7 +3978,7 @@
                         ),
                     );
                 }
-                analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+                analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
             <span class="kw">let </span>(args, hints) = explain_args(<span class="kw-2">&amp;</span>args);
@@ -4416,12 +4426,12 @@
     <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
 }
 
-<span class="kw">fn </span>issue_source(source: AssetVc, span: Span) -&gt; IssueSourceVc {
-    IssueSourceVc::from_byte_offset(source, span.lo.to_usize(), span.hi.to_usize())
+<span class="kw">fn </span>issue_source(source: SourceVc, span: Span) -&gt; IssueSourceVc {
+    IssueSourceVc::from_byte_offset(source.into(), span.lo.to_usize(), span.hi.to_usize())
 }
 
 <span class="kw">fn </span>analyze_amd_define(
-    source: AssetVc,
+    source: SourceVc,
     analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
     origin: ResolveOriginVc,
     handler: <span class="kw-2">&amp;</span>Handler,
@@ -4526,7 +4536,7 @@
 }
 
 <span class="kw">fn </span>analyze_amd_define_with_deps(
-    source: AssetVc,
+    source: SourceVc,
     analysis: <span class="kw-2">&amp;mut </span>AnalyzeEcmascriptModuleResultBuilder,
     origin: ResolveOriginVc,
     handler: <span class="kw-2">&amp;</span>Handler,
@@ -5235,7 +5245,7 @@
     );
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(source) = <span class="kw-2">*</span>resolved.first_asset().<span class="kw">await</span><span class="question-mark">? </span>{
-        <span class="prelude-val">Ok</span>(webpack_runtime(source, transforms))
+        <span class="prelude-val">Ok</span>(webpack_runtime(asset_to_source(source), transforms))
     } <span class="kw">else </span>{
         <span class="prelude-val">Ok</span>(WebpackRuntime::None.into())
     }

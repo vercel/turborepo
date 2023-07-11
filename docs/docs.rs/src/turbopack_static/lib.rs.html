@@ -248,6 +248,7 @@
 <a href="#248" id="248">248</a>
 <a href="#249" id="249">249</a>
 <a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -275,6 +276,7 @@
     ident::AssetIdentVc,
     module::{Module, ModuleVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
+    source::SourceVc,
 };
 <span class="kw">use </span>turbopack_css::embed::{CssEmbed, CssEmbedVc, CssEmbeddable, CssEmbeddableVc};
 <span class="kw">use </span>turbopack_ecmascript::{
@@ -294,14 +296,14 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
 </span><span class="kw">pub struct </span>StaticModuleAsset {
-    <span class="kw">pub </span>source: AssetVc,
+    <span class="kw">pub </span>source: SourceVc,
     <span class="kw">pub </span>context: AssetContextVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>StaticModuleAssetVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(source: AssetVc, context: AssetContextVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(source: SourceVc, context: AssetContextVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(StaticModuleAsset { source, context })
     }
 
@@ -385,7 +387,7 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>StaticAsset {
     context: ChunkingContextVc,
-    source: AssetVc,
+    source: SourceVc,
 }
 
 <span class="attr">#[turbo_tasks::value_impl]

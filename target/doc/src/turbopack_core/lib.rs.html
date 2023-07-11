@@ -50,6 +50,7 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
 </pre></div><pre class="rust"><code><span class="attr">#![feature(async_closure)]
 #![feature(min_specialization)]
 #![feature(option_get_or_insert_default)]
@@ -65,6 +66,7 @@
 <span class="kw">pub mod </span>context;
 <span class="kw">pub mod </span>environment;
 <span class="kw">pub mod </span>error;
+<span class="kw">pub mod </span>file_source;
 <span class="kw">pub mod </span>ident;
 <span class="kw">pub mod </span>introspect;
 <span class="kw">pub mod </span>issue;
@@ -76,14 +78,14 @@
 <span class="kw">pub mod </span>reference_type;
 <span class="kw">pub mod </span>resolve;
 <span class="kw">pub mod </span>server_fs;
-<span class="kw">pub mod </span>source_asset;
+<span class="kw">pub mod </span>source;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub mod </span>source_pos;
 <span class="kw">pub mod </span>source_transform;
 <span class="kw">pub mod </span>target;
 <span class="kw">mod </span>utils;
 <span class="kw">pub mod </span>version;
-<span class="kw">pub mod </span>virtual_asset;
+<span class="kw">pub mod </span>virtual_source;
 
 <span class="kw">pub mod </span>virtual_fs {
     <span class="kw">pub use </span>turbo_tasks_fs::VirtualFileSystemVc;

@@ -191,6 +191,10 @@
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
 <a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
@@ -200,15 +204,16 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     module::ModuleVc,
     reference_type::{InnerAssetsVc, ReferenceType},
-    source_asset::SourceAssetVc,
+    source::{Source, SourceVc},
     source_transform::{SourceTransform, SourceTransformVc},
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
-<span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_assets, EmittedAsset};
+<span class="kw">use </span><span class="kw">super</span>::util::{emitted_assets_to_virtual_sources, EmittedAsset};
 <span class="kw">use crate</span>::{
     debug::should_debug,
     embed_js::embed_file_path,
@@ -267,7 +272,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>SourceTransform <span class="kw">for </span>WebpackLoaders {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">fn </span>transform(self_vc: WebpackLoadersVc, source: AssetVc) -&gt; AssetVc {
+    </span><span class="kw">fn </span>transform(self_vc: WebpackLoadersVc, source: SourceVc) -&gt; SourceVc {
         WebpackLoadersProcessedAsset {
             transform: self_vc,
             source,
@@ -280,8 +285,11 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>WebpackLoadersProcessedAsset {
     transform: WebpackLoadersVc,
-    source: AssetVc,
+    source: SourceVc,
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>Source <span class="kw">for </span>WebpackLoadersProcessedAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>WebpackLoadersProcessedAsset {
@@ -305,13 +313,13 @@
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">struct </span>ProcessWebpackLoadersResult {
     content: AssetContentVc,
-    assets: Vec&lt;VirtualAssetVc&gt;,
+    assets: Vec&lt;VirtualSourceVc&gt;,
 }
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">fn </span>webpack_loaders_executor(context: AssetContextVc) -&gt; ModuleVc {
     context.process(
-        SourceAssetVc::new(embed_file_path(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).into(),
+        FileSourceVc::new(embed_file_path(<span class="string">&quot;transforms/webpack-loaders.ts&quot;</span>)).into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
     )
 }
@@ -379,7 +387,7 @@
 
         <span class="comment">// TODO handle SourceMap
         </span><span class="kw">let </span>file = File::from(processed.source);
-        <span class="kw">let </span>assets = emitted_assets_to_virtual_assets(processed.assets);
+        <span class="kw">let </span>assets = emitted_assets_to_virtual_sources(processed.assets);
         <span class="kw">let </span>content = AssetContent::File(FileContent::Content(file).cell()).cell();
         <span class="prelude-val">Ok</span>(ProcessWebpackLoadersResult { content, assets }.cell())
     }

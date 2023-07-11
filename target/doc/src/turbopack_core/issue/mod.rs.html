@@ -1131,7 +1131,7 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
 </span><span class="kw">pub struct </span>IssueSource {
-    <span class="kw">pub </span>asset: AssetVc,
+    <span class="kw">pub </span>source: AssetVc,
     <span class="kw">pub </span>start: SourcePos,
     <span class="kw">pub </span>end: SourcePos,
 }
@@ -1139,7 +1139,7 @@
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>IssueSourceVc {
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>from_byte_offset(asset: AssetVc, start: usize, end: usize) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+    </span><span class="kw">pub async fn </span>from_byte_offset(source: AssetVc, start: usize, end: usize) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">fn </span>find_line_and_column(lines: <span class="kw-2">&amp;</span>[FileLine], offset: usize) -&gt; SourcePos {
             <span class="kw">match </span>lines.binary_search_by(|line| line.bytes_offset.cmp(<span class="kw-2">&amp;</span>offset)) {
                 <span class="prelude-val">Ok</span>(i) =&gt; SourcePos { line: i, column: <span class="number">0 </span>},
@@ -1159,13 +1159,13 @@
             }
         }
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::cell(
-            <span class="kw">if let </span>FileLinesContent::Lines(lines) = <span class="kw-2">&amp;*</span>asset.content().lines().<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">if let </span>FileLinesContent::Lines(lines) = <span class="kw-2">&amp;*</span>source.content().lines().<span class="kw">await</span><span class="question-mark">? </span>{
                 <span class="kw">let </span>start = find_line_and_column(lines.as_ref(), start);
                 <span class="kw">let </span>end = find_line_and_column(lines.as_ref(), end);
-                IssueSource { asset, start, end }
+                IssueSource { source, start, end }
             } <span class="kw">else </span>{
                 IssueSource {
-                    asset,
+                    source,
                     start: SourcePos::default(),
                     end: SourcePos::max(),
                 }
@@ -1325,7 +1325,7 @@
     </span><span class="kw">pub async fn </span>into_plain(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PlainIssueSourceVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(PlainIssueSource {
-            asset: PlainAssetVc::from_asset(this.asset).<span class="kw">await</span><span class="question-mark">?</span>,
+            asset: PlainAssetVc::from_asset(this.source).<span class="kw">await</span><span class="question-mark">?</span>,
             start: this.start,
             end: this.end,
         }

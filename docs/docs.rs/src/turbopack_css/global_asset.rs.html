@@ -75,6 +75,7 @@
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
@@ -85,6 +86,7 @@
     module::{Module, ModuleVc},
     reference::AssetReferencesVc,
     reference_type::{CssReferenceSubType, ReferenceType},
+    source::SourceVc,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::references::internal::InternalCssAssetReferenceVc;
@@ -92,7 +94,7 @@
 <span class="attr">#[turbo_tasks::value]
 #[derive(Clone)]
 </span><span class="kw">pub struct </span>GlobalCssAsset {
-    source: AssetVc,
+    source: SourceVc,
     context: AssetContextVc,
 }
 
@@ -100,7 +102,7 @@
 </span><span class="kw">impl </span>GlobalCssAssetVc {
     <span class="doccomment">/// Creates a new CSS asset. The CSS is treated as global CSS.
     </span><span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub fn </span>new(source: AssetVc, context: AssetContextVc) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(source: SourceVc, context: AssetContextVc) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::cell(GlobalCssAsset { source, context })
     }
 }

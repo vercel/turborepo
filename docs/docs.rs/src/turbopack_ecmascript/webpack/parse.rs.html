@@ -242,7 +242,7 @@
 };
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
-<span class="kw">use </span>turbopack_core::asset::{Asset, AssetVc};
+<span class="kw">use </span>turbopack_core::{asset::Asset, source::SourceVc};
 
 <span class="kw">use crate</span>::{
     analyzer::{graph::EvalContext, JsValue},
@@ -411,11 +411,11 @@
 
 <span class="attr">#[turbo_tasks::function]
 </span><span class="kw">pub async fn </span>webpack_runtime(
-    asset: AssetVc,
+    source: SourceVc,
     transforms: EcmascriptInputTransformsVc,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;WebpackRuntimeVc&gt; {
     <span class="kw">let </span>parsed = parse(
-        asset,
+        source,
         Value::new(EcmascriptModuleAssetType::Ecmascript),
         transforms,
     )
@@ -445,7 +445,7 @@
 
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(WebpackRuntime::Webpack5 {
                             chunk_request_expr: value,
-                            context_path: asset.ident().path().parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>,
+                            context_path: source.ident().path().parent().resolve().<span class="kw">await</span><span class="question-mark">?</span>,
                         }
                         .into());
                     }

@@ -192,11 +192,18 @@
 <a href="#192" id="192">192</a>
 <a href="#193" id="193">193</a>
 <a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>swc_core::ecma::ast::Lit;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
@@ -205,7 +212,7 @@
         parse::RequestVc,
         resolve, ResolveResult, ResolveResultVc,
     },
-    source_asset::SourceAssetVc,
+    source::{asset_to_source, SourceVc},
 };
 
 <span class="kw">use </span><span class="self">self</span>::{
@@ -225,7 +232,7 @@
 
 <span class="attr">#[turbo_tasks::value]
 </span><span class="kw">pub struct </span>WebpackModuleAsset {
-    <span class="kw">pub </span>source: AssetVc,
+    <span class="kw">pub </span>source: SourceVc,
     <span class="kw">pub </span>runtime: WebpackRuntimeVc,
     <span class="kw">pub </span>transforms: EcmascriptInputTransformsVc,
 }
@@ -234,7 +241,7 @@
 </span><span class="kw">impl </span>WebpackModuleAssetVc {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub fn </span>new(
-        source: AssetVc,
+        source: SourceVc,
         runtime: WebpackRuntimeVc,
         transforms: EcmascriptInputTransformsVc,
     ) -&gt; <span class="self">Self </span>{
@@ -289,7 +296,7 @@
                     <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(),
                 };
                 <span class="kw">let </span>filename = <span class="macro">format!</span>(<span class="string">&quot;./chunks/{}.js&quot;</span>, chunk_id);
-                <span class="kw">let </span>source = SourceAssetVc::new(context_path.join(<span class="kw-2">&amp;</span>filename)).into();
+                <span class="kw">let </span>source = FileSourceVc::new(context_path.join(<span class="kw-2">&amp;</span>filename)).into();
 
                 ResolveResult::asset(
                     WebpackModuleAssetVc::new(source, <span class="self">self</span>.runtime, <span class="self">self</span>.transforms).into(),
@@ -316,7 +323,7 @@
 
 <span class="attr">#[turbo_tasks::value(shared)]
 </span><span class="kw">pub struct </span>WebpackEntryAssetReference {
-    <span class="kw">pub </span>source: AssetVc,
+    <span class="kw">pub </span>source: SourceVc,
     <span class="kw">pub </span>runtime: WebpackRuntimeVc,
     <span class="kw">pub </span>transforms: EcmascriptInputTransformsVc,
 }
@@ -367,7 +374,12 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.map(
                 |source| <span class="kw">async move </span>{
-                    <span class="prelude-val">Ok</span>(WebpackModuleAssetVc::new(source, <span class="self">self</span>.runtime, <span class="self">self</span>.transforms).into())
+                    <span class="prelude-val">Ok</span>(WebpackModuleAssetVc::new(
+                        asset_to_source(source),
+                        <span class="self">self</span>.runtime,
+                        <span class="self">self</span>.transforms,
+                    )
+                    .into())
                 },
                 |r| <span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(r) },
             )

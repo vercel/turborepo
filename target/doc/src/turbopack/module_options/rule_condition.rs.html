@@ -126,7 +126,7 @@
 <span class="kw">use </span>turbo_tasks::{primitives::Regex, trace::TraceRawVcs};
 <span class="kw">use </span>turbo_tasks_fs::{glob::GlobReadRef, FileSystemPath, FileSystemPathReadRef};
 <span class="kw">use </span>turbopack_core::{
-    asset::AssetVc, reference_type::ReferenceType, virtual_asset::VirtualAssetVc,
+    reference_type::ReferenceType, source::SourceVc, virtual_source::VirtualSourceVc,
 };
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
@@ -135,7 +135,7 @@
     Any(Vec&lt;ModuleRuleCondition&gt;),
     Not(Box&lt;ModuleRuleCondition&gt;),
     ReferenceType(ReferenceType),
-    ResourceIsVirtualAsset,
+    ResourceIsVirtualSource,
     ResourcePathEquals(FileSystemPathReadRef),
     ResourcePathHasNoExtension,
     ResourcePathEndsWith(String),
@@ -175,7 +175,7 @@
     <span class="attr">#[async_recursion]
     </span><span class="kw">pub async fn </span>matches(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        source: AssetVc,
+        source: SourceVc,
         path: <span class="kw-2">&amp;</span>FileSystemPath,
         reference_type: <span class="kw-2">&amp;</span>ReferenceType,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
@@ -221,8 +221,8 @@
             ModuleRuleCondition::ReferenceType(condition_ty) =&gt; {
                 condition_ty.includes(reference_type)
             }
-            ModuleRuleCondition::ResourceIsVirtualAsset =&gt; {
-                VirtualAssetVc::resolve_from(source).<span class="kw">await</span><span class="question-mark">?</span>.is_some()
+            ModuleRuleCondition::ResourceIsVirtualSource =&gt; {
+                VirtualSourceVc::resolve_from(source).<span class="kw">await</span><span class="question-mark">?</span>.is_some()
             }
             ModuleRuleCondition::ResourcePathGlob { glob, base } =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(path) = base.get_relative_path_to(path) {
