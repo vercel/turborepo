@@ -19,6 +19,7 @@
 type RefreshRuntimeGlobals =
   import("@next/react-refresh-utils/dist/runtime").RefreshRuntimeGlobals;
 
+declare var CHUNK_BASE_PATH: string;
 declare var $RefreshHelpers$: RefreshRuntimeGlobals["$RefreshHelpers$"];
 declare var $RefreshReg$: RefreshRuntimeGlobals["$RefreshReg$"];
 declare var $RefreshSig$: RefreshRuntimeGlobals["$RefreshSig$"];
@@ -1288,6 +1289,13 @@ function getOrInstantiateRuntimeModule(
 }
 
 /**
+ * Returns the URL relative to the origin where a chunk can be fetched from.
+ */
+function getChunkRelativeUrl(chunkPath: ChunkPath): string {
+  return `${CHUNK_BASE_PATH}${chunkPath}`;
+}
+
+/**
  * Subscribes to chunk list updates from the update server and applies them.
  */
 function registerChunkList(
@@ -1297,7 +1305,7 @@ function registerChunkList(
   chunkUpdateProvider.push([
     // The chunk base path is required here for the update server to match it with
     // the correct asset in the content source.
-    `${CHUNK_BASE_PATH}${chunkList.path}`,
+    getChunkRelativeUrl(chunkList.path),
     handleApply.bind(null, chunkList.path),
   ]);
 

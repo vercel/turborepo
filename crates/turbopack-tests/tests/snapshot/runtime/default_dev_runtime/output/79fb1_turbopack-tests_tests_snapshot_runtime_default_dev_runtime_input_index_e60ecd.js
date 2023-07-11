@@ -136,6 +136,7 @@ function getChunkPath(chunkData) {
 ;
 ;
 ;
+;
 var SourceType;
 (function(SourceType) {
     SourceType[SourceType["Runtime"] = 0] = "Runtime";
@@ -884,9 +885,12 @@ function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
         chunkPath
     });
 }
+function getChunkRelativeUrl(chunkPath) {
+    return `${CHUNK_BASE_PATH}${chunkPath}`;
+}
 function registerChunkList(chunkUpdateProvider, chunkList) {
     chunkUpdateProvider.push([
-        `${CHUNK_BASE_PATH}${chunkList.path}`,
+        getChunkRelativeUrl(chunkList.path),
         handleApply.bind(null, chunkList.path)
     ]);
     const chunks = new Set(chunkList.chunks.map(getChunkPath));
@@ -964,13 +968,14 @@ function commonJsRequireContext(entry1, sourceModule1) {
         },
         unloadChunk (chunkPath1) {
             deleteResolver1(chunkPath1);
+            const chunkUrl1 = getChunkRelativeUrl(chunkPath1);
             if (chunkPath1.endsWith(".css")) {
-                const links1 = document.querySelectorAll(`link[href="/${CHUNK_BASE_PATH}${chunkPath1}"]`);
+                const links1 = document.querySelectorAll(`link[href="${chunkUrl1}"]`);
                 for (const link1 of Array.from(links1)){
                     link1.remove();
                 }
             } else if (chunkPath1.endsWith(".js")) {
-                const scripts1 = document.querySelectorAll(`script[src="/${CHUNK_BASE_PATH}${chunkPath1}"]`);
+                const scripts1 = document.querySelectorAll(`script[src="${chunkUrl1}"]`);
                 for (const script1 of Array.from(scripts1)){
                     script1.remove();
                 }
@@ -985,14 +990,15 @@ function commonJsRequireContext(entry1, sourceModule1) {
                     return;
                 }
                 const encodedChunkPath1 = chunkPath1.split("/").map((p1)=>encodeURIComponent(p1)).join("/");
-                const previousLink1 = document.querySelector(`link[rel=stylesheet][href^="/${CHUNK_BASE_PATH}${encodedChunkPath1}"]`);
+                const chunkUrl1 = `/${getChunkRelativeUrl(encodedChunkPath1)}`;
+                const previousLink1 = document.querySelector(`link[rel=stylesheet][href^="${chunkUrl1}"]`);
                 if (previousLink1 == null) {
                     reject1(new Error(`No link element found for chunk ${chunkPath1}`));
                     return;
                 }
                 const link1 = document.createElement("link");
                 link1.rel = "stylesheet";
-                link1.href = `/${encodedChunkPath1}`;
+                link1.href = chunkUrl1;
                 link1.onerror = ()=>{
                     reject1();
                 };
@@ -1042,10 +1048,11 @@ function commonJsRequireContext(entry1, sourceModule1) {
             }
             return resolver1.promise;
         }
+        const chunkUrl1 = `/${getChunkRelativeUrl(chunkPath1)}`;
         if (chunkPath1.endsWith(".css")) {
             const link1 = document.createElement("link");
             link1.rel = "stylesheet";
-            link1.href = `/${CHUNK_BASE_PATH}${chunkPath1}`;
+            link1.href = chunkUrl1;
             link1.onerror = ()=>{
                 resolver1.reject();
             };
@@ -1055,7 +1062,7 @@ function commonJsRequireContext(entry1, sourceModule1) {
             document.body.appendChild(link1);
         } else if (chunkPath1.endsWith(".js")) {
             const script1 = document.createElement("script");
-            script1.src = `/${CHUNK_BASE_PATH}${chunkPath1}`;
+            script1.src = chunkUrl1;
             script1.onerror = ()=>{
                 resolver1.reject();
             };
@@ -1067,7 +1074,7 @@ function commonJsRequireContext(entry1, sourceModule1) {
     }
 })();
 function _eval({ code, url, map }) {
-    code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
+    code += `\n\n//# sourceURL=${location.origin}/${getChunkRelativeUrl(url)}`;
     if (map) code += `\n//# sourceMappingURL=${map}`;
     return eval(code);
 }
