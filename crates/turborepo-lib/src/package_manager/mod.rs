@@ -69,7 +69,7 @@ pub enum PackageManager {
     Yarn,
 }
 
-impl fmt::Display for PackageManager {
+impl Display for PackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Do not change these without also changing `GetPackageManager` in
         // packagemanager.go
@@ -89,7 +89,7 @@ pub struct WorkspaceGlobs {
     directory_inclusions: Any<'static>,
     directory_exclusions: Any<'static>,
     package_json_inclusions: Vec<String>,
-    raw_exclusions: Vec<String>,
+    pub(crate) raw_exclusions: Vec<String>,
 }
 
 impl PartialEq for WorkspaceGlobs {
@@ -280,6 +280,14 @@ static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
     lazy_regex!(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
+    pub fn get_lockfile(&self) -> &'static str {
+        match self {
+            PackageManager::Berry | PackageManager::Yarn => yarn::LOCKFILE,
+            PackageManager::Npm => npm::LOCKFILE,
+            PackageManager::Pnpm | PackageManager::Pnpm6 => pnpm::LOCKFILE,
+        }
+    }
+
     /// Returns the set of globs for the workspace.
     pub fn get_workspace_globs(
         &self,

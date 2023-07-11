@@ -2,13 +2,28 @@ use std::collections::HashMap;
 
 use itertools::{Either, Itertools};
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf,
+};
 
 use crate::{hash_object::hash_objects, Error, Git, SCM};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
 impl SCM {
+    pub fn get_hashes_for_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        files: &[impl AsRef<AnchoredSystemPath>],
+        allow_missing: bool,
+    ) -> Result<GitHashes, Error> {
+        if allow_missing {
+            hasher.hash_existing_of(&turbo_root, files.into_iter())
+        } else {
+            hasher.hash_files(&turbo_root, files.into_iter())
+        }
+    }
+
     pub fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,

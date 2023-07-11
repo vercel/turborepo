@@ -61,15 +61,15 @@ struct TaskHashable {
 }
 
 pub struct GlobalHashable {
-    global_cache_key: String,
-    global_file_hash_map: HashMap<turbopath::RelativeUnixPathBuf, String>,
-    root_external_deps_hash: String,
-    env: Vec<String>,
-    resolved_env_vars: Vec<String>,
-    pass_through_env: Vec<String>,
-    env_mode: EnvMode,
-    framework_inference: bool,
-    dot_env: Vec<turbopath::RelativeUnixPathBuf>,
+    pub global_cache_key: String,
+    pub global_file_hash_map: HashMap<turbopath::RelativeUnixPathBuf, String>,
+    pub root_external_deps_hash: String,
+    pub env: Vec<String>,
+    pub resolved_env_vars: Vec<String>,
+    pub pass_through_env: Vec<String>,
+    pub env_mode: EnvMode,
+    pub framework_inference: bool,
+    pub dot_env: Vec<turbopath::RelativeUnixPathBuf>,
 }
 
 struct TaskOutputs {
