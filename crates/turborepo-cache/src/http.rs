@@ -88,8 +88,8 @@ impl HttpCache {
     }
 
     fn get_duration_from_response(response: &Response) -> Result<u32, CacheError> {
-        if let Some(duration) = response.headers().get("x-artifact-duration") {
-            let duration = duration
+        if let Some(duration_value) = response.headers().get("x-artifact-duration") {
+            let duration = duration_value
                 .to_str()
                 .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))?;
 

@@ -122,7 +122,7 @@ pub struct UserResponse {
 
 pub struct PreflightResponse {
     location: Url,
-    allow_auth: bool,
+    allow_authorization_header: bool,
 }
 
 pub struct APIClient {
@@ -272,11 +272,11 @@ impl APIClient {
                     token,
                     &request_url,
                     "PUT",
-                    "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag",
+                    "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
                 )
                 .await?;
 
-            allow_auth = preflight_response.allow_auth;
+            allow_auth = preflight_response.allow_authorization_header;
             request_url = preflight_response.location.to_string();
         }
 
@@ -346,7 +346,7 @@ impl APIClient {
                 .do_preflight(token, &request_url, "GET", "Authorization, User-Agent")
                 .await?;
 
-            allow_auth = preflight_response.allow_auth;
+            allow_auth = preflight_response.allow_authorization_header;
             request_url = preflight_response.location.to_string();
         };
 
@@ -401,7 +401,7 @@ impl APIClient {
 
         Ok(PreflightResponse {
             location,
-            allow_auth,
+            allow_authorization_header: allow_auth,
         })
     }
 

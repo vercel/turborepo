@@ -32,11 +32,12 @@ pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
 pub async fn start_test_server(port: u16) -> Result<()> {
-    let durations = Arc::new(Mutex::new(HashMap::new()));
-    let durations2 = durations.clone();
-    let durations3 = durations.clone();
-    let tempdir = Arc::new(tempfile::tempdir()?);
-    let tempdir2 = tempdir.clone();
+    let get_durations_ref = Arc::new(Mutex::new(HashMap::new()));
+    let head_durations_ref = get_durations_ref.clone();
+    let put_durations_ref = get_durations_ref.clone();
+    let put_tempdir_ref = Arc::new(tempfile::tempdir()?);
+    let get_tempdir_ref = put_tempdir_ref.clone();
+
     let app = Router::new()
         .route(
             "/v2/user",
@@ -99,7 +100,7 @@ pub async fn start_test_server(port: u16) -> Result<()> {
             "/v8/artifacts/:hash",
             put(
                 |Path(hash): Path<String>, headers: HeaderMap, mut body: BodyStream| async move {
-                    let root_path = tempdir.path();
+                    let root_path = put_tempdir_ref.path();
                     let file_path = root_path.join(&hash);
                     let mut file = OpenOptions::new()
                         .append(true)
@@ -110,10 +111,10 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     let duration = headers
                         .get("x-artifact-duration")
                         .and_then(|header_value| header_value.to_str().ok())
-                        .and_then(|duration| duration.parse::<u64>().ok())
-                        .unwrap_or(0);
+                        .and_then(|duration| duration.parse::<u32>().ok())
+                        .expect("x-artifact-duration header is missing");
 
-                    let mut durations_map = durations.lock().await;
+                    let mut durations_map = put_durations_ref.lock().await;
                     durations_map.insert(hash.clone(), duration);
 
                     while let Some(item) = body.next().await {
@@ -128,10 +129,15 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         .route(
             "/v8/artifacts/:hash",
             get(|Path(hash): Path<String>| async move {
-                let root_path = tempdir2.path();
+                let root_path = get_tempdir_ref.path();
                 let file_path = root_path.join(&hash);
                 let buffer = std::fs::read(file_path).unwrap();
-                let duration = durations2.lock().await.get(&hash).cloned().unwrap_or(0);
+                let duration = get_durations_ref
+                    .lock()
+                    .await
+                    .get(&hash)
+                    .cloned()
+                    .unwrap_or(0);
                 let mut headers = HeaderMap::new();
 
                 headers.insert(
@@ -145,7 +151,12 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         .route(
             "/v8/artifacts/:hash",
             head(|Path(hash): Path<String>| async move {
-                let duration = durations3.lock().await.get(&hash).cloned().unwrap_or(0);
+                let duration = head_durations_ref
+                    .lock()
+                    .await
+                    .get(&hash)
+                    .cloned()
+                    .unwrap_or(0);
                 let mut headers = HeaderMap::new();
 
                 headers.insert(
