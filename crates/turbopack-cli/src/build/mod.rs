@@ -10,7 +10,7 @@ use turbo_tasks::{unit, TransientInstance, TryJoinIterExt, TurboTasks, Value, Vc
 use turbo_tasks_fs::FileSystem;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::ecmascript::EcmascriptModuleAsset;
-use turbopack_build::BuildChunkingContext;
+use turbopack_build::{BuildChunkingContext, MinifyType};
 use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
     asset::Asset,
@@ -178,6 +178,7 @@ async fn build_internal(
             build_output_root,
             env,
         )
+        .minify_type(MinifyType::Minify)
         .build(),
     );
 

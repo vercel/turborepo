@@ -9111,6 +9111,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
+ "sourcemap",
+ "swc_core",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
@@ -9206,6 +9208,7 @@ name = "turbopack-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-recursion",
  "async-trait",
  "auto-hash-map",
  "browserslist-rs",
