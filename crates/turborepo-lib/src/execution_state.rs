@@ -3,10 +3,12 @@ use tracing::trace;
 
 use crate::{
     cli::Args, commands::CommandBase, package_json::PackageJson, package_manager::PackageManager,
+    run::Run,
 };
 
 #[derive(Debug, Serialize)]
 pub struct ExecutionState<'a> {
+    global_hash: Option<String>,
     pub api_client_config: APIClientConfig<'a>,
     pub spaces_api_client_config: SpacesAPIClientConfig<'a>,
     package_manager: PackageManager,
@@ -41,6 +43,18 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
     type Error = anyhow::Error;
 
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
+        let run = Run::new((*base).clone());
+
+        let global_hash;
+        #[cfg(debug_assertions)]
+        {
+            global_hash = Some(run.get_global_hash()?);
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            global_hash = None;
+        }
+
         let root_package_json =
             PackageJson::load(&base.repo_root.join_component("package.json")).ok();
 
@@ -72,6 +86,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         };
 
         Ok(ExecutionState {
+            global_hash,
             api_client_config,
             spaces_api_client_config,
             package_manager,

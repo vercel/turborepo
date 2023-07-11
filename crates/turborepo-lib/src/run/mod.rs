@@ -126,22 +126,6 @@ impl Run {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let _global_hash_inputs = get_global_hash_inputs(
-            &self.base.ui,
-            &self.base.repo_root,
-            pkg_dep_graph.root_package_json(),
-            pkg_dep_graph.package_manager(),
-            pkg_dep_graph.lockfile(),
-            // TODO: Fill in these vec![] once turbo.json is ported
-            vec![],
-            &env_at_execution_start,
-            vec![],
-            vec![],
-            opts.run_opts.env_mode,
-            opts.run_opts.framework_inference,
-            vec![],
-        )?;
-
         let team_id = self.base.repo_config()?.team_id();
 
         let token = self.base.user_config()?.token();
@@ -209,6 +193,28 @@ impl Run {
             return Ok(());
         }
 
+        let root_workspace = pkg_dep_graph
+            .workspace_info(&WorkspaceName::Root)
+            .expect("must have root workspace");
+
+        let global_hash_inputs = get_global_hash_inputs(
+            root_workspace,
+            &self.base.repo_root,
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
+            root_turbo_json.global_deps,
+            &env_at_execution_start,
+            root_turbo_json.global_env,
+            root_turbo_json.global_pass_through_env,
+            opts.run_opts.env_mode,
+            opts.run_opts.framework_inference,
+            root_turbo_json.global_dot_env,
+        )?;
+
+        let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
+
+        debug!("global hash: {}", global_hash);
+
         let color_selector = ColorSelector::default();
 
         let _runcache = RunCache::new(
@@ -226,5 +232,44 @@ impl Run {
         visitor.visit(engine).await?;
 
         Ok(())
+    }
+
+    pub fn get_global_hash(&self) -> Result<String> {
+        let env_at_execution_start = EnvironmentVariableMap::infer();
+
+        let package_json_path = self.base.repo_root.join_component("package.json");
+        let root_package_json =
+            PackageJson::load(&package_json_path).context("failed to read package.json")?;
+
+        let opts = self.opts()?;
+
+        let is_single_package = opts.run_opts.single_package;
+
+        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+            .with_single_package_mode(opts.run_opts.single_package)
+            .build()?;
+
+        let root_turbo_json =
+            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
+
+        let root_workspace = pkg_dep_graph
+            .workspace_info(&WorkspaceName::Root)
+            .expect("must have root workspace");
+
+        let global_hash_inputs = get_global_hash_inputs(
+            root_workspace,
+            &self.base.repo_root,
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
+            root_turbo_json.global_deps,
+            &env_at_execution_start,
+            root_turbo_json.global_env,
+            root_turbo_json.global_pass_through_env,
+            opts.run_opts.env_mode,
+            opts.run_opts.framework_inference,
+            root_turbo_json.global_dot_env,
+        )?;
+
+        Ok(global_hash_inputs.calculate_global_hash_from_inputs())
     }
 }

@@ -756,7 +756,6 @@ pub async fn run(
         Command::Run(args) => {
             // in the case of enabling the run stub, we want to be able to opt-in
             // to the rust codepath for running turbo
-
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }

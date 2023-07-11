@@ -192,6 +192,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
                 .clone()
                 .ok_or(Error::PackageJsonMissingName(package_json_path))?,
         );
+
         let entry = WorkspaceInfo {
             package_json: json,
             package_json_path: relative_json_path,

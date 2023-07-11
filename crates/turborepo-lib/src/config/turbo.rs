@@ -28,10 +28,10 @@ pub struct SpacesJson {
 // The processed TurboJSON ready for use by Turborepo.
 pub struct TurboJson {
     extends: Vec<String>,
-    global_deps: Vec<String>,
-    global_dot_env: Vec<RelativeUnixPathBuf>,
-    global_env: Vec<String>,
-    global_pass_through_env: Vec<String>,
+    pub(crate) global_deps: Vec<String>,
+    pub(crate) global_dot_env: Vec<RelativeUnixPathBuf>,
+    pub(crate) global_env: Vec<String>,
+    pub(crate) global_pass_through_env: Vec<String>,
     pub(crate) pipeline: Pipeline,
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
     pub(crate) space_id: Option<String>,

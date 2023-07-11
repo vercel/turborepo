@@ -4,7 +4,7 @@ use globwalk::fix_glob_pattern;
 use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoUnix};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix};
 use wax::{any, Glob, Pattern};
 
 use crate::{package_deps::GitHashes, Error};
@@ -24,12 +24,12 @@ fn git_like_hash_file(path: &AbsoluteSystemPath, metadata: &Metadata) -> Result<
 
 pub(crate) fn hash_files(
     root_path: &AbsoluteSystemPath,
-    files: impl Iterator<Item = AnchoredSystemPathBuf>,
+    files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     allow_missing: bool,
 ) -> Result<GitHashes, Error> {
     let mut hashes = GitHashes::new();
     for file in files.into_iter() {
-        let path = root_path.resolve(&file);
+        let path = root_path.resolve(file.as_ref());
         let metadata = match path.symlink_metadata() {
             Ok(metadata) => metadata,
             Err(e) => {
@@ -40,7 +40,7 @@ pub(crate) fn hash_files(
             }
         };
         let hash = git_like_hash_file(&path, &metadata)?;
-        hashes.insert(file.to_unix(), hash);
+        hashes.insert(file.as_ref().to_unix(), hash);
     }
     Ok(hashes)
 }
