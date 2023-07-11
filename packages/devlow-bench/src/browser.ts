@@ -129,7 +129,7 @@ async function withRequestMetrics(
   }
 }
 
-function networkIdle(page: Page) {
+function networkIdle(page: Page, delay: number = 300) {
   return new Promise<void>((resolve) => {
     const cleanup = () => {
       page.off("request", requestHandler);
@@ -151,7 +151,7 @@ function networkIdle(page: Page) {
         timeout = setTimeout(() => {
           cleanup();
           resolve();
-        }, 300);
+        }, delay);
       }
     };
     page.on("request", requestHandler);
@@ -182,6 +182,7 @@ class BrowserSessionImpl implements BrowserSession {
     const page = (this.page = this.page ?? (await this.context.newPage()));
     await withRequestMetrics(metricName, page, async () => {
       measureTime(`${metricName}/start`);
+      const idle = networkIdle(page, 3000);
       await page.goto(url, {
         waitUntil: "commit",
       });
@@ -196,8 +197,9 @@ class BrowserSessionImpl implements BrowserSession {
       measureTime(`${metricName}/load`, {
         relativeTo: `${metricName}/start`,
       });
-      await page.waitForLoadState("networkidle");
+      await idle;
       measureTime(`${metricName}`, {
+        offset: 3000,
         relativeTo: `${metricName}/start`,
       });
     });
@@ -216,7 +218,7 @@ class BrowserSessionImpl implements BrowserSession {
       const firstResponse = new Promise<void>((resolve) =>
         page.once("response", () => resolve())
       );
-      const idle = networkIdle(page);
+      const idle = networkIdle(page, 3000);
       await page.click(selector);
       await firstResponse;
       measureTime(`${metricName}/firstResponse`, {
@@ -224,6 +226,7 @@ class BrowserSessionImpl implements BrowserSession {
       });
       await idle;
       measureTime(`${metricName}`, {
+        offset: 3000,
         relativeTo: `${metricName}/start`,
       });
     });
@@ -236,6 +239,7 @@ class BrowserSessionImpl implements BrowserSession {
     }
     await withRequestMetrics(metricName, page, async () => {
       measureTime(`${metricName}/start`);
+      const idle = networkIdle(page, 3000);
       await page.reload({
         waitUntil: "commit",
       });
@@ -250,8 +254,9 @@ class BrowserSessionImpl implements BrowserSession {
       measureTime(`${metricName}/load`, {
         relativeTo: `${metricName}/start`,
       });
-      await page.waitForLoadState("networkidle");
+      await idle;
       measureTime(`${metricName}`, {
+        offset: 3000,
         relativeTo: `${metricName}/start`,
       });
     });
