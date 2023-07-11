@@ -7,6 +7,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 use crate::{PathError, RelativeUnixPathBuf};
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct RelativeUnixPath(str);
 
