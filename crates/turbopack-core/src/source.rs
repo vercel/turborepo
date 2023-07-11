@@ -18,9 +18,9 @@ pub struct Sources(Vec<SourceVc>);
 /// TODO make this function unnecessary
 #[turbo_tasks::function]
 pub async fn asset_to_source(asset: AssetVc) -> Result<SourceVc> {
-    Ok(SourceVc::resolve_from(asset)
+    SourceVc::resolve_from(asset)
         .await?
-        .context("Asset must be a Source")?)
+        .context("Asset must be a Source")
 }
 
 /// This is a temporary function that should be removed once the [Source] trait

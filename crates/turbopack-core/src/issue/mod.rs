@@ -620,7 +620,7 @@ impl IssueSourceVc {
     pub async fn into_plain(self) -> Result<PlainIssueSourceVc> {
         let this = self.await?;
         Ok(PlainIssueSource {
-            asset: PlainAssetVc::from_asset(this.source.into()).await?,
+            asset: PlainAssetVc::from_asset(this.source).await?,
             start: this.start,
             end: this.end,
         }
