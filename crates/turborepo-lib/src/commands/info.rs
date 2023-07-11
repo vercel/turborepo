@@ -52,9 +52,7 @@ fn print_workspace_details(package_graph: &PackageGraph, workspace_name: &str) -
         name => WorkspaceNode::Workspace(WorkspaceName::Other(name.to_string())),
     };
 
-    let Some(transitive_dependencies) = package_graph.transitive_closure(&workspace_node) else {
-        return Err(anyhow!("Workspace not found: {}", workspace_name));
-    };
+    let transitive_dependencies = package_graph.transitive_closure(Some(&workspace_node));
 
     let mut workspace_dep_names: Vec<&str> = transitive_dependencies
         .into_iter()
