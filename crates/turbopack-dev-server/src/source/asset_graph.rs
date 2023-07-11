@@ -5,7 +5,10 @@ use std::{
 
 use anyhow::Result;
 use indexmap::{indexset, IndexSet};
-use turbo_tasks::{primitives::StringVc, CompletionVc, State, Value, ValueToString};
+use turbo_tasks::{
+    primitives::{OptionStringVc, StringVc},
+    CompletionVc, State, Value, ValueToString,
+};
 use turbo_tasks_fs::{FileSystemPath, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsSetVc},
@@ -28,6 +31,7 @@ struct AssetsMap(HashMap<String, AssetVc>);
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new")]
 pub struct AssetGraphContentSource {
     root_path: FileSystemPathVc,
+    base_path: OptionStringVc,
     root_assets: AssetsSetVc,
     expanded: Option<State<HashSet<AssetVc>>>,
 }
@@ -36,9 +40,14 @@ pub struct AssetGraphContentSource {
 impl AssetGraphContentSourceVc {
     /// Serves all assets references by root_asset.
     #[turbo_tasks::function]
-    pub fn new_eager(root_path: FileSystemPathVc, root_asset: AssetVc) -> Self {
+    pub fn new_eager(
+        root_path: FileSystemPathVc,
+        base_path: OptionStringVc,
+        root_asset: AssetVc,
+    ) -> Self {
         Self::cell(AssetGraphContentSource {
             root_path,
+            base_path,
             root_assets: AssetsSetVc::cell(indexset! { root_asset }),
             expanded: None,
         })
@@ -47,9 +56,14 @@ impl AssetGraphContentSourceVc {
     /// Serves all assets references by root_asset. Only serve references of an
     /// asset when it has served its content before.
     #[turbo_tasks::function]
-    pub fn new_lazy(root_path: FileSystemPathVc, root_asset: AssetVc) -> Self {
+    pub fn new_lazy(
+        root_path: FileSystemPathVc,
+        base_path: OptionStringVc,
+        root_asset: AssetVc,
+    ) -> Self {
         Self::cell(AssetGraphContentSource {
             root_path,
+            base_path,
             root_assets: AssetsSetVc::cell(indexset! { root_asset }),
             expanded: Some(State::new(HashSet::new())),
         })
@@ -57,9 +71,14 @@ impl AssetGraphContentSourceVc {
 
     /// Serves all assets references by all root_assets.
     #[turbo_tasks::function]
-    pub fn new_eager_multiple(root_path: FileSystemPathVc, root_assets: AssetsSetVc) -> Self {
+    pub fn new_eager_multiple(
+        root_path: FileSystemPathVc,
+        base_path: OptionStringVc,
+        root_assets: AssetsSetVc,
+    ) -> Self {
         Self::cell(AssetGraphContentSource {
             root_path,
+            base_path,
             root_assets,
             expanded: None,
         })
@@ -68,9 +87,14 @@ impl AssetGraphContentSourceVc {
     /// Serves all assets references by all root_assets. Only serve references
     /// of an asset when it has served its content before.
     #[turbo_tasks::function]
-    pub fn new_lazy_multiple(root_path: FileSystemPathVc, root_assets: AssetsSetVc) -> Self {
+    pub fn new_lazy_multiple(
+        root_path: FileSystemPathVc,
+        base_path: OptionStringVc,
+        root_assets: AssetsSetVc,
+    ) -> Self {
         Self::cell(AssetGraphContentSource {
             root_path,
+            base_path,
             root_assets,
             expanded: Some(State::new(HashSet::new())),
         })
@@ -166,12 +190,17 @@ struct UnresolvedAsset(AssetVc);
 impl ContentSource for AssetGraphContentSource {
     #[turbo_tasks::function]
     async fn get_routes(self_vc: AssetGraphContentSourceVc) -> Result<RouteTreeVc> {
+        let base_path = self_vc.await?.base_path.await?;
         let assets = self_vc.all_assets_map().strongly_consistent().await?;
         let routes = assets
             .iter()
             .map(|(path, asset)| {
                 RouteTreeVc::new_route(
-                    BaseSegment::from_static_pathname(path).collect(),
+                    if let Some(base_path) = &*base_path {
+                        BaseSegment::from_static_pathname(&format!("{base_path}{path}")).collect()
+                    } else {
+                        BaseSegment::from_static_pathname(path).collect()
+                    },
                     RouteType::Exact,
                     AssetGraphGetContentSourceContentVc::new(
                         self_vc,

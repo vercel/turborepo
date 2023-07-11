@@ -3,10 +3,7 @@ use std::io::Write;
 use anyhow::{bail, Result};
 use indoc::writedoc;
 use serde::Serialize;
-use turbo_tasks::{
-    primitives::{OptionStringVc, StringVc},
-    TryJoinIterExt, Value, ValueToString, ValueToStringVc,
-};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
@@ -145,7 +142,7 @@ impl EcmascriptDevEvaluateChunkVc {
             RuntimeType::Default => {
                 let runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(
                     environment,
-                    OptionStringVc::cell(chunking_context.chunk_base_path().cloned()),
+                    chunking_context.chunk_base_path(),
                 );
                 code.push_code(&*runtime_code.await?);
             }

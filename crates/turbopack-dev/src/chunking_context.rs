@@ -2,7 +2,7 @@ use anyhow::Result;
 use indexmap::IndexSet;
 use turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
-    primitives::{BoolVc, StringVc},
+    primitives::{BoolVc, OptionStringVc, StringVc},
     TryJoinIterExt, Value,
 };
 use turbo_tasks_fs::FileSystemPathVc;
@@ -41,9 +41,8 @@ impl DevChunkingContextBuilder {
         self
     }
 
-    pub fn chunk_base_path(mut self, chunk_base_path: &str) -> Self {
-        self.context.chunk_base_path =
-            (!chunk_base_path.is_empty()).then(|| chunk_base_path.to_string());
+    pub fn chunk_base_path(mut self, chunk_base_path: OptionStringVc) -> Self {
+        self.context.chunk_base_path = chunk_base_path;
         self
     }
 
@@ -95,7 +94,7 @@ pub struct DevChunkingContext {
     asset_root_path: FileSystemPathVc,
     /// Base path that will be prepended to all chunk URLs when loading them.
     /// This path will not appear in chunk paths or chunk data.
-    chunk_base_path: Option<String>,
+    chunk_base_path: OptionStringVc,
     /// Layer name within this context
     layer: Option<String>,
     /// Enable HMR for this chunking
@@ -122,7 +121,7 @@ impl DevChunkingContextVc {
                 reference_chunk_source_maps: true,
                 reference_css_chunk_source_maps: true,
                 asset_root_path,
-                chunk_base_path: None,
+                chunk_base_path: Default::default(),
                 layer: None,
                 enable_hot_module_replacement: false,
                 environment,
@@ -142,8 +141,8 @@ impl DevChunkingContext {
     }
 
     /// Returns the chunk public path.
-    pub fn chunk_base_path(&self) -> Option<&String> {
-        self.chunk_base_path.as_ref()
+    pub fn chunk_base_path(&self) -> OptionStringVc {
+        self.chunk_base_path
     }
 }
 

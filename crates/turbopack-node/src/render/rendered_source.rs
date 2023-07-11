@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use indexmap::IndexSet;
 use turbo_tasks::{
-    primitives::{JsonValueVc, StringVc},
+    primitives::{JsonValueVc, OptionStringVc, StringVc},
     Value,
 };
 use turbo_tasks_env::ProcessEnvVc;
@@ -51,6 +51,7 @@ pub fn create_node_rendered_source(
     base_segments: Vec<BaseSegment>,
     route_type: RouteType,
     server_root: FileSystemPathVc,
+    base_path: OptionStringVc,
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
@@ -64,6 +65,7 @@ pub fn create_node_rendered_source(
         base_segments,
         route_type,
         server_root,
+        base_path,
         route_match,
         pathname,
         entry,
@@ -91,6 +93,7 @@ pub struct NodeRenderContentSource {
     base_segments: Vec<BaseSegment>,
     route_type: RouteType,
     server_root: FileSystemPathVc,
+    base_path: OptionStringVc,
     route_match: RouteMatcherVc,
     pathname: StringVc,
     entry: NodeEntryVc,
@@ -145,10 +148,12 @@ impl GetContentSource for NodeRenderContentSource {
                 .copied(),
             )
         }
-        Ok(
-            AssetGraphContentSourceVc::new_lazy_multiple(self.server_root, AssetsSetVc::cell(set))
-                .into(),
+        Ok(AssetGraphContentSourceVc::new_lazy_multiple(
+            self.server_root,
+            self.base_path,
+            AssetsSetVc::cell(set),
         )
+        .into())
     }
 }
 
