@@ -11,7 +11,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/env"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/runsummary"
@@ -28,7 +27,6 @@ func DryRun(
 	engine *core.Engine,
 	_ *taskhash.Tracker, // unused, but keep here for parity with RealRun method signature
 	turboCache cache.Cache,
-	_ *fs.TurboJSON, // unused, but keep here for parity with RealRun method signature
 	globalEnvMode util.EnvMode,
 	_ env.EnvironmentVariableMap,
 	_ env.EnvironmentVariableMap,
