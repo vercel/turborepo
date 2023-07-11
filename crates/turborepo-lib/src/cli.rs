@@ -651,6 +651,7 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
+        #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
 

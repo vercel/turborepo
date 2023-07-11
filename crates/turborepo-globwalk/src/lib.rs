@@ -1,5 +1,4 @@
 #![feature(assert_matches)]
-#![feature(once_cell)]
 
 mod empty_glob;
 
