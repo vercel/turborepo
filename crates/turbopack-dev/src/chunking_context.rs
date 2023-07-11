@@ -140,7 +140,7 @@ impl DevChunkingContext {
         self.runtime_type
     }
 
-    /// Returns the chunk public path.
+    /// Returns the asset base path.
     pub fn chunk_base_path(&self) -> OptionStringVc {
         self.chunk_base_path
     }

@@ -890,7 +890,7 @@ function getChunkRelativeUrl(chunkPath) {
 }
 function registerChunkList(chunkUpdateProvider, chunkList) {
     chunkUpdateProvider.push([
-        getChunkRelativeUrl(chunkList.path),
+        chunkList.path,
         handleApply.bind(null, chunkList.path)
     ]);
     const chunks = new Set(chunkList.chunks.map(getChunkPath));
@@ -1074,7 +1074,7 @@ function commonJsRequireContext(entry1, sourceModule1) {
     }
 })();
 function _eval({ code, url, map }) {
-    code += `\n\n//# sourceURL=${location.origin}/${getChunkRelativeUrl(url)}`;
+    code += `\n\n//# sourceURL=${location.origin}/${url}`;
     if (map) code += `\n//# sourceMappingURL=${map}`;
     return eval(code);
 }

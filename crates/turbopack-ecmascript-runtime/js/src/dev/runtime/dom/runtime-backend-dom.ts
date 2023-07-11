@@ -230,7 +230,7 @@ function commonJsRequireContext(
 })();
 
 function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
-  code += `\n\n//# sourceURL=${location.origin}/${getChunkRelativeUrl(url)}`;
+  code += `\n\n//# sourceURL=${location.origin}/${url}`;
   if (map) code += `\n//# sourceMappingURL=${map}`;
   return eval(code);
 }

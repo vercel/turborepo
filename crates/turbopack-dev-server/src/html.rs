@@ -1,9 +1,6 @@
 use anyhow::{anyhow, Result};
 use mime_guess::mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{
-    primitives::{OptionStringVc, StringVc},
-    TryJoinIterExt,
-};
+use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
 use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
@@ -23,7 +20,6 @@ use turbopack_core::{
 #[derive(Clone)]
 pub struct DevHtmlAsset {
     path: FileSystemPathVc,
-    base_path: OptionStringVc,
     // TODO(WEB-945) This should become a `Vec<DevHtmlEntry>` once we have a
     // `turbo_tasks::input` attribute macro/`Input` derive macro.
     entries: Vec<(
@@ -72,7 +68,6 @@ impl DevHtmlAssetVc {
     /// Create a new dev HTML asset.
     pub fn new(
         path: FileSystemPathVc,
-        base_path: OptionStringVc,
         entries: Vec<(
             ChunkableModuleVc,
             ChunkingContextVc,
@@ -81,7 +76,6 @@ impl DevHtmlAssetVc {
     ) -> Self {
         DevHtmlAsset {
             path,
-            base_path,
             entries,
             body: None,
         }
@@ -91,7 +85,6 @@ impl DevHtmlAssetVc {
     /// Create a new dev HTML asset.
     pub fn new_with_body(
         path: FileSystemPathVc,
-        base_path: OptionStringVc,
         entries: Vec<(
             ChunkableModuleVc,
             ChunkingContextVc,
@@ -101,7 +94,6 @@ impl DevHtmlAssetVc {
     ) -> Self {
         DevHtmlAsset {
             path,
-            base_path,
             entries,
             body: Some(body),
         }
@@ -132,14 +124,11 @@ impl DevHtmlAssetVc {
     async fn html_content(self) -> Result<DevHtmlAssetContentVc> {
         let this = self.await?;
         let context_path = this.path.parent().await?;
-        let base_path = this.base_path.await?;
-        let base_path = base_path.as_deref().unwrap_or("");
-
         let mut chunk_paths = vec![];
         for chunk in &*self.chunks().await? {
             let chunk_path = &*chunk.ident().path().await?;
             if let Some(relative_path) = context_path.get_path_to(chunk_path) {
-                chunk_paths.push(format!("/{base_path}{relative_path}"));
+                chunk_paths.push(format!("/{relative_path}"));
             }
         }
 
