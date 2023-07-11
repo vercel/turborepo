@@ -65,11 +65,15 @@ async function withRequestMetrics(
       activePromises.push(
         (async () => {
           const args = [];
-          const text = message.text();
-          for (const arg of message.args()) {
-            args.push(await arg.jsonValue());
+          try {
+            const text = message.text();
+            for (const arg of message.args()) {
+              args.push(await arg.jsonValue());
+            }
+            console.log(`[${type}] ${text}`, ...args);
+          } catch {
+            // Ignore
           }
-          console.log(`[${type}] ${text}`, ...args);
         })()
       );
     }
@@ -129,23 +133,57 @@ async function withRequestMetrics(
   }
 }
 
-function networkIdle(page: Page, delay: number = 300) {
-  return new Promise<void>((resolve) => {
+function networkIdle(
+  page: Page,
+  delay: number = 300,
+  rejectTimeout: number = 180000
+) {
+  return new Promise<void>((resolve, reject) => {
     const cleanup = () => {
       page.off("request", requestHandler);
       page.off("requestfailed", requestFinishedHandler);
       page.off("requestfinished", requestFinishedHandler);
+      clearTimeout(fullTimeout);
+      if (timeout) {
+        clearTimeout(timeout);
+      }
     };
     let activeRequests = 0;
     let timeout: NodeJS.Timeout | null = null;
-    const requestHandler = (request: Request) => {
+    const requests = new Set();
+    const fullTimeout = setTimeout(() => {
+      cleanup();
+      reject(
+        new Error(
+          `Timeout while waiting for network idle. These requests are still pending: ${Array.from(
+            requests
+          ).join(", ")}}`
+        )
+      );
+    }, rejectTimeout);
+    const requestFilter = async (request: Request) => {
+      return (await request.headerValue("accept")) !== "text/event-stream";
+    };
+    const requestHandler = async (request: Request) => {
+      requests.add(request.url());
       activeRequests++;
       if (timeout) {
         clearTimeout(timeout);
         timeout = null;
       }
+      // Avoid tracking some requests, but we only know this after awaiting
+      // so we need to do this weird stunt to ensure that
+      if (!(await requestFilter(request))) {
+        await requestFinishedInternal(request);
+      }
     };
-    const requestFinishedHandler = (request: Request) => {
+    const requestFinishedHandler = async (request: Request) => {
+      if (await requestFilter(request)) {
+        requestFinishedInternal(request);
+      }
+    };
+    const requestFinishedInternal = async (request: Request) => {
+      requests.delete(request.url());
       activeRequests--;
       if (activeRequests === 0) {
         timeout = setTimeout(() => {
