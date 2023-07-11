@@ -120,6 +120,8 @@ await session.close();
 
 Run with `BROWSER_OUTPUT=1` to show the output of the browser.
 
+Run with `HEADLESS=false` to show the actual browser window.
+
 ## Shell operations
 
 The `devlow-bench` package provides a few helper functions to run operations in the shell.
