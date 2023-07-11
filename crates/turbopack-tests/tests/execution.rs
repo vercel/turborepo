@@ -195,7 +195,13 @@ async fn run_test(resource: &str) -> Result<RunTestResultVc> {
     )));
 
     let compile_time_info = CompileTimeInfo::builder(env)
-        .defines(compile_time_defines!(process.env.NODE_ENV = "development",).cell())
+        .defines(
+            compile_time_defines!(
+                process.turbopack = true,
+                process.env.NODE_ENV = "development",
+            )
+            .cell(),
+        )
         .cell();
 
     let context: AssetContextVc = ModuleAssetContextVc::new(

@@ -219,6 +219,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
     let compile_time_info = CompileTimeInfo::builder(env)
         .defines(
             compile_time_defines!(
+                process.turbopack = true,
                 process.env.NODE_ENV = "development",
                 DEFINED_VALUE = "value",
                 DEFINED_TRUE = true,
