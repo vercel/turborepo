@@ -162,7 +162,7 @@ function networkIdle(
       );
     }, rejectTimeout);
     const requestFilter = async (request: Request) => {
-      return (await request.headerValue("accept")) !== "text/event-stream";
+      return (await request.headers().accept) !== "text/event-stream";
     };
     const requestHandler = async (request: Request) => {
       requests.add(request.url());
