@@ -886,7 +886,7 @@ function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
 }
 function registerChunkList(chunkUpdateProvider, chunkList) {
     chunkUpdateProvider.push([
-        chunkList.path,
+        `${CHUNK_BASE_PATH}${chunkList.path}`,
         handleApply.bind(null, chunkList.path)
     ]);
     const chunks = new Set(chunkList.chunks.map(getChunkPath));
