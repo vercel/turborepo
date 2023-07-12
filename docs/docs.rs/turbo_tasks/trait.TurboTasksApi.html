@@ -37,7 +37,7 @@
 <span class="item-spacer"></span>    fn <a href="#tymethod.unemit_collectibles" class="fn">unemit_collectibles</a>(
         &amp;self,
         trait_type: <a class="struct" href="struct.TraitTypeId.html" title="struct turbo_tasks::TraitTypeId">TraitTypeId</a>,
-        collectibles: &amp;AutoSet&lt;<a class="enum" href="enum.RawVc.html" title="enum turbo_tasks::RawVc">RawVc</a>&gt;
+        collectibles: &amp;<a class="struct" href="../auto_hash_map/set/struct.AutoSet.html" title="struct auto_hash_map::set::AutoSet">AutoSet</a>&lt;<a class="enum" href="enum.RawVc.html" title="enum turbo_tasks::RawVc">RawVc</a>&gt;
     );
 <span class="item-spacer"></span>    fn <a href="#tymethod.try_read_own_task_cell_untracked" class="fn">try_read_own_task_cell_untracked</a>(
         &amp;self,
@@ -94,7 +94,7 @@ using it could break cache invalidation.</p>
 ) -&gt; <a class="struct" href="primitives/struct.RawVcSetVc.html" title="struct turbo_tasks::primitives::RawVcSetVc">RawVcSetVc</a></h4></section><section id="tymethod.emit_collectible" class="method"><a class="srclink rightside" href="../src/turbo_tasks/manager.rs.html#105">source</a><h4 class="code-header">fn <a href="#tymethod.emit_collectible" class="fn">emit_collectible</a>(&amp;self, trait_type: <a class="struct" href="struct.TraitTypeId.html" title="struct turbo_tasks::TraitTypeId">TraitTypeId</a>, collectible: <a class="enum" href="enum.RawVc.html" title="enum turbo_tasks::RawVc">RawVc</a>)</h4></section><section id="tymethod.unemit_collectible" class="method"><a class="srclink rightside" href="../src/turbo_tasks/manager.rs.html#106">source</a><h4 class="code-header">fn <a href="#tymethod.unemit_collectible" class="fn">unemit_collectible</a>(&amp;self, trait_type: <a class="struct" href="struct.TraitTypeId.html" title="struct turbo_tasks::TraitTypeId">TraitTypeId</a>, collectible: <a class="enum" href="enum.RawVc.html" title="enum turbo_tasks::RawVc">RawVc</a>)</h4></section><section id="tymethod.unemit_collectibles" class="method"><a class="srclink rightside" href="../src/turbo_tasks/manager.rs.html#107">source</a><h4 class="code-header">fn <a href="#tymethod.unemit_collectibles" class="fn">unemit_collectibles</a>(
     &amp;self,
     trait_type: <a class="struct" href="struct.TraitTypeId.html" title="struct turbo_tasks::TraitTypeId">TraitTypeId</a>,
-    collectibles: &amp;AutoSet&lt;<a class="enum" href="enum.RawVc.html" title="enum turbo_tasks::RawVc">RawVc</a>&gt;
+    collectibles: &amp;<a class="struct" href="../auto_hash_map/set/struct.AutoSet.html" title="struct auto_hash_map::set::AutoSet">AutoSet</a>&lt;<a class="enum" href="enum.RawVc.html" title="enum turbo_tasks::RawVc">RawVc</a>&gt;
 )</h4></section><details class="toggle method-toggle" open><summary><section id="tymethod.try_read_own_task_cell_untracked" class="method"><a class="srclink rightside" href="../src/turbo_tasks/manager.rs.html#111-115">source</a><h4 class="code-header">fn <a href="#tymethod.try_read_own_task_cell_untracked" class="fn">try_read_own_task_cell_untracked</a>(
     &amp;self,
     current_task: <a class="struct" href="struct.TaskId.html" title="struct turbo_tasks::TaskId">TaskId</a>,
