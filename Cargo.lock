@@ -9553,6 +9553,8 @@ dependencies = [
  "dunce",
  "path-clean 1.0.1",
  "serde",
+ "serde_json",
+ "tempdir",
  "test-case",
  "thiserror",
  "wax",
@@ -9642,8 +9644,8 @@ dependencies = [
 name = "turborepo-fs"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "tempfile",
+ "thiserror",
  "turbopath",
  "walkdir",
 ]
@@ -9727,6 +9729,7 @@ dependencies = [
  "turbopath",
  "turborepo-api-client",
  "turborepo-env",
+ "turborepo-fs",
  "turborepo-lockfiles",
  "turborepo-scm",
  "uds_windows",
@@ -9752,6 +9755,7 @@ dependencies = [
  "serde_yaml 0.9.21",
  "test-case",
  "thiserror",
+ "turbopath",
 ]
 
 [[package]]
