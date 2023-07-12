@@ -78,9 +78,15 @@
 <a href="#78" id="78">78</a>
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+</pre></div><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>context_transition;
+
+<span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::Result;
+<span class="kw">pub use </span>context_transition::ContextTransitionVc;
 <span class="kw">use </span>turbo_tasks::Value;
 <span class="kw">use </span>turbopack_core::{
     compile_time_info::CompileTimeInfoVc, module::ModuleVc, reference_type::ReferenceType,

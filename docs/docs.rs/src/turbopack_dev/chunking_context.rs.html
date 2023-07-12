@@ -400,11 +400,25 @@
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
 <a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
-    primitives::{BoolVc, StringVc},
+    primitives::{BoolVc, OptionStringVc, StringVc},
     TryJoinIterExt, Value,
 };
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
@@ -443,6 +457,11 @@
         <span class="self">self
     </span>}
 
+    <span class="kw">pub fn </span>chunk_base_path(<span class="kw-2">mut </span><span class="self">self</span>, chunk_base_path: OptionStringVc) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.context.chunk_base_path = chunk_base_path;
+        <span class="self">self
+    </span>}
+
     <span class="kw">pub fn </span>layer(<span class="kw-2">mut </span><span class="self">self</span>, layer: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.context.layer = (!layer.is_empty()).then(|| layer.to_string());
         <span class="self">self
@@ -463,8 +482,8 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; ChunkingContextVc {
-        DevChunkingContextVc::new(Value::new(<span class="self">self</span>.context)).into()
+    <span class="kw">pub fn </span>build(<span class="self">self</span>) -&gt; DevChunkingContextVc {
+        DevChunkingContextVc::new(Value::new(<span class="self">self</span>.context))
     }
 }
 
@@ -489,6 +508,9 @@
     </span>reference_css_chunk_source_maps: bool,
     <span class="doccomment">/// Static assets are placed at this path
     </span>asset_root_path: FileSystemPathVc,
+    <span class="doccomment">/// Base path that will be prepended to all chunk URLs when loading them.
+    /// This path will not appear in chunk paths or chunk data.
+    </span>chunk_base_path: OptionStringVc,
     <span class="doccomment">/// Layer name within this context
     </span>layer: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// Enable HMR for this chunking
@@ -515,6 +537,7 @@
                 reference_chunk_source_maps: <span class="bool-val">true</span>,
                 reference_css_chunk_source_maps: <span class="bool-val">true</span>,
                 asset_root_path,
+                chunk_base_path: Default::default(),
                 layer: <span class="prelude-val">None</span>,
                 enable_hot_module_replacement: <span class="bool-val">false</span>,
                 environment,
@@ -531,6 +554,11 @@
     /// `RuntimeType` has a single variant.
     </span><span class="kw">pub fn </span>runtime_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RuntimeType {
         <span class="self">self</span>.runtime_type
+    }
+
+    <span class="doccomment">/// Returns the asset base path.
+    </span><span class="kw">pub fn </span>chunk_base_path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OptionStringVc {
+        <span class="self">self</span>.chunk_base_path
     }
 }
 

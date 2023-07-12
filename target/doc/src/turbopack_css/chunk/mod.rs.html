@@ -559,6 +559,7 @@
 <a href="#559" id="559">559</a>
 <a href="#560" id="560">560</a>
 <a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
 </pre></div><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>single_item_chunk;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -573,9 +574,9 @@
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{
         availability_info::AvailabilityInfo, chunk_content, chunk_content_split, Chunk,
-        ChunkContentResult, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModuleVc, ChunkingContext,
-        ChunkingContextVc, ChunksVc, FromChunkableModule, ModuleId, ModuleIdVc, ModuleIdsVc,
-        OutputChunk, OutputChunkRuntimeInfo, OutputChunkRuntimeInfoVc, OutputChunkVc,
+        ChunkContentResult, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule, ChunkableModuleVc,
+        ChunkingContext, ChunkingContextVc, ChunksVc, FromChunkableModule, ModuleId, ModuleIdVc,
+        ModuleIdsVc, OutputChunk, OutputChunkRuntimeInfo, OutputChunkRuntimeInfoVc, OutputChunkVc,
     },
     code_builder::{CodeBuilder, CodeVc},
     ident::{AssetIdent, AssetIdentVc},
@@ -583,6 +584,7 @@
         asset::{children_from_asset_references, content_to_details, IntrospectableAssetVc},
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::PrimaryResolveResult,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
@@ -1018,7 +1020,7 @@
 }
 
 <span class="attr">#[turbo_tasks::value_trait]
-</span><span class="kw">pub trait </span>CssChunkPlaceable: Asset {
+</span><span class="kw">pub trait </span>CssChunkPlaceable: ChunkableModule + Module + Asset {
     <span class="kw">fn </span>as_chunk_item(<span class="kw-2">&amp;</span><span class="self">self</span>, context: ChunkingContextVc) -&gt; CssChunkItemVc;
 }
 

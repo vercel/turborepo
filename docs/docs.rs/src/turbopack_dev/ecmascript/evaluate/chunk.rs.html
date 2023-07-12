@@ -243,6 +243,10 @@
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -312,6 +316,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>code(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;CodeVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>chunking_context = this.chunking_context.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>environment = this.chunking_context.environment();
 
         <span class="kw">let </span>output_root = this.chunking_context.output_root().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -382,9 +387,12 @@
             StringifyJs(<span class="kw-2">&amp;</span>params),
         )<span class="question-mark">?</span>;
 
-        <span class="kw">match </span>this.chunking_context.<span class="kw">await</span><span class="question-mark">?</span>.runtime_type() {
+        <span class="kw">match </span>chunking_context.runtime_type() {
             RuntimeType::Default =&gt; {
-                <span class="kw">let </span>runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(environment);
+                <span class="kw">let </span>runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(
+                    environment,
+                    chunking_context.chunk_base_path(),
+                );
                 code.push_code(<span class="kw-2">&amp;*</span>runtime_code.<span class="kw">await</span><span class="question-mark">?</span>);
             }
             <span class="attr">#[cfg(feature = <span class="string">&quot;test&quot;</span>)]

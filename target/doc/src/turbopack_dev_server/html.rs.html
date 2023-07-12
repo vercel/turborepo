@@ -255,7 +255,6 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mime_guess::mime::TEXT_HTML_UTF_8;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt};
@@ -382,7 +381,6 @@
     </span><span class="kw">async fn </span>html_content(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;DevHtmlAssetContentVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>context_path = this.path.parent().<span class="kw">await</span><span class="question-mark">?</span>;
-
         <span class="kw">let </span><span class="kw-2">mut </span>chunk_paths = <span class="macro">vec!</span>[];
         <span class="kw">for </span>chunk <span class="kw">in </span><span class="kw-2">&amp;*</span><span class="self">self</span>.chunks().<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="kw">let </span>chunk_path = <span class="kw-2">&amp;*</span>chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -431,7 +429,7 @@
 }
 
 <span class="kw">impl </span>DevHtmlAssetContentVc {
-    <span class="kw">pub fn </span>new(chunk_paths: Vec&lt;String&gt;, body: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">fn </span>new(chunk_paths: Vec&lt;String&gt;, body: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         DevHtmlAssetContent { chunk_paths, body }.cell()
     }
 }
