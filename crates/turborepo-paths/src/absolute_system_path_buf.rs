@@ -202,6 +202,10 @@ impl AbsoluteSystemPathBuf {
         fs::remove_file(self.0.as_path())
     }
 
+    pub fn remove_dir_all(&self) -> Result<(), io::Error> {
+        fs::remove_dir_all(self.0.as_path())
+    }
+
     pub fn set_readonly(&self) -> Result<(), PathError> {
         let metadata = fs::symlink_metadata(self)?;
         let mut perms = metadata.permissions();
