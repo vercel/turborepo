@@ -148,14 +148,7 @@ async fn run(resource: PathBuf) -> Result<()> {
 
         let plain_issues = captured_issues
             .iter_with_shortest_path()
-            .map(|(issue_vc, path)| async move {
-                Ok((
-                    issue_vc.into_plain(path).await?,
-                    issue_vc.into_plain(path).dbg().await?,
-                ))
-            })
-            .try_join()
-            .await?;
+            .map(|(issue_vc, path)| issue_vc.into_plain(path));
 
         snapshot_issues(plain_issues, out.join("issues".to_string()), &REPO_ROOT)
             .await

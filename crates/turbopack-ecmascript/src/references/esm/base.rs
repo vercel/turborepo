@@ -8,7 +8,8 @@ use swc_core::{
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
-        ChunkableModuleReference, ChunkingContext, ChunkingType, ChunkingTypeOption, ModuleId,
+        availability_info::AvailabilityInfo, ChunkableModuleReference,
+        ChunkingContext, ChunkingType, ChunkingTypeOption, ModuleId,
     },
     issue::{IssueSeverity, OptionIssueSource},
     module::Module,
@@ -106,6 +107,10 @@ pub struct EsmAssetReference {
     pub export_name: Option<Vc<ModulePart>>,
 }
 
+/// A list of [EsmAssetReference]s
+#[turbo_tasks::value(transparent)]
+pub struct EsmAssetReferences(Vec<Vc<EsmAssetReference>>);
+
 impl EsmAssetReference {
     fn get_origin(&self) -> Vc<Box<dyn ResolveOrigin>> {
         let mut origin = self.origin;
@@ -144,19 +149,32 @@ impl EsmAssetReference {
     }
 
     #[turbo_tasks::function]
-    pub(crate) async fn is_async(self: Vc<Self>, recursive: bool) -> Result<Vc<bool>> {
+    pub(crate) async fn is_external_esm(self) -> Result<Vc<bool>> {
         let asset = self.get_referenced_asset().await?;
 
-        match &*asset {
-            ReferencedAsset::Some(placeable) if recursive => {
-                Ok(placeable.get_async_module().is_async())
-            }
-            ReferencedAsset::OriginalReferenceTypeExternal(_) => {
-                // TODO(WEB-1259): we need to detect if external modules are esm
-                Ok(BoolVc::cell(false))
-            }
-            ReferencedAsset::Some(_) | ReferencedAsset::None => Ok(BoolVc::cell(false)),
+        let ReferencedAsset::OriginalReferenceTypeExternal(_) = &*asset else {
+            return Ok(Vc::cell(false));
+        };
+
+        // TODO(WEB-1259): we need to detect if external modules are esm
+        Ok(Vc::cell(false))
+    }
+
+    #[turbo_tasks::function]
+    pub(crate) async fn is_async(
+        self,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Result<Vc<bool>> {
+        if *self.is_external_esm().await? {
+            return Ok(Vc::cell(true));
         }
+
+        let asset = self.get_referenced_asset().await?;
+        let ReferencedAsset::Some(placeable) = &*asset else {
+            return Ok(Vc::cell(false));
+        };
+
+        Ok(placeable.get_async_module().is_async(availability_info))
     }
 }
 

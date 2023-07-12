@@ -54,7 +54,10 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             availability_info,
         );
 
-        let async_module_options = module.full_module.get_async_module().module_options();
+        let async_module_options = module
+            .full_module
+            .get_async_module()
+            .module_options(availability_info);
 
         Ok(EcmascriptChunkItemContent::new(
             content,

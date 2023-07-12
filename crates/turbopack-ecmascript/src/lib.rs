@@ -285,17 +285,8 @@ impl EcmascriptModuleAsset {
     }
 
     #[turbo_tasks::function]
-    pub async fn analyze(self: Vc<Self>) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
-        let this = self.await?;
-        Ok(analyze_ecmascript_module(
-            this.source,
-            Vc::upcast(self),
-            Value::new(this.ty),
-            this.transforms,
-            Value::new(this.options),
-            this.compile_time_info,
-            None,
-        ))
+    pub fn analyze(self: Vc<Self>) -> Vc<AnalyzeEcmascriptModuleResult> {
+        analyze_ecmascript_module(self, None)
     }
 
     #[turbo_tasks::function]
@@ -519,7 +510,10 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
         let content = this.module.module_content(this.context, availability_info);
-        let async_module_options = this.module.get_async_module().module_options();
+        let async_module_options = this
+            .module
+            .get_async_module()
+            .module_options(availability_info);
 
         Ok(EcmascriptChunkItemContent::new(
             content,

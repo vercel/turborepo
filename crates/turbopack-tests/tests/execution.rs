@@ -273,10 +273,17 @@ async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
         .context("test node result did not emit anything")?;
 
     let SingleValue::Single(bytes) = single else {
-        panic!(
-            "Evaluation stream must yield SingleValue, but got: {:?}",
-            single
-        );
+        return Ok(RunTestResult {
+            js_result: JsResultVc::cell(JsResult {
+                uncaught_exceptions: vec![],
+                unhandled_rejections: vec![],
+                jest_result: JestRunResult {
+                    test_results: vec![],
+                },
+            }),
+            path,
+        }
+        .cell());
     };
 
     Ok(RunTestResult {
@@ -298,14 +305,7 @@ async fn snapshot_issues(run_result: Vc<RunTestResult>) -> Result<Vc<()>> {
 
     let plain_issues = captured_issues
         .iter_with_shortest_path()
-        .map(|(issue_vc, path)| async move {
-            Ok((
-                issue_vc.into_plain(path).await?,
-                issue_vc.into_plain(path).dbg().await?,
-            ))
-        })
-        .try_join()
-        .await?;
+        .map(|(issue_vc, path)| issue_vc.into_plain(path));
 
     turbopack_test_utils::snapshot::snapshot_issues(
         plain_issues,

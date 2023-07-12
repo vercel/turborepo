@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     env, fs,
+    path::PathBuf,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -12,22 +13,26 @@ use turbo_tasks_fs::{
     FileSystemPath,
 };
 use turbo_tasks_hash::encode_hex;
-use turbopack_core::{asset::AssetContent, issue::PlainIssue};
+use turbopack_cli_utils::issue::{format_issue, LogOptions};
+use turbopack_core::{
+    asset::{AssetContent},
+    issue::{IssueSeverity, PlainIssue},
+};
 
 // Updates the existing snapshot outputs with the actual outputs of this run.
 // e.g. `UPDATE=1 cargo test -p turbopack-tests -- test_my_pattern`
 static UPDATE: Lazy<bool> = Lazy::new(|| env::var("UPDATE").unwrap_or_default() == "1");
 
-pub async fn snapshot_issues<
-    I: IntoIterator<Item = (ReadRef<PlainIssue>, ReadRef<ValueDebugString>)>,
->(
+pub async fn snapshot_issues<I: IntoIterator<Item = Vc<PlainIssue>>>(
     captured_issues: I,
     issues_path: Vc<FileSystemPath>,
     workspace_root: &str,
 ) -> Result<()> {
     let expected_issues = expected(issues_path).await?;
     let mut seen = HashSet::new();
-    for (plain_issue, debug_string) in captured_issues.into_iter() {
+    for plain_issue in captured_issues.into_iter() {
+        let plain_issue = plain_issue.await?;
+
         let title = plain_issue
             .title
             .replace('/', "__")
@@ -48,14 +53,27 @@ pub async fn snapshot_issues<
             continue;
         }
 
+        let formatted = format_issue(
+            &plain_issue,
+            None,
+            &LogOptions {
+                current_dir: PathBuf::new(),
+                project_dir: PathBuf::new(),
+                show_all: true,
+                log_detail: true,
+                log_level: IssueSeverity::Info,
+            },
+        );
+
         // Annoyingly, the PlainIssue.source -> PlainIssueSource.asset ->
         // PlainSource.path -> FileSystemPath.fs -> DiskFileSystem.root changes
         // for everyone.
-        let content = debug_string
+        let content = formatted
             .as_str()
             .replace(workspace_root, "WORKSPACE_ROOT")
             // Normalize syspaths from Windows. These appear in stack traces.
             .replace("\\\\", "/");
+
         let asset = AssetContent::file(File::from(content).into());
 
         diff(path, asset).await?;
