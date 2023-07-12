@@ -184,6 +184,32 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
                 headers
             }),
+        )
+        .route(
+            "/preflight/allow-auth",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "Access-Control-Allow-Headers",
+                    "Authorization, Location, Access-Control-Allow-Headers"
+                        .parse()
+                        .unwrap(),
+                );
+
+                headers
+            }),
+        )
+        .route(
+            "/preflight/no-allow-auth",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "Access-Control-Allow-Headers",
+                    "x-authorization-foo, Location".parse().unwrap(),
+                );
+
+                headers
+            }),
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));

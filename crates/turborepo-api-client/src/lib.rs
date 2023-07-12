@@ -4,6 +4,8 @@
 
 use std::env;
 
+use lazy_static::lazy_static;
+use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Method, RequestBuilder};
 use serde::{Deserialize, Serialize};
@@ -13,6 +15,11 @@ pub use crate::error::{Error, Result};
 
 mod error;
 mod retry;
+
+lazy_static! {
+    static ref AUTHORIZATION_REGEX: Regex =
+        Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap();
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VerifiedSsoUser {
@@ -404,7 +411,7 @@ impl APIClient {
             .get("Access-Control-Allow-Headers")
             .map_or("", |h| h.to_str().unwrap_or(""));
 
-        let allow_auth = allowed_headers.to_lowercase().contains("authorization");
+        let allow_auth = AUTHORIZATION_REGEX.is_match(allowed_headers);
 
         Ok(PreflightResponse {
             location,
@@ -449,7 +456,6 @@ impl APIClient {
 #[cfg(test)]
 mod test {
     use anyhow::Result;
-    use url::Url;
     use vercel_api_mock::start_test_server;
 
     use crate::APIClient;
@@ -471,7 +477,7 @@ mod test {
             )
             .await;
 
-        assert_eq!(response.is_ok());
+        assert!(response.is_ok());
 
         let response = client
             .do_preflight(
@@ -482,7 +488,31 @@ mod test {
             )
             .await;
 
-        assert_eq!(response.is_ok());
+        // Since PreflightResponse returns a Url,
+        // do_preflight would error if the Url is relative
+        assert!(response.is_ok());
+
+        let response = client
+            .do_preflight(
+                "",
+                &format!("{}/preflight/allow-auth", base_url),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await?;
+
+        assert!(response.allow_authorization_header);
+
+        let response = client
+            .do_preflight(
+                "",
+                &format!("{}/preflight/no-allow-auth", base_url),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await?;
+
+        assert!(!response.allow_authorization_header);
 
         handle.abort();
         Ok(())
