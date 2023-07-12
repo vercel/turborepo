@@ -79,7 +79,7 @@ impl Git {
 
         let output = self.execute_git_command(&["diff", "--name-only", to_commit], pathspec)?;
 
-        self.add_files_from_stdout(&mut files, &turbo_root, output);
+        self.add_files_from_stdout(&mut files, turbo_root, output);
 
         if let Some(from_commit) = from_commit {
             let output = self.execute_git_command(
@@ -91,13 +91,13 @@ impl Git {
                 pathspec,
             )?;
 
-            self.add_files_from_stdout(&mut files, &turbo_root, output);
+            self.add_files_from_stdout(&mut files, turbo_root, output);
         }
 
         let output =
             self.execute_git_command(&["ls-files", "--others", "--exclude-standard"], pathspec)?;
 
-        self.add_files_from_stdout(&mut files, &turbo_root, output);
+        self.add_files_from_stdout(&mut files, turbo_root, output);
 
         Ok(files)
     }
@@ -126,7 +126,7 @@ impl Git {
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
     ) {
-        let turbo_root = turbo_root.as_ref();
+        let turbo_root = turbo_root;
         let stdout = String::from_utf8(stdout).unwrap();
         for line in stdout.lines() {
             let path = RelativeUnixPath::new(line).unwrap();
@@ -194,7 +194,7 @@ pub fn previous_content(
     // Note that we assume any relative file path is relative to the git root
     // FIXME: this is probably wrong. We should know the path to the lockfile
     // exactly
-    let absolute_file_path = AbsoluteSystemPathBuf::from_unknown(&git_root, &file_path);
+    let absolute_file_path = AbsoluteSystemPathBuf::from_unknown(&git_root, file_path);
 
     scm.previous_content(from_commit, &absolute_file_path)
 }

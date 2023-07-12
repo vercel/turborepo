@@ -40,10 +40,11 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::{AssetContext, AssetContextVc},
     environment::{BrowserEnvironment, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSourceVc,
     issue::IssueVc,
     reference::all_referenced_assets,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    source_asset::SourceAssetVc,
+    source::SourceVc,
 };
 use turbopack_dev::DevChunkingContextVc;
 use turbopack_ecmascript_plugins::transform::{
@@ -218,6 +219,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
     let compile_time_info = CompileTimeInfo::builder(env)
         .defines(
             compile_time_defines!(
+                process.turbopack = true,
                 process.env.NODE_ENV = "development",
                 DEFINED_VALUE = "value",
                 DEFINED_TRUE = true,
@@ -286,7 +288,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
 
     let runtime_entries = maybe_load_env(context, project_path)
         .await?
-        .map(|asset| EvaluatableAssetsVc::one(EvaluatableAssetVc::from_asset(asset, context)));
+        .map(|asset| EvaluatableAssetsVc::one(EvaluatableAssetVc::from_source(asset, context)));
 
     let chunk_root_path = path.join("output");
     let static_root_path = path.join("static");
@@ -300,7 +302,8 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
             env,
         )
         .runtime_type(options.runtime_type)
-        .build(),
+        .build()
+        .into(),
         Runtime::Build => BuildChunkingContextVc::builder(
             project_root,
             path,
@@ -320,7 +323,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
         .collect();
 
     let entry_module = context.process(
-        SourceAssetVc::new(entry_asset).into(),
+        FileSourceVc::new(entry_asset).into(),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );
 
@@ -338,7 +341,7 @@ async fn run_test(resource: &str) -> Result<FileSystemPathVc> {
                     AssetsVc::cell(vec![BuildChunkingContextVc::resolve_from(chunking_context)
                         .await?
                         .unwrap()
-                        .generate_entry_chunk(
+                        .entry_chunk(
                             // `expected` expects a completely flat output directory.
                             chunk_root_path
                                 .join(
@@ -414,7 +417,7 @@ async fn walk_asset(
 async fn maybe_load_env(
     _context: AssetContextVc,
     path: FileSystemPathVc,
-) -> Result<Option<AssetVc>> {
+) -> Result<Option<SourceVc>> {
     let dotenv_path = path.join("input/.env");
 
     if !dotenv_path.read().await?.is_content() {

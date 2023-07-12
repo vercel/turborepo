@@ -87,7 +87,7 @@ mod test {
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
             let pkg_prefix = git_to_pkg_path.to_unix().unwrap();
 
-            let expected_hashes = GitHashes::from_iter(file_hashes.into_iter());
+            let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
             hash_objects(&git_root, pkg_path, to_hash, &mut hashes).unwrap();
@@ -110,8 +110,8 @@ mod test {
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, &pkg_path, to_hash, &mut hashes);
-            assert_eq!(result.is_err(), true);
+            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes);
+            assert!(result.is_err());
         }
     }
 }

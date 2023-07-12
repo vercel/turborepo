@@ -7,9 +7,9 @@ use turbopack_cli_utils::runtime_entry::{RuntimeEntriesVc, RuntimeEntry};
 use turbopack_core::{
     chunk::{ChunkableModuleVc, ChunkingContextVc},
     environment::{BrowserEnvironment, EnvironmentVc, ExecutionEnvironment},
+    file_source::FileSourceVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
-    source_asset::SourceAssetVc,
 };
 use turbopack_dev::{react_refresh::assert_can_resolve_react_refresh, DevChunkingContextVc};
 use turbopack_dev_server::{
@@ -121,6 +121,7 @@ pub fn get_client_chunking_context(
     )
     .hot_module_replacement()
     .build()
+    .into()
 }
 
 #[turbo_tasks::function]
@@ -144,7 +145,7 @@ pub async fn get_client_runtime_entries(
     };
 
     runtime_entries.push(
-        RuntimeEntry::Source(SourceAssetVc::new(embed_file_path("entry/bootstrap.ts")).into())
+        RuntimeEntry::Source(FileSourceVc::new(embed_file_path("entry/bootstrap.ts")).into())
             .cell(),
     );
 

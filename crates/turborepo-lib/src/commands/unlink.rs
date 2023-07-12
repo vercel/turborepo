@@ -1,8 +1,8 @@
-use std::fs::File;
+use std::{fs, fs::File};
 
 use anyhow::{Context, Result};
 
-use crate::{cli::LinkTarget, commands::CommandBase, config::TurboJson, ui::GREY};
+use crate::{cli::LinkTarget, commands::CommandBase, config::RawTurboJSON, ui::GREY};
 
 enum UnlinkSpacesResult {
     Unlinked,
@@ -55,8 +55,9 @@ pub fn unlink(base: &mut CommandBase, target: LinkTarget) -> Result<()> {
 fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResult> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
 
-    let turbo_json_file = File::open(&turbo_json_path).context("unable to open turbo.json file")?;
-    let mut turbo_json: TurboJson = serde_json::from_reader(turbo_json_file)?;
+    let turbo_json_contents =
+        fs::read_to_string(&turbo_json_path).context("unable to open turbo.json file")?;
+    let mut turbo_json: RawTurboJSON = serde_json::from_str(&turbo_json_contents)?;
     let has_spaces_id = turbo_json
         .experimental_spaces
         .unwrap_or_default()

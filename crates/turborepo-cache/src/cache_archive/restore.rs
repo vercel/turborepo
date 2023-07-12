@@ -342,7 +342,7 @@ mod tests {
         for (tar_bytes, is_compressed) in
             [(&uncompressed_tar[..], false), (&compressed_tar[..], true)]
         {
-            let mut cache_reader = CacheReader::new(&tar_bytes[..], is_compressed)?;
+            let mut cache_reader = CacheReader::new(tar_bytes, is_compressed)?;
             let output_dir = tempdir()?;
             let output_dir_path = output_dir.path().to_string_lossy();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
@@ -365,7 +365,7 @@ mod tests {
         for (tar_bytes, is_compressed) in
             [(&uncompressed_tar[..], false), (&compressed_tar[..], true)]
         {
-            let mut cache_reader = CacheReader::new(&tar_bytes[..], is_compressed)?;
+            let mut cache_reader = CacheReader::new(tar_bytes, is_compressed)?;
             let output_dir = tempdir()?;
             let output_dir_path = output_dir.path().to_string_lossy();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;

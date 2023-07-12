@@ -452,7 +452,7 @@ impl Dependencies {
                 .map_or(false, |workspace_version| {
                     DependencyVersion::new(version).matches_workspace_package(
                         workspace_version,
-                        &workspace_dir,
+                        workspace_dir,
                         repo_root,
                     )
                 });
