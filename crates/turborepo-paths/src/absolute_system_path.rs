@@ -328,7 +328,7 @@ impl AbsoluteSystemPath {
 
     #[cfg(unix)]
     pub fn set_mode(&self, mode: u32) -> Result<(), io::Error> {
-        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+        use std::os::unix::fs::PermissionsExt;
 
         let permissions = Permissions::from_mode(mode);
         fs::set_permissions(&self.0, permissions)?;

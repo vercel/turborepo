@@ -1,4 +1,4 @@
-use std::{collections::HashSet, process::Command};
+use std::process::Command;
 
 use node_semver::{Range, Version};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};

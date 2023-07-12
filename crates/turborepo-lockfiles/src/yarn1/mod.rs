@@ -89,7 +89,7 @@ impl Lockfile for Yarn1Lockfile {
 
     fn subgraph(
         &self,
-        workspace_packages: &[String],
+        _workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn Lockfile>, super::Error> {
         let mut inner = Map::new();

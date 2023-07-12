@@ -7,7 +7,6 @@ mod ser;
 use std::{
     collections::{HashMap, HashSet},
     iter,
-    path::Path,
     rc::Rc,
 };
 
