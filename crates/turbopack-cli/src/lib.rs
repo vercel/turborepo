@@ -1,6 +1,6 @@
 #![feature(future_join)]
 #![feature(min_specialization)]
-
+#![allow(clippy::too_many_arguments)]
 pub mod arguments;
 pub(crate) mod contexts;
 pub mod dev;
