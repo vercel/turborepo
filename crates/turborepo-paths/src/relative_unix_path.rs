@@ -5,7 +5,7 @@ use std::{
 
 use camino::{Utf8Path, Utf8PathBuf};
 
-use crate::{PathError, RelativeUnixPathBuf};
+use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
@@ -44,6 +44,10 @@ impl RelativeUnixPath {
         }
     }
 
+    pub fn to_system_path(&self) -> AnchoredSystemPathBuf {
+        AnchoredSystemPathBuf(self.to_system_path_buf())
+    }
+
     pub fn to_owned(&self) -> RelativeUnixPathBuf {
         RelativeUnixPathBuf(self.0.to_owned())
     }
@@ -77,5 +81,25 @@ impl RelativeUnixPath {
 impl AsRef<RelativeUnixPath> for RelativeUnixPath {
     fn as_ref(&self) -> &RelativeUnixPath {
         self
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::AnchoredSystemPath;
+
+    #[test]
+    fn test_to_system_path() {
+        let path = RelativeUnixPath::new("foo/bar/baz").unwrap();
+        let expected = AnchoredSystemPath::new(if cfg!(windows) {
+            // Unix path separators should be converted
+            "foo\\bar\\baz"
+        } else {
+            // Unix paths already have correct separators
+            "foo/bar/baz"
+        })
+        .unwrap();
+        assert_eq!(&*path.to_system_path(), expected);
     }
 }
