@@ -29,18 +29,18 @@ impl RelativeUnixPath {
         Ok(unsafe { &*(path as *const str as *const Self) })
     }
 
-    pub(crate) fn to_system_path_buf(&self) -> Result<Utf8PathBuf, PathError> {
+    pub(crate) fn to_system_path_buf(&self) -> Utf8PathBuf {
         #[cfg(unix)]
         {
             // On unix, unix paths are already system paths. Copy the string
             // but skip validation.
-            Ok(Utf8PathBuf::from(&self.0))
+            Utf8PathBuf::from(&self.0)
         }
 
         #[cfg(windows)]
         {
             let system_path_string = self.0.replace('/', "\\");
-            Ok(Utf8PathBuf::from(system_path_string))
+            Utf8PathBuf::from(system_path_string)
         }
     }
 
