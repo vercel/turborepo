@@ -5,6 +5,7 @@ use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
     chunk::{ChunkVc, ChunkingContext},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{VersionedContent, VersionedContentVc},
 };
@@ -73,6 +74,9 @@ fn modifier() -> StringVc {
 fn chunk_list_chunk_reference_description() -> StringVc {
     StringVc::cell("chunk list chunk".to_string())
 }
+
+#[turbo_tasks::value_impl]
+impl OutputAsset for EcmascriptDevChunkList {}
 
 #[turbo_tasks::value_impl]
 impl Asset for EcmascriptDevChunkList {

@@ -9,6 +9,7 @@ use turbopack_core::{
         ChunkableModule, ChunkableModuleVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
     },
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{Version, VersionVc, VersionedContent, VersionedContentVc},
 };
@@ -34,6 +35,9 @@ pub struct DevHtmlAsset {
 fn dev_html_chunk_reference_description() -> StringVc {
     StringVc::cell("dev html chunk".to_string())
 }
+
+#[turbo_tasks::value_impl]
+impl OutputAsset for DevHtmlAsset {}
 
 #[turbo_tasks::value_impl]
 impl Asset for DevHtmlAsset {

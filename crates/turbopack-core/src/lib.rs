@@ -18,6 +18,7 @@ pub mod ident;
 pub mod introspect;
 pub mod issue;
 pub mod module;
+pub mod output;
 pub mod package_json;
 pub mod proxied_asset;
 pub mod raw_module;

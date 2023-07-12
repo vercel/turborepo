@@ -9,6 +9,7 @@ use turbopack_core::{
     chunk::{ChunkingContext, EvaluatableAssetsVc},
     code_builder::{CodeBuilder, CodeVc},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     source_map::{
         GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapAssetReferenceVc,
@@ -180,6 +181,9 @@ fn modifier() -> StringVc {
 fn chunk_reference_description() -> StringVc {
     StringVc::cell("chunk".to_string())
 }
+
+#[turbo_tasks::value_impl]
+impl OutputAsset for EcmascriptBuildNodeEntryChunk {}
 
 #[turbo_tasks::value_impl]
 impl Asset for EcmascriptBuildNodeEntryChunk {

@@ -12,6 +12,7 @@ use turbopack_core::{
     },
     code_builder::{CodeBuilder, CodeVc},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     reference::AssetReferencesVc,
     source_map::{
         GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapAssetReferenceVc,
@@ -174,6 +175,9 @@ impl ValueToString for EcmascriptDevEvaluateChunk {
 fn modifier() -> StringVc {
     StringVc::cell("ecmascript dev evaluate chunk".to_string())
 }
+
+#[turbo_tasks::value_impl]
+impl OutputAsset for EcmascriptDevEvaluateChunk {}
 
 #[turbo_tasks::value_impl]
 impl Asset for EcmascriptDevEvaluateChunk {
