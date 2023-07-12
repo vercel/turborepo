@@ -2,10 +2,10 @@ use anyhow::Result;
 use serde::Serialize;
 use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkVc, ChunkingContext},
     ident::AssetIdentVc,
-    output::{OutputAsset, OutputAssetVc},
+    output::{OutputAsset, OutputAssetVc, OutputAssetsVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{VersionedContent, VersionedContentVc},
 };
@@ -28,7 +28,7 @@ use crate::DevChunkingContextVc;
 pub(crate) struct EcmascriptDevChunkList {
     pub(super) chunking_context: DevChunkingContextVc,
     pub(super) entry_chunk: ChunkVc,
-    pub(super) chunks: AssetsVc,
+    pub(super) chunks: OutputAssetsVc,
     pub(super) source: EcmascriptDevChunkListSource,
 }
 
@@ -39,7 +39,7 @@ impl EcmascriptDevChunkListVc {
     pub fn new(
         chunking_context: DevChunkingContextVc,
         entry_chunk: ChunkVc,
-        chunks: AssetsVc,
+        chunks: OutputAssetsVc,
         source: Value<EcmascriptDevChunkListSource>,
     ) -> Self {
         EcmascriptDevChunkList {
@@ -102,9 +102,12 @@ impl Asset for EcmascriptDevChunkList {
             self.chunks
                 .await?
                 .iter()
-                .map(|chunk| {
-                    SingleAssetReferenceVc::new(*chunk, chunk_list_chunk_reference_description())
-                        .into()
+                .map(|&chunk| {
+                    SingleAssetReferenceVc::new(
+                        chunk.into(),
+                        chunk_list_chunk_reference_description(),
+                    )
+                    .into()
                 })
                 .collect(),
         ))

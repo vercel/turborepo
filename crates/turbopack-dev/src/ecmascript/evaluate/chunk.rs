@@ -6,13 +6,13 @@ use serde::Serialize;
 use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkDataVc, ChunkVc, ChunkingContext, ChunksDataVc, EvaluatableAssetsVc, ModuleIdReadRef,
     },
     code_builder::{CodeBuilder, CodeVc},
     ident::AssetIdentVc,
-    output::{OutputAsset, OutputAssetVc},
+    output::{OutputAsset, OutputAssetVc, OutputAssetsVc},
     reference::AssetReferencesVc,
     source_map::{
         GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapAssetReferenceVc,
@@ -33,7 +33,7 @@ use crate::DevChunkingContextVc;
 pub(crate) struct EcmascriptDevEvaluateChunk {
     chunking_context: DevChunkingContextVc,
     entry_chunk: ChunkVc,
-    other_chunks: AssetsVc,
+    other_chunks: OutputAssetsVc,
     evaluatable_assets: EvaluatableAssetsVc,
 }
 
@@ -44,7 +44,7 @@ impl EcmascriptDevEvaluateChunkVc {
     pub fn new(
         chunking_context: DevChunkingContextVc,
         entry_chunk: ChunkVc,
-        other_chunks: AssetsVc,
+        other_chunks: OutputAssetsVc,
         evaluatable_assets: EvaluatableAssetsVc,
     ) -> Self {
         EcmascriptDevEvaluateChunk {

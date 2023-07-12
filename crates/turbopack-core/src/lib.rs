@@ -22,6 +22,7 @@ pub mod output;
 pub mod package_json;
 pub mod proxied_asset;
 pub mod raw_module;
+pub mod raw_output;
 pub mod reference;
 pub mod reference_type;
 pub mod resolve;

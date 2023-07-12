@@ -5,11 +5,11 @@ use indoc::writedoc;
 use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 use turbo_tasks_fs::{File, FileSystemPathVc};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkingContext, EvaluatableAssetsVc},
     code_builder::{CodeBuilder, CodeVc},
     ident::AssetIdentVc,
-    output::{OutputAsset, OutputAssetVc},
+    output::{OutputAsset, OutputAssetVc, OutputAssetsVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     source_map::{
         GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapAssetReferenceVc,
@@ -29,7 +29,7 @@ use crate::BuildChunkingContextVc;
 pub(crate) struct EcmascriptBuildNodeEntryChunk {
     path: FileSystemPathVc,
     chunking_context: BuildChunkingContextVc,
-    other_chunks: AssetsVc,
+    other_chunks: OutputAssetsVc,
     evaluatable_assets: EvaluatableAssetsVc,
     exported_module: EcmascriptChunkPlaceableVc,
 }
@@ -41,7 +41,7 @@ impl EcmascriptBuildNodeEntryChunkVc {
     pub fn new(
         path: FileSystemPathVc,
         chunking_context: BuildChunkingContextVc,
-        other_chunks: AssetsVc,
+        other_chunks: OutputAssetsVc,
         evaluatable_assets: EvaluatableAssetsVc,
         exported_module: EcmascriptChunkPlaceableVc,
     ) -> Self {
@@ -206,9 +206,10 @@ impl Asset for EcmascriptBuildNodeEntryChunk {
         }
 
         let other_chunks = this.other_chunks.await?;
-        for other_chunk in &*other_chunks {
+        for &other_chunk in &*other_chunks {
             references.push(
-                SingleAssetReferenceVc::new(*other_chunk, chunk_reference_description()).into(),
+                SingleAssetReferenceVc::new(other_chunk.into(), chunk_reference_description())
+                    .into(),
             );
         }
 
