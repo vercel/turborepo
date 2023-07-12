@@ -714,6 +714,14 @@ mod test {
         let patch = lockfile.patches.get(&locator).unwrap();
         let package = lockfile.locator_package.get(patch).unwrap();
         assert_eq!(package.version.as_ref(), "2.0.0-next.4");
+
+        assert_eq!(
+            lockfile.patches().unwrap(),
+            vec![
+                RelativeUnixPathBuf::new(".yarn/patches/lodash-npm-4.17.21-6382451519.patch")
+                    .unwrap()
+            ]
+        );
     }
 
     #[test]

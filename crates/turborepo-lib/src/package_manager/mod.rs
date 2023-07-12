@@ -13,7 +13,7 @@ use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
 use wax::{Any, Glob, Pattern};
 
@@ -457,6 +457,22 @@ impl PackageManager {
                 )),
             )?),
         })
+    }
+
+    pub fn prune_patched_packages<R: AsRef<RelativeUnixPath>>(
+        &self,
+        package_json: &PackageJson,
+        patches: &[R],
+    ) -> PackageJson {
+        match self {
+            PackageManager::Berry => yarn::prune_patches(package_json, patches),
+            PackageManager::Pnpm6 | PackageManager::Pnpm => {
+                pnpm::prune_patches(package_json, patches)
+            }
+            PackageManager::Yarn | PackageManager::Npm => {
+                unreachable!("npm and yarn 1 don't have a concept of patches")
+            }
+        }
     }
 }
 
