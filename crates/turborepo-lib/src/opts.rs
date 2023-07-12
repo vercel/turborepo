@@ -61,11 +61,11 @@ pub struct RunOpts<'a> {
     pub(crate) env_mode: EnvMode,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
-    profile: Option<&'a str>,
+    pub profile: Option<&'a str>,
     continue_on_error: bool,
     pub(crate) pass_through_args: &'a [String],
     pub(crate) only: bool,
-    dry_run: bool,
+    pub(crate) dry_run: bool,
     pub(crate) dry_run_json: bool,
     pub graph: Option<GraphOpts<'a>>,
     pub(crate) no_daemon: bool,

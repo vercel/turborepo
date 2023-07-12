@@ -15,6 +15,12 @@ pub struct TaskId<'a> {
     task: Cow<'a, str>,
 }
 
+impl Serialize for TaskId<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 /// A task name as it appears in in a `turbo.json` it might be for all
 /// workspaces or just one.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
@@ -76,6 +82,11 @@ impl<'a> TaskId<'a> {
 
     pub fn task(&self) -> &str {
         &self.task
+    }
+
+    // Remove package for single package task summaries
+    pub fn strip_package(&mut self) {
+        self.package = "".into();
     }
 
     pub fn as_non_workspace_task_name(&self) -> TaskName {

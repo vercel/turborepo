@@ -9,6 +9,7 @@ use std::{
 
 use regex::Regex;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 const DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
@@ -32,6 +33,10 @@ pub enum Error {
 pub struct EnvironmentVariableMap(HashMap<String, String>);
 
 impl EnvironmentVariableMap {
+    // Returns a deterministically sorted set of EnvironmentVariablePairs
+    // from an EnvironmentVariableMap.
+    // This is the value that is used upstream as a task hash input,
+    // so we need it to be deterministic
     pub fn to_hashable(&self) -> EnvironmentVariablePairs {
         let mut list: Vec<_> = self.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
         list.sort();
@@ -44,6 +49,26 @@ impl EnvironmentVariableMap {
         names.sort();
 
         names
+    }
+
+    // Returns a deterministically sorted set of EnvironmentVariablePairs
+    // from an EnvironmentVariableMap
+    // This is the value used to print out the task hash input,
+    // so the values are cryptographically hashed
+    pub fn to_secret_hashable(&self) -> EnvironmentVariablePairs {
+        self.iter()
+            .map(|(k, v)| {
+                if v != "" {
+                    let mut hasher = Sha256::new();
+                    hasher.update(v.as_bytes());
+                    let hash = hasher.finalize();
+                    let hexed_hash = hex::encode(hash);
+                    format!("{}=", hexed_hash)
+                } else {
+                    format!("{}=", k)
+                }
+            })
+            .collect()
     }
 }
 
