@@ -388,7 +388,14 @@ impl APIClient {
         let headers = response.headers();
         let location = if let Some(location) = headers.get("Location") {
             let location = location.to_str()?;
-            Url::parse(location)?
+
+            match Url::parse(location) {
+                Ok(location_url) => location_url,
+                Err(url::ParseError::RelativeUrlWithoutBase) => {
+                    Url::parse(&self.base_url)?.join(location)?
+                }
+                Err(e) => return Err(e.into()),
+            }
         } else {
             response.url().clone()
         };
@@ -436,5 +443,48 @@ impl APIClient {
 
     fn make_url(&self, endpoint: &str) -> String {
         format!("{}{}", self.base_url, endpoint)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use anyhow::Result;
+    use url::Url;
+    use vercel_api_mock::start_test_server;
+
+    use crate::APIClient;
+
+    #[tokio::test]
+    async fn test_do_preflight() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+        let base_url = format!("http://localhost:{}", port);
+
+        let client = APIClient::new(&base_url, 200, "2.0.0", true)?;
+
+        let response = client
+            .do_preflight(
+                "",
+                &format!("{}/preflight/absolute-location", base_url),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await;
+
+        assert_eq!(response.is_ok());
+
+        let response = client
+            .do_preflight(
+                "",
+                &format!("{}/preflight/relative-location", base_url),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await;
+
+        assert_eq!(response.is_ok());
+
+        handle.abort();
+        Ok(())
     }
 }

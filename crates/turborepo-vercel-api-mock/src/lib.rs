@@ -4,7 +4,7 @@ use anyhow::Result;
 use axum::{
     extract::{BodyStream, Path},
     http::{HeaderMap, HeaderValue, StatusCode},
-    routing::{get, head, put},
+    routing::{get, head, options, put},
     Json, Router,
 };
 use futures_util::StreamExt;
@@ -163,6 +163,24 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     "x-artifact-duration",
                     HeaderValue::from_str(&duration.to_string()).unwrap(),
                 );
+
+                headers
+            }),
+        )
+        .route(
+            "/preflight/absolute-location",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert("Location", "http://example.com/about".parse().unwrap());
+
+                headers
+            }),
+        )
+        .route(
+            "/preflight/relative-location",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert("Location", "/about/me".parse().unwrap());
 
                 headers
             }),
