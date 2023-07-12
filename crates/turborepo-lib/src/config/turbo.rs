@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
     pub id: Option<String>,
@@ -39,7 +39,7 @@ pub struct TurboJson {
     pub(crate) space_id: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJSON {
@@ -61,11 +61,11 @@ pub struct RawTurboJSON {
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(transparent)]
 struct RawPipeline(BTreeMap<String, RawTaskDefinition>);
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RawTaskDefinition {
     cache: Option<bool>,
@@ -263,6 +263,37 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
                 persistent: raw_task.persistent.unwrap_or_default(),
             },
         })
+    }
+}
+
+impl RawTurboJSON {
+    /// Produces a new turbo.json without any tasks that reference non-existent
+    /// workspaces
+    pub fn prune_tasks<S: AsRef<str>>(&self, workspaces: &[S]) -> Self {
+        let mut this = self.clone();
+        // in go
+        // for each task check if it is in any of the packages
+        if let Some(pipeline) = &mut this.pipeline {
+            pipeline.0.retain(|task_name, _| {
+                // check if any of the listed workspaces have this
+                workspaces
+                    .iter()
+                    .any(|workspace| Self::is_task_in_package(task_name, workspace.as_ref()))
+            })
+        }
+
+        this
+    }
+
+    // TODO this will be moved to a more comprehensive task name module
+    // when porting the task graph
+    fn is_task_in_package(task: &str, workspace: &str) -> bool {
+        match task.split_once('#') {
+            // If a specific package task, then check that the task is for the given workspace
+            Some((package_name, _)) => package_name == workspace || package_name == "//",
+            // If there's no '#' then it isn't a specific package task
+            None => true,
+        }
     }
 }
 
@@ -480,10 +511,12 @@ mod tests {
     use std::{collections::HashSet, fs};
 
     use anyhow::Result;
+    use pretty_assertions::assert_eq;
     use tempfile::tempdir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
+    use super::RawTurboJSON;
     use crate::{
         config::{turbo::RawTaskDefinition, TurboJson},
         package_json::PackageJson,
@@ -718,5 +751,29 @@ mod tests {
         assert_eq!(task_outputs, expected_task_outputs);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_turbo_task_pruning() {
+        let json: RawTurboJSON = serde_json::from_value(serde_json::json!({
+            "pipeline": {
+                "//#top": {},
+                "build": {},
+                "a#build": {},
+                "b#build": {},
+            }
+        }))
+        .unwrap();
+        let pruned_json = json.prune_tasks(&["a"]);
+        let expected: RawTurboJSON = serde_json::from_value(serde_json::json!({
+            "pipeline": {
+                "//#top": {},
+                "build": {},
+                "a#build": {},
+            }
+        }))
+        .unwrap();
+
+        assert_eq!(pruned_json, expected);
     }
 }
