@@ -618,11 +618,6 @@ mod tests {
         BookkeepingTaskDefinition::default()
     ; "empty")]
     #[test_case(
-    "{/* comment */}",
-    RawTaskDefinition::default(),
-    BookkeepingTaskDefinition::default()
-    ; "empty with comment")]
-    #[test_case(
         r#"{ "persistent": false }"#,
         RawTaskDefinition {
             persistent: Some(false),
