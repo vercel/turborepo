@@ -16,6 +16,7 @@ use identifiers::{Descriptor, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use turbopath::RelativeUnixPathBuf;
 
 use self::resolution::{parse_resolution, Resolution};
 use super::Lockfile;
@@ -177,16 +178,6 @@ impl BerryLockfile {
                 .map(|desc| desc.clone().into_owned()),
         );
         Ok(())
-    }
-
-    /// All patch files referenced in the lockfile
-    pub fn patches(&self) -> Vec<&Path> {
-        self.patches
-            .values()
-            .filter_map(|patch| patch.patch_file())
-            .filter(|path| !Locator::is_patch_builtin(path))
-            .map(Path::new)
-            .collect()
     }
 
     // Helper function for inverting the resolution map
@@ -440,6 +431,125 @@ impl Lockfile for BerryLockfile {
         // For each dependency we need to check if there's an override
         Ok(Some(map))
     }
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Box<dyn Lockfile>, crate::Error> {
+        let reverse_lookup = self.locator_to_descriptors();
+
+        let mut resolutions = Map::new();
+        let mut patches = Map::new();
+
+        // Include all workspace packages and their references
+        for (locator, package) in &self.locator_package {
+            if workspace_packages
+                .iter()
+                .map(|s| s.as_str())
+                .chain(iter::once("."))
+                .any(|path| locator.is_workspace_path(path))
+            {
+                //  We need to track all of the descriptors coming out the workspace
+                for (name, range) in package.dependencies.iter().flatten() {
+                    let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
+                    let dep_locator = self
+                        .resolutions
+                        .get(&dependency)
+                        .unwrap_or_else(|| panic!("No locator found for {dependency}"));
+                    resolutions.insert(dependency, dep_locator.clone());
+                }
+
+                // Included workspaces will always have their locator listed as a descriptor.
+                // All other descriptors should show up in the other workspace package
+                // dependencies.
+                resolutions.insert(Descriptor::from(locator.clone()), locator.clone());
+            }
+        }
+
+        for key in packages {
+            // The error mapping is required to help massage the error types
+            let locator = Locator::try_from(key.as_str()).map_err(Error::from)?;
+
+            let package = self
+                .locator_package
+                .get(&locator)
+                .cloned()
+                .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
+
+            for (name, range) in package.dependencies.iter().flatten() {
+                let dependency = self.resolve_dependency(&locator, name, range.as_ref())?;
+                let dep_locator = self
+                    .resolutions
+                    .get(&dependency)
+                    .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
+                resolutions.insert(dependency, dep_locator.clone());
+            }
+
+            // If the package has an associated patch we include it in the subgraph
+            if let Some(patch_locator) = self.patches.get(&locator) {
+                patches.insert(locator.as_owned(), patch_locator.clone());
+            }
+        }
+
+        for patch in patches.values() {
+            let patch_descriptors = reverse_lookup
+                .get(patch)
+                .unwrap_or_else(|| panic!("Unable to find {patch} in reverse lookup"));
+
+            // For each patch descriptor we extract the primary descriptor that each patch
+            // descriptor targets and check if that descriptor is present in the
+            // pruned map and add it if it is present
+            for patch_descriptor in patch_descriptors {
+                let version = patch_descriptor.primary_version().unwrap();
+                let primary_descriptor = Descriptor {
+                    ident: patch_descriptor.ident.clone(),
+                    range: version.into(),
+                };
+
+                if resolutions.contains_key(&primary_descriptor) {
+                    resolutions.insert((*patch_descriptor).clone(), patch.clone());
+                }
+            }
+        }
+
+        // Add any descriptors used by package extensions
+        for descriptor in &self.extensions {
+            let locator = self
+                .resolutions
+                .get(descriptor)
+                .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
+            resolutions.insert(descriptor.clone(), locator.clone());
+        }
+
+        Ok(Box::new(Self {
+            data: self.data.clone(),
+            resolutions,
+            patches,
+            // We clone the following structures without any alterations and
+            // rely on resolutions being correctly pruned.
+            locator_package: self.locator_package.clone(),
+            resolver: self.resolver.clone(),
+            extensions: self.extensions.clone(),
+            overrides: self.overrides.clone(),
+        }))
+    }
+
+    fn encode(&self) -> Result<Vec<u8>, crate::Error> {
+        Ok(self.lockfile()?.to_string().into_bytes())
+    }
+
+    fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
+        let mut patches = self
+            .patches
+            .values()
+            .filter_map(|patch| patch.patch_file())
+            .filter(|path| !Locator::is_patch_builtin(path))
+            .map(|s| RelativeUnixPathBuf::new(s.to_string()))
+            .collect::<Result<Vec<_>, turbopath::PathError>>()?;
+        patches.sort();
+        Ok(patches)
+    }
 }
 
 impl LockfileData {
@@ -475,12 +585,12 @@ pub fn berry_subgraph(
     workspace_packages: &[String],
     packages: &[String],
     resolutions: Option<HashMap<String, String>>,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>, crate::Error> {
     let manifest = resolutions.map(BerryManifest::with_resolutions);
     let data = LockfileData::from_bytes(contents)?;
     let lockfile = BerryLockfile::new(data, manifest)?;
     let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = pruned_lockfile.lockfile()?.to_string().into_bytes();
+    let new_contents = pruned_lockfile.encode()?;
     Ok(new_contents)
 }
 
@@ -612,8 +722,8 @@ mod test {
             LockfileData::from_bytes(include_bytes!("../../fixtures/minimal-berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
 
-        let empty_vec: Vec<&Path> = Vec::new();
-        assert_eq!(lockfile.patches(), empty_vec);
+        let empty_vec: Vec<RelativeUnixPathBuf> = Vec::new();
+        assert_eq!(lockfile.patches().unwrap(), empty_vec);
     }
 
     #[test]

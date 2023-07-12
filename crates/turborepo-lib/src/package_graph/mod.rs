@@ -37,7 +37,7 @@ impl WorkspaceInfo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
-struct Package {
+pub struct Package {
     name: String,
     version: String,
 }
@@ -260,6 +260,18 @@ mod test {
                 "key:c" => Ok(None),
                 _ => Ok(None),
             }
+        }
+
+        fn subgraph(
+            &self,
+            workspace_packages: &[String],
+            packages: &[String],
+        ) -> std::result::Result<Box<dyn Lockfile>, turborepo_lockfiles::Error> {
+            unreachable!("lockfile pruning not necessary for package graph construction")
+        }
+
+        fn encode(&self) -> std::result::Result<Vec<u8>, turborepo_lockfiles::Error> {
+            unreachable!("lockfile encoding not necessary for package graph construction")
         }
     }
 
