@@ -461,40 +461,34 @@ mod tests {
         let examples = root.join_component("examples");
 
         let with_yarn = examples.join_component("with-yarn");
-        let with_yarn_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(
-            [
-                with_yarn.join_components(&["apps", "docs", "package.json"]),
-                with_yarn.join_components(&["apps", "web", "package.json"]),
-                with_yarn.join_components(&["packages", "eslint-config-custom", "package.json"]),
-                with_yarn.join_components(&["packages", "tsconfig", "package.json"]),
-                with_yarn.join_components(&["packages", "ui", "package.json"]),
-            ]
-            .into_iter(),
-        );
+        let with_yarn_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter([
+            with_yarn.join_components(&["apps", "docs", "package.json"]),
+            with_yarn.join_components(&["apps", "web", "package.json"]),
+            with_yarn.join_components(&["packages", "eslint-config-custom", "package.json"]),
+            with_yarn.join_components(&["packages", "tsconfig", "package.json"]),
+            with_yarn.join_components(&["packages", "ui", "package.json"]),
+        ]);
         for mgr in &[
             PackageManager::Berry,
             PackageManager::Yarn,
             PackageManager::Npm,
         ] {
             let found = mgr.get_package_jsons(&with_yarn).unwrap();
-            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found.into_iter());
+            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
             assert_eq!(found, with_yarn_expected);
         }
 
         let basic = examples.join_component("basic");
-        let basic_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(
-            [
-                basic.join_components(&["apps", "docs", "package.json"]),
-                basic.join_components(&["apps", "web", "package.json"]),
-                basic.join_components(&["packages", "eslint-config-custom", "package.json"]),
-                basic.join_components(&["packages", "tsconfig", "package.json"]),
-                basic.join_components(&["packages", "ui", "package.json"]),
-            ]
-            .into_iter(),
-        );
+        let basic_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter([
+            basic.join_components(&["apps", "docs", "package.json"]),
+            basic.join_components(&["apps", "web", "package.json"]),
+            basic.join_components(&["packages", "eslint-config-custom", "package.json"]),
+            basic.join_components(&["packages", "tsconfig", "package.json"]),
+            basic.join_components(&["packages", "ui", "package.json"]),
+        ]);
         for mgr in &[PackageManager::Pnpm, PackageManager::Pnpm6] {
             let found = mgr.get_package_jsons(&basic).unwrap();
-            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found.into_iter());
+            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
             assert_eq!(found, basic_expected);
         }
     }
@@ -517,7 +511,7 @@ mod tests {
             PackageManager::Pnpm6,
         ] {
             let globs = mgr.get_workspace_globs(&fixtures).unwrap();
-            let ignores: HashSet<String> = HashSet::from_iter(globs.raw_exclusions.into_iter());
+            let ignores: HashSet<String> = HashSet::from_iter(globs.raw_exclusions);
             let expected: &[&str] = match mgr {
                 PackageManager::Npm => &["**/node_modules/**"],
                 PackageManager::Berry => &["**/node_modules", "**/.git", "**/.yarn"],

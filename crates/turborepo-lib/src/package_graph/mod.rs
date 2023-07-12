@@ -239,13 +239,13 @@ mod test {
         {
             match key {
                 "key:a" => Ok(Some(
-                    vec![("c", "1")]
+                    [("c", "1")]
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),
                 )),
                 "key:b" => Ok(Some(
-                    vec![("c", "1")]
+                    [("c", "1")]
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),

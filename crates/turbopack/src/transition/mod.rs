@@ -1,10 +1,13 @@
+pub(crate) mod context_transition;
+
 use std::collections::HashMap;
 
 use anyhow::Result;
+pub use context_transition::ContextTransitionVc;
 use turbo_tasks::Value;
 use turbopack_core::{
-    asset::AssetVc, compile_time_info::CompileTimeInfoVc, module::ModuleVc,
-    reference_type::ReferenceType,
+    compile_time_info::CompileTimeInfoVc, module::ModuleVc, reference_type::ReferenceType,
+    source::SourceVc,
 };
 
 use crate::{
@@ -18,7 +21,7 @@ use crate::{
 #[turbo_tasks::value_trait]
 pub trait Transition {
     /// Apply modifications/wrapping to the source asset
-    fn process_source(&self, asset: AssetVc) -> AssetVc {
+    fn process_source(&self, asset: SourceVc) -> SourceVc {
         asset
     }
     /// Apply modifications to the compile-time information
@@ -65,7 +68,7 @@ pub trait Transition {
     /// Apply modification on the processing of the asset
     fn process(
         self_vc: TransitionVc,
-        asset: AssetVc,
+        asset: SourceVc,
         context: ModuleAssetContextVc,
         reference_type: Value<ReferenceType>,
     ) -> ModuleVc {

@@ -101,7 +101,7 @@ impl ArtifactSignatureAuthenticator {
         let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
         let message = self.construct_metadata(hash)?;
         mac.update(&message);
-        mac.update(&artifact_body);
+        mac.update(artifact_body);
 
         let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
         Ok(mac.verify_slice(&expected_bytes).is_ok())
@@ -124,7 +124,7 @@ mod tests {
             let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
             let message = self.construct_metadata(hash)?;
             mac.update(&message);
-            mac.update(&artifact_body);
+            mac.update(artifact_body);
 
             Ok(mac.verify_slice(expected_tag).is_ok())
         }
