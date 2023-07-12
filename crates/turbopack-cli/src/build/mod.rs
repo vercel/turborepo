@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     env::current_dir,
     path::{PathBuf, MAIN_SEPARATOR},
     sync::Arc,
@@ -14,7 +15,7 @@ use turbopack::ecmascript::EcmascriptModuleAssetVc;
 use turbopack_build::BuildChunkingContextVc;
 use turbopack_cli_utils::issue::{ConsoleUiVc, LogOptions};
 use turbopack_core::{
-    asset::{Asset, AssetsVc},
+    asset::{Asset, AssetVc, AssetsVc},
     chunk::{
         ChunkableModule, ChunkableModuleVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
     },
@@ -124,7 +125,14 @@ impl TurbopackBuildBuilder {
                 }))
                 .into();
 
-            handle_issues(build_result, issue_reporter, &None, &None).await?;
+            handle_issues(
+                build_result,
+                issue_reporter,
+                IssueSeverity::Error.into(),
+                &None,
+                &None,
+            )
+            .await?;
 
             Ok(NothingVc::new().into())
         });
@@ -280,13 +288,18 @@ async fn build_internal(
         .try_join()
         .await?;
 
+    let mut chunks: HashSet<AssetVc> = HashSet::new();
     for chunk_group in entry_chunk_groups {
         for entry in &*chunk_group.await? {
-            for asset in &*all_assets_from_entry(entry.to_owned()).await? {
-                asset.content().write(asset.ident().path()).await?;
-            }
+            chunks.extend(&*all_assets_from_entry(entry.to_owned()).await?);
         }
     }
+
+    chunks
+        .iter()
+        .map(|c| c.content().write(c.ident().path()))
+        .try_join()
+        .await?;
 
     Ok(NothingVc::new())
 }

@@ -33,7 +33,7 @@ use tracing::{event, info_span, Instrument, Level, Span};
 use turbo_tasks::{run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, TurboTasksApi};
 use turbopack_core::{
     error::PrettyPrintError,
-    issue::{handle_issues, IssueReporterVc},
+    issue::{handle_issues, IssueReporterVc, IssueSeverity},
 };
 
 use self::{source::ContentSourceVc, update::UpdateServer};
@@ -209,6 +209,7 @@ impl DevServerBuilder {
                             handle_issues(
                                 source,
                                 issue_reporter,
+                                IssueSeverity::Fatal.into(),
                                 &Some(path.clone()),
                                 &Some("get source".to_owned()),
                             )

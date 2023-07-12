@@ -16,7 +16,7 @@ use turbo_tasks_bytes::Bytes;
 use turbo_tasks_fs::{FileContent, FileContentReadRef};
 use turbopack_core::{
     asset::AssetContent,
-    issue::{handle_issues, IssueReporterVc},
+    issue::{handle_issues, IssueReporterVc, IssueSeverity},
     version::VersionedContent,
 };
 
@@ -80,6 +80,7 @@ pub async fn process_request_with_content_source(
     handle_issues(
         result,
         issue_reporter,
+        IssueSeverity::Fatal.into(),
         &Some(original_path.clone()),
         &Some("get_from_source".to_owned()),
     )

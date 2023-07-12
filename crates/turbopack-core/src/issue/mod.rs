@@ -719,6 +719,7 @@ where
 pub async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
     source: T,
     issue_reporter: IssueReporterVc,
+    min_fatal_severity: IssueSeverityVc,
     path: &Option<String>,
     operation: &Option<String>,
 ) -> Result<()> {
@@ -730,7 +731,7 @@ pub async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
     let has_fatal = issue_reporter.report_issues(
         TransientInstance::new(issues.clone()),
         TransientValue::new(source.into()),
-        IssueSeverity::Fatal.into(),
+        min_fatal_severity,
     );
 
     if *has_fatal.await? {
