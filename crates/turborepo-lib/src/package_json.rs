@@ -22,6 +22,10 @@ pub struct PackageJson {
     pub optional_dependencies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_dependencies: Option<BTreeMap<String, String>>,
+    #[serde(rename = "turbo")]
+    pub legacy_turbo_config: Option<serde_json::Value>,
+    #[serde(default)]
+    pub scripts: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resolutions: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -74,6 +78,7 @@ impl PackageJson {
 
 #[cfg(test)]
 mod test {
+    use anyhow::Result;
     use serde_json::json;
     use test_case::test_case;
 
@@ -87,5 +92,20 @@ mod test {
         let package_json: PackageJson = serde_json::from_value(json.clone()).unwrap();
         let actual = serde_json::to_value(&package_json).unwrap();
         assert_eq!(actual, json);
+    }
+
+    #[test]
+    fn test_legacy_turbo_config() -> Result<()> {
+        let contents = r#"{"turbo": {}}"#;
+        let package_json = serde_json::from_str::<PackageJson>(contents)?;
+
+        assert!(package_json.legacy_turbo_config.is_some());
+
+        let contents = r#"{"turbo": { "globalDependencies": [".env"] } }"#;
+        let package_json = serde_json::from_str::<PackageJson>(contents)?;
+
+        assert!(package_json.legacy_turbo_config.is_some());
+
+        Ok(())
     }
 }

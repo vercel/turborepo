@@ -57,12 +57,13 @@ use turbo_tasks_fs::{rope::Rope, FileSystemPathVc};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetOptionVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc, EvaluatableAsset, EvaluatableAssetVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc, EvaluatableAsset, EvaluatableAssetVc,
     },
     compile_time_info::CompileTimeInfoVc,
     context::AssetContextVc,
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReferencesReadRef, AssetReferencesVc},
     reference_type::InnerAssetsVc,
     resolve::{
@@ -70,6 +71,7 @@ use turbopack_core::{
         parse::RequestVc,
         ModulePartVc,
     },
+    source::SourceVc,
 };
 
 pub use self::references::AnalyzeEcmascriptModuleResultVc;
@@ -139,7 +141,7 @@ struct MemoizedSuccessfulAnalysis {
 }
 
 pub struct EcmascriptModuleAssetBuilder {
-    source: AssetVc,
+    source: SourceVc,
     context: AssetContextVc,
     ty: EcmascriptModuleAssetType,
     transforms: EcmascriptInputTransformsVc,
@@ -165,7 +167,7 @@ impl EcmascriptModuleAssetBuilder {
         self
     }
 
-    pub fn build(self) -> AssetVc {
+    pub fn build(self) -> ModuleVc {
         let base = if let Some(inner_assets) = self.inner_assets {
             EcmascriptModuleAssetVc::new_with_inner_assets(
                 self.source,
@@ -196,7 +198,7 @@ impl EcmascriptModuleAssetBuilder {
 
 #[turbo_tasks::value]
 pub struct EcmascriptModuleAsset {
-    pub source: AssetVc,
+    pub source: SourceVc,
     pub context: AssetContextVc,
     pub ty: EcmascriptModuleAssetType,
     pub transforms: EcmascriptInputTransformsVc,
@@ -214,7 +216,7 @@ pub struct OptionEcmascriptModuleAsset(Option<EcmascriptModuleAssetVc>);
 
 impl EcmascriptModuleAssetVc {
     pub fn builder(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         transforms: EcmascriptInputTransformsVc,
         options: EcmascriptOptions,
@@ -237,7 +239,7 @@ impl EcmascriptModuleAssetVc {
 impl EcmascriptModuleAssetVc {
     #[turbo_tasks::function]
     pub fn new(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         ty: Value<EcmascriptModuleAssetType>,
         transforms: EcmascriptInputTransformsVc,
@@ -258,7 +260,7 @@ impl EcmascriptModuleAssetVc {
 
     #[turbo_tasks::function]
     pub fn new_with_inner_assets(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         ty: Value<EcmascriptModuleAssetType>,
         transforms: EcmascriptInputTransformsVc,
@@ -411,7 +413,10 @@ impl Asset for EcmascriptModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for EcmascriptModuleAsset {
+impl Module for EcmascriptModuleAsset {}
+
+#[turbo_tasks::value_impl]
+impl ChunkableModule for EcmascriptModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self_vc: EcmascriptModuleAssetVc,

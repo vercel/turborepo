@@ -396,11 +396,9 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
     }
 
     fn populate_transitive_dependencies(&mut self) -> Result<(), Error> {
-        let Some(lockfile) = self
-            .lockfile
-            .as_deref() else {
-                return Ok(())
-            };
+        let Some(lockfile) = self.lockfile.as_deref() else {
+            return Ok(());
+        };
 
         let mut closures = turborepo_lockfiles::all_transitive_closures(
             lockfile,

@@ -90,7 +90,7 @@ impl EcmascriptModuleEntry {
         EcmascriptModuleEntry {
             // Cloning a rope is cheap.
             code: code.source_code().clone(),
-            url: format!("/{}?{}", chunk_path, &id),
+            url: format!("{}?{}", chunk_path, &id),
             map: code
                 .has_source_map()
                 .then(|| format!("/__turbopack_sourcemap__/{}.map?{}", chunk_path, &id)),
@@ -172,8 +172,7 @@ pub(super) async fn update_ecmascript_merged_chunk(
     let mut merged_update = EcmascriptMergedUpdate::default();
 
     for (content, content_ref, output_root, path) in &to_contents {
-        let Some(chunk_path) = output_root
-            .get_path_to(path) else {
+        let Some(chunk_path) = output_root.get_path_to(path) else {
             continue;
         };
 

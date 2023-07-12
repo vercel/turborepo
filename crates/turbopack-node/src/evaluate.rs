@@ -15,7 +15,7 @@ use turbo_tasks::{
     duration_span, mark_finished,
     primitives::{JsonValueVc, StringVc},
     util::SharedError,
-    CompletionVc, RawVc, TryJoinIterExt, Value, ValueToString,
+    CompletionVc, NothingVc, RawVc, TryJoinIterExt, Value, ValueToString,
 };
 use turbo_tasks_bytes::{Bytes, Stream};
 use turbo_tasks_env::{ProcessEnv, ProcessEnvVc};
@@ -25,14 +25,15 @@ use turbo_tasks_fs::{
 use turbopack_core::{
     asset::{Asset, AssetVc},
     chunk::{
-        ChunkableAsset, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc, EvaluatableAssetsVc,
+        ChunkableModule, ChunkingContext, ChunkingContextVc, EvaluatableAssetVc,
+        EvaluatableAssetsVc,
     },
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
     reference_type::{InnerAssetsVc, ReferenceType},
-    source_asset::SourceAssetVc,
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
 use crate::{
@@ -108,7 +109,7 @@ pub async fn get_evaluate_pool(
     debug: bool,
 ) -> Result<NodeJsPoolVc> {
     let runtime_asset = context.process(
-        SourceAssetVc::new(embed_file_path("ipc/evaluate.ts")).into(),
+        FileSourceVc::new(embed_file_path("ipc/evaluate.ts")).into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
     );
 
@@ -123,7 +124,7 @@ pub async fn get_evaluate_pool(
     };
     let path = chunking_context.output_root().join(file_name.as_ref());
     let entry_module = context.process(
-        VirtualAssetVc::new(
+        VirtualSourceVc::new(
             runtime_asset.ident().path().join("evaluate.js"),
             File::from(
                 "import { run } from 'RUNTIME'; run((...args) => \
@@ -134,7 +135,7 @@ pub async fn get_evaluate_pool(
         .into(),
         Value::new(ReferenceType::Internal(InnerAssetsVc::cell(indexmap! {
             "INNER".to_string() => module_asset,
-            "RUNTIME".to_string() => runtime_asset
+            "RUNTIME".to_string() => runtime_asset.into()
         }))),
     );
 
@@ -148,7 +149,7 @@ pub async fn get_evaluate_pool(
 
     let runtime_entries = {
         let globals_module = context.process(
-            SourceAssetVc::new(embed_file_path("globals.ts")).into(),
+            FileSourceVc::new(embed_file_path("globals.ts")).into(),
             Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
         );
 
@@ -252,7 +253,7 @@ pub fn evaluate(
     let initial = Mutex::new(Some(sender));
 
     // run the evaluation as side effect
-    compute_evaluate_stream(
+    let _ = compute_evaluate_stream(
         module_asset,
         cwd,
         env,
@@ -299,11 +300,11 @@ async fn compute_evaluate_stream(
     additional_invalidation: CompletionVc,
     debug: bool,
     sender: JavaScriptStreamSenderVc,
-) {
+) -> Result<NothingVc> {
     mark_finished();
     let Ok(sender) = sender.await else {
         // Impossible to handle the error in a good way.
-        return;
+        return Ok(NothingVc::new());
     };
 
     let stream = generator! {
@@ -381,12 +382,14 @@ async fn compute_evaluate_stream(
     pin_mut!(stream);
     while let Some(value) = stream.next().await {
         if sender.send(value).await.is_err() {
-            return;
+            return Ok(NothingVc::new());
         }
         if sender.flush().await.is_err() {
-            return;
+            return Ok(NothingVc::new());
         }
     }
+
+    Ok(NothingVc::new())
 }
 
 /// Repeatedly pulls from the NodeJsOperation until we receive a

@@ -7,11 +7,13 @@ use std::{
     collections::HashSet,
     io::ErrorKind,
     path::{Path, PathBuf},
+    sync::OnceLock,
 };
 
 use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
+use regex::Regex;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 use wax::{Any, BuildError, Glob, Pattern};
 
@@ -175,7 +177,8 @@ fn preprocess_paths_and_globs(
 
     let (include_paths, lowest_segment) = include
         .iter()
-        .map(|s| join_unix_like_paths(&base_path_slash, s))
+        .map(|s| fix_glob_pattern(s))
+        .map(|s| join_unix_like_paths(&base_path_slash, &s))
         .filter_map(|s| collapse_path(&s).map(|(s, v)| (s.to_string(), v)))
         .fold(
             (vec![], usize::MAX),
@@ -197,7 +200,8 @@ fn preprocess_paths_and_globs(
     let mut exclude_paths = vec![];
     for split in exclude
         .iter()
-        .map(|s| join_unix_like_paths(&base_path_slash, s))
+        .map(|s| fix_glob_pattern(s))
+        .map(|s| join_unix_like_paths(&base_path_slash, &s))
         .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
     {
         let split = split.to_string();
@@ -221,6 +225,47 @@ fn preprocess_paths_and_globs(
     }
 
     Ok((base_path, include_paths, exclude_paths))
+}
+
+fn double_doublestar() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\*\*/\*\*").unwrap())
+}
+
+fn leading_doublestar() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\*\*(?P<suffix>[^*/]+)").unwrap())
+}
+
+fn trailing_doublestar() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?P<prefix>[^*/]+)\*\*").unwrap())
+}
+
+pub fn fix_glob_pattern(pattern: &str) -> String {
+    // This is a no-op on unix systems, but converts to slashes on windows
+    #[cfg(not(windows))]
+    let needs_trailing_slash = false;
+    #[cfg(windows)]
+    let needs_trailing_slash = pattern.ends_with('/') || pattern.ends_with('\\');
+    let converted = Path::new(pattern)
+        .to_slash()
+        .expect("failed to roundtrip through Path");
+    // TODO: consider inlining path-slash to handle this bug
+    // technically this won't happen on unix, the to_slash conversion
+    // is a no-op, so it doesn't strip trailing slashes. path-slash
+    // strips trailing _unix_ slashes from windows paths, rather than
+    // "converting" (leaving) them.
+    let p0 = if needs_trailing_slash {
+        format!("{}/", converted)
+    } else {
+        converted.to_string()
+    };
+    let p1 = double_doublestar().replace(&p0, "**");
+    let p2 = leading_doublestar().replace(&p1, "**/*$suffix");
+    let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
+
+    p3.to_string()
 }
 
 fn do_match(path: &Path, include: &InclusiveEmptyAny, exclude: &Any) -> MatchType {
@@ -278,7 +323,7 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
         Some((Cow::Borrowed(path), lowest_index))
     } else {
         let string = if is_root {
-            std::iter::once("").chain(stack.into_iter()).join("/")
+            std::iter::once("").chain(stack).join("/")
         } else {
             stack.join("/")
         };
@@ -456,7 +501,7 @@ mod test {
         let expected = format!(
             "{}{}",
             ROOT,
-            base_path_exp.replace("/", std::path::MAIN_SEPARATOR_STR)
+            base_path_exp.replace('/', std::path::MAIN_SEPARATOR_STR)
         );
         assert_eq!(result_path.to_string_lossy(), expected);
 
@@ -585,6 +630,10 @@ mod test {
         tmp
     }
 
+    #[test_case("a*/**", 22, 22 => matches None ; "wildcard followed by doublestar")]
+    #[test_case("**/*f", 4, 4 => matches None ; "leading doublestar expansion")]
+    #[test_case("**f", 4, 4 => matches None ; "transform leading doublestar")]
+    #[test_case("a**", 22, 22 => matches None ; "transform trailing doublestar")]
     #[test_case("abc", 1, 1 => matches None ; "exact match")]
     #[test_case("*", 19, 15 => matches None ; "single star match")]
     #[test_case("*c", 2, 2 => matches None ; "single star suffix match")]
@@ -1266,7 +1315,7 @@ mod test {
                 .iter()
                 .map(|p| {
                     p.trim_start_matches('/')
-                        .replace("/", std::path::MAIN_SEPARATOR_STR)
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
                 })
                 .sorted()
                 .collect::<Vec<_>>();
@@ -1377,17 +1426,14 @@ mod test {
                 relative.to_string()
             })
             .collect::<HashSet<_>>();
-        let expected: HashSet<String> = HashSet::from_iter(
-            [
-                "docs/package.json"
-                    .replace("/", std::path::MAIN_SEPARATOR_STR)
-                    .to_string(),
-                "apps/some-app/package.json"
-                    .replace("/", std::path::MAIN_SEPARATOR_STR)
-                    .to_string(),
-            ]
-            .into_iter(),
-        );
+        let expected: HashSet<String> = HashSet::from_iter([
+            "docs/package.json"
+                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                .to_string(),
+            "apps/some-app/package.json"
+                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                .to_string(),
+        ]);
         assert_eq!(paths, expected);
     }
 }

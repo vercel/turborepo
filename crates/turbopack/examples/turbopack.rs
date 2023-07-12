@@ -1,5 +1,4 @@
 #![feature(trivial_bounds)]
-#![feature(once_cell)]
 #![feature(min_specialization)]
 
 use std::{
@@ -28,7 +27,7 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfoVc,
     context::AssetContext,
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    source_asset::SourceAssetVc,
+    file_source::FileSourceVc,
     PROJECT_FILESYSTEM_NAME,
 };
 
@@ -51,7 +50,7 @@ async fn main() -> Result<()> {
             let output = fs.root().join("out");
             let entry = fs.root().join("demo/index.js");
 
-            let source = SourceAssetVc::new(entry);
+            let source = FileSourceVc::new(entry);
             let context = turbopack::ModuleAssetContextVc::new(
                 TransitionsByNameVc::cell(HashMap::new()),
                 CompileTimeInfoVc::new(EnvironmentVc::new(Value::new(
@@ -71,7 +70,7 @@ async fn main() -> Result<()> {
                 source.into(),
                 Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
             );
-            let rebased = RebasedAssetVc::new(module, input, output);
+            let rebased = RebasedAssetVc::new(module.into(), input, output);
             emit_with_completion(rebased.into(), output).await?;
 
             Ok(NothingVc::new().into())

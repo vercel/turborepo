@@ -19,6 +19,7 @@
 type RefreshRuntimeGlobals =
   import("@next/react-refresh-utils/dist/runtime").RefreshRuntimeGlobals;
 
+declare var CHUNK_BASE_PATH: string;
 declare var $RefreshHelpers$: RefreshRuntimeGlobals["$RefreshHelpers$"];
 declare var $RefreshReg$: RefreshRuntimeGlobals["$RefreshReg$"];
 declare var $RefreshSig$: RefreshRuntimeGlobals["$RefreshSig$"];
@@ -38,7 +39,7 @@ interface TurbopackDevBaseContext {
   f: RequireContextFactory;
   i: EsmImport;
   s: EsmExport;
-  j: typeof cjsExport;
+  j: typeof dynamicExport;
   v: ExportValue;
   n: typeof exportNamespace;
   m: Module;
@@ -337,7 +338,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           f: requireContext.bind(null, module),
           i: esmImport.bind(null, module),
           s: esmExport.bind(null, module),
-          j: cjsExport.bind(null, module.exports),
+          j: dynamicExport.bind(null, module),
           v: exportValue.bind(null, module),
           n: exportNamespace.bind(null, module),
           m: module,
@@ -1285,6 +1286,13 @@ function getOrInstantiateRuntimeModule(
   }
 
   return instantiateModule(moduleId, { type: SourceType.Runtime, chunkPath });
+}
+
+/**
+ * Returns the URL relative to the origin where a chunk can be fetched from.
+ */
+function getChunkRelativeUrl(chunkPath: ChunkPath): string {
+  return `${CHUNK_BASE_PATH}${chunkPath}`;
 }
 
 /**

@@ -17,18 +17,18 @@ use turbopack::{
 };
 use turbopack_cli_utils::runtime_entry::{RuntimeEntriesVc, RuntimeEntry};
 use turbopack_core::{
-    chunk::{ChunkableAssetVc, ChunkingContextVc},
+    chunk::{ChunkableModuleVc, ChunkingContextVc},
     compile_time_defines,
     compile_time_info::{CompileTimeDefinesVc, CompileTimeInfo, CompileTimeInfoVc},
     context::AssetContextVc,
     environment::{BrowserEnvironment, EnvironmentVc, ExecutionEnvironment},
+    file_source::FileSourceVc,
     reference_type::{EntryReferenceSubType, ReferenceType},
     resolve::{
         options::{ImportMap, ImportMapVc, ImportMapping},
         origin::PlainResolveOriginVc,
         parse::RequestVc,
     },
-    source_asset::SourceAssetVc,
 };
 use turbopack_dev::{react_refresh::assert_can_resolve_react_refresh, DevChunkingContextVc};
 use turbopack_dev_server::{
@@ -217,6 +217,7 @@ pub fn get_client_chunking_context(
     )
     .hot_module_replacement()
     .build()
+    .into()
 }
 
 #[turbo_tasks::function]
@@ -239,7 +240,7 @@ pub async fn get_client_runtime_entries(
     };
 
     runtime_entries.push(
-        RuntimeEntry::Source(SourceAssetVc::new(embed_file_path("entry/bootstrap.ts")).into())
+        RuntimeEntry::Source(FileSourceVc::new(embed_file_path("entry/bootstrap.ts")).into())
             .cell(),
     );
 
@@ -289,7 +290,7 @@ pub async fn create_web_entry_source(
                     chunking_context,
                     Some(runtime_entries.with_entry(ecmascript.into())),
                 ))
-            } else if let Some(chunkable) = ChunkableAssetVc::resolve_from(module).await? {
+            } else if let Some(chunkable) = ChunkableModuleVc::resolve_from(module).await? {
                 // TODO this is missing runtime code, so it's probably broken and we should also
                 // add an ecmascript chunk with the runtime code
                 Ok((chunkable, chunking_context, None))

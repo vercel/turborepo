@@ -577,7 +577,7 @@ impl Default for LogPrefix {
 #[tokio::main]
 pub async fn run(
     repo_state: Option<RepoState>,
-    _logger: &TurboSubscriber,
+    #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
 ) -> Result<Payload> {
     let mut cli_args = Args::new()?;
@@ -596,28 +596,36 @@ pub async fn run(
         Command::Run(Box::new(run_args))
     };
 
-    let mut pkg_inference_root = None;
-    // If this is a run command, and we know the actual invocation path, set the
-    // inference root, as long as the user hasn't overridden the cwd
-    if cli_args.cwd.is_none() && matches!(command, Command::Run(_)) {
-        if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
-            let invocation_path = Path::new(&invocation_dir);
+    // Set some run flags if we have the data and are executing a Run
+    if let Command::Run(run_args) = &mut command {
+        // Don't overwrite the flag if it's already been set for whatever reason
+        run_args.single_package = run_args.single_package
+            || repo_state
+                .as_ref()
+                .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
+                .unwrap_or(false);
+        // If this is a run command, and we know the actual invocation path, set the
+        // inference root, as long as the user hasn't overridden the cwd
+        if cli_args.cwd.is_none() {
+            if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
+                let invocation_path = Path::new(&invocation_dir);
 
-            // If repo state doesn't exist, we're either local turbo running at the root
-            // (cwd), or inference failed.
-            // If repo state does exist, we're global turbo, and want to calculate
-            // package inference based on the repo root
-            let this_dir = AbsoluteSystemPathBuf::cwd()?;
-            let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
-            if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                debug!("pkg_inference_root set to \"{}\"", relative_path.display());
-                let utf8_path = relative_path
-                    .to_str()
-                    .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
-                pkg_inference_root = Some(utf8_path.to_owned());
+                // If repo state doesn't exist, we're either local turbo running at the root
+                // (cwd), or inference failed.
+                // If repo state does exist, we're global turbo, and want to calculate
+                // package inference based on the repo root
+                let this_dir = AbsoluteSystemPathBuf::cwd()?;
+                let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
+                if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
+                    debug!("pkg_inference_root set to \"{}\"", relative_path.display());
+                    let utf8_path = relative_path
+                        .to_str()
+                        .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
+                    run_args.pkg_inference_root = Some(utf8_path.to_owned());
+                }
+            } else {
+                debug!("{} not set", INVOCATION_DIR_ENV_VAR);
             }
-        } else {
-            debug!("{} not set", INVOCATION_DIR_ENV_VAR);
         }
     }
 
@@ -634,19 +642,6 @@ pub async fn run(
 
     let version = get_version();
 
-    // Save all the mutation for the end. In the future, we should refactor this
-    // into a "parse don't validate" scheme where we construct a config struct
-    // that is contains all of the normalized, validated, and defaulted values.
-    if let Some(repo_state) = repo_state {
-        if let Command::Run(run_args) = &mut command {
-            if let Some(pkg_inference_root) = pkg_inference_root {
-                run_args.pkg_inference_root = Some(pkg_inference_root);
-            }
-            // Don't overwrite the flag if it's already been set for whatever reason
-            run_args.single_package =
-                run_args.single_package || matches!(repo_state.mode, RepoMode::SinglePackage);
-        }
-    }
     cli_args.command = Some(command);
     cli_args.cwd = Some(repo_root.as_path().to_owned());
 
@@ -656,10 +651,8 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon {
-            command,
-            idle_time: _,
-        } => {
+        #[allow(unused_variables)]
+        Command::Daemon { command, idle_time } => {
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
 
             match command {

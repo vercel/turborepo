@@ -1,7 +1,7 @@
 use std::{
     borrow::Borrow,
     fmt,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Display, Formatter},
     ops::Deref,
 };
 
@@ -9,7 +9,6 @@ use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 
 use crate::{IntoUnix, PathError, RelativeUnixPath};
-
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 // This is necessary to perform validation on the string during deserialization
 #[serde(try_from = "String", into = "String")]

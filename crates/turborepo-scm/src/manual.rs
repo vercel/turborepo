@@ -1,5 +1,6 @@
 use std::{fs::Metadata, io::Read};
 
+use globwalk::fix_glob_pattern;
 use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
@@ -58,11 +59,11 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     for pattern in inputs {
         let pattern = pattern.as_ref();
         if let Some(exclusion) = pattern.strip_prefix('!') {
-            let glob = exclusion.into_unix();
+            let glob = fix_glob_pattern(exclusion).into_unix();
             let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
             excludes.push(g);
         } else {
-            let glob = pattern.into_unix();
+            let glob = fix_glob_pattern(pattern).into_unix();
             let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
             includes.push(g);
         }
@@ -75,7 +76,7 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     let exclude_pattern = if excludes.is_empty() {
         None
     } else {
-        Some(any(excludes.into_iter())?)
+        Some(any(excludes)?)
     };
     let walker = walker_builder
         .follow_links(false)
@@ -212,7 +213,7 @@ mod tests {
 
         let mut expected = GitHashes::new();
         for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
-            let unix_path = RelativeUnixPath::new(&raw_unix_path).unwrap();
+            let unix_path = RelativeUnixPath::new(raw_unix_path).unwrap();
             let file_path = turbo_root.join_unix_path(unix_path).unwrap();
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();
@@ -236,7 +237,7 @@ mod tests {
 
         expected = GitHashes::new();
         for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
-            let unix_path = RelativeUnixPath::new(&raw_unix_path).unwrap();
+            let unix_path = RelativeUnixPath::new(raw_unix_path).unwrap();
             let file_path = turbo_root.join_unix_path(unix_path).unwrap();
             file_path.ensure_dir().unwrap();
             file_path.create_with_contents(contents).unwrap();

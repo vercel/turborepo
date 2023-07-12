@@ -5,6 +5,7 @@ pub(crate) mod containment_tree;
 pub(crate) mod data;
 pub(crate) mod evaluate;
 pub mod optimize;
+pub(crate) mod passthrough_asset;
 
 use std::{
     collections::HashSet,
@@ -19,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info_span, Span};
 use turbo_tasks::{
     debug::ValueDebugFormat,
-    graph::{GraphTraversal, GraphTraversalResult, ReverseTopological, Visit, VisitControlFlow},
+    graph::{AdjacencyMap, GraphTraversal, GraphTraversalResult, Visit, VisitControlFlow},
     primitives::{StringReadRef, StringVc},
     trace::TraceRawVcs,
     TryJoinIterExt, Value, ValueToString, ValueToStringVc,
@@ -32,10 +33,12 @@ pub use self::{
     chunking_context::{ChunkingContext, ChunkingContextVc},
     data::{ChunkData, ChunkDataOption, ChunkDataOptionVc, ChunkDataVc, ChunksData, ChunksDataVc},
     evaluate::{EvaluatableAsset, EvaluatableAssetVc, EvaluatableAssets, EvaluatableAssetsVc},
+    passthrough_asset::{PassthroughAsset, PassthroughAssetVc},
 };
 use crate::{
     asset::{Asset, AssetVc, AssetsVc},
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{PrimaryResolveResult, ResolveResult, ResolveResultVc},
 };
@@ -81,14 +84,14 @@ pub struct ModuleIds(Vec<ModuleIdVc>);
 
 /// An [Asset] that can be converted into a [Chunk].
 #[turbo_tasks::value_trait]
-pub trait ChunkableAsset: Asset {
+pub trait ChunkableModule: Module + Asset {
     fn as_chunk(
         &self,
         context: ChunkingContextVc,
         availability_info: Value<AvailabilityInfo>,
     ) -> ChunkVc;
 
-    fn as_root_chunk(self_vc: ChunkableAssetVc, context: ChunkingContextVc) -> ChunkVc {
+    fn as_root_chunk(self_vc: ChunkableModuleVc, context: ChunkingContextVc) -> ChunkVc {
         self_vc.as_chunk(
             context,
             Value::new(AvailabilityInfo::Root {
@@ -166,27 +169,22 @@ pub enum ChunkingType {
     /// Referenced asset will not inherit the available modules, but form a
     /// new availability root.
     IsolatedParallel,
-    /// Asset is placed in a separate chunk group that is referenced from the
-    /// referencing chunk group, but not loaded.
-    /// Note: Separate chunks need to be loaded by something external to current
-    /// reference.
-    Separate,
     /// An async loader is placed into the referencing chunk and loads the
     /// separate chunk group in which the asset is placed.
-    SeparateAsync,
+    Async,
 }
 
 #[turbo_tasks::value(transparent)]
 pub struct ChunkingTypeOption(Option<ChunkingType>);
 
 /// An [AssetReference] implementing this trait and returning true for
-/// [ChunkableAssetReference::is_chunkable] are considered as potentially
+/// [ChunkableModuleReference::is_chunkable] are considered as potentially
 /// chunkable references. When all [Asset]s of such a reference implement
-/// [ChunkableAsset] they are placed in [Chunk]s during chunking.
+/// [ChunkableModule] they are placed in [Chunk]s during chunking.
 /// They are even potentially placed in the same [Chunk] when a chunk type
 /// specific interface is implemented.
 #[turbo_tasks::value_trait]
-pub trait ChunkableAssetReference: AssetReference + ValueToString {
+pub trait ChunkableModuleReference: AssetReference + ValueToString {
     fn chunking_type(&self) -> ChunkingTypeOptionVc {
         ChunkingTypeOptionVc::cell(Some(ChunkingType::default()))
     }
@@ -239,17 +237,16 @@ impl ValueToString for ChunkGroupReference {
 pub struct ChunkContentResult<I> {
     pub chunk_items: Vec<I>,
     pub chunks: Vec<ChunkVc>,
-    pub async_chunk_group_entries: Vec<ChunkVc>,
     pub external_asset_references: Vec<AssetReferenceVc>,
     pub availability_info: AvailabilityInfo,
 }
 
 #[async_trait::async_trait]
-pub trait FromChunkableAsset: ChunkItem + Sized + Debug {
+pub trait FromChunkableModule: ChunkItem + Sized + Debug {
     async fn from_asset(context: ChunkingContextVc, asset: AssetVc) -> Result<Option<Self>>;
     async fn from_async_asset(
         context: ChunkingContextVc,
-        asset: ChunkableAssetVc,
+        asset: ChunkableModuleVc,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Option<Self>>;
 }
@@ -261,7 +258,7 @@ pub async fn chunk_content_split<I>(
     availability_info: Value<AvailabilityInfo>,
 ) -> Result<ChunkContentResult<I>>
 where
-    I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     chunk_content_internal_parallel(context, entry, additional_entries, availability_info, true)
         .await
@@ -275,7 +272,7 @@ pub async fn chunk_content<I>(
     availability_info: Value<AvailabilityInfo>,
 ) -> Result<Option<ChunkContentResult<I>>>
 where
-    I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     chunk_content_internal_parallel(context, entry, additional_entries, availability_info, false)
         .await
@@ -283,15 +280,15 @@ where
 
 #[derive(Eq, PartialEq, Clone, Hash)]
 enum ChunkContentGraphNode<I> {
+    // An asset not placed in the current chunk, but whose references we will
+    // follow to find more graph nodes.
+    PassthroughAsset { asset: AssetVc },
     // Chunk items that are placed into the current chunk
     ChunkItem { item: I, ident: StringReadRef },
     // Asset that is already available and doesn't need to be included
     AvailableAsset(AssetVc),
     // Chunks that are loaded in parallel to the current chunk
     Chunk(ChunkVc),
-    // Chunk groups that are referenced from the current chunk, but
-    // not loaded in parallel
-    AsyncChunkGroup { entry: ChunkVc },
     ExternalAssetReference(AssetReferenceVc),
 }
 
@@ -308,14 +305,22 @@ async fn reference_to_graph_nodes<I>(
     reference: AssetReferenceVc,
 ) -> Result<Vec<(Option<(AssetVc, ChunkingType)>, ChunkContentGraphNode<I>)>>
 where
-    I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
-    let Some(chunkable_asset_reference) = ChunkableAssetReferenceVc::resolve_from(reference).await? else {
-        return Ok(vec![(None, ChunkContentGraphNode::ExternalAssetReference(reference))]);
+    let Some(chunkable_asset_reference) =
+        ChunkableModuleReferenceVc::resolve_from(reference).await?
+    else {
+        return Ok(vec![(
+            None,
+            ChunkContentGraphNode::ExternalAssetReference(reference),
+        )]);
     };
 
     let Some(chunking_type) = *chunkable_asset_reference.chunking_type().await? else {
-        return Ok(vec![(None, ChunkContentGraphNode::ExternalAssetReference(reference))]);
+        return Ok(vec![(
+            None,
+            ChunkContentGraphNode::ExternalAssetReference(reference),
+        )]);
     };
 
     let result = reference.resolve_reference().await?;
@@ -342,7 +347,12 @@ where
             }
         }
 
-        let chunkable_asset = match ChunkableAssetVc::resolve_from(asset).await? {
+        if PassthroughAssetVc::resolve_from(asset).await?.is_some() {
+            graph_nodes.push((None, ChunkContentGraphNode::PassthroughAsset { asset }));
+            continue;
+        }
+
+        let chunkable_asset = match ChunkableModuleVc::resolve_from(asset).await? {
             Some(chunkable_asset) => chunkable_asset,
             _ => {
                 return Ok(vec![(
@@ -414,16 +424,7 @@ where
                     ChunkContentGraphNode::Chunk(chunk),
                 ));
             }
-            ChunkingType::Separate => {
-                graph_nodes.push((
-                    Some((asset, chunking_type)),
-                    ChunkContentGraphNode::AsyncChunkGroup {
-                        entry: chunkable_asset
-                            .as_chunk(context.chunking_context, context.availability_info),
-                    },
-                ));
-            }
-            ChunkingType::SeparateAsync => {
+            ChunkingType::Async => {
                 if let Some(manifest_loader_item) = I::from_async_asset(
                     context.chunking_context,
                     chunkable_asset,
@@ -465,12 +466,12 @@ struct ChunkContentVisit<I> {
 type ChunkItemToGraphNodesEdges<I> =
     impl Iterator<Item = (Option<(AssetVc, ChunkingType)>, ChunkContentGraphNode<I>)>;
 
-type ChunkItemToGraphNodesFuture<I: FromChunkableAsset + Eq + std::hash::Hash + Clone> =
+type ChunkItemToGraphNodesFuture<I: FromChunkableModule + Eq + std::hash::Hash + Clone> =
     impl Future<Output = Result<ChunkItemToGraphNodesEdges<I>>>;
 
 impl<I> Visit<ChunkContentGraphNode<I>, ()> for ChunkContentVisit<I>
 where
-    I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     type Edge = (Option<(AssetVc, ChunkingType)>, ChunkContentGraphNode<I>);
     type EdgesIntoIter = ChunkItemToGraphNodesEdges<I>;
@@ -504,24 +505,20 @@ where
     }
 
     fn edges(&mut self, node: &ChunkContentGraphNode<I>) -> Self::EdgesFuture {
-        let chunk_item = if let ChunkContentGraphNode::ChunkItem {
-            item: chunk_item, ..
-        } = node
-        {
-            Some(chunk_item.clone())
-        } else {
-            None
-        };
+        let node = node.clone();
 
         let context = self.context;
 
         async move {
-            let Some(chunk_item) = chunk_item else {
-                return Ok(vec![].into_iter().flatten());
+            let references = match node {
+                ChunkContentGraphNode::PassthroughAsset { asset } => asset.references(),
+                ChunkContentGraphNode::ChunkItem { item, .. } => item.references(),
+                _ => {
+                    return Ok(vec![].into_iter().flatten());
+                }
             };
 
-            Ok(chunk_item
-                .references()
+            Ok(references
                 .await?
                 .into_iter()
                 .map(|reference| reference_to_graph_nodes::<I>(context, *reference))
@@ -549,7 +546,7 @@ async fn chunk_content_internal_parallel<I>(
     split: bool,
 ) -> Result<Option<ChunkContentResult<I>>>
 where
-    I: FromChunkableAsset + Eq + std::hash::Hash + Clone,
+    I: FromChunkableModule + Eq + std::hash::Hash + Clone,
 {
     let additional_entries = if let Some(additional_entries) = additional_entries {
         additional_entries.await?.clone_value().into_iter()
@@ -586,28 +583,27 @@ where
         _phantom: PhantomData,
     };
 
-    let GraphTraversalResult::Completed(traversal_result) = ReverseTopological::new().visit(root_edges, visit).await else {
+    let GraphTraversalResult::Completed(traversal_result) =
+        AdjacencyMap::new().visit(root_edges, visit).await
+    else {
         return Ok(None);
     };
 
-    let graph_nodes: Vec<_> = traversal_result?.into_iter().collect();
+    let graph_nodes: Vec<_> = traversal_result?.into_reverse_topological().collect();
 
     let mut chunk_items = Vec::new();
     let mut chunks = Vec::new();
-    let mut async_chunk_group_entries = Vec::new();
     let mut external_asset_references = Vec::new();
 
     for graph_node in graph_nodes {
         match graph_node {
-            ChunkContentGraphNode::AvailableAsset(_asset) => {}
+            ChunkContentGraphNode::AvailableAsset(_)
+            | ChunkContentGraphNode::PassthroughAsset { .. } => {}
             ChunkContentGraphNode::ChunkItem { item, .. } => {
                 chunk_items.push(item);
             }
             ChunkContentGraphNode::Chunk(chunk) => {
                 chunks.push(chunk);
-            }
-            ChunkContentGraphNode::AsyncChunkGroup { entry } => {
-                async_chunk_group_entries.push(entry);
             }
             ChunkContentGraphNode::ExternalAssetReference(reference) => {
                 external_asset_references.push(reference);
@@ -618,7 +614,6 @@ where
     Ok(Some(ChunkContentResult {
         chunk_items,
         chunks,
-        async_chunk_group_entries,
         external_asset_references,
         availability_info: availability_info.into_value(),
     }))

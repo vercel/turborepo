@@ -13,16 +13,18 @@ use turbopack_core::{
     asset::{Asset, AssetContent, AssetContentVc, AssetVc},
     changed::any_content_changed,
     context::{AssetContext, AssetContextVc},
+    file_source::FileSourceVc,
     ident::AssetIdentVc,
     issue::IssueContextExt,
+    module::ModuleVc,
     reference_type::{EntryReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
-    source_asset::SourceAssetVc,
+    source::{Source, SourceVc},
     source_transform::{SourceTransform, SourceTransformVc},
-    virtual_asset::VirtualAssetVc,
+    virtual_source::VirtualSourceVc,
 };
 
-use super::util::{emitted_assets_to_virtual_assets, EmittedAsset};
+use super::util::{emitted_assets_to_virtual_sources, EmittedAsset};
 use crate::{
     debug::should_debug,
     embed_js::embed_file,
@@ -89,7 +91,7 @@ impl PostCssTransformVc {
 #[turbo_tasks::value_impl]
 impl SourceTransform for PostCssTransform {
     #[turbo_tasks::function]
-    fn transform(&self, source: AssetVc) -> AssetVc {
+    fn transform(&self, source: SourceVc) -> SourceVc {
         PostCssTransformedAsset {
             evaluate_context: self.evaluate_context,
             execution_context: self.execution_context,
@@ -104,8 +106,11 @@ impl SourceTransform for PostCssTransform {
 struct PostCssTransformedAsset {
     evaluate_context: AssetContextVc,
     execution_context: ExecutionContextVc,
-    source: AssetVc,
+    source: SourceVc,
 }
+
+#[turbo_tasks::value_impl]
+impl Source for PostCssTransformedAsset {}
 
 #[turbo_tasks::value_impl]
 impl Asset for PostCssTransformedAsset {
@@ -129,7 +134,7 @@ impl Asset for PostCssTransformedAsset {
 #[turbo_tasks::value]
 struct ProcessPostCssResult {
     content: AssetContentVc,
-    assets: Vec<VirtualAssetVc>,
+    assets: Vec<VirtualSourceVc>,
 }
 
 #[turbo_tasks::function]
@@ -143,10 +148,14 @@ async fn extra_configs(
         .map(|path| async move {
             Ok(
                 matches!(&*path.get_type().await?, FileSystemEntryType::File).then(|| {
-                    any_content_changed(context.process(
-                        SourceAssetVc::new(path).into(),
-                        Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
-                    ))
+                    any_content_changed(
+                        context
+                            .process(
+                                FileSourceVc::new(path).into(),
+                                Value::new(ReferenceType::Internal(InnerAssetsVc::empty())),
+                            )
+                            .into(),
+                    )
                 }),
             )
         })
@@ -160,14 +169,16 @@ async fn extra_configs(
 }
 
 #[turbo_tasks::function]
-fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPathVc) -> AssetVc {
-    let config_asset = context.process(
-        SourceAssetVc::new(postcss_config_path).into(),
-        Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
-    );
+fn postcss_executor(context: AssetContextVc, postcss_config_path: FileSystemPathVc) -> ModuleVc {
+    let config_asset = context
+        .process(
+            FileSourceVc::new(postcss_config_path).into(),
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+        )
+        .into();
 
     context.process(
-        VirtualAssetVc::new(
+        VirtualSourceVc::new(
             postcss_config_path.join("transform.ts"),
             AssetContent::File(embed_file("transforms/postcss.ts")).cell(),
         )
@@ -188,8 +199,9 @@ impl PostCssTransformedAssetVc {
         let FindContextFileResult::Found(config_path, _) = *find_config_result.await? else {
             return Ok(ProcessPostCssResult {
                 content: this.source.content(),
-                assets: Vec::new()
-            }.cell())
+                assets: Vec::new(),
+            }
+            .cell());
         };
 
         let ExecutionContext {
@@ -204,8 +216,9 @@ impl PostCssTransformedAssetVc {
         let FileContent::Content(content) = &*file.await? else {
             return Ok(ProcessPostCssResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
-                assets: Vec::new()
-            }.cell());
+                assets: Vec::new(),
+            }
+            .cell());
         };
         let content = content.content().to_str()?;
         let context = this.evaluate_context;
@@ -218,7 +231,7 @@ impl PostCssTransformedAssetVc {
         let css_path = css_fs_path.path.as_str();
 
         let config_value = evaluate(
-            postcss_executor,
+            postcss_executor.into(),
             project_path,
             env,
             this.source.ident(),
@@ -238,15 +251,16 @@ impl PostCssTransformedAssetVc {
             // An error happened, which has already been converted into an issue.
             return Ok(ProcessPostCssResult {
                 content: AssetContent::File(FileContent::NotFound.cell()).cell(),
-                assets: Vec::new()
-            }.cell());
+                assets: Vec::new(),
+            }
+            .cell());
         };
         let processed_css: PostCssProcessingResult = parse_json_with_source_context(val.to_str()?)
             .context("Unable to deserializate response from PostCSS transform operation")?;
 
         // TODO handle SourceMap
         let file = File::from(processed_css.css);
-        let assets = emitted_assets_to_virtual_assets(processed_css.assets);
+        let assets = emitted_assets_to_virtual_sources(processed_css.assets);
         let content = AssetContent::File(FileContent::Content(file).cell()).cell();
         Ok(ProcessPostCssResult { content, assets }.cell())
     }

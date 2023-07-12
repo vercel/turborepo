@@ -131,7 +131,7 @@ impl PackageGraph {
 impl fmt::Display for WorkspaceName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WorkspaceName::Root => f.write_str("Root workspace"),
+            WorkspaceName::Root => f.write_str("//"),
             WorkspaceName::Other(other) => f.write_str(other),
         }
     }
@@ -246,13 +246,13 @@ mod test {
         {
             match key {
                 "key:a" => Ok(Some(
-                    vec![("c", "1")]
+                    [("c", "1")]
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),
                 )),
                 "key:b" => Ok(Some(
-                    vec![("c", "1")]
+                    [("c", "1")]
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),
