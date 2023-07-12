@@ -550,6 +550,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-macros"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bb524613be645939e280b7279f7b017f98cf7f5ef084ec374df373530e73277"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.25",
+]
+
+[[package]]
 name = "axum-server"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9552,12 +9564,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "lazy_static",
+ "port_scanner",
+ "regex",
  "reqwest",
  "rustc_version_runtime",
  "serde",
  "thiserror",
  "tokio",
  "url",
+ "vercel-api-mock",
 ]
 
 [[package]]
@@ -9577,6 +9593,7 @@ dependencies = [
  "os_str_bytes",
  "path-clean 1.0.1",
  "petgraph",
+ "port_scanner",
  "serde",
  "serde_json",
  "sha2",
@@ -9584,9 +9601,11 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
+ "tokio",
  "tracing",
  "turbopath",
  "turborepo-api-client",
+ "vercel-api-mock",
  "zstd",
 ]
 
@@ -9762,8 +9781,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.4.6",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -10019,8 +10038,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-macros",
  "axum-server",
+ "futures-util",
  "port_scanner",
+ "tempfile",
  "tokio",
  "turborepo-api-client",
 ]
