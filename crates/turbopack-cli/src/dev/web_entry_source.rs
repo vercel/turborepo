@@ -115,8 +115,8 @@ pub fn get_client_chunking_context(
     DevChunkingContextVc::builder(
         project_path,
         server_root,
-        server_root.join("/_chunks"),
-        server_root.join("/_assets"),
+        server_root.join("_chunks"),
+        server_root.join("_assets"),
         environment,
     )
     .hot_module_replacement()

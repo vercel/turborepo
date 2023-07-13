@@ -15,10 +15,14 @@ pub enum EntryRequest {
 }
 
 pub struct NormalizedDirs {
+    /// Normalized project directory path as an absolute path
     pub project_dir: String,
+    /// Normalized root directory path as an absolute path
     pub root_dir: String,
 }
 
+/// Normalizes (canonicalizes and represents as an absolute path in a String)
+/// the project and root directories.
 pub fn normalize_dirs(
     project_dir: &Option<PathBuf>,
     root_dir: &Option<PathBuf>,
