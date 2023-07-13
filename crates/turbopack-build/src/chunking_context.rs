@@ -9,7 +9,7 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        Chunk, ChunkVc, ChunkableAsset, ChunkingContext, ChunkingContextVc, ChunksVc,
+        Chunk, ChunkVc, ChunkableModule, ChunkingContext, ChunkingContextVc, ChunksVc,
         EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
@@ -114,7 +114,7 @@ impl BuildChunkingContextVc {
     /// * exports the result of evaluating the given module as a CommonJS
     ///   default export.
     #[turbo_tasks::function]
-    pub async fn generate_entry_chunk(
+    pub async fn entry_chunk(
         self_vc: BuildChunkingContextVc,
         path: FileSystemPathVc,
         module: EcmascriptChunkPlaceableVc,
@@ -129,7 +129,6 @@ impl BuildChunkingContextVc {
         let asset = EcmascriptBuildNodeEntryChunkVc::new(
             path,
             self_vc,
-            entry_chunk,
             AssetsVc::cell(other_chunks),
             evaluatable_assets,
             module,
@@ -346,7 +345,7 @@ where
         .copied()
         .map(|chunk| chunk.as_chunk())
         .chain(css_chunks.iter().copied().map(|chunk| chunk.as_chunk()))
-        .chain(other_chunks.into_iter())
+        .chain(other_chunks)
         .collect();
 
     Ok(ChunksVc::cell(chunks))

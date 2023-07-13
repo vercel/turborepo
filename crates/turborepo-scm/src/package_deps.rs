@@ -328,13 +328,13 @@ mod tests {
             ),
         ];
         for (inputs, expected_files) in input_tests {
-            let expected: GitHashes = HashMap::from_iter(expected_files.into_iter().map(|key| {
+            let expected: GitHashes = HashMap::from_iter(expected_files.iter().map(|key| {
                 let key = RelativeUnixPathBuf::new(*key).unwrap();
                 let value = all_expected.get(&key).unwrap().clone();
                 (key, value)
             }));
             let hashes = git
-                .get_package_file_hashes(&repo_root, &package_path, &inputs)
+                .get_package_file_hashes(&repo_root, &package_path, inputs)
                 .unwrap();
             assert_eq!(hashes, expected);
         }
@@ -344,7 +344,7 @@ mod tests {
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
         HashMap::from_iter(
             pairs
-                .into_iter()
+                .iter()
                 .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
         )
     }

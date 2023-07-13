@@ -387,11 +387,9 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
     }
 
     fn populate_transitive_dependencies(&mut self) -> Result<(), Error> {
-        let Some(lockfile) = self
-            .lockfile
-            .as_deref() else {
-                return Ok(())
-            };
+        let Some(lockfile) = self.lockfile.as_deref() else {
+            return Ok(());
+        };
 
         let mut closures = turborepo_lockfiles::all_transitive_closures(
             lockfile,
@@ -454,7 +452,7 @@ impl Dependencies {
                 .map_or(false, |workspace_version| {
                     DependencyVersion::new(version).matches_workspace_package(
                         workspace_version,
-                        &workspace_dir,
+                        workspace_dir,
                         repo_root,
                     )
                 });

@@ -1,7 +1,14 @@
-use std::net::SocketAddr;
+use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
-use axum::{routing::get, Json, Router};
+use axum::{
+    extract::{BodyStream, Path},
+    http::{HeaderMap, HeaderValue, StatusCode},
+    routing::{get, head, options, put},
+    Json, Router,
+};
+use futures_util::StreamExt;
+use tokio::sync::Mutex;
 use turborepo_api_client::{
     CachingStatus, CachingStatusResponse, Membership, Role, Space, SpacesResponse, Team,
     TeamsResponse, User, UserResponse, VerificationResponse,
@@ -25,6 +32,12 @@ pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
 pub async fn start_test_server(port: u16) -> Result<()> {
+    let get_durations_ref = Arc::new(Mutex::new(HashMap::new()));
+    let head_durations_ref = get_durations_ref.clone();
+    let put_durations_ref = get_durations_ref.clone();
+    let put_tempdir_ref = Arc::new(tempfile::tempdir()?);
+    let get_tempdir_ref = put_tempdir_ref.clone();
+
     let app = Router::new()
         .route(
             "/v2/user",
@@ -82,7 +95,123 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     team_id: Some(EXPECTED_SSO_TEAM_ID.to_string()),
                 })
             }),
+        )
+        .route(
+            "/v8/artifacts/:hash",
+            put(
+                |Path(hash): Path<String>, headers: HeaderMap, mut body: BodyStream| async move {
+                    let root_path = put_tempdir_ref.path();
+                    let file_path = root_path.join(&hash);
+                    let mut file = OpenOptions::new()
+                        .append(true)
+                        .create(true)
+                        .open(&file_path)
+                        .unwrap();
+
+                    let duration = headers
+                        .get("x-artifact-duration")
+                        .and_then(|header_value| header_value.to_str().ok())
+                        .and_then(|duration| duration.parse::<u32>().ok())
+                        .expect("x-artifact-duration header is missing");
+
+                    let mut durations_map = put_durations_ref.lock().await;
+                    durations_map.insert(hash.clone(), duration);
+
+                    while let Some(item) = body.next().await {
+                        let chunk = item.unwrap();
+                        file.write_all(&chunk).unwrap();
+                    }
+
+                    (StatusCode::CREATED, Json(hash))
+                },
+            ),
+        )
+        .route(
+            "/v8/artifacts/:hash",
+            get(|Path(hash): Path<String>| async move {
+                let root_path = get_tempdir_ref.path();
+                let file_path = root_path.join(&hash);
+                let buffer = std::fs::read(file_path).unwrap();
+                let duration = get_durations_ref
+                    .lock()
+                    .await
+                    .get(&hash)
+                    .cloned()
+                    .unwrap_or(0);
+                let mut headers = HeaderMap::new();
+
+                headers.insert(
+                    "x-artifact-duration",
+                    HeaderValue::from_str(&duration.to_string()).unwrap(),
+                );
+
+                (headers, buffer)
+            }),
+        )
+        .route(
+            "/v8/artifacts/:hash",
+            head(|Path(hash): Path<String>| async move {
+                let duration = head_durations_ref
+                    .lock()
+                    .await
+                    .get(&hash)
+                    .cloned()
+                    .unwrap_or(0);
+                let mut headers = HeaderMap::new();
+
+                headers.insert(
+                    "x-artifact-duration",
+                    HeaderValue::from_str(&duration.to_string()).unwrap(),
+                );
+
+                headers
+            }),
+        )
+        .route(
+            "/preflight/absolute-location",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert("Location", "http://example.com/about".parse().unwrap());
+
+                headers
+            }),
+        )
+        .route(
+            "/preflight/relative-location",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert("Location", "/about/me".parse().unwrap());
+
+                headers
+            }),
+        )
+        .route(
+            "/preflight/allow-auth",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "Access-Control-Allow-Headers",
+                    "Authorization, Location, Access-Control-Allow-Headers"
+                        .parse()
+                        .unwrap(),
+                );
+
+                headers
+            }),
+        )
+        .route(
+            "/preflight/no-allow-auth",
+            options(|| async {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "Access-Control-Allow-Headers",
+                    "x-authorization-foo, Location".parse().unwrap(),
+                );
+
+                headers
+            }),
         );
+
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     // We print the port so integration tests can use it
     println!("{}", port);

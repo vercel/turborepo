@@ -12,16 +12,18 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc,
     },
     context::AssetContextVc,
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::{AssetReference, AssetReferencesVc},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginVc},
         PrimaryResolveResult,
     },
+    source::SourceVc,
 };
 
 use crate::{
@@ -50,7 +52,7 @@ fn modifier() -> StringVc {
 #[turbo_tasks::value]
 #[derive(Clone)]
 pub struct CssModuleAsset {
-    source: AssetVc,
+    source: SourceVc,
     context: AssetContextVc,
     transforms: CssInputTransformsVc,
     ty: CssModuleAssetType,
@@ -61,7 +63,7 @@ impl CssModuleAssetVc {
     /// Creates a new CSS asset.
     #[turbo_tasks::function]
     pub fn new(
-        source: AssetVc,
+        source: SourceVc,
         context: AssetContextVc,
         transforms: CssInputTransformsVc,
         ty: CssModuleAssetType,
@@ -115,7 +117,10 @@ impl Asset for CssModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for CssModuleAsset {
+impl Module for CssModuleAsset {}
+
+#[turbo_tasks::value_impl]
+impl ChunkableModule for CssModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self_vc: CssModuleAssetVc,

@@ -1,15 +1,17 @@
 use std::{
     borrow::Borrow,
     fmt,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Display, Formatter},
     ops::Deref,
 };
 
 use camino::Utf8Path;
+use serde::Serialize;
 
 use crate::{IntoUnix, PathError, RelativeUnixPath};
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
+#[serde(transparent)]
 pub struct RelativeUnixPathBuf(pub(crate) String);
 
 impl Display for RelativeUnixPathBuf {

@@ -577,7 +577,7 @@ impl Default for LogPrefix {
 #[tokio::main]
 pub async fn run(
     repo_state: Option<RepoState>,
-    _logger: &TurboSubscriber,
+    #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
 ) -> Result<Payload> {
     let mut cli_args = Args::new()?;
@@ -651,10 +651,8 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Daemon {
-            command,
-            idle_time: _,
-        } => {
+        #[allow(unused_variables)]
+        Command::Daemon { command, idle_time } => {
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
 
             match command {
