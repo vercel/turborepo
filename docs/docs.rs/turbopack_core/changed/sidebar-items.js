@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["any_content_changed","any_content_changed_inline","content_changed","content_changed_inline"]};
+window.SIDEBAR_ITEMS = {"fn":["any_content_changed","any_content_changed_inline","any_content_changed_of_output_assets","any_content_changed_of_output_assets_inline","content_changed","content_changed_inline"]};
