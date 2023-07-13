@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use std::{
     collections::HashMap,
     env,

@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
