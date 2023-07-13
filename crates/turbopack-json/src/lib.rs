@@ -15,11 +15,13 @@ use turbo_tasks_fs::{FileContent, FileJsonContent};
 use turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableAsset,
-        ChunkableAssetVc, ChunkingContextVc,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkItemVc, ChunkVc, ChunkableModule,
+        ChunkableModuleVc, ChunkingContextVc,
     },
     ident::AssetIdentVc,
+    module::{Module, ModuleVc},
     reference::AssetReferencesVc,
+    source::SourceVc,
 };
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemContentVc,
@@ -34,13 +36,13 @@ fn modifier() -> StringVc {
 
 #[turbo_tasks::value]
 pub struct JsonModuleAsset {
-    source: AssetVc,
+    source: SourceVc,
 }
 
 #[turbo_tasks::value_impl]
 impl JsonModuleAssetVc {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc) -> Self {
+    pub fn new(source: SourceVc) -> Self {
         Self::cell(JsonModuleAsset { source })
     }
 }
@@ -59,7 +61,10 @@ impl Asset for JsonModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAsset for JsonModuleAsset {
+impl Module for JsonModuleAsset {}
+
+#[turbo_tasks::value_impl]
+impl ChunkableModule for JsonModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self_vc: JsonModuleAssetVc,

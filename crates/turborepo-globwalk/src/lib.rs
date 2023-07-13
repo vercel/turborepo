@@ -1,5 +1,4 @@
 #![feature(assert_matches)]
-#![feature(once_cell)]
 
 mod empty_glob;
 
@@ -244,7 +243,25 @@ fn trailing_doublestar() -> &'static Regex {
 }
 
 pub fn fix_glob_pattern(pattern: &str) -> String {
-    let p1 = double_doublestar().replace(pattern, "**");
+    // This is a no-op on unix systems, but converts to slashes on windows
+    #[cfg(not(windows))]
+    let needs_trailing_slash = false;
+    #[cfg(windows)]
+    let needs_trailing_slash = pattern.ends_with('/') || pattern.ends_with('\\');
+    let converted = Path::new(pattern)
+        .to_slash()
+        .expect("failed to roundtrip through Path");
+    // TODO: consider inlining path-slash to handle this bug
+    // technically this won't happen on unix, the to_slash conversion
+    // is a no-op, so it doesn't strip trailing slashes. path-slash
+    // strips trailing _unix_ slashes from windows paths, rather than
+    // "converting" (leaving) them.
+    let p0 = if needs_trailing_slash {
+        format!("{}/", converted)
+    } else {
+        converted.to_string()
+    };
+    let p1 = double_doublestar().replace(&p0, "**");
     let p2 = leading_doublestar().replace(&p1, "**/*$suffix");
     let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
 
@@ -306,7 +323,7 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
         Some((Cow::Borrowed(path), lowest_index))
     } else {
         let string = if is_root {
-            std::iter::once("").chain(stack.into_iter()).join("/")
+            std::iter::once("").chain(stack).join("/")
         } else {
             stack.join("/")
         };
@@ -484,7 +501,7 @@ mod test {
         let expected = format!(
             "{}{}",
             ROOT,
-            base_path_exp.replace("/", std::path::MAIN_SEPARATOR_STR)
+            base_path_exp.replace('/', std::path::MAIN_SEPARATOR_STR)
         );
         assert_eq!(result_path.to_string_lossy(), expected);
 
@@ -1298,7 +1315,7 @@ mod test {
                 .iter()
                 .map(|p| {
                     p.trim_start_matches('/')
-                        .replace("/", std::path::MAIN_SEPARATOR_STR)
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
                 })
                 .sorted()
                 .collect::<Vec<_>>();
@@ -1409,17 +1426,14 @@ mod test {
                 relative.to_string()
             })
             .collect::<HashSet<_>>();
-        let expected: HashSet<String> = HashSet::from_iter(
-            [
-                "docs/package.json"
-                    .replace("/", std::path::MAIN_SEPARATOR_STR)
-                    .to_string(),
-                "apps/some-app/package.json"
-                    .replace("/", std::path::MAIN_SEPARATOR_STR)
-                    .to_string(),
-            ]
-            .into_iter(),
-        );
+        let expected: HashSet<String> = HashSet::from_iter([
+            "docs/package.json"
+                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                .to_string(),
+            "apps/some-app/package.json"
+                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                .to_string(),
+        ]);
         assert_eq!(paths, expected);
     }
 }

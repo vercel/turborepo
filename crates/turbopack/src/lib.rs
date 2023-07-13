@@ -3,7 +3,6 @@
 #![feature(min_specialization)]
 #![feature(map_try_insert)]
 #![feature(option_get_or_insert_default)]
-#![feature(once_cell)]
 #![feature(hash_set_entry)]
 #![recursion_limit = "256"]
 
@@ -13,7 +12,7 @@ use std::{
 };
 
 use anyhow::Result;
-use css::{CssModuleAssetVc, ModuleCssModuleAssetVc};
+use css::{CssModuleAssetVc, GlobalCssAssetVc, ModuleCssAssetVc};
 use ecmascript::{
     typescript::resolve::TypescriptTypesAssetReferenceVc, EcmascriptModuleAssetType,
     EcmascriptModuleAssetVc,
@@ -34,13 +33,15 @@ use turbopack_core::{
     context::{AssetContext, AssetContextVc},
     ident::AssetIdentVc,
     issue::{Issue, IssueVc},
-    plugin::CustomModuleType,
+    module::ModuleVc,
+    raw_module::RawModuleVc,
     reference::all_referenced_assets,
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssetsVc, ReferenceType},
     resolve::{
         options::ResolveOptionsVc, origin::PlainResolveOriginVc, parse::RequestVc, resolve,
         ModulePartVc, ResolveResultVc,
     },
+    source::{asset_to_source, SourceVc},
 };
 
 use crate::transition::Transition;
@@ -62,6 +63,7 @@ use turbopack_mdx::MdxModuleAssetVc;
 use turbopack_static::StaticModuleAssetVc;
 
 use self::{
+    module_options::CustomModuleType,
     resolve_options_context::ResolveOptionsContextVc,
     transition::{TransitionVc, TransitionsByNameVc},
 };
@@ -98,12 +100,12 @@ impl Issue for ModuleIssue {
 
 #[turbo_tasks::function]
 async fn apply_module_type(
-    source: AssetVc,
+    source: SourceVc,
     context: ModuleAssetContextVc,
     module_type: ModuleTypeVc,
     part: Option<ModulePartVc>,
     inner_assets: Option<InnerAssetsVc>,
-) -> Result<AssetVc> {
+) -> Result<ModuleVc> {
     let module_type = &*module_type.await?;
     Ok(match module_type {
         ModuleType::Ecmascript {
@@ -164,21 +166,19 @@ async fn apply_module_type(
 
             builder.build()
         }
-
         ModuleType::Json => JsonModuleAssetVc::new(source).into(),
-        ModuleType::Raw => source,
-        ModuleType::Css(transforms) => {
-            CssModuleAssetVc::new(source, context.into(), *transforms).into()
-        }
-        ModuleType::CssModule(transforms) => {
-            ModuleCssModuleAssetVc::new(source, context.into(), *transforms).into()
+        ModuleType::Raw => RawModuleVc::new(source).into(),
+        ModuleType::CssGlobal => GlobalCssAssetVc::new(source, context.into()).into(),
+        ModuleType::CssModule => ModuleCssAssetVc::new(source, context.into()).into(),
+        ModuleType::Css { ty, transforms } => {
+            CssModuleAssetVc::new(source, context.into(), *transforms, *ty).into()
         }
         ModuleType::Static => StaticModuleAssetVc::new(source, context.into()).into(),
         ModuleType::Mdx {
             transforms,
             options,
         } => MdxModuleAssetVc::new(source, context.into(), *transforms, *options).into(),
-        ModuleType::Custom(custom) => custom.create_module(source, context.into(), part),
+        ModuleType::Custom(custom) => custom.create_module(source, context, part),
     })
 }
 
@@ -262,9 +262,9 @@ impl ModuleAssetContextVc {
     #[turbo_tasks::function]
     fn process_default(
         self_vc: ModuleAssetContextVc,
-        source: AssetVc,
+        source: SourceVc,
         reference_type: Value<ReferenceType>,
-    ) -> AssetVc {
+    ) -> ModuleVc {
         process_default(self_vc, source, reference_type, Vec::new())
     }
 }
@@ -272,10 +272,10 @@ impl ModuleAssetContextVc {
 #[turbo_tasks::function]
 async fn process_default(
     context: ModuleAssetContextVc,
-    source: AssetVc,
+    source: SourceVc,
     reference_type: Value<ReferenceType>,
     processed_rules: Vec<usize>,
-) -> Result<AssetVc> {
+) -> Result<ModuleVc> {
     let ident = source.ident().resolve().await?;
     let options = ModuleOptionsVc::new(ident.path().parent(), context.module_options_context());
 
@@ -450,7 +450,16 @@ impl AssetContext for ModuleAssetContext {
         Ok(result
             .await?
             .map(
-                |a| self_vc.process(a, reference_type.clone()).resolve(),
+                |a| {
+                    let reference_type = reference_type.clone();
+                    async move {
+                        Ok(self_vc
+                            .process(asset_to_source(a), reference_type)
+                            .resolve()
+                            .await?
+                            .into())
+                    }
+                },
                 |i| async move { Ok(i) },
             )
             .await?
@@ -459,9 +468,9 @@ impl AssetContext for ModuleAssetContext {
     #[turbo_tasks::function]
     async fn process(
         self_vc: ModuleAssetContextVc,
-        asset: AssetVc,
+        asset: SourceVc,
         reference_type: Value<ReferenceType>,
-    ) -> Result<AssetVc> {
+    ) -> Result<ModuleVc> {
         let this = self_vc.await?;
         if let Some(transition) = this.transition {
             Ok(transition.process(asset, self_vc, reference_type))

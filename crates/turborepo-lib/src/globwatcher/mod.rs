@@ -415,11 +415,7 @@ mod test {
         println!("{:?} {:?}", include, exclude);
 
         watcher
-            .watch_globs(
-                hash.clone(),
-                include.clone().into_iter(),
-                exclude.clone().into_iter(),
-            )
+            .watch_globs(hash.clone(), include.clone(), exclude.clone())
             .await
             .unwrap();
 
@@ -532,19 +528,15 @@ mod test {
         let globs2_exclusion = ["my-pkg/.next/cache/**".to_string()];
 
         watcher
-            .watch_globs(
-                hash1.clone(),
-                globs1_inclusion.clone().into_iter(),
-                vec![].into_iter(),
-            )
+            .watch_globs(hash1.clone(), globs1_inclusion.clone(), vec![])
             .await
             .unwrap();
 
         watcher
             .watch_globs(
                 hash2.clone(),
-                globs2_inclusion.clone().into_iter(),
-                globs2_exclusion.clone().into_iter(),
+                globs2_inclusion.clone(),
+                globs2_exclusion.clone(),
             )
             .await
             .unwrap();
@@ -650,11 +642,7 @@ mod test {
         let inclusions = ["my-pkg/.next/next-file".to_string()];
 
         watcher
-            .watch_globs(
-                hash.clone(),
-                inclusions.clone().into_iter(),
-                vec![].into_iter(),
-            )
+            .watch_globs(hash.clone(), inclusions.clone(), vec![])
             .await
             .unwrap();
 

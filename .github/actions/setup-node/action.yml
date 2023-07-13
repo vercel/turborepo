@@ -27,7 +27,7 @@ runs:
         version: 7.12.1
 
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v3.6.0
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm

@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use anyhow::Result;
 use camino::Utf8PathBuf;
 use config::{Config, Environment};
 use serde::{Deserialize, Serialize};
 
 use super::write_to_disk;
+use crate::config::Error;
 
 // Inner struct that matches the config file schema
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
@@ -38,13 +38,13 @@ impl UserConfig {
     }
 
     /// Set token and sync the changes to disk
-    pub fn set_token(&mut self, token: Option<String>) -> Result<()> {
+    pub fn set_token(&mut self, token: Option<String>) -> Result<(), Error> {
         self.disk_config.token = token.clone();
         self.config.token = token;
         self.write_to_disk()
     }
 
-    fn write_to_disk(&self) -> Result<()> {
+    fn write_to_disk(&self) -> Result<(), Error> {
         write_to_disk(&self.path, &self.disk_config)
     }
 }
@@ -75,7 +75,7 @@ impl UserConfigLoader {
     }
 
     /// Loads the user config using settings of the loader
-    pub fn load(self) -> Result<UserConfig> {
+    pub fn load(self) -> Result<UserConfig, Error> {
         let Self {
             path,
             token,
@@ -113,6 +113,7 @@ impl UserConfigLoader {
 mod test {
     use std::io::Write;
 
+    use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
 
     use super::*;

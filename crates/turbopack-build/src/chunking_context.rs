@@ -1,7 +1,7 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use turbo_tasks::{
-    graph::{GraphTraversal, ReverseTopological},
+    graph::{AdjacencyMap, GraphTraversal},
     primitives::{BoolVc, StringVc},
     TryJoinIterExt, Value,
 };
@@ -9,21 +9,21 @@ use turbo_tasks_fs::FileSystemPathVc;
 use turbopack_core::{
     asset::{Asset, AssetVc, AssetsVc},
     chunk::{
-        Chunk, ChunkVc, ChunkableAsset, ChunkingContext, ChunkingContextVc, ChunksVc,
+        Chunk, ChunkVc, ChunkableModule, ChunkingContext, ChunkingContextVc, ChunksVc,
         EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
     ident::AssetIdentVc,
 };
 use turbopack_css::chunk::CssChunkVc;
-use turbopack_ecmascript::{
-    chunk::{EcmascriptChunkVc, EcmascriptChunkingContext, EcmascriptChunkingContextVc},
-    EcmascriptModuleAssetVc,
+use turbopack_ecmascript::chunk::{
+    EcmascriptChunkPlaceableVc, EcmascriptChunkVc, EcmascriptChunkingContext,
+    EcmascriptChunkingContextVc,
 };
 use turbopack_ecmascript_runtime::RuntimeType;
 
 use crate::ecmascript::node::{
-    chunk::EcmascriptBuildNodeChunkVc, evaluate::chunk::EcmascriptBuildNodeEvaluateChunkVc,
+    chunk::EcmascriptBuildNodeChunkVc, entry::chunk::EcmascriptBuildNodeEntryChunkVc,
 };
 
 /// A builder for [`BuildChunkingContextVc`].
@@ -34,6 +34,11 @@ pub struct BuildChunkingContextBuilder {
 impl BuildChunkingContextBuilder {
     pub fn runtime_type(mut self, runtime_type: RuntimeType) -> Self {
         self.context.runtime_type = runtime_type;
+        self
+    }
+
+    pub fn layer(mut self, layer: impl Into<String>) -> Self {
+        self.context.layer = Some(layer.into());
         self
     }
 
@@ -104,46 +109,31 @@ impl BuildChunkingContextVc {
         this.into_value().cell()
     }
 
-    #[turbo_tasks::function]
-    fn generate_evaluate_chunk(
-        self_vc: BuildChunkingContextVc,
-        entry_chunk: ChunkVc,
-        other_chunks: AssetsVc,
-        evaluatable_assets: EvaluatableAssetsVc,
-        exported_module: Option<EcmascriptModuleAssetVc>,
-    ) -> AssetVc {
-        EcmascriptBuildNodeEvaluateChunkVc::new(
-            self_vc,
-            entry_chunk,
-            other_chunks,
-            evaluatable_assets,
-            exported_module,
-        )
-        .into()
-    }
-
     /// Generates an output chunk that:
     /// * evaluates the given assets; and
     /// * exports the result of evaluating the given module as a CommonJS
     ///   default export.
     #[turbo_tasks::function]
-    pub async fn generate_exported_chunk(
+    pub async fn entry_chunk(
         self_vc: BuildChunkingContextVc,
-        module: EcmascriptModuleAssetVc,
+        path: FileSystemPathVc,
+        module: EcmascriptChunkPlaceableVc,
         evaluatable_assets: EvaluatableAssetsVc,
     ) -> Result<AssetVc> {
         let entry_chunk = module.as_root_chunk(self_vc.into());
 
-        let assets = self_vc
-            .get_evaluate_chunk_assets(entry_chunk, evaluatable_assets)
+        let other_chunks = self_vc
+            .get_chunk_assets(entry_chunk, evaluatable_assets)
             .await?;
 
-        let asset = self_vc.generate_evaluate_chunk(
-            entry_chunk,
-            AssetsVc::cell(assets),
+        let asset = EcmascriptBuildNodeEntryChunkVc::new(
+            path,
+            self_vc,
+            AssetsVc::cell(other_chunks),
             evaluatable_assets,
-            Some(module),
-        );
+            module,
+        )
+        .into();
 
         Ok(asset)
     }
@@ -161,7 +151,7 @@ impl BuildChunkingContextVc {
 }
 
 impl BuildChunkingContextVc {
-    async fn get_evaluate_chunk_assets(
+    async fn get_chunk_assets(
         self,
         entry_chunk: ChunkVc,
         evaluatable_assets: EvaluatableAssetsVc,
@@ -296,22 +286,13 @@ impl ChunkingContext for BuildChunkingContext {
 
     #[turbo_tasks::function]
     async fn evaluated_chunk_group(
-        self_vc: BuildChunkingContextVc,
-        entry_chunk: ChunkVc,
-        evaluatable_assets: EvaluatableAssetsVc,
+        _self_vc: BuildChunkingContextVc,
+        _entry_chunk: ChunkVc,
+        _evaluatable_assets: EvaluatableAssetsVc,
     ) -> Result<AssetsVc> {
-        let mut assets = self_vc
-            .get_evaluate_chunk_assets(entry_chunk, evaluatable_assets)
-            .await?;
-
-        assets.push(self_vc.generate_evaluate_chunk(
-            entry_chunk,
-            AssetsVc::cell(assets.clone()),
-            evaluatable_assets,
-            None,
-        ));
-
-        Ok(AssetsVc::cell(assets))
+        // TODO(alexkirsz) This method should be part of a separate trait that is
+        // only implemented for client/edge runtimes.
+        bail!("the build chunking context does not support evaluated chunk groups")
     }
 }
 
@@ -322,7 +303,7 @@ async fn get_parallel_chunks<I>(entries: I) -> Result<impl Iterator<Item = Chunk
 where
     I: IntoIterator<Item = ChunkVc>,
 {
-    Ok(ReverseTopological::new()
+    Ok(AdjacencyMap::new()
         .skip_duplicates()
         .visit(entries, |chunk: ChunkVc| async move {
             Ok(chunk
@@ -336,7 +317,7 @@ where
         .await
         .completed()?
         .into_inner()
-        .into_iter())
+        .into_reverse_topological())
 }
 
 async fn get_optimized_chunks<I>(chunks: I) -> Result<ChunksVc>
@@ -364,7 +345,7 @@ where
         .copied()
         .map(|chunk| chunk.as_chunk())
         .chain(css_chunks.iter().copied().map(|chunk| chunk.as_chunk()))
-        .chain(other_chunks.into_iter())
+        .chain(other_chunks)
         .collect();
 
     Ok(ChunksVc::cell(chunks))

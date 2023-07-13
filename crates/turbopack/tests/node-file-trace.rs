@@ -1,4 +1,5 @@
 #![feature(min_specialization)]
+#![allow(clippy::items_after_test_module)]
 
 mod helpers;
 #[cfg(feature = "bench_against_node_nft")]
@@ -37,8 +38,8 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfoVc,
     context::AssetContext,
     environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSourceVc,
     reference_type::ReferenceType,
-    source_asset::SourceAssetVc,
 };
 
 #[global_allocator]
@@ -409,7 +410,7 @@ fn node_file_trace<B: Backend + 'static>(
                 let output_fs = DiskFileSystemVc::new("output".to_string(), directory.clone());
                 let output_dir = output_fs.root();
 
-                let source = SourceAssetVc::new(input);
+                let source = FileSourceVc::new(input);
                 let context = ModuleAssetContextVc::new(
                     TransitionsByNameVc::cell(HashMap::new()),
                     // TODO It's easy to make a mistake here as this should match the config in the
@@ -420,6 +421,7 @@ fn node_file_trace<B: Backend + 'static>(
                     ))),
                     ModuleOptionsContext {
                         enable_types: true,
+                        enable_raw_css: true,
                         ..Default::default()
                     }
                     .cell(),
@@ -432,7 +434,7 @@ fn node_file_trace<B: Backend + 'static>(
                     .cell(),
                 );
                 let module = context.process(source.into(), Value::new(ReferenceType::Undefined));
-                let rebased = RebasedAssetVc::new(module, input_dir, output_dir);
+                let rebased = RebasedAssetVc::new(module.into(), input_dir, output_dir);
 
                 #[cfg(not(feature = "bench_against_node_nft"))]
                 let output_path = rebased.ident().path();

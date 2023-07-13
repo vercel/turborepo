@@ -50,7 +50,7 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::{FileJsonContent, FileSystemPathVc};
 use turbopack_core::{
-    asset::{Asset, AssetVc},
+    asset::Asset,
     compile_time_info::{CompileTimeInfoVc, FreeVarReference},
     error::PrettyPrintError,
     issue::{IssueSourceVc, OptionIssueSourceVc},
@@ -64,6 +64,7 @@ use turbopack_core::{
         pattern::Pattern,
         resolve, FindContextFileResult, ModulePartVc, PrimaryResolveResult,
     },
+    source::{asset_to_source, SourceVc},
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 use unreachable::UnreachableVc;
@@ -79,7 +80,7 @@ use self::{
         EsmModuleItemVc, ImportMetaBindingVc, ImportMetaRefVc, UrlAssetReferenceVc,
     },
     node::{DirAssetReferenceVc, PackageJsonReferenceVc},
-    raw::SourceAssetReferenceVc,
+    raw::FileSourceReferenceVc,
     typescript::{
         TsConfigReferenceVc, TsReferencePathAssetReferenceVc, TsReferenceTypeAssetReferenceVc,
     },
@@ -283,7 +284,7 @@ async fn specified_module_type(package_json: FileSystemPathVc) -> Result<Specifi
 
 struct AnalysisState<'a> {
     handler: &'a Handler,
-    source: AssetVc,
+    source: SourceVc,
     origin: ResolveOriginVc,
     compile_time_info: CompileTimeInfoVc,
     var_graph: &'a VarGraph,
@@ -319,7 +320,7 @@ where
 
 #[turbo_tasks::function]
 pub(crate) async fn analyze_ecmascript_module(
-    source: AssetVc,
+    source: SourceVc,
     origin: ResolveOriginVc,
     ty: Value<EcmascriptModuleAssetType>,
     transforms: EcmascriptInputTransformsVc,
@@ -379,7 +380,8 @@ pub(crate) async fn analyze_ecmascript_module(
         comments,
         source_map,
         ..
-    } = &*parsed else {
+    } = &*parsed
+    else {
         return analysis.build().await;
     };
 
@@ -422,7 +424,7 @@ pub(crate) async fn analyze_ecmascript_module(
             CommentKind::Line => {
                 lazy_static! {
                     static ref SOURCE_MAP_FILE_REFERENCE: Regex =
-                        Regex::new(r#"# sourceMappingURL=(.*?\.map)$"#).unwrap();
+                        Regex::new(r"# sourceMappingURL=(.*?\.map)$").unwrap();
                 }
                 if let Some(m) = SOURCE_MAP_FILE_REFERENCE.captures(&comment.text) {
                     let path = &m[1];
@@ -588,27 +590,48 @@ pub(crate) async fn analyze_ecmascript_module(
 
         EcmascriptExports::EsmExports(esm_exports)
     } else if matches!(specified_type, SpecifiedModuleType::EcmaScript) {
-        if has_cjs_export(program) {
-            SpecifiedModuleTypeIssue {
-                path: source.ident().path(),
-                specified_type,
+        match detect_dynamic_export(program) {
+            DetectedDynamicExportType::CommonJs => {
+                SpecifiedModuleTypeIssue {
+                    path: source.ident().path(),
+                    specified_type,
+                }
+                .cell()
+                .as_issue()
+                .emit();
+                EcmascriptExports::EsmExports(
+                    EsmExports {
+                        exports: Default::default(),
+                        star_exports: Default::default(),
+                    }
+                    .cell(),
+                )
             }
-            .cell()
-            .as_issue()
-            .emit();
+            DetectedDynamicExportType::Namespace => EcmascriptExports::DynamicNamespace,
+            DetectedDynamicExportType::Value => EcmascriptExports::Value,
+            DetectedDynamicExportType::UsingModuleDeclarations
+            | DetectedDynamicExportType::None => EcmascriptExports::EsmExports(
+                EsmExports {
+                    exports: Default::default(),
+                    star_exports: Default::default(),
+                }
+                .cell(),
+            ),
         }
-
-        EcmascriptExports::EsmExports(
-            EsmExports {
-                exports: Default::default(),
-                star_exports: Default::default(),
-            }
-            .cell(),
-        )
-    } else if has_cjs_export(program) {
-        EcmascriptExports::CommonJs
     } else {
-        EcmascriptExports::None
+        match detect_dynamic_export(program) {
+            DetectedDynamicExportType::CommonJs => EcmascriptExports::CommonJs,
+            DetectedDynamicExportType::Namespace => EcmascriptExports::DynamicNamespace,
+            DetectedDynamicExportType::Value => EcmascriptExports::Value,
+            DetectedDynamicExportType::UsingModuleDeclarations => EcmascriptExports::EsmExports(
+                EsmExports {
+                    exports: Default::default(),
+                    star_exports: Default::default(),
+                }
+                .cell(),
+            ),
+            DetectedDynamicExportType::None => EcmascriptExports::None,
+        }
     };
 
     analysis.set_exports(exports);
@@ -927,7 +950,11 @@ pub(crate) async fn analyze_ecmascript_module(
                     RequestVc::parse(Value::new(pat)),
                     compile_time_info.environment().rendering(),
                     AstPathVc::cell(ast_path),
-                    IssueSourceVc::from_byte_offset(source, span.lo.to_usize(), span.hi.to_usize()),
+                    IssueSourceVc::from_byte_offset(
+                        source.into(),
+                        span.lo.to_usize(),
+                        span.hi.to_usize(),
+                    ),
                     in_try,
                 ));
             }
@@ -1174,7 +1201,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         ),
                     )
                 }
-                analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+                analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1214,7 +1241,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     ),
                 )
             }
-            analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+            analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
             return Ok(());
         }
 
@@ -1273,7 +1300,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         ),
                     );
                 }
-                analysis.add_reference(SourceAssetReferenceVc::new(source, pat.into()));
+                analysis.add_reference(FileSourceReferenceVc::new(source, pat.into()));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1721,12 +1748,12 @@ async fn handle_free_var_reference(
     Ok(true)
 }
 
-fn issue_source(source: AssetVc, span: Span) -> IssueSourceVc {
-    IssueSourceVc::from_byte_offset(source, span.lo.to_usize(), span.hi.to_usize())
+fn issue_source(source: SourceVc, span: Span) -> IssueSourceVc {
+    IssueSourceVc::from_byte_offset(source.into(), span.lo.to_usize(), span.hi.to_usize())
 }
 
 fn analyze_amd_define(
-    source: AssetVc,
+    source: SourceVc,
     analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
     origin: ResolveOriginVc,
     handler: &Handler,
@@ -1831,7 +1858,7 @@ fn analyze_amd_define(
 }
 
 fn analyze_amd_define_with_deps(
-    source: AssetVc,
+    source: SourceVc,
     analysis: &mut AnalyzeEcmascriptModuleResultBuilder,
     origin: ResolveOriginVc,
     handler: &Handler,
@@ -2540,7 +2567,7 @@ async fn resolve_as_webpack_runtime(
     );
 
     if let Some(source) = *resolved.first_asset().await? {
-        Ok(webpack_runtime(source, transforms))
+        Ok(webpack_runtime(asset_to_source(source), transforms))
     } else {
         Ok(WebpackRuntime::None.into())
     }
@@ -2553,18 +2580,27 @@ pub struct AstPath(#[turbo_tasks(trace_ignore)] Vec<AstParentKind>);
 pub static TURBOPACK_HELPER: &str = "__turbopackHelper";
 
 pub fn is_turbopack_helper_import(import: &ImportDecl) -> bool {
-    import.asserts.as_ref().map_or(true, |asserts| {
+    import.asserts.as_ref().map_or(false, |asserts| {
         asserts.props.iter().any(|assert| {
             assert
                 .as_prop()
                 .and_then(|prop| prop.as_key_value())
                 .and_then(|kv| kv.key.as_ident())
-                .map_or(true, |ident| &*ident.sym != TURBOPACK_HELPER)
+                .map_or(false, |ident| &*ident.sym == TURBOPACK_HELPER)
         })
     })
 }
 
-fn has_cjs_export(p: &Program) -> bool {
+#[derive(Debug)]
+enum DetectedDynamicExportType {
+    CommonJs,
+    Namespace,
+    Value,
+    None,
+    UsingModuleDeclarations,
+}
+
+fn detect_dynamic_export(p: &Program) -> DetectedDynamicExportType {
     use swc_core::ecma::visit::{visit_obj_and_computed, Visit, VisitWith};
 
     if let Program::Module(m) = p {
@@ -2576,11 +2612,14 @@ fn has_cjs_export(p: &Program) -> bool {
                     .map_or(true, |import| !is_turbopack_helper_import(import))
             })
         }) {
-            return false;
+            return DetectedDynamicExportType::UsingModuleDeclarations;
         }
     }
 
     struct Visitor {
+        cjs: bool,
+        value: bool,
+        namespace: bool,
         found: bool,
     }
 
@@ -2588,10 +2627,20 @@ fn has_cjs_export(p: &Program) -> bool {
         visit_obj_and_computed!();
 
         fn visit_ident(&mut self, i: &Ident) {
-            if &*i.sym == "module"
-                || &*i.sym == "exports"
-                || &*i.sym == "__turbopack_export_value__"
-            {
+            // The detection is not perfect, it might have some false positives, e. g. in
+            // cases where `module` is used in some other way. e. g. `const module = 42;`.
+            // But a false positive doesn't break anything, it only opts out of some
+            // optimizations, which is acceptable.
+            if &*i.sym == "module" || &*i.sym == "exports" {
+                self.cjs = true;
+                self.found = true;
+            }
+            if &*i.sym == "__turbopack_export_value__" {
+                self.value = true;
+                self.found = true;
+            }
+            if &*i.sym == "__turbopack_export_namespace__" {
+                self.namespace = true;
                 self.found = true;
             }
         }
@@ -2610,7 +2659,20 @@ fn has_cjs_export(p: &Program) -> bool {
         }
     }
 
-    let mut v = Visitor { found: false };
+    let mut v = Visitor {
+        cjs: false,
+        value: false,
+        namespace: false,
+        found: false,
+    };
     p.visit_with(&mut v);
-    v.found
+    if v.cjs {
+        DetectedDynamicExportType::CommonJs
+    } else if v.value {
+        DetectedDynamicExportType::Value
+    } else if v.namespace {
+        DetectedDynamicExportType::Namespace
+    } else {
+        DetectedDynamicExportType::None
+    }
 }

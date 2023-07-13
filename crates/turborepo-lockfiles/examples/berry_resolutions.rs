@@ -4,7 +4,7 @@ fn main() {
     let manifest = generate_manifest("foobar", 100);
     let lockfile_bytes = include_bytes!("yarn.lock");
     let data = LockfileData::from_bytes(lockfile_bytes.as_slice()).unwrap();
-    let lockfile = BerryLockfile::new(&data, Some(&manifest)).unwrap();
+    let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
     let key = "debug@npm:3.2.7";
     println!(
         "Dependencies of {key}: {}",

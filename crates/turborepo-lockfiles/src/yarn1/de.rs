@@ -109,7 +109,7 @@ fn multikey_property_statement(
         Ok((
             i,
             std::iter::once(property)
-                .chain(others.into_iter())
+                .chain(others)
                 .map(|key| (key, value.clone()))
                 .collect(),
         ))

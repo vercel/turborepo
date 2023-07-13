@@ -7,7 +7,10 @@
 if (!Array.isArray(globalThis.TURBOPACK)) {
     return;
 }
+
+const CHUNK_BASE_PATH = "";
 ;
+const REEXPORTED_OBJECTS = Symbol("reexported objects");
 ;
 ;
 ;
@@ -34,13 +37,33 @@ function esm(exports, getters) {
 function esmExport(module, getters) {
     esm(module.namespaceObject = module.exports, getters);
 }
-function cjsExport(exports, props) {
-    for(const key in props){
-        defineProp(exports, key, {
-            get: ()=>props[key],
-            enumerable: true
+function dynamicExport(module, object) {
+    let reexportedObjects = module[REEXPORTED_OBJECTS];
+    if (!reexportedObjects) {
+        reexportedObjects = module[REEXPORTED_OBJECTS] = [];
+        module.exports = module.namespaceObject = new Proxy(module.exports, {
+            get (target, prop) {
+                if (hasOwnProperty.call(target, prop) || prop === "default" || prop === "__esModule") {
+                    return Reflect.get(target, prop);
+                }
+                for (const obj of reexportedObjects){
+                    const value = Reflect.get(obj, prop);
+                    if (value !== undefined) return value;
+                }
+                return undefined;
+            },
+            ownKeys (target) {
+                const keys = Reflect.ownKeys(target);
+                for (const obj of reexportedObjects){
+                    for (const key of Reflect.ownKeys(obj)){
+                        if (key !== "default" && !keys.includes(key)) keys.push(key);
+                    }
+                }
+                return keys;
+            }
         });
     }
+    reexportedObjects.push(object);
 }
 function exportValue(module, value) {
     module.exports = value;
@@ -107,6 +130,7 @@ function requireContext(sourceModule, map) {
 function getChunkPath(chunkData) {
     return typeof chunkData === "string" ? chunkData : chunkData.path;
 }
+;
 ;
 ;
 ;
@@ -256,7 +280,7 @@ function instantiateModule(id, source) {
                 f: requireContext.bind(null, module),
                 i: esmImport.bind(null, module),
                 s: esmExport.bind(null, module),
-                j: cjsExport.bind(null, module.exports),
+                j: dynamicExport.bind(null, module),
                 v: exportValue.bind(null, module),
                 n: exportNamespace.bind(null, module),
                 m: module,
@@ -861,6 +885,9 @@ function getOrInstantiateRuntimeModule(moduleId, chunkPath) {
         chunkPath
     });
 }
+function getChunkRelativeUrl(chunkPath) {
+    return `${CHUNK_BASE_PATH}${chunkPath}`;
+}
 function registerChunkList(chunkUpdateProvider, chunkList) {
     chunkUpdateProvider.push([
         chunkList.path,
@@ -941,13 +968,14 @@ function commonJsRequireContext(entry1, sourceModule1) {
         },
         unloadChunk (chunkPath1) {
             deleteResolver1(chunkPath1);
+            const chunkUrl1 = getChunkRelativeUrl(chunkPath1);
             if (chunkPath1.endsWith(".css")) {
-                const links1 = document.querySelectorAll(`link[href="/${chunkPath1}"]`);
+                const links1 = document.querySelectorAll(`link[href="${chunkUrl1}"]`);
                 for (const link1 of Array.from(links1)){
                     link1.remove();
                 }
             } else if (chunkPath1.endsWith(".js")) {
-                const scripts1 = document.querySelectorAll(`script[src="/${chunkPath1}"]`);
+                const scripts1 = document.querySelectorAll(`script[src="${chunkUrl1}"]`);
                 for (const script1 of Array.from(scripts1)){
                     script1.remove();
                 }
@@ -962,14 +990,15 @@ function commonJsRequireContext(entry1, sourceModule1) {
                     return;
                 }
                 const encodedChunkPath1 = chunkPath1.split("/").map((p1)=>encodeURIComponent(p1)).join("/");
-                const previousLink1 = document.querySelector(`link[rel=stylesheet][href^="/${encodedChunkPath1}"]`);
+                const chunkUrl1 = `/${getChunkRelativeUrl(encodedChunkPath1)}`;
+                const previousLink1 = document.querySelector(`link[rel=stylesheet][href^="${chunkUrl1}"]`);
                 if (previousLink1 == null) {
                     reject1(new Error(`No link element found for chunk ${chunkPath1}`));
                     return;
                 }
                 const link1 = document.createElement("link");
                 link1.rel = "stylesheet";
-                link1.href = `/${encodedChunkPath1}`;
+                link1.href = chunkUrl1;
                 link1.onerror = ()=>{
                     reject1();
                 };
@@ -1019,10 +1048,11 @@ function commonJsRequireContext(entry1, sourceModule1) {
             }
             return resolver1.promise;
         }
+        const chunkUrl1 = `/${getChunkRelativeUrl(chunkPath1)}`;
         if (chunkPath1.endsWith(".css")) {
             const link1 = document.createElement("link");
             link1.rel = "stylesheet";
-            link1.href = `/${chunkPath1}`;
+            link1.href = chunkUrl1;
             link1.onerror = ()=>{
                 resolver1.reject();
             };
@@ -1032,7 +1062,7 @@ function commonJsRequireContext(entry1, sourceModule1) {
             document.body.appendChild(link1);
         } else if (chunkPath1.endsWith(".js")) {
             const script1 = document.createElement("script");
-            script1.src = `/${chunkPath1}`;
+            script1.src = chunkUrl1;
             script1.onerror = ()=>{
                 resolver1.reject();
             };
@@ -1044,7 +1074,7 @@ function commonJsRequireContext(entry1, sourceModule1) {
     }
 })();
 function _eval({ code, url, map }) {
-    code += `\n\n//# sourceURL=${location.origin}${url}`;
+    code += `\n\n//# sourceURL=${location.origin}/${url}`;
     if (map) code += `\n//# sourceMappingURL=${map}`;
     return eval(code);
 }
