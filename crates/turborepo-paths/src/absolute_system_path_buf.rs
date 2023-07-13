@@ -1,12 +1,13 @@
 use std::{
     borrow::Borrow,
-    fmt, fs,
+    fmt,
     io::{self, Write},
     ops::Deref,
     path::{Path, PathBuf},
 };
 
 use camino::{Utf8Components, Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use path_clean::PathClean;
 use serde::Serialize;
 
@@ -233,7 +234,8 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn try_exists(&self) -> Result<bool, PathError> {
-        Ok(fs::try_exists(&self.0)?)
+        // try_exists is an experimental API and not yet in fs_err
+        Ok(std::fs::try_exists(&self.0)?)
     }
 
     pub fn extension(&self) -> Option<&str> {

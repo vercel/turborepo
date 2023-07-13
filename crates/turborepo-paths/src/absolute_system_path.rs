@@ -5,13 +5,14 @@ use std::os::unix::fs::symlink as symlink_dir;
 #[cfg(windows)]
 use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
-    fmt, fs,
+    fmt,
     fs::{File, Metadata, OpenOptions},
     io,
     path::Path,
 };
 
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use path_clean::PathClean;
 
 use crate::{
