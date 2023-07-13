@@ -5,7 +5,7 @@ use crate::{
     source::SourceVc,
 };
 
-/// A module where source code doesn't need to be parsed but can be usd as is.
+/// A module where source code doesn't need to be parsed but can be used as is.
 /// This module has no references to other modules.
 #[turbo_tasks::value]
 pub struct RawOutput {
