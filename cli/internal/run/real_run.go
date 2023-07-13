@@ -112,7 +112,11 @@ type logBufferWriter struct {
 // Write implements io.Writer.Write for logBufferWriter
 func (lbw *logBufferWriter) Write(bytes []byte) (int, error) {
 	n := len(bytes)
-	lbw.logBuffer.LogLine(bytes, lbw.isStdout)
+	// The io.Writer contract states that we cannot retain the bytes we are passed,
+	// so we need to make a copy of them
+	cpy := make([]byte, n)
+	copy(cpy, bytes)
+	lbw.logBuffer.LogLine(cpy, lbw.isStdout)
 	return n, nil
 }
 
