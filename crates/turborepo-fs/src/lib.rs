@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use std::fs::{self, DirBuilder, Metadata};
 
 use anyhow::Result;

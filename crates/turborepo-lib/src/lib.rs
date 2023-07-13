@@ -2,6 +2,7 @@
 #![feature(box_patterns)]
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
+#![deny(clippy::all)]
 
 mod child;
 mod cli;
