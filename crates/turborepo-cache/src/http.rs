@@ -129,7 +129,7 @@ impl HttpCache {
 
             let body = response.bytes().await.map_err(|e| {
                 CacheError::ApiClientError(
-                    turborepo_api_client::Error::ReqwestError(e),
+                    Box::new(turborepo_api_client::Error::ReqwestError(e)),
                     Backtrace::capture(),
                 )
             })?;
@@ -143,7 +143,7 @@ impl HttpCache {
         } else {
             response.bytes().await.map_err(|e| {
                 CacheError::ApiClientError(
-                    turborepo_api_client::Error::ReqwestError(e),
+                    Box::new(turborepo_api_client::Error::ReqwestError(e)),
                     Backtrace::capture(),
                 )
             })?

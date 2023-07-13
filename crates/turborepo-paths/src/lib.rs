@@ -1,5 +1,6 @@
 #![feature(assert_matches)]
 #![feature(fs_try_exists)]
+#![deny(clippy::all)]
 
 /// Turborepo's path handling library
 /// Defines distinct path types for the different usecases of paths in turborepo
