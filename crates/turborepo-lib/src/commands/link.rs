@@ -37,7 +37,7 @@ pub(crate) enum SelectedTeam<'a> {
 pub(crate) enum SelectedSpace<'a> {
     Space(&'a Space),
 }
-
+use itertools::Itertools;
 pub(crate) const REMOTE_CACHING_INFO: &str = "  Remote Caching shares your cached Turborepo task \
                                               outputs and logs across
   all your team’s Vercel projects. It also can share outputs
@@ -404,15 +404,35 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
         writeln!(gitignore, ".turbo")?;
     } else {
         let gitignore = File::open(&gitignore_path)?;
-        let mut lines = io::BufReader::new(gitignore).lines();
-        let has_turbo = lines.any(|line| line.map_or(false, |line| line.trim() == ".turbo"));
-        if !has_turbo {
-            let mut gitignore = OpenOptions::new()
-                .read(true)
-                .append(true)
-                .open(&gitignore_path)?;
-            writeln!(gitignore, ".turbo")?;
-        }
+        let lines = io::BufReader::new(&gitignore).lines();
+        let existing_or_last = lines.find_or_last(|line| {
+            matches!(line, Ok(line_value) if line_value.trim_end_matches(|c| {char::is_whitespace(c) || c == '/' }) == ".turbo")
+        });
+
+        match existing_or_last {
+            // We got a string value.
+            Some(Ok(line_value)) => {
+                let is_turbo =
+                    line_value.trim_end_matches(|c| char::is_whitespace(c) || c == '/') == ".turbo";
+
+                if !is_turbo {
+                    let is_empty = line_value == "";
+                    let mut gitignore = OpenOptions::new()
+                        .read(true)
+                        .append(true)
+                        .open(&gitignore_path)?;
+
+                    // Make sure to insert a newline.
+                    if !is_empty {
+                        writeln!(gitignore, "")?;
+                    }
+
+                    // Add our value.
+                    writeln!(gitignore, ".turbo")?;
+                }
+            }
+            _ => {}
+        };
     }
 
     Ok(())
