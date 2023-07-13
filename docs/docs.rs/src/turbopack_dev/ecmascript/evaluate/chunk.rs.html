@@ -247,6 +247,10 @@
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
 <a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
@@ -255,12 +259,13 @@
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::File;
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkDataVc, ChunkVc, ChunkingContext, ChunksDataVc, EvaluatableAssetsVc, ModuleIdReadRef,
     },
     code_builder::{CodeBuilder, CodeVc},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc, OutputAssetsVc},
     reference::AssetReferencesVc,
     source_map::{
         GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapAssetReferenceVc,
@@ -281,7 +286,7 @@
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>EcmascriptDevEvaluateChunk {
     chunking_context: DevChunkingContextVc,
     entry_chunk: ChunkVc,
-    other_chunks: AssetsVc,
+    other_chunks: OutputAssetsVc,
     evaluatable_assets: EvaluatableAssetsVc,
 }
 
@@ -292,7 +297,7 @@
     </span><span class="kw">pub fn </span>new(
         chunking_context: DevChunkingContextVc,
         entry_chunk: ChunkVc,
-        other_chunks: AssetsVc,
+        other_chunks: OutputAssetsVc,
         evaluatable_assets: EvaluatableAssetsVc,
     ) -&gt; <span class="self">Self </span>{
         EcmascriptDevEvaluateChunk {
@@ -423,6 +428,9 @@
 </span><span class="kw">fn </span>modifier() -&gt; StringVc {
     StringVc::cell(<span class="string">&quot;ecmascript dev evaluate chunk&quot;</span>.to_string())
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>EcmascriptDevEvaluateChunk {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>EcmascriptDevEvaluateChunk {

@@ -560,6 +560,10 @@
 <a href="#560" id="560">560</a>
 <a href="#561" id="561">561</a>
 <a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
 </pre></div><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>single_item_chunk;
 <span class="kw">pub mod </span>source_map;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>writer;
@@ -585,6 +589,7 @@
         Introspectable, IntrospectableChildrenVc, IntrospectableVc,
     },
     module::{Module, ModuleVc},
+    output::{OutputAsset, OutputAssetVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::PrimaryResolveResult,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
@@ -915,6 +920,9 @@
         .cell())
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>CssChunk {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>CssChunk {

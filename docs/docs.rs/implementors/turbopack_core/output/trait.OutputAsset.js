@@ -1,0 +1,7 @@
+(function() {var implementors = {
+"turbopack":[["impl OutputAsset for <a class=\"struct\" href=\"turbopack/rebase/struct.RebasedAssetVc.html\" title=\"struct turbopack::rebase::RebasedAssetVc\">RebasedAssetVc</a>"]],
+"turbopack_core":[],
+"turbopack_css":[["impl OutputAsset for <a class=\"struct\" href=\"turbopack_css/chunk/source_map/struct.CssChunkSourceMapAssetVc.html\" title=\"struct turbopack_css::chunk::source_map::CssChunkSourceMapAssetVc\">CssChunkSourceMapAssetVc</a>"],["impl OutputAsset for <a class=\"struct\" href=\"turbopack_css/chunk/struct.CssChunkVc.html\" title=\"struct turbopack_css::chunk::CssChunkVc\">CssChunkVc</a>"]],
+"turbopack_dev_server":[["impl OutputAsset for <a class=\"struct\" href=\"turbopack_dev_server/html/struct.DevHtmlAssetVc.html\" title=\"struct turbopack_dev_server::html::DevHtmlAssetVc\">DevHtmlAssetVc</a>"]],
+"turbopack_static":[["impl OutputAsset for <a class=\"struct\" href=\"turbopack_static/fixed/struct.FixedStaticAssetVc.html\" title=\"struct turbopack_static::fixed::FixedStaticAssetVc\">FixedStaticAssetVc</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

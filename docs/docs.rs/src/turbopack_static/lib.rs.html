@@ -249,6 +249,10 @@
 <a href="#249" id="249">249</a>
 <a href="#250" id="250">250</a>
 <a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Static asset support for turbopack.
 //!
 //! Static assets are copied directly to the output folder.
@@ -275,6 +279,7 @@
     context::AssetContextVc,
     ident::AssetIdentVc,
     module::{Module, ModuleVc},
+    output::{OutputAsset, OutputAssetVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     source::SourceVc,
 };
@@ -389,6 +394,9 @@
     context: ChunkingContextVc,
     source: SourceVc,
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>StaticAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>StaticAsset {

@@ -38,11 +38,16 @@
 <a href="#38" id="38">38</a>
 <a href="#39" id="39">39</a>
 <a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     source::SourceVc,
 };
 
@@ -65,6 +70,9 @@
         .cell()
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>FixedStaticAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>FixedStaticAsset {

@@ -414,7 +414,13 @@
 <a href="#414" id="414">414</a>
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
@@ -423,13 +429,14 @@
 };
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetVc, AssetsVc},
+    asset::{Asset, AssetVc},
     chunk::{
         Chunk, ChunkVc, ChunkableModule, ChunkingContext, ChunkingContextVc, ChunksVc,
         EvaluatableAssetsVc,
     },
     environment::EnvironmentVc,
     ident::AssetIdentVc,
+    output::{OutputAssetVc, OutputAssetsVc},
 };
 <span class="kw">use </span>turbopack_css::chunk::{CssChunkVc, CssChunksVc};
 <span class="kw">use </span>turbopack_ecmascript::chunk::{
@@ -573,9 +580,9 @@
     </span><span class="kw">fn </span>generate_evaluate_chunk(
         self_vc: DevChunkingContextVc,
         entry_chunk: ChunkVc,
-        other_chunks: AssetsVc,
+        other_chunks: OutputAssetsVc,
         evaluatable_assets: EvaluatableAssetsVc,
-    ) -&gt; AssetVc {
+    ) -&gt; OutputAssetVc {
         EcmascriptDevEvaluateChunkVc::new(self_vc, entry_chunk, other_chunks, evaluatable_assets)
             .into()
     }
@@ -584,19 +591,21 @@
     </span><span class="kw">fn </span>generate_chunk_list_register_chunk(
         self_vc: DevChunkingContextVc,
         entry_chunk: ChunkVc,
-        other_chunks: AssetsVc,
+        other_chunks: OutputAssetsVc,
         source: Value&lt;EcmascriptDevChunkListSource&gt;,
-    ) -&gt; AssetVc {
+    ) -&gt; OutputAssetVc {
         EcmascriptDevChunkListVc::new(self_vc, entry_chunk, other_chunks, source).into()
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>generate_chunk(<span class="self">self</span>, chunk: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetVc&gt; {
+    </span><span class="kw">async fn </span>generate_chunk(<span class="self">self</span>, chunk: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;OutputAssetVc&gt; {
         <span class="prelude-val">Ok</span>(
             <span class="kw">if let </span><span class="prelude-val">Some</span>(ecmascript_chunk) = EcmascriptChunkVc::resolve_from(chunk).<span class="kw">await</span><span class="question-mark">? </span>{
                 EcmascriptDevChunkVc::new(<span class="self">self</span>, ecmascript_chunk).into()
+            } <span class="kw">else if let </span><span class="prelude-val">Some</span>(output_asset) = OutputAssetVc::resolve_from(chunk).<span class="kw">await</span><span class="question-mark">? </span>{
+                output_asset
             } <span class="kw">else </span>{
-                chunk.into()
+                <span class="macro">bail!</span>(<span class="string">&quot;Unable to generate output asset for chunk&quot;</span>);
             },
         )
     }
@@ -700,12 +709,15 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunk_group(self_vc: DevChunkingContextVc, entry_chunk: ChunkVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
+    </span><span class="kw">async fn </span>chunk_group(
+        self_vc: DevChunkingContextVc,
+        entry_chunk: ChunkVc,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputAssetsVc&gt; {
         <span class="kw">let </span>parallel_chunks = get_parallel_chunks([entry_chunk]).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>optimized_chunks = get_optimized_chunks(parallel_chunks).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>assets: Vec&lt;AssetVc&gt; = optimized_chunks
+        <span class="kw">let </span><span class="kw-2">mut </span>assets: Vec&lt;OutputAssetVc&gt; = optimized_chunks
             .<span class="kw">await</span><span class="question-mark">?
             </span>.iter()
             .map(|chunk| self_vc.generate_chunk(<span class="kw-2">*</span>chunk))
@@ -713,11 +725,11 @@
 
         assets.push(self_vc.generate_chunk_list_register_chunk(
             entry_chunk,
-            AssetsVc::cell(assets.clone()),
+            OutputAssetsVc::cell(assets.clone()),
             Value::new(EcmascriptDevChunkListSource::Dynamic),
         ));
 
-        <span class="prelude-val">Ok</span>(AssetsVc::cell(assets))
+        <span class="prelude-val">Ok</span>(OutputAssetsVc::cell(assets))
     }
 
     <span class="attr">#[turbo_tasks::function]
@@ -725,7 +737,7 @@
         self_vc: DevChunkingContextVc,
         entry_chunk: ChunkVc,
         evaluatable_assets: EvaluatableAssetsVc,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutputAssetsVc&gt; {
         <span class="kw">let </span>evaluatable_assets_ref = evaluatable_assets.<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>entry_assets: IndexSet&lt;<span class="kw">_</span>&gt; = evaluatable_assets_ref
@@ -749,13 +761,13 @@
 
         <span class="kw">let </span>optimized_chunks = get_optimized_chunks(parallel_chunks).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>assets: Vec&lt;AssetVc&gt; = optimized_chunks
+        <span class="kw">let </span><span class="kw-2">mut </span>assets: Vec&lt;OutputAssetVc&gt; = optimized_chunks
             .<span class="kw">await</span><span class="question-mark">?
             </span>.iter()
             .map(|chunk| self_vc.generate_chunk(<span class="kw-2">*</span>chunk))
             .collect();
 
-        <span class="kw">let </span>other_assets = AssetsVc::cell(assets.clone());
+        <span class="kw">let </span>other_assets = OutputAssetsVc::cell(assets.clone());
 
         assets.push(self_vc.generate_chunk_list_register_chunk(
             entry_chunk,
@@ -765,7 +777,7 @@
 
         assets.push(self_vc.generate_evaluate_chunk(entry_chunk, other_assets, evaluatable_assets));
 
-        <span class="prelude-val">Ok</span>(AssetsVc::cell(assets))
+        <span class="prelude-val">Ok</span>(OutputAssetsVc::cell(assets))
     }
 }
 

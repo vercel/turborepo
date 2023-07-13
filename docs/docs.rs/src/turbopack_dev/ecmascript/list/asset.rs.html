@@ -137,13 +137,21 @@
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkVc, ChunkingContext},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc, OutputAssetsVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{VersionedContent, VersionedContentVc},
 };
@@ -166,7 +174,7 @@
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>EcmascriptDevChunkList {
     <span class="kw">pub</span>(<span class="kw">super</span>) chunking_context: DevChunkingContextVc,
     <span class="kw">pub</span>(<span class="kw">super</span>) entry_chunk: ChunkVc,
-    <span class="kw">pub</span>(<span class="kw">super</span>) chunks: AssetsVc,
+    <span class="kw">pub</span>(<span class="kw">super</span>) chunks: OutputAssetsVc,
     <span class="kw">pub</span>(<span class="kw">super</span>) source: EcmascriptDevChunkListSource,
 }
 
@@ -177,7 +185,7 @@
     </span><span class="kw">pub fn </span>new(
         chunking_context: DevChunkingContextVc,
         entry_chunk: ChunkVc,
-        chunks: AssetsVc,
+        chunks: OutputAssetsVc,
         source: Value&lt;EcmascriptDevChunkListSource&gt;,
     ) -&gt; <span class="self">Self </span>{
         EcmascriptDevChunkList {
@@ -214,6 +222,9 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>EcmascriptDevChunkList {}
+
+<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>EcmascriptDevChunkList {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetIdentVc&gt; {
@@ -237,9 +248,12 @@
             <span class="self">self</span>.chunks
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.iter()
-                .map(|chunk| {
-                    SingleAssetReferenceVc::new(<span class="kw-2">*</span>chunk, chunk_list_chunk_reference_description())
-                        .into()
+                .map(|<span class="kw-2">&amp;</span>chunk| {
+                    SingleAssetReferenceVc::new(
+                        chunk.into(),
+                        chunk_list_chunk_reference_description(),
+                    )
+                    .into()
                 })
                 .collect(),
         ))

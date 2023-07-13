@@ -49,12 +49,17 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use crate</span>::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     reference::AssetReferencesVc,
     version::VersionedContentVc,
 };
@@ -77,6 +82,9 @@
         ProxiedAsset { asset, path }.cell()
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>ProxiedAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>ProxiedAsset {

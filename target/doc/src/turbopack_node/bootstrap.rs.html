@@ -74,15 +74,17 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::primitives::StringVc;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{ChunkVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc},
     ident::AssetIdentVc,
+    output::OutputAssetsVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 <span class="kw">use </span>turbopack_ecmascript::utils::StringifyJs;
@@ -101,7 +103,7 @@
 }
 
 <span class="kw">impl </span>NodeJsBootstrapAsset {
-    <span class="kw">fn </span>chunks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetsVc {
+    <span class="kw">fn </span>chunks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OutputAssetsVc {
         <span class="self">self</span>.chunking_context
             .evaluated_chunk_group(<span class="self">self</span>.entry, <span class="self">self</span>.evaluatable_assets)
     }
@@ -138,10 +140,10 @@
     </span><span class="kw">async fn </span>references(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="kw">let </span>chunks = <span class="self">self</span>.chunks().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
-        <span class="kw">for </span>chunk <span class="kw">in </span>chunks.iter() {
+        <span class="kw">for </span><span class="kw-2">&amp;</span>chunk <span class="kw">in </span>chunks.iter() {
             references.push(
                 SingleAssetReferenceVc::new(
-                    <span class="kw-2">*</span>chunk,
+                    chunk.into(),
                     node_js_bootstrap_chunk_reference_description(),
                 )
                 .into(),

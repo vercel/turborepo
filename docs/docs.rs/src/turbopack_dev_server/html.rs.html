@@ -255,17 +255,23 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{anyhow, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>mime_guess::mime::TEXT_HTML_UTF_8;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt};
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystemPathVc};
 <span class="kw">use </span>turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         ChunkableModule, ChunkableModuleVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
     },
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc, OutputAssetsVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
     version::{Version, VersionVc, VersionedContent, VersionedContentVc},
 };
@@ -293,6 +299,9 @@
 }
 
 <span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>DevHtmlAsset {}
+
+<span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>DevHtmlAsset {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">fn </span>ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AssetIdentVc {
@@ -307,9 +316,10 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>references(self_vc: DevHtmlAssetVc) -&gt; <span class="prelude-ty">Result</span>&lt;AssetReferencesVc&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>references = Vec::new();
-        <span class="kw">for </span>chunk <span class="kw">in </span><span class="kw-2">&amp;*</span>self_vc.chunks().<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="kw">for </span><span class="kw-2">&amp;</span>chunk <span class="kw">in </span><span class="kw-2">&amp;*</span>self_vc.chunks().<span class="kw">await</span><span class="question-mark">? </span>{
             references.push(
-                SingleAssetReferenceVc::new(<span class="kw-2">*</span>chunk, dev_html_chunk_reference_description()).into(),
+                SingleAssetReferenceVc::new(chunk.into(), dev_html_chunk_reference_description())
+                    .into(),
             );
         }
         <span class="prelude-val">Ok</span>(AssetReferencesVc::cell(references))
@@ -393,7 +403,7 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
+    </span><span class="kw">async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputAssetsVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>all_assets = this
@@ -418,7 +428,7 @@
             .copied()
             .collect();
 
-        <span class="prelude-val">Ok</span>(AssetsVc::cell(all_assets))
+        <span class="prelude-val">Ok</span>(OutputAssetsVc::cell(all_assets))
     }
 }
 

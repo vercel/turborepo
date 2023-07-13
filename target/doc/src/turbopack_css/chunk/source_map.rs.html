@@ -79,6 +79,10 @@
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
 <span class="kw">use </span>turbo_tasks_fs::File;
@@ -86,6 +90,7 @@
     asset::{Asset, AssetContentVc, AssetVc},
     chunk::Chunk,
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
     source_map::{GenerateSourceMap, SourceMapVc},
@@ -106,6 +111,9 @@
         CssChunkSourceMapAsset { chunk }.cell()
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>CssChunkSourceMapAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>CssChunkSourceMapAsset {

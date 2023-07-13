@@ -634,6 +634,7 @@
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
 <a href="#636" id="636">636</a>
+<a href="#637" id="637">637</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>availability_info;
 <span class="kw">pub mod </span>available_assets;
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>chunking_context;
@@ -675,6 +676,7 @@
     asset::{Asset, AssetVc, AssetsVc},
     ident::AssetIdentVc,
     module::{Module, ModuleVc},
+    output::OutputAssetsVc,
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::{PrimaryResolveResult, ResolveResult, ResolveResultVc},
 };
@@ -844,7 +846,7 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
+    </span><span class="kw">async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputAssetsVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(this.chunking_context.chunk_group(this.entry))
     }
@@ -854,7 +856,7 @@
 </span><span class="kw">impl </span>AssetReference <span class="kw">for </span>ChunkGroupReference {
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">async fn </span>resolve_reference(self_vc: ChunkGroupReferenceVc) -&gt; <span class="prelude-ty">Result</span>&lt;ResolveResultVc&gt; {
-        <span class="kw">let </span>set = self_vc.chunks().<span class="kw">await</span><span class="question-mark">?</span>.clone_value();
+        <span class="kw">let </span>set = self_vc.chunks().<span class="kw">await</span><span class="question-mark">?</span>.iter().map(|<span class="kw-2">&amp;</span>c| c.into()).collect();
         <span class="prelude-val">Ok</span>(ResolveResult::assets(set).into())
     }
 }

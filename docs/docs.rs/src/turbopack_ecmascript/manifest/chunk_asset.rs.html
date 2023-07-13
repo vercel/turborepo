@@ -149,16 +149,21 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, Value};
 <span class="kw">use </span>turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
+    asset::{Asset, AssetContentVc, AssetVc},
     chunk::{
         availability_info::AvailabilityInfo, ChunkVc, ChunkableModule, ChunkableModuleVc,
         ChunkingContext, ChunkingContextVc,
     },
     ident::AssetIdentVc,
     module::{Module, ModuleVc},
+    output::OutputAssetsVc,
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 
@@ -215,13 +220,13 @@
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
+    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">async fn </span>chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputAssetsVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(this.chunking_context.chunk_group(<span class="self">self</span>.entry_chunk()))
     }
 
     <span class="attr">#[turbo_tasks::function]
-    </span><span class="kw">pub async fn </span>manifest_chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AssetsVc&gt; {
+    </span><span class="kw">pub async fn </span>manifest_chunks(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;OutputAssetsVc&gt; {
         <span class="kw">let </span>this = <span class="self">self</span>.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(this.chunking_context.chunk_group(<span class="self">self</span>.as_chunk(
             this.chunking_context.into(),
@@ -257,8 +262,11 @@
                 </span>.iter()
                 .copied()
                 .map(|chunk| {
-                    SingleAssetReferenceVc::new(chunk, manifest_chunk_reference_description())
-                        .into()
+                    SingleAssetReferenceVc::new(
+                        chunk.into(),
+                        manifest_chunk_reference_description(),
+                    )
+                    .into()
                 })
                 .collect(),
         ))

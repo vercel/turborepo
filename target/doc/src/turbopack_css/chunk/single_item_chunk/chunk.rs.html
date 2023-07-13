@@ -161,6 +161,10 @@
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
 
 <span class="kw">use </span>anyhow::Result;
@@ -172,6 +176,7 @@
     code_builder::{CodeBuilder, CodeVc},
     ident::AssetIdentVc,
     introspect::{Introspectable, IntrospectableVc},
+    output::{OutputAsset, OutputAssetVc},
     reference::AssetReferencesVc,
     source_map::{GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc},
 };
@@ -246,6 +251,9 @@
 </span><span class="kw">fn </span>single_item_modifier() -&gt; StringVc {
     StringVc::cell(<span class="string">&quot;single item css chunk&quot;</span>.to_string())
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>SingleItemCssChunk {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>SingleItemCssChunk {

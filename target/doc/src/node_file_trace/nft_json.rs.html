@@ -57,12 +57,17 @@
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>turbo_tasks_fs::{File, FileSystem};
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     reference::all_assets,
 };
 
@@ -78,6 +83,9 @@
         <span class="self">Self</span>::cell(NftJsonAsset { entry })
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>NftJsonAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>NftJsonAsset {

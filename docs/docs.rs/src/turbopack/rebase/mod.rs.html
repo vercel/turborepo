@@ -109,6 +109,10 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>anyhow::Result;
@@ -117,6 +121,7 @@
 <span class="kw">use </span>turbopack_core::{
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
+    output::{OutputAsset, OutputAssetVc},
     reference::{AssetReference, AssetReferenceVc, AssetReferencesVc},
     resolve::ResolveResultVc,
 };
@@ -140,6 +145,9 @@
         })
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>RebasedAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>RebasedAsset {

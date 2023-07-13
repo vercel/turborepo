@@ -55,8 +55,6 @@
 <a href="#55" id="55">55</a>
 <a href="#56" id="56">56</a>
 <a href="#57" id="57">57</a>
-<a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>anyhow::Result;
@@ -65,9 +63,7 @@
 
 <span class="kw">use super</span>::{ChunkVc, EvaluatableAssetsVc};
 <span class="kw">use crate</span>::{
-    asset::{AssetVc, AssetsVc},
-    environment::EnvironmentVc,
-    ident::AssetIdentVc,
+    asset::AssetVc, environment::EnvironmentVc, ident::AssetIdentVc, output::OutputAssetsVc,
 };
 
 <span class="doccomment">/// A context for the chunking that influences the way chunks are created
@@ -108,12 +104,12 @@
 
     <span class="kw">fn </span>with_layer(<span class="kw-2">&amp;</span><span class="self">self</span>, layer: <span class="kw-2">&amp;</span>str) -&gt; ChunkingContextVc;
 
-    <span class="kw">fn </span>chunk_group(<span class="kw-2">&amp;</span><span class="self">self</span>, entry: ChunkVc) -&gt; AssetsVc;
+    <span class="kw">fn </span>chunk_group(<span class="kw-2">&amp;</span><span class="self">self</span>, entry: ChunkVc) -&gt; OutputAssetsVc;
 
     <span class="kw">fn </span>evaluated_chunk_group(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         entry: ChunkVc,
         evaluatable_assets: EvaluatableAssetsVc,
-    ) -&gt; AssetsVc;
+    ) -&gt; OutputAssetsVc;
 }
 </code></pre></div></section></main></body></html>

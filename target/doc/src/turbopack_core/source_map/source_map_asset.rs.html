@@ -124,6 +124,10 @@
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
 <a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::{bail, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>indexmap::IndexSet;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
@@ -133,6 +137,7 @@
     asset::{Asset, AssetContentVc, AssetVc},
     ident::AssetIdentVc,
     introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    output::{OutputAsset, OutputAssetVc},
     reference::{AssetReference, AssetReferenceVc},
     resolve::{ResolveResult, ResolveResultVc},
     source_map::{GenerateSourceMap, GenerateSourceMapVc, SourceMapVc},
@@ -151,6 +156,9 @@
         SourceMapAsset { asset }.cell()
     }
 }
+
+<span class="attr">#[turbo_tasks::value_impl]
+</span><span class="kw">impl </span>OutputAsset <span class="kw">for </span>SourceMapAsset {}
 
 <span class="attr">#[turbo_tasks::value_impl]
 </span><span class="kw">impl </span>Asset <span class="kw">for </span>SourceMapAsset {

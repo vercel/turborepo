@@ -149,13 +149,15 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>turbo_tasks::{primitives::StringVc, TryJoinIterExt};
 <span class="kw">use </span>turbo_tasks_fs::FileSystemPathVc;
 
 <span class="kw">use crate</span>::{
-    asset::{Asset, AssetVc, AssetsVc},
+    asset::Asset,
     chunk::{ModuleIdReadRef, OutputChunk, OutputChunkRuntimeInfo, OutputChunkVc},
+    output::{OutputAssetVc, OutputAssetsVc},
     reference::{AssetReferencesVc, SingleAssetReferenceVc},
 };
 
@@ -188,7 +190,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>from_asset(
         output_root: FileSystemPathVc,
-        chunk: AssetVc,
+        chunk: OutputAssetVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ChunkDataOptionVc&gt; {
         <span class="kw">let </span>output_root = output_root.<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>path = chunk.ident().path().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -278,7 +280,7 @@
     <span class="attr">#[turbo_tasks::function]
     </span><span class="kw">pub async fn </span>from_assets(
         output_root: FileSystemPathVc,
-        chunks: AssetsVc,
+        chunks: OutputAssetsVc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ChunksDataVc&gt; {
         <span class="prelude-val">Ok</span>(ChunksDataVc::cell(
             chunks
