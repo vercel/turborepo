@@ -3,8 +3,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::{
     fs,
     fs::{File, OpenOptions},
-    io,
-    io::{BufRead, Write},
+    io::{self, BufRead, Write},
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -16,6 +15,8 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
+use regex::Regex;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
 
 #[cfg(not(test))]
@@ -37,7 +38,6 @@ pub(crate) enum SelectedTeam<'a> {
 pub(crate) enum SelectedSpace<'a> {
     Space(&'a Space),
 }
-use itertools::Itertools;
 pub(crate) const REMOTE_CACHING_INFO: &str = "  Remote Caching shares your cached Turborepo task \
                                               outputs and logs across
   all your team’s Vercel projects. It also can share outputs
@@ -177,7 +177,7 @@ pub async fn link(
             };
 
             if modify_gitignore {
-                add_turbo_to_gitignore(base)?;
+                add_turbo_to_gitignore(&base.repo_root)?;
             }
 
             println!(
@@ -394,8 +394,9 @@ fn enable_caching(url: &str) -> Result<()> {
     Err(anyhow!("link after enabling caching"))
 }
 
-fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
-    let gitignore_path = base.repo_root.join_component(".gitignore");
+fn add_turbo_to_gitignore(repo_root: &AbsoluteSystemPathBuf) -> Result<()> {
+    let turbo_test_regex = Regex::new("^.turbo/? *$").unwrap();
+    let gitignore_path = repo_root.join_component(".gitignore");
 
     if !gitignore_path.exists() {
         let mut gitignore = File::create(gitignore_path)?;
@@ -404,35 +405,19 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
         writeln!(gitignore, ".turbo")?;
     } else {
         let gitignore = File::open(&gitignore_path)?;
-        let lines = io::BufReader::new(&gitignore).lines();
-        let existing_or_last = lines.find_or_last(|line| {
-            matches!(line, Ok(line_value) if line_value.trim_end_matches(|c| {char::is_whitespace(c) || c == '/' }) == ".turbo")
-        });
+        let mut lines = io::BufReader::new(&gitignore).lines();
+        let has_turbo = lines
+            .any(|line| matches!(line, Ok(line_value) if turbo_test_regex.is_match(&line_value)));
 
-        match existing_or_last {
-            // We got a string value.
-            Some(Ok(line_value)) => {
-                let is_turbo =
-                    line_value.trim_end_matches(|c| char::is_whitespace(c) || c == '/') == ".turbo";
+        if !has_turbo {
+            let mut gitignore = OpenOptions::new()
+                .read(true)
+                .append(true)
+                .open(&gitignore_path)?;
 
-                if !is_turbo {
-                    let is_empty = line_value == "";
-                    let mut gitignore = OpenOptions::new()
-                        .read(true)
-                        .append(true)
-                        .open(&gitignore_path)?;
-
-                    // Make sure to insert a newline.
-                    if !is_empty {
-                        writeln!(gitignore, "")?;
-                    }
-
-                    // Add our value.
-                    writeln!(gitignore, ".turbo")?;
-                }
-            }
-            _ => {}
-        };
+            // Defensively ensure that it has a preceding newline.
+            writeln!(gitignore, "\n.turbo")?;
+        }
     }
 
     Ok(())
@@ -479,7 +464,7 @@ mod test {
 
     use crate::{
         cli::LinkTarget,
-        commands::{link, CommandBase},
+        commands::{link, link::add_turbo_to_gitignore, CommandBase},
         config::{ClientConfigLoader, RawTurboJSON, RepoConfigLoader, UserConfigLoader},
         ui::UI,
         Args,
@@ -598,5 +583,62 @@ mod test {
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
             vercel_api_mock::EXPECTED_SPACE_ID
         );
+    }
+
+    macro_rules! gitignore_append_tests {
+        ($($name:ident: $value:expr,)*) => {
+        $(
+            #[test]
+            fn $name() {
+                let repo_root = AbsoluteSystemPathBuf::new(
+                    TempDir::new().unwrap().into_path().to_string_lossy(),
+                ).unwrap();
+                let gitignore_path = repo_root.join_component(".gitignore");
+
+                let (input, expected) = $value;
+                let _ = fs::write(&gitignore_path, input).unwrap();
+
+                let _ = add_turbo_to_gitignore(&repo_root);
+
+                let output = fs::read_to_string(&gitignore_path).unwrap();
+                assert_eq!(expected, output);
+            }
+        )*
+        }
+    }
+
+    gitignore_append_tests! {
+        has_turbo_dir: (
+            "original\n.turbo/\nother\n",
+            "original\n.turbo/\nother\n",
+        ),
+        has_turbo_dir_last_line: (
+            "original\n.turbo/\n",
+            "original\n.turbo/\n",
+        ),
+        has_turbo_dir_last_line_no_newline: (
+            "original\n.turbo/",
+            "original\n.turbo/",
+        ),
+        has_turbo_file: (
+            "original\n.turbo\nother\n",
+            "original\n.turbo\nother\n",
+        ),
+        has_turbo_file_last_line: (
+            "original\n.turbo\n",
+            "original\n.turbo\n",
+        ),
+        has_turbo_file_last_line_no_newline: (
+            "original\n.turbo",
+            "original\n.turbo",
+        ),
+        false_turbo: (
+            ".turbo\\ thing",
+            ".turbo\\ thing\n.turbo\n",
+        ),
+        false_turbo_newline: (
+            ".turbo\\ thing\n",
+            ".turbo\\ thing\n\n.turbo\n",
+        ),
     }
 }
