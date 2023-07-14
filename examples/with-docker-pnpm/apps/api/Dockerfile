@@ -1,4 +1,4 @@
-FROM node:20 as base
+FROM node:18 as base
     # Update apt-get and install the necessary libraries
     # This is mainly so that the `canvas` package can be installed
     RUN apt-get update && \
@@ -8,8 +8,6 @@ FROM node:20 as base
 FROM base AS builder
     WORKDIR /app
 
-    ENV APP_NAME=my_secret_project
-
     # This might be necessary when switching to alpine
     # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
     # RUN apk add --no-cache libc6-compat
@@ -18,12 +16,11 @@ FROM base AS builder
 
     COPY . .
 
-    RUN turbo prune --scope=@my_secret_org/${APP_NAME} --docker
+    RUN turbo prune --scope=api --docker
 
 
 FROM base as installer
     WORKDIR /app
-    ENV APP_NAME=my_secret_project
 
     RUN npm install -g pnpm
     RUN npm install -g turbo
@@ -45,12 +42,10 @@ FROM base as installer
     # ARG TURBO_TOKEN
     # ENV TURBO_TOKEN=$TURBO_TOKEN
 
-    RUN turbo run build --filter=@my_secret_org/${APP_NAME}...
+    RUN turbo run build --filter=api...
 
 FROM base AS runner
     WORKDIR /app
-    ENV APP_NAME=my_secret_project
-
 
     RUN npm install -g pnpm
 
@@ -62,4 +57,4 @@ FROM base AS runner
     COPY --from=installer /app .
 
     # TODO: Maybe use the npm script?
-    CMD pnpm --filter "@my_secret_org/${APP_NAME}" run start
+    CMD pnpm --filter api run start
