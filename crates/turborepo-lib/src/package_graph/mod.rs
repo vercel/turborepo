@@ -106,7 +106,7 @@ impl PackageGraph {
     ) -> HashSet<&WorkspaceNode> {
         let indexes = nodes
             .into_iter()
-            .find_map(|node| self.node_lookup.get(node))
+            .filter_map(|node| self.node_lookup.get(node))
             .copied();
         let mut visited = HashSet::new();
         petgraph::visit::depth_first_search(&self.workspace_graph, indexes, |event| {
@@ -121,10 +121,16 @@ impl PackageGraph {
         visited
     }
 
-    #[allow(dead_code)]
-    fn external_dependencies(&self, workspace: &WorkspaceName) -> Option<&HashSet<Package>> {
-        let entry = self.workspaces.get(workspace)?;
-        entry.unresolved_external_dependencies.as_ref()
+    pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a WorkspaceName>>(
+        &self,
+        workspaces: I,
+    ) -> HashSet<&turborepo_lockfiles::Package> {
+        workspaces
+            .into_iter()
+            .filter_map(|workspace| self.workspaces.get(workspace))
+            .filter_map(|entry| entry.transitive_dependencies.as_ref())
+            .flatten()
+            .collect()
     }
 }
 
@@ -208,7 +214,16 @@ mod test {
         .unwrap();
 
         let closure = pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace("a".into())));
-        assert!(closure.contains(&WorkspaceNode::Workspace("b".into())));
+        assert_eq!(
+            closure,
+            [
+                WorkspaceNode::Root,
+                WorkspaceNode::Workspace("a".into()),
+                WorkspaceNode::Workspace("b".into())
+            ]
+            .iter()
+            .collect::<HashSet<_>>()
+        );
         let b_external = pkg_graph
             .workspaces
             .get(&WorkspaceName::from("b"))
@@ -287,7 +302,7 @@ mod test {
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
-                root.join_component("package_a"),
+                root.join_components(&["package_a", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "foo",
                     "dependencies": {
@@ -297,7 +312,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_b"),
+                root.join_components(&["package_b", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "bar",
                     "dependencies": {
@@ -312,33 +327,31 @@ mod test {
         .build()
         .unwrap();
 
+        let foo = WorkspaceName::from("foo");
+        let bar = WorkspaceName::from("bar");
+
         let foo_deps = pkg_graph
             .workspaces
-            .get(&WorkspaceName::from("foo"))
+            .get(&foo)
             .unwrap()
             .transitive_dependencies
             .as_ref()
             .unwrap();
         let bar_deps = pkg_graph
             .workspaces
-            .get(&WorkspaceName::from("bar"))
+            .get(&bar)
             .unwrap()
             .transitive_dependencies
             .as_ref()
             .unwrap();
+        let a = turborepo_lockfiles::Package::new("key:a", "1");
+        let b = turborepo_lockfiles::Package::new("key:b", "1");
+        let c = turborepo_lockfiles::Package::new("key:c", "1");
+        assert_eq!(foo_deps, &HashSet::from_iter(vec![a.clone(), c.clone(),]));
+        assert_eq!(bar_deps, &HashSet::from_iter(vec![b.clone(), c.clone(),]));
         assert_eq!(
-            foo_deps,
-            &HashSet::from_iter(vec![
-                turborepo_lockfiles::Package::new("key:a", "1"),
-                turborepo_lockfiles::Package::new("key:c", "1")
-            ])
-        );
-        assert_eq!(
-            bar_deps,
-            &HashSet::from_iter(vec![
-                turborepo_lockfiles::Package::new("key:b", "1"),
-                turborepo_lockfiles::Package::new("key:c", "1")
-            ])
+            pkg_graph.transitive_external_dependencies([&foo, &bar].iter().copied()),
+            HashSet::from_iter(vec![&a, &b, &c,])
         );
     }
 }

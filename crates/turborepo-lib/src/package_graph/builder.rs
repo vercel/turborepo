@@ -6,7 +6,8 @@ use std::{
 use petgraph::graph::{Graph, NodeIndex};
 use tracing::warn;
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    RelativeUnixPathBuf,
 };
 use turborepo_lockfiles::Lockfile;
 
@@ -377,7 +378,11 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
         self.workspaces
             .values()
             .map(|entry| {
-                let workspace_path = entry.package_json_path.to_unix()?;
+                let workspace_path = entry
+                    .package_json_path
+                    .parent()
+                    .unwrap_or(AnchoredSystemPath::new("")?)
+                    .to_unix()?;
                 let workspace_string = workspace_path.as_str();
                 let external_deps = entry
                     .unresolved_external_dependencies
@@ -565,7 +570,11 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
 
 impl WorkspaceInfo {
     fn unix_dir_str(&self) -> Result<String, Error> {
-        let unix = self.package_json_path.to_unix()?;
+        let unix = self
+            .package_json_path
+            .parent()
+            .unwrap_or_else(|| AnchoredSystemPath::new("").expect("empty path is anchored"))
+            .to_unix()?;
         Ok(unix.to_string())
     }
 }
