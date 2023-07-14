@@ -43,21 +43,29 @@ pub struct TurboJson {
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJSON {
-    #[serde(rename = "$schema")]
+    #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     schema: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental_spaces: Option<SpacesJson>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     extends: Option<Vec<String>>,
     // Global root filesystem dependencies
+    #[serde(skip_serializing_if = "Option::is_none")]
     global_dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     global_env: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     global_pass_through_env: Option<Vec<String>>,
     // .env files to consider, in order.
+    #[serde(skip_serializing_if = "Option::is_none")]
     global_dot_env: Option<Vec<String>>,
     // Pipeline is a map of Turbo pipeline entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pipeline: Option<RawPipeline>,
     // Configuration options when interfacing with the remote cache
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
 }
 
@@ -68,14 +76,23 @@ struct RawPipeline(BTreeMap<String, RawTaskDefinition>);
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RawTaskDefinition {
+    #[serde(skip_serializing_if = "Option::is_none")]
     cache: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     depends_on: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dot_env: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     env: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     inputs: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pass_through_env: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     persistent: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     outputs: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     output_mode: Option<TaskOutputMode>,
 }
 
