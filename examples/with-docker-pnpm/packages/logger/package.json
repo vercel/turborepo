@@ -1,0 +1,30 @@
+{
+  "name": "logger",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "source": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "dev": "tsc -w",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "test": "jest"
+  },
+  "jest": {
+    "preset": "jest-presets/jest/node"
+  },
+  "devDependencies": {
+    "@types/jest": "^26.0.22",
+    "eslint": "^7.32.0",
+    "eslint-config-custom": "*",
+    "jest": "^26.6.3",
+    "jest-presets": "*",
+    "tsconfig": "*",
+    "typescript": "^4.5.3"
+  }
+}
