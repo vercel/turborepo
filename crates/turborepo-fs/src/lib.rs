@@ -1,8 +1,9 @@
 use std::{
-    fs::{self, DirBuilder, Metadata},
+    fs::{DirBuilder, FileType, Metadata},
     io,
 };
 
+use fs_err as fs;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use walkdir::WalkDir;
 
@@ -101,7 +102,7 @@ pub fn copy_file(
 
 fn copy_file_with_type(
     from: impl AsRef<AbsoluteSystemPath>,
-    from_type: fs::FileType,
+    from_type: FileType,
     to: impl AsRef<AbsoluteSystemPath>,
 ) -> Result<(), Error> {
     let from = from.as_ref();
