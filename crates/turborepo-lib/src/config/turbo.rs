@@ -288,11 +288,8 @@ impl RawTurboJSON {
     /// workspaces
     pub fn prune_tasks<S: AsRef<str>>(&self, workspaces: &[S]) -> Self {
         let mut this = self.clone();
-        // in go
-        // for each task check if it is in any of the packages
         if let Some(pipeline) = &mut this.pipeline {
             pipeline.0.retain(|task_name, _| {
-                // check if any of the listed workspaces have this
                 workspaces
                     .iter()
                     .any(|workspace| Self::is_task_in_package(task_name, workspace.as_ref()))
