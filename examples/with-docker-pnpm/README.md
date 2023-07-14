@@ -68,3 +68,24 @@ This Turborepo has some additional tools already setup for you:
 - [ESLint](https://eslint.org/) for code linting
 - [Jest](https://jestjs.io) test runner for all things JavaScript
 - [Prettier](https://prettier.io) for code formatting
+
+## Contributing
+
+```
+<!-- WARNING -->
+// TODO: figure out better solution
+Remove the pnpm requirement from root package.json
+  "engines": {
+    "node": "18.x",
+    "pnpm": "7"
+  }
+
+
+cd ./examples/with-docker-pnpm
+
+pnpm install
+
+pnpm run build
+
+pnpm run dev
+```

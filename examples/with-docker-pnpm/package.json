@@ -1,11 +1,7 @@
 {
-  "name": "with-docker",
+  "name": "with-docker-pnpm",
   "version": "0.0.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo run build",
     "clean": "turbo run clean",
@@ -16,7 +12,7 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "eslint-config-custom": "*",
+    "eslint-config-custom": "workspace:*",
     "prettier": "^2.8.8",
     "turbo": "^1.9.3"
   },
