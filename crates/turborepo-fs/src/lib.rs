@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use std::{
     fs::{DirBuilder, FileType, Metadata},
     io,
@@ -137,7 +139,7 @@ mod tests {
 
     use super::*;
 
-    fn tmp_dir<'a>() -> Result<(tempfile::TempDir, AbsoluteSystemPathBuf), Error> {
+    fn tmp_dir() -> Result<(tempfile::TempDir, AbsoluteSystemPathBuf), Error> {
         let tmp_dir = tempfile::tempdir()?;
         let dir = AbsoluteSystemPathBuf::try_from(tmp_dir.path())?;
         Ok((tmp_dir, dir))
@@ -234,13 +236,13 @@ mod tests {
         b_path.create_with_contents("bFile")?;
 
         let link_path = child_dir.join_component("link");
-        link_path.symlink_to_file(&["..", "b"].join(std::path::MAIN_SEPARATOR_STR))?;
+        link_path.symlink_to_file(["..", "b"].join(std::path::MAIN_SEPARATOR_STR))?;
 
         let broken_link_path = child_dir.join_component("broken");
         broken_link_path.symlink_to_file("missing")?;
 
         let circle_path = child_dir.join_component("circle");
-        circle_path.symlink_to_dir(&["..", "child"].join(std::path::MAIN_SEPARATOR_STR))?;
+        circle_path.symlink_to_dir(["..", "child"].join(std::path::MAIN_SEPARATOR_STR))?;
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
 
@@ -259,7 +261,7 @@ mod tests {
         let dst_link_path = dst_child_path.join_component("link");
         assert_target_matches(
             dst_link_path,
-            &["..", "b"].join(std::path::MAIN_SEPARATOR_STR),
+            ["..", "b"].join(std::path::MAIN_SEPARATOR_STR),
         );
 
         let dst_broken_path = dst_child_path.join_component("broken");
