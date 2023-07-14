@@ -81,7 +81,7 @@ impl AnchoredSystemPath {
         #[cfg(not(unix))]
         {
             use crate::IntoUnix;
-            let unix_buf = self.0.as_std_path().into_unix();
+            let unix_buf = self.0.into_unix();
             RelativeUnixPathBuf::new(unix_buf)
         }
     }
