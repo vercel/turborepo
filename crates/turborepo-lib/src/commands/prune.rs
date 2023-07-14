@@ -1,4 +1,6 @@
-use std::{fs, sync::OnceLock};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, bail, Result};
 use tracing::trace;
@@ -130,7 +132,12 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
         let permissions = original.symlink_metadata()?.permissions();
         let new_package_json_path = prune.out_directory.resolve(package_json());
         new_package_json_path.create_with_contents(&pruned_json_contents)?;
-        fs::set_permissions(&new_package_json_path, permissions)?;
+        #[cfg(unix)]
+        new_package_json_path.set_mode(permissions.mode())?;
+        #[cfg(windows)]
+        if permissions.readonly() {
+            new_package_json_path.set_readonly()?
+        }
         if prune.docker {
             turborepo_fs::copy_file(
                 new_package_json_path,
@@ -301,7 +308,7 @@ impl<'a> Prune<'a> {
         let turbo_json: RawTurboJSON = serde_json::from_slice(&turbo_json_contents)?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
-        new_turbo_path.create_with_contents(&serde_json::to_string_pretty(&pruned_turbo_json)?)?;
+        new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;
 
         Ok(())
     }

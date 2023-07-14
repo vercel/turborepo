@@ -279,8 +279,8 @@ mod test {
 
         fn subgraph(
             &self,
-            workspace_packages: &[String],
-            packages: &[String],
+            _workspace_packages: &[String],
+            _packages: &[String],
         ) -> std::result::Result<Box<dyn Lockfile>, turborepo_lockfiles::Error> {
             unreachable!("lockfile pruning not necessary for package graph construction")
         }
