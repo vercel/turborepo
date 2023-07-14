@@ -119,6 +119,10 @@ impl AbsoluteSystemPath {
         fs::create_dir_all(&self.0)
     }
 
+    pub fn remove_dir_all(&self) -> Result<(), io::Error> {
+        fs::remove_dir_all(&self.0)
+    }
+
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
     }

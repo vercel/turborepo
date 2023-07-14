@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use itertools::{Either, Itertools};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
 use crate::{hash_object::hash_objects, Error, Git, SCM};
@@ -20,7 +21,19 @@ impl SCM {
                 package_path,
                 inputs,
             ),
-            SCM::Git(git) => git.get_package_file_hashes(turbo_root, package_path, inputs),
+            SCM::Git(git) => git
+                .get_package_file_hashes(turbo_root, package_path, inputs)
+                .or_else(|e| {
+                    debug!(
+                        "failed to use git to hash files: {}. Falling back to manual",
+                        e
+                    );
+                    crate::manual::get_package_file_hashes_from_processing_gitignore(
+                        turbo_root,
+                        package_path,
+                        inputs,
+                    )
+                }),
         }
     }
 
@@ -155,7 +168,7 @@ impl Git {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, process::Command};
+    use std::{assert_matches::assert_matches, collections::HashMap, process::Command};
 
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
@@ -216,6 +229,36 @@ mod tests {
             get_package_file_hashes_from_processing_gitignore(&git_root, &pkg_path, &["l*"])
                 .unwrap();
         assert!(manual_hashes.is_empty());
+    }
+
+    #[test]
+    fn test_get_package_deps_fallback() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let my_pkg_dir = repo_root.join_component("my-pkg");
+        my_pkg_dir.create_dir_all().unwrap();
+
+        // create file 1
+        let committed_file_path = my_pkg_dir.join_component("committed-file");
+        committed_file_path
+            .create_with_contents("committed bytes")
+            .unwrap();
+
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+        let git = SCM::new(&repo_root);
+        assert_matches!(git, SCM::Git(_));
+        // Remove the .git directory to trigger an error in git hashing
+        repo_root.join_component(".git").remove_dir_all().unwrap();
+        let pkg_path = repo_root.anchor(&my_pkg_dir).unwrap();
+        let hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[])
+            .unwrap();
+        let mut expected = GitHashes::new();
+        expected.insert(
+            RelativeUnixPathBuf::new("committed-file").unwrap(),
+            "3a29e62ea9ba15c4a4009d1f605d391cdd262033".to_string(),
+        );
+        assert_eq!(hashes, expected);
     }
 
     #[test]
