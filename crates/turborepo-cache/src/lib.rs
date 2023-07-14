@@ -1,6 +1,7 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
 #![feature(assert_matches)]
+#![deny(clippy::all)]
 
 pub mod cache_archive;
 pub mod fs;
@@ -29,7 +30,7 @@ pub enum CacheError {
     #[error("cannot untar file to {0}")]
     InvalidFilePath(String, #[backtrace] Backtrace),
     #[error("artifact verification failed: {0}")]
-    ApiClientError(#[from] turborepo_api_client::Error, #[backtrace] Backtrace),
+    ApiClientError(Box<turborepo_api_client::Error>, #[backtrace] Backtrace),
     #[error("signing artifact failed: {0}")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),
     #[error("invalid duration")]
@@ -60,6 +61,12 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
     #[error("Cache miss")]
     CacheMiss,
+}
+
+impl From<turborepo_api_client::Error> for CacheError {
+    fn from(value: turborepo_api_client::Error) -> Self {
+        CacheError::ApiClientError(Box::new(value), Backtrace::capture())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
