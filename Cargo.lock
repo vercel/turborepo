@@ -2516,6 +2516,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-err"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0845fa252299212f0389d64ba26f34fa32cfe41588355f21ed507c59a0f64541"
+
+[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9644,6 +9650,7 @@ dependencies = [
 name = "turborepo-fs"
 version = "0.1.0"
 dependencies = [
+ "fs-err",
  "tempfile",
  "thiserror",
  "turbopath",

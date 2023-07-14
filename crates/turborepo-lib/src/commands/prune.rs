@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{fs, sync::OnceLock};
 
 use anyhow::{anyhow, bail, Result};
 use tracing::trace;
@@ -18,6 +18,16 @@ use crate::{
 // All paths should be given as relative unix paths
 const ADDITIONAL_FILES: &[(&str, bool)] = [(".gitignore", false), (".npmrc", true)].as_slice();
 
+fn package_json() -> &'static AnchoredSystemPath {
+    static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
+    PATH.get_or_init(|| AnchoredSystemPath::new("package.json").unwrap())
+}
+
+fn turbo_json() -> &'static AnchoredSystemPath {
+    static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
+    PATH.get_or_init(|| AnchoredSystemPath::new("turbo.json").unwrap())
+}
+
 pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &str) -> Result<()> {
     let prune = Prune::new(base, scope, docker, output_dir)?;
 
@@ -26,8 +36,6 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
         base.ui.apply(BOLD.apply_to(scope.join(", "))),
         base.ui.apply(BOLD.apply_to(&prune.out_directory)),
     );
-
-    std::fs::create_dir_all(prune.out_directory.as_path())?;
 
     if let Some(workspace_config_path) = prune
         .package_graph
@@ -40,18 +48,21 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
         )?;
     }
 
-    let mut lockfile_keys = HashSet::new();
     let mut workspace_paths = Vec::new();
-    let mut workspaces = Vec::new();
-    for workspace in prune.internal_dependencies()? {
+    let mut workspace_names = Vec::new();
+    let workspaces = prune.internal_dependencies()?;
+    let lockfile_keys: Vec<_> = prune
+        .package_graph
+        .transitive_external_dependencies(workspaces.iter())
+        .into_iter()
+        .map(|pkg| pkg.key.clone())
+        .collect();
+    for workspace in workspaces {
         let entry = prune
             .package_graph
             .workspace_info(&workspace)
             .ok_or_else(|| anyhow!("Workspace '{workspace}' not in package graph"))?;
 
-        if let Some(transitive_deps) = &entry.transitive_dependencies {
-            lockfile_keys.extend(transitive_deps.iter().map(|pkg| pkg.key.clone()))
-        }
         // We don't want to do any copying for the root workspace
         if let WorkspaceName::Other(workspace) = workspace {
             prune.copy_workspace(entry.package_json_path())?;
@@ -65,12 +76,12 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
             );
 
             println!(" - Added {workspace}");
-            workspaces.push(workspace);
+            workspace_names.push(workspace);
         }
     }
     trace!("new workspaces: {}", workspace_paths.join(", "));
+    trace!("lockfile keys: {}", lockfile_keys.join(", "));
 
-    let lockfile_keys = lockfile_keys.into_iter().collect::<Vec<_>>();
     let lockfile = prune
         .package_graph
         .lockfile()
@@ -80,9 +91,9 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
     let lockfile_contents = lockfile.encode()?;
     let lockfile_name = prune.package_graph.package_manager().lockfile_name();
     let lockfile_path = prune.out_directory.join_component(lockfile_name);
-    std::fs::write(lockfile_path, &lockfile_contents)?;
+    fs::write(lockfile_path, &lockfile_contents)?;
     if prune.docker {
-        std::fs::write(
+        fs::write(
             prune.docker_directory().join_component(lockfile_name),
             &lockfile_contents,
         )?;
@@ -93,7 +104,7 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
         prune.copy_file(&path, *required_for_install)?;
     }
 
-    prune.copy_turbo_json(&workspaces)?;
+    prune.copy_turbo_json(&workspace_names)?;
 
     let original_patches = prune
         .package_graph
@@ -102,20 +113,28 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
         .patches()?;
     if !original_patches.is_empty() {
         let pruned_patches = lockfile.patches()?;
+        trace!(
+            "original patches: {:?}, pruned patches: {:?}",
+            original_patches,
+            pruned_patches
+        );
         let pruned_json = prune
             .package_graph
             .package_manager()
             .prune_patched_packages(prune.package_graph.root_package_json(), &pruned_patches);
-        let pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
-        let original = prune.root.join_component("package.json");
-        let permissions = std::fs::metadata(original)?.permissions();
-        let new_package_json_path = prune.root.resolve(AnchoredSystemPath::new("package.json")?);
+        let mut pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
+        // Add trailing newline to match Go behavior
+        pruned_json_contents.push('\n');
+
+        let original = prune.root.resolve(package_json());
+        let permissions = original.symlink_metadata()?.permissions();
+        let new_package_json_path = prune.out_directory.resolve(package_json());
         new_package_json_path.create_with_contents(&pruned_json_contents)?;
-        std::fs::set_permissions(&new_package_json_path, permissions)?;
+        fs::set_permissions(&new_package_json_path, permissions)?;
         if prune.docker {
             turborepo_fs::copy_file(
                 new_package_json_path,
-                prune.docker_directory().join_component("package.json"),
+                prune.docker_directory().resolve(package_json()),
             )?;
         }
 
@@ -123,7 +142,7 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
             prune.copy_file(&patch.to_system_path(), true)?;
         }
     } else {
-        prune.copy_file(&AnchoredSystemPathBuf::from_raw("package.json")?, true)?;
+        prune.copy_file(package_json(), true)?;
     }
 
     Ok(())
@@ -185,6 +204,14 @@ impl<'a> Prune<'a> {
             bail!("Cannot prune without parsed lockfile")
         }
 
+        full_directory.resolve(package_json()).ensure_dir()?;
+        if docker {
+            out_directory
+                .join_component("json")
+                .resolve(package_json())
+                .ensure_dir()?;
+        }
+
         Ok(Self {
             package_graph,
             root: base.repo_root.clone(),
@@ -199,8 +226,12 @@ impl<'a> Prune<'a> {
         self.out_directory.join_component("json")
     }
 
-    fn copy_file(&self, path: &AnchoredSystemPathBuf, required_for_install: bool) -> Result<()> {
+    fn copy_file(&self, path: &AnchoredSystemPath, required_for_install: bool) -> Result<()> {
         let from_path = self.root.resolve(path);
+        if !from_path.try_exists()? {
+            trace!("{from_path} doesn't exist, skipping copying");
+            return Ok(());
+        }
         let full_to = self.full_directory.resolve(path);
         turborepo_fs::copy_file(&from_path, full_to)?;
         if self.docker && required_for_install {
@@ -215,48 +246,58 @@ impl<'a> Prune<'a> {
         let original_dir = package_json_path
             .parent()
             .ok_or_else(|| anyhow!("turbo doesn't support workspaces at file system root"))?;
-        let metadata = std::fs::metadata(original_dir.as_path())?;
-        let target_dir = self
-            .out_directory
-            .resolve(&AnchoredSystemPathBuf::new(&self.root, original_dir)?);
+        let metadata = original_dir.symlink_metadata()?;
+        let relative_workspace_dir = AnchoredSystemPathBuf::new(&self.root, original_dir)?;
+        let target_dir = self.out_directory.resolve(&relative_workspace_dir);
         target_dir.create_dir_all_with_permissions(metadata.permissions())?;
 
         turborepo_fs::recursive_copy(original_dir, &target_dir)?;
 
         if self.docker {
-            let docker_dir = self.docker_directory();
-            docker_dir.ensure_dir()?;
-            // TODO: Recursive copy usage here matches Go, but is probably unnecessary
-            turborepo_fs::recursive_copy(package_json_path, docker_dir)?;
+            let docker_workspace_dir = self.docker_directory().resolve(&relative_workspace_dir);
+            docker_workspace_dir.ensure_dir()?;
+            turborepo_fs::copy_file(
+                package_json_path,
+                docker_workspace_dir.resolve(package_json()),
+            )?;
         }
 
         Ok(())
     }
 
-    fn internal_dependencies(&self) -> Result<HashSet<WorkspaceName>> {
+    fn internal_dependencies(&self) -> Result<Vec<WorkspaceName>> {
         let workspaces =
-            std::iter::once(WorkspaceNode::Root)
+            std::iter::once(WorkspaceNode::Workspace(WorkspaceName::Root))
                 .chain(self.scope.iter().map(|workspace| {
                     WorkspaceNode::Workspace(WorkspaceName::Other(workspace.clone()))
                 }))
                 .collect::<Vec<_>>();
         let nodes = self.package_graph.transitive_closure(workspaces.iter());
 
-        Ok(nodes
+        let mut names: Vec<_> = nodes
             .into_iter()
             .filter_map(|node| match node {
                 WorkspaceNode::Root => None,
                 WorkspaceNode::Workspace(workspace) => Some(workspace.clone()),
             })
-            .collect())
+            .collect();
+        names.sort();
+        Ok(names)
     }
 
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<()> {
-        let turbo_segment = AnchoredSystemPath::new("turbo.json")?;
-        let original_turbo_path = self.root.resolve(turbo_segment);
-        let new_turbo_path = self.out_directory.resolve(turbo_segment);
+        let original_turbo_path = self.root.resolve(turbo_json());
 
-        let turbo_json_contents = original_turbo_path.read()?;
+        let new_turbo_path = self.out_directory.resolve(turbo_json());
+
+        let turbo_json_contents = match original_turbo_path.read() {
+            Ok(contents) => contents,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // If turbo.json doesn't exist skip copying
+                return Ok(());
+            }
+            Err(e) => return Err(e.into()),
+        };
         let turbo_json: RawTurboJSON = serde_json::from_slice(&turbo_json_contents)?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
