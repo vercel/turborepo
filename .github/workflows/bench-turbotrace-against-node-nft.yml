@@ -28,7 +28,7 @@ jobs:
 
       - uses: ./.github/actions/setup-node
         with:
-          package-install: false
+          package-install: ""
 
       - uses: ./.github/actions/setup-rust
 
@@ -46,12 +46,12 @@ jobs:
         uses: taiki-e/install-action@nextest
 
       - name: Build benchmark
-        timeout-minutes: 60
+        timeout-minutes: 600
         run: |
           cargo nextest run --no-run ${{ env.BENCH_ARGS }}
 
       - name: Run benchmark
-        timeout-minutes: 60
+        timeout-minutes: 600
         run: |
           cargo nextest run --test-threads 1 --no-fail-fast ${{ env.BENCH_ARGS }}
 
