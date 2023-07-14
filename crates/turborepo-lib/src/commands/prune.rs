@@ -255,7 +255,7 @@ impl<'a> Prune<'a> {
             .ok_or_else(|| anyhow!("turbo doesn't support workspaces at file system root"))?;
         let metadata = original_dir.symlink_metadata()?;
         let relative_workspace_dir = AnchoredSystemPathBuf::new(&self.root, original_dir)?;
-        let target_dir = self.out_directory.resolve(&relative_workspace_dir);
+        let target_dir = self.full_directory.resolve(&relative_workspace_dir);
         target_dir.create_dir_all_with_permissions(metadata.permissions())?;
 
         turborepo_fs::recursive_copy(original_dir, &target_dir)?;
@@ -295,7 +295,7 @@ impl<'a> Prune<'a> {
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<()> {
         let original_turbo_path = self.root.resolve(turbo_json());
 
-        let new_turbo_path = self.out_directory.resolve(turbo_json());
+        let new_turbo_path = self.full_directory.resolve(turbo_json());
 
         let turbo_json_contents = match original_turbo_path.read() {
             Ok(contents) => contents,
