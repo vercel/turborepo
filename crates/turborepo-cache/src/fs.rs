@@ -20,7 +20,7 @@ struct CacheMetadata {
 
 impl CacheMetadata {
     fn read(path: &AbsoluteSystemPath) -> Result<CacheMetadata, CacheError> {
-        serde_json::from_reader(path.open()?)
+        serde_json::from_str(&path.read_to_string()?)
             .map_err(|e| CacheError::InvalidMetadata(e, Backtrace::capture()))
     }
 }
