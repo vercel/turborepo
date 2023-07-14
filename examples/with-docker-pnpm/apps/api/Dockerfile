@@ -1,50 +1,65 @@
-FROM node:18-alpine AS base
+FROM node:20 as base
+    # Update apt-get and install the necessary libraries
+    # This is mainly so that the `canvas` package can be installed
+    RUN apt-get update && \
+        apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
 
-# The web Dockerfile is copy-pasted into our main docs at /docs/handbook/deploying-with-docker.
-# Make sure you update this Dockerfile, the Dockerfile in the web workspace and copy that over to Dockerfile in the docs.
 
 FROM base AS builder
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat
-RUN apk update
-# Set working directory
-WORKDIR /app
-RUN yarn global add turbo
-COPY . .
-RUN turbo prune --scope=api --docker
+    WORKDIR /app
 
-# Add lockfile and package.json's of isolated subworkspace
-FROM base AS installer
-RUN apk add --no-cache libc6-compat
-RUN apk update
-WORKDIR /app
+    ENV APP_NAME=my_secret_project
 
-# First install dependencies (as they change less often)
-COPY .gitignore .gitignore
-COPY --from=builder /app/out/json/ .
-COPY --from=builder /app/out/yarn.lock ./yarn.lock
-RUN yarn install
+    # This might be necessary when switching to alpine
+    # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
+    # RUN apk add --no-cache libc6-compat
 
-# Build the project and its dependencies
-COPY --from=builder /app/out/full/ .
-COPY turbo.json turbo.json
+    RUN npm install -g turbo
 
-# Uncomment and use build args to enable remote caching
-# ARG TURBO_TEAM
-# ENV TURBO_TEAM=$TURBO_TEAM
+    COPY . .
 
-# ARG TURBO_TOKEN
-# ENV TURBO_TOKEN=$TURBO_TOKEN
+    RUN turbo prune --scope=@my_secret_org/${APP_NAME} --docker
 
-RUN yarn turbo run build --filter=api...
+
+FROM base as installer
+    WORKDIR /app
+    ENV APP_NAME=my_secret_project
+
+    RUN npm install -g pnpm
+    RUN npm install -g turbo
+
+    # First install dependencies (as they change less often)
+    COPY .gitignore .gitignore
+    COPY --from=builder /app/out/json/ .
+    COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+    RUN pnpm install
+
+    # Build the project and its dependencies
+    COPY --from=builder /app/out/full/ .
+    COPY turbo.json turbo.json
+
+    # Uncomment and use build args to enable remote caching
+    # ARG TURBO_TEAM
+    # ENV TURBO_TEAM=$TURBO_TEAM
+
+    # ARG TURBO_TOKEN
+    # ENV TURBO_TOKEN=$TURBO_TOKEN
+
+    RUN turbo run build --filter=@my_secret_org/${APP_NAME}...
 
 FROM base AS runner
-WORKDIR /app
+    WORKDIR /app
+    ENV APP_NAME=my_secret_project
 
-# Don't run production as root
-RUN addgroup --system --gid 1001 expressjs
-RUN adduser --system --uid 1001 expressjs
-USER expressjs
-COPY --from=installer /app .
 
-CMD node apps/api/dist/index.js
+    RUN npm install -g pnpm
+
+    # Don't run production as root
+    # RUN addgroup --system --gid 1001 expressjs
+    # RUN adduser --system --uid 1001 expressjs
+
+    # USER expressjs
+    COPY --from=installer /app .
+
+    # TODO: Maybe use the npm script?
+    CMD pnpm --filter "@my_secret_org/${APP_NAME}" run start
