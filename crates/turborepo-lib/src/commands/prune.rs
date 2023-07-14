@@ -305,7 +305,9 @@ impl<'a> Prune<'a> {
             }
             Err(e) => return Err(e.into()),
         };
-        let turbo_json: RawTurboJSON = serde_json::from_slice(&turbo_json_contents)?;
+        let turbo_json: RawTurboJSON = serde_json::from_reader(json_comments::StripComments::new(
+            turbo_json_contents.as_slice(),
+        ))?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;
