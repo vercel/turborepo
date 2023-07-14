@@ -124,13 +124,6 @@ fn copy_file_with_type(
     }
 }
 
-pub fn file_exists(path: impl AsRef<AbsoluteSystemPath>) -> bool {
-    match fs::metadata(path.as_ref().as_path()) {
-        Ok(info) => !info.is_dir(),
-        Err(_) => false,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{io, path::Path};
