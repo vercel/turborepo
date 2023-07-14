@@ -1,6 +1,7 @@
 #![feature(async_closure)]
 #![feature(provide_any)]
 #![feature(error_generic_member_access)]
+#![deny(clippy::all)]
 
 use std::env;
 

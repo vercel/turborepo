@@ -5,13 +5,14 @@ use std::os::unix::fs::symlink as symlink_dir;
 #[cfg(windows)]
 use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
-    fmt, fs,
+    fmt,
     fs::{File, Metadata, OpenOptions, Permissions},
     io,
     path::Path,
 };
 
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use path_clean::PathClean;
 
 use crate::{
@@ -145,6 +146,10 @@ impl AbsoluteSystemPath {
         }
 
         Ok(())
+    }
+
+    pub fn remove_dir_all(&self) -> Result<(), io::Error> {
+        fs::remove_dir_all(&self.0)
     }
 
     pub fn extension(&self) -> Option<&str> {
