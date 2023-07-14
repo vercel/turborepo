@@ -184,9 +184,9 @@ impl AbsoluteSystemPathBuf {
         Ok(self.0.symlink_metadata()?.permissions().readonly())
     }
 
-    pub fn create_with_contents(&self, contents: &str) -> Result<(), io::Error> {
+    pub fn create_with_contents<B: AsRef<[u8]>>(&self, contents: B) -> Result<(), io::Error> {
         let mut f = fs::File::create(self.0.as_path())?;
-        write!(f, "{}", contents)?;
+        f.write_all(contents.as_ref())?;
         Ok(())
     }
 

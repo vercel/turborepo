@@ -91,12 +91,12 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
     let lockfile_contents = lockfile.encode()?;
     let lockfile_name = prune.package_graph.package_manager().lockfile_name();
     let lockfile_path = prune.out_directory.join_component(lockfile_name);
-    fs::write(lockfile_path, &lockfile_contents)?;
+    lockfile_path.create_with_contents(&lockfile_contents)?;
     if prune.docker {
-        fs::write(
-            prune.docker_directory().join_component(lockfile_name),
-            &lockfile_contents,
-        )?;
+        prune
+            .docker_directory()
+            .join_component(lockfile_name)
+            .create_with_contents(&lockfile_contents)?;
     }
 
     for (relative_path, required_for_install) in ADDITIONAL_FILES {
