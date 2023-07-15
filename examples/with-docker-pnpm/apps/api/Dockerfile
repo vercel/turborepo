@@ -1,4 +1,4 @@
-FROM node:18 as base
+FROM node:18 AS base
     # Update apt-get and install the necessary libraries
     # This is mainly so that the `canvas` package can be installed
     RUN apt-get update && \
@@ -50,10 +50,10 @@ FROM base AS runner
     RUN npm install -g pnpm
 
     # Don't run production as root
-    # RUN addgroup --system --gid 1001 expressjs
-    # RUN adduser --system --uid 1001 expressjs
+    RUN addgroup --system --gid 1001 expressjs
+    RUN adduser --system --uid 1001 expressjs
 
-    # USER expressjs
+    USER expressjs
     COPY --from=installer /app .
 
     # TODO: Maybe use the npm script?
