@@ -36,7 +36,13 @@ function set_package_manager() {
 }
 
 # Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
-corepack enable
+if [ "$PRYSK_TEMP" == "" ]; then
+  COREPACK_INSTALL_DIR=
+else
+  mkdir -p "${PRYSK_TEMP}/corepack"
+  COREPACK_INSTALL_DIR="--install-directory=${PRYSK_TEMP}/corepack"
+fi
+corepack enable "${COREPACK_INSTALL_DIR}"
 
 # Set the packageManger version
 NPM_PACKAGE_MANAGER_VALUE="npm@8.1.2"
