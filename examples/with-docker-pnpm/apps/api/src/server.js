@@ -1,4 +1,6 @@
-import { json, urlencoded } from "body-parser";
+import bodyParser from "body-parser";
+const { urlencoded, json } = bodyParser;
+
 import express from "express";
 import morgan from "morgan";
 import cors from "cors";

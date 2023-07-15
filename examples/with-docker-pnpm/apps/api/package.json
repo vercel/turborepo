@@ -6,9 +6,9 @@
   "scripts": {
     "build": "echo 'No build step required.'",
     "clean": "rm -rf dist",
-    "dev": "node --watch ./src/server.js",
+    "dev": "node --watch ./src/index.js",
     "lint": "tsc --noEmit && eslint \"src/**/*.ts*\"",
-    "start": "node ./src/server.js",
+    "start": "node ./src/index.js",
     "test": "jest --detectOpenHandles"
   },
   "jest": {
