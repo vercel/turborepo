@@ -15,16 +15,16 @@ pub struct CompileTarget {
     pub libc: Libc,
 }
 
-impl Default for CompileTargetVc {
-    fn default() -> Self {
-        Self::current()
+impl Default for CompileTarget {
+    fn default() -> Vc<Self> {
+        Vc::<Self>::current()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl CompileTargetVc {
+impl CompileTarget {
     #[turbo_tasks::function]
-    pub fn current() -> Self {
+    pub fn current() -> Vc<Self> {
         Self::cell(CompileTarget {
             arch: CompileTarget::current_arch(),
             platform: CompileTarget::current_platform(),
@@ -34,7 +34,7 @@ impl CompileTargetVc {
     }
 
     #[turbo_tasks::function]
-    pub fn unknown() -> Self {
+    pub fn unknown() -> Vc<Self> {
         Self::cell(CompileTarget {
             arch: Arch::Unknown,
             platform: Platform::Unknown,

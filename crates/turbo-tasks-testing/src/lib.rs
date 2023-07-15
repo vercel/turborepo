@@ -78,7 +78,7 @@ impl TurboTasksCallApi for VcStorage {
                 }
             },
         ));
-        RawVc::TaskOutput(i.into())
+        Raw::TaskOutput(i.into())
     }
 
     fn native_call(

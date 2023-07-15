@@ -1,8 +1,9 @@
 use std::marker::PhantomData;
 
 use anyhow::Result;
+use turbo_tasks::Vc;
 
-use crate::{unit, RawVc, Vc};
+use crate::{unit, RawVc};
 
 pub trait TaskOutput {
     type Return;

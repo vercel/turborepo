@@ -1,6 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
-    env::{self, current_dir},
+    env::{
+        current_dir, {self},
+    },
     fmt::{Display, Write},
     fs::read_dir,
     path::{PathBuf, MAIN_SEPARATOR as PATH_SEP},

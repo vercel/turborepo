@@ -4,17 +4,17 @@ use std::{
 };
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString};
+use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{chunk::ChunkItem, code_builder::CodeBuilder};
 
-use super::{CssChunkItemVc, CssImport};
+use super::{CssChunkItem, CssImport};
 use crate::chunk::CssChunkItem;
 
 // TODO(WEB-1261)
 pub async fn expand_imports(
     code: &mut CodeBuilder,
-    chunk_item: CssChunkItemVc,
-) -> Result<Vec<StringVc>> {
+    chunk_item: Vc<Box<dyn CssChunkItem>>,
+) -> Result<Vec<Vc<String>>> {
     let content = chunk_item.content().await?;
     let mut stack = vec![(
         chunk_item,
@@ -22,8 +22,9 @@ pub async fn expand_imports(
         "".to_string(),
     )];
     let mut external_imports = vec![];
-    let mut imported_chunk_items: HashSet<(String, String, CssChunkItemVc)> = HashSet::default();
-    let mut composed_chunk_items: HashSet<CssChunkItemVc> = HashSet::default();
+    let mut imported_chunk_items: HashSet<(String, String, Vc<Box<dyn CssChunkItem>>)> =
+        HashSet::default();
+    let mut composed_chunk_items: HashSet<Vc<Box<dyn CssChunkItem>>> = HashSet::default();
 
     while let Some((chunk_item, imports, close)) = stack.last_mut() {
         match imports.pop_front() {
@@ -76,7 +77,7 @@ pub async fn expand_imports(
                 let content = chunk_item.content().await?;
                 code.push_source(
                     &content.inner_code,
-                    content.source_map.map(|sm| sm.as_generate_source_map()),
+                    content.source_map.map(|sm| Vc::upcast(sm)),
                 );
 
                 writeln!(code, "\n{}", close)?;

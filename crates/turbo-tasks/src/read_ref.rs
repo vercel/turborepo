@@ -7,13 +7,14 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use turbo_tasks::Vc;
 use turbo_tasks_hash::DeterministicHash;
 
 use crate::{
     debug::{ValueDebugFormat, ValueDebugFormatString},
     macro_helpers::find_cell_by_type,
     trace::{TraceRawVcs, TraceRawVcsContext},
-    SharedReference, Vc, VcRead, VcValueType,
+    SharedReference, VcRead, VcValueType,
 };
 
 /// The read value of a value cell. The read value is immutable, while the cell

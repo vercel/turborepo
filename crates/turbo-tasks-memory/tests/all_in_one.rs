@@ -42,13 +42,13 @@ struct MyTransparentValue(u32);
 enum MyEnumValue {
     Yeah(u32),
     Nah,
-    More(MyEnumValueVc),
+    More(Vc<MyEnumValue>),
 }
 
 #[turbo_tasks::value_impl]
-impl MyEnumValueVc {
+impl MyEnumValue {
     #[turbo_tasks::function]
-    pub async fn get_last(self) -> Result<Self> {
+    pub async fn get_last(self: Vc<Self>) -> Result<Vc<Self>> {
         let mut current = self;
         while let MyEnumValue::More(more) = &*current.await? {
             current = *more;
@@ -72,13 +72,13 @@ impl ValueToString for MyEnumValue {
 #[turbo_tasks::value(shared)]
 struct MyStructValue {
     value: u32,
-    next: Option<MyStructValueVc>,
+    next: Option<Vc<MyStructValue>>,
 }
 
 #[turbo_tasks::value_impl]
-impl MyStructValueVc {
+impl MyStructValue {
     #[turbo_tasks::function]
-    pub async fn new(value: MyTransparentValueVc) -> Result<Self> {
+    pub async fn new(value: Vc<MyTransparentValue>) -> Result<Vc<Self>> {
         Ok(Self::cell(MyStructValue {
             value: *value.await?,
             next: None,
@@ -97,8 +97,8 @@ impl ValueToString for MyStructValue {
 #[turbo_tasks::value_impl]
 impl MyTrait for MyStructValue {
     #[turbo_tasks::function]
-    fn my_trait_function2(self_vc: MyStructValueVc) -> Vc<String> {
-        self_vc.to_string()
+    fn my_trait_function2(self: Vc<Self>) -> Vc<String> {
+        self.to_string()
     }
     #[turbo_tasks::function]
     async fn my_trait_function3(&self) -> Result<Vc<String>> {
@@ -119,11 +119,11 @@ trait MyTrait: ValueToString {
             ));
         }
         // Calling a function twice
-        Ok(self_vc.to_string())
+        Ok(self.to_string())
     }
 
-    fn my_trait_function2(&self) -> Vc<String>;
-    fn my_trait_function3(&self) -> Vc<String>;
+    fn my_trait_function2(self: Vc<Self>) -> Vc<String>;
+    fn my_trait_function3(self: Vc<Self>) -> Vc<String>;
 }
 
 #[turbo_tasks::function]
@@ -132,7 +132,7 @@ async fn my_function(
     b: Vc<MyEnumValue>,
     c: Vc<MyStructValue>,
     d: Value<MyEnumValue>,
-) -> Result<MyStructValueVc> {
+) -> Result<Vc<MyStructValue>> {
     assert_eq!(*a.await?, 4242);
     assert_eq!(*b.await?, MyEnumValue::Yeah(42));
     assert_eq!(c.await?.value, 42);

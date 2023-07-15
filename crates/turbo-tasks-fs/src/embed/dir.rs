@@ -1,12 +1,17 @@
-pub use ::include_dir::{self, include_dir};
+pub use ::include_dir::{
+    include_dir, {self},
+};
 use anyhow::Result;
-use turbo_tasks::TransientInstance;
+use turbo_tasks::{TransientInstance, Vc};
 
-use crate::{embed::EmbeddedFileSystemVc, DiskFileSystemVc, FileSystemVc};
+use crate::{embed::EmbeddedFileSystem, DiskFileSystem, FileSystem};
 
 #[turbo_tasks::function]
-pub async fn directory_from_relative_path(name: &str, path: String) -> Result<FileSystemVc> {
-    let disk_fs = DiskFileSystemVc::new(name.to_string(), path);
+pub async fn directory_from_relative_path(
+    name: String,
+    path: String,
+) -> Result<Vc<Box<dyn FileSystem>>> {
+    let disk_fs = DiskFileSystem::new(name.to_string(), path);
     disk_fs.await?.start_watching()?;
 
     Ok(disk_fs.into())
@@ -14,19 +19,19 @@ pub async fn directory_from_relative_path(name: &str, path: String) -> Result<Fi
 
 #[turbo_tasks::function]
 pub async fn directory_from_include_dir(
-    name: &str,
+    name: String,
     dir: TransientInstance<&'static include_dir::Dir<'static>>,
-) -> Result<FileSystemVc> {
-    Ok(EmbeddedFileSystemVc::new(name.to_string(), dir).into())
+) -> Result<Vc<Box<dyn FileSystem>>> {
+    Ok(Vc::upcast(EmbeddedFileSystem::new(name.to_string(), dir)))
 }
 
-/// Returns an embedded [FileSystemVc] for the given path.
+/// Returns an embedded [Vc<Box<dyn FileSystem>>] for the given path.
 ///
 /// This will embed a directory's content into the binary and
-/// create an [EmbeddedFileSystemVc].
+/// create an [Vc<EmbeddedFileSystem>].
 ///
 /// If you enable the `dynamic_embed_contents` feature, calling
-/// the macro will return a [DiskFileSystemVc].
+/// the macro will return a [Vc<DiskFileSystem>].
 ///
 /// This enables dynamic linking (and hot reloading) of embedded files/dirs.
 /// A binary built with `dynamic_embed_contents` enabled is **is not portable**,

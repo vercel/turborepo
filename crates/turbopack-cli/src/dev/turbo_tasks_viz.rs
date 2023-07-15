@@ -2,18 +2,17 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::{bail, Result};
 use mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value};
+use turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value, Vc};
 use turbo_tasks_fs::File;
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
     viz, MemoryBackend,
 };
-use turbopack_core::asset::AssetContentVc;
+use turbopack_core::asset::AssetContent;
 use turbopack_dev_server::source::{
-    route_tree::{BaseSegment, RouteTreeVc, RouteTreesVc, RouteType},
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataFilter,
-    ContentSourceDataVary, ContentSourceDataVaryVc, ContentSourceVc, GetContentSourceContent,
-    GetContentSourceContentVc,
+    route_tree::{BaseSegment, RouteTree, RouteTrees, RouteType},
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
+    ContentSourceDataVary, GetContentSourceContent,
 };
 
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new", into = "new")]
@@ -22,8 +21,8 @@ pub struct TurboTasksSource {
     pub turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
 }
 
-impl TurboTasksSourceVc {
-    pub fn new(turbo_tasks: Arc<TurboTasks<MemoryBackend>>) -> Self {
+impl TurboTasksSource {
+    pub fn new(turbo_tasks: Arc<TurboTasks<MemoryBackend>>) -> Vc<Self> {
         Self::cell(TurboTasksSource { turbo_tasks })
     }
 }
@@ -33,27 +32,27 @@ const INVALIDATION_INTERVAL: Duration = Duration::from_secs(3);
 #[turbo_tasks::value_impl]
 impl ContentSource for TurboTasksSource {
     #[turbo_tasks::function]
-    fn get_routes(self_vc: TurboTasksSourceVc) -> RouteTreeVc {
-        RouteTreesVc::cell(vec![
-            RouteTreeVc::new_route(
+    fn get_routes(self: Vc<Self>) -> Vc<RouteTree> {
+        Vc::cell(vec![
+            RouteTree::new_route(
                 vec![BaseSegment::Static("graph".to_string())],
                 RouteType::Exact,
-                self_vc.into(),
+                self.into(),
             ),
-            RouteTreeVc::new_route(
+            RouteTree::new_route(
                 vec![BaseSegment::Static("call-graph".to_string())],
                 RouteType::Exact,
-                self_vc.into(),
+                self.into(),
             ),
-            RouteTreeVc::new_route(
+            RouteTree::new_route(
                 vec![BaseSegment::Static("table".to_string())],
                 RouteType::Exact,
-                self_vc.into(),
+                self.into(),
             ),
-            RouteTreeVc::new_route(
+            RouteTree::new_route(
                 vec![BaseSegment::Static("reset".to_string())],
                 RouteType::Exact,
-                self_vc.into(),
+                self.into(),
             ),
         ])
         .merge()
@@ -63,7 +62,7 @@ impl ContentSource for TurboTasksSource {
 #[turbo_tasks::value_impl]
 impl GetContentSourceContent for TurboTasksSource {
     #[turbo_tasks::function]
-    fn vary(&self) -> ContentSourceDataVaryVc {
+    fn vary(&self) -> Vc<ContentSourceDataVary> {
         ContentSourceDataVary {
             query: Some(ContentSourceDataFilter::All),
             ..Default::default()
@@ -73,11 +72,11 @@ impl GetContentSourceContent for TurboTasksSource {
 
     #[turbo_tasks::function]
     async fn get(
-        self_vc: TurboTasksSourceVc,
-        path: &str,
+        self: Vc<Self>,
+        path: String,
         data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceContentVc> {
-        let this = self_vc.await?;
+    ) -> Result<Vc<ContentSourceContent>> {
+        let this = self.await?;
         let tt = &this.turbo_tasks;
         let invalidator = get_invalidator();
         tokio::spawn({
@@ -138,8 +137,8 @@ impl GetContentSourceContent for TurboTasksSource {
             }
             _ => bail!("Unknown path: {}", path),
         };
-        Ok(ContentSourceContentVc::static_content(
-            AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
-        ))
+        Ok(ContentSourceContent::static_content(Vc::upcast(
+            AssetContent::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)),
+        )))
     }
 }

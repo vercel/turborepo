@@ -9,7 +9,7 @@ use swc_core::{
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 
 #[turbo_tasks::value(transparent)]
-pub struct OptionStyledComponentsTransformConfig(Option<StyledComponentsTransformConfigVc>);
+pub struct OptionStyledComponentsTransformConfig(Option<Vc<StyledComponentsTransformConfig>>);
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
@@ -39,16 +39,16 @@ impl Default for StyledComponentsTransformConfig {
 }
 
 #[turbo_tasks::value_impl]
-impl StyledComponentsTransformConfigVc {
+impl StyledComponentsTransformConfig {
     #[turbo_tasks::function]
-    pub fn default() -> Self {
+    pub fn default() -> Vc<Self> {
         Self::cell(Default::default())
     }
 }
 
-impl Default for StyledComponentsTransformConfigVc {
-    fn default() -> Self {
-        Self::default()
+impl Default for StyledComponentsTransformConfig {
+    fn default() -> Vc<Self> {
+        Vc::<Self>::default()
     }
 }
 

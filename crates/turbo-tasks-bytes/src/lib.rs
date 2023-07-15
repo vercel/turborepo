@@ -1,8 +1,10 @@
 pub mod bytes;
 pub mod stream;
 
+use turbo_tasks::Vc;
+
 pub use crate::{
-    bytes::{Bytes, BytesVc},
+    bytes::Bytes,
     stream::{Stream, StreamRead},
 };
 

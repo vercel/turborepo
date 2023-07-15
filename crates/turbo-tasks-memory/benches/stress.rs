@@ -65,7 +65,7 @@ struct FibResult(u64);
 /// This function also has a `key` parameter to allow forcing it to separate
 /// cache entries by using different keys.
 #[turbo_tasks::function]
-async fn fib(i: u32, key: u32) -> Result<FibResultVc> {
+async fn fib(i: u32, key: u32) -> Result<Vc<FibResult>> {
     Ok(match i {
         0 => FibResult(1).cell(),
         1 => fib(0, key),

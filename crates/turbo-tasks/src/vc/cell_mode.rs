@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
-use super::{read::VcRead, traits::VcValueType, Vc};
+use turbo_tasks::Vc;
+
+use super::{read::VcRead, traits::VcValueType};
 use crate::manager::find_cell_by_type;
 
 /// Trait that controls the behavior of `Vc::cell` on a value type basis.

@@ -32,14 +32,14 @@ use tokio::task::JoinHandle;
 use tracing::{event, info_span, Instrument, Level, Span};
 use turbo_tasks::{
     run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
-    TransientInstance, TransientValue, TurboTasksApi,
+    TransientInstance, TransientValue, TurboTasksApi, Vc,
 };
 use turbopack_core::{
     error::PrettyPrintError,
-    issue::{IssueReporter, IssueReporterVc, IssueVc},
+    issue::{Issue, IssueReporter},
 };
 
-use self::{source::ContentSourceVc, update::UpdateServer};
+use self::{source::ContentSource, update::UpdateServer};
 use crate::{
     invalidation::{ServerRequest, ServerRequestSideEffects},
     source::ContentSourceSideEffect,
@@ -47,14 +47,14 @@ use crate::{
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
-    fn get_source(&self) -> ContentSourceVc;
+    fn get_source(&self) -> Vc<Box<dyn ContentSource>>;
 }
 
 impl<T> SourceProvider for T
 where
-    T: Fn() -> ContentSourceVc + Send + Clone + 'static,
+    T: Fn() -> Vc<Box<dyn ContentSource>> + Send + Clone + 'static,
 {
-    fn get_source(&self) -> ContentSourceVc {
+    fn get_source(&self) -> Vc<Box<dyn ContentSource>> {
         self()
     }
 }
@@ -79,9 +79,9 @@ async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
     source: T,
     path: &str,
     operation: &str,
-    issue_reporter: IssueReporterVc,
+    issue_reporter: Vc<Box<dyn IssueReporter>>,
 ) -> Result<()> {
-    let issues = IssueVc::peek_issues_with_path(source)
+    let issues = Issue::peek_issues_with_path(source)
         .await?
         .strongly_consistent()
         .await?;
@@ -138,7 +138,7 @@ impl DevServerBuilder {
         self,
         turbo_tasks: Arc<dyn TurboTasksApi>,
         source_provider: impl SourceProvider + Clone + Send + Sync,
-        get_issue_reporter: Arc<dyn Fn() -> IssueReporterVc + Send + Sync>,
+        get_issue_reporter: Arc<dyn Fn() -> Vc<Box<dyn IssueReporter>> + Send + Sync>,
     ) -> DevServer {
         let ongoing_side_effects = Arc::new(Mutex::new(VecDeque::<
             Arc<tokio::sync::Mutex<Option<JoinHandle<Result<()>>>>>,

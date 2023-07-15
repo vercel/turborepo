@@ -7,7 +7,8 @@ pub(crate) mod css;
 pub(crate) mod ecmascript;
 pub mod react_refresh;
 
-pub use chunking_context::{DevChunkingContext, DevChunkingContextBuilder, DevChunkingContextVc};
+pub use chunking_context::{DevChunkingContext, DevChunkingContextBuilder};
+use turbo_tasks::Vc;
 
 pub fn register() {
     turbo_tasks::register();

@@ -474,8 +474,8 @@ impl ConcreteTaskInput {
 impl From<RawVc> for ConcreteTaskInput {
     fn from(raw_vc: RawVc) -> Self {
         match raw_vc {
-            RawVc::TaskOutput(task) => ConcreteTaskInput::TaskOutput(task),
-            RawVc::TaskCell(task, i) => ConcreteTaskInput::TaskCell(task, i),
+            Raw::TaskOutput(task) => ConcreteTaskInput::TaskOutput(task),
+            Raw::TaskCell(task, i) => ConcreteTaskInput::TaskCell(task, i),
         }
     }
 }

@@ -99,13 +99,14 @@ pub use task::{
     task_input::TaskInput,
 };
 pub use trait_ref::{IntoTraitRef, TraitRef};
+use turbo_tasks::Vc;
 pub use turbo_tasks_macros::{function, value, value_impl, value_trait, TaskInput};
 pub use unit::unit;
 pub use value::{TransientInstance, TransientValue, Value};
 pub use value_type::{TraitMethod, TraitType, ValueType};
 pub use vc::{
-    Dynamic, TypedForInput, Upcast, ValueDefault, Vc, VcCellNewMode, VcCellSharedMode,
-    VcDefaultRead, VcRead, VcTransparentRead, VcValueTrait, VcValueType,
+    Dynamic, TypedForInput, Upcast, ValueDefault, VcCellNewMode, VcCellSharedMode, VcDefaultRead,
+    VcRead, VcTransparentRead, VcValueTrait, VcValueType,
 };
 
 pub mod test_helpers {

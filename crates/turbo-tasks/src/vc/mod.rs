@@ -255,7 +255,7 @@ where
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(Vc {
-            node: RawVc::deserialize(deserializer)?,
+            node: Raw::deserialize(deserializer)?,
             _t: PhantomData,
         })
     }

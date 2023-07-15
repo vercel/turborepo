@@ -6,7 +6,9 @@ use std::{
     cell::RefCell,
     cmp::{max, Ordering, Reverse},
     collections::{HashMap, HashSet, VecDeque},
-    fmt::{self, Debug, Display, Formatter, Write},
+    fmt::{
+        Debug, Display, Formatter, Write, {self},
+    },
     future::Future,
     hash::Hash,
     mem::{replace, take},
@@ -2267,7 +2269,7 @@ impl Task {
                             read_task_id,
                             &*turbo_tasks,
                         );
-                        RawVc::TaskOutput(task).into_read::<AutoSet<RawVc>>()
+                        Raw::TaskOutput(task).into_read::<AutoSet<RawVc>>()
                     })
                 })
             })
@@ -2294,7 +2296,7 @@ impl Task {
             reader,
             turbo_tasks,
         );
-        RawVc::TaskOutput(task).into()
+        Vc::upcast(Raw::TaskOutput(task))
     }
 
     pub(crate) fn emit_collectible(

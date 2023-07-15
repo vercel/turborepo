@@ -22,6 +22,7 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
 use tokio::{runtime::Handle, select, task_local};
 use tracing::{instrument, trace_span, Instrument, Level};
+use turbo_tasks::Vc;
 
 use crate::{
     backend::{Backend, CellContent, PersistentTaskType, TransientTaskType},
@@ -30,11 +31,13 @@ use crate::{
     id_factory::IdFactory,
     raw_vc::{CellId, RawVc},
     registry,
-    timed_future::{self, TimedFuture},
+    timed_future::{
+        TimedFuture, {self},
+    },
     trace::TraceRawVcs,
     util::{FormatDuration, StaticOrArc},
     Completion, ConcreteTaskInput, InvalidationReason, InvalidationReasonSet, SharedReference,
-    TaskId, ValueTypeId, Vc, VcRead, VcValueTrait, VcValueType,
+    TaskId, ValueTypeId, VcRead, VcValueTrait, VcValueType,
 };
 
 pub trait TurboTasksCallApi: Sync + Send {
@@ -386,7 +389,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
     /// Call a native function with arguments.
     /// All inputs must be resolved.
     pub(crate) fn native_call(&self, func: FunctionId, inputs: Vec<ConcreteTaskInput>) -> RawVc {
-        RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
+        Raw::TaskOutput(self.backend.get_or_create_persistent_task(
             PersistentTaskType::Native(func, inputs),
             current_task("turbo_function calls"),
             self,
@@ -399,7 +402,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
         if inputs.iter().all(|i| i.is_resolved() && !i.is_nothing()) {
             self.native_call(func, inputs)
         } else {
-            RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
+            Raw::TaskOutput(self.backend.get_or_create_persistent_task(
                 PersistentTaskType::ResolveNative(func, inputs),
                 current_task("turbo_function calls"),
                 self,
@@ -429,7 +432,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
         }
 
         // create a wrapper task to resolve all inputs
-        RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
+        Raw::TaskOutput(self.backend.get_or_create_persistent_task(
             PersistentTaskType::ResolveTrait(trait_type, trait_fn_name, inputs),
             current_task("turbo_function calls"),
             self,
@@ -1542,7 +1545,7 @@ impl CurrentCellRef {
 
 impl From<CurrentCellRef> for RawVc {
     fn from(cell: CurrentCellRef) -> Self {
-        RawVc::TaskCell(cell.current_task, cell.index)
+        Raw::TaskCell(cell.current_task, cell.index)
     }
 }
 

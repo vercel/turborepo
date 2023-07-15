@@ -12,36 +12,31 @@ use std::{
 };
 
 use anyhow::Result;
-use css::{CssModuleAssetVc, GlobalCssAssetVc, ModuleCssAssetVc};
+use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
-    typescript::resolve::TypescriptTypesAssetReferenceVc, EcmascriptModuleAssetType,
-    EcmascriptModuleAssetVc,
+    typescript::resolve::TypescriptTypesAssetReference, EcmascriptModuleAsset,
+    EcmascriptModuleAssetType,
 };
-use graph::{aggregate, AggregatedGraphNodeContent, AggregatedGraphVc};
-use module_options::{
-    ModuleOptionsContextVc, ModuleOptionsVc, ModuleRuleEffect, ModuleType, ModuleTypeVc,
-};
+use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
+use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 pub use resolve::resolve_options;
-use turbo_tasks::{
-    primitives::{BoolVc, StringVc},
-    CompletionVc, Value,
-};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{Completion, Value, Vc};
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    asset::{Asset, AssetVc},
-    compile_time_info::CompileTimeInfoVc,
-    context::{AssetContext, AssetContextVc},
-    ident::AssetIdentVc,
-    issue::{Issue, IssueVc},
-    module::ModuleVc,
-    raw_module::RawModuleVc,
+    asset::Asset,
+    compile_time_info::CompileTimeInfo,
+    context::AssetContext,
+    ident::AssetIdent,
+    issue::Issue,
+    module::Module,
+    raw_module::RawModule,
     reference::all_referenced_assets,
-    reference_type::{EcmaScriptModulesReferenceSubType, InnerAssetsVc, ReferenceType},
+    reference_type::{EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType},
     resolve::{
-        options::ResolveOptionsVc, origin::PlainResolveOriginVc, parse::RequestVc, resolve,
-        ModulePartVc, ResolveResultVc,
+        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
+        ResolveResult,
     },
-    source::{asset_to_source, SourceVc},
+    source::{asset_to_source, Source},
 };
 
 use crate::transition::Transition;
@@ -56,56 +51,57 @@ pub mod resolve_options_context;
 pub mod transition;
 pub(crate) mod unsupported_sass;
 
+use turbo_tasks::Vc;
 pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
-use turbopack_json::JsonModuleAssetVc;
-use turbopack_mdx::MdxModuleAssetVc;
-use turbopack_static::StaticModuleAssetVc;
+use turbopack_json::JsonModuleAsset;
+use turbopack_mdx::MdxModuleAsset;
+use turbopack_static::StaticModuleAsset;
 
 use self::{
     module_options::CustomModuleType,
-    resolve_options_context::ResolveOptionsContextVc,
-    transition::{TransitionVc, TransitionsByNameVc},
+    resolve_options_context::ResolveOptionsContext,
+    transition::{Transition, TransitionsByName},
 };
 
 #[turbo_tasks::value]
 struct ModuleIssue {
-    ident: AssetIdentVc,
-    title: StringVc,
-    description: StringVc,
+    ident: Vc<AssetIdent>,
+    title: Vc<String>,
+    description: Vc<String>,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for ModuleIssue {
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("other".to_string())
+    fn category(&self) -> Vc<String> {
+        Vc::cell("other".to_string())
     }
 
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
+    fn context(&self) -> Vc<FileSystemPath> {
         self.ident.path()
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
+    fn title(&self) -> Vc<String> {
         self.title
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> StringVc {
+    fn description(&self) -> Vc<String> {
         self.description
     }
 }
 
 #[turbo_tasks::function]
 async fn apply_module_type(
-    source: SourceVc,
-    context: ModuleAssetContextVc,
-    module_type: ModuleTypeVc,
-    part: Option<ModulePartVc>,
-    inner_assets: Option<InnerAssetsVc>,
-) -> Result<ModuleVc> {
+    source: Vc<Box<dyn Source>>,
+    context: Vc<ModuleAssetContext>,
+    module_type: Vc<ModuleType>,
+    part: Option<Vc<ModulePart>>,
+    inner_assets: Option<Vc<InnerAssets>>,
+) -> Result<Vc<Box<dyn Module>>> {
     let module_type = &*module_type.await?;
     Ok(match module_type {
         ModuleType::Ecmascript {
@@ -131,7 +127,7 @@ async fn apply_module_type(
                 }
                 _ => context,
             };
-            let mut builder = EcmascriptModuleAssetVc::builder(
+            let mut builder = EcmascriptModuleAsset::builder(
                 source,
                 context_for_module.into(),
                 *transforms,
@@ -166,18 +162,26 @@ async fn apply_module_type(
 
             builder.build()
         }
-        ModuleType::Json => JsonModuleAssetVc::new(source).into(),
-        ModuleType::Raw => RawModuleVc::new(source).into(),
-        ModuleType::CssGlobal => GlobalCssAssetVc::new(source, context.into()).into(),
-        ModuleType::CssModule => ModuleCssAssetVc::new(source, context.into()).into(),
-        ModuleType::Css { ty, transforms } => {
-            CssModuleAssetVc::new(source, context.into(), *transforms, *ty).into()
-        }
-        ModuleType::Static => StaticModuleAssetVc::new(source, context.into()).into(),
+        ModuleType::Json => Vc::upcast(JsonModuleAsset::new(source)),
+        ModuleType::Raw => Vc::upcast(RawModule::new(source)),
+        ModuleType::CssGlobal => Vc::upcast(GlobalCssAsset::new(source, context.into())),
+        ModuleType::CssModule => Vc::upcast(ModuleCssAsset::new(source, context.into())),
+        ModuleType::Css { ty, transforms } => Vc::upcast(CssModuleAsset::new(
+            source,
+            context.into(),
+            *transforms,
+            *ty,
+        )),
+        ModuleType::Static => Vc::upcast(StaticModuleAsset::new(source, context.into())),
         ModuleType::Mdx {
             transforms,
             options,
-        } => MdxModuleAssetVc::new(source, context.into(), *transforms, *options).into(),
+        } => Vc::upcast(MdxModuleAsset::new(
+            source,
+            context.into(),
+            *transforms,
+            *options,
+        )),
         ModuleType::Custom(custom) => custom.create_module(source, context, part),
     })
 }
@@ -185,22 +189,22 @@ async fn apply_module_type(
 #[turbo_tasks::value]
 #[derive(Debug)]
 pub struct ModuleAssetContext {
-    pub transitions: TransitionsByNameVc,
-    pub compile_time_info: CompileTimeInfoVc,
-    pub module_options_context: ModuleOptionsContextVc,
-    pub resolve_options_context: ResolveOptionsContextVc,
-    transition: Option<TransitionVc>,
+    pub transitions: Vc<TransitionsByName>,
+    pub compile_time_info: Vc<CompileTimeInfo>,
+    pub module_options_context: Vc<ModuleOptionsContext>,
+    pub resolve_options_context: Vc<ResolveOptionsContext>,
+    transition: Option<Vc<Box<dyn Transition>>>,
 }
 
 #[turbo_tasks::value_impl]
-impl ModuleAssetContextVc {
+impl ModuleAssetContext {
     #[turbo_tasks::function]
     pub fn new(
-        transitions: TransitionsByNameVc,
-        compile_time_info: CompileTimeInfoVc,
-        module_options_context: ModuleOptionsContextVc,
-        resolve_options_context: ResolveOptionsContextVc,
-    ) -> Self {
+        transitions: Vc<TransitionsByName>,
+        compile_time_info: Vc<CompileTimeInfo>,
+        module_options_context: Vc<ModuleOptionsContext>,
+        resolve_options_context: Vc<ResolveOptionsContext>,
+    ) -> Vc<Self> {
         Self::cell(ModuleAssetContext {
             transitions,
             compile_time_info,
@@ -212,12 +216,12 @@ impl ModuleAssetContextVc {
 
     #[turbo_tasks::function]
     pub fn new_transition(
-        transitions: TransitionsByNameVc,
-        compile_time_info: CompileTimeInfoVc,
-        module_options_context: ModuleOptionsContextVc,
-        resolve_options_context: ResolveOptionsContextVc,
-        transition: TransitionVc,
-    ) -> Self {
+        transitions: Vc<TransitionsByName>,
+        compile_time_info: Vc<CompileTimeInfo>,
+        module_options_context: Vc<ModuleOptionsContext>,
+        resolve_options_context: Vc<ResolveOptionsContext>,
+        transition: Vc<Box<dyn Transition>>,
+    ) -> Vc<Self> {
         Self::cell(ModuleAssetContext {
             transitions,
             compile_time_info,
@@ -228,20 +232,18 @@ impl ModuleAssetContextVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn module_options_context(self) -> Result<ModuleOptionsContextVc> {
+    pub async fn module_options_context(self: Vc<Self>) -> Result<Vc<ModuleOptionsContext>> {
         Ok(self.await?.module_options_context)
     }
 
     #[turbo_tasks::function]
-    pub async fn is_types_resolving_enabled(self) -> Result<BoolVc> {
+    pub async fn is_types_resolving_enabled(self: Vc<Self>) -> Result<Vc<bool>> {
         let context = self.await?.resolve_options_context.await?;
-        Ok(BoolVc::cell(
-            context.enable_types && context.enable_typescript,
-        ))
+        Ok(Vc::cell(context.enable_types && context.enable_typescript))
     }
 
     #[turbo_tasks::function]
-    pub async fn with_types_resolving_enabled(self) -> Result<ModuleAssetContextVc> {
+    pub async fn with_types_resolving_enabled(self: Vc<Self>) -> Result<Vc<ModuleAssetContext>> {
         if *self.is_types_resolving_enabled().await? {
             return Ok(self);
         }
@@ -251,7 +253,7 @@ impl ModuleAssetContextVc {
             .with_types_enabled()
             .resolve()
             .await?;
-        Ok(ModuleAssetContextVc::new(
+        Ok(ModuleAssetContext::new(
             this.transitions,
             this.compile_time_info,
             this.module_options_context,
@@ -261,26 +263,26 @@ impl ModuleAssetContextVc {
 
     #[turbo_tasks::function]
     fn process_default(
-        self_vc: ModuleAssetContextVc,
-        source: SourceVc,
+        self: Vc<Self>,
+        source: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> ModuleVc {
-        process_default(self_vc, source, reference_type, Vec::new())
+    ) -> Vc<Box<dyn Module>> {
+        process_default(self, source, reference_type, Vec::new())
     }
 }
 
 #[turbo_tasks::function]
 async fn process_default(
-    context: ModuleAssetContextVc,
-    source: SourceVc,
+    context: Vc<ModuleAssetContext>,
+    source: Vc<Box<dyn Source>>,
     reference_type: Value<ReferenceType>,
     processed_rules: Vec<usize>,
-) -> Result<ModuleVc> {
+) -> Result<Vc<Box<dyn Module>>> {
     let ident = source.ident().resolve().await?;
-    let options = ModuleOptionsVc::new(ident.path().parent(), context.module_options_context());
+    let options = ModuleOptions::new(ident.path().parent(), context.module_options_context());
 
     let reference_type = reference_type.into_value();
-    let part: Option<ModulePartVc> = match &reference_type {
+    let part: Option<Vc<ModulePart>> = match &reference_type {
         ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportPart(part)) => {
             Some(*part)
         }
@@ -345,30 +347,28 @@ async fn process_default(
                             Some(module_type) => {
                                 ModuleIssue {
                                     ident,
-                                    title: StringVc::cell("Invalid module type".to_string()),
-                                    description: StringVc::cell(
+                                    title: Vc::cell("Invalid module type".to_string()),
+                                    description: Vc::cell(
                                         "The module type must be Ecmascript or Typescript to add \
                                          Ecmascript transforms"
                                             .to_string(),
                                     ),
                                 }
                                 .cell()
-                                .as_issue()
                                 .emit();
                                 Some(module_type)
                             }
                             None => {
                                 ModuleIssue {
                                     ident,
-                                    title: StringVc::cell("Missing module type".to_string()),
-                                    description: StringVc::cell(
+                                    title: Vc::cell("Missing module type".to_string()),
+                                    description: Vc::cell(
                                         "The module type effect must be applied before adding \
                                          Ecmascript transforms"
                                             .to_string(),
                                     ),
                                 }
                                 .cell()
-                                .as_issue()
                                 .emit();
                                 None
                             }
@@ -393,21 +393,21 @@ async fn process_default(
 #[turbo_tasks::value_impl]
 impl AssetContext for ModuleAssetContext {
     #[turbo_tasks::function]
-    fn compile_time_info(&self) -> CompileTimeInfoVc {
+    fn compile_time_info(&self) -> Vc<CompileTimeInfo> {
         self.compile_time_info
     }
 
     #[turbo_tasks::function]
     async fn resolve_options(
-        self_vc: ModuleAssetContextVc,
-        origin_path: FileSystemPathVc,
+        self: Vc<Self>,
+        origin_path: Vc<FileSystemPath>,
         _reference_type: Value<ReferenceType>,
-    ) -> Result<ResolveOptionsVc> {
-        let this = self_vc.await?;
+    ) -> Result<Vc<ResolveOptions>> {
+        let this = self.await?;
         let context = if let Some(transition) = this.transition {
-            transition.process_context(self_vc)
+            transition.process_context(self)
         } else {
-            self_vc
+            self
         };
         // TODO move `apply_commonjs/esm_resolve_options` etc. to here
         Ok(resolve_options(
@@ -418,20 +418,20 @@ impl AssetContext for ModuleAssetContext {
 
     #[turbo_tasks::function]
     async fn resolve_asset(
-        self_vc: ModuleAssetContextVc,
-        origin_path: FileSystemPathVc,
-        request: RequestVc,
-        resolve_options: ResolveOptionsVc,
+        self: Vc<Self>,
+        origin_path: Vc<FileSystemPath>,
+        request: Vc<Request>,
+        resolve_options: Vc<ResolveOptions>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<ResolveResultVc> {
+    ) -> Result<Vc<ResolveResult>> {
         let context_path = origin_path.parent().resolve().await?;
 
         let result = resolve(context_path, request, resolve_options);
-        let mut result = self_vc.process_resolve_result(result, reference_type);
+        let mut result = self.process_resolve_result(result, reference_type);
 
-        if *self_vc.is_types_resolving_enabled().await? {
-            let types_reference = TypescriptTypesAssetReferenceVc::new(
-                PlainResolveOriginVc::new(self_vc.into(), origin_path).into(),
+        if *self.is_types_resolving_enabled().await? {
+            let types_reference = TypescriptTypesAssetReference::new(
+                Vc::upcast(PlainResolveOrigin::new(self.into(), origin_path)),
                 request,
             );
 
@@ -443,17 +443,17 @@ impl AssetContext for ModuleAssetContext {
 
     #[turbo_tasks::function]
     async fn process_resolve_result(
-        self_vc: ModuleAssetContextVc,
-        result: ResolveResultVc,
+        self: Vc<Self>,
+        result: Vc<ResolveResult>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<ResolveResultVc> {
+    ) -> Result<Vc<ResolveResult>> {
         Ok(result
             .await?
             .map(
                 |a| {
                     let reference_type = reference_type.clone();
                     async move {
-                        Ok(self_vc
+                        Ok(self
                             .process(asset_to_source(a), reference_type)
                             .resolve()
                             .await?
@@ -467,96 +467,100 @@ impl AssetContext for ModuleAssetContext {
     }
     #[turbo_tasks::function]
     async fn process(
-        self_vc: ModuleAssetContextVc,
-        asset: SourceVc,
+        self: Vc<Self>,
+        asset: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<ModuleVc> {
-        let this = self_vc.await?;
+    ) -> Result<Vc<Box<dyn Module>>> {
+        let this = self.await?;
         if let Some(transition) = this.transition {
-            Ok(transition.process(asset, self_vc, reference_type))
+            Ok(transition.process(asset, self, reference_type))
         } else {
-            Ok(self_vc.process_default(asset, reference_type))
+            Ok(self.process_default(asset, reference_type))
         }
     }
 
     #[turbo_tasks::function]
-    async fn with_transition(&self, transition: &str) -> Result<AssetContextVc> {
+    async fn with_transition(&self, transition: String) -> Result<Vc<Box<dyn AssetContext>>> {
         Ok(
             if let Some(transition) = self.transitions.await?.get(transition) {
-                ModuleAssetContextVc::new_transition(
+                Vc::upcast(ModuleAssetContext::new_transition(
                     self.transitions,
                     self.compile_time_info,
                     self.module_options_context,
                     self.resolve_options_context,
                     *transition,
-                )
-                .into()
+                ))
             } else {
                 // TODO report issue
-                ModuleAssetContextVc::new(
+                Vc::upcast(ModuleAssetContext::new(
                     self.transitions,
                     self.compile_time_info,
                     self.module_options_context,
                     self.resolve_options_context,
-                )
-                .into()
+                ))
             },
         )
     }
 }
 
 #[turbo_tasks::function]
-pub async fn emit_with_completion(asset: AssetVc, output_dir: FileSystemPathVc) -> CompletionVc {
+pub async fn emit_with_completion(
+    asset: Vc<Box<dyn Asset>>,
+    output_dir: Vc<FileSystemPath>,
+) -> Vc<Completion> {
     emit_assets_aggregated(asset, output_dir)
 }
 
 #[turbo_tasks::function]
-async fn emit_assets_aggregated(asset: AssetVc, output_dir: FileSystemPathVc) -> CompletionVc {
+async fn emit_assets_aggregated(
+    asset: Vc<Box<dyn Asset>>,
+    output_dir: Vc<FileSystemPath>,
+) -> Vc<Completion> {
     let aggregated = aggregate(asset);
     emit_aggregated_assets(aggregated, output_dir)
 }
 
 #[turbo_tasks::function]
 async fn emit_aggregated_assets(
-    aggregated: AggregatedGraphVc,
-    output_dir: FileSystemPathVc,
-) -> Result<CompletionVc> {
+    aggregated: Vc<AggregatedGraph>,
+    output_dir: Vc<FileSystemPath>,
+) -> Result<Vc<Completion>> {
     Ok(match &*aggregated.content().await? {
         AggregatedGraphNodeContent::Asset(asset) => emit_asset_into_dir(*asset, output_dir),
         AggregatedGraphNodeContent::Children(children) => {
             for aggregated in children {
                 emit_aggregated_assets(*aggregated, output_dir).await?;
             }
-            CompletionVc::new()
+            Completion::new()
         }
     })
 }
 
 #[turbo_tasks::function]
-pub async fn emit_asset(asset: AssetVc) -> CompletionVc {
+pub async fn emit_asset(asset: Vc<Box<dyn Asset>>) -> Vc<Completion> {
     asset.content().write(asset.ident().path())
 }
 
 #[turbo_tasks::function]
 pub async fn emit_asset_into_dir(
-    asset: AssetVc,
-    output_dir: FileSystemPathVc,
-) -> Result<CompletionVc> {
+    asset: Vc<Box<dyn Asset>>,
+    output_dir: Vc<FileSystemPath>,
+) -> Result<Vc<Completion>> {
     let dir = &*output_dir.await?;
     Ok(if asset.ident().path().await?.is_inside(dir) {
         emit_asset(asset)
     } else {
-        CompletionVc::new()
+        Completion::new()
     })
 }
 
 #[turbo_tasks::value(shared)]
 struct ReferencesList {
-    referenced_by: HashMap<AssetVc, HashSet<AssetVc>>,
+    referenced_by: HashMap<Vc<Box<dyn Asset>>, HashSet<Vc<Box<dyn Asset>>>>,
 }
 
 #[turbo_tasks::function]
-async fn compute_back_references(aggregated: AggregatedGraphVc) -> Result<ReferencesListVc> {
+async fn compute_back_references(aggregated: Vc<AggregatedGraph>) -> Result<Vc<ReferencesList>> {
     Ok(match &*aggregated.content().await? {
         AggregatedGraphNodeContent::Asset(asset) => {
             let mut referenced_by = HashMap::new();
@@ -566,7 +570,8 @@ async fn compute_back_references(aggregated: AggregatedGraphVc) -> Result<Refere
             ReferencesList { referenced_by }.into()
         }
         AggregatedGraphNodeContent::Children(children) => {
-            let mut referenced_by = HashMap::<AssetVc, HashSet<AssetVc>>::new();
+            let mut referenced_by =
+                HashMap::<Vc<Box<dyn Asset>>, HashSet<Vc<Box<dyn Asset>>>>::new();
             let lists = children
                 .iter()
                 .map(|child| compute_back_references(*child))
@@ -588,10 +593,10 @@ async fn compute_back_references(aggregated: AggregatedGraphVc) -> Result<Refere
 }
 
 #[turbo_tasks::function]
-async fn top_references(list: ReferencesListVc) -> Result<ReferencesListVc> {
+async fn top_references(list: Vc<ReferencesList>) -> Result<Vc<ReferencesList>> {
     let list = list.await?;
     const N: usize = 5;
-    let mut top = Vec::<(&AssetVc, &HashSet<AssetVc>)>::new();
+    let mut top = Vec::<(&Vc<Box<dyn Asset>>, &HashSet<Vc<Box<dyn Asset>>>)>::new();
     for tuple in list.referenced_by.iter() {
         let mut current = tuple;
         for item in &mut top {

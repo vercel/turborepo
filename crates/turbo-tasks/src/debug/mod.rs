@@ -1,9 +1,10 @@
 use std::fmt::{Debug, Display};
 
 use auto_hash_map::{AutoMap, AutoSet};
+use turbo_tasks::Vc;
 pub use turbo_tasks_macros::ValueDebugFormat;
 
-use crate::{self as turbo_tasks, Vc};
+use crate::{self as turbo_tasks};
 
 #[doc(hidden)]
 pub mod internal;
@@ -13,8 +14,8 @@ use internal::PassthroughDebug;
 
 /// The return type of `ValueDebug::dbg`.
 ///
-/// We don't use `StringVc` directly because we don't want the `Debug`/`Display`
-/// representations to be escaped.
+/// We don't use `Vc<String>` directly because we don't want the
+/// `Debug`/`Display` representations to be escaped.
 #[turbo_tasks::value]
 pub struct ValueDebugString(String);
 
@@ -307,7 +308,7 @@ impl<'a> ValueDebugFormatString<'a> {
         })
     }
 
-    /// Convert the `ValueDebugFormatString` into a `ValueDebugStringVc`.
+    /// Convert the `ValueDebugFormatString` into a `Vc<ValueDebugString>`.
     ///
     /// This can fail when resolving `Vc` types.
     pub async fn try_to_value_debug_string(self) -> anyhow::Result<Vc<ValueDebugString>> {

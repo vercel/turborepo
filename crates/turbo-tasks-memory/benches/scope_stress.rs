@@ -67,12 +67,12 @@ pub fn scope_stress(c: &mut Criterion) {
 /// This fills a rectagle from (0, 0) to (a, b) by
 /// first filling (0, 0) to (a - 1, b) and then (0, 0) to (a, b - 1) recursively
 #[turbo_tasks::function]
-async fn rectangle(a: u32, b: u32) -> Result<CompletionVc> {
+async fn rectangle(a: u32, b: u32) -> Result<Vc<Completion>> {
     if a > 0 {
         rectangle(a - 1, b).await?;
     }
     if b > 0 {
         rectangle(a, b - 1).await?;
     }
-    Ok(CompletionVc::new())
+    Ok(Completion::new())
 }

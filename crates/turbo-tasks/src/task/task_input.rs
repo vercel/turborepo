@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, Result};
 
 use super::concrete_task_input::TransientSharedValue;
 use crate::{
-    magic_any::MagicAny, ConcreteTaskInput, RawVc, SharedValue, TransientInstance, TransientValue,
+    magic_any::MagicAny, ConcreteTaskInput, SharedValue, TransientInstance, TransientValue,
     TypedForInput, Value, Vc, VcValueType,
 };
 
@@ -154,11 +154,11 @@ impl<T> TaskInput for Vc<T> {
     fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
         match input {
             ConcreteTaskInput::TaskCell(task, index) => Ok(Vc {
-                node: RawVc::TaskCell(*task, *index),
+                node: Raw::TaskCell(*task, *index),
                 _t: PhantomData,
             }),
             ConcreteTaskInput::TaskOutput(task) => Ok(Vc {
-                node: RawVc::TaskOutput(*task),
+                node: Raw::TaskOutput(*task),
                 _t: PhantomData,
             }),
             _ => bail!("invalid task input type, expected RawVc"),
@@ -167,8 +167,8 @@ impl<T> TaskInput for Vc<T> {
 
     fn into_concrete(self) -> ConcreteTaskInput {
         match self.node {
-            RawVc::TaskCell(task, index) => ConcreteTaskInput::TaskCell(task, index),
-            RawVc::TaskOutput(task) => ConcreteTaskInput::TaskOutput(task),
+            Raw::TaskCell(task, index) => ConcreteTaskInput::TaskCell(task, index),
+            Raw::TaskOutput(task) => ConcreteTaskInput::TaskOutput(task),
         }
     }
 }

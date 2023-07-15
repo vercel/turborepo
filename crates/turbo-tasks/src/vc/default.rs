@@ -1,4 +1,5 @@
-use super::Vc;
+use turbo_tasks::Vc;
+
 use crate::{self as turbo_tasks};
 
 #[turbo_tasks::value_trait]

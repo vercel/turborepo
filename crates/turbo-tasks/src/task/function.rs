@@ -1,9 +1,10 @@
 use std::{future::Future, marker::PhantomData, pin::Pin};
 
 use anyhow::{bail, Context, Result};
+use turbo_tasks::Vc;
 
 use super::{TaskInput, TaskOutput};
-use crate::{macro_helpers, ConcreteTaskInput, RawVc, Vc, VcRead, VcValueType};
+use crate::{macro_helpers, ConcreteTaskInput, RawVc, VcRead, VcValueType};
 
 pub type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
 pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;

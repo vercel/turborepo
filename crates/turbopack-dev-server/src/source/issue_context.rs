@@ -1,33 +1,33 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, Value};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{Value, Vc};
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    introspect::{Introspectable, IntrospectableChildren},
     issue::IssueContextExt,
 };
 
 use super::{
-    route_tree::{MapGetContentSourceContent, RouteTreeVc},
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataVaryVc,
-    ContentSourceVc, ContentSourcesVc, GetContentSourceContent, GetContentSourceContentVc,
+    route_tree::{MapGetContentSourceContent, RouteTree},
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataVary, ContentSources,
+    GetContentSourceContent,
 };
-use crate::source::route_tree::MapGetContentSourceContentVc;
+use crate::source::route_tree::MapGetContentSourceContent;
 
 #[turbo_tasks::value]
 pub struct IssueContextContentSource {
-    context: Option<FileSystemPathVc>,
+    context: Option<Vc<FileSystemPath>>,
     description: String,
-    source: ContentSourceVc,
+    source: Vc<Box<dyn ContentSource>>,
 }
 
 #[turbo_tasks::value_impl]
-impl IssueContextContentSourceVc {
+impl IssueContextContentSource {
     #[turbo_tasks::function]
     pub fn new_context(
-        context: FileSystemPathVc,
-        description: &str,
-        source: ContentSourceVc,
-    ) -> Self {
+        context: Vc<FileSystemPath>,
+        description: String,
+        source: Vc<Box<dyn ContentSource>>,
+    ) -> Vc<Self> {
         IssueContextContentSource {
             context: Some(context),
             description: description.to_string(),
@@ -37,7 +37,7 @@ impl IssueContextContentSourceVc {
     }
 
     #[turbo_tasks::function]
-    pub fn new_description(description: &str, source: ContentSourceVc) -> Self {
+    pub fn new_description(description: String, source: Vc<Box<dyn ContentSource>>) -> Vc<Self> {
         IssueContextContentSource {
             context: None,
             description: description.to_string(),
@@ -50,35 +50,38 @@ impl IssueContextContentSourceVc {
 #[turbo_tasks::value_impl]
 impl ContentSource for IssueContextContentSource {
     #[turbo_tasks::function]
-    async fn get_routes(self_vc: IssueContextContentSourceVc) -> Result<RouteTreeVc> {
-        let this = self_vc.await?;
+    async fn get_routes(self: Vc<Self>) -> Result<Vc<RouteTree>> {
+        let this = self.await?;
         let routes = this
             .source
             .get_routes()
             .issue_context(this.context, &this.description)
             .await?;
         Ok(routes.map_routes(
-            IssueContextContentSourceMapper { source: self_vc }
+            IssueContextContentSourceMapper { source: self }
                 .cell()
                 .into(),
         ))
     }
 
     #[turbo_tasks::function]
-    fn get_children(&self) -> ContentSourcesVc {
-        ContentSourcesVc::cell(vec![self.source])
+    fn get_children(&self) -> Vc<ContentSources> {
+        Vc::cell(vec![self.source])
     }
 }
 
 #[turbo_tasks::value]
 struct IssueContextContentSourceMapper {
-    source: IssueContextContentSourceVc,
+    source: Vc<IssueContextContentSource>,
 }
 
 #[turbo_tasks::value_impl]
 impl MapGetContentSourceContent for IssueContextContentSourceMapper {
     #[turbo_tasks::function]
-    fn map_get_content(&self, get_content: GetContentSourceContentVc) -> GetContentSourceContentVc {
+    fn map_get_content(
+        &self,
+        get_content: Vc<Box<dyn GetContentSourceContent>>,
+    ) -> Vc<Box<dyn GetContentSourceContent>> {
         IssueContextGetContentSourceContent {
             get_content,
             source: self.source,
@@ -90,14 +93,14 @@ impl MapGetContentSourceContent for IssueContextContentSourceMapper {
 
 #[turbo_tasks::value]
 struct IssueContextGetContentSourceContent {
-    get_content: GetContentSourceContentVc,
-    source: IssueContextContentSourceVc,
+    get_content: Vc<Box<dyn GetContentSourceContent>>,
+    source: Vc<IssueContextContentSource>,
 }
 
 #[turbo_tasks::value_impl]
 impl GetContentSourceContent for IssueContextGetContentSourceContent {
     #[turbo_tasks::function]
-    async fn vary(&self) -> Result<ContentSourceDataVaryVc> {
+    async fn vary(&self) -> Result<Vc<ContentSourceDataVary>> {
         let source = self.source.await?;
         let result = self
             .get_content
@@ -110,9 +113,9 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
     #[turbo_tasks::function]
     async fn get(
         &self,
-        path: &str,
+        path: String,
         data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceContentVc> {
+    ) -> Result<Vc<ContentSourceContent>> {
         let source = self.source.await?;
         let result = self
             .get_content
@@ -126,46 +129,54 @@ impl GetContentSourceContent for IssueContextGetContentSourceContent {
 #[turbo_tasks::value_impl]
 impl Introspectable for IssueContextContentSource {
     #[turbo_tasks::function]
-    async fn ty(&self) -> Result<StringVc> {
+    async fn ty(&self) -> Result<Vc<String>> {
         Ok(
-            if let Some(source) = IntrospectableVc::resolve_from(self.source).await? {
+            if let Some(source) =
+                Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.source).await?
+            {
                 source.ty()
             } else {
-                StringVc::cell("IssueContextContentSource".to_string())
+                Vc::cell("IssueContextContentSource".to_string())
             },
         )
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<StringVc> {
+    async fn title(&self) -> Result<Vc<String>> {
         Ok(
-            if let Some(source) = IntrospectableVc::resolve_from(self.source).await? {
+            if let Some(source) =
+                Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.source).await?
+            {
                 let title = source.title().await?;
-                StringVc::cell(format!("{}: {}", self.description, title))
+                Vc::cell(format!("{}: {}", self.description, title))
             } else {
-                StringVc::cell(self.description.clone())
+                Vc::cell(self.description.clone())
             },
         )
     }
 
     #[turbo_tasks::function]
-    async fn details(&self) -> Result<StringVc> {
+    async fn details(&self) -> Result<Vc<String>> {
         Ok(
-            if let Some(source) = IntrospectableVc::resolve_from(self.source).await? {
+            if let Some(source) =
+                Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.source).await?
+            {
                 source.details()
             } else {
-                StringVc::cell(String::new())
+                Vc::cell(String::new())
             },
         )
     }
 
     #[turbo_tasks::function]
-    async fn children(&self) -> Result<IntrospectableChildrenVc> {
+    async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
         Ok(
-            if let Some(source) = IntrospectableVc::resolve_from(self.source).await? {
+            if let Some(source) =
+                Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(self.source).await?
+            {
                 source.children()
             } else {
-                IntrospectableChildrenVc::cell(Default::default())
+                Vc::cell(Default::default())
             },
         )
     }

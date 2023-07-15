@@ -5,11 +5,10 @@ use std::{
 };
 
 use crate::{
-    self as turbo_tasks,
     registry::register_function,
     task::{function::NativeTaskFn, IntoTaskFn, TaskFn},
     util::SharedError,
-    ConcreteTaskInput,
+    ConcreteTaskInput, {self as turbo_tasks},
 };
 
 /// A native (rust) turbo-tasks function. It's used internally by

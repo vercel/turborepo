@@ -8,14 +8,14 @@ use hyper::{
     header::{HeaderName as HyperHeaderName, HeaderValue as HyperHeaderValue},
     Uri,
 };
-use turbo_tasks::{TransientInstance, Value};
+use turbo_tasks::{TransientInstance, Value, Vc};
 
 use super::{
     headers::{HeaderValue, Headers},
     query::Query,
     request::SourceRequest,
-    ContentSourceContent, ContentSourceDataVary, ContentSourceVc, HeaderListVc, ProxyResultVc,
-    RewriteType, StaticContentVc,
+    ContentSource, ContentSourceContent, ContentSourceDataVary, HeaderList, ProxyResult,
+    RewriteType, StaticContent,
 };
 use crate::source::{ContentSource, ContentSourceData, GetContentSourceContent};
 
@@ -25,8 +25,8 @@ use crate::source::{ContentSource, ContentSourceData, GetContentSourceContent};
 #[turbo_tasks::value(serialization = "none")]
 pub enum ResolveSourceRequestResult {
     NotFound,
-    Static(StaticContentVc, HeaderListVc),
-    HttpProxy(ProxyResultVc),
+    Static(Vc<StaticContent>, Vc<HeaderList>),
+    HttpProxy(Vc<ProxyResult>),
 }
 
 /// Resolves a [SourceRequest] within a [super::ContentSource], returning the
@@ -39,9 +39,9 @@ pub enum ResolveSourceRequestResult {
 /// any side effect in get should not wait for recomputing of get_routes.
 #[turbo_tasks::function]
 pub async fn resolve_source_request(
-    source: ContentSourceVc,
+    source: Vc<Box<dyn ContentSource>>,
     request: TransientInstance<SourceRequest>,
-) -> Result<ResolveSourceRequestResultVc> {
+) -> Result<Vc<ResolveSourceRequestResult>> {
     let original_path = request.uri.path().to_string();
     // Remove leading slash.
     let mut current_asset_path = urlencoding::decode(&original_path[1..])?.into_owned();
@@ -109,7 +109,7 @@ pub async fn resolve_source_request(
                     ContentSourceContent::Static(static_content) => {
                         return Ok(ResolveSourceRequestResult::Static(
                             *static_content,
-                            HeaderListVc::new(response_header_overwrites),
+                            HeaderList::new(response_header_overwrites),
                         )
                         .cell());
                     }

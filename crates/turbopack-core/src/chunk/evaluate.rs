@@ -1,13 +1,13 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{Value, ValueToString};
+use turbo_tasks::{Value, ValueToString, Vc};
 
-use super::{ChunkableModule, ChunkableModuleVc};
+use super::ChunkableModule;
 use crate::{
-    asset::{Asset, AssetVc},
-    context::{AssetContext, AssetContextVc},
-    module::{Module, ModuleVc},
+    asset::Asset,
+    context::AssetContext,
+    module::Module,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    source::SourceVc,
+    source::Source,
 };
 
 /// Marker trait for the chunking context to accept evaluated entries.
@@ -18,17 +18,18 @@ use crate::{
 pub trait EvaluatableAsset: Asset + Module + ChunkableModule {}
 
 #[turbo_tasks::value_impl]
-impl EvaluatableAssetVc {
+impl EvaluatableAsset {
     #[turbo_tasks::function]
     pub async fn from_source(
-        source: SourceVc,
-        context: AssetContextVc,
-    ) -> Result<EvaluatableAssetVc> {
+        source: Vc<Box<dyn Source>>,
+        context: Vc<Box<dyn AssetContext>>,
+    ) -> Result<Vc<Box<dyn EvaluatableAsset>>> {
         let asset = context.process(
             source,
             Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)),
         );
-        let Some(entry) = EvaluatableAssetVc::resolve_from(asset).await? else {
+        let Some(entry) = Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(asset).await?
+        else {
             bail!(
                 "{} is not a valid evaluated entry",
                 asset.ident().to_string().await?
@@ -39,27 +40,30 @@ impl EvaluatableAssetVc {
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct EvaluatableAssets(Vec<EvaluatableAssetVc>);
+pub struct EvaluatableAssets(Vec<Vc<Box<dyn EvaluatableAsset>>>);
 
 #[turbo_tasks::value_impl]
-impl EvaluatableAssetsVc {
+impl EvaluatableAssets {
     #[turbo_tasks::function]
-    pub fn empty() -> EvaluatableAssetsVc {
+    pub fn empty() -> Vc<EvaluatableAssets> {
         EvaluatableAssets(vec![]).cell()
     }
 
     #[turbo_tasks::function]
-    pub fn one(entry: EvaluatableAssetVc) -> EvaluatableAssetsVc {
+    pub fn one(entry: Vc<Box<dyn EvaluatableAsset>>) -> Vc<EvaluatableAssets> {
         EvaluatableAssets(vec![entry]).cell()
     }
 
     #[turbo_tasks::function]
-    pub fn many(assets: Vec<EvaluatableAssetVc>) -> EvaluatableAssetsVc {
+    pub fn many(assets: Vec<Vc<Box<dyn EvaluatableAsset>>>) -> Vc<EvaluatableAssets> {
         EvaluatableAssets(assets).cell()
     }
 
     #[turbo_tasks::function]
-    pub async fn with_entry(self, entry: EvaluatableAssetVc) -> Result<EvaluatableAssetsVc> {
+    pub async fn with_entry(
+        self: Vc<Self>,
+        entry: Vc<Box<dyn EvaluatableAsset>>,
+    ) -> Result<Vc<EvaluatableAssets>> {
         let mut entries = self.await?.clone_value();
         entries.push(entry);
         Ok(EvaluatableAssets(entries).cell())

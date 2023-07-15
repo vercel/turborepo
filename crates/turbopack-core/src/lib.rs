@@ -37,7 +37,8 @@ pub mod version;
 pub mod virtual_source;
 
 pub mod virtual_fs {
-    pub use turbo_tasks_fs::VirtualFileSystemVc;
+    use turbo_tasks::Vc;
+    pub use turbo_tasks_fs::VirtualFileSystem;
 }
 
 pub const PROJECT_FILESYSTEM_NAME: &str = "project";

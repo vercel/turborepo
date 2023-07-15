@@ -1,7 +1,11 @@
-use crate::{self as turbo_tasks, RawVc, Vc};
+use turbo_tasks::Vc;
+
+use crate::{
+    RawVc, {self as turbo_tasks},
+};
 
 /// Just an empty type, but it's never equal to itself.
-/// [CompletionVc] can be used as return value instead of `()`
+/// [Vc<Completion>] can be used as return value instead of `()`
 /// to have a concrete reference that can be awaited.
 /// It will invalidate the awaiting task everytime the referenced
 /// task has been executed.
@@ -28,7 +32,7 @@ impl Completion {
     /// Uses the previous completion. Can be used to cancel without triggering a
     /// new invalidation.
     pub fn unchanged() -> Vc<Self> {
-        // This is the same code that CompletionVc::cell uses except that it
+        // This is the same code that Completion::cell uses except that it
         // only updates the cell when it is empty (Completion::cell opted-out of
         // that via `#[turbo_tasks::value(cell = "new")]`)
         let cell = turbo_tasks::macro_helpers::find_cell_by_type(*COMPLETION_VALUE_TYPE_ID);
@@ -46,7 +50,7 @@ impl Completions {
     /// Merges multiple completions into one. The passed list will be part of
     /// the cache key, so this function should not be used with varying lists.
     ///
-    /// Varying lists should use `CompletionsVc::cell(list).completed()`
+    /// Varying lists should use `Vc::cell(list).completed()`
     /// instead.
     #[turbo_tasks::function]
     pub fn all(completions: Vec<Vc<Completion>>) -> Vc<Completion> {

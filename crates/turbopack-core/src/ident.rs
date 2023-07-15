@@ -1,35 +1,35 @@
 use std::fmt::Write;
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash64Hasher};
 
-use crate::resolve::{ModulePart, ModulePartVc};
+use crate::resolve::ModulePart;
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash)]
 pub struct AssetIdent {
     /// The primary path of the asset
-    pub path: FileSystemPathVc,
+    pub path: Vc<FileSystemPath>,
     /// The query string of the asset (e.g. `?foo=bar`)
-    pub query: Option<StringVc>,
+    pub query: Option<Vc<String>>,
     /// The fragment of the asset (e.g. `#foo`)
-    pub fragment: Option<StringVc>,
+    pub fragment: Option<Vc<String>>,
     /// The assets that are nested in this asset
-    pub assets: Vec<(StringVc, AssetIdentVc)>,
+    pub assets: Vec<(Vc<String>, Vc<AssetIdent>)>,
     /// The modifiers of this asset (e.g. `client chunks`)
-    pub modifiers: Vec<StringVc>,
+    pub modifiers: Vec<Vc<String>>,
     /// The part of the asset that is a (ECMAScript) module
-    pub part: Option<ModulePartVc>,
+    pub part: Option<Vc<ModulePart>>,
 }
 
 impl AssetIdent {
-    pub fn add_modifier(&mut self, modifier: StringVc) {
+    pub fn add_modifier(&mut self, modifier: Vc<String>) {
         self.modifiers.push(modifier);
     }
 
-    pub fn add_asset(&mut self, key: StringVc, asset: AssetIdentVc) {
+    pub fn add_asset(&mut self, key: Vc<String>, asset: Vc<AssetIdent>) {
         self.assets.push((key, asset));
     }
 
@@ -47,7 +47,7 @@ impl AssetIdent {
 #[turbo_tasks::value_impl]
 impl ValueToString for AssetIdent {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
+    async fn to_string(&self) -> Result<Vc<String>> {
         let mut s = self.path.to_string().await?.clone_value();
         if let Some(query) = &self.query {
             write!(s, "?{}", query.await?)?;
@@ -68,20 +68,20 @@ impl ValueToString for AssetIdent {
             }
             s.push(')');
         }
-        Ok(StringVc::cell(s))
+        Ok(Vc::cell(s))
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetIdentVc {
+impl AssetIdent {
     #[turbo_tasks::function]
-    pub fn new(ident: Value<AssetIdent>) -> Self {
+    pub fn new(ident: Value<AssetIdent>) -> Vc<Self> {
         ident.into_value().cell()
     }
 
-    /// Creates an [AssetIdent] from a [FileSystemPathVc]
+    /// Creates an [AssetIdent] from a [Vc<FileSystemPath>]
     #[turbo_tasks::function]
-    pub fn from_path(path: FileSystemPathVc) -> Self {
+    pub fn from_path(path: Vc<FileSystemPath>) -> Vc<Self> {
         Self::new(Value::new(AssetIdent {
             path,
             query: None,
@@ -93,28 +93,28 @@ impl AssetIdentVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_modifier(self, modifier: StringVc) -> Result<Self> {
+    pub async fn with_modifier(self: Vc<Self>, modifier: Vc<String>) -> Result<Vc<Self>> {
         let mut this = self.await?.clone_value();
         this.add_modifier(modifier);
         Ok(Self::new(Value::new(this)))
     }
 
     #[turbo_tasks::function]
-    pub async fn with_part(self, part: ModulePartVc) -> Result<Self> {
+    pub async fn with_part(self: Vc<Self>, part: Vc<ModulePart>) -> Result<Vc<Self>> {
         let mut this = self.await?.clone_value();
         this.part = Some(part);
         Ok(Self::new(Value::new(this)))
     }
 
     #[turbo_tasks::function]
-    pub async fn rename_as(self, pattern: &str) -> Result<Self> {
+    pub async fn rename_as(self: Vc<Self>, pattern: String) -> Result<Vc<Self>> {
         let mut this = self.await?.clone_value();
         this.rename_as(pattern).await?;
         Ok(Self::new(Value::new(this)))
     }
 
     #[turbo_tasks::function]
-    pub async fn path(self) -> Result<FileSystemPathVc> {
+    pub async fn path(self: Vc<Self>) -> Result<Vc<FileSystemPath>> {
         Ok(self.await?.path)
     }
 
@@ -124,10 +124,10 @@ impl AssetIdentVc {
     /// name generation logic.
     #[turbo_tasks::function]
     pub async fn output_name(
-        self,
-        context_path: FileSystemPathVc,
-        expected_extension: &str,
-    ) -> Result<StringVc> {
+        self: Vc<Self>,
+        context_path: Vc<FileSystemPath>,
+        expected_extension: String,
+    ) -> Result<Vc<String>> {
         let this = &*self.await?;
 
         // For clippy -- This explicit deref is necessary
@@ -242,7 +242,7 @@ impl AssetIdentVc {
             name += "._";
         }
         name += expected_extension;
-        Ok(StringVc::cell(name))
+        Ok(Vc::cell(name))
     }
 }
 

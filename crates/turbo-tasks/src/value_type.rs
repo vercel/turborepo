@@ -1,7 +1,9 @@
 use std::{
     any::{type_name, Any},
     borrow::Cow,
-    fmt::{self, Debug, Display, Formatter},
+    fmt::{
+        Debug, Display, Formatter, {self},
+    },
     hash::Hash,
     sync::Arc,
 };
@@ -20,7 +22,7 @@ type AnySerializationFn = fn(&(dyn Any + Sync + Send)) -> &dyn erased_serde::Ser
 
 // TODO this type need some refactoring when multiple languages are added to
 // turbo-task In this case a trait_method might be of a different function type.
-// It probably need to be a FunctionVc.
+// It probably need to be a Vc<Function>.
 // That's also needed in a distributed world, where the function might be only
 // available on a remote instance.
 

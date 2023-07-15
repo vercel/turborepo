@@ -18,17 +18,14 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 use futures::{stream::Stream as StreamTrait, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{
-    primitives::StringVc, trace::TraceRawVcs, util::SharedError, CompletionVc, Value,
-};
+use turbo_tasks::{trace::TraceRawVcs, util::SharedError, Completion, Value, Vc};
 use turbo_tasks_bytes::{Bytes, Stream, StreamRead};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{DeterministicHash, DeterministicHasher, Xxh3Hash64Hasher};
-use turbopack_core::version::{Version, VersionVc, VersionedContentVc};
+use turbopack_core::version::{Version, VersionedContent};
 
 use self::{
-    headers::Headers, issue_context::IssueContextContentSourceVc, query::Query,
-    route_tree::RouteTreeVc,
+    headers::Headers, issue_context::IssueContextContentSource, query::Query, route_tree::RouteTree,
 };
 
 /// The result of proxying a request to another HTTP server.
@@ -45,7 +42,7 @@ pub struct ProxyResult {
 #[turbo_tasks::value_impl]
 impl Version for ProxyResult {
     #[turbo_tasks::function]
-    async fn id(&self) -> Result<StringVc> {
+    async fn id(&self) -> Result<Vc<String>> {
         let mut hash = Xxh3Hash64Hasher::new();
         hash.write_u16(self.status);
         for (name, value) in &self.headers {
@@ -56,7 +53,7 @@ impl Version for ProxyResult {
         while let Some(chunk) = read.try_next().await? {
             hash.write_bytes(&chunk);
         }
-        Ok(StringVc::cell(hash.finish().to_string()))
+        Ok(Vc::cell(hash.finish().to_string()))
     }
 }
 
@@ -65,22 +62,22 @@ impl Version for ProxyResult {
 pub trait GetContentSourceContent {
     /// Specifies data requirements for the get function. Restricting data
     /// passed allows to cache the get method.
-    fn vary(&self) -> ContentSourceDataVaryVc {
+    fn vary(self: Vc<Self>) -> Vc<ContentSourceDataVary> {
         ContentSourceDataVary::default().cell()
     }
 
     /// Get the content
-    fn get(&self, path: &str, data: Value<ContentSourceData>) -> ContentSourceContentVc;
+    fn get(self: Vc<Self>, path: &str, data: Value<ContentSourceData>) -> Vc<ContentSourceContent>;
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct GetContentSourceContents(Vec<GetContentSourceContentVc>);
+pub struct GetContentSourceContents(Vec<Vc<Box<dyn GetContentSourceContent>>>);
 
 #[turbo_tasks::value]
 pub struct StaticContent {
-    pub content: VersionedContentVc,
+    pub content: Vc<Box<dyn VersionedContent>>,
     pub status_code: u16,
-    pub headers: HeaderListVc,
+    pub headers: Vc<HeaderList>,
 }
 
 #[turbo_tasks::value(shared)]
@@ -88,9 +85,9 @@ pub struct StaticContent {
 /// The content of a result that is returned by a content source.
 pub enum ContentSourceContent {
     NotFound,
-    Static(StaticContentVc),
-    HttpProxy(ProxyResultVc),
-    Rewrite(RewriteVc),
+    Static(Vc<StaticContent>),
+    HttpProxy(Vc<ProxyResult>),
+    Rewrite(Vc<Rewrite>),
     /// Continue with the next route
     Next,
 }
@@ -100,30 +97,30 @@ pub enum ContentSourceContent {
 /// is handled.
 #[turbo_tasks::value_trait]
 pub trait ContentSourceSideEffect {
-    fn apply(&self) -> CompletionVc;
+    fn apply(self: Vc<Self>) -> Vc<Completion>;
 }
 
 #[turbo_tasks::value_impl]
 impl GetContentSourceContent for ContentSourceContent {
     #[turbo_tasks::function]
     fn get(
-        self_vc: ContentSourceContentVc,
-        _path: &str,
+        self: Vc<Self>,
+        _path: String,
         _data: Value<ContentSourceData>,
-    ) -> ContentSourceContentVc {
-        self_vc
+    ) -> Vc<ContentSourceContent> {
+        self
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ContentSourceContentVc {
+impl ContentSourceContent {
     #[turbo_tasks::function]
-    pub fn static_content(content: VersionedContentVc) -> ContentSourceContentVc {
+    pub fn static_content(content: Vc<Box<dyn VersionedContent>>) -> Vc<ContentSourceContent> {
         ContentSourceContent::Static(
             StaticContent {
                 content,
                 status_code: 200,
-                headers: HeaderListVc::empty(),
+                headers: HeaderList::empty(),
             }
             .cell(),
         )
@@ -132,10 +129,10 @@ impl ContentSourceContentVc {
 
     #[turbo_tasks::function]
     pub fn static_with_headers(
-        content: VersionedContentVc,
+        content: Vc<Box<dyn VersionedContent>>,
         status_code: u16,
-        headers: HeaderListVc,
-    ) -> ContentSourceContentVc {
+        headers: Vc<HeaderList>,
+    ) -> Vc<ContentSourceContent> {
         ContentSourceContent::Static(
             StaticContent {
                 content,
@@ -148,7 +145,7 @@ impl ContentSourceContentVc {
     }
 
     #[turbo_tasks::function]
-    pub fn not_found() -> ContentSourceContentVc {
+    pub fn not_found() -> Vc<ContentSourceContent> {
         ContentSourceContent::NotFound.cell()
     }
 }
@@ -158,14 +155,14 @@ impl ContentSourceContentVc {
 pub struct HeaderList(Vec<(String, String)>);
 
 #[turbo_tasks::value_impl]
-impl HeaderListVc {
+impl HeaderList {
     #[turbo_tasks::function]
-    pub fn new(headers: Vec<(String, String)>) -> Self {
+    pub fn new(headers: Vec<(String, String)>) -> Vc<Self> {
         HeaderList(headers).cell()
     }
 
     #[turbo_tasks::function]
-    pub fn empty() -> Self {
+    pub fn empty() -> Vc<Self> {
         HeaderList(vec![]).cell()
     }
 }
@@ -197,7 +194,7 @@ pub struct ContentSourceData {
     /// requested.
     pub raw_headers: Option<Vec<(String, String)>>,
     /// Request body, if requested.
-    pub body: Option<BodyVc>,
+    pub body: Option<Vc<Body>>,
     /// See [ContentSourceDataVary::cache_buster].
     pub cache_buster: u64,
 }
@@ -240,8 +237,8 @@ impl<T: Into<Bytes>> From<T> for Body {
     }
 }
 
-impl Default for BodyVc {
-    fn default() -> Self {
+impl Default for Body {
+    fn default() -> Vc<Self> {
         Body::default().cell()
     }
 }
@@ -408,30 +405,38 @@ impl ContentSourceDataVary {
 /// A source of content that the dev server uses to respond to http requests.
 #[turbo_tasks::value_trait]
 pub trait ContentSource {
-    fn get_routes(&self) -> RouteTreeVc;
+    fn get_routes(self: Vc<Self>) -> Vc<RouteTree>;
 
     /// Gets any content sources wrapped in this content source.
-    fn get_children(&self) -> ContentSourcesVc {
-        ContentSourcesVc::empty()
+    fn get_children(self: Vc<Self>) -> Vc<ContentSources> {
+        ContentSources::empty()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ContentSourceVc {
+impl ContentSource {
     #[turbo_tasks::function]
-    pub fn issue_context(self, context: FileSystemPathVc, description: &str) -> ContentSourceVc {
-        IssueContextContentSourceVc::new_context(context, description, self).into()
+    pub fn issue_context(
+        self: Vc<Self>,
+        context: Vc<FileSystemPath>,
+        description: String,
+    ) -> Vc<Box<dyn ContentSource>> {
+        Vc::upcast(IssueContextContentSource::new_context(
+            context,
+            description,
+            self,
+        ))
     }
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct ContentSources(Vec<ContentSourceVc>);
+pub struct ContentSources(Vec<Vc<Box<dyn ContentSource>>>);
 
 #[turbo_tasks::value_impl]
-impl ContentSourcesVc {
+impl ContentSources {
     #[turbo_tasks::function]
-    pub fn empty() -> Self {
-        ContentSourcesVc::cell(Vec::new())
+    pub fn empty() -> Vc<Self> {
+        Vc::cell(Vec::new())
     }
 }
 
@@ -441,17 +446,17 @@ impl ContentSourcesVc {
 pub struct NoContentSource;
 
 #[turbo_tasks::value_impl]
-impl NoContentSourceVc {
+impl NoContentSource {
     #[turbo_tasks::function]
-    pub fn new() -> Self {
+    pub fn new() -> Vc<Self> {
         NoContentSource.cell()
     }
 }
 #[turbo_tasks::value_impl]
 impl ContentSource for NoContentSource {
     #[turbo_tasks::function]
-    fn get_routes(&self) -> RouteTreeVc {
-        RouteTreeVc::empty()
+    fn get_routes(&self) -> Vc<RouteTree> {
+        RouteTree::empty()
     }
 }
 
@@ -463,10 +468,10 @@ pub enum RewriteType {
         path_and_query: String,
     },
     ContentSource {
-        /// [ContentSourceVc]s from which to restart the lookup
+        /// [Vc<Box<dyn ContentSource>>]s from which to restart the lookup
         /// process. This _does not_ need to be the original content
         /// source.
-        source: ContentSourceVc,
+        source: Vc<Box<dyn ContentSource>>,
         /// The new path and query used to lookup content. This _does not_ need
         /// to be the original path or query.
         path_and_query: String,
@@ -475,7 +480,7 @@ pub enum RewriteType {
         /// [GetContentSourceContent]s from which to restart the lookup
         /// process. This _does not_ need to be the original content
         /// source.
-        sources: GetContentSourceContentsVc,
+        sources: Vc<GetContentSourceContents>,
     },
 }
 
@@ -488,11 +493,11 @@ pub struct Rewrite {
 
     /// A [Headers] which will be appended to the eventual, fully resolved
     /// content result. This overwrites any previous matching headers.
-    pub response_headers: Option<HeaderListVc>,
+    pub response_headers: Option<Vc<HeaderList>>,
 
     /// A [HeaderList] which will overwrite the values used during the lookup
     /// process. All headers not present in this list will be deleted.
-    pub request_headers: Option<HeaderListVc>,
+    pub request_headers: Option<Vc<HeaderList>>,
 }
 
 pub struct RewriteBuilder {
@@ -510,7 +515,10 @@ impl RewriteBuilder {
         }
     }
 
-    pub fn new_source_with_path_and_query(source: ContentSourceVc, path_and_query: String) -> Self {
+    pub fn new_source_with_path_and_query(
+        source: Vc<Box<dyn ContentSource>>,
+        path_and_query: String,
+    ) -> Self {
         Self {
             rewrite: Rewrite {
                 ty: RewriteType::ContentSource {
@@ -523,7 +531,7 @@ impl RewriteBuilder {
         }
     }
 
-    pub fn new_sources(sources: GetContentSourceContentsVc) -> Self {
+    pub fn new_sources(sources: Vc<GetContentSourceContents>) -> Self {
         Self {
             rewrite: Rewrite {
                 ty: RewriteType::Sources { sources },
@@ -535,19 +543,19 @@ impl RewriteBuilder {
 
     /// Sets response headers to append to the eventual, fully resolved content
     /// result.
-    pub fn response_headers(mut self, headers: HeaderListVc) -> Self {
+    pub fn response_headers(mut self, headers: Vc<HeaderList>) -> Self {
         self.rewrite.response_headers = Some(headers);
         self
     }
 
     /// Sets request headers to overwrite the headers used during the lookup
     /// process.
-    pub fn request_headers(mut self, headers: HeaderListVc) -> Self {
+    pub fn request_headers(mut self, headers: Vc<HeaderList>) -> Self {
         self.rewrite.request_headers = Some(headers);
         self
     }
 
-    pub fn build(self) -> RewriteVc {
+    pub fn build(self) -> Vc<Rewrite> {
         self.rewrite.cell()
     }
 }

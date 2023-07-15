@@ -5,20 +5,18 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{
-    primitives::StringVc, trace::TraceRawVcs, Value, ValueToString, ValueToStringVc,
-};
+use turbo_tasks::{trace::TraceRawVcs, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPathVc, LinkContent, LinkType,
+    DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPath, LinkContent, LinkType,
 };
 
 #[turbo_tasks::value(transparent)]
 pub struct QueryMap(#[turbo_tasks(trace_ignore)] Option<IndexMap<String, String>>);
 
 #[turbo_tasks::value_impl]
-impl QueryMapVc {
+impl QueryMap {
     #[turbo_tasks::function]
-    pub fn none() -> Self {
+    pub fn none() -> Vc<Self> {
         Self::cell(None)
     }
 }
@@ -525,16 +523,16 @@ impl Pattern {
     }
 }
 
-impl PatternVc {
-    pub fn new(pattern: Pattern) -> Self {
-        PatternVc::new_internal(Value::new(pattern))
+impl Pattern {
+    pub fn new(pattern: Pattern) -> Vc<Self> {
+        Pattern::new_internal(Value::new(pattern))
     }
 }
 
 #[turbo_tasks::value_impl]
-impl PatternVc {
+impl Pattern {
     #[turbo_tasks::function]
-    fn new_internal(pattern: Value<Pattern>) -> Self {
+    fn new_internal(pattern: Value<Pattern>) -> Vc<Self> {
         Self::cell(pattern.into_value())
     }
 }
@@ -630,15 +628,15 @@ impl Display for Pattern {
 #[turbo_tasks::value_impl]
 impl ValueToString for Pattern {
     #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
-        StringVc::cell(self.to_string())
+    fn to_string(&self) -> Vc<String> {
+        Vc::cell(self.to_string())
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, TraceRawVcs, Serialize, Deserialize)]
 pub enum PatternMatch {
-    File(String, FileSystemPathVc),
-    Directory(String, FileSystemPathVc),
+    File(String, Vc<FileSystemPath>),
+    Directory(String, Vc<FileSystemPath>),
 }
 
 // TODO this isn't super efficient
@@ -655,11 +653,11 @@ pub struct PatternMatches(Vec<PatternMatch>);
 /// symlinks when they are interested in that.
 #[turbo_tasks::function]
 pub async fn read_matches(
-    context: FileSystemPathVc,
+    context: Vc<FileSystemPath>,
     prefix: String,
     force_in_context: bool,
-    pattern: PatternVc,
-) -> Result<PatternMatchesVc> {
+    pattern: Vc<Pattern>,
+) -> Result<Vc<PatternMatches>> {
     let mut prefix = prefix;
     let pat = pattern.await?;
     let mut results = Vec::new();
@@ -863,7 +861,7 @@ pub async fn read_matches(
             results.extend(nested.await?.iter().cloned());
         }
         results.sort();
-        Ok(PatternMatchesVc::cell(results))
+        Ok(Vc::cell(results))
     }
 }
 

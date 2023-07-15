@@ -2,11 +2,12 @@ use std::{fmt::Debug, future::Future, marker::PhantomData};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use turbo_tasks::Vc;
 
 use crate::{
     manager::find_cell_by_type,
     vc::{cast::VcCast, VcValueTraitCast},
-    RawVc, ReadRawVcFuture, SharedReference, Vc, VcValueTrait,
+    RawVc, ReadRawVcFuture, SharedReference, VcValueTrait,
 };
 
 /// Similar to a [`ReadRef<T>`], but contains a value trait object instead. The

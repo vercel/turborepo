@@ -1,8 +1,8 @@
 #![cfg(test)]
 
-use turbo_tasks::primitives::{OptionStringVc, StringVc};
+use turbo_tasks::Vc;
 use turbo_tasks_fetch::{fetch, register, FetchErrorKind};
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemPathVc, FileSystemVc};
+use turbo_tasks_fs::{DiskFileSystem, FileSystem, FileSystemPath};
 use turbo_tasks_testing::{register, run};
 use turbopack_core::issue::{Issue, IssueSeverity};
 
@@ -21,7 +21,7 @@ async fn basic_get() {
         });
 
 
-        let result = &*fetch(StringVc::cell(server.url("/foo.woff")), OptionStringVc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(server.url("/foo.woff")), Vc::cell(None)).await?;
         resource_mock.assert();
 
         match result {
@@ -47,7 +47,7 @@ async fn sends_user_agent() {
                 .body("responsebody");
         });
 
-        let result = &*fetch(StringVc::cell(server.url("/foo.woff")), OptionStringVc::cell(Some("foo".to_owned()))).await?;
+        let result = &*fetch(Vc::cell(server.url("/foo.woff")), Vc::cell(Some("foo".to_owned()))).await?;
         resource_mock.assert();
 
         let Ok(response) = result else {
@@ -74,8 +74,8 @@ async fn invalidation_does_not_invalidate() {
                 .body("responsebody");
         });
 
-        let url = StringVc::cell(server.url("/foo.woff"));
-        let user_agent = OptionStringVc::cell(Some("foo".to_owned()));
+        let url = Vc::cell(server.url("/foo.woff"));
+        let user_agent = Vc::cell(Some("foo".to_owned()));
         let result = &*fetch(url, user_agent).await?;
         resource_mock.assert();
 
@@ -104,7 +104,7 @@ async fn errors_on_failed_connection() {
         register();
 
         let url = "https://doesnotexist/foo.woff";
-        let result = &*fetch(StringVc::cell(url.to_owned()), OptionStringVc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(url.to_owned()), Vc::cell(None)).await?;
         let Err(err_vc) = result else {
             panic!()
         };
@@ -126,7 +126,7 @@ async fn errors_on_404() {
 
         let server = httpmock::MockServer::start();
         let resource_url = server.url("/");
-        let result = &*fetch(StringVc::cell(resource_url.clone()), OptionStringVc::cell(None)).await?;
+        let result = &*fetch(Vc::cell(resource_url.clone()), Vc::cell(None)).await?;
         let Err(err_vc) = result else {
             panic!()
         };
@@ -141,8 +141,8 @@ async fn errors_on_404() {
     }
 }
 
-fn get_issue_context() -> FileSystemPathVc {
-    std::convert::Into::<FileSystemVc>::into(DiskFileSystemVc::new(
+fn get_issue_context() -> Vc<FileSystemPath> {
+    std::convert::Into::<Vc<Box<dyn FileSystem>>>::into(DiskFileSystem::new(
         "root".to_owned(),
         "/".to_owned(),
     ))

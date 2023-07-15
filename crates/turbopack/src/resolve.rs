@@ -1,10 +1,11 @@
 use anyhow::Result;
-use turbo_tasks_fs::{FileSystem, FileSystemPathVc};
+use turbo_tasks::Vc;
+use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack_core::resolve::{
     find_context_file,
     options::{
         ConditionValue, ImportMap, ImportMapping, ResolutionConditions, ResolveInPackage,
-        ResolveIntoPackage, ResolveModules, ResolveOptions, ResolveOptionsVc,
+        ResolveIntoPackage, ResolveModules, ResolveOptions,
     },
     AliasMap, AliasPattern, FindContextFileResult,
 };
@@ -12,7 +13,7 @@ use turbopack_ecmascript::typescript::resolve::{
     apply_tsconfig_resolve_options, tsconfig, tsconfig_resolve_options,
 };
 
-use crate::resolve_options_context::ResolveOptionsContextVc;
+use crate::resolve_options_context::ResolveOptionsContext;
 
 const NODE_EXTERNALS: [&str; 51] = [
     "assert",
@@ -70,9 +71,9 @@ const NODE_EXTERNALS: [&str; 51] = [
 
 #[turbo_tasks::function]
 async fn base_resolve_options(
-    context: FileSystemPathVc,
-    options_context: ResolveOptionsContextVc,
-) -> Result<ResolveOptionsVc> {
+    context: Vc<FileSystemPath>,
+    options_context: Vc<ResolveOptionsContext>,
+) -> Result<Vc<ResolveOptions>> {
     let parent = context.parent().resolve().await?;
     if parent != context {
         return Ok(base_resolve_options(parent, options_context));
@@ -231,9 +232,9 @@ async fn base_resolve_options(
 
 #[turbo_tasks::function]
 pub async fn resolve_options(
-    context: FileSystemPathVc,
-    options_context: ResolveOptionsContextVc,
-) -> Result<ResolveOptionsVc> {
+    context: Vc<FileSystemPath>,
+    options_context: Vc<ResolveOptionsContext>,
+) -> Result<Vc<ResolveOptions>> {
     let options_context_value = options_context.await?;
     if !options_context_value.rules.is_empty() {
         let context_value = &*context.await?;

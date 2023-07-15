@@ -1,31 +1,34 @@
 use anyhow::{bail, Result};
-use turbo_tasks::ValueToString;
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::Asset,
-    chunk::{EvaluatableAssetVc, EvaluatableAssetsVc},
-    context::AssetContextVc,
-    issue::{IssueSeverity, OptionIssueSourceVc},
-    resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
-    source::SourceVc,
+    chunk::{EvaluatableAsset, EvaluatableAssets},
+    context::AssetContext,
+    issue::{IssueSeverity, OptionIssueSource},
+    resolve::{origin::PlainResolveOrigin, parse::Request},
+    source::Source,
 };
 use turbopack_ecmascript::resolve::cjs_resolve;
 
 #[turbo_tasks::value(shared)]
 pub enum RuntimeEntry {
-    Request(RequestVc, FileSystemPathVc),
-    Evaluatable(EvaluatableAssetVc),
-    Source(SourceVc),
+    Request(Vc<Request>, Vc<FileSystemPath>),
+    Evaluatable(Vc<Box<dyn EvaluatableAsset>>),
+    Source(Vc<Box<dyn Source>>),
 }
 
 #[turbo_tasks::value_impl]
-impl RuntimeEntryVc {
+impl RuntimeEntry {
     #[turbo_tasks::function]
-    pub async fn resolve_entry(self, context: AssetContextVc) -> Result<EvaluatableAssetsVc> {
+    pub async fn resolve_entry(
+        self: Vc<Self>,
+        context: Vc<Box<dyn AssetContext>>,
+    ) -> Result<Vc<EvaluatableAssets>> {
         let (request, path) = match *self.await? {
-            RuntimeEntry::Evaluatable(e) => return Ok(EvaluatableAssetsVc::one(e)),
+            RuntimeEntry::Evaluatable(e) => return Ok(EvaluatableAssets::one(e)),
             RuntimeEntry::Source(source) => {
-                return Ok(EvaluatableAssetsVc::one(EvaluatableAssetVc::from_source(
+                return Ok(EvaluatableAssets::one(EvaluatableAsset::from_source(
                     source, context,
                 )));
             }
@@ -33,9 +36,9 @@ impl RuntimeEntryVc {
         };
 
         let assets = cjs_resolve(
-            PlainResolveOriginVc::new(context, path).into(),
+            Vc::upcast(PlainResolveOrigin::new(context, path)),
             request,
-            OptionIssueSourceVc::none(),
+            OptionIssueSource::none(),
             IssueSeverity::Error.cell(),
         )
         .primary_assets()
@@ -43,7 +46,9 @@ impl RuntimeEntryVc {
 
         let mut runtime_entries = Vec::with_capacity(assets.len());
         for asset in &assets {
-            if let Some(entry) = EvaluatableAssetVc::resolve_from(asset).await? {
+            if let Some(entry) =
+                Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(asset).await?
+            {
                 runtime_entries.push(entry);
             } else {
                 bail!(
@@ -53,17 +58,20 @@ impl RuntimeEntryVc {
             }
         }
 
-        Ok(EvaluatableAssetsVc::cell(runtime_entries))
+        Ok(Vc::cell(runtime_entries))
     }
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct RuntimeEntries(Vec<RuntimeEntryVc>);
+pub struct RuntimeEntries(Vec<Vc<RuntimeEntry>>);
 
 #[turbo_tasks::value_impl]
-impl RuntimeEntriesVc {
+impl RuntimeEntries {
     #[turbo_tasks::function]
-    pub async fn resolve_entries(self, context: AssetContextVc) -> Result<EvaluatableAssetsVc> {
+    pub async fn resolve_entries(
+        self: Vc<Self>,
+        context: Vc<Box<dyn AssetContext>>,
+    ) -> Result<Vc<EvaluatableAssets>> {
         let mut runtime_entries = Vec::new();
 
         for reference in &self.await? {
@@ -71,6 +79,6 @@ impl RuntimeEntriesVc {
             runtime_entries.extend(&resolved_entries);
         }
 
-        Ok(EvaluatableAssetsVc::cell(runtime_entries))
+        Ok(Vc::cell(runtime_entries))
     }
 }

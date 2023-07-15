@@ -2,7 +2,7 @@ use std::{fmt::Debug, marker::PhantomData, ops::Deref, sync::Arc};
 
 use crate::SharedReference;
 
-/// Pass a value by value (`Value<Xxx>`) instead of by reference (`XxxVc`).
+/// Pass a value by value (`Value<Xxx>`) instead of by reference (`Vc<Xxx>`).
 ///
 /// Persistent, requires serialization.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
@@ -36,7 +36,7 @@ impl<T: Default> Default for Value<T> {
     }
 }
 
-/// Pass a value by value (`Value<Xxx>`) instead of by reference (`XxxVc`).
+/// Pass a value by value (`Value<Xxx>`) instead of by reference (`Vc<Xxx>`).
 ///
 /// Doesn't require serialization, and won't be stored in the persistent cache
 /// in the future.

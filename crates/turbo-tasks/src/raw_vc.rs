@@ -13,6 +13,7 @@ use anyhow::{anyhow, Result};
 use auto_hash_map::AutoSet;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use turbo_tasks::Vc;
 
 use crate::{
     backend::CellContent,
@@ -21,9 +22,11 @@ use crate::{
         read_task_cell, read_task_cell_untracked, read_task_output, read_task_output_untracked,
         TurboTasksApi,
     },
-    registry::{self, get_value_type},
+    registry::{
+        get_value_type, {self},
+    },
     turbo_tasks,
-    vc::{cast::VcCast, Vc, VcValueTraitCast, VcValueTypeCast},
+    vc::{cast::VcCast, VcValueTraitCast, VcValueTypeCast},
     CollectiblesSource, ReadRef, SharedReference, TaskId, TraitTypeId, ValueTypeId, VcValueTrait,
     VcValueType,
 };
@@ -63,7 +66,7 @@ pub enum RawVc {
     TaskCell(TaskId, CellId),
 }
 
-impl RawVc {
+impl Raw {
     pub fn into_read<T: VcValueType>(self) -> ReadRawVcFuture<T, VcValueTypeCast<T>> {
         // returns a custom future to have something concrete and sized
         // this avoids boxing in IntoFuture
@@ -139,11 +142,11 @@ impl RawVc {
         let mut current = self;
         loop {
             match current {
-                RawVc::TaskOutput(task) => {
+                Raw::TaskOutput(task) => {
                     current =
                         read_task_output_untracked(turbo_tasks, task, strongly_consistent).await?
                 }
-                RawVc::TaskCell(task, index) => {
+                Raw::TaskCell(task, index) => {
                     return read_task_cell_untracked(turbo_tasks, task, index).await;
                 }
             }
@@ -159,19 +162,19 @@ impl RawVc {
         let mut current = self;
         loop {
             match current {
-                RawVc::TaskOutput(task) => {
+                Raw::TaskOutput(task) => {
                     current = read_task_output(&*tt, task, false)
                         .await
                         .map_err(|source| ResolveTypeError::TaskError { source })?;
                 }
-                RawVc::TaskCell(task, index) => {
+                Raw::TaskCell(task, index) => {
                     let content = read_task_cell(&*tt, task, index)
                         .await
                         .map_err(|source| ResolveTypeError::ReadError { source })?;
                     if let CellContent(Some(shared_reference)) = content {
                         if let SharedReference(Some(value_type), _) = shared_reference {
                             if get_value_type(value_type).has_trait(&trait_type) {
-                                return Ok(Some(RawVc::TaskCell(task, index)));
+                                return Ok(Some(Raw::TaskCell(task, index)));
                             } else {
                                 return Ok(None);
                             }
@@ -195,19 +198,19 @@ impl RawVc {
         let mut current = self;
         loop {
             match current {
-                RawVc::TaskOutput(task) => {
+                Raw::TaskOutput(task) => {
                     current = read_task_output(&*tt, task, false)
                         .await
                         .map_err(|source| ResolveTypeError::TaskError { source })?;
                 }
-                RawVc::TaskCell(task, index) => {
+                Raw::TaskCell(task, index) => {
                     let content = read_task_cell(&*tt, task, index)
                         .await
                         .map_err(|source| ResolveTypeError::ReadError { source })?;
                     if let CellContent(Some(shared_reference)) = content {
                         if let SharedReference(Some(cell_value_type), _) = shared_reference {
                             if cell_value_type == value_type {
-                                return Ok(Some(RawVc::TaskCell(task, index)));
+                                return Ok(Some(Raw::TaskCell(task, index)));
                             } else {
                                 return Ok(None);
                             }
@@ -229,14 +232,14 @@ impl RawVc {
         let mut notified = false;
         loop {
             match current {
-                RawVc::TaskOutput(task) => {
+                Raw::TaskOutput(task) => {
                     if !notified {
                         tt.notify_scheduled_tasks();
                         notified = true;
                     }
                     current = read_task_output(&*tt, task, false).await?;
                 }
-                RawVc::TaskCell(_, _) => return Ok(current),
+                Raw::TaskCell(_, _) => return Ok(current),
             }
         }
     }
@@ -247,14 +250,14 @@ impl RawVc {
         let mut notified = false;
         loop {
             match current {
-                RawVc::TaskOutput(task) => {
+                Raw::TaskOutput(task) => {
                     if !notified {
                         tt.notify_scheduled_tasks();
                         notified = true;
                     }
                     current = read_task_output(&*tt, task, true).await?;
                 }
-                RawVc::TaskCell(_, _) => return Ok(current),
+                Raw::TaskCell(_, _) => return Ok(current),
             }
         }
     }
@@ -266,19 +269,19 @@ impl RawVc {
 
     pub fn is_resolved(&self) -> bool {
         match self {
-            RawVc::TaskOutput(_) => false,
-            RawVc::TaskCell(_, _) => true,
+            Raw::TaskOutput(_) => false,
+            Raw::TaskCell(_, _) => true,
         }
     }
 
     pub fn get_task_id(&self) -> TaskId {
         match self {
-            RawVc::TaskOutput(t) | RawVc::TaskCell(t, _) => *t,
+            Raw::TaskOutput(t) | Raw::TaskCell(t, _) => *t,
         }
     }
 }
 
-impl CollectiblesSource for RawVc {
+impl CollectiblesSource for Raw {
     fn peek_collectibles<T: VcValueTrait>(self) -> CollectiblesFuture<T> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
@@ -306,13 +309,13 @@ impl CollectiblesSource for RawVc {
     }
 }
 
-impl Display for RawVc {
+impl Display for Raw {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RawVc::TaskOutput(task) => {
+            Raw::TaskOutput(task) => {
                 write!(f, "output of {}", task)
             }
-            RawVc::TaskCell(task, index) => {
+            Raw::TaskCell(task, index) => {
                 write!(f, "value {} of {}", index, task)
             }
         }
@@ -373,7 +376,7 @@ impl<T: ?Sized, Cast: VcCast> Future for ReadRawVcFuture<T, Cast> {
                 this.listener = None;
             }
             let mut listener = match this.current {
-                RawVc::TaskOutput(task) => match this
+                Raw::TaskOutput(task) => match this
                     .turbo_tasks
                     .try_read_task_output(task, this.strongly_consistent)
                 {
@@ -385,7 +388,7 @@ impl<T: ?Sized, Cast: VcCast> Future for ReadRawVcFuture<T, Cast> {
                     Ok(Err(listener)) => listener,
                     Err(err) => return Poll::Ready(Err(err)),
                 },
-                RawVc::TaskCell(task, index) => {
+                Raw::TaskCell(task, index) => {
                     match this.turbo_tasks.try_read_task_cell(task, index) {
                         Ok(Ok(content)) => {
                             // SAFETY: Constructor ensures that T and U are binary identical
