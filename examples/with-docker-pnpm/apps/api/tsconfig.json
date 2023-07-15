@@ -1,9 +1,13 @@
 {
   "compilerOptions": {
-    "lib": ["ES2015"],
-    "module": "CommonJS",
-    "outDir": "./dist",
-    "rootDir": "./src"
+    "module": "ESNext",
+    "moduleResolution": "nodenext",
+    "target": "ESNext",
+
+    "noEmit": true,
+
+    "allowJs": true,
+    "checkJs": true
   },
   "exclude": ["node_modules"],
   "extends": "tsconfig/base.json",

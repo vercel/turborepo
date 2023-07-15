@@ -1,4 +1,4 @@
-import { createServer } from "./server";
+import { createServer } from "./server.js";
 import { log } from "logger";
 
 const port = process.env.PORT || 3001;

@@ -2,12 +2,13 @@
   "name": "api",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "echo 'No build step required.''",
     "clean": "rm -rf dist",
-    "dev": "nodemon --exec \"node -r esbuild-register ./src/index.ts\" -e .ts",
+    "dev": "node --watch ./src/server.js",
     "lint": "tsc --noEmit && eslint \"src/**/*.ts*\"",
-    "start": "node -r esbuild-register ./src/index.ts",
+    "start": "node ./src/server.js",
     "test": "jest --detectOpenHandles"
   },
   "jest": {

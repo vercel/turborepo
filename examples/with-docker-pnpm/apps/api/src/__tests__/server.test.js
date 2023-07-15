@@ -1,5 +1,5 @@
 import supertest from "supertest";
-import { createServer } from "../server";
+import { createServer } from "../server.js";
 
 describe("server", () => {
   it("health check returns 200", async () => {
