@@ -9,7 +9,7 @@
     "dev": "node --watch ./src/index.js",
     "lint": "tsc --noEmit && eslint \"src/**/*.ts*\"",
     "start": "node ./src/index.js",
-    "test": "jest --detectOpenHandles"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles"
   },
   "jest": {
     "preset": "jest-presets/jest/node"
