@@ -15,7 +15,7 @@ FROM base AS builder
 
     COPY . .
 
-    RUN turbo prune --scope=api --docker
+    RUN turbo prune --scope=web --docker
 
 FROM base as installer
     WORKDIR /app

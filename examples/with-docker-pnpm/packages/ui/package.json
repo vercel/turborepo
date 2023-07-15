@@ -2,10 +2,15 @@
   "name": "ui",
   "version": "0.0.0",
   "license": "MIT",
-  "main": "./index.tsx",
-  "types": "./index.tsx",
+  "type": "module",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "lint": "eslint \"**/*.ts*\""
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "dev": "tsc --watch",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "test": "jest"
   },
   "devDependencies": {
     "@types/react": "^17.0.37",
