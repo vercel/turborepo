@@ -8,12 +8,14 @@
     "dev": "turbo run dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "lint": "turbo run lint",
-    "test": "turbo run test"
+    "test": "turbo run test",
+
+    "syncpack": "syncpack"
   },
-  "dependencies": {},
   "devDependencies": {
     "eslint-config-custom": "workspace:*",
     "prettier": "^2.8.8",
+    "syncpack": "^10.7.3",
     "turbo": "^1.9.3"
   },
   "packageManager": "pnpm@8.6.5",
