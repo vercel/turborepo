@@ -11,6 +11,7 @@ services:
       - 3000:3000
     networks:
       - app_network
+
   api:
     container_name: api
     build:

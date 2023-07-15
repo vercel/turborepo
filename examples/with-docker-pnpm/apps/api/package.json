@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo 'No build step required.''",
+    "build": "echo 'No build step required.'",
     "clean": "rm -rf dist",
     "dev": "node --watch ./src/server.js",
     "lint": "tsc --noEmit && eslint \"src/**/*.ts*\"",
@@ -39,6 +39,6 @@
     "nodemon": "^2.0.15",
     "supertest": "^6.1.3",
     "tsconfig": "workspace:*",
-    "typescript": "^4.5.3"
+    "typescript": "^5.1.6"
   }
 }

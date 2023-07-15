@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
-    "lib": ["ES2015", "DOM"],
-    "module": "CommonJS",
+    "lib": ["ESNext", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "nodenext",
+    "target": "ESNext",
+
     "outDir": "./dist",
     "rootDir": "./src"
   },
