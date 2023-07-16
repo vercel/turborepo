@@ -57,9 +57,6 @@ impl Default for Vc<Option<String>> {
     }
 }
 
-#[turbo_tasks::value(transparent)]
-pub struct Strings(Vec<std::string::String>);
-
 __turbo_tasks_internal_primitive!(bool);
 __turbo_tasks_internal_primitive!(u8);
 __turbo_tasks_internal_primitive!(u16);

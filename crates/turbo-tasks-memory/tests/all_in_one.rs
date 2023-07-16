@@ -30,6 +30,24 @@ async fn all_in_one() {
         assert_eq!(*result.my_trait_function2().await?, "42");
         assert_eq!(*result.my_trait_function3().await?, "4242");
         assert_eq!(*result.to_string().await?, "42");
+
+        // Testing Vc<Self> in traits
+
+        let a: Vc<Number> = Vc::cell(32);
+        let b: Vc<Number> = Vc::cell(10);
+        let c: Vc<Number> = a.add(b);
+
+        assert_eq!(*c.await?, 42);
+
+        let a_erased: Vc<Box<dyn Add>> = Vc::upcast(a);
+        let b_erased: Vc<Box<dyn Add>> = Vc::upcast(b);
+        let c_erased: Vc<Box<dyn Add>> = a_erased.add(b_erased);
+
+        assert_eq!(*Vc::try_resolve_downcast_type::<Number>(c_erased).await?.unwrap().await?, 42);
+
+        let b_erased_other: Vc<Box<dyn Add>> = Vc::upcast(Vc::<NumberB>::cell(10));
+        let c_erased_invalid: Vc<Box<dyn Add>> = a_erased.add(b_erased_other);
+        assert!(c_erased_invalid.resolve().await.is_err());
     }
 }
 
@@ -138,4 +156,31 @@ async fn my_function(
     assert_eq!(c.await?.value, 42);
     assert_eq!(d.into_value(), MyEnumValue::Yeah(42));
     Ok(c)
+}
+
+#[turbo_tasks::value_trait]
+trait Add {
+    fn add(self: Vc<Self>, other: Vc<Self>) -> Vc<Self>;
+}
+
+#[turbo_tasks::value(transparent)]
+struct Number(u32);
+
+#[turbo_tasks::value_impl]
+impl Add for Number {
+    #[turbo_tasks::function]
+    async fn add(self: Vc<Self>, other: Vc<Self>) -> Result<Vc<Self>> {
+        Ok(Vc::cell(*self.await? + *other.await?))
+    }
+}
+
+#[turbo_tasks::value(transparent)]
+struct NumberB(u32);
+
+#[turbo_tasks::value_impl]
+impl Add for NumberB {
+    #[turbo_tasks::function]
+    async fn add(self: Vc<Self>, other: Vc<Self>) -> Result<Vc<Self>> {
+        Ok(Vc::cell(*self.await? + *other.await?))
+    }
 }
