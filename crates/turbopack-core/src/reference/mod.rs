@@ -6,7 +6,7 @@ use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
 use crate::{
     asset::{Asset, Assets},
     issue::IssueContextExt,
-    module::{Module, Modules},
+    module::{convert_asset_to_module, Module, Modules},
     output::{OutputAsset, OutputAssets},
     resolve::{PrimaryResolveResult, ResolveResult},
 };
@@ -195,14 +195,7 @@ pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Mo
             queue.push_back(reference.resolve_reference());
         }
     }
-    let modules = assets
-        .into_iter()
-        .map(|asset| async move { Ok(Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await?) })
-        .try_join()
-        .await?
-        .into_iter()
-        .flatten()
-        .collect();
+    let modules = assets.into_iter().map(convert_asset_to_module).collect();
     Ok(Vc::cell(modules))
 }
 
