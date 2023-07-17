@@ -21,7 +21,7 @@ use turbo_tasks_fs::{
     glob::Glob, to_sys_path, DirectoryEntry, File, FileSystemPath, ReadGlobResult,
 };
 use turbopack_core::{
-    asset::{AssetContent},
+    asset::AssetContent,
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset, EvaluatableAssets},
     context::AssetContext,
     file_source::FileSource,

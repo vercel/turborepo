@@ -35,7 +35,7 @@ pub use self::{
     passthrough_asset::PassthroughAsset,
 };
 use crate::{
-    asset::{Asset},
+    asset::Asset,
     ident::AssetIdent,
     module::{Module, Modules},
     output::OutputAssets,

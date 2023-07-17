@@ -10,7 +10,7 @@ use turbo_tasks_hash::Xxh3Hash64Hasher;
 
 use super::{ChunkableModuleReference, ChunkingType};
 use crate::{
-    asset::{Asset},
+    asset::Asset,
     module::{Module, ModulesSet},
     reference::AssetReference,
 };

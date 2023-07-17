@@ -14,7 +14,10 @@ use swc_core::{
     quote, quote_expr,
 };
 use turbo_tasks::{trace::TraceRawVcs, ValueToString, Vc};
-use turbopack_core::{issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity}, module::Module};
+use turbopack_core::{
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity},
+    module::Module,
+};
 
 use super::{base::ReferencedAsset, EsmAssetReference};
 use crate::{

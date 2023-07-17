@@ -19,10 +19,11 @@ use turbo_tasks_fs::{to_sys_path, File, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset, EvaluatableAssets},
+    module::Module,
     output::{OutputAsset, OutputAssetsSet},
-    reference::{primary_referenced_output_assets},
+    reference::primary_referenced_output_assets,
     source_map::GenerateSourceMap,
-    virtual_output::VirtualOutputAsset, module::Module,
+    virtual_output::VirtualOutputAsset,
 };
 
 use self::{bootstrap::NodeJsBootstrapAsset, pool::NodeJsPool, source_map::StructuredError};

@@ -9,7 +9,7 @@ use turbopack_core::{
     introspect::{asset::IntrospectableAsset, Introspectable, IntrospectableChildren},
     issue::IssueContextExt,
     module::Module,
-    output::{OutputAsset},
+    output::OutputAsset,
     reference::AssetReference,
     resolve::PrimaryResolveResult,
     version::VersionedContentExt,

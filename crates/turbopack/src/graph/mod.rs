@@ -2,10 +2,7 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use turbo_tasks::Vc;
-use turbopack_core::{
-    output::OutputAsset,
-    reference::{all_referenced_output_assets},
-};
+use turbopack_core::{output::OutputAsset, reference::all_referenced_output_assets};
 
 #[turbo_tasks::value(shared)]
 pub enum AggregatedGraph {
