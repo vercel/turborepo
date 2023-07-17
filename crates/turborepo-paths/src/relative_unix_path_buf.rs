@@ -27,9 +27,7 @@ impl RelativeUnixPathBuf {
             return Err(PathError::NotRelative(path_string));
         }
 
-        let unix_path = path_string.into_unix();
-
-        Ok(Self(unix_path.into()))
+        Ok(Self(path_string))
     }
 
     pub fn into_inner(self) -> String {

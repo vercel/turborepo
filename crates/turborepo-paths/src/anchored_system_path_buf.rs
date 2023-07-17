@@ -192,19 +192,6 @@ impl AnchoredSystemPathBuf {
         self.0.as_std_path()
     }
 
-    pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
-        #[cfg(unix)]
-        {
-            return RelativeUnixPathBuf::new(self.0.as_str());
-        }
-        #[cfg(not(unix))]
-        {
-            use crate::IntoUnix;
-            let unix_buf = self.0.as_path().into_unix();
-            RelativeUnixPathBuf::new(unix_buf)
-        }
-    }
-
     pub fn push(&mut self, path: impl AsRef<Utf8Path>) {
         self.0.push(path.as_ref());
     }
