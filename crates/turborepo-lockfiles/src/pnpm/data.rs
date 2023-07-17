@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use super::{dep_path::DepPath, Error, LockfileVersion};
 
@@ -83,7 +82,7 @@ pub struct Dependency {
 pub struct PackageSnapshot {
     // We don't use any fields in resolution in order to avoid losing data we parse it as a generic
     // value
-    resolution: Value,
+    resolution: PackageResolution,
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
 
@@ -115,14 +114,21 @@ pub struct DependenciesMeta {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PackageResolution {
+    // Type field, cannot use serde(tag) due to tarball having an empty type field
+    // tarball -> none
+    // directory -> 'directory'
+    // git repository -> 'git'
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     type_field: Option<String>,
+    // Tarball fields
     #[serde(skip_serializing_if = "Option::is_none")]
     integrity: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tarball: Option<String>,
+    // Directory fields
     #[serde(skip_serializing_if = "Option::is_none")]
-    dir: Option<String>,
+    directory: Option<String>,
+    // Git repository fields
     #[serde(skip_serializing_if = "Option::is_none")]
     repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -797,11 +803,25 @@ mod tests {
 
     #[test]
     fn test_injected_package_round_trip() {
-        let original_contents = "file:packages/ui:
+        let original_contents = "a:
   resolution:
-    directory: packages/ui,
     type: directory,
+    directory: packages/ui,
   name: ui
+  version: 0.0.0
+  dev: false
+b:
+  resolution:
+    integrity: deadbeef,
+    tarball: path/to/tarball.tar.gz,
+  name: tar
+  version: 0.0.0
+  dev: false
+c:
+  resolution:
+    repo: great-repo.git,
+    commit: greatcommit,
+  name: git
   version: 0.0.0
   dev: false
 ";
