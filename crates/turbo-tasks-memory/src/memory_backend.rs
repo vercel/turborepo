@@ -443,17 +443,11 @@ impl Backend for MemoryBackend {
 
     fn task_execution_result(
         &self,
-        task_id: TaskId,
+        task: TaskId,
         result: Result<Result<RawVc>, Option<Cow<'static, str>>>,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        self.with_task(task_id, |task| {
-            #[cfg(debug_assertions)]
-            if let Ok(Ok(RawVc::TaskOutput(result))) = result.as_ref() {
-                if *result == task_id {
-                    panic!("Task {} returned itself as output", task.get_description());
-                }
-            }
+        self.with_task(task, |task| {
             task.execution_result(result, self, turbo_tasks);
         })
     }
