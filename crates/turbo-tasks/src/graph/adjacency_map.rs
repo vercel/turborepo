@@ -89,7 +89,7 @@ where
 
     /// Returns an iterator over the nodes in reverse topological order,
     /// starting from the roots.
-    pub fn reverse_topological<'graph>(&'graph self) -> ReverseTopologicalIter<'graph, T> {
+    pub fn reverse_topological(&self) -> ReverseTopologicalIter<T> {
         ReverseTopologicalIter {
             adjacency_map: &self.adjacency_map,
             stack: self
