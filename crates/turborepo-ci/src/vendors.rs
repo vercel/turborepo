@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use lazy_static::lazy_static;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VendorEnvs {
     pub(crate) any: Vec<&'static str>,
     pub(crate) all: Vec<&'static str>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code)]
 pub struct Vendor {
     pub(crate) name: &'static str,
