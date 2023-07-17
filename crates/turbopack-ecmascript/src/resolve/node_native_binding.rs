@@ -162,11 +162,11 @@ pub async fn resolve_node_pre_gyp_files(
                     .results
                     .values()
                 {
-                    match entry {
-                        &DirectoryEntry::File(dylib) => {
+                    match *entry {
+                        DirectoryEntry::File(dylib) => {
                             assets.insert(Vc::upcast(FileSource::new(dylib)));
                         }
-                        &DirectoryEntry::Symlink(dylib) => {
+                        DirectoryEntry::Symlink(dylib) => {
                             let realpath_with_links = dylib.realpath_with_links().await?;
                             for symlink in realpath_with_links.symlinks.iter() {
                                 assets.insert(Vc::upcast(FileSource::new(*symlink)));

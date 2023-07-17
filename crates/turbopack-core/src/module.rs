@@ -46,3 +46,5 @@ pub async fn convert_asset_to_module(asset: Vc<Box<dyn Asset>>) -> Result<Vc<Box
         bail!("Asset must be a Module or a Source")
     }
 }
+
+// TODO All Vc::try_resolve_downcast::<Box<dyn Module>> calls should be removed

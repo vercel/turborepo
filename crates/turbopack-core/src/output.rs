@@ -38,3 +38,6 @@ pub async fn asset_to_output_asset(asset: Vc<Box<dyn Asset>>) -> Result<Vc<Box<d
         .await?
         .context("Asset must be a OutputAsset")
 }
+
+// TODO All Vc::try_resolve_downcast::<Box<dyn OutputAsset>> calls should be
+// removed

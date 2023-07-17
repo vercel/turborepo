@@ -46,3 +46,5 @@ pub async fn option_asset_to_source(asset: Vc<AssetOption>) -> Result<Vc<OptionS
         Ok(Vc::cell(None))
     }
 }
+
+// TODO All Vc::try_resolve_downcast::<Box<dyn Source>> calls should be removed
