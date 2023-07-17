@@ -1,10 +1,14 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
+#![feature(assert_matches)]
 #![deny(clippy::all)]
 
 pub mod cache_archive;
+pub mod fs;
 pub mod http;
 pub mod signature_authentication;
+#[cfg(test)]
+mod test_cases;
 
 use std::{backtrace, backtrace::Backtrace};
 
@@ -51,6 +55,12 @@ pub enum CacheError {
     WindowsUnsafeName(String, #[backtrace] Backtrace),
     #[error("tar attempts to write outside of directory: {0}")]
     LinkOutsideOfDirectory(String, #[backtrace] Backtrace),
+    #[error("Invalid cache metadata file")]
+    InvalidMetadata(serde_json::Error, #[backtrace] Backtrace),
+    #[error("Failed to write cache metadata file")]
+    MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
+    #[error("Cache miss")]
+    CacheMiss,
 }
 
 impl From<turborepo_api_client::Error> for CacheError {
