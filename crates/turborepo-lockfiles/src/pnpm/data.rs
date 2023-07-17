@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::{dep_path::DepPath, Error, LockfileVersion};
 
@@ -80,8 +81,9 @@ pub struct Dependency {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageSnapshot {
-    // can we make this flow?/is it necessary?
-    resolution: PackageResolution,
+    // We don't use any fields in resolution in order to avoid losing data we parse it as a generic
+    // value
+    resolution: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
 
@@ -791,5 +793,21 @@ mod tests {
                 Package::new("/foo/1.0.0", "1.0.0"),
             ],
         );
+    }
+
+    #[test]
+    fn test_injected_package_round_trip() {
+        let original_contents = "file:packages/ui:
+  resolution:
+    directory: packages/ui,
+    type: directory,
+  name: ui
+  version: 0.0.0
+  dev: false
+";
+        let original_parsed: Map<String, PackageSnapshot> =
+            serde_yaml::from_str(original_contents).unwrap();
+        let contents = serde_yaml::to_string(&original_parsed).unwrap();
+        assert_eq!(original_contents, &contents);
     }
 }
