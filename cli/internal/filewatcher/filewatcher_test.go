@@ -152,12 +152,12 @@ func TestFileWatching(t *testing.T) {
 	expectNoFilesystemEvent(t, ch)
 }
 
-// TestFileWatchingParentDeletion tests that when a directory is deleted,
+// TestFileWatchingParentDeletion tests that when a repo subfolder is deleted,
 // recursive watching will still work for new folders
 //
 // ✅ macOS
-// ? Linux
-// ? Windows
+// ✅ Linux
+// ✅ Windows
 func TestFileWatchingSubfolderDeletion(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -234,8 +234,8 @@ func TestFileWatchingSubfolderDeletion(t *testing.T) {
 // will continue, and an add event will be sent for the re-created root.
 //
 // ✅ macOS
-// ? Linux
-// ? Windows
+// ❌ Linux - we do not get an event when the root is recreated L287
+// ❌ Windows - we do not get an event when the root is recreated L287
 func TestFileWatchingRootDeletion(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -290,15 +290,12 @@ func TestFileWatchingRootDeletion(t *testing.T) {
 	})
 }
 
-// TestFileWatchingSubfolderRename tests that when a parent folder is renamed,
+// TestFileWatchingSubfolderRename tests that when a repo subfolder is renamed,
 // file watching will continue, and a rename event will be sent.
 //
-// This test currently does not work on macOS, as rename events are not
-// being sent.
-//
-// ❌ macOS
-// ? Linux
-// ? Windows
+// ❌ macOS - rename events are not being sent
+// ❌ Linux - renaming generates file creation events of the new folder (and all the subcontents), not a rename
+// ❌ Windows - you cannot rename a watched folder (see https://github.com/fsnotify/fsnotify/issues/356)
 func TestFileWatchingSubfolderRename(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -359,12 +356,12 @@ func TestFileWatchingSubfolderRename(t *testing.T) {
 // file watching will stop watching that directory, and no new events
 // will be sent.
 //
-// It additonally tests that when the parent folder is renamed back to its
+// It additonally tests that when the root folder is renamed back to its
 // original name, file watching will continue, and a rename event will be sent.
 //
 // ✅ macOS
-// ? Linux
-// ? Windows
+// ❌ Linux - L415 fails because renames are respected and creating a file emits an event
+// ❌ Windows - you cannot rename a watched folder (see https://github.com/fsnotify/fsnotify/issues/356)
 func TestFileWatchingRootRename(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -438,8 +435,8 @@ func TestFileWatchingRootRename(t *testing.T) {
 // be watched, and raise events with the original path.
 //
 // ✅ macOS
-// ? Linux
-// ? Windows
+// ❌ Linux - L493 fails because symlinks do not produce events
+// ✅ Windows - requires admin permissions
 func TestFileWatchSymlinkCreate(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -505,8 +502,8 @@ func TestFileWatchSymlinkCreate(t *testing.T) {
 // file watching raises no events for the virtual path
 //
 // ✅ macOS
-// ? Linux
-// ? Windows
+// ✅ Linux
+// ✅ Windows - requires admin permissions
 func TestFileWatchSymlinkDelete(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -556,11 +553,11 @@ func TestFileWatchSymlinkDelete(t *testing.T) {
 }
 
 // TestFileWatchSymlinkRename tests that when a symlink is renamed,
-// file watching raises no events for the virtual path
+// file watching raises a rename event for the virtual path
 //
-// ✅ macOS
-// ? Linux
-// ? Windows
+// ❌ macOS - raises no event at all
+// ❌ Linux - raises an event for creating the file
+// ❌ Windows - raises an event for creating the file
 func TestFileWatchSymlinkRename(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -607,7 +604,11 @@ func TestFileWatchSymlinkRename(t *testing.T) {
 	newSymlinkPath := repoRoot.UntypedJoin("new_symlink")
 	err = os.Rename(string(symlinkPath), string(newSymlinkPath))
 	assert.NilError(t, err, "Rename")
-	expectNoFilesystemEvent(t, ch)
+
+	expectFilesystemEvent(t, ch, Event{
+		EventType: FileRenamed,
+		Path:      newSymlinkPath,
+	})
 }
 
 // TestFileWatchRootParentRename tests that when the parent directory of the root is renamed,
@@ -617,8 +618,8 @@ func TestFileWatchSymlinkRename(t *testing.T) {
 // to start reporting events again
 //
 // ✅ macOS
-// ? Linux
-// ? Windows
+// ✅ Linux
+// ✅ Windows
 func TestFileWatchRootParentRename(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -677,8 +678,8 @@ func TestFileWatchRootParentRename(t *testing.T) {
 // to start reporting events again
 //
 // ✅ macOS
-// ? Linux
-// ? Windows
+// ❌ Linux - L721 no create event is emitted
+// ❌ Windows - L721 no create event is emitted
 func TestFileWatchRootParentDelete(t *testing.T) {
 	logger := hclog.Default()
 	logger.SetLevel(hclog.Debug)
@@ -723,5 +724,4 @@ func TestFileWatchRootParentDelete(t *testing.T) {
 		EventType: FileAdded,
 		Path:      repoRoot,
 	})
-
 }
