@@ -73,10 +73,8 @@ use self::{
     tree_shake::asset::EcmascriptModulePartAsset,
 };
 use crate::{
-    chunk::EcmascriptChunkPlaceable, references::{
-        analyze_ecmascript_module,
-        async_module::{OptionAsyncModuleOptions},
-    },
+    chunk::EcmascriptChunkPlaceable,
+    references::{analyze_ecmascript_module, async_module::OptionAsyncModule},
     transform::remove_shebang,
 };
 
@@ -124,7 +122,7 @@ struct MemoizedSuccessfulAnalysis {
     operation: RawVc,
     references: ReadRef<AssetReferences>,
     exports: ReadRef<EcmascriptExports>,
-    async_module_options: ReadRef<OptionAsyncModule>,
+    async_module: ReadRef<OptionAsyncModule>,
 }
 
 pub struct EcmascriptModuleAssetBuilder {
@@ -438,8 +436,8 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleAsset {
     }
 
     #[turbo_tasks::function]
-    async fn get_async_module(self_vc: EcmascriptModuleAssetVc) -> Result<OptionAsyncModuleVc> {
-        Ok(self_vc.failsafe_analyze().await?.async_module)
+    async fn get_async_module(self: Vc<Self>) -> Result<Vc<OptionAsyncModule>> {
+        Ok(self.failsafe_analyze().await?.async_module)
     }
 }
 

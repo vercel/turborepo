@@ -9,7 +9,10 @@ use turbopack_core::{
 
 use super::{asset::EcmascriptModulePartAsset, part_of_module, split_module};
 use crate::{
-    chunk::{EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkingContext},
+    chunk::{
+        placeable::EcmascriptChunkPlaceable, EcmascriptChunkItem, EcmascriptChunkItemContent,
+        EcmascriptChunkingContext,
+    },
     EcmascriptModuleContent,
 };
 

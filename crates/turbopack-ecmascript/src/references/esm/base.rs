@@ -142,14 +142,14 @@ impl EsmAssetReference {
     pub(crate) async fn get_referenced_asset(self: Vc<Self>) -> Result<Vc<ReferencedAsset>> {
         let this = self.await?;
 
-        Ok(ReferencedAssetVc::from_resolve_result(
+        Ok(ReferencedAsset::from_resolve_result(
             self.resolve_reference(),
             this.request,
         ))
     }
 
     #[turbo_tasks::function]
-    pub(crate) async fn is_external_esm(self) -> Result<Vc<bool>> {
+    pub(crate) async fn is_external_esm(self: Vc<Self>) -> Result<Vc<bool>> {
         let asset = self.get_referenced_asset().await?;
 
         let ReferencedAsset::OriginalReferenceTypeExternal(_) = &*asset else {
@@ -162,7 +162,7 @@ impl EsmAssetReference {
 
     #[turbo_tasks::function]
     pub(crate) async fn is_async(
-        self,
+        self: Vc<Self>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<bool>> {
         if *self.is_external_esm().await? {

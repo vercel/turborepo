@@ -11,7 +11,7 @@ pub trait EcmascriptChunkPlaceable: ChunkableModule + Module + Asset {
         context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Vc<Box<dyn EcmascriptChunkItem>>;
     fn get_exports(self: Vc<Self>) -> Vc<EcmascriptExports>;
-    fn get_async_module_options(&self) -> Vc<OptionAsyncModule> {
+    fn get_async_module(self: Vc<Self>) -> Vc<OptionAsyncModule> {
         Vc::cell(None)
     }
 }

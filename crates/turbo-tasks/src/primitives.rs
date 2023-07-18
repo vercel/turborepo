@@ -1,12 +1,13 @@
 use std::{future::IntoFuture, ops::Deref};
 
+use anyhow::Result;
 use auto_hash_map::AutoSet;
 use futures::TryFutureExt;
 // This specific macro identifier is detected by turbo-tasks-build.
 use turbo_tasks_macros::primitive as __turbo_tasks_internal_primitive;
 
 use crate::{
-    RawVc, Vc, {self as turbo_tasks}, TryJoinIterExt,
+    RawVc, TryJoinIterExt, Vc, {self as turbo_tasks},
 };
 
 __turbo_tasks_internal_primitive!(());
@@ -84,7 +85,7 @@ pub struct Bools(Vec<Vc<bool>>);
 impl Bools {
     #[turbo_tasks::function]
     pub fn empty() -> Vc<Bools> {
-        Self::cell(Vec::new())
+        Vc::cell(Vec::new())
     }
 
     #[turbo_tasks::function]

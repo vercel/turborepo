@@ -20,8 +20,8 @@ pub async fn get_dev_runtime_code(
 ) -> Result<Vc<Code>> {
     let asset_context = get_runtime_asset_context(environment);
 
-    let shared_runtime_utils_code = embed_static_code(asset_context, "shared/runtime-utils.ts");
-    let runtime_base_code = embed_static_code(asset_context, "dev/runtime/base/runtime-base.ts");
+    let shared_runtime_utils_code = embed_static_code(asset_context, "shared/runtime-utils.ts".to_string());
+    let runtime_base_code = embed_static_code(asset_context, "dev/runtime/base/runtime-base.ts".to_string());
 
     let chunk_loading = &*asset_context
         .compile_time_info()
@@ -32,9 +32,9 @@ pub async fn get_dev_runtime_code(
     let runtime_backend_code = embed_static_code(
         asset_context,
         match chunk_loading {
-            ChunkLoading::None => "dev/runtime/none/runtime-backend-none.ts",
-            ChunkLoading::NodeJs => "dev/runtime/nodejs/runtime-backend-nodejs.ts",
-            ChunkLoading::Dom => "dev/runtime/dom/runtime-backend-dom.ts",
+            ChunkLoading::None => "dev/runtime/none/runtime-backend-none.ts".to_string(),
+            ChunkLoading::NodeJs => "dev/runtime/nodejs/runtime-backend-nodejs.ts".to_string(),
+            ChunkLoading::Dom => "dev/runtime/dom/runtime-backend-dom.ts".to_string(),
         },
     );
 
@@ -61,7 +61,7 @@ pub async fn get_dev_runtime_code(
     code.push_code(&*runtime_base_code.await?);
 
     if matches!(chunk_loading, ChunkLoading::NodeJs) {
-        code.push_code(&*embed_static_code(asset_context, "shared-node/require.ts").await?);
+        code.push_code(&*embed_static_code(asset_context, "shared-node/require.ts".to_string()).await?);
     }
 
     code.push_code(&*runtime_backend_code.await?);

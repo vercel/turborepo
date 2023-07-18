@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use turbo_tasks::{debug::ValueDebug, unit, Completion, TryJoinIterExt, TurboTasks, Value, Vc};
+use turbo_tasks::{unit, Completion, TryJoinIterExt, TurboTasks, Value, Vc};
 use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_env::CommandLineProcessEnv;
 use turbo_tasks_fs::{
@@ -274,13 +274,14 @@ async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
 
     let SingleValue::Single(bytes) = single else {
         return Ok(RunTestResult {
-            js_result: JsResultVc::cell(JsResult {
+            js_result: JsResult {
                 uncaught_exceptions: vec![],
                 unhandled_rejections: vec![],
                 jest_result: JestRunResult {
                     test_results: vec![],
                 },
-            }),
+            }
+            .cell(),
             path,
         }
         .cell());
@@ -305,7 +306,9 @@ async fn snapshot_issues(run_result: Vc<RunTestResult>) -> Result<Vc<()>> {
 
     let plain_issues = captured_issues
         .iter_with_shortest_path()
-        .map(|(issue_vc, path)| issue_vc.into_plain(path));
+        .map(|(issue_vc, path)| async move { issue_vc.into_plain(path).await })
+        .try_join()
+        .await?;
 
     turbopack_test_utils::snapshot::snapshot_issues(
         plain_issues,

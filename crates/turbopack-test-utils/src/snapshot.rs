@@ -7,15 +7,16 @@ use std::{
 use anyhow::{anyhow, bail, Context, Result};
 use once_cell::sync::Lazy;
 use similar::TextDiff;
-use turbo_tasks::{debug::ValueDebugString, ReadRef, TryJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{ReadRef, TryJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystem, File, FileContent, FileSystemEntryType,
     FileSystemPath,
 };
+use regex::Regex;
 use turbo_tasks_hash::encode_hex;
 use turbopack_cli_utils::issue::{format_issue, LogOptions};
 use turbopack_core::{
-    asset::{AssetContent},
+    asset::AssetContent,
     issue::{IssueSeverity, PlainIssue},
 };
 
@@ -23,7 +24,9 @@ use turbopack_core::{
 // e.g. `UPDATE=1 cargo test -p turbopack-tests -- test_my_pattern`
 static UPDATE: Lazy<bool> = Lazy::new(|| env::var("UPDATE").unwrap_or_default() == "1");
 
-pub async fn snapshot_issues<I: IntoIterator<Item = Vc<PlainIssue>>>(
+static ANSI_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\x1b\[\d+m").unwrap());
+
+pub async fn snapshot_issues<I: IntoIterator<Item = ReadRef<PlainIssue>>>(
     captured_issues: I,
     issues_path: Vc<FileSystemPath>,
     workspace_root: &str,
@@ -31,8 +34,6 @@ pub async fn snapshot_issues<I: IntoIterator<Item = Vc<PlainIssue>>>(
     let expected_issues = expected(issues_path).await?;
     let mut seen = HashSet::new();
     for plain_issue in captured_issues.into_iter() {
-        let plain_issue = plain_issue.await?;
-
         let title = plain_issue
             .title
             .replace('/', "__")
@@ -71,6 +72,7 @@ pub async fn snapshot_issues<I: IntoIterator<Item = Vc<PlainIssue>>>(
         let content = formatted
             .as_str()
             .replace(workspace_root, "WORKSPACE_ROOT")
+            .replace(&*ANSI_REGEX, "")
             // Normalize syspaths from Windows. These appear in stack traces.
             .replace("\\\\", "/");
 

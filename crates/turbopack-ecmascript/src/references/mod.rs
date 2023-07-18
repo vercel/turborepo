@@ -64,6 +64,7 @@ use turbopack_core::{
     },
     source::{asset_to_source, Source},
 };
+use turbopack_core::issue::IssueSeverity;
 use turbopack_swc_utils::emitter::IssueEmitter;
 use unreachable::Unreachable;
 
@@ -132,7 +133,7 @@ pub struct AnalyzeEcmascriptModuleResult {
     pub references: Vc<AssetReferences>,
     pub code_generation: Vc<CodeGenerateables>,
     pub exports: Vc<EcmascriptExports>,
-    pub async_module_options: Vc<OptionAsyncModule>,
+    pub async_module: Vc<OptionAsyncModule>,
     /// `true` when the analysis was successful.
     pub successful: bool,
 }
@@ -169,7 +170,7 @@ pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
     references: IndexSet<Vc<Box<dyn AssetReference>>>,
     code_gens: Vec<CodeGen>,
     exports: EcmascriptExports,
-    async_module_options: Vc<OptionAsyncModule>,
+    async_module: Vc<OptionAsyncModule>,
     successful: bool,
 }
 
@@ -179,7 +180,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
             references: IndexSet::new(),
             code_gens: Vec::new(),
             exports: EcmascriptExports::None,
-            async_module_options: Vc::cell(None),
+            async_module: Vc::cell(None),
             successful: false,
         }
     }
@@ -219,8 +220,8 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     }
 
     /// Sets the analysis result ES export.
-    pub fn set_async_module(&mut self, async_module: AsyncModuleVc) {
-        self.async_module = OptionAsyncModuleVc::cell(Some(async_module));
+    pub fn set_async_module(&mut self, async_module: Vc<AsyncModule>) {
+        self.async_module = Vc::cell(Some(async_module));
     }
 
     /// Sets whether the analysis was successful.
@@ -328,7 +329,7 @@ pub(crate) async fn analyze_ecmascript_module(
     let options = raw_module.options;
     let compile_time_info = raw_module.compile_time_info;
 
-    let origin = module.as_resolve_origin();
+    let origin = Vc::upcast::<Box<dyn ResolveOrigin>>(module);
 
     let mut analysis = AnalyzeEcmascriptModuleResultBuilder::new();
     let path = origin.origin_path();
@@ -668,17 +669,16 @@ pub(crate) async fn analyze_ecmascript_module(
         if !matches!(exports, EcmascriptExports::EsmExports(_)) {
             AnalyzeIssue {
                 code: None,
-                category: StringVc::cell("analyze".to_string()),
-                message: StringVc::cell(
+                category: Vc::cell("analyze".to_string()),
+                message: Vc::cell(
                     "top level await is only supported in ESM modules.".to_string(),
                 ),
                 source_ident: source.ident(),
                 severity: IssueSeverity::Error.into(),
                 source: Some(issue_source(source, span)),
-                title: StringVc::cell("unexpected top level await".to_string()),
+                title: Vc::cell("unexpected top level await".to_string()),
             }
             .cell()
-            .as_issue()
             .emit();
         }
     }
