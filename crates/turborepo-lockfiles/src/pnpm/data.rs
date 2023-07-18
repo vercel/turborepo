@@ -80,8 +80,6 @@ pub struct Dependency {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageSnapshot {
-    // We don't use any fields in resolution in order to avoid losing data we parse it as a generic
-    // value
     resolution: PackageResolution,
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
