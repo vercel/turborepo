@@ -29,37 +29,15 @@ function esmExport(module, exports, getters) {
     esm(exports, getters);
 }
 function dynamicExport(module, exports, object) {
-    let reexportedObjects = module[REEXPORTED_OBJECTS];
-    if (!reexportedObjects) {
-        reexportedObjects = module[REEXPORTED_OBJECTS] = [];
-        const namespaceObject = new Proxy(exports, {
-            get (target, prop) {
-                if (hasOwnProperty.call(target, prop) || prop === "default" || prop === "__esModule") {
-                    return Reflect.get(target, prop);
-                }
-                for (const obj of reexportedObjects){
-                    const value = Reflect.get(obj, prop);
-                    if (value !== undefined) return value;
-                }
-                return undefined;
-            },
-            ownKeys (target) {
-                const keys = Reflect.ownKeys(target);
-                for (const obj of reexportedObjects){
-                    for (const key of Reflect.ownKeys(obj)){
-                        if (key !== "default" && !keys.includes(key)) keys.push(key);
-                    }
-                }
-                return keys;
-            }
-        });
-        if (isPromise(module.namespaceObject)) {
-            module.exports = module.namespaceObject = maybeWrapAsyncModulePromise(module.namespaceObject, ()=>namespaceObject);
-        } else {
-            module.exports = module.namespaceObject = namespaceObject;
+    const keys = Reflect.ownKeys(exports);
+    for (const key of Reflect.ownKeys(object)){
+        if (key !== "default" && !keys.includes(key)) {
+            defineProp(exports, key, {
+                get: createGetter(object, key),
+                enumerable: true
+            });
         }
     }
-    reexportedObjects.push(object);
 }
 function exportValue(module, value) {
     module.exports = value;

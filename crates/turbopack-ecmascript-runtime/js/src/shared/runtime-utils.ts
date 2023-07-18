@@ -98,52 +98,19 @@ function esmExport(
  * Dynamically exports properties from an object
  */
 function dynamicExport(
-  module: Module,
   exports: Exports,
   object: Record<string, any>
 ) {
-  let reexportedObjects = module[REEXPORTED_OBJECTS];
-  if (!reexportedObjects) {
-    reexportedObjects = module[REEXPORTED_OBJECTS] = [];
+  const keys = Reflect.ownKeys(exports);
 
-    const namespaceObject = new Proxy(exports, {
-      get(target, prop) {
-        if (
-          hasOwnProperty.call(target, prop) ||
-          prop === "default" ||
-          prop === "__esModule"
-        ) {
-          return Reflect.get(target, prop);
-        }
-        for (const obj of reexportedObjects!) {
-          const value = Reflect.get(obj, prop);
-          if (value !== undefined) return value;
-        }
-        return undefined;
-      },
-      ownKeys(target) {
-        const keys = Reflect.ownKeys(target);
-        for (const obj of reexportedObjects!) {
-          for (const key of Reflect.ownKeys(obj)) {
-            if (key !== "default" && !keys.includes(key)) keys.push(key);
-          }
-        }
-        return keys;
-      },
-    });
-
-    // If this is inside an async module `module.namespaceObject` is a promise,
-    // so we need to replace it with a new promise.
-    if (isPromise(module.namespaceObject)) {
-      module.exports = module.namespaceObject = maybeWrapAsyncModulePromise(
-        module.namespaceObject,
-        () => namespaceObject
-      );
-    } else {
-      module.exports = module.namespaceObject = namespaceObject;
+  for (const key of Reflect.ownKeys(object)) {
+    if (key !== "default" && !keys.includes(key)) {
+      defineProp(exports, key, {
+        get: createGetter(object, key),
+        enumerable: true,
+      });
     }
   }
-  reexportedObjects.push(object);
 }
 
 function exportValue(module: Module, value: any) {
@@ -154,7 +121,7 @@ function exportNamespace(module: Module, namespace: any) {
   module.exports = module.namespaceObject = namespace;
 }
 
-function createGetter(obj: Record<string, any>, key: string) {
+function createGetter(obj: Record<string | symbol, any>, key: string | symbol) {
   return () => obj[key];
 }
 
@@ -209,10 +176,10 @@ function esmImport(
   const module = getOrInstantiateModuleFromParent(id, sourceModule);
   if (module.error) throw module.error;
 
-  // Any ES module has to have `module.namespaceObject` defined.
+  // any ES module has to have `module.namespaceObject` defined.
   if (module.namespaceObject) return module.namespaceObject;
 
-  // only ESM can be an async module, so we don't need to worry about exports being a promise.
+  // only ESM can be an async module, so we don't need to worry about exports being a promise here.
   const raw = module.exports;
   return (module.namespaceObject = interopEsm(
     raw,
