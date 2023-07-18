@@ -11,7 +11,7 @@ use crate::{package_json::PackageJson, package_manager::PackageManager};
 
 mod builder;
 
-pub use builder::PackageGraphBuilder;
+pub use builder::{Error, PackageGraphBuilder};
 
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,

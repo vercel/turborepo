@@ -2,7 +2,6 @@
 use std::os::unix::fs::PermissionsExt;
 use std::sync::OnceLock;
 
-use anyhow::{anyhow, bail, Result};
 use lazy_static::lazy_static;
 use tracing::trace;
 use turbopath::{
@@ -16,6 +15,32 @@ use crate::{
     package_json::PackageJson,
     ui::BOLD,
 };
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("io error while pruning: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("fs error while pruning: {0}")]
+    Fs(#[from] turborepo_fs::Error),
+    #[error("json error while pruning: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("path error while pruning: {0}")]
+    Path(#[from] turbopath::PathError),
+    #[error(transparent)]
+    PackageJson(#[from] crate::package_json::Error),
+    #[error(transparent)]
+    PackageGraph(#[from] crate::package_graph::Error),
+    #[error(transparent)]
+    Lockfile(#[from] turborepo_lockfiles::Error),
+    #[error("turbo doesn't support workspaces at file system root")]
+    WorkspaceAtFilesystemRoot,
+    #[error("at least one target must be specified")]
+    NoWorkspaceSpecified,
+    #[error("invalid scope: package {0} not found")]
+    MissingWorkspace(WorkspaceName),
+    #[error("Cannot prune without parsed lockfile")]
+    MissingLockfile,
+}
 
 // Files that should be copied from root and if they're required for install
 lazy_static! {
@@ -35,7 +60,12 @@ fn turbo_json() -> &'static AnchoredSystemPath {
     PATH.get_or_init(|| AnchoredSystemPath::new("turbo.json").unwrap())
 }
 
-pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &str) -> Result<()> {
+pub fn prune(
+    base: &CommandBase,
+    scope: &[String],
+    docker: bool,
+    output_dir: &str,
+) -> Result<(), Error> {
     let prune = Prune::new(base, scope, docker, output_dir)?;
 
     println!(
@@ -57,7 +87,7 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
 
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
-    let workspaces = prune.internal_dependencies()?;
+    let workspaces = prune.internal_dependencies();
     let lockfile_keys: Vec<_> = prune
         .package_graph
         .transitive_external_dependencies(workspaces.iter())
@@ -68,7 +98,7 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
         let entry = prune
             .package_graph
             .workspace_info(&workspace)
-            .ok_or_else(|| anyhow!("Workspace '{workspace}' not in package graph"))?;
+            .ok_or_else(|| Error::MissingWorkspace(workspace.clone()))?;
 
         // We don't want to do any copying for the root workspace
         if let WorkspaceName::Other(workspace) = workspace {
@@ -175,9 +205,9 @@ impl<'a> Prune<'a> {
         scope: &'a [String],
         docker: bool,
         output_dir: &str,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         if scope.is_empty() {
-            bail!("at least one target must be specified");
+            return Err(Error::NoWorkspaceSpecified);
         }
 
         let root_package_json_path = base.repo_root.join_component("package.json");
@@ -199,7 +229,7 @@ impl<'a> Prune<'a> {
         for target in scope {
             let workspace = WorkspaceName::Other(target.clone());
             let Some(info) = package_graph.workspace_info(&workspace) else {
-                bail!("invalid scope: package {} not found", target);
+                return Err(Error::MissingWorkspace(workspace));
             };
             trace!(
                 "target: {}",
@@ -213,7 +243,7 @@ impl<'a> Prune<'a> {
         }
 
         if package_graph.lockfile().is_none() {
-            bail!("Cannot prune without parsed lockfile")
+            return Err(Error::MissingLockfile);
         }
 
         full_directory.resolve(package_json()).ensure_dir()?;
@@ -238,7 +268,11 @@ impl<'a> Prune<'a> {
         self.out_directory.join_component("json")
     }
 
-    fn copy_file(&self, path: &AnchoredSystemPath, required_for_install: bool) -> Result<()> {
+    fn copy_file(
+        &self,
+        path: &AnchoredSystemPath,
+        required_for_install: bool,
+    ) -> Result<(), Error> {
         let from_path = self.root.resolve(path);
         if !from_path.try_exists()? {
             trace!("{from_path} doesn't exist, skipping copying");
@@ -253,11 +287,11 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn copy_workspace(&self, package_json_path: &AnchoredSystemPathBuf) -> Result<()> {
+    fn copy_workspace(&self, package_json_path: &AnchoredSystemPathBuf) -> Result<(), Error> {
         let package_json_path = self.root.resolve(package_json_path);
         let original_dir = package_json_path
             .parent()
-            .ok_or_else(|| anyhow!("turbo doesn't support workspaces at file system root"))?;
+            .ok_or_else(|| Error::WorkspaceAtFilesystemRoot)?;
         let metadata = original_dir.symlink_metadata()?;
         let relative_workspace_dir = AnchoredSystemPathBuf::new(&self.root, original_dir)?;
         let target_dir = self.full_directory.resolve(&relative_workspace_dir);
@@ -277,7 +311,7 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn internal_dependencies(&self) -> Result<Vec<WorkspaceName>> {
+    fn internal_dependencies(&self) -> Vec<WorkspaceName> {
         let workspaces =
             std::iter::once(WorkspaceNode::Workspace(WorkspaceName::Root))
                 .chain(self.scope.iter().map(|workspace| {
@@ -294,10 +328,10 @@ impl<'a> Prune<'a> {
             })
             .collect();
         names.sort();
-        Ok(names)
+        names
     }
 
-    fn copy_turbo_json(&self, workspaces: &[String]) -> Result<()> {
+    fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
         let original_turbo_path = self.root.resolve(turbo_json());
 
         let new_turbo_path = self.full_directory.resolve(turbo_json());
