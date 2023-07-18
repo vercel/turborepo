@@ -613,5 +613,5 @@ type TaskError struct {
 func (te *TaskError) Unwrap() error { return te.cause }
 
 func (te *TaskError) Error() string {
-	return fmt.Sprintf("Task %v finished with error: %v", te.taskIDDisplay, te.cause)
+	return fmt.Sprintf("%v: %v", te.taskIDDisplay, te.cause)
 }
