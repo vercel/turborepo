@@ -5,10 +5,7 @@ use turbo_tasks_fs::{
     FileContent, FileJsonContent, FileLinesContent, FileSystemPath, LinkContent, LinkType,
 };
 
-use crate::{
-    reference::AssetReferences,
-    version::{VersionedAssetContent, VersionedContent},
-};
+use crate::version::{VersionedAssetContent, VersionedContent};
 
 /// A list of [Asset]s
 #[turbo_tasks::value(transparent)]
@@ -28,16 +25,20 @@ impl Assets {
     }
 }
 
+#[turbo_tasks::value_impl]
+impl AssetsSet {
+    /// Creates an empty set of [Asset]s
+    #[turbo_tasks::function]
+    pub fn empty() -> Vc<AssetsSet> {
+        Vc::cell(IndexSet::new())
+    }
+}
+
 /// An asset. It also forms a graph when following [Asset::references].
 #[turbo_tasks::value_trait]
 pub trait Asset {
     /// The content of the [Asset].
     fn content(self: Vc<Self>) -> Vc<AssetContent>;
-
-    /// Other things (most likely [Asset]s) referenced from this [Asset].
-    fn references(self: Vc<Self>) -> Vc<AssetReferences> {
-        AssetReferences::empty()
-    }
 
     /// The content of the [Asset] alongside its version.
     async fn versioned_content(self: Vc<Self>) -> Result<Vc<Box<dyn VersionedContent>>> {

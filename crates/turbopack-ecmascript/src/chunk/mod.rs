@@ -1,6 +1,7 @@
 pub(crate) mod content;
 pub(crate) mod context;
 pub(crate) mod data;
+pub(crate) mod esm_scope;
 pub(crate) mod item;
 pub(crate) mod placeable;
 
@@ -311,6 +312,24 @@ impl Chunk for EcmascriptChunk {
         }
         Ok(Vc::cell(chunks))
     }
+
+    #[turbo_tasks::function]
+    async fn references(self: Vc<Self>) -> Result<Vc<AssetReferences>> {
+        let this = self.await?;
+        let content = ecmascript_chunk_content(
+            this.context,
+            this.main_entries,
+            this.omit_entries,
+            Value::new(this.availability_info),
+        )
+        .await?;
+        let mut references = Vec::new();
+        for r in content.external_asset_references.iter() {
+            references.push(*r);
+        }
+
+        Ok(Vc::cell(references))
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -374,24 +393,6 @@ impl Asset for EcmascriptChunk {
     #[turbo_tasks::function]
     fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
         bail!("EcmascriptChunk::content() is not implemented")
-    }
-
-    #[turbo_tasks::function]
-    async fn references(self: Vc<Self>) -> Result<Vc<AssetReferences>> {
-        let this = self.await?;
-        let content = ecmascript_chunk_content(
-            this.context,
-            this.main_entries,
-            this.omit_entries,
-            Value::new(this.availability_info),
-        )
-        .await?;
-        let mut references = Vec::new();
-        for r in content.external_asset_references.iter() {
-            references.push(*r);
-        }
-
-        Ok(Vc::cell(references))
     }
 }
 

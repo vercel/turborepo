@@ -2,7 +2,10 @@ use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use turbo_tasks::Vc;
 
-use crate::{asset::Asset, ident::AssetIdent, raw_module::RawModule, source::Source};
+use crate::{
+    asset::Asset, ident::AssetIdent, raw_module::RawModule, reference::AssetReferences,
+    source::Source,
+};
 
 /// A module. This usually represents parsed source code, which has references
 /// to other modules.
@@ -11,6 +14,12 @@ pub trait Module: Asset {
     /// The identifier of the [Module]. It's expected to be unique and capture
     /// all properties of the [Module].
     fn ident(&self) -> Vc<AssetIdent>;
+
+    /// Other things (most likely [Asset]s) referenced from this [Module].
+    // TODO refactor this to ensure that only [Module]s can be referenced
+    fn references(self: Vc<Self>) -> Vc<AssetReferences> {
+        AssetReferences::empty()
+    }
 }
 
 #[turbo_tasks::value(transparent)]
@@ -30,6 +39,14 @@ impl Modules {
 /// A set of [Module]s
 #[turbo_tasks::value(transparent)]
 pub struct ModulesSet(IndexSet<Vc<Box<dyn Module>>>);
+
+#[turbo_tasks::value_impl]
+impl ModulesSet {
+    #[turbo_tasks::function]
+    pub fn empty() -> Vc<Self> {
+        Vc::cell(IndexSet::new())
+    }
+}
 
 /// This is a temporary function that should be removed once the [Module]
 /// trait completely replaces the [Asset] trait.

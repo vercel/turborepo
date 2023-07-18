@@ -198,6 +198,10 @@ pub struct EcmascriptModuleAsset {
 #[turbo_tasks::value(transparent)]
 pub struct OptionEcmascriptModuleAsset(Option<Vc<EcmascriptModuleAsset>>);
 
+/// A list of [EcmascriptModuleAsset]s
+#[turbo_tasks::value(transparent)]
+pub struct EcmascriptModuleAssets(Vec<Vc<EcmascriptModuleAsset>>);
+
 impl EcmascriptModuleAsset {
     pub fn builder(
         source: Vc<Box<dyn Source>>,
@@ -390,6 +394,11 @@ impl Module for EcmascriptModuleAsset {
             Ok(self.source.ident().with_modifier(modifier()))
         }
     }
+
+    #[turbo_tasks::function]
+    async fn references(self: Vc<Self>) -> Result<Vc<AssetReferences>> {
+        Ok(self.failsafe_analyze().await?.references)
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -397,11 +406,6 @@ impl Asset for EcmascriptModuleAsset {
     #[turbo_tasks::function]
     fn content(&self) -> Vc<AssetContent> {
         self.source.content()
-    }
-
-    #[turbo_tasks::function]
-    async fn references(self: Vc<Self>) -> Result<Vc<AssetReferences>> {
-        Ok(self.failsafe_analyze().await?.references)
     }
 }
 
