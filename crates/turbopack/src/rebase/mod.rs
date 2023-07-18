@@ -52,14 +52,11 @@ impl OutputAsset for RebasedAsset {
     async fn references(&self) -> Result<Vc<OutputAssets>> {
         let mut references = Vec::new();
         for &module in all_referenced_modules(self.source).await?.iter() {
-            references.push(Vc::upcast(
-                RebasedAsset {
-                    source: module,
-                    input_dir: self.input_dir,
-                    output_dir: self.output_dir,
-                }
-                .cell(),
-            ));
+            references.push(Vc::upcast(RebasedAsset::new(
+                module,
+                self.input_dir,
+                self.output_dir,
+            )));
         }
         Ok(Vc::cell(references))
     }
