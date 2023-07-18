@@ -8,7 +8,7 @@ use std::{
 use camino::Utf8Path;
 use serde::Serialize;
 
-use crate::{IntoUnix, PathError, RelativeUnixPath};
+use crate::{PathError, RelativeUnixPath};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 #[serde(transparent)]
