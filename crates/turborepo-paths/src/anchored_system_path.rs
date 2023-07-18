@@ -76,7 +76,7 @@ impl AnchoredSystemPath {
     pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
         #[cfg(unix)]
         {
-            return RelativeUnixPathBuf::new(self.as_str());
+            return RelativeUnixPathBuf::new(self.0.as_str());
         }
         #[cfg(not(unix))]
         {

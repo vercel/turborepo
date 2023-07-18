@@ -331,6 +331,10 @@ impl AbsoluteSystemPath {
         std::fs::read(self.as_path())
     }
 
+    pub fn read_to_string(&self) -> Result<String, io::Error> {
+        fs::read_to_string(&self.0)
+    }
+
     #[cfg(unix)]
     pub fn set_mode(&self, mode: u32) -> Result<(), io::Error> {
         use std::os::unix::fs::PermissionsExt;

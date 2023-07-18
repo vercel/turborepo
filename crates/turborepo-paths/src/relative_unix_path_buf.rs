@@ -8,7 +8,7 @@ use std::{
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 
-use crate::{IntoUnix, PathError, RelativeUnixPath};
+use crate::{PathError, RelativeUnixPath};
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 // This is necessary to perform validation on the string during deserialization
 #[serde(try_from = "String", into = "String")]
@@ -27,9 +27,7 @@ impl RelativeUnixPathBuf {
             return Err(PathError::NotRelative(path_string));
         }
 
-        let unix_path = path_string.into_unix();
-
-        Ok(Self(unix_path.into()))
+        Ok(Self(path_string))
     }
 
     pub fn into_inner(self) -> String {
