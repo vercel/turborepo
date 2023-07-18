@@ -3,6 +3,8 @@
 #![feature(array_chunks)]
 #![feature(iter_intersperse)]
 #![feature(str_split_remainder)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 pub mod html;
 mod http;
@@ -30,13 +32,15 @@ use parking_lot::Mutex;
 use socket2::{Domain, Protocol, Socket, Type};
 use tokio::task::JoinHandle;
 use tracing::{event, info_span, Instrument, Level, Span};
-use turbo_tasks::{run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, TurboTasksApi};
+use turbo_tasks::{
+    run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, TurboTasksApi, Vc,
+};
 use turbopack_core::{
     error::PrettyPrintError,
-    issue::{handle_issues, IssueReporterVc},
+    issue::{handle_issues, IssueReporter, IssueSeverity},
 };
 
-use self::{source::ContentSourceVc, update::UpdateServer};
+use self::{source::ContentSource, update::UpdateServer};
 use crate::{
     invalidation::{ServerRequest, ServerRequestSideEffects},
     source::ContentSourceSideEffect,
@@ -44,14 +48,14 @@ use crate::{
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
-    fn get_source(&self) -> ContentSourceVc;
+    fn get_source(&self) -> Vc<Box<dyn ContentSource>>;
 }
 
 impl<T> SourceProvider for T
 where
-    T: Fn() -> ContentSourceVc + Send + Clone + 'static,
+    T: Fn() -> Vc<Box<dyn ContentSource>> + Send + Clone + 'static,
 {
-    fn get_source(&self) -> ContentSourceVc {
+    fn get_source(&self) -> Vc<Box<dyn ContentSource>> {
         self()
     }
 }
@@ -112,7 +116,7 @@ impl DevServerBuilder {
         self,
         turbo_tasks: Arc<dyn TurboTasksApi>,
         source_provider: impl SourceProvider + Clone + Send + Sync,
-        get_issue_reporter: Arc<dyn Fn() -> IssueReporterVc + Send + Sync>,
+        get_issue_reporter: Arc<dyn Fn() -> Vc<Box<dyn IssueReporter>> + Send + Sync>,
     ) -> DevServer {
         let ongoing_side_effects = Arc::new(Mutex::new(VecDeque::<
             Arc<tokio::sync::Mutex<Option<JoinHandle<Result<()>>>>>,
@@ -209,8 +213,9 @@ impl DevServerBuilder {
                             handle_issues(
                                 source,
                                 issue_reporter,
-                                &Some(path.clone()),
-                                &Some("get source".to_owned()),
+                                IssueSeverity::Fatal.cell(),
+                                Some(&path),
+                                Some("get source"),
                             )
                             .await?;
                             let resolved_source = source.resolve_strongly_consistent().await?;

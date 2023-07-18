@@ -24,29 +24,29 @@ type Factory interface {
 type BasicUIFactory struct {
 }
 
-// basicUI is an implementation of Ui that just outputs to the given
+// BasicUI is an implementation of Ui that just outputs to the given
 // writer. This UI is not threadsafe by default, but you can wrap it
 // in a ConcurrentUi to make it safe.
 //
 // Inlined from cli.Ui to fuse newlines to lines being logged. This is
 // probably not the optimal way to do it, but it works for now.
-type basicUI struct {
+type BasicUI struct {
 	Reader      io.Reader
 	Writer      io.Writer
 	ErrorWriter io.Writer
 }
 
 // Ask implements ui.Cli.Ask for BasicUi
-func (u *basicUI) Ask(query string) (string, error) {
+func (u *BasicUI) Ask(query string) (string, error) {
 	return u.ask(query, false)
 }
 
 // AskSecret implements ui.Cli.AskSecret for BasicUi
-func (u *basicUI) AskSecret(query string) (string, error) {
+func (u *BasicUI) AskSecret(query string) (string, error) {
 	return u.ask(query, true)
 }
 
-func (u *basicUI) ask(query string, secret bool) (string, error) {
+func (u *BasicUI) ask(query string, secret bool) (string, error) {
 	if _, err := fmt.Fprint(u.Writer, query+" "); err != nil {
 		return "", err
 	}
@@ -92,7 +92,7 @@ func (u *basicUI) ask(query string, secret bool) (string, error) {
 }
 
 // Error implements ui.Cli.Error for BasicUi
-func (u *basicUI) Error(message string) {
+func (u *BasicUI) Error(message string) {
 	w := u.Writer
 	if u.ErrorWriter != nil {
 		w = u.ErrorWriter
@@ -102,23 +102,23 @@ func (u *basicUI) Error(message string) {
 }
 
 // Info implements ui.Cli.Info for BasicUi
-func (u *basicUI) Info(message string) {
+func (u *BasicUI) Info(message string) {
 	u.Output(message)
 }
 
 // Output implements ui.Cli.Output for BasicUi
-func (u *basicUI) Output(message string) {
+func (u *BasicUI) Output(message string) {
 	fmt.Fprintf(u.Writer, "%v\n", message)
 }
 
 // Warn implements ui.Cli.Warn for BasicUi
-func (u *basicUI) Warn(message string) {
+func (u *BasicUI) Warn(message string) {
 	u.Error(message)
 }
 
 // Build builds a cli.BasicUi from input, output and error IOs
 func (factory *BasicUIFactory) Build(in io.Reader, out io.Writer, err io.Writer) cli.Ui {
-	return &basicUI{
+	return &BasicUI{
 		Reader:      in,
 		Writer:      out,
 		ErrorWriter: err,

@@ -1,4 +1,5 @@
 #![feature(assert_matches)]
+#![deny(clippy::all)]
 
 mod empty_glob;
 

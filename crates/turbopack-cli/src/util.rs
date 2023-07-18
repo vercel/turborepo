@@ -2,10 +2,11 @@ use std::{env::current_dir, path::PathBuf};
 
 use anyhow::{Context, Result};
 use dunce::canonicalize;
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystemVc};
+use turbo_tasks::Vc;
+use turbo_tasks_fs::{DiskFileSystem, FileSystem};
 
 #[turbo_tasks::value(transparent)]
-pub struct EntryRequests(Vec<EntryRequestVc>);
+pub struct EntryRequests(Vec<Vc<EntryRequest>>);
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone)]
@@ -59,15 +60,15 @@ pub fn normalize_entries(entries: &Option<Vec<String>>) -> Vec<String> {
 }
 
 #[turbo_tasks::function]
-pub async fn project_fs(project_dir: &str) -> Result<FileSystemVc> {
-    let disk_fs = DiskFileSystemVc::new("project".to_string(), project_dir.to_string());
+pub async fn project_fs(project_dir: String) -> Result<Vc<Box<dyn FileSystem>>> {
+    let disk_fs = DiskFileSystem::new("project".to_string(), project_dir.to_string());
     disk_fs.await?.start_watching()?;
-    Ok(disk_fs.into())
+    Ok(Vc::upcast(disk_fs))
 }
 
 #[turbo_tasks::function]
-pub async fn output_fs(project_dir: &str) -> Result<FileSystemVc> {
-    let disk_fs = DiskFileSystemVc::new("output".to_string(), project_dir.to_string());
+pub async fn output_fs(project_dir: String) -> Result<Vc<Box<dyn FileSystem>>> {
+    let disk_fs = DiskFileSystem::new("output".to_string(), project_dir.to_string());
     disk_fs.await?.start_watching()?;
-    Ok(disk_fs.into())
+    Ok(Vc::upcast(disk_fs))
 }

@@ -1,61 +1,103 @@
 use anyhow::{anyhow, Result};
-use turbo_tasks::{TryJoinIterExt, Value};
-use turbo_tasks_env::ProcessEnvVc;
-use turbo_tasks_fs::FileSystemPathVc;
-use turbopack::ecmascript::EcmascriptModuleAssetVc;
-use turbopack_cli_utils::runtime_entry::{RuntimeEntriesVc, RuntimeEntry};
+use turbo_tasks::{TryJoinIterExt, Value, Vc};
+use turbo_tasks_env::ProcessEnv;
+use turbo_tasks_fs::FileSystemPath;
+use turbopack::ecmascript::EcmascriptModuleAsset;
+use turbopack_cli_utils::runtime_entry::{RuntimeEntries, RuntimeEntry};
 use turbopack_core::{
-    chunk::{ChunkableModuleVc, ChunkingContextVc},
-    environment::{BrowserEnvironment, EnvironmentVc, ExecutionEnvironment},
-    file_source::FileSourceVc,
+    chunk::{ChunkableModule, ChunkingContext},
+    environment::Environment,
+    file_source::FileSource,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    resolve::{origin::PlainResolveOriginVc, parse::RequestVc},
+    resolve::{
+        origin::{PlainResolveOrigin, ResolveOriginExt},
+        parse::Request,
+    },
 };
-use turbopack_dev::{react_refresh::assert_can_resolve_react_refresh, DevChunkingContextVc};
+use turbopack_dev::{react_refresh::assert_can_resolve_react_refresh, DevChunkingContext};
 use turbopack_dev_server::{
-    html::DevHtmlAssetVc,
-    source::{asset_graph::AssetGraphContentSourceVc, ContentSourceVc},
+    html::DevHtmlAsset,
+    source::{asset_graph::AssetGraphContentSource, ContentSource},
 };
-use turbopack_node::execution_context::ExecutionContextVc;
+use turbopack_node::execution_context::ExecutionContext;
 
 use crate::{
     contexts::{
         get_client_asset_context, get_client_compile_time_info, get_client_resolve_options_context,
-        NodeEnvVc,
+        NodeEnv,
     },
     embed_js::embed_file_path,
 };
 
 #[turbo_tasks::function]
+pub fn get_client_chunking_context(
+    project_path: Vc<FileSystemPath>,
+    server_root: Vc<FileSystemPath>,
+    environment: Vc<Environment>,
+) -> Vc<Box<dyn ChunkingContext>> {
+    Vc::upcast(
+        DevChunkingContext::builder(
+            project_path,
+            server_root,
+            server_root.join("/_chunks".to_string()),
+            server_root.join("/_assets".to_string()),
+            environment,
+        )
+        .hot_module_replacement()
+        .build(),
+    )
+}
+
+#[turbo_tasks::function]
+pub async fn get_client_runtime_entries(
+    project_path: Vc<FileSystemPath>,
+) -> Result<Vc<RuntimeEntries>> {
+    let resolve_options_context = get_client_resolve_options_context(project_path);
+
+    let mut runtime_entries = Vec::new();
+
+    let enable_react_refresh =
+        assert_can_resolve_react_refresh(project_path, resolve_options_context)
+            .await?
+            .as_request();
+    // It's important that React Refresh come before the regular bootstrap file,
+    // because the bootstrap contains JSX which requires Refresh's global
+    // functions to be available.
+    if let Some(request) = enable_react_refresh {
+        runtime_entries
+            .push(RuntimeEntry::Request(request, project_path.join("_".to_string())).cell())
+    };
+
+    runtime_entries.push(
+        RuntimeEntry::Source(Vc::upcast(FileSource::new(embed_file_path(
+            "entry/bootstrap.ts".to_string(),
+        ))))
+        .cell(),
+    );
+
+    Ok(Vc::cell(runtime_entries))
+}
+
+#[turbo_tasks::function]
 pub async fn create_web_entry_source(
-    project_path: FileSystemPathVc,
-    execution_context: ExecutionContextVc,
-    entry_requests: Vec<RequestVc>,
-    server_root: FileSystemPathVc,
-    _env: ProcessEnvVc,
+    project_path: Vc<FileSystemPath>,
+    execution_context: Vc<ExecutionContext>,
+    entry_requests: Vec<Vc<Request>>,
+    server_root: Vc<FileSystemPath>,
+    _env: Vc<Box<dyn ProcessEnv>>,
     eager_compile: bool,
-    node_env: NodeEnvVc,
-    browserslist_query: &str,
-) -> Result<ContentSourceVc> {
-    let env = EnvironmentVc::new(Value::new(ExecutionEnvironment::Browser(
-        BrowserEnvironment {
-            dom: true,
-            web_worker: false,
-            service_worker: false,
-            browserslist_query: browserslist_query.to_owned(),
-        }
-        .into(),
-    )));
-    let compile_time_info = get_client_compile_time_info(env, node_env);
-    let context =
-        get_client_asset_context(project_path, execution_context, compile_time_info, node_env);
+    node_env: Vc<NodeEnv>,
+    browserslist_query: String,
+) -> Result<Vc<Box<dyn ContentSource>>> {
+    let compile_time_info = get_client_compile_time_info(browserslist_query, node_env);
+    let context = get_client_asset_context(project_path, execution_context, compile_time_info);
     let chunking_context =
         get_client_chunking_context(project_path, server_root, compile_time_info.environment());
-    let entries = get_client_runtime_entries(project_path, node_env);
+    let entries = get_client_runtime_entries(project_path);
 
     let runtime_entries = entries.resolve_entries(context);
 
-    let origin = PlainResolveOriginVc::new(context, project_path.join("_")).as_resolve_origin();
+    let origin = PlainResolveOrigin::new(context, project_path.join("_".to_string()));
     let entries = entry_requests
         .into_iter()
         .map(|request| async move {
@@ -74,13 +116,17 @@ pub async fn create_web_entry_source(
         .into_iter()
         .flatten()
         .map(|module| async move {
-            if let Some(ecmascript) = EcmascriptModuleAssetVc::resolve_from(module).await? {
+            if let Some(ecmascript) =
+                Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?
+            {
                 Ok((
-                    ecmascript.into(),
+                    Vc::upcast(ecmascript),
                     chunking_context,
-                    Some(runtime_entries.with_entry(ecmascript.into())),
+                    Some(runtime_entries.with_entry(Vc::upcast(ecmascript))),
                 ))
-            } else if let Some(chunkable) = ChunkableModuleVc::resolve_from(module).await? {
+            } else if let Some(chunkable) =
+                Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(module).await?
+            {
                 // TODO this is missing runtime code, so it's probably broken and we should also
                 // add an ecmascript chunk with the runtime code
                 Ok((chunkable, chunking_context, None))
@@ -95,59 +141,15 @@ pub async fn create_web_entry_source(
         .try_join()
         .await?;
 
-    let entry_asset = DevHtmlAssetVc::new(server_root.join("index.html"), entries).into();
+    let entry_asset = Vc::upcast(DevHtmlAsset::new(
+        server_root.join("index.html".to_string()),
+        entries,
+    ));
 
-    let graph = if eager_compile {
-        AssetGraphContentSourceVc::new_eager(server_root, entry_asset)
+    let graph = Vc::upcast(if eager_compile {
+        AssetGraphContentSource::new_eager(server_root, entry_asset)
     } else {
-        AssetGraphContentSourceVc::new_lazy(server_root, entry_asset)
-    }
-    .into();
+        AssetGraphContentSource::new_lazy(server_root, entry_asset)
+    });
     Ok(graph)
-}
-
-#[turbo_tasks::function]
-pub fn get_client_chunking_context(
-    project_path: FileSystemPathVc,
-    server_root: FileSystemPathVc,
-    environment: EnvironmentVc,
-) -> ChunkingContextVc {
-    DevChunkingContextVc::builder(
-        project_path,
-        server_root,
-        server_root.join("_chunks"),
-        server_root.join("_assets"),
-        environment,
-    )
-    .hot_module_replacement()
-    .build()
-    .into()
-}
-
-#[turbo_tasks::function]
-pub async fn get_client_runtime_entries(
-    project_path: FileSystemPathVc,
-    node_env: NodeEnvVc,
-) -> Result<RuntimeEntriesVc> {
-    let resolve_options_context = get_client_resolve_options_context(project_path, node_env);
-
-    let mut runtime_entries = Vec::new();
-
-    let enable_react_refresh =
-        assert_can_resolve_react_refresh(project_path, resolve_options_context)
-            .await?
-            .as_request();
-    // It's important that React Refresh come before the regular bootstrap file,
-    // because the bootstrap contains JSX which requires Refresh's global
-    // functions to be available.
-    if let Some(request) = enable_react_refresh {
-        runtime_entries.push(RuntimeEntry::Request(request, project_path.join("_")).cell())
-    };
-
-    runtime_entries.push(
-        RuntimeEntry::Source(FileSourceVc::new(embed_file_path("entry/bootstrap.ts")).into())
-            .cell(),
-    );
-
-    Ok(RuntimeEntriesVc::cell(runtime_entries))
 }

@@ -2,6 +2,10 @@
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
 TURBO_PNPM_WORKSPACE_DIR = { value = "", relative = true }
 
+[build]
+rustflags = ["--cfg", "tokio_unstable"]
+rustdocflags = ["-Znormalize-docs"]
+
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
 

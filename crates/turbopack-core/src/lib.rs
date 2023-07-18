@@ -4,6 +4,8 @@
 #![feature(type_alias_impl_trait)]
 #![feature(assert_matches)]
 #![feature(lint_reasons)]
+#![feature(async_fn_in_trait)]
+#![feature(arbitrary_self_types)]
 
 pub mod asset;
 pub mod changed;
@@ -18,9 +20,11 @@ pub mod ident;
 pub mod introspect;
 pub mod issue;
 pub mod module;
+pub mod output;
 pub mod package_json;
 pub mod proxied_asset;
 pub mod raw_module;
+pub mod raw_output;
 pub mod reference;
 pub mod reference_type;
 pub mod resolve;
@@ -32,10 +36,11 @@ pub mod source_transform;
 pub mod target;
 mod utils;
 pub mod version;
+pub mod virtual_output;
 pub mod virtual_source;
 
 pub mod virtual_fs {
-    pub use turbo_tasks_fs::VirtualFileSystemVc;
+    pub use turbo_tasks_fs::VirtualFileSystem;
 }
 
 pub const PROJECT_FILESYSTEM_NAME: &str = "project";

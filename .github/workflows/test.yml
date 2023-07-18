@@ -309,7 +309,7 @@ jobs:
     name: Turborepo Examples
     needs: determine_jobs
     if: needs.determine_jobs.outputs.examples == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     strategy:
       fail-fast: false
