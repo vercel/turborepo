@@ -76,9 +76,8 @@ impl OutputAsset for EcmascriptBuildNodeChunk {
             .chunking_context
             .reference_chunk_source_maps(Vc::upcast(self))
             .await?;
-        let mut references = Vec::with_capacity(
-            chunk_references.len() + include_source_map.then_some(1).unwrap_or(0),
-        );
+        let mut references =
+            Vec::with_capacity(chunk_references.len() + if include_source_map { 1 } else { 0 });
 
         for reference in &*chunk_references {
             references.push(*reference);
