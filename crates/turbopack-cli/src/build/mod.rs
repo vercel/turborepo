@@ -15,7 +15,6 @@ use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
     asset::Asset,
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAssets},
-    context::AssetContext,
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment},
     issue::{handle_issues, IssueReporter, IssueSeverity},
     module::Module,
@@ -27,7 +26,6 @@ use turbopack_core::{
         parse::Request,
         pattern::QueryMap,
     },
-    source::asset_to_source,
 };
 use turbopack_env::dotenv::load_env;
 use turbopack_node::execution_context::ExecutionContext;
@@ -229,14 +227,8 @@ async fn build_internal(
         .try_join()
         .await?;
 
-    let modules = entries.into_iter().map(|entry| {
-        context.process(
-            asset_to_source(entry),
-            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
-        )
-    });
-
-    let entry_chunk_groups = modules
+    let entry_chunk_groups = entries
+        .into_iter()
         .map(|entry_module| async move {
             Ok(
                 if let Some(ecmascript) =
@@ -250,7 +242,7 @@ async fn build_internal(
                     .entry_chunk(
                         build_output_root
                             .join(
-                                entry_module
+                                ecmascript
                                     .ident()
                                     .path()
                                     .file_stem()
