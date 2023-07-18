@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 mod berry;
 mod error;
 mod npm;

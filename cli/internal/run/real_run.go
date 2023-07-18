@@ -112,7 +112,11 @@ type logBufferWriter struct {
 // Write implements io.Writer.Write for logBufferWriter
 func (lbw *logBufferWriter) Write(bytes []byte) (int, error) {
 	n := len(bytes)
-	lbw.logBuffer.LogLine(bytes, lbw.isStdout)
+	// The io.Writer contract states that we cannot retain the bytes we are passed,
+	// so we need to make a copy of them
+	cpy := make([]byte, n)
+	copy(cpy, bytes)
+	lbw.logBuffer.LogLine(cpy, lbw.isStdout)
 	return n, nil
 }
 
@@ -212,7 +216,13 @@ func RealRun(
 
 		if isGrouped {
 			outWriter = logBuffer.StdoutWriter()
-			errWriter = logBuffer.StderrWriter()
+			if rs.Opts.runOpts.IsGithubActions {
+				// If we're running on Github Actions, force everything to stdout
+				// so as not to have out-of-order log lines
+				errWriter = outWriter
+			} else {
+				errWriter = logBuffer.StderrWriter()
+			}
 		}
 
 		var spacesLogBuffer *threadsafeOutputBuffer
@@ -276,6 +286,14 @@ func RealRun(
 	// Assign tasks after execution
 	runSummary.RunSummary.Tasks = taskSummaries
 
+	terminal := base.UI
+	if rs.Opts.runOpts.IsGithubActions {
+		terminal = &cli.PrefixedUi{
+			Ui:          terminal,
+			ErrorPrefix: "::error::",
+			WarnPrefix:  "::warn::",
+		}
+	}
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
 			// If a process gets killed via a signal, Go reports it's exit code as -1.
@@ -292,7 +310,7 @@ func RealRun(
 			// We hit some error, it shouldn't be exit code 0
 			exitCode = 1
 		}
-		base.UI.Error(err.Error())
+		terminal.Error(err.Error())
 	}
 
 	// When continue on error is enabled don't register failed tasks as errors
@@ -395,14 +413,14 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		Ui:           ui,
 		OutputPrefix: prettyPrefix,
 		InfoPrefix:   prettyPrefix,
-		ErrorPrefix:  prettyPrefix,
+		ErrorPrefix:  prettyPrefix + "ERROR: ",
 		WarnPrefix:   prettyPrefix,
 	}
 
 	if ec.rs.Opts.runOpts.IsGithubActions {
 		ui.Output(fmt.Sprintf("::group::%s", packageTask.OutputPrefix(ec.isSinglePackage)))
-		prefixedUI.WarnPrefix = "::warn::"
-		prefixedUI.ErrorPrefix = "::error::"
+		prefixedUI.WarnPrefix = "[WARN] "
+		prefixedUI.ErrorPrefix = "[ERROR] "
 		defer func() {
 			// We don't use the prefixedUI here because the prefix in this case would include
 			// the ::group::<taskID>, and we explicitly want to close the github group
@@ -540,17 +558,25 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			// If it wasn't a ChildExit, and something else went wrong, we don't have an exitCode
 			tracer(runsummary.TargetBuildFailed, err, nil)
 		}
-
+		taskIDDisplay := packageTask.TaskID
+		if ec.isSinglePackage {
+			taskIDDisplay = packageTask.Task
+		}
+		taskErr := &TaskError{
+			cause:         err,
+			taskIDDisplay: taskIDDisplay,
+		}
 		// If there was an error, flush the buffered output
 		taskCache.OnError(prefixedUI, progressLogger)
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.ContinueOnError {
-			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+			prefixedUI.Error(fmt.Sprintf("command finished with error: %s", err))
 			ec.processes.Close()
 			// We're not continuing, stop graph traversal
-			err = core.StopExecution(err)
+			err = core.StopExecution(taskErr)
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
+			err = taskErr
 		}
 
 		return taskExecutionSummary, err
@@ -575,4 +601,17 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer(runsummary.TargetBuilt, nil, &successExitCode)
 	progressLogger.Debug("done", "status", "complete", "duration", taskExecutionSummary.Duration)
 	return taskExecutionSummary, nil
+}
+
+// TaskError wraps an error encountered running the given task
+type TaskError struct {
+	cause         error
+	taskIDDisplay string
+}
+
+// Unwrap allows for interoperation with standard library error wrapping
+func (te *TaskError) Unwrap() error { return te.cause }
+
+func (te *TaskError) Error() string {
+	return fmt.Sprintf("%v: %v", te.taskIDDisplay, te.cause)
 }

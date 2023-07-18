@@ -550,6 +550,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-macros"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bb524613be645939e280b7279f7b017f98cf7f5ef084ec374df373530e73277"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.25",
+]
+
+[[package]]
 name = "axum-server"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2502,6 +2514,12 @@ dependencies = [
  "swc_macros_common",
  "syn 2.0.25",
 ]
+
+[[package]]
+name = "fs-err"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0845fa252299212f0389d64ba26f34fa32cfe41588355f21ed507c59a0f64541"
 
 [[package]]
 name = "fs_extra"
@@ -8733,6 +8751,7 @@ name = "turbo-tasks"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "auto-hash-map",
  "concurrent-queue",
  "dashmap",
@@ -9540,6 +9559,7 @@ dependencies = [
  "anyhow",
  "camino",
  "dunce",
+ "fs-err",
  "path-clean 1.0.1",
  "serde",
  "test-case",
@@ -9553,12 +9573,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "lazy_static",
+ "port_scanner",
+ "regex",
  "reqwest",
  "rustc_version_runtime",
  "serde",
  "thiserror",
  "tokio",
  "url",
+ "vercel-api-mock",
 ]
 
 [[package]]
@@ -9571,6 +9595,7 @@ dependencies = [
  "camino",
  "chrono",
  "dunce",
+ "futures",
  "hex",
  "hmac",
  "lazy_static",
@@ -9578,6 +9603,7 @@ dependencies = [
  "os_str_bytes",
  "path-clean 1.0.1",
  "petgraph",
+ "port_scanner",
  "serde",
  "serde_json",
  "sha2",
@@ -9585,9 +9611,11 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
+ "tokio",
  "tracing",
  "turbopath",
  "turborepo-api-client",
+ "vercel-api-mock",
  "zstd",
 ]
 
@@ -9625,6 +9653,7 @@ name = "turborepo-fs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "fs-err",
  "tempfile",
  "turbopath",
  "walkdir",
@@ -9763,8 +9792,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.4.6",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -10020,8 +10049,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-macros",
  "axum-server",
+ "futures-util",
  "port_scanner",
+ "tempfile",
  "tokio",
  "turborepo-api-client",
 ]

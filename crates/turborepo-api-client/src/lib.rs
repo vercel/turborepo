@@ -1,16 +1,26 @@
 #![feature(async_closure)]
 #![feature(provide_any)]
 #![feature(error_generic_member_access)]
+#![deny(clippy::all)]
 
 use std::env;
 
-use reqwest::RequestBuilder;
+use lazy_static::lazy_static;
+use regex::Regex;
+pub use reqwest::Response;
+use reqwest::{Method, RequestBuilder};
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 pub use crate::error::{Error, Result};
 
 mod error;
 mod retry;
+
+lazy_static! {
+    static ref AUTHORIZATION_REGEX: Regex =
+        Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap();
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VerifiedSsoUser {
@@ -37,6 +47,13 @@ pub enum CachingStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachingStatusResponse {
     pub status: CachingStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArtifactResponse {
+    pub duration: u64,
+    pub expected_tag: Option<String>,
+    pub body: Vec<u8>,
 }
 
 /// Membership is the relationship between the logged-in user and a particular
@@ -111,10 +128,16 @@ pub struct UserResponse {
     pub user: User,
 }
 
+pub struct PreflightResponse {
+    location: Url,
+    allow_authorization_header: bool,
+}
+
 pub struct APIClient {
     client: reqwest::Client,
     base_url: String,
     user_agent: String,
+    use_preflight: bool,
 }
 
 impl APIClient {
@@ -240,7 +263,169 @@ impl APIClient {
         })
     }
 
-    pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &str) -> Result<Self> {
+    pub async fn put_artifact(
+        &self,
+        hash: &str,
+        artifact_body: &[u8],
+        duration: u32,
+        tag: Option<&str>,
+        token: &str,
+    ) -> Result<()> {
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
+        let mut allow_auth = true;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(
+                    token,
+                    &request_url,
+                    "PUT",
+                    "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
+                )
+                .await?;
+
+            allow_auth = preflight_response.allow_authorization_header;
+            request_url = preflight_response.location.to_string();
+        }
+
+        let mut request_builder = self
+            .client
+            .put(&request_url)
+            .header("Content-Type", "application/octet-stream")
+            .header("x-artifact-duration", duration.to_string())
+            .header("User-Agent", self.user_agent.clone())
+            .body(artifact_body.to_vec());
+
+        // TODO: Add CI header
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        if let Some(tag) = tag {
+            request_builder = request_builder.header("x-artifact-tag", tag);
+        }
+
+        retry::make_retryable_request(request_builder)
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+
+    pub async fn fetch_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+        use_preflight: bool,
+    ) -> Result<Response> {
+        self.get_artifact(hash, token, team_id, team_slug, use_preflight, Method::GET)
+            .await
+    }
+
+    pub async fn artifact_exists(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+        use_preflight: bool,
+    ) -> Result<Response> {
+        self.get_artifact(hash, token, team_id, team_slug, use_preflight, Method::HEAD)
+            .await
+    }
+
+    async fn get_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+        use_preflight: bool,
+        method: Method,
+    ) -> Result<Response> {
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
+        let mut allow_auth = true;
+
+        if use_preflight {
+            let preflight_response = self
+                .do_preflight(token, &request_url, "GET", "Authorization, User-Agent")
+                .await?;
+
+            allow_auth = preflight_response.allow_authorization_header;
+            request_url = preflight_response.location.to_string();
+        };
+
+        let mut request_builder = self
+            .client
+            .request(method, request_url)
+            .header("User-Agent", self.user_agent.clone());
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+
+        let response = retry::make_retryable_request(request_builder)
+            .await?
+            .error_for_status()?;
+
+        Ok(response)
+    }
+
+    pub async fn do_preflight(
+        &self,
+        token: &str,
+        request_url: &str,
+        request_method: &str,
+        request_headers: &str,
+    ) -> Result<PreflightResponse> {
+        let request_builder = self
+            .client
+            .request(Method::OPTIONS, request_url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Access-Control-Request-Method", request_method)
+            .header("Access-Control-Request-Headers", request_headers)
+            .header("Authorization", format!("Bearer {}", token));
+
+        let response = retry::make_retryable_request(request_builder).await?;
+
+        let headers = response.headers();
+        let location = if let Some(location) = headers.get("Location") {
+            let location = location.to_str()?;
+
+            match Url::parse(location) {
+                Ok(location_url) => location_url,
+                Err(url::ParseError::RelativeUrlWithoutBase) => {
+                    Url::parse(&self.base_url)?.join(location)?
+                }
+                Err(e) => return Err(e.into()),
+            }
+        } else {
+            response.url().clone()
+        };
+
+        let allowed_headers = headers
+            .get("Access-Control-Allow-Headers")
+            .map_or("", |h| h.to_str().unwrap_or(""));
+
+        let allow_auth = AUTHORIZATION_REGEX.is_match(allowed_headers);
+
+        Ok(PreflightResponse {
+            location,
+            allow_authorization_header: allow_auth,
+        })
+    }
+
+    pub fn new(
+        base_url: impl AsRef<str>,
+        timeout: u64,
+        version: &str,
+        use_preflight: bool,
+    ) -> Result<Self> {
         let client = if timeout != 0 {
             reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout))
@@ -260,10 +445,77 @@ impl APIClient {
             client,
             base_url: base_url.as_ref().to_string(),
             user_agent,
+            use_preflight,
         })
     }
 
     fn make_url(&self, endpoint: &str) -> String {
         format!("{}{}", self.base_url, endpoint)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use anyhow::Result;
+    use vercel_api_mock::start_test_server;
+
+    use crate::APIClient;
+
+    #[tokio::test]
+    async fn test_do_preflight() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+        let base_url = format!("http://localhost:{}", port);
+
+        let client = APIClient::new(&base_url, 200, "2.0.0", true)?;
+
+        let response = client
+            .do_preflight(
+                "",
+                &format!("{}/preflight/absolute-location", base_url),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await;
+
+        assert!(response.is_ok());
+
+        let response = client
+            .do_preflight(
+                "",
+                &format!("{}/preflight/relative-location", base_url),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await;
+
+        // Since PreflightResponse returns a Url,
+        // do_preflight would error if the Url is relative
+        assert!(response.is_ok());
+
+        let response = client
+            .do_preflight(
+                "",
+                &format!("{}/preflight/allow-auth", base_url),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await?;
+
+        assert!(response.allow_authorization_header);
+
+        let response = client
+            .do_preflight(
+                "",
+                &format!("{}/preflight/no-allow-auth", base_url),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await?;
+
+        assert!(!response.allow_authorization_header);
+
+        handle.abort();
+        Ok(())
     }
 }

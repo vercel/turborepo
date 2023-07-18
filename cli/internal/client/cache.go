@@ -30,7 +30,9 @@ func (c *APIClient) PutArtifact(hash string, artifactBody []byte, duration int, 
 	requestURL := c.makeURL("/v8/artifacts/" + hash + encoded)
 	allowAuth := true
 	if c.usePreflight {
-		resp, latestRequestURL, err := c.doPreflight(requestURL, http.MethodPut, "Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag")
+		resp, latestRequestURL, err := c.doPreflight(requestURL,
+			http.MethodPut,
+			"Content-Type, x-artifact-duration, Authorization, User-Agent, x-artifact-tag")
 		if err != nil {
 			return fmt.Errorf("pre-flight request failed before trying to store in HTTP cache: %w", err)
 		}

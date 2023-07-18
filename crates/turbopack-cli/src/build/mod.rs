@@ -6,35 +6,38 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use turbo_tasks::{
-    primitives::StringVc, NothingVc, TransientInstance, TryJoinIterExt, TurboTasks, Value,
-};
+use turbo_tasks::{unit, TransientInstance, TryJoinIterExt, TurboTasks, Value, Vc};
 use turbo_tasks_fs::FileSystem;
 use turbo_tasks_memory::MemoryBackend;
-use turbopack::ecmascript::EcmascriptModuleAssetVc;
-use turbopack_build::BuildChunkingContextVc;
-use turbopack_cli_utils::issue::{ConsoleUiVc, LogOptions};
+use turbopack::ecmascript::EcmascriptModuleAsset;
+use turbopack_build::BuildChunkingContext;
+use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
-    asset::{Asset, AssetVc, AssetsVc},
-    chunk::{
-        ChunkableModule, ChunkableModuleVc, ChunkingContext, ChunkingContextVc, EvaluatableAssetsVc,
-    },
+    asset::Asset,
+    chunk::{ChunkableModule, ChunkingContext, EvaluatableAssets},
     context::AssetContext,
-    environment::{BrowserEnvironment, EnvironmentVc, ExecutionEnvironment},
-    issue::{handle_issues, IssueReporterVc, IssueSeverity},
-    reference::all_assets_from_entry,
+    environment::{BrowserEnvironment, Environment, ExecutionEnvironment},
+    issue::{handle_issues, IssueReporter, IssueSeverity},
+    module::Module,
+    output::OutputAsset,
+    reference::all_assets_from_entries,
     reference_type::{EntryReferenceSubType, ReferenceType},
-    resolve::{origin::PlainResolveOriginVc, parse::RequestVc, pattern::QueryMapVc},
+    resolve::{
+        origin::{PlainResolveOrigin, ResolveOriginExt},
+        parse::Request,
+        pattern::QueryMap,
+    },
+    source::asset_to_source,
 };
 use turbopack_env::dotenv::load_env;
-use turbopack_node::execution_context::ExecutionContextVc;
+use turbopack_node::execution_context::ExecutionContext;
 
 use crate::{
     arguments::BuildArguments,
     contexts::{get_client_asset_context, get_client_compile_time_info, NodeEnv},
     util::{
-        normalize_dirs, normalize_entries, output_fs, project_fs, EntryRequest, EntryRequestVc,
-        EntryRequestsVc, NormalizedDirs,
+        normalize_dirs, normalize_entries, output_fs, project_fs, EntryRequest, EntryRequests,
+        NormalizedDirs,
     },
 };
 
@@ -100,41 +103,41 @@ impl TurbopackBuildBuilder {
     pub async fn build(self) -> Result<()> {
         let task = self.turbo_tasks.spawn_once_task(async move {
             let build_result = build_internal(
-                StringVc::cell(self.project_dir.clone()),
-                StringVc::cell(self.root_dir),
-                EntryRequestsVc::cell(
+                self.project_dir.clone(),
+                self.root_dir,
+                EntryRequests(
                     self.entry_requests
                         .iter()
                         .cloned()
-                        .map(EntryRequestVc::cell)
+                        .map(EntryRequest::cell)
                         .collect(),
-                ),
-                StringVc::cell(self.browserslist_query),
+                )
+                .cell(),
+                self.browserslist_query,
             );
 
             // Await the result to propagate any errors.
             build_result.await?;
 
-            let issue_reporter: IssueReporterVc =
-                ConsoleUiVc::new(TransientInstance::new(LogOptions {
+            let issue_reporter: Vc<Box<dyn IssueReporter>> =
+                Vc::upcast(ConsoleUi::new(TransientInstance::new(LogOptions {
                     project_dir: PathBuf::from(self.project_dir),
                     current_dir: current_dir().unwrap(),
                     show_all: self.show_all,
                     log_detail: self.log_detail,
                     log_level: self.log_level,
-                }))
-                .into();
+                })));
 
             handle_issues(
                 build_result,
                 issue_reporter,
                 IssueSeverity::Error.into(),
-                &None,
-                &None,
+                None,
+                None,
             )
             .await?;
 
-            Ok(NothingVc::new().into())
+            Ok(unit().node)
         });
 
         self.turbo_tasks.wait_task_completion(task, true).await?;
@@ -145,58 +148,45 @@ impl TurbopackBuildBuilder {
 
 #[turbo_tasks::function]
 async fn build_internal(
-    project_dir: StringVc,
-    root_dir: StringVc,
-    entry_requests: EntryRequestsVc,
-    browserslist_query: StringVc,
-) -> Result<NothingVc> {
-    let project_dir = &*project_dir.await?;
-    let root_dir = &*root_dir.await?;
-    let browserslist_query = &*browserslist_query.await?;
-
-    let env = EnvironmentVc::new(Value::new(ExecutionEnvironment::Browser(
+    project_dir: String,
+    root_dir: String,
+    entry_requests: Vc<EntryRequests>,
+    browserslist_query: String,
+) -> Result<Vc<()>> {
+    let env = Environment::new(Value::new(ExecutionEnvironment::Browser(
         BrowserEnvironment {
             dom: true,
             web_worker: false,
             service_worker: false,
-            browserslist_query: browserslist_query.to_owned(),
+            browserslist_query: browserslist_query.clone(),
         }
         .into(),
     )));
-    let output_fs = output_fs(project_dir);
-    let project_fs = project_fs(root_dir);
-    let project_relative = project_dir.strip_prefix(root_dir).unwrap();
+    let output_fs = output_fs(project_dir.clone());
+    let project_fs = project_fs(root_dir.clone());
+    let project_relative = project_dir.strip_prefix(&root_dir).unwrap();
     let project_relative = project_relative
         .strip_prefix(MAIN_SEPARATOR)
         .unwrap_or(project_relative)
         .replace(MAIN_SEPARATOR, "/");
-    let project_path = project_fs.root().join(&project_relative);
-    let build_output_root = output_fs.root().join("dist");
+    let project_path = project_fs.root().join(project_relative);
+    let build_output_root = output_fs.root().join("dist".to_string());
 
-    let chunking_context: ChunkingContextVc = BuildChunkingContextVc::builder(
-        project_path,
-        build_output_root,
-        build_output_root,
-        build_output_root,
-        env,
-    )
-    .build()
-    .into();
+    let chunking_context = Vc::upcast(
+        BuildChunkingContext::builder(
+            project_path,
+            build_output_root,
+            build_output_root,
+            build_output_root,
+            env,
+        )
+        .build(),
+    );
 
     let node_env = NodeEnv::Production.cell();
-    // TODO: allow node environment via cli
-    let env = EnvironmentVc::new(Value::new(ExecutionEnvironment::Browser(
-        BrowserEnvironment {
-            dom: true,
-            web_worker: false,
-            service_worker: false,
-            browserslist_query: browserslist_query.to_owned(),
-        }
-        .into(),
-    )));
-    let compile_time_info = get_client_compile_time_info(env, node_env);
+    let compile_time_info = get_client_compile_time_info(browserslist_query, node_env);
     let execution_context =
-        ExecutionContextVc::new(project_path, chunking_context, load_env(project_path));
+        ExecutionContext::new(project_path, chunking_context, load_env(project_path));
     let context =
         get_client_asset_context(project_path, execution_context, compile_time_info, node_env);
 
@@ -206,11 +196,9 @@ async fn build_internal(
         .cloned()
         .map(|r| async move {
             Ok(match &*r.await? {
-                EntryRequest::Relative(p) => {
-                    RequestVc::relative(Value::new(p.clone().into()), false)
-                }
+                EntryRequest::Relative(p) => Request::relative(Value::new(p.clone().into()), false),
                 EntryRequest::Module(m, p) => {
-                    RequestVc::module(m.clone(), Value::new(p.clone().into()), QueryMapVc::none())
+                    Request::module(m.clone(), Value::new(p.clone().into()), QueryMap::none())
                 }
             })
         })
@@ -218,8 +206,8 @@ async fn build_internal(
         .await?)
         .to_vec();
 
-    let origin = PlainResolveOriginVc::new(context, output_fs.root().join("_")).as_resolve_origin();
-
+    let origin = PlainResolveOrigin::new(context, output_fs.root().join("_".to_string()));
+    let project_dir = &project_dir;
     let entries = entry_requests
         .into_iter()
         .map(|request_vc| async move {
@@ -243,7 +231,7 @@ async fn build_internal(
 
     let modules = entries.into_iter().map(|entry| {
         context.process(
-            entry,
+            asset_to_source(entry),
             Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
         )
     });
@@ -252,28 +240,31 @@ async fn build_internal(
         .map(|entry_module| async move {
             Ok(
                 if let Some(ecmascript) =
-                    EcmascriptModuleAssetVc::resolve_from(entry_module).await?
+                    Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(entry_module).await?
                 {
-                    AssetsVc::cell(vec![BuildChunkingContextVc::resolve_from(chunking_context)
-                        .await?
-                        .unwrap()
-                        .generate_entry_chunk(
-                            build_output_root
-                                .join(
-                                    entry_module
-                                        .ident()
-                                        .path()
-                                        .file_stem()
-                                        .await?
-                                        .as_deref()
-                                        .unwrap(),
-                                )
-                                .with_extension("entry.js"),
-                            ecmascript.into(),
-                            EvaluatableAssetsVc::one(ecmascript.into()),
-                        )])
+                    Vc::cell(vec![Vc::try_resolve_downcast_type::<BuildChunkingContext>(
+                        chunking_context,
+                    )
+                    .await?
+                    .unwrap()
+                    .entry_chunk(
+                        build_output_root
+                            .join(
+                                entry_module
+                                    .ident()
+                                    .path()
+                                    .file_stem()
+                                    .await?
+                                    .as_deref()
+                                    .unwrap()
+                                    .to_string(),
+                            )
+                            .with_extension("entry.js".to_string()),
+                        Vc::upcast(ecmascript),
+                        EvaluatableAssets::one(Vc::upcast(ecmascript)),
+                    )])
                 } else if let Some(chunkable) =
-                    ChunkableModuleVc::resolve_from(entry_module).await?
+                    Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(entry_module).await?
                 {
                     chunking_context.chunk_group(chunkable.as_root_chunk(chunking_context))
                 } else {
@@ -288,11 +279,9 @@ async fn build_internal(
         .try_join()
         .await?;
 
-    let mut chunks: HashSet<AssetVc> = HashSet::new();
+    let mut chunks: HashSet<Vc<Box<dyn OutputAsset>>> = HashSet::new();
     for chunk_group in entry_chunk_groups {
-        for entry in &*chunk_group.await? {
-            chunks.extend(&*all_assets_from_entry(entry.to_owned()).await?);
-        }
+        chunks.extend(&*all_assets_from_entries(chunk_group).await?);
     }
 
     chunks
@@ -301,7 +290,7 @@ async fn build_internal(
         .try_join()
         .await?;
 
-    Ok(NothingVc::new())
+    Ok(unit())
 }
 
 pub async fn build(args: &BuildArguments) -> Result<()> {

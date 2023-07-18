@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use std::{
     env::{consts, current_exe},
     process,

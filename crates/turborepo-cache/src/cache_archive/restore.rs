@@ -16,13 +16,12 @@ use crate::{
     CacheError,
 };
 
-pub struct CacheReader {
-    reader: Box<dyn Read>,
+pub struct CacheReader<'a> {
+    reader: Box<dyn Read + 'a>,
 }
 
-impl CacheReader {
-    #[cfg(test)]
-    pub fn new(reader: impl Read + 'static, is_compressed: bool) -> Result<Self, CacheError> {
+impl<'a> CacheReader<'a> {
+    pub fn from_reader(reader: impl Read + 'a, is_compressed: bool) -> Result<Self, CacheError> {
         let reader: Box<dyn Read> = if is_compressed {
             Box::new(zstd::Decoder::new(reader)?)
         } else {
@@ -342,7 +341,7 @@ mod tests {
         for (tar_bytes, is_compressed) in
             [(&uncompressed_tar[..], false), (&compressed_tar[..], true)]
         {
-            let mut cache_reader = CacheReader::new(tar_bytes, is_compressed)?;
+            let mut cache_reader = CacheReader::from_reader(&tar_bytes[..], is_compressed)?;
             let output_dir = tempdir()?;
             let output_dir_path = output_dir.path().to_string_lossy();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
@@ -365,7 +364,7 @@ mod tests {
         for (tar_bytes, is_compressed) in
             [(&uncompressed_tar[..], false), (&compressed_tar[..], true)]
         {
-            let mut cache_reader = CacheReader::new(tar_bytes, is_compressed)?;
+            let mut cache_reader = CacheReader::from_reader(&tar_bytes[..], is_compressed)?;
             let output_dir = tempdir()?;
             let output_dir_path = output_dir.path().to_string_lossy();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;

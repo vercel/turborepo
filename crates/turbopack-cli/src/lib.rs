@@ -1,5 +1,8 @@
 #![feature(future_join)]
 #![feature(min_specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
+#![allow(clippy::too_many_arguments)]
 
 pub mod arguments;
 pub mod build;
