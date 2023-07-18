@@ -192,10 +192,7 @@ impl AsyncModule {
         let this = self.await?;
 
         let scope = EsmScope::new(availability_info);
-        let Some(scc) = &*scope
-            .get_scc(Vc::upcast(this.module))
-            .await?
-        else {
+        let Some(scc) = &*scope.get_scc(Vc::upcast(this.module)).await? else {
             // I'm not sure if this should be possible.
             return Ok(Vc::cell(None));
         };

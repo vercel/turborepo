@@ -165,6 +165,7 @@ pub fn rerun_if_glob(globs: &str, root: &str) {
     let cwd = env::current_dir().unwrap();
     let globs = cwd.join(globs.replace('/', PATH_SEP.to_string().as_str()));
     let root = cwd.join(root.replace('/', PATH_SEP.to_string().as_str()));
+    println!("cargo:rerun-if-changed={}", root.display());
     let mut seen = HashSet::from([root]);
     for entry in glob(globs.to_str().unwrap()).unwrap() {
         let path = entry.unwrap();

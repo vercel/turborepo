@@ -20,8 +20,12 @@ pub async fn get_dev_runtime_code(
 ) -> Result<Vc<Code>> {
     let asset_context = get_runtime_asset_context(environment);
 
-    let shared_runtime_utils_code = embed_static_code(asset_context, "shared/runtime-utils.ts".to_string());
-    let runtime_base_code = embed_static_code(asset_context, "dev/runtime/base/runtime-base.ts".to_string());
+    let shared_runtime_utils_code =
+        embed_static_code(asset_context, "shared/runtime-utils.ts".to_string());
+    let runtime_base_code = embed_static_code(
+        asset_context,
+        "dev/runtime/base/runtime-base.ts".to_string(),
+    );
 
     let chunk_loading = &*asset_context
         .compile_time_info()
@@ -61,7 +65,9 @@ pub async fn get_dev_runtime_code(
     code.push_code(&*runtime_base_code.await?);
 
     if matches!(chunk_loading, ChunkLoading::NodeJs) {
-        code.push_code(&*embed_static_code(asset_context, "shared-node/require.ts".to_string()).await?);
+        code.push_code(
+            &*embed_static_code(asset_context, "shared-node/require.ts".to_string()).await?,
+        );
     }
 
     code.push_code(&*runtime_backend_code.await?);

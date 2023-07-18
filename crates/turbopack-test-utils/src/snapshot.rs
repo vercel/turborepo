@@ -6,13 +6,13 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use once_cell::sync::Lazy;
+use regex::Regex;
 use similar::TextDiff;
 use turbo_tasks::{ReadRef, TryJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, DiskFileSystem, File, FileContent, FileSystemEntryType,
     FileSystemPath,
 };
-use regex::Regex;
 use turbo_tasks_hash::encode_hex;
 use turbopack_cli_utils::issue::{format_issue, LogOptions};
 use turbopack_core::{

@@ -8,8 +8,8 @@ use swc_core::{
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
-        availability_info::AvailabilityInfo, ChunkableModuleReference,
-        ChunkingContext, ChunkingType, ChunkingTypeOption, ModuleId,
+        availability_info::AvailabilityInfo, ChunkableModuleReference, ChunkingContext,
+        ChunkingType, ChunkingTypeOption, ModuleId,
     },
     issue::{IssueSeverity, OptionIssueSource},
     module::Module,

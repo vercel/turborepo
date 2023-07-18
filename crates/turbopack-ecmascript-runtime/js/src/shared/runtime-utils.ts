@@ -209,10 +209,10 @@ function esmImport(
   const module = getOrInstantiateModuleFromParent(id, sourceModule);
   if (module.error) throw module.error;
 
-  // any async module has to have `module.namespaceObject` defined
+  // Any ES module has to have `module.namespaceObject` defined.
   if (module.namespaceObject) return module.namespaceObject;
 
-  // can't be an async module at this point
+  // only ESM can be an async module, so we don't need to worry about exports being a promise.
   const raw = module.exports;
   return (module.namespaceObject = interopEsm(
     raw,
