@@ -3,6 +3,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::sync::OnceLock;
 
 use anyhow::{anyhow, bail, Result};
+use lazy_static::lazy_static;
 use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
@@ -17,8 +18,12 @@ use crate::{
 };
 
 // Files that should be copied from root and if they're required for install
-// All paths should be given as relative unix paths
-const ADDITIONAL_FILES: &[(&str, bool)] = [(".gitignore", false), (".npmrc", true)].as_slice();
+lazy_static! {
+    static ref ADDITIONAL_FILES: Vec<(&'static RelativeUnixPath, bool)> = vec![
+        (RelativeUnixPath::new(".gitignore").unwrap(), false),
+        (RelativeUnixPath::new(".npmrc").unwrap(), true),
+    ];
+}
 
 fn package_json() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
@@ -101,8 +106,8 @@ pub fn prune(base: &CommandBase, scope: &[String], docker: bool, output_dir: &st
             .create_with_contents(&lockfile_contents)?;
     }
 
-    for (relative_path, required_for_install) in ADDITIONAL_FILES {
-        let path = RelativeUnixPath::new(relative_path)?.to_system_path();
+    for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
+        let path = relative_path.to_system_path();
         prune.copy_file(&path, *required_for_install)?;
     }
 
