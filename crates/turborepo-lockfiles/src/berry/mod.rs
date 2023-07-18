@@ -100,11 +100,9 @@ pub struct BerryManifest {
 
 impl BerryLockfile {
     pub fn load(contents: &[u8], manifest: Option<BerryManifest>) -> Result<Self, super::Error> {
-        fn inner(contents: &[u8], manifest: Option<BerryManifest>) -> Result<BerryLockfile, Error> {
-            let data = LockfileData::from_bytes(contents)?;
-            BerryLockfile::new(data, manifest)
-        }
-        Ok(inner(contents, manifest)?)
+        let data = LockfileData::from_bytes(contents)?;
+        let lockfile = BerryLockfile::new(data, manifest)?;
+        Ok(lockfile)
     }
 
     pub fn new(lockfile: LockfileData, manifest: Option<BerryManifest>) -> Result<Self, Error> {
