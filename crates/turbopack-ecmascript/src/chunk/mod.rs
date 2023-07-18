@@ -1,7 +1,6 @@
 pub(crate) mod content;
 pub(crate) mod context;
 pub(crate) mod data;
-pub(crate) mod esm_scope;
 pub(crate) mod item;
 pub(crate) mod placeable;
 

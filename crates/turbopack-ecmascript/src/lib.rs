@@ -198,10 +198,6 @@ pub struct EcmascriptModuleAsset {
 #[turbo_tasks::value(transparent)]
 pub struct OptionEcmascriptModuleAsset(Option<Vc<EcmascriptModuleAsset>>);
 
-/// A list of [EcmascriptModuleAsset]s
-#[turbo_tasks::value(transparent)]
-pub struct EcmascriptModuleAssets(Vec<Vc<EcmascriptModuleAsset>>);
-
 impl EcmascriptModuleAsset {
     pub fn builder(
         source: Vc<Box<dyn Source>>,
