@@ -45,7 +45,7 @@ pub(crate) const REMOTE_CACHING_INFO: &str = "  Remote Caching shares your cache
   This results in faster build times and deployments for your team.";
 pub(crate) const REMOTE_CACHING_URL: &str =
     "https://turbo.build/repo/docs/core-concepts/remote-caching";
-pub(crate) const SPACES_URL: &str = "https://vercel.com/docs/spaces";
+pub(crate) const SPACES_URL: &str = "https://vercel.com/docs/workflow-collaboration/vercel-spaces";
 
 /// Verifies that caching status for a team is enabled, or prompts the user to
 /// enable it.
@@ -205,8 +205,31 @@ pub async fn link(
                 return Err(anyhow!("canceled"));
             }
 
+            let user_response = api_client
+                .get_user(token)
+                .await
+                .context("could not get user information")?;
+
+            let user_display_name = user_response
+                .user
+                .name
+                .as_deref()
+                .unwrap_or(user_response.user.username.as_str());
+
+            let teams_response = api_client
+                .get_teams(token)
+                .await
+                .context("could not get team information")?;
+
+            let selected_team = select_team(base, &teams_response.teams, user_display_name)?;
+
+            let team_id = match selected_team {
+                SelectedTeam::User => user_response.user.id.as_str(),
+                SelectedTeam::Team(team) => team.id.as_str(),
+            };
+
             let spaces_response = api_client
-                .get_spaces(token, base.repo_config()?.team_id())
+                .get_spaces(token, Some(team_id))
                 .await
                 .context("could not get spaces information")?;
 
