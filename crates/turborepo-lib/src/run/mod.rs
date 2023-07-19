@@ -236,4 +236,43 @@ impl Run {
 
         Ok(())
     }
+
+    pub fn get_global_hash(&self) -> Result<u64> {
+        let env_at_execution_start = EnvironmentVariableMap::infer();
+
+        let package_json_path = self.base.repo_root.join_component("package.json");
+        let root_package_json =
+            PackageJson::load(&package_json_path).context("failed to read package.json")?;
+
+        let opts = self.opts()?;
+
+        let is_single_package = opts.run_opts.single_package;
+
+        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+            .with_single_package_mode(opts.run_opts.single_package)
+            .build()?;
+
+        let root_turbo_json =
+            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
+
+        let root_external_dependencies = pkg_dep_graph.external_dependencies(&WorkspaceName::Root);
+
+        let global_hash_inputs = get_global_hash_inputs(
+            root_external_dependencies,
+            &self.base.repo_root,
+            pkg_dep_graph.root_package_json(),
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
+            // TODO: Fill in these vec![] once turbo.json is ported
+            root_turbo_json.global_deps,
+            &env_at_execution_start,
+            root_turbo_json.global_env,
+            root_turbo_json.global_pass_through_env,
+            opts.run_opts.env_mode,
+            opts.run_opts.framework_inference,
+            root_turbo_json.global_dot_env,
+        )?;
+
+        Ok(global_hash_inputs.calculate_global_hash_from_inputs())
+    }
 }

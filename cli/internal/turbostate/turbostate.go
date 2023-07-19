@@ -97,6 +97,7 @@ type ExecutionState struct {
 	SpacesAPIClientConfig APIClientConfig    `json:"spaces_api_client_config"`
 	PackageManager        string             `json:"package_manager"`
 	CLIArgs               ParsedArgsFromRust `json:"cli_args"`
+	GlobalHash            string             `json:"global_hash"`
 }
 
 // APIClientConfig holds the authentication and endpoint details for the API client
