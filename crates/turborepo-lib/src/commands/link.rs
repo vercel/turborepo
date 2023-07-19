@@ -247,6 +247,11 @@ pub async fn link(
                 )
             })?;
 
+            fs::create_dir_all(base.repo_root.join_component(".turbo"))
+                .context("could not create .turbo directory")?;
+            base.repo_config_mut()?
+                .set_team_id(Some(team_id.to_string()))?;
+
             println!(
                 "
     {} {} linked to {}
