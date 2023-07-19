@@ -10,6 +10,7 @@ use crate::{
     asset::Asset,
     issue::IssueContextExt,
     module::{convert_asset_to_module, Module, Modules},
+    output::{OutputAsset, OutputAssets},
     resolve::{PrimaryResolveResult, ResolveResult},
 };
 pub mod source_map;
@@ -185,11 +186,14 @@ pub async fn all_modules(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
 /// Walks the asset graph from multiple assets and collect all referenced
 /// assets.
 #[turbo_tasks::function]
-async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<OutputAssets>> {
+pub async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<OutputAssets>> {
     Ok(Vc::cell(
         AdjacencyMap::new()
             .skip_duplicates()
-            .visit(entries.await?.iter().copied(), get_referenced_assets)
+            .visit(
+                entries.await?.iter().copied().map(Vc::upcast),
+                get_referenced_assets,
+            )
             .await
             .completed()?
             .into_inner()
@@ -199,28 +203,14 @@ async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<OutputA
 }
 
 /// Computes the list of all chunk children of a given chunk.
-async fn get_referenced_assets(
+pub async fn get_referenced_assets(
     asset: Vc<Box<dyn OutputAsset>>,
 ) -> Result<impl Iterator<Item = Vc<Box<dyn OutputAsset>>> + Send> {
-    Ok(
-        asset
-            .references()
-            .await?
-            .iter()
-            .map(|reference| async move {
-                let primary_assets = reference.resolve_reference().primary_assets().await?;
-                Ok(primary_assets.clone_value())
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten()
-            .map(|asset| async move {
-                Ok(Vc::try_resolve_sidecast::<Box<dyn OutputAsset>>(asset).await?)
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten(),
-    )
+    Ok(asset
+        .references()
+        .await?
+        .iter()
+        .copied()
+        .collect::<Vec<_>>()
+        .into_iter())
 }
