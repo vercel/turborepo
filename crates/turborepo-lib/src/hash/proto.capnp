@@ -2,8 +2,8 @@ using Go = import "/go.capnp";
 
 @0xe1dde60149aeb063;
 
-$Go.package("proto");
-$Go.import("proto");
+$Go.package("capnp");
+$Go.import("capnp");
 
 struct TaskHashable {
     globalHash @0 :Text;
@@ -50,6 +50,25 @@ struct GlobalHashable {
     loose @1;
     strict @2;
   }
+
+  struct Entry {
+    key @0 :Text;
+    value @1 :Text;
+  }
+}
+
+struct LockFilePackages {
+  packages @0 :List(Package);
+}
+
+struct Package {
+  key @0 :Text;
+  version @1 :Text;
+  found @2 :Bool;
+}
+
+struct FileHashes {
+  fileHashes @0 :List(Entry);
 
   struct Entry {
     key @0 :Text;
