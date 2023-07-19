@@ -126,7 +126,12 @@ func Test_isWorkspaceReference(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isWorkspaceReference(tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath)
+			splitter := dependencySplitter{
+				workspaces: map[string]*fs.PackageJSON{"foo": {Version: tt.packageVersion}},
+				pkgDir:     pkgDir,
+				rootPath:   rootpath,
+			}
+			got := splitter.isInternal("foo", tt.dependencyVersion)
 			if got != tt.want {
 				t.Errorf("isWorkspaceReference(%v, %v, %v, %v) got = %v, want %v", tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath, got, tt.want)
 			}

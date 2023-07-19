@@ -455,23 +455,14 @@ impl Dependencies {
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = HashSet::new();
+        let splitter = DependencySplitter {
+            repo_root,
+            workspace_dir,
+            workspaces,
+        };
         for (name, version) in dependencies.into_iter() {
-            // TODO implement borrowing for workspaces to allow for zero copy queries
-            let workspace_name = WorkspaceName::Other(name.clone());
-            let is_internal = workspaces
-                .get(&workspace_name)
-                // This is the current Go behavior, in the future we might not want to paper over a
-                // missing version
-                .map(|e| e.package_json.version.as_deref().unwrap_or_default())
-                .map_or(false, |workspace_version| {
-                    DependencyVersion::new(version).matches_workspace_package(
-                        workspace_version,
-                        workspace_dir,
-                        repo_root,
-                    )
-                });
-            if is_internal {
-                internal.insert(workspace_name);
+            if splitter.is_internal(name, version) {
+                internal.insert(WorkspaceName::Other(name.clone()));
             } else {
                 external.insert(Package {
                     name: name.clone(),
@@ -480,6 +471,31 @@ impl Dependencies {
             }
         }
         Self { internal, external }
+    }
+}
+
+struct DependencySplitter<'a, 'b, 'c> {
+    repo_root: &'a AbsoluteSystemPath,
+    workspace_dir: &'b AbsoluteSystemPath,
+    workspaces: &'c HashMap<WorkspaceName, WorkspaceInfo>,
+}
+
+impl<'a, 'b, 'c> DependencySplitter<'a, 'b, 'c> {
+    fn is_internal(&self, name: &str, version: &str) -> bool {
+        // TODO implement borrowing for workspaces to allow for zero copy queries
+        let workspace_name = WorkspaceName::Other(name.to_string());
+        self.workspaces
+            .get(&workspace_name)
+            // This is the current Go behavior, in the future we might not want to paper over a
+            // missing version
+            .map(|e| e.package_json.version.as_deref().unwrap_or_default())
+            .map_or(false, |workspace_version| {
+                DependencyVersion::new(version).matches_workspace_package(
+                    workspace_version,
+                    self.workspace_dir,
+                    self.repo_root,
+                )
+            })
     }
 }
 
@@ -612,15 +628,30 @@ mod test {
         })
         .unwrap();
         let pkg_dir = root.join_components(&["packages", "libA"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                WorkspaceName::Other("foo".to_string()),
+                WorkspaceInfo {
+                    package_json: PackageJson {
+                        version: Some(package_version.to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw("unused").unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map
+        };
 
-        assert_eq!(
-            DependencyVersion::new(range).matches_workspace_package(
-                package_version,
-                &pkg_dir,
-                &root
-            ),
-            expected
-        );
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+        };
+
+        assert_eq!(splitter.is_internal("foo", range), expected);
     }
 
     #[test]
