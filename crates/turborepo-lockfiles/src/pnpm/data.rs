@@ -83,7 +83,6 @@ pub struct Dependency {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageSnapshot {
-    // can we make this flow?/is it necessary?
     resolution: PackageResolution,
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
@@ -116,14 +115,21 @@ pub struct DependenciesMeta {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PackageResolution {
+    // Type field, cannot use serde(tag) due to tarball having an empty type field
+    // tarball -> none
+    // directory -> 'directory'
+    // git repository -> 'git'
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     type_field: Option<String>,
+    // Tarball fields
     #[serde(skip_serializing_if = "Option::is_none")]
     integrity: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tarball: Option<String>,
+    // Directory fields
     #[serde(skip_serializing_if = "Option::is_none")]
-    dir: Option<String>,
+    directory: Option<String>,
+    // Git repository fields
     #[serde(skip_serializing_if = "Option::is_none")]
     repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -804,5 +810,35 @@ mod tests {
                 Package::new("/foo/1.0.0", "1.0.0"),
             ],
         );
+    }
+
+    #[test]
+    fn test_injected_package_round_trip() {
+        let original_contents = "a:
+  resolution:
+    type: directory,
+    directory: packages/ui,
+  name: ui
+  version: 0.0.0
+  dev: false
+b:
+  resolution:
+    integrity: deadbeef,
+    tarball: path/to/tarball.tar.gz,
+  name: tar
+  version: 0.0.0
+  dev: false
+c:
+  resolution:
+    repo: great-repo.git,
+    commit: greatcommit,
+  name: git
+  version: 0.0.0
+  dev: false
+";
+        let original_parsed: Map<String, PackageSnapshot> =
+            serde_yaml::from_str(original_contents).unwrap();
+        let contents = serde_yaml::to_string(&original_parsed).unwrap();
+        assert_eq!(original_contents, &contents);
     }
 }
