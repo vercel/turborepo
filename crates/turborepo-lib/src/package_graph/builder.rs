@@ -6,11 +6,12 @@ use std::{
 use petgraph::graph::{Graph, NodeIndex};
 use tracing::warn;
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    RelativeUnixPathBuf,
 };
 use turborepo_lockfiles::Lockfile;
 
-use super::{Entry, Package, PackageGraph, WorkspaceName, WorkspaceNode};
+use super::{Package, PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
 use crate::{package_json::PackageJson, package_manager::PackageManager};
 
 pub struct PackageGraphBuilder<'a> {
@@ -43,8 +44,6 @@ pub enum Error {
     PackageJsonMissingName,
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("TODO lockfile errors")]
-    Todo,
 }
 
 impl<'a> PackageGraphBuilder<'a> {
@@ -103,7 +102,7 @@ struct BuildState<'a, S> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     package_manager: PackageManager,
-    workspaces: HashMap<WorkspaceName, Entry>,
+    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
     workspace_graph: Graph<WorkspaceNode, ()>,
     node_lookup: HashMap<WorkspaceNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -154,7 +153,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let mut workspaces = HashMap::new();
         workspaces.insert(
             WorkspaceName::Root,
-            Entry {
+            WorkspaceInfo {
                 package_json: root_package_json,
                 ..Default::default()
             },
@@ -181,7 +180,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
         let name = WorkspaceName::Other(json.name.clone().ok_or(Error::PackageJsonMissingName)?);
-        let entry = Entry {
+        let entry = WorkspaceInfo {
             package_json: json,
             package_json_path: relative_json_path,
             ..Default::default()
@@ -320,8 +319,20 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
     }
 
     fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
-        // TODO actual lockfile parsing
-        self.lockfile.take().map_or_else(|| Err(Error::Todo), Ok)
+        match self.lockfile.take() {
+            Some(lockfile) => Ok(lockfile),
+            None => {
+                let lockfile = self.package_manager.read_lockfile(
+                    self.repo_root,
+                    self.workspaces
+                        .get(&WorkspaceName::Root)
+                        .as_ref()
+                        .map(|e| &e.package_json)
+                        .expect("root workspace should have json"),
+                )?;
+                Ok(lockfile)
+            }
+        }
     }
 
     fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile>, Error> {
@@ -329,13 +340,12 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
 
         let lockfile = match self.populate_lockfile() {
             Ok(lockfile) => Some(lockfile),
-            Err(_) => {
-                // TODO: Re-enable this warning once we have lockfile parsing hooked up
-                // warn!(
-                //     "Issues occurred when constructing package graph. Turbo will function,
-                // but \      some features may not be available: {}",
-                //     e
-                // );
+            Err(e) => {
+                warn!(
+                    "Issues occurred when constructing package graph. Turbo will function, but \
+                     some features may not be available: {}",
+                    e
+                );
                 None
             }
         };
@@ -368,7 +378,11 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
         self.workspaces
             .values()
             .map(|entry| {
-                let workspace_path = entry.package_json_path.to_unix()?;
+                let workspace_path = entry
+                    .package_json_path
+                    .parent()
+                    .unwrap_or(AnchoredSystemPath::new("")?)
+                    .to_unix()?;
                 let workspace_string = workspace_path.as_str();
                 let external_deps = entry
                     .unresolved_external_dependencies
@@ -432,7 +446,7 @@ impl Dependencies {
     pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
-        workspaces: &HashMap<WorkspaceName, Entry>,
+        workspaces: &HashMap<WorkspaceName, WorkspaceInfo>,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -554,9 +568,13 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
     }
 }
 
-impl Entry {
+impl WorkspaceInfo {
     fn unix_dir_str(&self) -> Result<String, Error> {
-        let unix = self.package_json_path.to_unix()?;
+        let unix = self
+            .package_json_path
+            .parent()
+            .unwrap_or_else(|| AnchoredSystemPath::new("").expect("empty path is anchored"))
+            .to_unix()?;
         Ok(unix.to_string())
     }
 }

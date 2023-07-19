@@ -3583,6 +3583,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "json_comments"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41ee439ee368ba4a77ac70d04f14015415af8600d6c894dc1f11bd79758c57d5"
+
+[[package]]
 name = "jsonc-parser"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9561,6 +9567,8 @@ dependencies = [
  "fs-err",
  "path-clean 1.0.1",
  "serde",
+ "serde_json",
+ "tempdir",
  "test-case",
  "thiserror",
  "wax",
@@ -9651,9 +9659,9 @@ dependencies = [
 name = "turborepo-fs"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "fs-err",
  "tempfile",
+ "thiserror",
  "turbopath",
  "walkdir",
 ]
@@ -9692,6 +9700,7 @@ dependencies = [
  "indicatif",
  "is-terminal",
  "itertools",
+ "json_comments",
  "lazy-regex",
  "lazy_static",
  "libc",
@@ -9737,6 +9746,7 @@ dependencies = [
  "turbopath",
  "turborepo-api-client",
  "turborepo-env",
+ "turborepo-fs",
  "turborepo-lockfiles",
  "turborepo-scm",
  "uds_windows",
@@ -9762,6 +9772,7 @@ dependencies = [
  "serde_yaml 0.9.21",
  "test-case",
  "thiserror",
+ "turbopath",
 ]
 
 [[package]]
