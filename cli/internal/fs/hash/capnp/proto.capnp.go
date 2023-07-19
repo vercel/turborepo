@@ -877,80 +877,484 @@ func (f GlobalHashable_Entry_Future) Struct() (GlobalHashable_Entry, error) {
 	return GlobalHashable_Entry(p.Struct()), err
 }
 
-const schema_e1dde60149aeb063 = "x\xda\xa4\x94Mh\x1ce\x18\xc7\xff\xffw\xf6+\xc9" +
-	"\xd6\xcd2\xe3g-\x91R\xb0\x15Z\xd2\xa6\x14\x0cH" +
-	"\xda\x98\xd4\x04\xad\xe98E\xa1\xb4\x87\xc9\xee\x9b\xec\x9a" +
-	"qg\x9d\x99\xcdGA\xa3\xd5C\x0czPz\x10\xad" +
-	"`\xa5\x82X\x14\x05\x0f^\x84*x\x11D\x0b\xf5\"" +
-	"\x84\x10\xb0\xd2j\x05/\x95\x1e\x0a#\xef\xec\xce\xee$" +
-	"\xa1=\xe8iw~\xef\xf3>\xef3\xf3\xfc\x9e\xb7\x7f" +
-	"Y\x1cL\xed\xdd2\xa7A\x98;\xd3\x99\xf0\x9e\xf7\xff" +
-	"\xd9\xb5m\xf9\xe2[(\xde/\xc2\x85\xdfn<\xfd\xe7" +
-	"\xd9\xbf\xd7\x00\x0e\x9cc7\xf5/\x99\x05\xf4\xcf8\x01" +
-	"\xae^\xfe\xbetzu\xf8Bq\xab\x08\xbf\xea\x7f\xf9" +
-	"\xb9\xa5\x03=\x7f\xa8\xb8o\xf9\x00\xf5KQ\xdc\x8fQ" +
-	"\xdc\xf4G\x17\xae\xdez\xed\x97b\x9ea\xe9\x8b\xcf\xc7" +
-	"\xf9\xfb\xca\x1a\xd2B\xad\xaf\xf1;\xfdZ\x14y\x85s" +
-	"`8\xfe\xd3\x81\x91G\x1fsVP\xdc\xcaN\xce(" +
-	"v\xa0*\xba\xa9/D\xdb\x1aB\x05\xb7k3\xf3L" +
-	"f\xce\xab\x90K\xe2\x07}E\xdc\x0b\x0c\\\x11\xab\x02" +
-	"\x89l\x1b\xa2\xb3*\xfad\xe6W\xbd\x9ay\x18\x18x" +
-	")\x13\x12\xbb\xc3\xba\xe7\x06\xee\x9e\x92\xad\xd5k\xf5\xc1" +
-	"c\xb6?3f\xfb\x15{\xd2\x91{Fk\xb3G\xdc" +
-	"\xb2\x04\x8e\x92f\x9e\x02(n\xdb\x07\x90\xc5\xbb\xd5\x8f" +
-	"(n\x19\x04\xfa\xaa\xb5)\xe9\xf59\xae\xeb\xcb!?" +
-	"\xf0\xaa\xa5`}\xca'\x1cw\xd2v\xd6'\xd5\xca\xf2" +
-	"\xbf\xe6\x14q\x99\x13\x8d\xa0\xde\x08\xfc\xa8\xb8\x9c\x96\x02" +
-	"R\x04\x8a\xbb\x8e\x03\xe6N\x8d\xe6\x88`\x914\xa8\xe0" +
-	"!\x05\x0fj4O\x08\x86\xd5Z\xc9i\xf8U\x17Z" +
-	"\xcd\xe7]\xe0Q\x8d\xccC\xa8\xbf\xa1\x9c\xbf\xfd\xda\x9d" +
-	"_*\xf0\x16\xb0\xb1\x94\xed\x80\xb9C\xa3\xd9\x9f(e" +
-	"\xf7\xbeV}\xfb\x05\xb33r!J\x9f\x07\xfbfm" +
-	"\xa7!\xe3\xa7\xcdo\x1b\x1f\x05\x98)2a.\x87\x17" +
-	"[}2\xf7\xc7G\xeb'y\x1c\xb0NP\xa3Ua" +
-	"\xe7t]\xf2S\xc0\xaa(\xfe\xba\xe2B\x18\xaa\x05\xfa" +
-	"\xabQ\xfc+\x8a\xbf\xa9\xb8\xa6\x19\xd4\x00\xfd\x0dN\x02" +
-	"\xd6\x92\xe2g\x14O\xa5\x0c\xa6\x00\xfdm.\x03\xd6\x19" +
-	"\xc5?T<\x9d6\x98\x06\xf4\x0f\xf8\x08`\xbd\xab\xf8" +
-	"y\xc53\x19\x83\x19@?\xc7a\xc0:\xab\xf8'\x8a" +
-	"g\xb3F4\x0a\x1f\xf3y\xc0:\xaf\xf8E\xc5s9" +
-	"\x839@\xff\x86\xdb\x01\xebk\xc5/+\xde\xd5e\xb0" +
-	"K\xa9\xce\xd3\x80\xf5\xb3\xe2\xd7\x15\xef\xee6\xd8\x0d\xe8" +
-	"\xd7\xa2:\xaf*\x9e\x12\x82\xec1\xd8\x03\xe8\x14\xea\xd8" +
-	"[\x0a\xe7\x84`1\xdfc0\x0f\xe8i1\x08<#" +
-	"4Z\x0f\x0a\xc1p\xba\xd5Lh~\xa5\xdd\x81\xc0\xf6" +
-	"gFd]\xb2V\x96\xb5\xd2\xc2\x98]\xf0+r\xb3" +
-	"\x14vi\xc6\x9e\x96#\xd0\xaa^{k\xc5\xf6+\x13" +
-	"S\x87\xab\xc8:\xd2oS9\x1fH\xaff;\x1c\x91" +
-	"u_\xb5\x13\x88\xd7\x0a\xea\xb0\xf8a\xd1m\x8a\xcd\xde" +
-	"\xf86\x01\xd9\x1b\x9d\xe5\xfb\xc7*^\x03\x85C\xde\xf4" +
-	"\xc6J\xb2\xb26\xbb\xb18O\xfa\xae3+\xcb\x1c\xad" +
-	"\xcd>k{>6W\xdf\xca\x98\x1d\xdd\xb4{Q6" +
-	"\xadb\xa1#\x1b\xc8\x028Tv\x83\xcd\xf1\xeb\x95M" +
-	"\xce\x87\xe6H3\xc7\xce\x1d\xda5\x9c\xb8\xfc\xd2\xfbb" +
-	"}\xfb\xa2!2w\xb4\xe7\xe7\xafS\x80y]\xa3y" +
-	"31?7\xde\x01\xcc\x9b\x1a-#\xe9o1\xf2\xda" +
-	"P\x8d~(\xe9\xef\xb6\xc8\xa3\xfb\x14\xdf\x9f\xf4wo" +
-	"\xe4Q\xbf\xe2O%\xfd\x1d\xe7)\xc0\x1aS\xbcLA" +
-	"\xb6\xf4\xb5#};\xe3\x94\xedm\xea+\xf9^<N" +
-	"A\xa4o\xa6\xa9\xef\x8b\x1c\x04,G\xf1%\xb6\x05{" +
-	"\xdc\xc6P\xa9\"\x9f\xec\x0c}k\xe1p\x95\x8eT\xdf" +
-	"\xea\x88\xcdz\xfcY{;\x1f\x09l\xb6\xd3u\x83\xd1" +
-	"\xf9@RY\xa4$*\xa8=q\xae\xff#\x80\x8b\xa1" +
-	"\xc6t\xe5N\x0e\xc4\xcdk\x1a\x10Ny\xf6\x0br\xce" +
-	"\xf583\xaenjY\xd3J\x92\x84 o\xa7\xc7\xbf" +
-	"\x01\x00\x00\xff\xff\x9b\xa2\xb13"
+type LockFilePackages capnp.Struct
+
+// LockFilePackages_TypeID is the unique identifier for the type LockFilePackages.
+const LockFilePackages_TypeID = 0xb470b49a14912305
+
+func NewLockFilePackages(s *capnp.Segment) (LockFilePackages, error) {
+	st, err := capnp.NewStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1})
+	return LockFilePackages(st), err
+}
+
+func NewRootLockFilePackages(s *capnp.Segment) (LockFilePackages, error) {
+	st, err := capnp.NewRootStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1})
+	return LockFilePackages(st), err
+}
+
+func ReadRootLockFilePackages(msg *capnp.Message) (LockFilePackages, error) {
+	root, err := msg.Root()
+	return LockFilePackages(root.Struct()), err
+}
+
+func (s LockFilePackages) String() string {
+	str, _ := text.Marshal(0xb470b49a14912305, capnp.Struct(s))
+	return str
+}
+
+func (s LockFilePackages) EncodeAsPtr(seg *capnp.Segment) capnp.Ptr {
+	return capnp.Struct(s).EncodeAsPtr(seg)
+}
+
+func (LockFilePackages) DecodeFromPtr(p capnp.Ptr) LockFilePackages {
+	return LockFilePackages(capnp.Struct{}.DecodeFromPtr(p))
+}
+
+func (s LockFilePackages) ToPtr() capnp.Ptr {
+	return capnp.Struct(s).ToPtr()
+}
+func (s LockFilePackages) IsValid() bool {
+	return capnp.Struct(s).IsValid()
+}
+
+func (s LockFilePackages) Message() *capnp.Message {
+	return capnp.Struct(s).Message()
+}
+
+func (s LockFilePackages) Segment() *capnp.Segment {
+	return capnp.Struct(s).Segment()
+}
+func (s LockFilePackages) Packages() (Package_List, error) {
+	p, err := capnp.Struct(s).Ptr(0)
+	return Package_List(p.List()), err
+}
+
+func (s LockFilePackages) HasPackages() bool {
+	return capnp.Struct(s).HasPtr(0)
+}
+
+func (s LockFilePackages) SetPackages(v Package_List) error {
+	return capnp.Struct(s).SetPtr(0, v.ToPtr())
+}
+
+// NewPackages sets the packages field to a newly
+// allocated Package_List, preferring placement in s's segment.
+func (s LockFilePackages) NewPackages(n int32) (Package_List, error) {
+	l, err := NewPackage_List(capnp.Struct(s).Segment(), n)
+	if err != nil {
+		return Package_List{}, err
+	}
+	err = capnp.Struct(s).SetPtr(0, l.ToPtr())
+	return l, err
+}
+
+// LockFilePackages_List is a list of LockFilePackages.
+type LockFilePackages_List = capnp.StructList[LockFilePackages]
+
+// NewLockFilePackages creates a new list of LockFilePackages.
+func NewLockFilePackages_List(s *capnp.Segment, sz int32) (LockFilePackages_List, error) {
+	l, err := capnp.NewCompositeList(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1}, sz)
+	return capnp.StructList[LockFilePackages](l), err
+}
+
+// LockFilePackages_Future is a wrapper for a LockFilePackages promised by a client call.
+type LockFilePackages_Future struct{ *capnp.Future }
+
+func (f LockFilePackages_Future) Struct() (LockFilePackages, error) {
+	p, err := f.Future.Ptr()
+	return LockFilePackages(p.Struct()), err
+}
+
+type Package capnp.Struct
+
+// Package_TypeID is the unique identifier for the type Package.
+const Package_TypeID = 0xc2d08935698f1b78
+
+func NewPackage(s *capnp.Segment) (Package, error) {
+	st, err := capnp.NewStruct(s, capnp.ObjectSize{DataSize: 8, PointerCount: 2})
+	return Package(st), err
+}
+
+func NewRootPackage(s *capnp.Segment) (Package, error) {
+	st, err := capnp.NewRootStruct(s, capnp.ObjectSize{DataSize: 8, PointerCount: 2})
+	return Package(st), err
+}
+
+func ReadRootPackage(msg *capnp.Message) (Package, error) {
+	root, err := msg.Root()
+	return Package(root.Struct()), err
+}
+
+func (s Package) String() string {
+	str, _ := text.Marshal(0xc2d08935698f1b78, capnp.Struct(s))
+	return str
+}
+
+func (s Package) EncodeAsPtr(seg *capnp.Segment) capnp.Ptr {
+	return capnp.Struct(s).EncodeAsPtr(seg)
+}
+
+func (Package) DecodeFromPtr(p capnp.Ptr) Package {
+	return Package(capnp.Struct{}.DecodeFromPtr(p))
+}
+
+func (s Package) ToPtr() capnp.Ptr {
+	return capnp.Struct(s).ToPtr()
+}
+func (s Package) IsValid() bool {
+	return capnp.Struct(s).IsValid()
+}
+
+func (s Package) Message() *capnp.Message {
+	return capnp.Struct(s).Message()
+}
+
+func (s Package) Segment() *capnp.Segment {
+	return capnp.Struct(s).Segment()
+}
+func (s Package) Key() (string, error) {
+	p, err := capnp.Struct(s).Ptr(0)
+	return p.Text(), err
+}
+
+func (s Package) HasKey() bool {
+	return capnp.Struct(s).HasPtr(0)
+}
+
+func (s Package) KeyBytes() ([]byte, error) {
+	p, err := capnp.Struct(s).Ptr(0)
+	return p.TextBytes(), err
+}
+
+func (s Package) SetKey(v string) error {
+	return capnp.Struct(s).SetText(0, v)
+}
+
+func (s Package) Version() (string, error) {
+	p, err := capnp.Struct(s).Ptr(1)
+	return p.Text(), err
+}
+
+func (s Package) HasVersion() bool {
+	return capnp.Struct(s).HasPtr(1)
+}
+
+func (s Package) VersionBytes() ([]byte, error) {
+	p, err := capnp.Struct(s).Ptr(1)
+	return p.TextBytes(), err
+}
+
+func (s Package) SetVersion(v string) error {
+	return capnp.Struct(s).SetText(1, v)
+}
+
+func (s Package) Found() bool {
+	return capnp.Struct(s).Bit(0)
+}
+
+func (s Package) SetFound(v bool) {
+	capnp.Struct(s).SetBit(0, v)
+}
+
+// Package_List is a list of Package.
+type Package_List = capnp.StructList[Package]
+
+// NewPackage creates a new list of Package.
+func NewPackage_List(s *capnp.Segment, sz int32) (Package_List, error) {
+	l, err := capnp.NewCompositeList(s, capnp.ObjectSize{DataSize: 8, PointerCount: 2}, sz)
+	return capnp.StructList[Package](l), err
+}
+
+// Package_Future is a wrapper for a Package promised by a client call.
+type Package_Future struct{ *capnp.Future }
+
+func (f Package_Future) Struct() (Package, error) {
+	p, err := f.Future.Ptr()
+	return Package(p.Struct()), err
+}
+
+type FileHashes capnp.Struct
+
+// FileHashes_TypeID is the unique identifier for the type FileHashes.
+const FileHashes_TypeID = 0xed110dc172c21b8f
+
+func NewFileHashes(s *capnp.Segment) (FileHashes, error) {
+	st, err := capnp.NewStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1})
+	return FileHashes(st), err
+}
+
+func NewRootFileHashes(s *capnp.Segment) (FileHashes, error) {
+	st, err := capnp.NewRootStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1})
+	return FileHashes(st), err
+}
+
+func ReadRootFileHashes(msg *capnp.Message) (FileHashes, error) {
+	root, err := msg.Root()
+	return FileHashes(root.Struct()), err
+}
+
+func (s FileHashes) String() string {
+	str, _ := text.Marshal(0xed110dc172c21b8f, capnp.Struct(s))
+	return str
+}
+
+func (s FileHashes) EncodeAsPtr(seg *capnp.Segment) capnp.Ptr {
+	return capnp.Struct(s).EncodeAsPtr(seg)
+}
+
+func (FileHashes) DecodeFromPtr(p capnp.Ptr) FileHashes {
+	return FileHashes(capnp.Struct{}.DecodeFromPtr(p))
+}
+
+func (s FileHashes) ToPtr() capnp.Ptr {
+	return capnp.Struct(s).ToPtr()
+}
+func (s FileHashes) IsValid() bool {
+	return capnp.Struct(s).IsValid()
+}
+
+func (s FileHashes) Message() *capnp.Message {
+	return capnp.Struct(s).Message()
+}
+
+func (s FileHashes) Segment() *capnp.Segment {
+	return capnp.Struct(s).Segment()
+}
+func (s FileHashes) FileHashes() (FileHashes_Entry_List, error) {
+	p, err := capnp.Struct(s).Ptr(0)
+	return FileHashes_Entry_List(p.List()), err
+}
+
+func (s FileHashes) HasFileHashes() bool {
+	return capnp.Struct(s).HasPtr(0)
+}
+
+func (s FileHashes) SetFileHashes(v FileHashes_Entry_List) error {
+	return capnp.Struct(s).SetPtr(0, v.ToPtr())
+}
+
+// NewFileHashes sets the fileHashes field to a newly
+// allocated FileHashes_Entry_List, preferring placement in s's segment.
+func (s FileHashes) NewFileHashes(n int32) (FileHashes_Entry_List, error) {
+	l, err := NewFileHashes_Entry_List(capnp.Struct(s).Segment(), n)
+	if err != nil {
+		return FileHashes_Entry_List{}, err
+	}
+	err = capnp.Struct(s).SetPtr(0, l.ToPtr())
+	return l, err
+}
+
+// FileHashes_List is a list of FileHashes.
+type FileHashes_List = capnp.StructList[FileHashes]
+
+// NewFileHashes creates a new list of FileHashes.
+func NewFileHashes_List(s *capnp.Segment, sz int32) (FileHashes_List, error) {
+	l, err := capnp.NewCompositeList(s, capnp.ObjectSize{DataSize: 0, PointerCount: 1}, sz)
+	return capnp.StructList[FileHashes](l), err
+}
+
+// FileHashes_Future is a wrapper for a FileHashes promised by a client call.
+type FileHashes_Future struct{ *capnp.Future }
+
+func (f FileHashes_Future) Struct() (FileHashes, error) {
+	p, err := f.Future.Ptr()
+	return FileHashes(p.Struct()), err
+}
+
+type FileHashes_Entry capnp.Struct
+
+// FileHashes_Entry_TypeID is the unique identifier for the type FileHashes_Entry.
+const FileHashes_Entry_TypeID = 0x8932f7433db89d99
+
+func NewFileHashes_Entry(s *capnp.Segment) (FileHashes_Entry, error) {
+	st, err := capnp.NewStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 2})
+	return FileHashes_Entry(st), err
+}
+
+func NewRootFileHashes_Entry(s *capnp.Segment) (FileHashes_Entry, error) {
+	st, err := capnp.NewRootStruct(s, capnp.ObjectSize{DataSize: 0, PointerCount: 2})
+	return FileHashes_Entry(st), err
+}
+
+func ReadRootFileHashes_Entry(msg *capnp.Message) (FileHashes_Entry, error) {
+	root, err := msg.Root()
+	return FileHashes_Entry(root.Struct()), err
+}
+
+func (s FileHashes_Entry) String() string {
+	str, _ := text.Marshal(0x8932f7433db89d99, capnp.Struct(s))
+	return str
+}
+
+func (s FileHashes_Entry) EncodeAsPtr(seg *capnp.Segment) capnp.Ptr {
+	return capnp.Struct(s).EncodeAsPtr(seg)
+}
+
+func (FileHashes_Entry) DecodeFromPtr(p capnp.Ptr) FileHashes_Entry {
+	return FileHashes_Entry(capnp.Struct{}.DecodeFromPtr(p))
+}
+
+func (s FileHashes_Entry) ToPtr() capnp.Ptr {
+	return capnp.Struct(s).ToPtr()
+}
+func (s FileHashes_Entry) IsValid() bool {
+	return capnp.Struct(s).IsValid()
+}
+
+func (s FileHashes_Entry) Message() *capnp.Message {
+	return capnp.Struct(s).Message()
+}
+
+func (s FileHashes_Entry) Segment() *capnp.Segment {
+	return capnp.Struct(s).Segment()
+}
+func (s FileHashes_Entry) Key() (string, error) {
+	p, err := capnp.Struct(s).Ptr(0)
+	return p.Text(), err
+}
+
+func (s FileHashes_Entry) HasKey() bool {
+	return capnp.Struct(s).HasPtr(0)
+}
+
+func (s FileHashes_Entry) KeyBytes() ([]byte, error) {
+	p, err := capnp.Struct(s).Ptr(0)
+	return p.TextBytes(), err
+}
+
+func (s FileHashes_Entry) SetKey(v string) error {
+	return capnp.Struct(s).SetText(0, v)
+}
+
+func (s FileHashes_Entry) Value() (string, error) {
+	p, err := capnp.Struct(s).Ptr(1)
+	return p.Text(), err
+}
+
+func (s FileHashes_Entry) HasValue() bool {
+	return capnp.Struct(s).HasPtr(1)
+}
+
+func (s FileHashes_Entry) ValueBytes() ([]byte, error) {
+	p, err := capnp.Struct(s).Ptr(1)
+	return p.TextBytes(), err
+}
+
+func (s FileHashes_Entry) SetValue(v string) error {
+	return capnp.Struct(s).SetText(1, v)
+}
+
+// FileHashes_Entry_List is a list of FileHashes_Entry.
+type FileHashes_Entry_List = capnp.StructList[FileHashes_Entry]
+
+// NewFileHashes_Entry creates a new list of FileHashes_Entry.
+func NewFileHashes_Entry_List(s *capnp.Segment, sz int32) (FileHashes_Entry_List, error) {
+	l, err := capnp.NewCompositeList(s, capnp.ObjectSize{DataSize: 0, PointerCount: 2}, sz)
+	return capnp.StructList[FileHashes_Entry](l), err
+}
+
+// FileHashes_Entry_Future is a wrapper for a FileHashes_Entry promised by a client call.
+type FileHashes_Entry_Future struct{ *capnp.Future }
+
+func (f FileHashes_Entry_Future) Struct() (FileHashes_Entry, error) {
+	p, err := f.Future.Ptr()
+	return FileHashes_Entry(p.Struct()), err
+}
+
+const schema_e1dde60149aeb063 = "x\xda\xacV]l\x14U\x14\xfe\xce\xbd\xb3\xdd\xedv" +
+	"\xebv3\xa3\xa8\x95\xd4 \x89`\x02)-\x10iB" +
+	"\x0a\xa5\xc5VA:\x0ehl\xe0a\xd8\xdev\xd7\xae" +
+	"3\xeb\xccniy\x10E\x1f\x80h\x08\x86\x07EH" +
+	"\x94`b$Q\x1f0!&&@\xc2\x83&FH" +
+	" &&\xa4!\x11\x83\x08\x89/(\x0f\x981g\xf6" +
+	"o\xda*&\xeaS\xa7\xdf\xfd\xee9\xe7\x9e\xf3\x9ds" +
+	"\xb6\xb3O\xae\xd3V\xb4~\xafA\x98O\xc6\x9a\x82\xf7" +
+	"\x8e\x9d^\xbb\xe1\xf7\xae\xfd\xc8,\xa0\xe0`\xfb9\xef" +
+	"lk\xe6\x16b\"\x0e\xe8\xa6\xb8\xa1\xef\x08\xbf^\x14" +
+	"\xbb@\xc1\x03\xef\xff\xb6t\xe1\x813o#\xf3\x90\x08" +
+	"\xa6\x7f\xbc\xfd\xec/G\x7f\xbd\x0aP\xf7\x17\"I\xfa" +
+	"\xf9\x90yVl\x01\xcd\\:\x9f\xdd;\xd3w2\xd3" +
+	".\x82S\x9d\xaf\xbe\xb0ou\xcb\x0d\xe6]\x16\x0f\x93" +
+	"~-\xe4]e^\x10{\xec\x90q\xe4T\xf1\x142" +
+	")\x0a\xb2\x9f\x7f:D?]\xb9\x8a\x181\xe3\xb6\xb8" +
+	"\xa1\x93\xe4\xaf?D/(\x98j?\x98_\xb5\xff\xc2" +
+	"9\x98)\x8a\x92Cs+\xe4q}MH^%?" +
+	"\x03\xcd\x8c\x1f?y\xfd\xee\x1b\x97g\x9b\x0d\x99\xdf\xca" +
+	"s\xfa\xe5\x90yQ\xf2\xa3\x86\xbe[\xdd\xbffm\xe1" +
+	"\x0a2\xed\xd4\x086\xe4vo\xd3\x92\xa4+\x8d\xc9\xb6" +
+	"\xc6\xe4\xfa\xa3\xe7\xc4\x90b\xcaW\xda7\xfa\xd7\xda\x02" +
+	"\xa0\xfb\xa26#\x10\xb16\x87\x1dg\xf6P\xe2\x07}" +
+	"[\xe2q\xa0;\x9f\x08\x08\x91\xe4\xffE.\xae$\xbf" +
+	"\xd4\xaf%\x17\x00\xfa\xadd/\x96\x05E\xcf-\xb9\xcb" +
+	"\xb3\xb6(:\xc5\x9e\x8d\xf9\x82\x1a\xb4\xfd\x9c\xf2\x97\x0f" +
+	"\xa4\x9d\x927=Ld&\xa4\x06h\x04d\x96.\x02" +
+	"\xcc\xc5\x92\xccNA\x19\"\x83\x18\\\xd6\x05\x98K$" +
+	"\x99+\x05\xc5'\xd44\xa5 (\x05\xea\x98\xb4\x0be" +
+	"U\xfb\xaf\xeeG\xb2\x9f\xad\xb6?\xc1~\xec\x9d\x05\xb5" +
+	"|\xc0\x99\xdc\xec\x8e*\x80\x9d\xa5H\x00\x99\x85]\x00" +
+	"Q\xe6~\xfe#2\xad=@G\xde\x19S^G\xc1" +
+	"u}\xd5\xeb\x97\xbc|\xb64\xdb\xe4S\x05w\xa7]" +
+	"\x98mT\x8e\xaa\x7fk3L\xc7&7;\xc1)\x19" +
+	"\xb6\xb3\x13i{\\\xf9lM\xab\xa7\xa3\xf5i\xc0L" +
+	"I2\x97\x08\x0a\x8avv\x82)\x00\xe8>\xd0\xb0$" +
+	"jk\x08\x0d\xc4`\xdd:\xb1u\xb6\x1a\xb7\xc7+!" +
+	"\xd6\x8d\x0ep\x8e\xd7I27Er<\xd4\x07\x98\xfd" +
+	"\x92\xccaA$\x8c\xf0=\x9b9\xef\x83\x92\xcc\xad\xb3" +
+	"\xf3\xbegRy~\xdeu\xeau\x18s\xcb\xce(\x11" +
+	"\x04Q$\x04Q\xab\xc3\x96r\xa9X.\xf9\x98S\xea" +
+	"\x91jU\xfb#a\xac\x1f\xa9\xc6\xb6]P\x90w\xb2" +
+	"\x85\xb2\x9fw!\x1d\xbf\xf6bv\xc9\xefTS\x7f\x7f" +
+	"v\xef\xaa\x95\xbci\xe0\xffW\x9d\x98\xab:\xc0\xd4(" +
+	":\x87\xa8oOU\x88\xe6\xca\x9ak}\x07\x8d\x00\xd6" +
+	"v\x92d\xe5\xa8\xe1]W\xf4\x09`\xe5\x18\x7f\x93q" +
+	"Q\xa9\x89\xfez\xc8\x7f\x8d\xf1\xb7\x18\x97\xd2 \x09\xe8" +
+	"\xfbi'`\xedc\xfc0\xe3\x9af\x90\x06\xe8\x87\xe8" +
+	"\x00`\x1df\xfc\x03\xc6c1\x83b\x80~\x8c\x9e\x00" +
+	"\xacw\x19?\xc1xS\x93AM\x80\xfe!\xf5\x01\xd6" +
+	"Q\xc6?f<\x1e7\xc2\xa6\xfe\x88^\x02\xac\x13\x8c" +
+	"\x9fa<\x910(\xc1s\x84\x16\x01\xd6i\xc6/1" +
+	"\xde\xdclP3\xcf+\xda\x0bX\x17\x18\xbf\xc9x2" +
+	"iP\x12\xd0\x7f\x0e\xe3\xbc\xce\xb8&\x04Q\x8bA-" +
+	"\x80N\x82\xdd\xdee8!\x04eR-\x06\xa5\x00=" +
+	"&z\x80\xe7\x84$\xeb\x11!(\x18\xaf\x16\x13\xd2\xcf" +
+	"\xd5+P\xb2\xfd\x89~UT\xe4\x8c*';=h" +
+	"\xa7y\xbc\xcc\x13E\xa5{\xfa!\xf3^\xfdj\xce\xf6" +
+	"s[\xc66\xe6\x11/(\xbf\x8e\xaa\xa9\x92\xf2\x1c\xbb" +
+	"@\xfd\xaa\xe8s9\x81\xdaY\x9a\x9d\xd5\xfb\xc0\xad\x08" +
+	"\x9b\xdaj#\x1cDm\xa1/\xdf\xdf\x9a\xf3\xcaH\xaf" +
+	"\xf7\xc6\xe7F\x12W\xce\xe4\xdc\xe0<\xe5\xbb\x85I5" +
+	"J\x03\xce\xe4\xf3\xb6\xe7c~\xf4U\x8b\xf1\x81y\xb7" +
+	"\xf7\xa8\x8a\xaa(\xdd\x10\x1b\x88\xd2\xa0\xdeQ\xb74\x9f" +
+	"?[\xb2\xd1\xfe\x90\x05e&\xa8\xb1\x11\x9b\xfb\"\x1b" +
+	"'\xd6U\x93oG\xd8D\xe6\xe2z\xff\xdc\xda\x0d\x98" +
+	"7%\x99w\"\xfds\xfb\x1d\xc0\xbc#\xc92\xa2\xfa" +
+	"\xcd\x84\xba6\xb8\xd0\x8fF\xf5\xbb0\xd4\xd1\x83\x8c\xaf" +
+	"\x8c\xeawE\xa8\xa3N\xc67E\xf5;D\xbb\x01k" +
+	"\x90\xf1Q\x12DU\xf9\xda\xa1|\x1b\xed\x14o\xab\xc8" +
+	"W\xd1\x91Z;\x95B\xf96U\xe4\xfb\x0a\xf5\x00V" +
+	"\x81\xf1}T\x17\xd8\x06\x1b\xbd\xd9\x9cz\xa6\xd1\xf4\xd5" +
+	"\x83\x8dy\xaa\xac\xaf\xcd6\x15\x1bC\xb8\x9e\xa4\xea\x10" +
+	"\xf6\\\xb740UR\xc4*b\x11\xa5\xf9N\xcd\xd6" +
+	"\x7f\x11\x80\x8b\xde\xf2x\xee^\x1a\xa8\x15\xaf\xa2\x80`" +
+	"\xcc\xb3_V\xbb\\\x8f&\x86x\x15)GfUm" +
+	"R\xff\x83<\xa8\xb6\xaf{+\x0b;\x1cg\x8d\x9f`" +
+	"\xd4U\xd5Ad]\x8dD\xd6\xd5Xu\xd3C6\x9a" +
+	"\xb1\xadq\xbf\x92\xaa?\x03\x00\x00\xff\xff\x12\xd9E\xe5"
 
 func RegisterSchema(reg *schemas.Registry) {
 	reg.Register(&schemas.Schema{
 		String: schema_e1dde60149aeb063,
 		Nodes: []uint64{
+			0x8932f7433db89d99,
 			0x8dc08a1d29f69b16,
 			0xab4200df8263c5d4,
+			0xb470b49a14912305,
+			0xc2d08935698f1b78,
 			0xd58300fce8aba267,
 			0xdd6c3d394436cf49,
 			0xe1f09ceb4ef5e479,
 			0xea0b3688577e30b4,
+			0xed110dc172c21b8f,
 		},
 		Compressed: true,
 	})

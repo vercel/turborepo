@@ -22,23 +22,21 @@ type FileHashes map[turbopath.AnchoredUnixPath]string
 
 // HashLockfilePackages hashes a list of packages
 func HashLockfilePackages(packages LockfilePackages) (string, error) {
-	return hashObject(packages)
+	return hash.HashLockfilePackages(packages)
 }
 
 // HashFileHashes produces a single hash for a set of file hashes
 func HashFileHashes(hashes FileHashes) (string, error) {
-	return hashObject(hashes)
+	return hash.HashFileHashes(hashes)
 }
 
 // HashTask produces the hash for a particular task
 func HashTask(task *hash.TaskHashable) (string, error) {
-	// return proto.HashTaskHashable(task)
 	return hash.HashTaskHashable(task)
 }
 
 // HashGlobal produces the global hash value to be incorporated in every task hash
 func HashGlobal(global hash.GlobalHashable) (string, error) {
-	// return proto.HashGlobalHashable(&global)
 	return hash.HashGlobalHashable(&global)
 }
 

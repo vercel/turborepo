@@ -56,3 +56,22 @@ struct GlobalHashable {
     value @1 :Text;
   }
 }
+
+struct LockFilePackages {
+  packages @0 :List(Package);
+}
+
+struct Package {
+  key @0 :Text;
+  version @1 :Text;
+  found @2 :Bool;
+}
+
+struct FileHashes {
+  fileHashes @0 :List(Entry);
+
+  struct Entry {
+    key @0 :Text;
+    value @1 :Text;
+  }
+}
