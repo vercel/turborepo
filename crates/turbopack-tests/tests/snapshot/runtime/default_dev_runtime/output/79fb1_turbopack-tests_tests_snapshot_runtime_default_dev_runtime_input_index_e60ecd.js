@@ -38,16 +38,36 @@ function esmExport(module, exports, getters) {
     module.namespaceObject = module.exports;
     esm(exports, getters);
 }
-function dynamicExport(module, exports, object) {
-    const keys = Reflect.ownKeys(exports);
-    for (const key of Reflect.ownKeys(object)){
-        if (key !== "default" && !keys.includes(key)) {
-            defineProp(exports, key, {
-                get: createGetter(object, key),
-                enumerable: true
-            });
-        }
+function ensureDynamicExports(module, exports) {
+    let reexportedObjects = module[REEXPORTED_OBJECTS];
+    if (!reexportedObjects) {
+        reexportedObjects = module[REEXPORTED_OBJECTS] = [];
+        module.exports = module.namespaceObject = new Proxy(exports, {
+            get (target, prop) {
+                if (hasOwnProperty.call(target, prop) || prop === "default" || prop === "__esModule") {
+                    return Reflect.get(target, prop);
+                }
+                for (const obj of reexportedObjects){
+                    const value = Reflect.get(obj, prop);
+                    if (value !== undefined) return value;
+                }
+                return undefined;
+            },
+            ownKeys (target) {
+                const keys = Reflect.ownKeys(target);
+                for (const obj of reexportedObjects){
+                    for (const key of Reflect.ownKeys(obj)){
+                        if (key !== "default" && !keys.includes(key)) keys.push(key);
+                    }
+                }
+                return keys;
+            }
+        });
     }
+}
+function dynamicExport(module, exports, object) {
+    ensureDynamicExports(module, exports);
+    module[REEXPORTED_OBJECTS].push(object);
 }
 function exportValue(module, value) {
     module.exports = value;
@@ -119,23 +139,6 @@ function isPromise(maybePromise) {
 function isAsyncModuleExt(obj) {
     return turbopackQueues in obj;
 }
-function maybeWrapAsyncModulePromise(promise, then) {
-    const newPromise = promise.then(then);
-    if (isAsyncModuleExt(promise)) {
-        Object.assign(newPromise, {
-            get [turbopackExports] () {
-                return promise[turbopackExports];
-            },
-            get [turbopackQueues] () {
-                return promise[turbopackQueues];
-            },
-            get [turbopackError] () {
-                return promise[turbopackError];
-            }
-        });
-    }
-    return newPromise;
-}
 function createPromise() {
     let resolve;
     let reject;
@@ -193,6 +196,7 @@ function asyncModule(module, body, hasAwait) {
         resolved: true
     }) : undefined;
     const depQueues = new Set();
+    ensureDynamicExports(module, module.exports);
     const exports = module.exports;
     const { resolve, reject, promise: rawPromise } = createPromise();
     const promise = Object.assign(rawPromise, {

@@ -40,11 +40,9 @@ function externalRequire(
 }
 externalRequire.resolve = (
   id: string,
-  options?:
-    | {
-    paths?: string[] | undefined;
+  options?: {
+    paths?: string[];
   }
-    | undefined
 ) => {
   return require.resolve(id, options);
 };
