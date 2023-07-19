@@ -95,52 +95,6 @@ impl SingleAssetReference {
 ///
 /// [Asset]: crate::asset::Asset
 #[turbo_tasks::function]
-pub async fn all_referenced_output_assets(
-    asset: Vc<Box<dyn OutputAsset>>,
-) -> Result<Vc<OutputAssets>> {
-    let references_set = asset.references().await?;
-    let mut assets = Vec::new();
-    let mut queue = VecDeque::with_capacity(32);
-    for reference in references_set.iter() {
-        queue.push_back(reference.resolve_reference());
-    }
-    // that would be non-deterministic:
-    // while let Some(result) = race_pop(&mut queue).await {
-    // match &*result? {
-    while let Some(resolve_result) = queue.pop_front() {
-        let ResolveResult {
-            primary,
-            references,
-        } = &*resolve_result.await?;
-        for result in primary {
-            if let PrimaryResolveResult::Asset(asset) = *result {
-                assets.push(asset);
-            }
-        }
-        for reference in references {
-            queue.push_back(reference.resolve_reference());
-        }
-    }
-    let output_assets =
-        assets
-            .into_iter()
-            .map(|asset| async move {
-                Ok(Vc::try_resolve_downcast::<Box<dyn OutputAsset>>(asset).await?)
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten()
-            .collect();
-    Ok(Vc::cell(output_assets))
-}
-
-/// Aggregates all [Asset]s referenced by an [Asset]. [AssetReference]
-/// This does not include transitively references [Asset]s, but it includes
-/// primary and secondary [Asset]s referenced.
-///
-/// [Asset]: crate::asset::Asset
-#[turbo_tasks::function]
 pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
     let references_set = module.references().await?;
     let mut assets = Vec::new();
@@ -206,48 +160,6 @@ pub async fn primary_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<V
     Ok(Vc::cell(modules))
 }
 
-/// Aggregates all primary [OutputAsset]s referenced by an [OutputAsset].
-/// [AssetReference] This does not include transitively references
-/// [OutputAsset]s, only includes primary [OutputAsset]s referenced.
-///
-/// [OutputAsset]: crate::output::OutputAsset
-#[turbo_tasks::function]
-pub async fn primary_referenced_output_assets(
-    output_asset: Vc<Box<dyn OutputAsset>>,
-) -> Result<Vc<OutputAssets>> {
-    let output_assets =
-        output_asset
-            .references()
-            .await?
-            .iter()
-            .map(|reference| async {
-                let ResolveResult { primary, .. } = &*reference.resolve_reference().await?;
-                Ok(primary
-                    .iter()
-                    .filter_map(|result| {
-                        if let PrimaryResolveResult::Asset(asset) = *result {
-                            Some(asset)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>())
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten()
-            .map(|asset| async move {
-                Ok(Vc::try_resolve_downcast::<Box<dyn OutputAsset>>(asset).await?)
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten()
-            .collect();
-    Ok(Vc::cell(output_assets))
-}
-
 /// Aggregates all [Module]s referenced by an [Module] including transitively
 /// referenced [Module]s. This basically gives all [Module]s in a subgraph
 /// starting from the passed [Module].
@@ -278,7 +190,10 @@ pub async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<Out
     Ok(Vc::cell(
         AdjacencyMap::new()
             .skip_duplicates()
-            .visit(entries.await?.iter().copied(), get_referenced_assets)
+            .visit(
+                entries.await?.iter().copied().map(Vc::upcast),
+                get_referenced_assets,
+            )
             .await
             .completed()?
             .into_inner()
@@ -288,28 +203,14 @@ pub async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<Out
 }
 
 /// Computes the list of all chunk children of a given chunk.
-async fn get_referenced_assets(
+pub async fn get_referenced_assets(
     asset: Vc<Box<dyn OutputAsset>>,
 ) -> Result<impl Iterator<Item = Vc<Box<dyn OutputAsset>>> + Send> {
-    Ok(
-        asset
-            .references()
-            .await?
-            .iter()
-            .map(|reference| async move {
-                let primary_assets = reference.resolve_reference().primary_assets().await?;
-                Ok(primary_assets.clone_value())
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten()
-            .map(|asset| async move {
-                Ok(Vc::try_resolve_sidecast::<Box<dyn OutputAsset>>(asset).await?)
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten(),
-    )
+    Ok(asset
+        .references()
+        .await?
+        .iter()
+        .copied()
+        .collect::<Vec<_>>()
+        .into_iter())
 }

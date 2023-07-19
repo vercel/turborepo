@@ -8,7 +8,7 @@ use std::{
 use camino::Utf8Path;
 use serde::Serialize;
 
-use crate::{IntoUnix, PathError, RelativeUnixPath};
+use crate::{PathError, RelativeUnixPath};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
 #[serde(transparent)]
@@ -27,9 +27,7 @@ impl RelativeUnixPathBuf {
             return Err(PathError::NotRelative(path_string));
         }
 
-        let unix_path = path_string.into_unix();
-
-        Ok(Self(unix_path.into()))
+        Ok(Self(path_string))
     }
 
     pub fn into_inner(self) -> String {

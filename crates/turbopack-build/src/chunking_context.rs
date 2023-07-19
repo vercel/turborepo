@@ -275,10 +275,10 @@ impl ChunkingContext for BuildChunkingContext {
     }
 
     #[turbo_tasks::function]
-    async fn with_layer(self: Vc<Self>, layer: String) -> Result<Vc<Box<dyn ChunkingContext>>> {
+    async fn with_layer(self: Vc<Self>, layer: String) -> Result<Vc<Self>> {
         let mut context = self.await?.clone_value();
         context.layer = (!layer.is_empty()).then(|| layer.to_string());
-        Ok(Vc::upcast(BuildChunkingContext::new(Value::new(context))))
+        Ok(BuildChunkingContext::new(Value::new(context)))
     }
 
     #[turbo_tasks::function]
@@ -360,8 +360,8 @@ where
     let chunks = ecmascript_chunks
         .iter()
         .copied()
-        .map(|chunk| Vc::upcast(chunk))
-        .chain(css_chunks.iter().copied().map(|chunk| Vc::upcast(chunk)))
+        .map(Vc::upcast)
+        .chain(css_chunks.iter().copied().map(Vc::upcast))
         .chain(other_chunks)
         .collect();
 
