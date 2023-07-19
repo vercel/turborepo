@@ -10,7 +10,7 @@ use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Method, RequestBuilder};
 use serde::{Deserialize, Serialize};
-use turborepo_ci::{Vendor, IS_CI};
+use turborepo_ci::{is_ci, Vendor};
 use url::Url;
 
 pub use crate::error::{Error, Result};
@@ -188,7 +188,7 @@ impl APIClient {
     }
 
     fn add_ci_header(mut request_builder: RequestBuilder) -> RequestBuilder {
-        if *IS_CI {
+        if is_ci() {
             if let Some(vendor_constant) = Vendor::get_constant() {
                 request_builder = request_builder.header("x-artifact-client-ci", vendor_constant);
             }

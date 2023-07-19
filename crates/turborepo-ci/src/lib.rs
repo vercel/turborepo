@@ -2,15 +2,15 @@
 
 mod vendors;
 
-use std::env;
+use std::{env, sync::OnceLock};
 
-use lazy_static::lazy_static;
-
+use crate::vendors::get_vendors;
 pub use crate::vendors::Vendor;
-use crate::vendors::VENDORS;
 
-lazy_static! {
-    pub static ref IS_CI: bool = {
+static IS_CI: OnceLock<bool> = OnceLock::new();
+
+pub fn is_ci() -> bool {
+    *IS_CI.get_or_init(|| {
         // We purposefully don't do `is_err()` because the Go version
         // returns false for both an unset env variable
         // and an env variable set to the empty string.
@@ -35,13 +35,13 @@ lazy_static! {
             || !continuous_integration.is_empty()
             || !run_id.is_empty()
             || !teamcity_version.is_empty()
-    };
+    })
 }
 
 impl Vendor {
     // Returns info about a CI vendor
     pub fn get_info() -> Option<Vendor> {
-        for env in VENDORS.iter() {
+        for env in get_vendors() {
             if let Some(eval_env) = &env.eval_env {
                 for (name, expected_value) in eval_env {
                     if matches!(env::var(name), Ok(env_value) if *expected_value == env_value) {
@@ -90,7 +90,7 @@ mod tests {
     use crate::Vendor;
 
     fn get_vendor(name: &str) -> Vendor {
-        for v in VENDORS.iter() {
+        for v in get_vendors() {
             if v.name == name {
                 return v.clone();
             }
