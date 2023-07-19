@@ -4,13 +4,12 @@
 //! data-types. This is managed using capnproto for deterministic hashing across
 //! languages and platforms.
 
+mod traits;
+
 use std::collections::HashMap;
 
-use capnp::{
-    message::{HeapAllocator, TypedBuilder},
-    serialize, serialize_packed,
-};
-use xxhash_rust::xxh64::xxh64;
+use capnp::message::{Builder, HeapAllocator};
+pub use traits::TurboHash;
 
 use crate::cli::EnvMode;
 
@@ -78,7 +77,11 @@ struct TaskOutputs {
     exclusions: Vec<String>,
 }
 
-impl From<TaskOutputs> for TypedBuilder<proto_capnp::task_outputs::Owned, HeapAllocator> {
+struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
+
+struct FileHashes(pub HashMap<turbopath::RelativeUnixPathBuf, String>);
+
+impl From<TaskOutputs> for Builder<HeapAllocator> {
     fn from(value: TaskOutputs) -> Self {
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::task_outputs::Owned,
@@ -104,37 +107,64 @@ impl From<TaskOutputs> for TypedBuilder<proto_capnp::task_outputs::Owned, HeapAl
             }
         }
 
-        message
+        message.into_inner()
     }
 }
 
-impl TaskHashable {
-    pub fn hash(self) -> u64 {
-        let mut buf = Vec::new();
-        let write = std::io::BufWriter::new(&mut buf);
+impl From<LockFilePackages> for Builder<HeapAllocator> {
+    fn from(LockFilePackages(packages): LockFilePackages) -> Self {
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::lock_file_packages::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
 
-        let reader: TypedBuilder<_, _> = self.into();
-        serialize::write_message(write, &reader.into_inner()).expect("works");
+        {
+            let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
+            for (i, turborepo_lockfiles::Package { key, version }) in packages.iter().enumerate() {
+                let mut package = packages_builder.reborrow().get(i as u32);
+                package.set_key(key);
+                package.set_version(version);
+            }
+        }
 
-        xxh64(&buf, 0)
+        message.into_inner()
     }
 }
 
-impl GlobalHashable {
-    pub fn hash(self) -> u64 {
-        let mut buf = Vec::new();
-        let write = std::io::BufWriter::new(&mut buf);
+impl From<FileHashes> for Builder<HeapAllocator> {
+    fn from(FileHashes(file_hashes): FileHashes) -> Self {
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::file_hashes::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
 
-        let reader: TypedBuilder<_, _> = self.into();
-        serialize::write_message(write, &reader.into_inner()).expect("works");
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_file_hashes(file_hashes.len() as u32);
 
-        xxh64(&buf, 0)
+            // get a sorted iterator over keys and values of the hashmap
+            // and set the entries in the capnp message
+
+            let mut hashable: Vec<_> = file_hashes.into_iter().collect();
+            hashable.sort_by(|a, b| a.0.cmp(&b.0));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key.as_str());
+                entry.set_value(value);
+            }
+        }
+
+        message.into_inner()
     }
 }
 
 type EnvVarPairs = Vec<String>;
 
-impl From<TaskHashable> for TypedBuilder<proto_capnp::task_hashable::Owned, HeapAllocator> {
+impl From<TaskHashable> for Builder<HeapAllocator> {
     fn from(task_hashable: TaskHashable) -> Self {
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::task_hashable::Owned>::new_default();
@@ -148,7 +178,7 @@ impl From<TaskHashable> for TypedBuilder<proto_capnp::task_hashable::Owned, Heap
         builder.set_env_mode(task_hashable.env_mode.into());
 
         {
-            let output_builder: TypedBuilder<_, _> = task_hashable.outputs.into();
+            let output_builder: Builder<_> = task_hashable.outputs.into();
             builder
                 .set_outputs(output_builder.get_root_as_reader().unwrap())
                 .unwrap();
@@ -206,11 +236,11 @@ impl From<TaskHashable> for TypedBuilder<proto_capnp::task_hashable::Owned, Heap
             }
         }
 
-        message
+        message.into_inner()
     }
 }
 
-impl From<GlobalHashable> for TypedBuilder<proto_capnp::global_hashable::Owned, HeapAllocator> {
+impl From<GlobalHashable> for Builder<HeapAllocator> {
     fn from(hashable: GlobalHashable) -> Self {
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::global_hashable::Owned>::new_default();
@@ -233,7 +263,7 @@ impl From<GlobalHashable> for TypedBuilder<proto_capnp::global_hashable::Owned, 
             for (i, (key, value)) in hashable.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
                 entry.set_key(key.as_str());
-                entry.set_value(&value);
+                entry.set_value(value);
             }
         }
 
@@ -283,13 +313,18 @@ impl From<GlobalHashable> for TypedBuilder<proto_capnp::global_hashable::Owned, 
             }
         }
 
-        message.into()
+        message.into_inner()
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{GlobalHashable, TaskHashable, TaskOutputs};
+    use test_case::test_case;
+    use turborepo_lockfiles::Package;
+
+    use super::{
+        FileHashes, GlobalHashable, LockFilePackages, TaskHashable, TaskOutputs, TurboHash,
+    };
     use crate::cli::EnvMode;
 
     #[test]
@@ -337,5 +372,48 @@ mod test {
         };
 
         assert_eq!(global_hash.hash(), 0xafa6b9c8d52c2642);
+    }
+
+    #[test_case(vec![], 0x3CBACE99D7F9F070 ; "empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }], 0xAE101A620FB8D207 ; "non-empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }, Package {
+        key: "zey".to_string(),
+        version: "version".to_string(),
+    }], 0xE1C49E53FDBEB38A ; "multiple in-order")]
+    #[test_case(vec![Package {
+        key: "zey".to_string(),
+        version: "version".to_string(),
+    }, Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }], 0xA9DA37EE949583BD ; "care about order")]
+    fn test_lock_file_packages(vec: Vec<Package>, expected: u64) {
+        let packages = LockFilePackages(vec);
+        assert_eq!(packages.hash(), expected);
+    }
+
+    #[test_case(vec![], 0xA6DD8F3ED2853E94 ; "empty")]
+    #[test_case(vec![
+        ("a".to_string(), "b".to_string()),
+        ("c".to_string(), "d".to_string()),
+    ], 0xF75C29EDA3AB994 ; "non-empty")]
+    #[test_case(vec![
+        ("c".to_string(), "d".to_string()),
+        ("a".to_string(), "b".to_string()),
+    ], 0xF75C29EDA3AB994 ; "order resistant")]
+    fn test_file_hashes(pairs: Vec<(String, String)>, expected: u64) {
+        let file_hashes = FileHashes(
+            pairs
+                .into_iter()
+                .map(|(a, b)| (turbopath::RelativeUnixPathBuf::new(a).unwrap(), b))
+                .collect(),
+        );
+        assert_eq!(file_hashes.hash(), expected);
     }
 }
