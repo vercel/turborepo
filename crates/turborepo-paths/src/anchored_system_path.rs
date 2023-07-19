@@ -65,6 +65,19 @@ impl AnchoredSystemPath {
             .map(|path| unsafe { AnchoredSystemPath::new_unchecked(path) })
     }
 
+    pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
+        #[cfg(unix)]
+        {
+            return RelativeUnixPathBuf::new(self.0.as_str());
+        }
+        #[cfg(not(unix))]
+        {
+            use crate::IntoUnix;
+            let unix_buf = self.0.as_path().into_unix();
+            RelativeUnixPathBuf::new(unix_buf)
+        }
+    }
+
     pub fn components(&self) -> impl Iterator<Item = Utf8Component> {
         self.0.components()
     }

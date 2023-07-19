@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
+use crate::hash::{LockFilePackages, TurboHash};
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
@@ -75,7 +77,10 @@ impl PackageJson {
             .chain(self.optional_dependencies.iter().flatten())
     }
 
-    pub fn get_external_deps_hash(&self, external_deps: HashSet<turborepo_lockfiles::Package>) {
+    pub fn get_external_deps_hash(
+        &self,
+        external_deps: HashSet<turborepo_lockfiles::Package>,
+    ) -> u64 {
         let mut transitive_deps = Vec::with_capacity(external_deps.len());
         for dependency in external_deps {
             transitive_deps.push(dependency);
@@ -86,7 +91,7 @@ impl PackageJson {
             other => other,
         });
 
-        hash_lockfile_packages(transitive_deps)
+        LockFilePackages(transitive_deps).hash()
     }
 }
 

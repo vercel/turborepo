@@ -36,7 +36,7 @@ struct TaskOutputs {
 struct GlobalHashable {
   globalCacheKey @0 :Text;
   globalFileHashMap @1 :List(Entry);
-  rootExternalDepsHash @2 :Text;
+  rootExternalDepsHash @2 :UInt64;
   env @3 :List(Text);
   resolvedEnvVars @4 :List(Text);
   passThroughEnv @5 :List(Text);

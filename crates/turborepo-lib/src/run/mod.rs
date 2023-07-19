@@ -126,20 +126,22 @@ impl Run {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let _global_hash_inputs = get_global_hash_inputs(
-            &self.base.ui,
+        let root_external_dependencies = pkg_dep_graph.external_dependencies(&WorkspaceName::Root);
+
+        let global_hash_inputs = get_global_hash_inputs(
+            root_external_dependencies,
             &self.base.repo_root,
             pkg_dep_graph.root_package_json(),
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
             // TODO: Fill in these vec![] once turbo.json is ported
-            vec![],
+            root_turbo_json.global_deps,
             &env_at_execution_start,
-            vec![],
-            vec![],
+            root_turbo_json.global_env,
+            root_turbo_json.global_pass_through_env,
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
-            vec![],
+            root_turbo_json.global_dot_env,
         )?;
 
         let repo_config = self.base.repo_config()?;
@@ -211,6 +213,10 @@ impl Run {
             }
             return Ok(());
         }
+
+        let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
+
+        println!("global hash: {:#x}", global_hash);
 
         let color_selector = ColorSelector::default();
 

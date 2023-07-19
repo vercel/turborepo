@@ -63,7 +63,7 @@ struct TaskHashable {
 pub struct GlobalHashable {
     pub global_cache_key: String,
     pub global_file_hash_map: HashMap<turbopath::RelativeUnixPathBuf, String>,
-    pub root_external_deps_hash: String,
+    pub root_external_dependencies_hash: u64,
     pub env: Vec<String>,
     pub resolved_env_vars: Vec<String>,
     pub pass_through_env: Vec<String>,
@@ -77,8 +77,7 @@ struct TaskOutputs {
     exclusions: Vec<String>,
 }
 
-struct LockFilePackages(Vec<turborepo_lockfiles::Package>);
-
+pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
 struct FileHashes(HashMap<turbopath::RelativeUnixPathBuf, String>);
 
 impl From<TaskOutputs> for Builder<HeapAllocator> {
@@ -413,7 +412,7 @@ mod test {
             )]
             .into_iter()
             .collect(),
-            root_external_deps_hash: "root_external_deps_hash".to_string(),
+            root_external_dependencies_hash: 0,
             env: vec!["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: vec!["pass_through_env".to_string()],
