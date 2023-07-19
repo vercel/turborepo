@@ -253,9 +253,20 @@ type dependencySplitter struct {
 	rootPath   string
 }
 
-func (d *dependencySplitter) isInternal(name, version string) bool {
-	item, ok := d.workspaces[name]
-	return ok && isWorkspaceReference(item.Version, version, d.pkgDir, d.rootPath)
+func (d *dependencySplitter) isInternal(name, version string) (string, bool) {
+	resolvedName := name
+	if withoutProtocol := strings.TrimPrefix(version, "workspace:"); withoutProtocol != version {
+		parts := strings.Split(withoutProtocol, "@")
+		lastIndex := len(parts) - 1
+		if len(parts) > 1 && (parts[lastIndex] == "*" || parts[lastIndex] == "^" || parts[lastIndex] == "~") {
+			resolvedName = strings.Join(parts[:lastIndex], "@")
+		}
+	}
+	item, ok := d.workspaces[resolvedName]
+	if ok && isWorkspaceReference(item.Version, version, d.pkgDir, d.rootPath) {
+		return resolvedName, true
+	}
+	return "", false
 }
 
 // populateWorkspaceGraphForPackageJSON fills in the edges for the dependencies of the given package
@@ -290,9 +301,9 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if splitter.isInternal(depName, depVersion) {
-			internalDepsSet.Add(depName)
-			c.WorkspaceGraph.Connect(dag.BasicEdge(vertexName, depName))
+		if name, internal := splitter.isInternal(depName, depVersion); internal {
+			internalDepsSet.Add(name)
+			c.WorkspaceGraph.Connect(dag.BasicEdge(vertexName, name))
 		} else {
 			externalUnresolvedDepsSet.Add(depName)
 		}

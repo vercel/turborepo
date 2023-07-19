@@ -461,8 +461,8 @@ impl Dependencies {
             workspaces,
         };
         for (name, version) in dependencies.into_iter() {
-            if splitter.is_internal(name, version) {
-                internal.insert(WorkspaceName::Other(name.clone()));
+            if let Some(workspace) = splitter.is_internal(name, version) {
+                internal.insert(workspace);
             } else {
                 external.insert(Package {
                     name: name.clone(),
@@ -481,10 +481,18 @@ struct DependencySplitter<'a, 'b, 'c> {
 }
 
 impl<'a, 'b, 'c> DependencySplitter<'a, 'b, 'c> {
-    fn is_internal(&self, name: &str, version: &str) -> bool {
+    fn is_internal(&self, name: &str, version: &str) -> Option<WorkspaceName> {
         // TODO implement borrowing for workspaces to allow for zero copy queries
-        let workspace_name = WorkspaceName::Other(name.to_string());
-        self.workspaces
+        let workspace_name = WorkspaceName::Other(
+            version
+                .strip_prefix("workspace:")
+                .and_then(|version| version.rsplit_once('@'))
+                .filter(|(_, version)| *version == "*" || *version == "^" || *version == "~")
+                .map_or(name, |(actual_name, _)| actual_name)
+                .to_string(),
+        );
+        let is_internal = self
+            .workspaces
             .get(&workspace_name)
             // This is the current Go behavior, in the future we might not want to paper over a
             // missing version
@@ -495,7 +503,11 @@ impl<'a, 'b, 'c> DependencySplitter<'a, 'b, 'c> {
                     self.workspace_dir,
                     self.repo_root,
                 )
-            })
+            });
+        match is_internal {
+            true => Some(workspace_name),
+            false => None,
+        }
     }
 }
 
@@ -602,25 +614,34 @@ mod test {
 
     use super::*;
 
-    #[test_case("1.2.3", "1.2.3", true ; "handles exact match")]
-    #[test_case("1.2.3", "^1.0.0", true ; "handles semver range satisfied")]
-    #[test_case("2.3.4", "^1.0.0", false ; "handles semver range not satisfied")]
-    #[test_case("1.2.3", "workspace:1.2.3", true ; "handles workspace protocol with version")]
-    #[test_case("1.2.3", "workspace:*", true ; "handles workspace protocol with no version")]
-    #[test_case("1.2.3", "workspace:../other-packages/", true ; "handles workspace protocol with relative path")]
-    #[test_case("1.2.3", "npm:^1.2.3", true ; "handles npm protocol with satisfied semver range")]
-    #[test_case("2.3.4", "npm:^1.2.3", false ; "handles npm protocol with not satisfied semver range")]
-    #[test_case("1.2.3", "1.2.2-alpha-123abcd.0", false ; "handles pre-release versions")]
+    #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo") ; "handles exact match")]
+    #[test_case("1.2.3", None, "^1.0.0", Some("@scope/foo") ; "handles semver range satisfied")]
+    #[test_case("2.3.4", None, "^1.0.0", None ; "handles semver range not satisfied")]
+    #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo") ; "handles workspace protocol with version")]
+    #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo") ; "handles workspace protocol with no version")]
+    #[test_case("1.2.3", None, "workspace:../other-packages/", Some("@scope/foo") ; "handles workspace protocol with relative path")]
+    #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo") ; "handles workspace protocol with scoped relative path")]
+    #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo") ; "handles npm protocol with satisfied semver range")]
+    #[test_case("2.3.4", None, "npm:^1.2.3", None ; "handles npm protocol with not satisfied semver range")]
+    #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None ; "handles pre-release versions")]
     // for backwards compatability with the code before versions were verified
-    #[test_case("sometag", "1.2.3", true ; "handles non-semver package version")]
+    #[test_case("sometag", None, "1.2.3", Some("@scope/foo") ; "handles non-semver package version")]
     // for backwards compatability with the code before versions were verified
-    #[test_case("1.2.3", "sometag", true ; "handles non-semver dependency version")]
-    #[test_case("1.2.3", "file:../libB", true ; "handles file:.. inside repo")]
-    #[test_case("1.2.3", "file:../../../otherproject", false ; "handles file:.. outside repo")]
-    #[test_case("1.2.3", "link:../libB", true ; "handles link:.. inside repo")]
-    #[test_case("1.2.3", "link:../../../otherproject", false ; "handles link:.. outside repo")]
-    #[test_case("0.0.0-development", "*", true ; "handles development versions")]
-    fn test_matches_workspace_package(package_version: &str, range: &str, expected: bool) {
+    #[test_case("1.2.3", None, "sometag", Some("@scope/foo") ; "handles non-semver dependency version")]
+    #[test_case("1.2.3", None, "file:../libB", Some("@scope/foo") ; "handles file:.. inside repo")]
+    #[test_case("1.2.3", None, "file:../../../otherproject", None ; "handles file:.. outside repo")]
+    #[test_case("1.2.3", None, "link:../libB", Some("@scope/foo") ; "handles link:.. inside repo")]
+    #[test_case("1.2.3", None, "link:../../../otherproject", None ; "handles link:.. outside repo")]
+    #[test_case("0.0.0-development", None, "*", Some("@scope/foo") ; "handles development versions")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo") ; "handles pnpm alias star")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo") ; "handles pnpm alias tilda")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo") ; "handles pnpm alias caret")]
+    fn test_matches_workspace_package(
+        package_version: &str,
+        dependency_name: Option<&str>,
+        range: &str,
+        expected: Option<&str>,
+    ) {
         let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
             "C:\\some\\repo"
         } else {
@@ -631,7 +652,7 @@ mod test {
         let workspaces = {
             let mut map = HashMap::new();
             map.insert(
-                WorkspaceName::Other("foo".to_string()),
+                WorkspaceName::Other("@scope/foo".to_string()),
                 WorkspaceInfo {
                     package_json: PackageJson {
                         version: Some(package_version.to_string()),
@@ -651,7 +672,10 @@ mod test {
             workspaces: &workspaces,
         };
 
-        assert_eq!(splitter.is_internal("foo", range), expected);
+        assert_eq!(
+            splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
+            expected.map(WorkspaceName::from)
+        );
     }
 
     #[test]
