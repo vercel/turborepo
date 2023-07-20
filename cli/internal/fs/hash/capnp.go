@@ -1,3 +1,12 @@
+// capnp.go contains the capnp schema and hashing functions for the turbo cache
+//
+// it depends on the generated capnp schema in ./capnp. to regenerate the schema,
+// you need the capnp binary as well as capnpc-go available in your path. then run:
+//
+// capnp compile -I std -ogo proto.capnp
+//
+// in crates/turborepo-lib/src/hash or run `make turbo-capnp` in the `cli` directory.
+
 package hash
 
 import (
