@@ -296,7 +296,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                         original: original_name,
                         from,
                     } => {
-                        let resolved_module = from.resolve_reference().first_asset().await?;
+                        let resolved_module = from.resolve_reference().first_module().await?;
 
                         let Some(resolved_module) = &*resolved_module else {
                             CssModuleComposesIssue {

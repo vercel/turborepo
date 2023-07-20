@@ -284,16 +284,6 @@ impl ModuleResolveResult {
     }
 
     #[turbo_tasks::function]
-    pub async fn first_asset(self: Vc<Self>) -> Result<Vc<AssetOption>> {
-        let this = self.await?;
-        Ok(Vc::cell(this.primary.iter().find_map(|item| match *item {
-            ModuleResolveResultItem::Module(a) => Some(Vc::upcast(a)),
-            ModuleResolveResultItem::OutputAsset(a) => Some(Vc::upcast(a)),
-            _ => None,
-        })))
-    }
-
-    #[turbo_tasks::function]
     pub async fn first_module(self: Vc<Self>) -> Result<Vc<OptionModule>> {
         let this = self.await?;
         Ok(Vc::cell(this.primary.iter().find_map(|item| match *item {
