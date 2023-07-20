@@ -2,7 +2,6 @@ package filewatcher
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -24,6 +23,8 @@ func (c *testClient) OnFileWatchEvent(ev Event) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		c.createEvents = append(c.createEvents, ev)
+	}
+	if ev.EventType != FileModified {
 		c.notify <- ev
 	}
 }
@@ -202,7 +203,7 @@ func TestFileWatchingSubfolderDeletion(t *testing.T) {
 
 	// Ensure we don't get any event when creating file in deleted directory
 	folder := repoRoot.UntypedJoin("parent", "child")
-	err = os.MkdirAll(folder.ToString(), 0775)
+	err = folder.MkdirAllMode(0755)
 	assert.NilError(t, err, "MkdirAll")
 
 	expectFilesystemEvent(t, ch, Event{
@@ -228,10 +229,7 @@ func TestFileWatchingSubfolderDeletion(t *testing.T) {
 }
 
 // TestFileWatchingRootDeletion tests that when the root is deleted,
-// file watching will continue, and no deletion event will be sent.
-//
-// It additonally tests that when the root is recreated, file watching
-// will continue, and an add event will be sent for the re-created root.
+// we get a deleted event at the root.
 //
 // ✅ macOS
 // ❌ Linux - we do not get an event when the root is recreated L287
@@ -278,14 +276,8 @@ func TestFileWatchingRootDeletion(t *testing.T) {
 	err = repoRoot.RemoveAll()
 	assert.NilError(t, err, "RemoveAll")
 
-	expectNoFilesystemEvent(t, ch)
-
-	// Ensure we don't get any event when creating file in deleted directory
-	err = repoRoot.MkdirAll(0775)
-	assert.NilError(t, err, "MkdirAll")
-
 	expectFilesystemEvent(t, ch, Event{
-		EventType: FileAdded,
+		EventType: FileDeleted,
 		Path:      repoRoot,
 	})
 }
@@ -293,7 +285,7 @@ func TestFileWatchingRootDeletion(t *testing.T) {
 // TestFileWatchingSubfolderRename tests that when a repo subfolder is renamed,
 // file watching will continue, and a rename event will be sent.
 //
-// ❌ macOS - rename events are not being sent
+// ✅ macOS
 // ❌ Linux - renaming generates file creation events of the new folder (and all the subcontents), not a rename
 // ❌ Windows - you cannot rename a watched folder (see https://github.com/fsnotify/fsnotify/issues/356)
 func TestFileWatchingSubfolderRename(t *testing.T) {
@@ -335,7 +327,7 @@ func TestFileWatchingSubfolderRename(t *testing.T) {
 	expectWatching(t, c, expectedWatching)
 
 	// Rename parent folder during file watching
-	err = os.Rename(string(repoRoot.UntypedJoin("parent")), string(repoRoot.UntypedJoin("new_parent")))
+	err = repoRoot.UntypedJoin("parent").Rename(repoRoot.UntypedJoin("new_parent"))
 	assert.NilError(t, err, "Rename")
 	expectFilesystemEvent(t, ch, Event{
 		EventType: FileRenamed,
@@ -353,11 +345,7 @@ func TestFileWatchingSubfolderRename(t *testing.T) {
 }
 
 // TestFileWatchingRootRename tests that when the root is renamed,
-// file watching will stop watching that directory, and no new events
-// will be sent.
-//
-// It additonally tests that when the root folder is renamed back to its
-// original name, file watching will continue, and a rename event will be sent.
+// a delete event will be sent
 //
 // ✅ macOS
 // ❌ Linux - L415 fails because renames are respected and creating a file emits an event
@@ -402,31 +390,14 @@ func TestFileWatchingRootRename(t *testing.T) {
 
 	// Rename root folder during file watching
 	newRepoRoot := oldRepoRoot.Dir().UntypedJoin("new_repo_root")
-	err = os.Rename(string(oldRepoRoot), string(newRepoRoot))
+	err = oldRepoRoot.Rename(newRepoRoot)
 	assert.NilError(t, err, "Rename")
 
-	expectNoFilesystemEvent(t, ch)
-
-	// Ensure we get no event when creating a file in the renamed directory
-	fooPath := newRepoRoot.UntypedJoin("parent", "child", "foo")
-	err = fooPath.WriteFile([]byte("hello"), 0644)
-	assert.NilError(t, err, "WriteFile")
-
-	expectNoFilesystemEvent(t, ch)
-
-	// Rename root folder back to original name
-	err = os.Rename(string(newRepoRoot), string(oldRepoRoot))
-	assert.NilError(t, err, "Rename")
-
-	expectNoFilesystemEvent(t, ch)
-
-	// Ensure we get an event when creating a file in the renamed directory
-	fooPath = oldRepoRoot.UntypedJoin("parent", "child", "foo")
-	err = fooPath.WriteFile([]byte("hello"), 0644)
-	assert.NilError(t, err, "WriteFile")
-
-	// file watching has stopped
-	expectNoFilesystemEvent(t, ch)
+	expectFilesystemEvent(t, ch, Event{
+		EventType: FileDeleted,
+		Path:      oldRepoRoot,
+	})
+	// We got the root delete event, no guarantees about what happens after that
 }
 
 // TestFileWatchSymlinkCreate tests that when a symlink is created,
@@ -477,7 +448,7 @@ func TestFileWatchSymlinkCreate(t *testing.T) {
 
 	// Create symlink during file watching
 	symlinkPath := repoRoot.UntypedJoin("symlink")
-	err = os.Symlink(string(repoRoot.UntypedJoin("parent", "child")), string(symlinkPath))
+	err = symlinkPath.Symlink(repoRoot.UntypedJoin("parent", "child").ToString())
 	assert.NilError(t, err, "Symlink")
 	expectFilesystemEvent(t, ch,
 		Event{
@@ -515,7 +486,7 @@ func TestFileWatchSymlinkDelete(t *testing.T) {
 	err = repoRoot.UntypedJoin("parent", "child").MkdirAll(0775)
 	assert.NilError(t, err, "MkdirAll")
 	symlinkPath := repoRoot.UntypedJoin("symlink")
-	err = os.Symlink(string(repoRoot.UntypedJoin("parent", "child")), string(symlinkPath))
+	err = symlinkPath.Symlink(repoRoot.UntypedJoin("parent", "child").ToString())
 	assert.NilError(t, err, "Symlink")
 
 	// Directory layout:
@@ -547,15 +518,18 @@ func TestFileWatchSymlinkDelete(t *testing.T) {
 	expectWatching(t, c, expectedWatching)
 
 	// Delete symlink during file watching
-	err = os.Remove(string(symlinkPath))
+	err = symlinkPath.Remove()
 	assert.NilError(t, err, "Remove")
-	expectNoFilesystemEvent(t, ch)
+	expectFilesystemEvent(t, ch, Event{
+		EventType: FileDeleted,
+		Path:      symlinkPath,
+	})
 }
 
 // TestFileWatchSymlinkRename tests that when a symlink is renamed,
 // file watching raises a rename event for the virtual path
 //
-// ❌ macOS - raises no event at all
+// ✅ macOS
 // ❌ Linux - raises an event for creating the file
 // ❌ Windows - raises an event for creating the file
 func TestFileWatchSymlinkRename(t *testing.T) {
@@ -569,7 +543,7 @@ func TestFileWatchSymlinkRename(t *testing.T) {
 	err = repoRoot.UntypedJoin("parent", "child").MkdirAll(0775)
 	assert.NilError(t, err, "MkdirAll")
 	symlinkPath := repoRoot.UntypedJoin("symlink")
-	err = os.Symlink(string(repoRoot.UntypedJoin("parent", "child")), string(symlinkPath))
+	err = symlinkPath.Symlink(repoRoot.UntypedJoin("parent", "child").ToString())
 	assert.NilError(t, err, "Symlink")
 
 	// Directory layout:
@@ -602,7 +576,7 @@ func TestFileWatchSymlinkRename(t *testing.T) {
 
 	// Rename symlink during file watching
 	newSymlinkPath := repoRoot.UntypedJoin("new_symlink")
-	err = os.Rename(string(symlinkPath), string(newSymlinkPath))
+	err = symlinkPath.Rename(newSymlinkPath)
 	assert.NilError(t, err, "Rename")
 
 	expectFilesystemEvent(t, ch, Event{
@@ -653,29 +627,17 @@ func TestFileWatchRootParentRename(t *testing.T) {
 
 	// Rename parent directory during file watching
 	newRepoRoot := parent.UntypedJoin("new_repo")
-	err = os.Rename(string(repoRoot), string(newRepoRoot))
+	err = repoRoot.Rename(newRepoRoot)
 	assert.NilError(t, err, "Rename")
-	expectNoFilesystemEvent(t, ch)
-
-	// Rename root parent directory back to original name
-	err = os.Rename(string(newRepoRoot), string(repoRoot))
-	assert.NilError(t, err, "Rename")
-	expectNoFilesystemEvent(t, ch)
-
-	// create a new file in the repo root
-	err = repoRoot.UntypedJoin("new_file").WriteFile([]byte("hello"), 0666)
-	assert.NilError(t, err, "WriteFile")
 	expectFilesystemEvent(t, ch, Event{
-		EventType: FileAdded,
-		Path:      repoRoot.UntypedJoin("new_file"),
+		EventType: FileDeleted,
+		Path:      repoRoot,
 	})
+	// We got the root delete event, no guarantees about what happens after that
 }
 
 // TestFileWatchRootParentDelete tests that when the parent directory of the root is deleted,
 // file watching stops reporting events
-//
-// additionally, recreating the root parent directory and the root should cause file watching
-// to start reporting events again
 //
 // ✅ macOS
 // ❌ Linux - L721 no create event is emitted
@@ -712,16 +674,11 @@ func TestFileWatchRootParentDelete(t *testing.T) {
 	expectWatching(t, c, expectedWatching)
 
 	// Delete parent directory during file watching
-	err = os.RemoveAll(string(parent))
+	err = parent.RemoveAll()
 	assert.NilError(t, err, "RemoveAll")
-	expectNoFilesystemEvent(t, ch)
-
-	// create the root parent and the root again
-	err = repoRoot.MkdirAll(0775)
-	assert.NilError(t, err, "MkdirAll")
-
 	expectFilesystemEvent(t, ch, Event{
-		EventType: FileAdded,
+		EventType: FileDeleted,
 		Path:      repoRoot,
 	})
+	// We got the root delete event, no guarantees about what happens after that
 }
