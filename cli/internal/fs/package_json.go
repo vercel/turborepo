@@ -3,6 +3,7 @@ package fs
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"sync"
 
@@ -131,7 +132,13 @@ func (p *PackageJSON) SetExternalDeps(externalDeps mapset.Set) error {
 		dependency := dependency.(lockfile.Package)
 		p.TransitiveDeps = append(p.TransitiveDeps, dependency)
 	}
+
 	sort.Sort(lockfile.ByKey(p.TransitiveDeps))
+
+	if p.Name == "my-turborepo" {
+		fmt.Println(len(p.TransitiveDeps))
+	}
+
 	hashOfExternalDeps, err := HashLockfilePackages(p.TransitiveDeps)
 	if err != nil {
 		return err

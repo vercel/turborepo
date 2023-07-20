@@ -126,23 +126,8 @@ impl Run {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let root_external_dependencies = pkg_dep_graph.external_dependencies(&WorkspaceName::Root);
-
-        let global_hash_inputs = get_global_hash_inputs(
-            root_external_dependencies,
-            &self.base.repo_root,
-            pkg_dep_graph.root_package_json(),
-            pkg_dep_graph.package_manager(),
-            pkg_dep_graph.lockfile(),
-            // TODO: Fill in these vec![] once turbo.json is ported
-            root_turbo_json.global_deps,
-            &env_at_execution_start,
-            root_turbo_json.global_env,
-            root_turbo_json.global_pass_through_env,
-            opts.run_opts.env_mode,
-            opts.run_opts.framework_inference,
-            root_turbo_json.global_dot_env,
-        )?;
+        let root_external_dependencies =
+            pkg_dep_graph.transitive_external_dependencies(std::iter::once(&WorkspaceName::Root));
 
         let repo_config = self.base.repo_config()?;
         let team_id = repo_config.team_id();
@@ -214,9 +199,25 @@ impl Run {
             return Ok(());
         }
 
+        let global_hash_inputs = get_global_hash_inputs(
+            root_external_dependencies,
+            &self.base.repo_root,
+            pkg_dep_graph.root_package_json(),
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
+            // TODO: Fill in these vec![] once turbo.json is ported
+            root_turbo_json.global_deps,
+            &env_at_execution_start,
+            root_turbo_json.global_env,
+            root_turbo_json.global_pass_through_env,
+            opts.run_opts.env_mode,
+            opts.run_opts.framework_inference,
+            root_turbo_json.global_dot_env,
+        )?;
+
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
 
-        println!("global hash: {:#x}", global_hash);
+        debug!("global hash: {}", global_hash);
 
         let color_selector = ColorSelector::default();
 
@@ -237,7 +238,7 @@ impl Run {
         Ok(())
     }
 
-    pub fn get_global_hash(&self) -> Result<u64> {
+    pub fn get_global_hash(&self) -> Result<String> {
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let package_json_path = self.base.repo_root.join_component("package.json");
@@ -255,7 +256,8 @@ impl Run {
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        let root_external_dependencies = pkg_dep_graph.external_dependencies(&WorkspaceName::Root);
+        let root_external_dependencies =
+            pkg_dep_graph.transitive_external_dependencies(std::iter::once(&WorkspaceName::Root));
 
         let global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies,
@@ -263,7 +265,6 @@ impl Run {
             pkg_dep_graph.root_package_json(),
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
-            // TODO: Fill in these vec![] once turbo.json is ported
             root_turbo_json.global_deps,
             &env_at_execution_start,
             root_turbo_json.global_env,

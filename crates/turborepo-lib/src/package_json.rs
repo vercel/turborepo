@@ -79,11 +79,11 @@ impl PackageJson {
 
     pub fn get_external_deps_hash(
         &self,
-        external_deps: HashSet<turborepo_lockfiles::Package>,
-    ) -> u64 {
+        external_deps: HashSet<&turborepo_lockfiles::Package>,
+    ) -> String {
         let mut transitive_deps = Vec::with_capacity(external_deps.len());
         for dependency in external_deps {
-            transitive_deps.push(dependency);
+            transitive_deps.push(dependency.clone());
         }
 
         transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {

@@ -60,10 +60,11 @@ struct TaskHashable {
     dot_env: Vec<turbopath::RelativeUnixPathBuf>,
 }
 
+#[derive(Debug)]
 pub struct GlobalHashable {
-    pub global_cache_key: String,
+    pub global_cache_key: &'static str,
     pub global_file_hash_map: HashMap<turbopath::RelativeUnixPathBuf, String>,
-    pub root_external_dependencies_hash: u64,
+    pub root_external_dependencies_hash: String,
     pub env: Vec<String>,
     pub resolved_env_vars: Vec<String>,
     pub pass_through_env: Vec<String>,
@@ -124,8 +125,8 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
                 let mut package = packages_builder.reborrow().get(i as u32);
                 package.set_key(key);
                 package.set_version(version);
-                // we don't track this in rust, set it to false
-                package.set_found(false);
+                // we don't track this in rust, set it to true
+                package.set_found(true);
             }
         }
 
@@ -307,7 +308,7 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             }
         }
 
-        builder.set_root_external_deps_hash(&hashable.root_external_deps_hash);
+        builder.set_root_external_deps_hash(&hashable.root_external_dependencies_hash);
 
         {
             let mut entries = builder.reborrow().init_env(hashable.env.len() as u32);
@@ -405,14 +406,14 @@ mod test {
     #[test]
     fn global_hashable() {
         let global_hash = GlobalHashable {
-            global_cache_key: "global_cache_key".to_string(),
+            global_cache_key: "global_cache_key",
             global_file_hash_map: vec![(
                 turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
                 "global_file_hash_map".to_string(),
             )]
             .into_iter()
             .collect(),
-            root_external_dependencies_hash: 0,
+            root_external_dependencies_hash: "0000000000000000".to_string(),
             env: vec!["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: vec!["pass_through_env".to_string()],
@@ -422,28 +423,28 @@ mod test {
             dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
-        assert_eq!(global_hash.hash(), "1d13a81d4c129bed");
+        assert_eq!(global_hash.hash(), "c0ddf8138bd686e8");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "version".to_string(),
-    }], "9e60782f386d8ff1" ; "non-empty")]
+    }], "1b266409f3ae154e" ; "non-empty")]
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "version".to_string(),
     }, Package {
         key: "zey".to_string(),
         version: "version".to_string(),
-    }], "765a46fa6c11f363" ; "multiple in-order")]
+    }], "6c0185544234b6dc" ; "multiple in-order")]
     #[test_case(vec![Package {
         key: "zey".to_string(),
         version: "version".to_string(),
     }, Package {
         key: "key".to_string(),
         version: "version".to_string(),
-    }], "1f5d2d372b4398db" ; "care about order")]
+    }], "26a67c9beeb0d16f" ; "care about order")]
     fn lock_file_packages(vec: Vec<Package>, expected: &str) {
         let packages = LockFilePackages(vec);
         assert_eq!(packages.hash(), expected);
@@ -456,7 +457,7 @@ mod test {
             version: format!("version{}", i),
         });
 
-        lock_file_packages(packages.collect(), "06bb5d05e53dd455");
+        lock_file_packages(packages.collect(), "4fd770c37194168e");
     }
 
     #[test_case(vec![], "459c029558afe716" ; "empty")]

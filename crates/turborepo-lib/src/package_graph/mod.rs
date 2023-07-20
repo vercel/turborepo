@@ -343,6 +343,12 @@ impl PackageGraph {
 
         Ok(changed.unwrap_or_else(|| self.workspaces.keys().cloned().collect()))
     }
+
+    #[allow(dead_code)]
+    fn external_dependencies(&self, workspace: &WorkspaceName) -> Option<&HashSet<Package>> {
+        let entry = self.workspaces.get(workspace)?;
+        entry.unresolved_external_dependencies.as_ref()
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
