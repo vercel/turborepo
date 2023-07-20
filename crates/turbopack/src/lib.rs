@@ -48,7 +48,7 @@ use turbopack_core::{
         options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve,
         AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ResolveResult,
     },
-    source::{asset_to_source, Source},
+    source::Source,
 };
 pub use turbopack_css as css;
 pub use turbopack_ecmascript as ecmascript;
@@ -448,13 +448,11 @@ impl AssetContext for ModuleAssetContext {
         Ok(result
             .await?
             .map_module(
-                |a| {
+                |source| {
                     let reference_type = reference_type.clone();
                     async move {
                         Ok(Vc::upcast(
-                            self.process(asset_to_source(a), reference_type)
-                                .resolve()
-                                .await?,
+                            self.process(source, reference_type).resolve().await?,
                         ))
                     }
                 },

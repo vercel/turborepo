@@ -11,14 +11,14 @@ use turbo_tasks_fs::{
 use turbopack_core::{
     asset::{Asset, AssetContent},
     file_source::FileSource,
-    module::{convert_asset_to_module, Module},
+    module::Module,
     raw_module::RawModule,
     reference::ModuleReference,
     resolve::{
         pattern::Pattern, resolve_raw, AffectingResolvingAssetReference, ModuleResolveResult,
         ResolveResultItem,
     },
-    source::{asset_to_source, Source},
+    source::Source,
     target::{CompileTarget, Platform},
 };
 
@@ -99,11 +99,10 @@ pub async fn resolve_node_pre_gyp_files(
             Regex::new(r"\{libc\}").expect("create node_libc regex failed");
     }
     let config = resolve_raw(context, config_file_pattern, true)
-        .first_asset()
+        .first_source()
         .await?;
     let compile_target = compile_target.await?;
     if let Some(config_asset) = *config {
-        let config_asset = convert_asset_to_module(config_asset);
         if let AssetContent::File(file) = &*config_asset.content().await? {
             if let FileContent::Content(ref config_file) = &*file.await? {
                 let config_file_path = config_asset.ident().path();
@@ -244,7 +243,7 @@ pub async fn resolve_node_gyp_build_files(
     }
     let binding_gyp_pat = Pattern::new(Pattern::Constant("binding.gyp".to_owned()));
     let gyp_file = resolve_raw(context, binding_gyp_pat, true);
-    if let [binding_gyp] = &gyp_file.primary_assets().await?[..] {
+    if let [binding_gyp] = &gyp_file.primary_sources().await?[..] {
         let mut merged_references = gyp_file
             .await?
             .get_affecting_sources()
@@ -267,10 +266,10 @@ pub async fn resolve_node_gyp_build_files(
                             true,
                         )
                         .await?;
-                        if let &[ResolveResultItem::Asset(asset)] =
+                        if let &[ResolveResultItem::Source(source)] =
                             &resolved_prebuilt_file.primary[..]
                         {
-                            resolved.insert(asset_to_source(asset).resolve().await?);
+                            resolved.insert(source.resolve().await?);
                             merged_references.extend(
                                 resolved_prebuilt_file
                                     .affecting_sources
@@ -365,7 +364,7 @@ pub async fn resolve_node_bindings_files(
             Pattern::Constant("package.json".to_owned()).into(),
             true,
         )
-        .first_asset()
+        .first_source()
         .await?;
         if let Some(asset) = *resolved {
             if let AssetContent::File(file) = &*asset.content().await? {

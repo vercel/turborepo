@@ -24,7 +24,7 @@ use turbopack_core::{
         pattern::{Pattern, QueryMap},
         resolve, AliasPattern, ModuleResolveResult,
     },
-    source::{option_asset_to_source, OptionSource, Source},
+    source::{OptionSource, Source},
 };
 #[turbo_tasks::value(shared)]
 pub struct TsConfigIssue {
@@ -135,16 +135,16 @@ async fn resolve_extends(
         // An empty extends is treated as "./tsconfig"
         Request::Empty => {
             let request = Request::parse_string("./tsconfig".to_string());
-            Ok(option_asset_to_source(resolve(context, request, resolve_options).first_asset()))
+            Ok(resolve(context, request, resolve_options).first_source())
         }
 
         // All other types are treated as module imports, and potentially joined with
         // "tsconfig.json". This includes "relative" imports like '.' and '..'.
         _ => {
-            let mut result = option_asset_to_source(resolve(context, request, resolve_options).first_asset());
+            let mut result = resolve(context, request, resolve_options).first_source();
             if result.await?.is_none() {
                 let request = Request::parse_string(format!("{extends}/tsconfig"));
-                result = option_asset_to_source(resolve(context, request, resolve_options).first_asset());
+                result = resolve(context, request, resolve_options).first_source();
             }
             Ok(result)
         }
@@ -157,15 +157,14 @@ async fn resolve_extends_rooted_or_relative(
     resolve_options: Vc<ResolveOptions>,
     path: &str,
 ) -> Result<Vc<OptionSource>> {
-    let mut result =
-        option_asset_to_source(resolve(context, request, resolve_options).first_asset());
+    let mut result = resolve(context, request, resolve_options).first_source();
 
     // If the file doesn't end with ".json" and we can't find the file, then we have
     // to try again with it.
     // https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3305
     if !path.ends_with(".json") && result.await?.is_none() {
         let request = Request::parse_string(format!("{path}.json"));
-        result = option_asset_to_source(resolve(context, request, resolve_options).first_asset());
+        result = resolve(context, request, resolve_options).first_source();
     }
     Ok(result)
 }

@@ -23,7 +23,7 @@ use self::{
     remap::{ExportsField, ImportsField},
 };
 use crate::{
-    asset::{Asset, AssetOption, Assets},
+    asset::{AssetOption, Assets},
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt},
     module::Module,
@@ -36,7 +36,7 @@ use crate::{
         pattern::{read_matches, PatternMatch},
         plugin::ResolvePlugin,
     },
-    source::{asset_to_source, Source},
+    source::{OptionSource, Source, Sources},
 };
 
 mod alias_map;
@@ -328,7 +328,7 @@ impl ModuleResolveResultOption {
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
 pub enum ResolveResultItem {
-    Asset(Vc<Box<dyn Asset>>),
+    Source(Vc<Box<dyn Source>>),
     OriginalReferenceExternal,
     OriginalReferenceTypeExternal(String),
     Ignore,
@@ -384,36 +384,36 @@ impl ResolveResult {
         }
     }
 
-    pub fn asset(asset: Vc<Box<dyn Asset>>) -> ResolveResult {
+    pub fn source(source: Vc<Box<dyn Source>>) -> ResolveResult {
         ResolveResult {
-            primary: vec![ResolveResultItem::Asset(asset)],
+            primary: vec![ResolveResultItem::Source(source)],
             affecting_sources: Vec::new(),
         }
     }
 
-    pub fn asset_with_affecting_sources(
-        asset: Vc<Box<dyn Asset>>,
+    pub fn source_with_affecting_sources(
+        source: Vc<Box<dyn Source>>,
         affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
-            primary: vec![ResolveResultItem::Asset(asset)],
+            primary: vec![ResolveResultItem::Source(source)],
             affecting_sources,
         }
     }
 
-    pub fn assets(assets: Vec<Vc<Box<dyn Asset>>>) -> ResolveResult {
+    pub fn sources(sources: Vec<Vc<Box<dyn Source>>>) -> ResolveResult {
         ResolveResult {
-            primary: assets.into_iter().map(ResolveResultItem::Asset).collect(),
+            primary: sources.into_iter().map(ResolveResultItem::Source).collect(),
             affecting_sources: Vec::new(),
         }
     }
 
-    pub fn assets_with_affecting_sources(
-        assets: Vec<Vc<Box<dyn Asset>>>,
+    pub fn sources_with_affecting_sources(
+        sources: Vec<Vc<Box<dyn Source>>>,
         affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
-            primary: assets.into_iter().map(ResolveResultItem::Asset).collect(),
+            primary: sources.into_iter().map(ResolveResultItem::Source).collect(),
             affecting_sources,
         }
     }
@@ -446,10 +446,10 @@ impl ResolveResult {
         self.primary.is_empty()
     }
 
-    pub async fn map<A, AF, R, RF>(&self, asset_fn: A, affecting_source_fn: R) -> Result<Self>
+    pub async fn map<A, AF, R, RF>(&self, source_fn: A, affecting_source_fn: R) -> Result<Self>
     where
-        A: Fn(Vc<Box<dyn Asset>>) -> AF,
-        AF: Future<Output = Result<Vc<Box<dyn Asset>>>>,
+        A: Fn(Vc<Box<dyn Source>>) -> AF,
+        AF: Future<Output = Result<Vc<Box<dyn Source>>>>,
         R: Fn(Vc<Box<dyn Source>>) -> RF,
         RF: Future<Output = Result<Vc<Box<dyn Source>>>>,
     {
@@ -459,10 +459,10 @@ impl ResolveResult {
                 .iter()
                 .cloned()
                 .map(|result| {
-                    let asset_fn = &asset_fn;
+                    let asset_fn = &source_fn;
                     async move {
-                        if let ResolveResultItem::Asset(asset) = result {
-                            Ok(ResolveResultItem::Asset(asset_fn(asset).await?))
+                        if let ResolveResultItem::Source(asset) = result {
+                            Ok(ResolveResultItem::Source(asset_fn(asset).await?))
                         } else {
                             Ok(result)
                         }
@@ -482,11 +482,11 @@ impl ResolveResult {
 
     pub async fn map_module<A, AF, R, RF>(
         &self,
-        asset_fn: A,
-        source_fn: R,
+        source_fn: A,
+        affected_source_fn: R,
     ) -> Result<ModuleResolveResult>
     where
-        A: Fn(Vc<Box<dyn Asset>>) -> AF,
+        A: Fn(Vc<Box<dyn Source>>) -> AF,
         AF: Future<Output = Result<Vc<Box<dyn Module>>>>,
         R: Fn(Vc<Box<dyn Source>>) -> RF,
         RF: Future<Output = Result<Vc<Box<dyn ModuleReference>>>>,
@@ -497,11 +497,11 @@ impl ResolveResult {
                 .iter()
                 .cloned()
                 .map(|item| {
-                    let asset_fn = &asset_fn;
+                    let asset_fn = &source_fn;
                     async move {
                         Ok(match item {
-                            ResolveResultItem::Asset(asset) => {
-                                ModuleResolveResultItem::Module(Vc::upcast(asset_fn(asset).await?))
+                            ResolveResultItem::Source(source) => {
+                                ModuleResolveResultItem::Module(Vc::upcast(asset_fn(source).await?))
                             }
                             ResolveResultItem::OriginalReferenceExternal => {
                                 ModuleResolveResultItem::OriginalReferenceExternal
@@ -524,7 +524,7 @@ impl ResolveResult {
                 .affecting_sources
                 .iter()
                 .copied()
-                .map(source_fn)
+                .map(affected_source_fn)
                 .try_join()
                 .await?,
         })
@@ -538,7 +538,7 @@ impl ResolveResult {
         Ok(
             self.await?
                 .map_module(
-                    |asset| async move { Ok(Vc::upcast(RawModule::new(asset_to_source(asset)))) },
+                    |asset| async move { Ok(Vc::upcast(RawModule::new(asset))) },
                     |source| async move {
                         Ok(Vc::upcast(AffectingResolvingAssetReference::new(source)))
                     },
@@ -646,10 +646,10 @@ impl ResolveResult {
     }
 
     #[turbo_tasks::function]
-    pub async fn first_asset(self: Vc<Self>) -> Result<Vc<AssetOption>> {
+    pub async fn first_source(self: Vc<Self>) -> Result<Vc<OptionSource>> {
         let this = self.await?;
         Ok(Vc::cell(this.primary.iter().find_map(|item| {
-            if let ResolveResultItem::Asset(a) = item {
+            if let ResolveResultItem::Source(a) = item {
                 Some(*a)
             } else {
                 None
@@ -658,13 +658,13 @@ impl ResolveResult {
     }
 
     #[turbo_tasks::function]
-    pub async fn primary_assets(self: Vc<Self>) -> Result<Vc<Assets>> {
+    pub async fn primary_sources(self: Vc<Self>) -> Result<Vc<Sources>> {
         let this = self.await?;
         Ok(Vc::cell(
             this.primary
                 .iter()
                 .filter_map(|item| {
-                    if let ResolveResultItem::Asset(a) = item {
+                    if let ResolveResultItem::Source(a) = item {
                         Some(*a)
                     } else {
                         None
@@ -936,7 +936,7 @@ pub async fn resolve_raw(
 ) -> Result<Vc<ResolveResult>> {
     async fn to_result(path: Vc<FileSystemPath>) -> Result<Vc<ResolveResult>> {
         let RealPathResult { path, symlinks } = &*path.realpath_with_links().await?;
-        Ok(ResolveResult::asset_with_affecting_sources(
+        Ok(ResolveResult::source_with_affecting_sources(
             Vc::upcast(FileSource::new(*path)),
             symlinks
                 .iter()
@@ -1027,10 +1027,9 @@ async fn handle_resolve_plugins(
     let mut new_references = Vec::new();
 
     for primary in result_value.primary.iter() {
-        if let &ResolveResultItem::Asset(asset) = primary {
-            let asset = asset_to_source(asset);
+        if let &ResolveResultItem::Source(source) = primary {
             if let Some(new_result) = apply_plugins_to_path(
-                asset.ident().path().resolve().await?,
+                source.ident().path().resolve().await?,
                 context,
                 request,
                 options,
@@ -1605,7 +1604,7 @@ async fn resolved(
         }
     }
 
-    Ok(ResolveResult::asset_with_affecting_sources(
+    Ok(ResolveResult::source_with_affecting_sources(
         Vc::upcast(FileSource::new(*path)),
         symlinks
             .iter()

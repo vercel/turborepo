@@ -13,7 +13,7 @@ use turbopack_core::{
         parse::Request,
         resolve, AffectingResolvingAssetReference, ModuleResolveResult,
     },
-    source::{asset_to_source, Source},
+    source::Source,
 };
 
 use self::{parse::WebpackRuntime, references::module_references};
@@ -180,7 +180,7 @@ impl ModuleReference for WebpackRuntimeAssetReference {
             .map_module(
                 |source| async move {
                     Ok(Vc::upcast(WebpackModuleAsset::new(
-                        asset_to_source(source),
+                        source,
                         self.runtime,
                         self.transforms,
                     )))

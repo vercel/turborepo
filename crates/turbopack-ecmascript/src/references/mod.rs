@@ -61,7 +61,7 @@ use turbopack_core::{
         pattern::Pattern,
         resolve, FindContextFileResult, ModulePart,
     },
-    source::{asset_to_source, Source},
+    source::Source,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 use unreachable::Unreachable;
@@ -2544,8 +2544,8 @@ async fn resolve_as_webpack_runtime(
         options,
     );
 
-    if let Some(source) = *resolved.first_asset().await? {
-        Ok(webpack_runtime(asset_to_source(source), transforms))
+    if let Some(source) = *resolved.first_source().await? {
+        Ok(webpack_runtime(source, transforms))
     } else {
         Ok(WebpackRuntime::None.into())
     }
