@@ -342,35 +342,35 @@ where
         )]);
     };
 
-    let assets = reference.resolve_reference().primary_assets().await?;
+    let modules = reference.resolve_reference().primary_modules().await?;
 
     let mut graph_nodes = vec![];
 
-    for &asset in &assets {
-        let asset = asset.resolve().await?;
-        let Some(asset) = Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await? else {
-            continue;
-        };
+    for &module in &modules {
+        let module = module.resolve().await?;
         if let Some(available_assets) = context.availability_info.available_assets() {
-            if *available_assets.includes(asset).await? {
+            if *available_assets.includes(module).await? {
                 graph_nodes.push((
-                    Some((asset, chunking_type)),
-                    ChunkContentGraphNode::AvailableAsset(asset),
+                    Some((module, chunking_type)),
+                    ChunkContentGraphNode::AvailableAsset(module),
                 ));
                 continue;
             }
         }
 
-        if Vc::try_resolve_sidecast::<Box<dyn PassthroughAsset>>(asset)
+        if Vc::try_resolve_sidecast::<Box<dyn PassthroughAsset>>(module)
             .await?
             .is_some()
         {
-            graph_nodes.push((None, ChunkContentGraphNode::PassthroughAsset { asset }));
+            graph_nodes.push((
+                None,
+                ChunkContentGraphNode::PassthroughAsset { asset: module },
+            ));
             continue;
         }
 
         let chunkable_asset =
-            match Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(asset).await? {
+            match Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(module).await? {
                 Some(chunkable_asset) => chunkable_asset,
                 _ => {
                     return Ok(vec![(
@@ -382,19 +382,19 @@ where
 
         match chunking_type {
             ChunkingType::Placed => {
-                if let Some(chunk_item) = I::from_asset(context.chunking_context, asset).await? {
+                if let Some(chunk_item) = I::from_asset(context.chunking_context, module).await? {
                     graph_nodes.push((
-                        Some((asset, chunking_type)),
+                        Some((module, chunking_type)),
                         ChunkContentGraphNode::ChunkItem {
                             item: chunk_item,
-                            ident: asset.ident().to_string().await?,
+                            ident: module.ident().to_string().await?,
                         },
                     ));
                 } else {
                     return Err(anyhow!(
                         "Asset {} was requested to be placed into the  same chunk, but this \
                          wasn't possible",
-                        asset.ident().to_string().await?
+                        module.ident().to_string().await?
                     ));
                 }
             }
@@ -402,14 +402,14 @@ where
                 let chunk =
                     chunkable_asset.as_chunk(context.chunking_context, context.availability_info);
                 graph_nodes.push((
-                    Some((asset, chunking_type)),
+                    Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
                 ));
             }
             ChunkingType::IsolatedParallel => {
                 let chunk = chunkable_asset.as_root_chunk(context.chunking_context);
                 graph_nodes.push((
-                    Some((asset, chunking_type)),
+                    Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
                 ));
             }
@@ -418,17 +418,18 @@ where
                 if !context.split
                     && *context
                         .chunking_context
-                        .can_be_in_same_chunk(context.entry, asset)
+                        .can_be_in_same_chunk(context.entry, module)
                         .await?
                 {
                     // chunk item, chunk or other asset?
-                    if let Some(chunk_item) = I::from_asset(context.chunking_context, asset).await?
+                    if let Some(chunk_item) =
+                        I::from_asset(context.chunking_context, module).await?
                     {
                         graph_nodes.push((
-                            Some((asset, chunking_type)),
+                            Some((module, chunking_type)),
                             ChunkContentGraphNode::ChunkItem {
                                 item: chunk_item,
-                                ident: asset.ident().to_string().await?,
+                                ident: module.ident().to_string().await?,
                             },
                         ));
                         continue;
@@ -438,7 +439,7 @@ where
                 let chunk =
                     chunkable_asset.as_chunk(context.chunking_context, context.availability_info);
                 graph_nodes.push((
-                    Some((asset, chunking_type)),
+                    Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
                 ));
             }
@@ -451,10 +452,10 @@ where
                 .await?
                 {
                     graph_nodes.push((
-                        Some((asset, chunking_type)),
+                        Some((module, chunking_type)),
                         ChunkContentGraphNode::ChunkItem {
                             item: manifest_loader_item,
-                            ident: asset.ident().to_string().await?,
+                            ident: module.ident().to_string().await?,
                         },
                     ));
                 } else {

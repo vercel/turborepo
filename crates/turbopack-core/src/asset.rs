@@ -1,5 +1,4 @@
 use anyhow::Result;
-use indexmap::IndexSet;
 use turbo_tasks::{Completion, Vc};
 use turbo_tasks_fs::{
     FileContent, FileJsonContent, FileLinesContent, FileSystemPath, LinkContent, LinkType,
@@ -18,10 +17,6 @@ pub trait Asset {
         Ok(Vc::upcast(VersionedAssetContent::new(self.content())))
     }
 }
-
-/// An optional [Asset]
-#[turbo_tasks::value(shared, transparent)]
-pub struct AssetOption(Option<Vc<Box<dyn Asset>>>);
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone)]

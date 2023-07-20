@@ -23,7 +23,6 @@ use self::{
     remap::{ExportsField, ImportsField},
 };
 use crate::{
-    asset::{AssetOption, Assets},
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt},
     module::{Module, Modules, OptionModule},

@@ -2057,7 +2057,13 @@ async fn require_resolve_visitor(
             OptionIssueSource::none(),
             try_to_severity(in_try),
         );
-        let mut values = resolved.primary_modules().await?.clone_value();
+        let mut values = resolved
+            .primary_modules()
+            .await?
+            .iter()
+            .map(|&module| async move { require_resolve(module.ident().path()).await })
+            .try_join()
+            .await?;
 
         match values.len() {
             0 => JsValue::unknown(
