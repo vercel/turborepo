@@ -487,7 +487,7 @@ pub(crate) async fn analyze_ecmascript_module(
         set_handler_and_globals(&handler, globals, || {
             // TODO migrate to effects
             let mut visitor =
-                AssetReferencesVisitor::new(eval_context, &import_references, &mut analysis);
+                ModuleReferencesVisitor::new(eval_context, &import_references, &mut analysis);
 
             for (i, reexport) in eval_context.imports.reexports() {
                 let import_ref = import_references[i];
@@ -2201,7 +2201,7 @@ impl StaticAnalyser {
     }
 }
 
-struct AssetReferencesVisitor<'a> {
+struct ModuleReferencesVisitor<'a> {
     eval_context: &'a EvalContext,
     old_analyser: StaticAnalyser,
     import_references: &'a [Vc<EsmAssetReference>],
@@ -2213,7 +2213,7 @@ struct AssetReferencesVisitor<'a> {
     webpack_chunks: Vec<Lit>,
 }
 
-impl<'a> AssetReferencesVisitor<'a> {
+impl<'a> ModuleReferencesVisitor<'a> {
     fn new(
         eval_context: &'a EvalContext,
         import_references: &'a [Vc<EsmAssetReference>],
@@ -2294,7 +2294,7 @@ fn for_each_ident_in_pat(pat: &Pat, f: &mut impl FnMut(String)) {
     }
 }
 
-impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
+impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
     fn visit_export_all<'ast: 'r, 'r>(
         &mut self,
         export: &'ast ExportAll,
