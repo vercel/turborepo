@@ -279,7 +279,7 @@ pub async fn resolve_node_gyp_build_files(
                         }
                     }
                     if !resolved.is_empty() {
-                        return Ok(ModuleResolveResult::assets_with_references(
+                        return Ok(ModuleResolveResult::modules_with_references(
                             resolved
                                 .into_iter()
                                 .map(|source| Vc::upcast(RawModule::new(source)))

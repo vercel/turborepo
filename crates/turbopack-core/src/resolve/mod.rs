@@ -114,13 +114,6 @@ impl ModuleResolveResult {
         }
     }
 
-    pub fn asset(asset: Vc<Box<dyn Asset>>) -> ModuleResolveResult {
-        ModuleResolveResult {
-            primary: vec![PrimaryResolveResult::Asset(asset)],
-            references: Vec::new(),
-        }
-    }
-
     pub fn module(module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
         ModuleResolveResult {
             primary: vec![PrimaryResolveResult::Asset(Vc::upcast(module))],
@@ -135,16 +128,6 @@ impl ModuleResolveResult {
         }
     }
 
-    pub fn asset_with_references(
-        asset: Vc<Box<dyn Asset>>,
-        references: Vec<Vc<Box<dyn ModuleReference>>>,
-    ) -> ModuleResolveResult {
-        ModuleResolveResult {
-            primary: vec![PrimaryResolveResult::Asset(asset)],
-            references,
-        }
-    }
-
     pub fn module_with_references(
         module: Vc<Box<dyn Module>>,
         references: Vec<Vc<Box<dyn ModuleReference>>>,
@@ -152,16 +135,6 @@ impl ModuleResolveResult {
         ModuleResolveResult {
             primary: vec![PrimaryResolveResult::Asset(Vc::upcast(module))],
             references,
-        }
-    }
-
-    pub fn assets(assets: Vec<Vc<Box<dyn Asset>>>) -> ModuleResolveResult {
-        ModuleResolveResult {
-            primary: assets
-                .into_iter()
-                .map(PrimaryResolveResult::Asset)
-                .collect(),
-            references: Vec::new(),
         }
     }
 
@@ -188,18 +161,6 @@ impl ModuleResolveResult {
         }
     }
 
-    pub fn assets_with_references(
-        assets: Vec<Vc<Box<dyn Asset>>>,
-        references: Vec<Vc<Box<dyn ModuleReference>>>,
-    ) -> ModuleResolveResult {
-        ModuleResolveResult {
-            primary: assets
-                .into_iter()
-                .map(PrimaryResolveResult::Asset)
-                .collect(),
-            references,
-        }
-    }
     pub fn modules_with_references(
         modules: Vec<Vc<Box<dyn Module>>>,
         references: Vec<Vc<Box<dyn ModuleReference>>>,

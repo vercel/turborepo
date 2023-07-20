@@ -9,6 +9,7 @@ use turbopack_core::{
     ident::AssetIdent,
     issue::{IssueSeverity, OptionIssueSource},
     module::Module,
+    raw_module::RawModule,
     reference::{ModuleReference, ModuleReferences},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
@@ -214,7 +215,7 @@ impl TsExtendsReference {
 impl ModuleReference for TsExtendsReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::asset(Vc::upcast(self.config)).into()
+        ModuleResolveResult::module(Vc::upcast(RawModule::new(Vc::upcast(self.config)))).cell()
     }
 }
 
