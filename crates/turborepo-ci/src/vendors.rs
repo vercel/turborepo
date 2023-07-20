@@ -20,7 +20,7 @@ pub struct Vendor {
 
 static VENDORS: OnceLock<[Vendor; 45]> = OnceLock::new();
 
-pub(crate) fn get_vendors() -> [Vendor; 45] {
+pub(crate) fn get_vendors() -> &'static [Vendor] {
     VENDORS
         .get_or_init(|| {
             [
@@ -578,5 +578,5 @@ pub(crate) fn get_vendors() -> [Vendor; 45] {
                 },
             ]
         })
-        .clone()
+        .as_slice()
 }
