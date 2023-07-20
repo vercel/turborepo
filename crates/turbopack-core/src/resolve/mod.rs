@@ -26,7 +26,7 @@ use crate::{
     asset::{AssetOption, Assets},
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt},
-    module::Module,
+    module::{Module, Modules, OptionModule},
     output::OutputAsset,
     package_json::{read_package_json, PackageJsonIssue},
     raw_module::RawModule,
@@ -294,6 +294,15 @@ impl ModuleResolveResult {
     }
 
     #[turbo_tasks::function]
+    pub async fn first_module(self: Vc<Self>) -> Result<Vc<OptionModule>> {
+        let this = self.await?;
+        Ok(Vc::cell(this.primary.iter().find_map(|item| match *item {
+            ModuleResolveResultItem::Module(a) => Some(a),
+            _ => None,
+        })))
+    }
+
+    #[turbo_tasks::function]
     pub async fn primary_assets(self: Vc<Self>) -> Result<Vc<Assets>> {
         let this = self.await?;
         Ok(Vc::cell(
@@ -302,6 +311,20 @@ impl ModuleResolveResult {
                 .filter_map(|item| match *item {
                     ModuleResolveResultItem::Module(a) => Some(Vc::upcast(a)),
                     ModuleResolveResultItem::OutputAsset(a) => Some(Vc::upcast(a)),
+                    _ => None,
+                })
+                .collect(),
+        ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn primary_modules(self: Vc<Self>) -> Result<Vc<Modules>> {
+        let this = self.await?;
+        Ok(Vc::cell(
+            this.primary
+                .iter()
+                .filter_map(|item| match *item {
+                    ModuleResolveResultItem::Module(a) => Some(a),
                     _ => None,
                 })
                 .collect(),

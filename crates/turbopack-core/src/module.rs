@@ -48,20 +48,4 @@ impl ModulesSet {
     }
 }
 
-/// This is a temporary function that should be removed once the [Module]
-/// trait completely replaces the [Asset] trait.
-/// It converts an [Asset] into a [Module], but either casting it or wrapping it
-/// in a [RawModule].
-// TODO make this function unnecessary, it should never be a Source
-#[turbo_tasks::function]
-pub async fn convert_asset_to_module(asset: Vc<Box<dyn Asset>>) -> Result<Vc<Box<dyn Module>>> {
-    if let Some(module) = Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await? {
-        Ok(module)
-    } else if let Some(source) = Vc::try_resolve_downcast::<Box<dyn Source>>(asset).await? {
-        Ok(Vc::upcast(RawModule::new(source)))
-    } else {
-        bail!("Asset must be a Module or a Source")
-    }
-}
-
 // TODO All Vc::try_resolve_downcast::<Box<dyn Module>> calls should be removed

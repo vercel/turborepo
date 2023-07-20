@@ -5,7 +5,7 @@ use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
 
 use crate::{
     issue::IssueContextExt,
-    module::{convert_asset_to_module, Module, Modules},
+    module::{Module, Modules},
     output::OutputAsset,
     resolve::ModuleResolveResult,
 };
@@ -139,7 +139,7 @@ impl SingleOutputAssetReference {
 #[turbo_tasks::function]
 pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
     let references_set = module.references().await?;
-    let mut assets = Vec::new();
+    let mut modules = Vec::new();
     let mut queue = VecDeque::with_capacity(32);
     for reference in references_set.iter() {
         queue.push_back(reference.resolve_reference());
@@ -148,12 +148,11 @@ pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Mo
     // while let Some(result) = race_pop(&mut queue).await {
     // match &*result? {
     while let Some(resolve_result) = queue.pop_front() {
-        assets.extend(resolve_result.primary_assets().await?.iter().copied());
+        modules.extend(resolve_result.primary_modules().await?.iter().copied());
         for &reference in resolve_result.await?.get_references() {
             queue.push_back(reference.resolve_reference());
         }
     }
-    let modules = assets.into_iter().map(convert_asset_to_module).collect();
     Ok(Vc::cell(modules))
 }
 
