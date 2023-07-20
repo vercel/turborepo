@@ -27,7 +27,7 @@ use crate::{
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt},
     module::{Module, Modules, OptionModule},
-    output::OutputAsset,
+    output::{OutputAsset, OutputAssets},
     package_json::{read_package_json, PackageJsonIssue},
     raw_module::RawModule,
     reference::ModuleReference,
@@ -325,6 +325,20 @@ impl ModuleResolveResult {
                 .iter()
                 .filter_map(|item| match *item {
                     ModuleResolveResultItem::Module(a) => Some(a),
+                    _ => None,
+                })
+                .collect(),
+        ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn primary_output_assets(self: Vc<Self>) -> Result<Vc<OutputAssets>> {
+        let this = self.await?;
+        Ok(Vc::cell(
+            this.primary
+                .iter()
+                .filter_map(|item| match *item {
+                    ModuleResolveResultItem::OutputAsset(a) => Some(a),
                     _ => None,
                 })
                 .collect(),

@@ -10,8 +10,8 @@ use turbopack_core::{
     },
     ident::AssetIdent,
     introspect::{
-        asset::{content_to_details, IntrospectableAsset},
-        Introspectable, IntrospectableChildren,
+        module::IntrospectableModule, utils::content_to_details, Introspectable,
+        IntrospectableChildren,
     },
     module::Module,
     output::{OutputAsset, OutputAssets},
@@ -250,7 +250,7 @@ impl Introspectable for ChunkGroupFilesAsset {
         let mut children = IndexSet::new();
         children.insert((
             Vc::cell("inner asset".to_string()),
-            IntrospectableAsset::new(Vc::upcast(self.await?.module)),
+            IntrospectableModule::new(Vc::upcast(self.await?.module)),
         ));
         Ok(Vc::cell(children))
     }

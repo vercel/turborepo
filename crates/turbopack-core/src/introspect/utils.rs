@@ -1,35 +1,17 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use indexmap::IndexSet;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::Vc;
 use turbo_tasks_fs::FileContent;
 
-use super::{Introspectable, IntrospectableChildren};
-use crate::{
-    asset::{Asset, AssetContent},
-    chunk::{ChunkableModuleReference, ChunkingType},
-    module::Module,
-    output::{OutputAsset, OutputAssets},
-    reference::{ModuleReference, ModuleReferences},
-    source::Source,
+use super::{
+    module::IntrospectableModule, output_asset::IntrospectableOutputAsset, IntrospectableChildren,
 };
-
-#[turbo_tasks::value]
-pub struct IntrospectableAsset(Vc<Box<dyn Asset>>);
-
-#[turbo_tasks::value_impl]
-impl IntrospectableAsset {
-    #[turbo_tasks::function]
-    pub async fn new(asset: Vc<Box<dyn Asset>>) -> Result<Vc<Box<dyn Introspectable>>> {
-        Ok(Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(asset)
-            .await?
-            .unwrap_or_else(|| Vc::upcast(IntrospectableAsset(asset).cell())))
-    }
-}
-
-#[turbo_tasks::function]
-fn asset_ty() -> Vc<String> {
-    Vc::cell("asset".to_string())
-}
+use crate::{
+    asset::AssetContent,
+    chunk::{ChunkableModuleReference, ChunkingType},
+    output::OutputAssets,
+    reference::{ModuleReference, ModuleReferences},
+};
 
 #[turbo_tasks::function]
 fn reference_ty() -> Vc<String> {
@@ -59,58 +41,6 @@ fn isolated_parallel_reference_ty() -> Vc<String> {
 #[turbo_tasks::function]
 fn async_reference_ty() -> Vc<String> {
     Vc::cell("async reference".to_string())
-}
-
-#[turbo_tasks::value_impl]
-impl Introspectable for IntrospectableAsset {
-    #[turbo_tasks::function]
-    fn ty(&self) -> Vc<String> {
-        asset_ty()
-    }
-
-    #[turbo_tasks::function]
-    async fn title(&self) -> Result<Vc<String>> {
-        let asset = self.0.resolve().await?;
-        Ok(
-            if let Some(source) = Vc::try_resolve_downcast::<Box<dyn Source>>(asset).await? {
-                source.ident().to_string()
-            } else if let Some(module) = Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await? {
-                module.ident().to_string()
-            } else if let Some(output_asset) =
-                Vc::try_resolve_downcast::<Box<dyn OutputAsset>>(asset).await?
-            {
-                output_asset.ident().to_string()
-            } else {
-                Vc::cell("unknown type".to_string())
-            },
-        )
-    }
-
-    #[turbo_tasks::function]
-    fn details(&self) -> Vc<String> {
-        content_to_details(self.0.content())
-    }
-
-    #[turbo_tasks::function]
-    async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
-        let asset = self.0.resolve().await?;
-        Ok(
-            if Vc::try_resolve_downcast::<Box<dyn Source>>(asset)
-                .await?
-                .is_some()
-            {
-                Vc::cell(Default::default())
-            } else if let Some(module) = Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await? {
-                children_from_module_references(module.references())
-            } else if let Some(output_asset) =
-                Vc::try_resolve_downcast::<Box<dyn OutputAsset>>(asset).await?
-            {
-                children_from_output_assets(output_asset.references())
-            } else {
-                bail!("unknown type")
-            },
-        )
-    }
 }
 
 #[turbo_tasks::function]
@@ -154,8 +84,21 @@ pub async fn children_from_module_references(
             }
         }
 
-        for &asset in reference.resolve_reference().primary_assets().await?.iter() {
-            children.insert((key, IntrospectableAsset::new(asset)));
+        for &module in reference
+            .resolve_reference()
+            .primary_modules()
+            .await?
+            .iter()
+        {
+            children.insert((key, IntrospectableModule::new(module)));
+        }
+        for &output_asset in reference
+            .resolve_reference()
+            .primary_output_assets()
+            .await?
+            .iter()
+        {
+            children.insert((key, IntrospectableOutputAsset::new(output_asset)));
         }
     }
     Ok(Vc::cell(children))
@@ -169,7 +112,7 @@ pub async fn children_from_output_assets(
     let mut children = IndexSet::new();
     let references = references.await?;
     for &reference in &*references {
-        children.insert((key, IntrospectableAsset::new(Vc::upcast(reference))));
+        children.insert((key, IntrospectableOutputAsset::new(Vc::upcast(reference))));
     }
     Ok(Vc::cell(children))
 }

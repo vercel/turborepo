@@ -18,7 +18,8 @@ use turbopack_core::{
     code_builder::{Code, CodeBuilder},
     ident::AssetIdent,
     introspect::{
-        asset::{children_from_output_assets, content_to_details, IntrospectableAsset},
+        module::IntrospectableModule,
+        utils::{children_from_output_assets, content_to_details},
         Introspectable, IntrospectableChildren,
     },
     module::Module,
@@ -578,7 +579,7 @@ impl Introspectable for CssChunk {
         for &entry in &*self.await?.main_entries.await? {
             children.insert((
                 entry_module_key(),
-                IntrospectableAsset::new(Vc::upcast(entry)),
+                IntrospectableModule::new(Vc::upcast(entry)),
             ));
         }
         Ok(Vc::cell(children))

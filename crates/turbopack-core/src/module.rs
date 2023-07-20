@@ -1,11 +1,7 @@
-use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use turbo_tasks::Vc;
 
-use crate::{
-    asset::Asset, ident::AssetIdent, raw_module::RawModule, reference::ModuleReferences,
-    source::Source,
-};
+use crate::{asset::Asset, ident::AssetIdent, reference::ModuleReferences};
 
 /// A module. This usually represents parsed source code, which has references
 /// to other modules.
