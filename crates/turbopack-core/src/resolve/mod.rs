@@ -57,7 +57,7 @@ use crate::issue::{IssueSeverity, OptionIssueSource};
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
-pub enum PrimaryResolveResult {
+pub enum ModuleResolveResultItem {
     Asset(Vc<Box<dyn Asset>>),
     OriginalReferenceExternal,
     OriginalReferenceTypeExternal(String),
@@ -70,7 +70,7 @@ pub enum PrimaryResolveResult {
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
 pub struct ModuleResolveResult {
-    pub primary: Vec<PrimaryResolveResult>,
+    pub primary: Vec<ModuleResolveResultItem>,
     pub references: Vec<Vc<Box<dyn ModuleReference>>>,
 }
 
@@ -99,14 +99,14 @@ impl ModuleResolveResult {
 
     pub fn module(module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
         ModuleResolveResult {
-            primary: vec![PrimaryResolveResult::Asset(Vc::upcast(module))],
+            primary: vec![ModuleResolveResultItem::Asset(Vc::upcast(module))],
             references: Vec::new(),
         }
     }
 
     pub fn output_asset(output_asset: Vc<Box<dyn OutputAsset>>) -> ModuleResolveResult {
         ModuleResolveResult {
-            primary: vec![PrimaryResolveResult::Asset(Vc::upcast(output_asset))],
+            primary: vec![ModuleResolveResultItem::Asset(Vc::upcast(output_asset))],
             references: Vec::new(),
         }
     }
@@ -116,7 +116,7 @@ impl ModuleResolveResult {
         references: Vec<Vc<Box<dyn ModuleReference>>>,
     ) -> ModuleResolveResult {
         ModuleResolveResult {
-            primary: vec![PrimaryResolveResult::Asset(Vc::upcast(module))],
+            primary: vec![ModuleResolveResultItem::Asset(Vc::upcast(module))],
             references,
         }
     }
@@ -126,7 +126,7 @@ impl ModuleResolveResult {
             primary: modules
                 .into_iter()
                 .map(Vc::upcast)
-                .map(PrimaryResolveResult::Asset)
+                .map(ModuleResolveResultItem::Asset)
                 .collect(),
             references: Vec::new(),
         }
@@ -138,7 +138,7 @@ impl ModuleResolveResult {
             primary: output_assets
                 .into_iter()
                 .map(Vc::upcast)
-                .map(PrimaryResolveResult::Asset)
+                .map(ModuleResolveResultItem::Asset)
                 .collect(),
             references: Vec::new(),
         }
@@ -152,7 +152,7 @@ impl ModuleResolveResult {
             primary: modules
                 .into_iter()
                 .map(Vc::upcast)
-                .map(PrimaryResolveResult::Asset)
+                .map(ModuleResolveResultItem::Asset)
                 .collect(),
             references,
         }
@@ -289,7 +289,7 @@ impl ModuleResolveResult {
     pub async fn first_asset(self: Vc<Self>) -> Result<Vc<AssetOption>> {
         let this = self.await?;
         Ok(Vc::cell(this.primary.iter().find_map(|item| {
-            if let PrimaryResolveResult::Asset(a) = item {
+            if let ModuleResolveResultItem::Asset(a) = item {
                 Some(*a)
             } else {
                 None
@@ -304,7 +304,7 @@ impl ModuleResolveResult {
             this.primary
                 .iter()
                 .filter_map(|item| {
-                    if let PrimaryResolveResult::Asset(a) = item {
+                    if let ModuleResolveResultItem::Asset(a) = item {
                         Some(*a)
                     } else {
                         None
@@ -333,8 +333,20 @@ impl ModuleResolveResultOption {
 
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
+pub enum ResolveResultItem {
+    Asset(Vc<Box<dyn Asset>>),
+    OriginalReferenceExternal,
+    OriginalReferenceTypeExternal(String),
+    Ignore,
+    Empty,
+    Custom(u8),
+    Unresolveable,
+}
+
+#[turbo_tasks::value(shared)]
+#[derive(Clone, Debug)]
 pub struct ResolveResult {
-    pub primary: Vec<PrimaryResolveResult>,
+    pub primary: Vec<ResolveResultItem>,
     pub affecting_sources: Vec<Vc<Box<dyn Source>>>,
 }
 
@@ -361,7 +373,7 @@ impl ResolveResult {
         }
     }
 
-    pub fn primary(result: PrimaryResolveResult) -> ResolveResult {
+    pub fn primary(result: ResolveResultItem) -> ResolveResult {
         ResolveResult {
             primary: vec![result],
             affecting_sources: Vec::new(),
@@ -369,7 +381,7 @@ impl ResolveResult {
     }
 
     pub fn primary_with_affecting_sources(
-        result: PrimaryResolveResult,
+        result: ResolveResultItem,
         affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
@@ -380,7 +392,7 @@ impl ResolveResult {
 
     pub fn asset(asset: Vc<Box<dyn Asset>>) -> ResolveResult {
         ResolveResult {
-            primary: vec![PrimaryResolveResult::Asset(asset)],
+            primary: vec![ResolveResultItem::Asset(asset)],
             affecting_sources: Vec::new(),
         }
     }
@@ -390,17 +402,14 @@ impl ResolveResult {
         affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
-            primary: vec![PrimaryResolveResult::Asset(asset)],
+            primary: vec![ResolveResultItem::Asset(asset)],
             affecting_sources,
         }
     }
 
     pub fn assets(assets: Vec<Vc<Box<dyn Asset>>>) -> ResolveResult {
         ResolveResult {
-            primary: assets
-                .into_iter()
-                .map(PrimaryResolveResult::Asset)
-                .collect(),
+            primary: assets.into_iter().map(ResolveResultItem::Asset).collect(),
             affecting_sources: Vec::new(),
         }
     }
@@ -410,10 +419,7 @@ impl ResolveResult {
         affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
-            primary: assets
-                .into_iter()
-                .map(PrimaryResolveResult::Asset)
-                .collect(),
+            primary: assets.into_iter().map(ResolveResultItem::Asset).collect(),
             affecting_sources,
         }
     }
@@ -461,8 +467,8 @@ impl ResolveResult {
                 .map(|result| {
                     let asset_fn = &asset_fn;
                     async move {
-                        if let PrimaryResolveResult::Asset(asset) = result {
-                            Ok(PrimaryResolveResult::Asset(asset_fn(asset).await?))
+                        if let ResolveResultItem::Asset(asset) = result {
+                            Ok(ResolveResultItem::Asset(asset_fn(asset).await?))
                         } else {
                             Ok(result)
                         }
@@ -496,16 +502,26 @@ impl ResolveResult {
                 .primary
                 .iter()
                 .cloned()
-                .map(|result| {
+                .map(|item| {
                     let asset_fn = &asset_fn;
                     async move {
-                        if let PrimaryResolveResult::Asset(asset) = result {
-                            Ok(PrimaryResolveResult::Asset(Vc::upcast(
-                                asset_fn(asset).await?,
-                            )))
-                        } else {
-                            Ok(result)
-                        }
+                        Ok(match item {
+                            ResolveResultItem::Asset(asset) => {
+                                ModuleResolveResultItem::Asset(Vc::upcast(asset_fn(asset).await?))
+                            }
+                            ResolveResultItem::OriginalReferenceExternal => {
+                                ModuleResolveResultItem::OriginalReferenceExternal
+                            }
+                            ResolveResultItem::OriginalReferenceTypeExternal(s) => {
+                                ModuleResolveResultItem::OriginalReferenceTypeExternal(s)
+                            }
+                            ResolveResultItem::Ignore => ModuleResolveResultItem::Ignore,
+                            ResolveResultItem::Empty => ModuleResolveResultItem::Empty,
+                            ResolveResultItem::Custom(u8) => ModuleResolveResultItem::Custom(u8),
+                            ResolveResultItem::Unresolveable => {
+                                ModuleResolveResultItem::Unresolveable
+                            }
+                        })
                     }
                 })
                 .try_join()
@@ -639,7 +655,7 @@ impl ResolveResult {
     pub async fn first_asset(self: Vc<Self>) -> Result<Vc<AssetOption>> {
         let this = self.await?;
         Ok(Vc::cell(this.primary.iter().find_map(|item| {
-            if let PrimaryResolveResult::Asset(a) = item {
+            if let ResolveResultItem::Asset(a) = item {
                 Some(*a)
             } else {
                 None
@@ -654,7 +670,7 @@ impl ResolveResult {
             this.primary
                 .iter()
                 .filter_map(|item| {
-                    if let PrimaryResolveResult::Asset(a) = item {
+                    if let ResolveResultItem::Asset(a) = item {
                         Some(*a)
                     } else {
                         None
@@ -1017,7 +1033,7 @@ async fn handle_resolve_plugins(
     let mut new_references = Vec::new();
 
     for primary in result_value.primary.iter() {
-        if let &PrimaryResolveResult::Asset(asset) = primary {
+        if let &ResolveResultItem::Asset(asset) = primary {
             let asset = asset_to_source(asset);
             if let Some(new_result) = apply_plugins_to_path(
                 asset.ident().path().resolve().await?,
@@ -1212,9 +1228,10 @@ async fn resolve_internal(
         Request::Uri {
             protocol,
             remainder,
-        } => ResolveResult::primary(PrimaryResolveResult::OriginalReferenceTypeExternal(
-            format!("{}{}", protocol, remainder),
-        ))
+        } => ResolveResult::primary(ResolveResultItem::OriginalReferenceTypeExternal(format!(
+            "{}{}",
+            protocol, remainder
+        )))
         .into(),
         Request::Unknown { path } => {
             ResolvingIssue {
@@ -1502,11 +1519,9 @@ async fn resolve_alias_field_result(
     field_name: &str,
 ) -> Result<Vc<ResolveResult>> {
     if result.as_bool() == Some(false) {
-        return Ok(ResolveResult::primary_with_affecting_sources(
-            PrimaryResolveResult::Ignore,
-            refs,
-        )
-        .cell());
+        return Ok(
+            ResolveResult::primary_with_affecting_sources(ResolveResultItem::Ignore, refs).cell(),
+        );
     }
     if let Some(value) = result.as_str() {
         return Ok(resolve_internal(

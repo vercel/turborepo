@@ -16,7 +16,7 @@ use turbopack_core::{
     reference::ModuleReference,
     resolve::{
         pattern::Pattern, resolve_raw, AffectingResolvingAssetReference, ModuleResolveResult,
-        PrimaryResolveResult,
+        ResolveResultItem,
     },
     source::{asset_to_source, Source},
     target::{CompileTarget, Platform},
@@ -267,7 +267,7 @@ pub async fn resolve_node_gyp_build_files(
                             true,
                         )
                         .await?;
-                        if let &[PrimaryResolveResult::Asset(asset)] =
+                        if let &[ResolveResultItem::Asset(asset)] =
                             &resolved_prebuilt_file.primary[..]
                         {
                             resolved.insert(asset_to_source(asset).resolve().await?);

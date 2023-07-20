@@ -11,7 +11,9 @@ use turbopack_core::{
         ModuleId,
     },
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
-    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult, PrimaryResolveResult},
+    resolve::{
+        origin::ResolveOrigin, parse::Request, ModuleResolveResult, ModuleResolveResultItem,
+    },
 };
 
 use super::util::{request_to_string, throw_module_not_found_expr};
@@ -136,14 +138,14 @@ impl PatternMapping {
                 )
                 .cell())
             }
-            Some(PrimaryResolveResult::Asset(asset)) => *asset,
-            Some(PrimaryResolveResult::OriginalReferenceExternal) => {
+            Some(ModuleResolveResultItem::Asset(asset)) => *asset,
+            Some(ModuleResolveResultItem::OriginalReferenceExternal) => {
                 return Ok(PatternMapping::OriginalReferenceExternal.cell())
             }
-            Some(PrimaryResolveResult::OriginalReferenceTypeExternal(s)) => {
+            Some(ModuleResolveResultItem::OriginalReferenceTypeExternal(s)) => {
                 return Ok(PatternMapping::OriginalReferenceTypeExternal(s.clone()).cell())
             }
-            Some(PrimaryResolveResult::Ignore) => return Ok(PatternMapping::Ignored.cell()),
+            Some(ModuleResolveResultItem::Ignore) => return Ok(PatternMapping::Ignored.cell()),
             _ => {
                 // TODO implement mapping
                 CodeGenerationIssue {

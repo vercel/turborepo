@@ -17,7 +17,7 @@ use turbopack_core::{
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        ModulePart, ModuleResolveResult, PrimaryResolveResult,
+        ModulePart, ModuleResolveResult, ModuleResolveResultItem,
     },
 };
 
@@ -68,19 +68,19 @@ impl ReferencedAsset {
     ) -> Result<Vc<Self>> {
         for result in resolve_result.await?.primary.iter() {
             match result {
-                PrimaryResolveResult::OriginalReferenceExternal => {
+                ModuleResolveResultItem::OriginalReferenceExternal => {
                     if let Some(request) = request.await?.request() {
                         return Ok(ReferencedAsset::OriginalReferenceTypeExternal(request).cell());
                     } else {
                         return Ok(ReferencedAsset::cell(ReferencedAsset::None));
                     }
                 }
-                PrimaryResolveResult::OriginalReferenceTypeExternal(request) => {
+                ModuleResolveResultItem::OriginalReferenceTypeExternal(request) => {
                     return Ok(
                         ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell(),
                     );
                 }
-                &PrimaryResolveResult::Asset(asset) => {
+                &ModuleResolveResultItem::Asset(asset) => {
                     if let Some(placeable) =
                         Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(asset).await?
                     {
