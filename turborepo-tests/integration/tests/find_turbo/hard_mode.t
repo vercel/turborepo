@@ -20,7 +20,7 @@ It finds repo root and uses correct version
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: supports_skip_infer_and_single_package true (re)
-  --skip-infer build --filter foo --single-package --
+  --skip-infer build --filter foo -vv --single-package --
 
 It respects cwd
   $ ${TESTDIR}/set_version.sh $TESTROOT "1.8.0"
@@ -33,7 +33,7 @@ It respects cwd
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: supports_skip_infer_and_single_package true (re)
-  --skip-infer build --filter foo --single-package --
+  --skip-infer build --filter foo -vv --single-package --
 
 It respects cwd and finds repo root
   $ ${TESTDIR}/set_version.sh $TESTROOT "1.8.0"
@@ -46,4 +46,4 @@ It respects cwd and finds repo root
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: supports_skip_infer_and_single_package true (re)
-  --skip-infer build --filter foo --single-package --
+  --skip-infer build --filter foo -vv --single-package --
