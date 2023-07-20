@@ -12,11 +12,13 @@ use turbopack_core::{
     asset::{Asset, AssetContent},
     file_source::FileSource,
     module::{convert_asset_to_module, Module},
-    reference::AssetReference,
+    raw_module::{RawModule, RawModuleReference},
+    reference::ModuleReference,
     resolve::{
-        pattern::Pattern, resolve_raw, AffectingResolvingAssetReference, PrimaryResolveResult,
-        ResolveResult,
+        pattern::Pattern, resolve_raw, AffectingResolvingAssetReference, ModuleResolveResult,
+        PrimaryResolveResult,
     },
+    source::{asset_to_source, Source},
     target::{CompileTarget, Platform},
 };
 
@@ -59,9 +61,9 @@ impl NodePreGypConfigReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for NodePreGypConfigReference {
+impl ModuleReference for NodePreGypConfigReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         resolve_node_pre_gyp_files(self.context, self.config_file_pattern, self.compile_target)
     }
 }
@@ -84,7 +86,7 @@ pub async fn resolve_node_pre_gyp_files(
     context: Vc<FileSystemPath>,
     config_file_pattern: Vc<Pattern>,
     compile_target: Vc<CompileTarget>,
-) -> Result<Vc<ResolveResult>> {
+) -> Result<Vc<ModuleResolveResult>> {
     lazy_static! {
         static ref NAPI_VERSION_TEMPLATE: Regex =
             Regex::new(r"\{(napi_build_version|node_napi_label)\}")
@@ -108,7 +110,7 @@ pub async fn resolve_node_pre_gyp_files(
                 let config_file_dir = config_file_path.parent();
                 let node_pre_gyp_config: NodePreGypConfigJson =
                     parse_json_rope_with_source_context(config_file.content())?;
-                let mut assets: IndexSet<Vc<Box<dyn Asset>>> = IndexSet::new();
+                let mut sources: IndexSet<Vc<Box<dyn Source>>> = IndexSet::new();
                 for version in node_pre_gyp_config.binary.napi_versions.iter() {
                     let native_binding_path = NAPI_VERSION_TEMPLATE.replace(
                         node_pre_gyp_config.binary.module_path.as_str(),
@@ -145,10 +147,10 @@ pub async fn resolve_node_pre_gyp_files(
                         if let &DirectoryEntry::File(dylib) | &DirectoryEntry::Symlink(dylib) =
                             entry
                         {
-                            assets.insert(Vc::upcast(FileSource::new(dylib)));
+                            sources.insert(Vc::upcast(FileSource::new(dylib)));
                         }
                     }
-                    assets.insert(Vc::upcast(FileSource::new(resolved_file_vc)));
+                    sources.insert(Vc::upcast(FileSource::new(resolved_file_vc)));
                 }
                 for entry in config_asset
                     .ident()
@@ -164,29 +166,32 @@ pub async fn resolve_node_pre_gyp_files(
                 {
                     match *entry {
                         DirectoryEntry::File(dylib) => {
-                            assets.insert(Vc::upcast(FileSource::new(dylib)));
+                            sources.insert(Vc::upcast(FileSource::new(dylib)));
                         }
                         DirectoryEntry::Symlink(dylib) => {
                             let realpath_with_links = dylib.realpath_with_links().await?;
                             for symlink in realpath_with_links.symlinks.iter() {
-                                assets.insert(Vc::upcast(FileSource::new(*symlink)));
+                                sources.insert(Vc::upcast(FileSource::new(*symlink)));
                             }
-                            assets.insert(Vc::upcast(FileSource::new(dylib)));
+                            sources.insert(Vc::upcast(FileSource::new(dylib)));
                         }
                         _ => {}
                     }
                 }
-                return Ok(ResolveResult::assets_with_references(
-                    assets.into_iter().collect(),
-                    vec![Vc::upcast(AffectingResolvingAssetReference::new(
-                        config_file_path,
-                    ))],
+                return Ok(ModuleResolveResult::modules_with_references(
+                    sources
+                        .into_iter()
+                        .map(|source| Vc::upcast(RawModule::new(source)))
+                        .collect(),
+                    vec![Vc::upcast(RawModuleReference::new(Vc::upcast(
+                        AffectingResolvingAssetReference::new(config_file_path),
+                    )))],
                 )
                 .into());
             }
         };
     }
-    Ok(ResolveResult::unresolveable().into())
+    Ok(ModuleResolveResult::unresolveable().into())
 }
 
 #[turbo_tasks::value]
@@ -208,9 +213,9 @@ impl NodeGypBuildReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for NodeGypBuildReference {
+impl ModuleReference for NodeGypBuildReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         resolve_node_gyp_build_files(self.context, self.compile_target)
     }
 }
@@ -231,7 +236,7 @@ impl ValueToString for NodeGypBuildReference {
 pub async fn resolve_node_gyp_build_files(
     context: Vc<FileSystemPath>,
     compile_target: Vc<CompileTarget>,
-) -> Result<Vc<ResolveResult>> {
+) -> Result<Vc<ModuleResolveResult>> {
     lazy_static! {
         static ref GYP_BUILD_TARGET_NAME: Regex =
             Regex::new(r#"['"]target_name['"]\s*:\s*(?:"(.*?)"|'(.*?)')"#)
@@ -240,13 +245,17 @@ pub async fn resolve_node_gyp_build_files(
     let binding_gyp_pat = Pattern::new(Pattern::Constant("binding.gyp".to_owned()));
     let gyp_file = resolve_raw(context, binding_gyp_pat, true).await?;
     if let [PrimaryResolveResult::Asset(binding_gyp)] = &gyp_file.primary[..] {
-        let mut merged_references = gyp_file.references.clone();
+        let mut merged_references = gyp_file
+            .references
+            .iter()
+            .map(|&r| Vc::upcast(RawModuleReference::new(r)))
+            .collect::<Vec<_>>();
         if let AssetContent::File(file) = &*binding_gyp.content().await? {
             if let FileContent::Content(config_file) = &*file.await? {
                 if let Some(captured) =
                     GYP_BUILD_TARGET_NAME.captures(&config_file.content().to_str()?)
                 {
-                    let mut resolved: IndexSet<Vc<Box<dyn Asset>>> =
+                    let mut resolved: IndexSet<Vc<Box<dyn Source>>> =
                         IndexSet::with_capacity(captured.len());
                     for found in captured.iter().skip(1).flatten() {
                         let name = found.as_str();
@@ -257,16 +266,24 @@ pub async fn resolve_node_gyp_build_files(
                             true,
                         )
                         .await?;
-                        if let [PrimaryResolveResult::Asset(asset)] =
+                        if let &[PrimaryResolveResult::Asset(asset)] =
                             &resolved_prebuilt_file.primary[..]
                         {
-                            resolved.insert(asset.resolve().await?);
-                            merged_references.extend_from_slice(&resolved_prebuilt_file.references);
+                            resolved.insert(asset_to_source(asset).resolve().await?);
+                            merged_references.extend(
+                                resolved_prebuilt_file
+                                    .references
+                                    .iter()
+                                    .map(|&r| Vc::upcast(RawModuleReference::new(r))),
+                            );
                         }
                     }
                     if !resolved.is_empty() {
-                        return Ok(ResolveResult::assets_with_references(
-                            resolved.into_iter().collect(),
+                        return Ok(ModuleResolveResult::assets_with_references(
+                            resolved
+                                .into_iter()
+                                .map(|source| Vc::upcast(RawModule::new(source)))
+                                .collect(),
                             merged_references,
                         )
                         .into());
@@ -288,7 +305,8 @@ pub async fn resolve_node_gyp_build_files(
         ])
         .into(),
         true,
-    ))
+    )
+    .as_raw_module_result())
 }
 
 #[turbo_tasks::value]
@@ -307,9 +325,9 @@ impl NodeBindingsReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for NodeBindingsReference {
+impl ModuleReference for NodeBindingsReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         resolve_node_bindings_files(self.context, self.file_name.clone())
     }
 }
@@ -329,7 +347,7 @@ impl ValueToString for NodeBindingsReference {
 pub async fn resolve_node_bindings_files(
     context: Vc<FileSystemPath>,
     file_name: String,
-) -> Result<Vc<ResolveResult>> {
+) -> Result<Vc<ModuleResolveResult>> {
     lazy_static! {
         static ref BINDINGS_TRY: [&'static str; 5] = [
             "build/bindings",
@@ -363,21 +381,21 @@ pub async fn resolve_node_bindings_files(
         }
         root_context = parent;
     }
-    let bindings_try: Vec<Vc<Box<dyn Asset>>> = BINDINGS_TRY
+    let bindings_try: Vec<Vc<Box<dyn Module>>> = BINDINGS_TRY
         .iter()
         .map(|try_dir| {
-            Vc::upcast(FileSource::new(
+            Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(
                 root_context.join(format!("{}/{}", try_dir, &file_name)),
-            ))
+            ))))
         })
         .collect();
 
-    Ok(ResolveResult::assets_with_references(
+    Ok(ModuleResolveResult::modules_with_references(
         bindings_try,
         vec![Vc::upcast(FileSourceReference::new(
             Vc::upcast(FileSource::new(root_context)),
             Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(file_name)]).into(),
         ))],
     )
-    .into())
+    .cell())
 }

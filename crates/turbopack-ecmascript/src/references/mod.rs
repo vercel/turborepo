@@ -51,7 +51,7 @@ use turbopack_core::{
     error::PrettyPrintError,
     issue::{IssueExt, IssueSource, OptionIssueSource},
     module::Module,
-    reference::{AssetReference, AssetReferences, SourceMapReference},
+    reference::{ModuleReference, ModuleReferences, SourceMapReference},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         find_context_file,
@@ -127,7 +127,7 @@ use crate::{
 
 #[turbo_tasks::value(shared)]
 pub struct AnalyzeEcmascriptModuleResult {
-    pub references: Vc<AssetReferences>,
+    pub references: Vc<ModuleReferences>,
     pub code_generation: Vc<CodeGenerateables>,
     pub exports: Vc<EcmascriptExports>,
     pub has_top_level_await: bool,
@@ -164,7 +164,7 @@ impl AnalyzeEcmascriptModuleResult {
 /// A temporary analysis result builder to pass around, to be turned into an
 /// `Vc<AnalyzeEcmascriptModuleResult>` eventually.
 pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
-    references: IndexSet<Vc<Box<dyn AssetReference>>>,
+    references: IndexSet<Vc<Box<dyn ModuleReference>>>,
     code_gens: Vec<CodeGen>,
     exports: EcmascriptExports,
     has_top_level_await: bool,
@@ -185,7 +185,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     /// Adds an asset reference to the analysis result.
     pub fn add_reference<R>(&mut self, reference: Vc<R>)
     where
-        R: Upcast<Box<dyn AssetReference>>,
+        R: Upcast<Box<dyn ModuleReference>>,
     {
         self.references.insert(Vc::upcast(reference));
     }

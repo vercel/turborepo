@@ -23,7 +23,7 @@ use turbopack_core::{
     },
     module::Module,
     output::OutputAssets,
-    reference::AssetReference,
+    reference::ModuleReference,
 };
 
 use self::content::ecmascript_chunk_content;

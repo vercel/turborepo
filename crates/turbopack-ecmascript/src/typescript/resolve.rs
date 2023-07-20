@@ -10,7 +10,7 @@ use turbopack_core::{
     file_source::FileSource,
     ident::AssetIdent,
     issue::{Issue, IssueExt, IssueSeverity, OptionIssueSource},
-    reference::AssetReference,
+    reference::ModuleReference,
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
         handle_resolve_error,
@@ -22,7 +22,7 @@ use turbopack_core::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
         pattern::{Pattern, QueryMap},
-        resolve, AliasPattern, ResolveResult,
+        resolve, AliasPattern, ModuleResolveResult,
     },
     source::{option_asset_to_source, OptionSource, Source},
 };
@@ -327,7 +327,7 @@ pub async fn apply_tsconfig_resolve_options(
 pub async fn type_resolve(
     origin: Vc<Box<dyn ResolveOrigin>>,
     request: Vc<Request>,
-) -> Result<Vc<ResolveResult>> {
+) -> Result<Vc<ModuleResolveResult>> {
     let ty = Value::new(ReferenceType::TypeScript(
         TypeScriptReferenceSubType::Undefined,
     ));
@@ -357,9 +357,10 @@ pub async fn type_resolve(
     let result = if let Some(types_request) = types_request {
         let result1 = resolve(context_path, request, options);
         if !*result1.is_unresolveable().await? {
-            return Ok(result1);
+            result1
+        } else {
+            resolve(context_path, types_request, options)
         }
-        resolve(context_path, types_request, options)
     } else {
         resolve(context_path, request, options)
     };
@@ -383,9 +384,9 @@ pub struct TypescriptTypesAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for TypescriptTypesAssetReference {
+impl ModuleReference for TypescriptTypesAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         type_resolve(self.origin, self.request)
     }
 }

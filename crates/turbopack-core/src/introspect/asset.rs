@@ -9,7 +9,7 @@ use crate::{
     chunk::{ChunkableModuleReference, ChunkingType},
     module::Module,
     output::{OutputAsset, OutputAssets},
-    reference::{AssetReference, AssetReferences},
+    reference::{AssetReference, AssetReferences, ModuleReference, ModuleReferences},
     resolve::PrimaryResolveResult,
     source::Source,
 };
@@ -102,7 +102,7 @@ impl Introspectable for IntrospectableAsset {
             {
                 Vc::cell(Default::default())
             } else if let Some(module) = Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await? {
-                children_from_asset_references(module.references())
+                children_from_module_references(module.references())
             } else if let Some(output_asset) =
                 Vc::try_resolve_downcast::<Box<dyn OutputAsset>>(asset).await?
             {
@@ -136,6 +136,23 @@ pub async fn content_to_details(content: Vc<AssetContent>) -> Result<Vc<String>>
 #[turbo_tasks::function]
 pub async fn children_from_asset_references(
     references: Vc<AssetReferences>,
+) -> Result<Vc<IntrospectableChildren>> {
+    let key = reference_ty();
+    let mut children = IndexSet::new();
+    let references = references.await?;
+    for reference in &*references {
+        for result in reference.resolve_reference().await?.primary.iter() {
+            if let PrimaryResolveResult::Asset(asset) = result {
+                children.insert((key, IntrospectableAsset::new(*asset)));
+            }
+        }
+    }
+    Ok(Vc::cell(children))
+}
+
+#[turbo_tasks::function]
+pub async fn children_from_module_references(
+    references: Vc<ModuleReferences>,
 ) -> Result<Vc<IntrospectableChildren>> {
     let key = reference_ty();
     let mut children = IndexSet::new();

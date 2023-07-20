@@ -3,7 +3,7 @@ use indexmap::IndexSet;
 use turbo_tasks::Vc;
 
 use crate::{
-    asset::Asset, ident::AssetIdent, raw_module::RawModule, reference::AssetReferences,
+    asset::Asset, ident::AssetIdent, raw_module::RawModule, reference::ModuleReferences,
     source::Source,
 };
 
@@ -17,8 +17,8 @@ pub trait Module: Asset {
 
     /// Other things (most likely [Asset]s) referenced from this [Module].
     // TODO refactor this to ensure that only [Module]s can be referenced
-    fn references(self: Vc<Self>) -> Vc<AssetReferences> {
-        AssetReferences::empty()
+    fn references(self: Vc<Self>) -> Vc<ModuleReferences> {
+        ModuleReferences::empty()
     }
 }
 

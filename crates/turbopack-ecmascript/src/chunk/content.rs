@@ -6,7 +6,7 @@ use turbopack_core::{
         availability_info::AvailabilityInfo, chunk_content, chunk_content_split, Chunk,
         ChunkContentResult,
     },
-    reference::AssetReference,
+    reference::ModuleReference,
 };
 
 use super::{
@@ -19,7 +19,7 @@ use super::{
 pub struct EcmascriptChunkContent {
     pub chunk_items: Vec<Vc<Box<dyn EcmascriptChunkItem>>>,
     pub chunks: Vec<Vc<Box<dyn Chunk>>>,
-    pub external_asset_references: Vec<Vc<Box<dyn AssetReference>>>,
+    pub external_asset_references: Vec<Vc<Box<dyn ModuleReference>>>,
     pub availability_info: AvailabilityInfo,
 }
 
@@ -81,7 +81,7 @@ async fn ecmascript_chunk_content_internal(
 
     let mut all_chunk_items = IndexSet::<Vc<Box<dyn EcmascriptChunkItem>>>::new();
     let mut all_chunks = IndexSet::<Vc<Box<dyn Chunk>>>::new();
-    let mut all_external_asset_references = IndexSet::<Vc<Box<dyn AssetReference>>>::new();
+    let mut all_external_asset_references = IndexSet::<Vc<Box<dyn ModuleReference>>>::new();
 
     for content in contents {
         let EcmascriptChunkContent {

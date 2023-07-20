@@ -39,8 +39,8 @@ use crate::{
     ident::AssetIdent,
     module::{Module, Modules},
     output::OutputAssets,
-    reference::{AssetReference, AssetReferences},
-    resolve::{PrimaryResolveResult, ResolveResult},
+    reference::{ModuleReference, ModuleReferences},
+    resolve::{ModuleResolveResult, PrimaryResolveResult},
 };
 
 /// A module id, which can be a number or string
@@ -185,14 +185,14 @@ pub enum ChunkingType {
 #[turbo_tasks::value(transparent)]
 pub struct ChunkingTypeOption(Option<ChunkingType>);
 
-/// An [AssetReference] implementing this trait and returning true for
+/// A [ModuleReference] implementing this trait and returning true for
 /// [ChunkableModuleReference::is_chunkable] are considered as potentially
 /// chunkable references. When all [Asset]s of such a reference implement
 /// [ChunkableModule] they are placed in [Chunk]s during chunking.
 /// They are even potentially placed in the same [Chunk] when a chunk type
 /// specific interface is implemented.
 #[turbo_tasks::value_trait]
-pub trait ChunkableModuleReference: AssetReference + ValueToString {
+pub trait ChunkableModuleReference: ModuleReference + ValueToString {
     fn chunking_type(self: Vc<Self>) -> Vc<ChunkingTypeOption> {
         Vc::cell(Some(ChunkingType::default()))
     }
@@ -226,16 +226,16 @@ impl ChunkGroupReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for ChunkGroupReference {
+impl ModuleReference for ChunkGroupReference {
     #[turbo_tasks::function]
-    async fn resolve_reference(self: Vc<Self>) -> Result<Vc<ResolveResult>> {
+    async fn resolve_reference(self: Vc<Self>) -> Result<Vc<ModuleResolveResult>> {
         let set = self
             .chunks()
             .await?
             .iter()
             .map(|&c| Vc::upcast(c))
             .collect();
-        Ok(ResolveResult::assets(set).into())
+        Ok(ModuleResolveResult::assets(set).cell())
     }
 }
 
@@ -253,7 +253,7 @@ impl ValueToString for ChunkGroupReference {
 pub struct ChunkContentResult<I> {
     pub chunk_items: Vec<I>,
     pub chunks: Vec<Vc<Box<dyn Chunk>>>,
-    pub external_asset_references: Vec<Vc<Box<dyn AssetReference>>>,
+    pub external_asset_references: Vec<Vc<Box<dyn ModuleReference>>>,
     pub availability_info: AvailabilityInfo,
 }
 
@@ -308,7 +308,7 @@ enum ChunkContentGraphNode<I> {
     AvailableAsset(Vc<Box<dyn Module>>),
     // Chunks that are loaded in parallel to the current chunk
     Chunk(Vc<Box<dyn Chunk>>),
-    ExternalAssetReference(Vc<Box<dyn AssetReference>>),
+    ExternalModuleReference(Vc<Box<dyn ModuleReference>>),
 }
 
 #[derive(Clone, Copy)]
@@ -321,7 +321,7 @@ struct ChunkContentContext {
 
 async fn reference_to_graph_nodes<I>(
     context: ChunkContentContext,
-    reference: Vc<Box<dyn AssetReference>>,
+    reference: Vc<Box<dyn ModuleReference>>,
 ) -> Result<
     Vec<(
         Option<(Vc<Box<dyn Module>>, ChunkingType)>,
@@ -336,14 +336,14 @@ where
     else {
         return Ok(vec![(
             None,
-            ChunkContentGraphNode::ExternalAssetReference(reference),
+            ChunkContentGraphNode::ExternalModuleReference(reference),
         )]);
     };
 
     let Some(chunking_type) = *chunkable_asset_reference.chunking_type().await? else {
         return Ok(vec![(
             None,
-            ChunkContentGraphNode::ExternalAssetReference(reference),
+            ChunkContentGraphNode::ExternalModuleReference(reference),
         )]);
     };
 
@@ -389,7 +389,7 @@ where
                 _ => {
                     return Ok(vec![(
                         None,
-                        ChunkContentGraphNode::ExternalAssetReference(reference),
+                        ChunkContentGraphNode::ExternalModuleReference(reference),
                     )]);
                 }
             };
@@ -474,7 +474,7 @@ where
                 } else {
                     return Ok(vec![(
                         None,
-                        ChunkContentGraphNode::ExternalAssetReference(reference),
+                        ChunkContentGraphNode::ExternalModuleReference(reference),
                     )]);
                 }
             }
@@ -647,7 +647,7 @@ where
             ChunkContentGraphNode::Chunk(chunk) => {
                 chunks.push(chunk);
             }
-            ChunkContentGraphNode::ExternalAssetReference(reference) => {
+            ChunkContentGraphNode::ExternalModuleReference(reference) => {
                 external_asset_references.push(reference);
             }
         }
@@ -671,7 +671,7 @@ pub trait ChunkItem {
     /// [Asset].
     /// TODO(alexkirsz) This should have a default impl that returns empty
     /// references.
-    fn references(self: Vc<Self>) -> Vc<AssetReferences>;
+    fn references(self: Vc<Self>) -> Vc<ModuleReferences>;
 }
 
 #[turbo_tasks::value(transparent)]

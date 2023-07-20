@@ -26,8 +26,10 @@ use crate::{
     asset::{Asset, AssetOption, Assets},
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt},
+    module::Module,
     package_json::{read_package_json, PackageJsonIssue},
-    reference::AssetReference,
+    raw_module::{RawModule, RawModuleReference},
+    reference::{AssetReference, ModuleReference},
     reference_type::ReferenceType,
     resolve::{
         pattern::{read_matches, PatternMatch},
@@ -62,6 +64,341 @@ pub enum PrimaryResolveResult {
     Empty,
     Custom(u8),
     Unresolveable,
+}
+
+#[turbo_tasks::value(shared)]
+#[derive(Clone, Debug)]
+pub struct ModuleResolveResult {
+    pub primary: Vec<PrimaryResolveResult>,
+    pub references: Vec<Vc<Box<dyn ModuleReference>>>,
+}
+
+impl Default for ModuleResolveResult {
+    fn default() -> Self {
+        ModuleResolveResult::unresolveable()
+    }
+}
+
+impl ModuleResolveResult {
+    pub fn unresolveable() -> Self {
+        ModuleResolveResult {
+            primary: Vec::new(),
+            references: Vec::new(),
+        }
+    }
+
+    pub fn unresolveable_with_references(
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: Vec::new(),
+            references,
+        }
+    }
+
+    pub fn primary(result: PrimaryResolveResult) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: vec![result],
+            references: Vec::new(),
+        }
+    }
+
+    pub fn primary_with_references(
+        result: PrimaryResolveResult,
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: vec![result],
+            references,
+        }
+    }
+
+    pub fn asset(asset: Vc<Box<dyn Asset>>) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: vec![PrimaryResolveResult::Asset(asset)],
+            references: Vec::new(),
+        }
+    }
+
+    pub fn module(module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: vec![PrimaryResolveResult::Asset(Vc::upcast(module))],
+            references: Vec::new(),
+        }
+    }
+
+    pub fn asset_with_references(
+        asset: Vc<Box<dyn Asset>>,
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: vec![PrimaryResolveResult::Asset(asset)],
+            references,
+        }
+    }
+
+    pub fn module_with_references(
+        module: Vc<Box<dyn Module>>,
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: vec![PrimaryResolveResult::Asset(Vc::upcast(module))],
+            references,
+        }
+    }
+
+    pub fn assets(assets: Vec<Vc<Box<dyn Asset>>>) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: assets
+                .into_iter()
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references: Vec::new(),
+        }
+    }
+
+    pub fn modules(modules: Vec<Vc<Box<dyn Module>>>) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: modules
+                .into_iter()
+                .map(Vc::upcast)
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references: Vec::new(),
+        }
+    }
+
+    pub fn assets_with_references(
+        assets: Vec<Vc<Box<dyn Asset>>>,
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: assets
+                .into_iter()
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references,
+        }
+    }
+    pub fn modules_with_references(
+        modules: Vec<Vc<Box<dyn Module>>>,
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: modules
+                .into_iter()
+                .map(Vc::upcast)
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references,
+        }
+    }
+
+    pub fn add_reference_ref(&mut self, reference: Vc<Box<dyn ModuleReference>>) {
+        self.references.push(reference);
+    }
+
+    pub fn get_references(&self) -> &Vec<Vc<Box<dyn ModuleReference>>> {
+        &self.references
+    }
+
+    fn clone_with_references(
+        &self,
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: self.primary.clone(),
+            references,
+        }
+    }
+
+    pub fn merge_alternatives(&mut self, other: &ModuleResolveResult) {
+        self.primary.extend(other.primary.iter().cloned());
+        self.references.extend(other.references.iter().copied());
+    }
+
+    pub fn is_unresolveable_ref(&self) -> bool {
+        self.primary.is_empty()
+    }
+
+    pub async fn map<A, AF, R, RF>(&self, asset_fn: A, reference_fn: R) -> Result<Self>
+    where
+        A: Fn(Vc<Box<dyn Asset>>) -> AF,
+        AF: Future<Output = Result<Vc<Box<dyn Asset>>>>,
+        R: Fn(Vc<Box<dyn ModuleReference>>) -> RF,
+        RF: Future<Output = Result<Vc<Box<dyn ModuleReference>>>>,
+    {
+        Ok(Self {
+            primary: self
+                .primary
+                .iter()
+                .cloned()
+                .map(|result| {
+                    let asset_fn = &asset_fn;
+                    async move {
+                        if let PrimaryResolveResult::Asset(asset) = result {
+                            Ok(PrimaryResolveResult::Asset(asset_fn(asset).await?))
+                        } else {
+                            Ok(result)
+                        }
+                    }
+                })
+                .try_join()
+                .await?,
+            references: self
+                .references
+                .iter()
+                .copied()
+                .map(reference_fn)
+                .try_join()
+                .await?,
+        })
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ModuleResolveResult {
+    #[turbo_tasks::function]
+    pub async fn with_reference(
+        self: Vc<Self>,
+        reference: Vc<Box<dyn ModuleReference>>,
+    ) -> Result<Vc<Self>> {
+        let mut this = self.await?.clone_value();
+        this.add_reference_ref(reference);
+        Ok(this.into())
+    }
+
+    #[turbo_tasks::function]
+    pub async fn with_references(
+        self: Vc<Self>,
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> Result<Vc<Self>> {
+        let mut this = self.await?.clone_value();
+        for reference in references {
+            this.add_reference_ref(reference);
+        }
+        Ok(this.into())
+    }
+
+    /// Returns the first [ModuleResolveResult] that is not
+    /// [ModuleResolveResult::Unresolveable] in the given list, while keeping
+    /// track of all the references in all the [ModuleResolveResult]s.
+    #[turbo_tasks::function]
+    pub async fn select_first(results: Vec<Vc<ModuleResolveResult>>) -> Result<Vc<Self>> {
+        let mut references = vec![];
+        for result in &results {
+            references.extend(result.await?.get_references());
+        }
+        for result in results {
+            let result_ref = result.await?;
+            if !result_ref.is_unresolveable_ref() {
+                return Ok(result_ref.clone_with_references(references).cell());
+            }
+        }
+        Ok(ModuleResolveResult::unresolveable_with_references(references).into())
+    }
+
+    #[turbo_tasks::function]
+    pub async fn alternatives(results: Vec<Vc<ModuleResolveResult>>) -> Result<Vc<Self>> {
+        if results.len() == 1 {
+            return Ok(results.into_iter().next().unwrap());
+        }
+        let mut iter = results.into_iter().try_join().await?.into_iter();
+        if let Some(current) = iter.next() {
+            let mut current = current.clone_value();
+            for result in iter {
+                // For clippy -- This explicit deref is necessary
+                let other = &*result;
+                current.merge_alternatives(other);
+            }
+            Ok(Self::cell(current))
+        } else {
+            Ok(Self::cell(ModuleResolveResult::unresolveable()))
+        }
+    }
+
+    #[turbo_tasks::function]
+    pub async fn alternatives_with_references(
+        results: Vec<Vc<ModuleResolveResult>>,
+        references: Vec<Vc<Box<dyn ModuleReference>>>,
+    ) -> Result<Vc<Self>> {
+        if references.is_empty() {
+            return Ok(Self::alternatives(results));
+        }
+        if results.len() == 1 {
+            return Ok(results
+                .into_iter()
+                .next()
+                .unwrap()
+                .with_references(references));
+        }
+        let mut iter = results.into_iter().try_join().await?.into_iter();
+        if let Some(current) = iter.next() {
+            let mut current = current.clone_value();
+            for result in iter {
+                // For clippy -- This explicit deref is necessary
+                let other = &*result;
+                current.merge_alternatives(other);
+            }
+            current.references.extend(references);
+            Ok(Self::cell(current))
+        } else {
+            Ok(Self::cell(
+                ModuleResolveResult::unresolveable_with_references(references),
+            ))
+        }
+    }
+
+    #[turbo_tasks::function]
+    pub async fn is_unresolveable(self: Vc<Self>) -> Result<Vc<bool>> {
+        let this = self.await?;
+        Ok(Vc::cell(this.is_unresolveable_ref()))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn first_asset(self: Vc<Self>) -> Result<Vc<AssetOption>> {
+        let this = self.await?;
+        Ok(Vc::cell(this.primary.iter().find_map(|item| {
+            if let PrimaryResolveResult::Asset(a) = item {
+                Some(*a)
+            } else {
+                None
+            }
+        })))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn primary_assets(self: Vc<Self>) -> Result<Vc<Assets>> {
+        let this = self.await?;
+        Ok(Vc::cell(
+            this.primary
+                .iter()
+                .filter_map(|item| {
+                    if let PrimaryResolveResult::Asset(a) = item {
+                        Some(*a)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        ))
+    }
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct ModuleResolveResultOption(Option<Vc<ModuleResolveResult>>);
+
+#[turbo_tasks::value_impl]
+impl ModuleResolveResultOption {
+    #[turbo_tasks::function]
+    pub fn some(result: Vc<ModuleResolveResult>) -> Vc<Self> {
+        ModuleResolveResultOption(Some(result)).cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn none() -> Vc<Self> {
+        ModuleResolveResultOption(None).cell()
+    }
 }
 
 #[turbo_tasks::value(shared)]
@@ -208,10 +545,62 @@ impl ResolveResult {
                 .await?,
         })
     }
+
+    pub async fn map_module<A, AF, R, RF>(
+        &self,
+        asset_fn: A,
+        reference_fn: R,
+    ) -> Result<ModuleResolveResult>
+    where
+        A: Fn(Vc<Box<dyn Asset>>) -> AF,
+        AF: Future<Output = Result<Vc<Box<dyn Module>>>>,
+        R: Fn(Vc<Box<dyn AssetReference>>) -> RF,
+        RF: Future<Output = Result<Vc<Box<dyn ModuleReference>>>>,
+    {
+        Ok(ModuleResolveResult {
+            primary: self
+                .primary
+                .iter()
+                .cloned()
+                .map(|result| {
+                    let asset_fn = &asset_fn;
+                    async move {
+                        if let PrimaryResolveResult::Asset(asset) = result {
+                            Ok(PrimaryResolveResult::Asset(Vc::upcast(
+                                asset_fn(asset).await?,
+                            )))
+                        } else {
+                            Ok(result)
+                        }
+                    }
+                })
+                .try_join()
+                .await?,
+            references: self
+                .references
+                .iter()
+                .copied()
+                .map(reference_fn)
+                .try_join()
+                .await?,
+        })
+    }
 }
 
 #[turbo_tasks::value_impl]
 impl ResolveResult {
+    #[turbo_tasks::function]
+    pub async fn as_raw_module_result(self: Vc<Self>) -> Result<Vc<ModuleResolveResult>> {
+        Ok(self
+            .await?
+            .map_module(
+                |asset| async move { Ok(Vc::upcast(RawModule::new(asset_to_source(asset)))) },
+                |reference| async move { Ok(Vc::upcast(RawModuleReference::new(reference))) },
+            )
+            .await?
+            .cell())
+    }
+
     #[turbo_tasks::function]
     pub async fn with_reference(
         self: Vc<Self>,
@@ -602,7 +991,7 @@ pub async fn resolve_raw(
                 .map(|p| Vc::upcast(AffectingResolvingAssetReference::new(*p)))
                 .collect(),
         )
-        .into())
+        .cell())
     }
     let mut results = Vec::new();
     let pat = path.await?;
@@ -1396,14 +1785,14 @@ impl ValueToString for AffectingResolvingAssetReference {
 }
 
 pub async fn handle_resolve_error(
-    result: Vc<ResolveResult>,
+    result: Vc<ModuleResolveResult>,
     reference_type: Value<ReferenceType>,
     origin_path: Vc<FileSystemPath>,
     request: Vc<Request>,
     resolve_options: Vc<ResolveOptions>,
     source: Vc<OptionIssueSource>,
     severity: Vc<IssueSeverity>,
-) -> Result<Vc<ResolveResult>> {
+) -> Result<Vc<ModuleResolveResult>> {
     Ok(match result.is_unresolveable().await {
         Ok(unresolveable) => {
             if *unresolveable {
@@ -1433,7 +1822,7 @@ pub async fn handle_resolve_error(
             }
             .cell()
             .emit();
-            ResolveResult::unresolveable().into()
+            ModuleResolveResult::unresolveable().cell()
         }
     })
 }

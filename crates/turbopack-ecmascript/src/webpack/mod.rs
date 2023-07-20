@@ -6,12 +6,13 @@ use turbopack_core::{
     file_source::FileSource,
     ident::AssetIdent,
     module::Module,
-    reference::{AssetReference, AssetReferences},
+    raw_module::RawModuleReference,
+    reference::{ModuleReference, ModuleReferences},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        resolve, ResolveResult,
+        resolve, ModuleResolveResult,
     },
     source::{asset_to_source, Source},
 };
@@ -59,7 +60,7 @@ impl Module for WebpackModuleAsset {
     }
 
     #[turbo_tasks::function]
-    fn references(&self) -> Vc<AssetReferences> {
+    fn references(&self) -> Vc<ModuleReferences> {
         module_references(self.source, self.runtime, self.transforms)
     }
 }
@@ -81,9 +82,9 @@ pub struct WebpackChunkAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for WebpackChunkAssetReference {
+impl ModuleReference for WebpackChunkAssetReference {
     #[turbo_tasks::function]
-    async fn resolve_reference(&self) -> Result<Vc<ResolveResult>> {
+    async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
         let runtime = self.runtime.await?;
         Ok(match &*runtime {
             WebpackRuntime::Webpack5 {
@@ -99,14 +100,14 @@ impl AssetReference for WebpackChunkAssetReference {
                 let filename = format!("./chunks/{}.js", chunk_id);
                 let source = Vc::upcast(FileSource::new(context_path.join(filename)));
 
-                ResolveResult::asset(Vc::upcast(WebpackModuleAsset::new(
+                ModuleResolveResult::module(Vc::upcast(WebpackModuleAsset::new(
                     source,
                     self.runtime,
                     self.transforms,
                 )))
                 .into()
             }
-            WebpackRuntime::None => ResolveResult::unresolveable().into(),
+            WebpackRuntime::None => ModuleResolveResult::unresolveable().into(),
         })
     }
 }
@@ -132,10 +133,10 @@ pub struct WebpackEntryAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for WebpackEntryAssetReference {
+impl ModuleReference for WebpackEntryAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
-        ResolveResult::asset(Vc::upcast(WebpackModuleAsset::new(
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::module(Vc::upcast(WebpackModuleAsset::new(
             self.source,
             self.runtime,
             self.transforms,
@@ -161,9 +162,9 @@ pub struct WebpackRuntimeAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for WebpackRuntimeAssetReference {
+impl ModuleReference for WebpackRuntimeAssetReference {
     #[turbo_tasks::function]
-    async fn resolve_reference(&self) -> Result<Vc<ResolveResult>> {
+    async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
         let ty = Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined));
         let options = self.origin.resolve_options(ty.clone());
 
@@ -177,7 +178,7 @@ impl AssetReference for WebpackRuntimeAssetReference {
 
         Ok(resolved
             .await?
-            .map(
+            .map_module(
                 |source| async move {
                     Ok(Vc::upcast(WebpackModuleAsset::new(
                         asset_to_source(source),
@@ -185,7 +186,7 @@ impl AssetReference for WebpackRuntimeAssetReference {
                         self.transforms,
                     )))
                 },
-                |r| async move { Ok(r) },
+                |r| async move { Ok(Vc::upcast(RawModuleReference::new(r))) },
             )
             .await?
             .cell())

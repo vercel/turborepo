@@ -23,7 +23,7 @@ use turbopack_core::{
     },
     module::Module,
     output::{OutputAsset, OutputAssets},
-    reference::AssetReference,
+    reference::ModuleReference,
     source_map::{GenerateSourceMap, OptionSourceMap},
 };
 use writer::expand_imports;
@@ -192,7 +192,7 @@ impl GenerateSourceMap for CssChunkContent {
 pub struct CssChunkContentResult {
     pub chunk_items: Vec<Vc<Box<dyn CssChunkItem>>>,
     pub chunks: Vec<Vc<Box<dyn Chunk>>>,
-    pub external_asset_references: Vec<Vc<Box<dyn AssetReference>>>,
+    pub external_asset_references: Vec<Vc<Box<dyn ModuleReference>>>,
 }
 
 impl From<ChunkContentResult<Vc<Box<dyn CssChunkItem>>>> for CssChunkContentResult {
@@ -224,7 +224,7 @@ async fn css_chunk_content(
 
     let mut all_chunk_items = IndexSet::<Vc<Box<dyn CssChunkItem>>>::new();
     let mut all_chunks = IndexSet::<Vc<Box<dyn Chunk>>>::new();
-    let mut all_external_asset_references = IndexSet::<Vc<Box<dyn AssetReference>>>::new();
+    let mut all_external_asset_references = IndexSet::<Vc<Box<dyn ModuleReference>>>::new();
 
     for content in contents {
         let CssChunkContentResult {

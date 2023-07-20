@@ -42,11 +42,11 @@ use turbopack_core::{
     issue::{Issue, IssueExt},
     module::Module,
     output::OutputAsset,
-    raw_module::RawModule,
+    raw_module::{RawModule, RawModuleReference},
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType},
     resolve::{
         options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
-        ResolveResult,
+        ModuleResolveResult, ResolveResult,
     },
     source::{asset_to_source, Source},
 };
@@ -421,7 +421,7 @@ impl AssetContext for ModuleAssetContext {
         request: Vc<Request>,
         resolve_options: Vc<ResolveOptions>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<Vc<ResolveResult>> {
+    ) -> Result<Vc<ModuleResolveResult>> {
         let context_path = origin_path.parent().resolve().await?;
 
         let result = resolve(context_path, request, resolve_options);
@@ -444,10 +444,10 @@ impl AssetContext for ModuleAssetContext {
         self: Vc<Self>,
         result: Vc<ResolveResult>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<Vc<ResolveResult>> {
+    ) -> Result<Vc<ModuleResolveResult>> {
         Ok(result
             .await?
-            .map(
+            .map_module(
                 |a| {
                     let reference_type = reference_type.clone();
                     async move {
@@ -458,7 +458,7 @@ impl AssetContext for ModuleAssetContext {
                         ))
                     }
                 },
-                |i| async move { Ok(i) },
+                |i| async move { Ok(Vc::upcast(RawModuleReference::new(i))) },
             )
             .await?
             .into())

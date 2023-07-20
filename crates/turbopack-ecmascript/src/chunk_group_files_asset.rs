@@ -15,7 +15,7 @@ use turbopack_core::{
     },
     module::Module,
     output::{OutputAsset, OutputAssets},
-    reference::{AssetReference, AssetReferences, SingleAssetReference},
+    reference::{ModuleReference, ModuleReferences, SingleModuleReference},
 };
 
 use crate::{
@@ -60,18 +60,17 @@ impl Module for ChunkGroupFilesAsset {
     }
 
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<Vc<AssetReferences>> {
-        let mut references: Vec<Vc<Box<dyn AssetReference>>> = vec![Vc::upcast(
-            SingleAssetReference::new(Vc::upcast(self.module), module_description()),
+    async fn references(&self) -> Result<Vc<ModuleReferences>> {
+        let mut references: Vec<Vc<Box<dyn ModuleReference>>> = vec![Vc::upcast(
+            SingleModuleReference::new(Vc::upcast(self.module), module_description()),
         )];
 
         if let Some(runtime_entries) = self.runtime_entries {
             references.extend(runtime_entries.await?.iter().map(|&entry| {
-                let reference: Vc<Box<dyn AssetReference>> = Vc::upcast(SingleAssetReference::new(
+                Vc::upcast(SingleModuleReference::new(
                     Vc::upcast(entry),
                     runtime_entry_description(),
-                ));
-                reference
+                ))
             }));
         }
 
@@ -207,7 +206,7 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
     }
 
     #[turbo_tasks::function]
-    async fn references(self: Vc<Self>) -> Result<Vc<AssetReferences>> {
+    async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
         let chunks = self.chunks();
 
         Ok(Vc::cell(
@@ -216,7 +215,7 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
                 .iter()
                 .copied()
                 .map(|chunk| {
-                    SingleAssetReference::new(
+                    SingleModuleReference::new(
                         Vc::upcast(chunk),
                         chunk_group_chunk_reference_description(),
                     )

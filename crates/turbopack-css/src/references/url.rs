@@ -9,9 +9,9 @@ use turbopack_core::{
     ident::AssetIdent,
     issue::{IssueSeverity, IssueSource},
     output::OutputAsset,
-    reference::AssetReference,
+    reference::ModuleReference,
     reference_type::UrlReferenceSubType,
-    resolve::{origin::ResolveOrigin, parse::Request, PrimaryResolveResult, ResolveResult},
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult, PrimaryResolveResult},
 };
 use turbopack_ecmascript::resolve::url_resolve;
 
@@ -76,9 +76,9 @@ impl UrlAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for UrlAssetReference {
+impl ModuleReference for UrlAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         url_resolve(
             self.origin,
             self.request,

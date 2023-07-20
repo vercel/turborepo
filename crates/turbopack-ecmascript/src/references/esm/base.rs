@@ -12,12 +12,12 @@ use turbopack_core::{
     },
     issue::{IssueSeverity, OptionIssueSource},
     module::Module,
-    reference::AssetReference,
+    reference::ModuleReference,
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        ModulePart, PrimaryResolveResult, ResolveResult,
+        ModulePart, ModuleResolveResult, PrimaryResolveResult,
     },
 };
 
@@ -63,7 +63,7 @@ impl ReferencedAsset {
 impl ReferencedAsset {
     #[turbo_tasks::function]
     pub async fn from_resolve_result(
-        resolve_result: Vc<ResolveResult>,
+        resolve_result: Vc<ModuleResolveResult>,
         request: Vc<Request>,
     ) -> Result<Vc<Self>> {
         for result in resolve_result.await?.primary.iter() {
@@ -145,9 +145,9 @@ impl EsmAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for EsmAssetReference {
+impl ModuleReference for EsmAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         let ty = Value::new(match &self.export_name {
             Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
             None => EcmaScriptModulesReferenceSubType::Undefined,

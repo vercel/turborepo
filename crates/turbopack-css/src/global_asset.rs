@@ -6,7 +6,7 @@ use turbopack_core::{
     context::AssetContext,
     ident::AssetIdent,
     module::Module,
-    reference::AssetReferences,
+    reference::ModuleReferences,
     reference_type::{CssReferenceSubType, ReferenceType},
     source::Source,
 };
@@ -53,7 +53,7 @@ impl Module for GlobalCssAsset {
     }
 
     #[turbo_tasks::function]
-    fn references(self: Vc<Self>) -> Vc<AssetReferences> {
+    fn references(self: Vc<Self>) -> Vc<ModuleReferences> {
         Vc::cell(vec![Vc::upcast(InternalCssAssetReference::new(
             self.inner(),
         ))])

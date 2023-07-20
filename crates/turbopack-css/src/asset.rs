@@ -17,7 +17,7 @@ use turbopack_core::{
     context::AssetContext,
     ident::AssetIdent,
     module::Module,
-    reference::{AssetReference, AssetReferences},
+    reference::{ModuleReference, ModuleReferences},
     resolve::{origin::ResolveOrigin, PrimaryResolveResult},
     source::Source,
 };
@@ -89,7 +89,7 @@ impl Module for CssModuleAsset {
     }
 
     #[turbo_tasks::function]
-    async fn references(self: Vc<Self>) -> Result<Vc<AssetReferences>> {
+    async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
         let this = self.await?;
         // TODO: include CSS source map
         Ok(analyze_css_stylesheet(
@@ -162,7 +162,7 @@ impl ChunkItem for CssModuleChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn references(&self) -> Vc<AssetReferences> {
+    fn references(&self) -> Vc<ModuleReferences> {
         self.module.references()
     }
 }
@@ -180,9 +180,9 @@ impl CssChunkItem for CssModuleChunkItem {
                 Vc::try_resolve_downcast_type::<ImportAssetReference>(*reference).await?
             {
                 for result in import_ref.resolve_reference().await?.primary.iter() {
-                    if let PrimaryResolveResult::Asset(asset) = result {
+                    if let &PrimaryResolveResult::Asset(asset) = result {
                         if let Some(placeable) =
-                            Vc::try_resolve_sidecast::<Box<dyn CssChunkPlaceable>>(*asset).await?
+                            Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
                         {
                             imports.push(CssImport::Internal(
                                 import_ref,
@@ -195,9 +195,9 @@ impl CssChunkItem for CssModuleChunkItem {
                 Vc::try_resolve_downcast_type::<CssModuleComposeReference>(*reference).await?
             {
                 for result in compose_ref.resolve_reference().await?.primary.iter() {
-                    if let PrimaryResolveResult::Asset(asset) = result {
+                    if let &PrimaryResolveResult::Asset(asset) = result {
                         if let Some(placeable) =
-                            Vc::try_resolve_sidecast::<Box<dyn CssChunkPlaceable>>(*asset).await?
+                            Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
                         {
                             imports.push(CssImport::Composes(placeable.as_chunk_item(context)));
                         }

@@ -11,7 +11,7 @@ use turbopack_core::{
         ModuleId,
     },
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
-    resolve::{origin::ResolveOrigin, parse::Request, PrimaryResolveResult, ResolveResult},
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult, PrimaryResolveResult},
 };
 
 use super::util::{request_to_string, throw_module_not_found_expr};
@@ -125,7 +125,7 @@ impl PatternMapping {
         request: Vc<Request>,
         origin: Vc<Box<dyn ResolveOrigin>>,
         context: Vc<Box<dyn ChunkingContext>>,
-        resolve_result: Vc<ResolveResult>,
+        resolve_result: Vc<ModuleResolveResult>,
         resolve_type: Value<ResolveType>,
     ) -> Result<Vc<PatternMapping>> {
         let result = resolve_result.await?;

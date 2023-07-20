@@ -7,7 +7,7 @@ use crate::{
     asset::Asset,
     issue::IssueContextExt,
     module::{convert_asset_to_module, Module, Modules},
-    resolve::{PrimaryResolveResult, ResolveResult},
+    resolve::{ModuleResolveResult, PrimaryResolveResult, ResolveResult},
 };
 pub mod source_map;
 
@@ -26,6 +26,19 @@ pub trait AssetReference: ValueToString {
     // fn kind(&self) -> Vc<AssetReferenceType>;
 }
 
+/// A reference to one or multiple [Asset]s or other special things.
+/// There are a bunch of optional traits that can influence how these references
+/// are handled. e. g. [ChunkableModuleReference]
+///
+/// [Asset]: crate::asset::Asset
+/// [ChunkableModuleReference]: crate::chunk::ChunkableModuleReference
+#[turbo_tasks::value_trait]
+pub trait ModuleReference: ValueToString {
+    fn resolve_reference(self: Vc<Self>) -> Vc<ModuleResolveResult>;
+    // TODO think about different types
+    // fn kind(&self) -> Vc<AssetReferenceType>;
+}
+
 /// Multiple [AssetReference]s
 #[turbo_tasks::value(transparent)]
 pub struct AssetReferences(Vec<Vc<Box<dyn AssetReference>>>);
@@ -39,14 +52,27 @@ impl AssetReferences {
     }
 }
 
+/// Multiple [ModuleReference]s
+#[turbo_tasks::value(transparent)]
+pub struct ModuleReferences(Vec<Vc<Box<dyn ModuleReference>>>);
+
+#[turbo_tasks::value_impl]
+impl ModuleReferences {
+    /// An empty list of [ModuleReference]s
+    #[turbo_tasks::function]
+    pub fn empty() -> Vc<Self> {
+        Vc::cell(Vec::new())
+    }
+}
+
 /// A reference that always resolves to a single asset.
 #[turbo_tasks::value]
-pub struct SingleAssetReference {
+pub struct SingleModuleReference {
     asset: Vc<Box<dyn Asset>>,
     description: Vc<String>,
 }
 
-impl SingleAssetReference {
+impl SingleModuleReference {
     /// Returns the asset that this reference resolves to.
     pub fn asset_ref(&self) -> Vc<Box<dyn Asset>> {
         self.asset
@@ -54,15 +80,15 @@ impl SingleAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for SingleAssetReference {
+impl ModuleReference for SingleModuleReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
-        ResolveResult::asset(self.asset).cell()
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::asset(self.asset).cell()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for SingleAssetReference {
+impl ValueToString for SingleModuleReference {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<String> {
         self.description
@@ -70,12 +96,12 @@ impl ValueToString for SingleAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl SingleAssetReference {
-    /// Create a new [Vc<SingleAssetReference>] that resolves to the given
+impl SingleModuleReference {
+    /// Create a new [Vc<SingleModuleReference>] that resolves to the given
     /// asset.
     #[turbo_tasks::function]
     pub fn new(asset: Vc<Box<dyn Asset>>, description: Vc<String>) -> Vc<Self> {
-        Self::cell(SingleAssetReference { asset, description })
+        Self::cell(SingleModuleReference { asset, description })
     }
 
     /// The [Vc<Box<dyn Asset>>] that this reference resolves to.
@@ -102,7 +128,7 @@ pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Mo
     // while let Some(result) = race_pop(&mut queue).await {
     // match &*result? {
     while let Some(resolve_result) = queue.pop_front() {
-        let ResolveResult {
+        let ModuleResolveResult {
             primary,
             references,
         } = &*resolve_result.await?;
@@ -131,7 +157,7 @@ pub async fn primary_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<V
         .await?
         .iter()
         .map(|reference| async {
-            let ResolveResult { primary, .. } = &*reference.resolve_reference().await?;
+            let ModuleResolveResult { primary, .. } = &*reference.resolve_reference().await?;
             Ok(primary
                 .iter()
                 .filter_map(|result| {

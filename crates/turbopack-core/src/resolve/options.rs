@@ -269,13 +269,10 @@ async fn import_mapping_to_result(
     Ok(match &*mapping.await? {
         ImportMapping::Direct(result) => ImportMapResult::Result(*result),
         ImportMapping::External(name) => ImportMapResult::Result(
-            ResolveResult::primary_with_references(
-                name.as_ref().map_or_else(
-                    || PrimaryResolveResult::OriginalReferenceExternal,
-                    |req| PrimaryResolveResult::OriginalReferenceTypeExternal(req.to_string()),
-                ),
-                Vec::new(),
-            )
+            ResolveResult::primary(name.as_ref().map_or_else(
+                || PrimaryResolveResult::OriginalReferenceExternal,
+                |req| PrimaryResolveResult::OriginalReferenceTypeExternal(req.to_string()),
+            ))
             .into(),
         ),
         ImportMapping::Ignore => {

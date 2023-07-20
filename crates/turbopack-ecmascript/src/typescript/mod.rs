@@ -9,13 +9,13 @@ use turbopack_core::{
     ident::AssetIdent,
     issue::{IssueSeverity, OptionIssueSource},
     module::Module,
-    reference::{AssetReference, AssetReferences},
+    reference::{ModuleReference, ModuleReferences},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
         pattern::QueryMap,
-        ResolveResult,
+        ModuleResolveResult,
     },
     source::Source,
 };
@@ -46,7 +46,7 @@ impl Module for TsConfigModuleAsset {
     }
 
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<Vc<AssetReferences>> {
+    async fn references(&self) -> Result<Vc<ModuleReferences>> {
         let mut references = Vec::new();
         let configs = read_tsconfigs(
             self.source.content().file_content(),
@@ -173,9 +173,9 @@ impl CompilerReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for CompilerReference {
+impl ModuleReference for CompilerReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         cjs_resolve(
             self.origin,
             self.request,
@@ -211,10 +211,10 @@ impl TsExtendsReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for TsExtendsReference {
+impl ModuleReference for TsExtendsReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
-        ResolveResult::asset(Vc::upcast(self.config)).into()
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::asset(Vc::upcast(self.config)).into()
     }
 }
 
@@ -245,9 +245,9 @@ impl TsNodeRequireReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for TsNodeRequireReference {
+impl ModuleReference for TsNodeRequireReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         cjs_resolve(
             self.origin,
             self.request,
@@ -284,9 +284,9 @@ impl TsConfigTypesReference {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for TsConfigTypesReference {
+impl ModuleReference for TsConfigTypesReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         type_resolve(self.origin, self.request)
     }
 }
