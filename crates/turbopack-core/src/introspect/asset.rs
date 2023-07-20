@@ -10,7 +10,6 @@ use crate::{
     module::Module,
     output::{OutputAsset, OutputAssets},
     reference::{ModuleReference, ModuleReferences},
-    resolve::PrimaryResolveResult,
     source::Source,
 };
 
@@ -155,10 +154,8 @@ pub async fn children_from_module_references(
             }
         }
 
-        for result in reference.resolve_reference().await?.primary.iter() {
-            if let PrimaryResolveResult::Asset(asset) = result {
-                children.insert((key, IntrospectableAsset::new(*asset)));
-            }
+        for &asset in reference.resolve_reference().primary_assets().await?.iter() {
+            children.insert((key, IntrospectableAsset::new(asset)));
         }
     }
     Ok(Vc::cell(children))

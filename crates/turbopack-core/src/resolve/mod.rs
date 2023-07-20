@@ -97,23 +97,6 @@ impl ModuleResolveResult {
         }
     }
 
-    pub fn primary(result: PrimaryResolveResult) -> ModuleResolveResult {
-        ModuleResolveResult {
-            primary: vec![result],
-            references: Vec::new(),
-        }
-    }
-
-    pub fn primary_with_references(
-        result: PrimaryResolveResult,
-        references: Vec<Vc<Box<dyn ModuleReference>>>,
-    ) -> ModuleResolveResult {
-        ModuleResolveResult {
-            primary: vec![result],
-            references,
-        }
-    }
-
     pub fn module(module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
         ModuleResolveResult {
             primary: vec![PrimaryResolveResult::Asset(Vc::upcast(module))],
@@ -200,40 +183,6 @@ impl ModuleResolveResult {
 
     pub fn is_unresolveable_ref(&self) -> bool {
         self.primary.is_empty()
-    }
-
-    pub async fn map<A, AF, R, RF>(&self, asset_fn: A, reference_fn: R) -> Result<Self>
-    where
-        A: Fn(Vc<Box<dyn Asset>>) -> AF,
-        AF: Future<Output = Result<Vc<Box<dyn Asset>>>>,
-        R: Fn(Vc<Box<dyn ModuleReference>>) -> RF,
-        RF: Future<Output = Result<Vc<Box<dyn ModuleReference>>>>,
-    {
-        Ok(Self {
-            primary: self
-                .primary
-                .iter()
-                .cloned()
-                .map(|result| {
-                    let asset_fn = &asset_fn;
-                    async move {
-                        if let PrimaryResolveResult::Asset(asset) = result {
-                            Ok(PrimaryResolveResult::Asset(asset_fn(asset).await?))
-                        } else {
-                            Ok(result)
-                        }
-                    }
-                })
-                .try_join()
-                .await?,
-            references: self
-                .references
-                .iter()
-                .copied()
-                .map(reference_fn)
-                .try_join()
-                .await?,
-        })
     }
 }
 

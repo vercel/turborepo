@@ -18,7 +18,7 @@ use turbopack_core::{
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReference, ModuleReferences},
-    resolve::{origin::ResolveOrigin, PrimaryResolveResult},
+    resolve::origin::ResolveOrigin,
     source::Source,
 };
 
@@ -179,28 +179,34 @@ impl CssChunkItem for CssModuleChunkItem {
             if let Some(import_ref) =
                 Vc::try_resolve_downcast_type::<ImportAssetReference>(*reference).await?
             {
-                for result in import_ref.resolve_reference().await?.primary.iter() {
-                    if let &PrimaryResolveResult::Asset(asset) = result {
-                        if let Some(placeable) =
-                            Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
-                        {
-                            imports.push(CssImport::Internal(
-                                import_ref,
-                                placeable.as_chunk_item(context),
-                            ));
-                        }
+                for &asset in import_ref
+                    .resolve_reference()
+                    .primary_assets()
+                    .await?
+                    .iter()
+                {
+                    if let Some(placeable) =
+                        Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
+                    {
+                        imports.push(CssImport::Internal(
+                            import_ref,
+                            placeable.as_chunk_item(context),
+                        ));
                     }
                 }
             } else if let Some(compose_ref) =
                 Vc::try_resolve_downcast_type::<CssModuleComposeReference>(*reference).await?
             {
-                for result in compose_ref.resolve_reference().await?.primary.iter() {
-                    if let &PrimaryResolveResult::Asset(asset) = result {
-                        if let Some(placeable) =
-                            Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
-                        {
-                            imports.push(CssImport::Composes(placeable.as_chunk_item(context)));
-                        }
+                for &asset in compose_ref
+                    .resolve_reference()
+                    .primary_assets()
+                    .await?
+                    .iter()
+                {
+                    if let Some(placeable) =
+                        Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
+                    {
+                        imports.push(CssImport::Composes(placeable.as_chunk_item(context)));
                     }
                 }
             }

@@ -59,7 +59,7 @@ use turbopack_core::{
         package_json,
         parse::Request,
         pattern::Pattern,
-        resolve, FindContextFileResult, ModulePart, PrimaryResolveResult,
+        resolve, FindContextFileResult, ModulePart,
     },
     source::{asset_to_source, Source},
 };
@@ -2056,22 +2056,20 @@ async fn require_resolve_visitor(
             request,
             OptionIssueSource::none(),
             try_to_severity(in_try),
-        )
-        .await?;
+        );
         let mut values = resolved
-            .primary
+            .primary_assets()
+            .await?
             .iter()
-            .map(|result| async move {
-                Ok(if let &PrimaryResolveResult::Asset(asset) = result {
+            .map(|&asset| async move {
+                Ok(
                     if let Some(module) = Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await?
                     {
                         Some(require_resolve(module.ident().path()).await?)
                     } else {
                         None
-                    }
-                } else {
-                    None
-                })
+                    },
+                )
             })
             .try_join()
             .await?

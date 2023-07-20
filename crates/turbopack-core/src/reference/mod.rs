@@ -7,7 +7,7 @@ use crate::{
     issue::IssueContextExt,
     module::{convert_asset_to_module, Module, Modules},
     output::OutputAsset,
-    resolve::{ModuleResolveResult, PrimaryResolveResult},
+    resolve::ModuleResolveResult,
 };
 pub mod source_map;
 
@@ -148,16 +148,8 @@ pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Mo
     // while let Some(result) = race_pop(&mut queue).await {
     // match &*result? {
     while let Some(resolve_result) = queue.pop_front() {
-        let ModuleResolveResult {
-            primary,
-            references,
-        } = &*resolve_result.await?;
-        for result in primary {
-            if let PrimaryResolveResult::Asset(asset) = *result {
-                assets.push(asset);
-            }
-        }
-        for reference in references {
+        assets.extend(resolve_result.primary_assets().await?.iter().copied());
+        for &reference in resolve_result.await?.get_references() {
             queue.push_back(reference.resolve_reference());
         }
     }
@@ -177,17 +169,11 @@ pub async fn primary_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<V
         .await?
         .iter()
         .map(|reference| async {
-            let ModuleResolveResult { primary, .. } = &*reference.resolve_reference().await?;
-            Ok(primary
-                .iter()
-                .filter_map(|result| {
-                    if let PrimaryResolveResult::Asset(asset) = *result {
-                        Some(asset)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>())
+            Ok(reference
+                .resolve_reference()
+                .primary_assets()
+                .await?
+                .clone_value())
         })
         .try_join()
         .await?

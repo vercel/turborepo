@@ -243,10 +243,11 @@ pub async fn resolve_node_gyp_build_files(
                 .expect("create napi_build_version regex failed");
     }
     let binding_gyp_pat = Pattern::new(Pattern::Constant("binding.gyp".to_owned()));
-    let gyp_file = resolve_raw(context, binding_gyp_pat, true).await?;
-    if let [PrimaryResolveResult::Asset(binding_gyp)] = &gyp_file.primary[..] {
+    let gyp_file = resolve_raw(context, binding_gyp_pat, true);
+    if let [binding_gyp] = &gyp_file.primary_assets().await?[..] {
         let mut merged_references = gyp_file
-            .affecting_sources
+            .await?
+            .get_affecting_sources()
             .iter()
             .map(|&r| Vc::upcast(AffectingResolvingAssetReference::new(r)))
             .collect::<Vec<_>>();

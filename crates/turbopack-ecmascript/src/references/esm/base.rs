@@ -80,10 +80,9 @@ impl ReferencedAsset {
                         ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell(),
                     );
                 }
-                PrimaryResolveResult::Asset(asset) => {
+                &PrimaryResolveResult::Asset(asset) => {
                     if let Some(placeable) =
-                        Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(*asset)
-                            .await?
+                        Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(asset).await?
                     {
                         return Ok(ReferencedAsset::cell(ReferencedAsset::Some(placeable)));
                     }

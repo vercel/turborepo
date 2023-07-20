@@ -40,7 +40,7 @@ use crate::{
     module::{Module, Modules},
     output::OutputAssets,
     reference::{ModuleReference, ModuleReferences},
-    resolve::{ModuleResolveResult, PrimaryResolveResult},
+    resolve::ModuleResolveResult,
 };
 
 /// A module id, which can be a number or string
@@ -342,20 +342,11 @@ where
         )]);
     };
 
-    let result = reference.resolve_reference().await?;
-
-    let assets = result.primary.iter().filter_map({
-        |result| {
-            if let PrimaryResolveResult::Asset(asset) = *result {
-                return Some(asset);
-            }
-            None
-        }
-    });
+    let assets = reference.resolve_reference().primary_assets().await?;
 
     let mut graph_nodes = vec![];
 
-    for asset in assets {
+    for &asset in &assets {
         let asset = asset.resolve().await?;
         let Some(asset) = Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await? else {
             continue;
