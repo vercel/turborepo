@@ -131,14 +131,14 @@ impl PatternMapping {
         resolve_type: Value<ResolveType>,
     ) -> Result<Vc<PatternMapping>> {
         let result = resolve_result.await?;
-        let asset = match result.primary.first() {
+        let module = match result.primary.first() {
             None => {
                 return Ok(PatternMapping::Unresolveable(
                     request_to_string(request).await?.to_string(),
                 )
                 .cell())
             }
-            Some(ModuleResolveResultItem::Asset(asset)) => *asset,
+            Some(ModuleResolveResultItem::Module(module)) => *module,
             Some(ModuleResolveResultItem::OriginalReferenceExternal) => {
                 return Ok(PatternMapping::OriginalReferenceExternal.cell())
             }
@@ -166,7 +166,8 @@ impl PatternMapping {
             }
         };
 
-        if let Some(chunkable) = Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(asset).await?
+        if let Some(chunkable) =
+            Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(module).await?
         {
             if let ResolveType::EsmAsync(availability_info) = *resolve_type {
                 let available = if let Some(available_assets) = availability_info.available_assets()

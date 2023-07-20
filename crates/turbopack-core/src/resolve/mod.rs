@@ -58,7 +58,8 @@ use crate::issue::{IssueSeverity, OptionIssueSource};
 #[turbo_tasks::value(shared)]
 #[derive(Clone, Debug)]
 pub enum ModuleResolveResultItem {
-    Asset(Vc<Box<dyn Asset>>),
+    Module(Vc<Box<dyn Module>>),
+    OutputAsset(Vc<Box<dyn OutputAsset>>),
     OriginalReferenceExternal,
     OriginalReferenceTypeExternal(String),
     Ignore,
@@ -99,14 +100,14 @@ impl ModuleResolveResult {
 
     pub fn module(module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
         ModuleResolveResult {
-            primary: vec![ModuleResolveResultItem::Asset(Vc::upcast(module))],
+            primary: vec![ModuleResolveResultItem::Module(module)],
             references: Vec::new(),
         }
     }
 
     pub fn output_asset(output_asset: Vc<Box<dyn OutputAsset>>) -> ModuleResolveResult {
         ModuleResolveResult {
-            primary: vec![ModuleResolveResultItem::Asset(Vc::upcast(output_asset))],
+            primary: vec![ModuleResolveResultItem::OutputAsset(output_asset)],
             references: Vec::new(),
         }
     }
@@ -116,7 +117,7 @@ impl ModuleResolveResult {
         references: Vec<Vc<Box<dyn ModuleReference>>>,
     ) -> ModuleResolveResult {
         ModuleResolveResult {
-            primary: vec![ModuleResolveResultItem::Asset(Vc::upcast(module))],
+            primary: vec![ModuleResolveResultItem::Module(module)],
             references,
         }
     }
@@ -125,8 +126,7 @@ impl ModuleResolveResult {
         ModuleResolveResult {
             primary: modules
                 .into_iter()
-                .map(Vc::upcast)
-                .map(ModuleResolveResultItem::Asset)
+                .map(ModuleResolveResultItem::Module)
                 .collect(),
             references: Vec::new(),
         }
@@ -137,8 +137,7 @@ impl ModuleResolveResult {
         ModuleResolveResult {
             primary: output_assets
                 .into_iter()
-                .map(Vc::upcast)
-                .map(ModuleResolveResultItem::Asset)
+                .map(ModuleResolveResultItem::OutputAsset)
                 .collect(),
             references: Vec::new(),
         }
@@ -151,8 +150,7 @@ impl ModuleResolveResult {
         ModuleResolveResult {
             primary: modules
                 .into_iter()
-                .map(Vc::upcast)
-                .map(ModuleResolveResultItem::Asset)
+                .map(ModuleResolveResultItem::Module)
                 .collect(),
             references,
         }
@@ -288,12 +286,10 @@ impl ModuleResolveResult {
     #[turbo_tasks::function]
     pub async fn first_asset(self: Vc<Self>) -> Result<Vc<AssetOption>> {
         let this = self.await?;
-        Ok(Vc::cell(this.primary.iter().find_map(|item| {
-            if let ModuleResolveResultItem::Asset(a) = item {
-                Some(*a)
-            } else {
-                None
-            }
+        Ok(Vc::cell(this.primary.iter().find_map(|item| match *item {
+            ModuleResolveResultItem::Module(a) => Some(Vc::upcast(a)),
+            ModuleResolveResultItem::OutputAsset(a) => Some(Vc::upcast(a)),
+            _ => None,
         })))
     }
 
@@ -303,12 +299,10 @@ impl ModuleResolveResult {
         Ok(Vc::cell(
             this.primary
                 .iter()
-                .filter_map(|item| {
-                    if let ModuleResolveResultItem::Asset(a) = item {
-                        Some(*a)
-                    } else {
-                        None
-                    }
+                .filter_map(|item| match *item {
+                    ModuleResolveResultItem::Module(a) => Some(Vc::upcast(a)),
+                    ModuleResolveResultItem::OutputAsset(a) => Some(Vc::upcast(a)),
+                    _ => None,
                 })
                 .collect(),
         ))
@@ -507,7 +501,7 @@ impl ResolveResult {
                     async move {
                         Ok(match item {
                             ResolveResultItem::Asset(asset) => {
-                                ModuleResolveResultItem::Asset(Vc::upcast(asset_fn(asset).await?))
+                                ModuleResolveResultItem::Module(Vc::upcast(asset_fn(asset).await?))
                             }
                             ResolveResultItem::OriginalReferenceExternal => {
                                 ModuleResolveResultItem::OriginalReferenceExternal
