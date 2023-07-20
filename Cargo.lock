@@ -9086,6 +9086,7 @@ dependencies = [
  "turbopack-dev",
  "turbopack-dev-server",
  "turbopack-ecmascript",
+ "turbopack-ecmascript-hmr-protocol",
  "turbopack-ecmascript-plugins",
  "turbopack-ecmascript-runtime",
  "turbopack-env",
@@ -9315,6 +9316,7 @@ dependencies = [
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-ecmascript",
+ "turbopack-ecmascript-hmr-protocol",
  "urlencoding",
 ]
 
@@ -9352,6 +9354,16 @@ dependencies = [
  "turbopack-core",
  "turbopack-swc-utils",
  "url",
+]
+
+[[package]]
+name = "turbopack-ecmascript-hmr-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "turbopack-cli-utils",
+ "turbopack-core",
 ]
 
 [[package]]
