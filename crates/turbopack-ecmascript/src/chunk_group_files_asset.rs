@@ -15,7 +15,9 @@ use turbopack_core::{
     },
     module::Module,
     output::{OutputAsset, OutputAssets},
-    reference::{ModuleReference, ModuleReferences, SingleModuleReference},
+    reference::{
+        ModuleReference, ModuleReferences, SingleModuleReference, SingleOutputAssetReference,
+    },
 };
 
 use crate::{
@@ -215,8 +217,8 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
                 .iter()
                 .copied()
                 .map(|chunk| {
-                    SingleModuleReference::new(
-                        Vc::upcast(chunk),
+                    SingleOutputAssetReference::new(
+                        chunk,
                         chunk_group_chunk_reference_description(),
                     )
                 })

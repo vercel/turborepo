@@ -6,7 +6,7 @@ use turbopack_core::{
     ident::AssetIdent,
     module::Module,
     output::OutputAssets,
-    reference::{ModuleReferences, SingleModuleReference},
+    reference::{ModuleReferences, SingleOutputAssetReference},
 };
 
 use super::chunk_item::ManifestChunkItem;
@@ -99,8 +99,8 @@ impl Module for ManifestChunkAsset {
                 .iter()
                 .copied()
                 .map(|chunk| {
-                    Vc::upcast(SingleModuleReference::new(
-                        Vc::upcast(chunk),
+                    Vc::upcast(SingleOutputAssetReference::new(
+                        chunk,
                         manifest_chunk_reference_description(),
                     ))
                 })

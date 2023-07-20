@@ -4,9 +4,9 @@ use anyhow::Result;
 use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
 
 use crate::{
-    asset::Asset,
     issue::IssueContextExt,
     module::{convert_asset_to_module, Module, Modules},
+    output::OutputAsset,
     resolve::{ModuleResolveResult, PrimaryResolveResult},
 };
 pub mod source_map;
@@ -39,16 +39,16 @@ impl ModuleReferences {
     }
 }
 
-/// A reference that always resolves to a single asset.
+/// A reference that always resolves to a single module.
 #[turbo_tasks::value]
 pub struct SingleModuleReference {
-    asset: Vc<Box<dyn Asset>>,
+    asset: Vc<Box<dyn Module>>,
     description: Vc<String>,
 }
 
 impl SingleModuleReference {
     /// Returns the asset that this reference resolves to.
-    pub fn asset_ref(&self) -> Vc<Box<dyn Asset>> {
+    pub fn asset_ref(&self) -> Vc<Box<dyn Module>> {
         self.asset
     }
 }
@@ -57,7 +57,7 @@ impl SingleModuleReference {
 impl ModuleReference for SingleModuleReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::asset(self.asset).cell()
+        ModuleResolveResult::module(self.asset).cell()
     }
 }
 
@@ -74,13 +74,59 @@ impl SingleModuleReference {
     /// Create a new [Vc<SingleModuleReference>] that resolves to the given
     /// asset.
     #[turbo_tasks::function]
-    pub fn new(asset: Vc<Box<dyn Asset>>, description: Vc<String>) -> Vc<Self> {
+    pub fn new(asset: Vc<Box<dyn Module>>, description: Vc<String>) -> Vc<Self> {
         Self::cell(SingleModuleReference { asset, description })
     }
 
     /// The [Vc<Box<dyn Asset>>] that this reference resolves to.
     #[turbo_tasks::function]
-    pub async fn asset(self: Vc<Self>) -> Result<Vc<Box<dyn Asset>>> {
+    pub async fn asset(self: Vc<Self>) -> Result<Vc<Box<dyn Module>>> {
+        Ok(self.await?.asset)
+    }
+}
+
+/// A reference that always resolves to a single module.
+#[turbo_tasks::value]
+pub struct SingleOutputAssetReference {
+    asset: Vc<Box<dyn OutputAsset>>,
+    description: Vc<String>,
+}
+
+impl SingleOutputAssetReference {
+    /// Returns the asset that this reference resolves to.
+    pub fn asset_ref(&self) -> Vc<Box<dyn OutputAsset>> {
+        self.asset
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ModuleReference for SingleOutputAssetReference {
+    #[turbo_tasks::function]
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::output_asset(self.asset).cell()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for SingleOutputAssetReference {
+    #[turbo_tasks::function]
+    fn to_string(&self) -> Vc<String> {
+        self.description
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl SingleOutputAssetReference {
+    /// Create a new [Vc<SingleOutputAssetReference>] that resolves to the given
+    /// asset.
+    #[turbo_tasks::function]
+    pub fn new(asset: Vc<Box<dyn OutputAsset>>, description: Vc<String>) -> Vc<Self> {
+        Self::cell(SingleOutputAssetReference { asset, description })
+    }
+
+    /// The [Vc<Box<dyn Asset>>] that this reference resolves to.
+    #[turbo_tasks::function]
+    pub async fn asset(self: Vc<Self>) -> Result<Vc<Box<dyn OutputAsset>>> {
         Ok(self.await?.asset)
     }
 }

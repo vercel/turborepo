@@ -229,13 +229,8 @@ impl ChunkGroupReference {
 impl ModuleReference for ChunkGroupReference {
     #[turbo_tasks::function]
     async fn resolve_reference(self: Vc<Self>) -> Result<Vc<ModuleResolveResult>> {
-        let set = self
-            .chunks()
-            .await?
-            .iter()
-            .map(|&c| Vc::upcast(c))
-            .collect();
-        Ok(ModuleResolveResult::assets(set).cell())
+        let set = self.chunks().await?.clone_value();
+        Ok(ModuleResolveResult::output_assets(set).cell())
     }
 }
 

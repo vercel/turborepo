@@ -27,6 +27,7 @@ use crate::{
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt},
     module::Module,
+    output::OutputAsset,
     package_json::{read_package_json, PackageJsonIssue},
     raw_module::RawModule,
     reference::ModuleReference,
@@ -127,6 +128,13 @@ impl ModuleResolveResult {
         }
     }
 
+    pub fn output_asset(output_asset: Vc<Box<dyn OutputAsset>>) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: vec![PrimaryResolveResult::Asset(Vc::upcast(output_asset))],
+            references: Vec::new(),
+        }
+    }
+
     pub fn asset_with_references(
         asset: Vc<Box<dyn Asset>>,
         references: Vec<Vc<Box<dyn ModuleReference>>>,
@@ -160,6 +168,18 @@ impl ModuleResolveResult {
     pub fn modules(modules: Vec<Vc<Box<dyn Module>>>) -> ModuleResolveResult {
         ModuleResolveResult {
             primary: modules
+                .into_iter()
+                .map(Vc::upcast)
+                .map(PrimaryResolveResult::Asset)
+                .collect(),
+            references: Vec::new(),
+        }
+    }
+
+    // TODO We don't want output assets to be references from modules
+    pub fn output_assets(output_assets: Vec<Vc<Box<dyn OutputAsset>>>) -> ModuleResolveResult {
+        ModuleResolveResult {
+            primary: output_assets
                 .into_iter()
                 .map(Vc::upcast)
                 .map(PrimaryResolveResult::Asset)
