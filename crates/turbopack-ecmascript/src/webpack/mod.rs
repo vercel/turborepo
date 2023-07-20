@@ -6,13 +6,12 @@ use turbopack_core::{
     file_source::FileSource,
     ident::AssetIdent,
     module::Module,
-    raw_module::RawModuleReference,
     reference::{ModuleReference, ModuleReferences},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        resolve, ModuleResolveResult,
+        resolve, AffectingResolvingAssetReference, ModuleResolveResult,
     },
     source::{asset_to_source, Source},
 };
@@ -186,7 +185,7 @@ impl ModuleReference for WebpackRuntimeAssetReference {
                         self.transforms,
                     )))
                 },
-                |r| async move { Ok(Vc::upcast(RawModuleReference::new(r))) },
+                |r| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(r))) },
             )
             .await?
             .cell())

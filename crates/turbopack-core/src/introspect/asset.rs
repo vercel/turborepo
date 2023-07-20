@@ -9,7 +9,7 @@ use crate::{
     chunk::{ChunkableModuleReference, ChunkingType},
     module::Module,
     output::{OutputAsset, OutputAssets},
-    reference::{AssetReference, AssetReferences, ModuleReference, ModuleReferences},
+    reference::{ModuleReference, ModuleReferences},
     resolve::PrimaryResolveResult,
     source::Source,
 };
@@ -131,23 +131,6 @@ pub async fn content_to_details(content: Vc<AssetContent>) -> Result<Vc<String>>
             Vc::cell(format!("redirect to {target} with type {link_type:?}"))
         }
     })
-}
-
-#[turbo_tasks::function]
-pub async fn children_from_asset_references(
-    references: Vc<AssetReferences>,
-) -> Result<Vc<IntrospectableChildren>> {
-    let key = reference_ty();
-    let mut children = IndexSet::new();
-    let references = references.await?;
-    for reference in &*references {
-        for result in reference.resolve_reference().await?.primary.iter() {
-            if let PrimaryResolveResult::Asset(asset) = result {
-                children.insert((key, IntrospectableAsset::new(*asset)));
-            }
-        }
-    }
-    Ok(Vc::cell(children))
 }
 
 #[turbo_tasks::function]

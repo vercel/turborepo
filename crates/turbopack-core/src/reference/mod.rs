@@ -7,7 +7,7 @@ use crate::{
     asset::Asset,
     issue::IssueContextExt,
     module::{convert_asset_to_module, Module, Modules},
-    resolve::{ModuleResolveResult, PrimaryResolveResult, ResolveResult},
+    resolve::{ModuleResolveResult, PrimaryResolveResult},
 };
 pub mod source_map;
 
@@ -20,36 +20,10 @@ pub use source_map::SourceMapReference;
 /// [Asset]: crate::asset::Asset
 /// [ChunkableModuleReference]: crate::chunk::ChunkableModuleReference
 #[turbo_tasks::value_trait]
-pub trait AssetReference: ValueToString {
-    fn resolve_reference(self: Vc<Self>) -> Vc<ResolveResult>;
-    // TODO think about different types
-    // fn kind(&self) -> Vc<AssetReferenceType>;
-}
-
-/// A reference to one or multiple [Asset]s or other special things.
-/// There are a bunch of optional traits that can influence how these references
-/// are handled. e. g. [ChunkableModuleReference]
-///
-/// [Asset]: crate::asset::Asset
-/// [ChunkableModuleReference]: crate::chunk::ChunkableModuleReference
-#[turbo_tasks::value_trait]
 pub trait ModuleReference: ValueToString {
     fn resolve_reference(self: Vc<Self>) -> Vc<ModuleResolveResult>;
     // TODO think about different types
     // fn kind(&self) -> Vc<AssetReferenceType>;
-}
-
-/// Multiple [AssetReference]s
-#[turbo_tasks::value(transparent)]
-pub struct AssetReferences(Vec<Vc<Box<dyn AssetReference>>>);
-
-#[turbo_tasks::value_impl]
-impl AssetReferences {
-    /// An empty list of [AssetReference]s
-    #[turbo_tasks::function]
-    pub fn empty() -> Vc<Self> {
-        Vc::cell(Vec::new())
-    }
 }
 
 /// Multiple [ModuleReference]s

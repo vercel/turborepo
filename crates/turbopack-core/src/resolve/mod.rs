@@ -28,8 +28,8 @@ use crate::{
     issue::{resolve::ResolvingIssue, IssueExt},
     module::Module,
     package_json::{read_package_json, PackageJsonIssue},
-    raw_module::{RawModule, RawModuleReference},
-    reference::{AssetReference, ModuleReference},
+    raw_module::RawModule,
+    reference::ModuleReference,
     reference_type::ReferenceType,
     resolve::{
         pattern::{read_matches, PatternMatch},
@@ -405,7 +405,7 @@ impl ModuleResolveResultOption {
 #[derive(Clone, Debug)]
 pub struct ResolveResult {
     pub primary: Vec<PrimaryResolveResult>,
-    pub references: Vec<Vc<Box<dyn AssetReference>>>,
+    pub affecting_sources: Vec<Vc<Box<dyn Source>>>,
 }
 
 impl Default for ResolveResult {
@@ -418,50 +418,50 @@ impl ResolveResult {
     pub fn unresolveable() -> Self {
         ResolveResult {
             primary: Vec::new(),
-            references: Vec::new(),
+            affecting_sources: Vec::new(),
         }
     }
 
-    pub fn unresolveable_with_references(
-        references: Vec<Vc<Box<dyn AssetReference>>>,
+    pub fn unresolveable_with_affecting_sources(
+        affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
             primary: Vec::new(),
-            references,
+            affecting_sources,
         }
     }
 
     pub fn primary(result: PrimaryResolveResult) -> ResolveResult {
         ResolveResult {
             primary: vec![result],
-            references: Vec::new(),
+            affecting_sources: Vec::new(),
         }
     }
 
-    pub fn primary_with_references(
+    pub fn primary_with_affecting_sources(
         result: PrimaryResolveResult,
-        references: Vec<Vc<Box<dyn AssetReference>>>,
+        affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
             primary: vec![result],
-            references,
+            affecting_sources,
         }
     }
 
     pub fn asset(asset: Vc<Box<dyn Asset>>) -> ResolveResult {
         ResolveResult {
             primary: vec![PrimaryResolveResult::Asset(asset)],
-            references: Vec::new(),
+            affecting_sources: Vec::new(),
         }
     }
 
-    pub fn asset_with_references(
+    pub fn asset_with_affecting_sources(
         asset: Vc<Box<dyn Asset>>,
-        references: Vec<Vc<Box<dyn AssetReference>>>,
+        affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
             primary: vec![PrimaryResolveResult::Asset(asset)],
-            references,
+            affecting_sources,
         }
     }
 
@@ -471,53 +471,57 @@ impl ResolveResult {
                 .into_iter()
                 .map(PrimaryResolveResult::Asset)
                 .collect(),
-            references: Vec::new(),
+            affecting_sources: Vec::new(),
         }
     }
 
-    pub fn assets_with_references(
+    pub fn assets_with_affecting_sources(
         assets: Vec<Vc<Box<dyn Asset>>>,
-        references: Vec<Vc<Box<dyn AssetReference>>>,
+        affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
             primary: assets
                 .into_iter()
                 .map(PrimaryResolveResult::Asset)
                 .collect(),
-            references,
+            affecting_sources,
         }
     }
 
-    pub fn add_reference_ref(&mut self, reference: Vc<Box<dyn AssetReference>>) {
-        self.references.push(reference);
+    pub fn add_affecting_source_ref(&mut self, reference: Vc<Box<dyn Source>>) {
+        self.affecting_sources.push(reference);
     }
 
-    pub fn get_references(&self) -> &Vec<Vc<Box<dyn AssetReference>>> {
-        &self.references
+    pub fn get_affecting_sources(&self) -> &Vec<Vc<Box<dyn Source>>> {
+        &self.affecting_sources
     }
 
-    fn clone_with_references(&self, references: Vec<Vc<Box<dyn AssetReference>>>) -> ResolveResult {
+    fn clone_with_affecting_sources(
+        &self,
+        affecting_sources: Vec<Vc<Box<dyn Source>>>,
+    ) -> ResolveResult {
         ResolveResult {
             primary: self.primary.clone(),
-            references,
+            affecting_sources,
         }
     }
 
     pub fn merge_alternatives(&mut self, other: &ResolveResult) {
         self.primary.extend(other.primary.iter().cloned());
-        self.references.extend(other.references.iter().copied());
+        self.affecting_sources
+            .extend(other.affecting_sources.iter().copied());
     }
 
     pub fn is_unresolveable_ref(&self) -> bool {
         self.primary.is_empty()
     }
 
-    pub async fn map<A, AF, R, RF>(&self, asset_fn: A, reference_fn: R) -> Result<Self>
+    pub async fn map<A, AF, R, RF>(&self, asset_fn: A, affecting_source_fn: R) -> Result<Self>
     where
         A: Fn(Vc<Box<dyn Asset>>) -> AF,
         AF: Future<Output = Result<Vc<Box<dyn Asset>>>>,
-        R: Fn(Vc<Box<dyn AssetReference>>) -> RF,
-        RF: Future<Output = Result<Vc<Box<dyn AssetReference>>>>,
+        R: Fn(Vc<Box<dyn Source>>) -> RF,
+        RF: Future<Output = Result<Vc<Box<dyn Source>>>>,
     {
         Ok(Self {
             primary: self
@@ -536,11 +540,11 @@ impl ResolveResult {
                 })
                 .try_join()
                 .await?,
-            references: self
-                .references
+            affecting_sources: self
+                .affecting_sources
                 .iter()
                 .copied()
-                .map(reference_fn)
+                .map(affecting_source_fn)
                 .try_join()
                 .await?,
         })
@@ -549,12 +553,12 @@ impl ResolveResult {
     pub async fn map_module<A, AF, R, RF>(
         &self,
         asset_fn: A,
-        reference_fn: R,
+        source_fn: R,
     ) -> Result<ModuleResolveResult>
     where
         A: Fn(Vc<Box<dyn Asset>>) -> AF,
         AF: Future<Output = Result<Vc<Box<dyn Module>>>>,
-        R: Fn(Vc<Box<dyn AssetReference>>) -> RF,
+        R: Fn(Vc<Box<dyn Source>>) -> RF,
         RF: Future<Output = Result<Vc<Box<dyn ModuleReference>>>>,
     {
         Ok(ModuleResolveResult {
@@ -577,10 +581,10 @@ impl ResolveResult {
                 .try_join()
                 .await?,
             references: self
-                .references
+                .affecting_sources
                 .iter()
                 .copied()
-                .map(reference_fn)
+                .map(source_fn)
                 .try_join()
                 .await?,
         })
@@ -591,34 +595,37 @@ impl ResolveResult {
 impl ResolveResult {
     #[turbo_tasks::function]
     pub async fn as_raw_module_result(self: Vc<Self>) -> Result<Vc<ModuleResolveResult>> {
-        Ok(self
-            .await?
-            .map_module(
-                |asset| async move { Ok(Vc::upcast(RawModule::new(asset_to_source(asset)))) },
-                |reference| async move { Ok(Vc::upcast(RawModuleReference::new(reference))) },
-            )
-            .await?
-            .cell())
+        Ok(
+            self.await?
+                .map_module(
+                    |asset| async move { Ok(Vc::upcast(RawModule::new(asset_to_source(asset)))) },
+                    |source| async move {
+                        Ok(Vc::upcast(AffectingResolvingAssetReference::new(source)))
+                    },
+                )
+                .await?
+                .cell(),
+        )
     }
 
     #[turbo_tasks::function]
-    pub async fn with_reference(
+    pub async fn with_affecting_source(
         self: Vc<Self>,
-        reference: Vc<Box<dyn AssetReference>>,
+        affecting_source: Vc<Box<dyn Source>>,
     ) -> Result<Vc<Self>> {
         let mut this = self.await?.clone_value();
-        this.add_reference_ref(reference);
+        this.add_affecting_source_ref(affecting_source);
         Ok(this.into())
     }
 
     #[turbo_tasks::function]
-    pub async fn with_references(
+    pub async fn with_affecting_sources(
         self: Vc<Self>,
-        references: Vec<Vc<Box<dyn AssetReference>>>,
+        affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> Result<Vc<Self>> {
         let mut this = self.await?.clone_value();
-        for reference in references {
-            this.add_reference_ref(reference);
+        for affecting_source in affecting_sources {
+            this.add_affecting_source_ref(affecting_source);
         }
         Ok(this.into())
     }
@@ -630,15 +637,15 @@ impl ResolveResult {
     pub async fn select_first(results: Vec<Vc<ResolveResult>>) -> Result<Vc<Self>> {
         let mut references = vec![];
         for result in &results {
-            references.extend(result.await?.get_references());
+            references.extend(result.await?.get_affecting_sources());
         }
         for result in results {
             let result_ref = result.await?;
             if !result_ref.is_unresolveable_ref() {
-                return Ok(result_ref.clone_with_references(references).cell());
+                return Ok(result_ref.clone_with_affecting_sources(references).cell());
             }
         }
-        Ok(ResolveResult::unresolveable_with_references(references).into())
+        Ok(ResolveResult::unresolveable_with_affecting_sources(references).into())
     }
 
     #[turbo_tasks::function]
@@ -661,11 +668,11 @@ impl ResolveResult {
     }
 
     #[turbo_tasks::function]
-    pub async fn alternatives_with_references(
+    pub async fn alternatives_with_affecting_sources(
         results: Vec<Vc<ResolveResult>>,
-        references: Vec<Vc<Box<dyn AssetReference>>>,
+        affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> Result<Vc<Self>> {
-        if references.is_empty() {
+        if affecting_sources.is_empty() {
             return Ok(Self::alternatives(results));
         }
         if results.len() == 1 {
@@ -673,7 +680,7 @@ impl ResolveResult {
                 .into_iter()
                 .next()
                 .unwrap()
-                .with_references(references));
+                .with_affecting_sources(affecting_sources));
         }
         let mut iter = results.into_iter().try_join().await?.into_iter();
         if let Some(current) = iter.next() {
@@ -683,12 +690,12 @@ impl ResolveResult {
                 let other = &*result;
                 current.merge_alternatives(other);
             }
-            current.references.extend(references);
+            current.affecting_sources.extend(affecting_sources);
             Ok(Self::cell(current))
         } else {
-            Ok(Self::cell(ResolveResult::unresolveable_with_references(
-                references,
-            )))
+            Ok(Self::cell(
+                ResolveResult::unresolveable_with_affecting_sources(affecting_sources),
+            ))
         }
     }
 
@@ -746,14 +753,14 @@ impl ResolveResultOption {
 
 async fn exists(
     fs_path: Vc<FileSystemPath>,
-    refs: &mut Vec<Vc<Box<dyn AssetReference>>>,
+    refs: &mut Vec<Vc<Box<dyn Source>>>,
 ) -> Result<Option<Vc<FileSystemPath>>> {
     type_exists(fs_path, FileSystemEntryType::File, refs).await
 }
 
 async fn dir_exists(
     fs_path: Vc<FileSystemPath>,
-    refs: &mut Vec<Vc<Box<dyn AssetReference>>>,
+    refs: &mut Vec<Vc<Box<dyn Source>>>,
 ) -> Result<Option<Vc<FileSystemPath>>> {
     type_exists(fs_path, FileSystemEntryType::Directory, refs).await
 }
@@ -761,11 +768,11 @@ async fn dir_exists(
 async fn type_exists(
     fs_path: Vc<FileSystemPath>,
     ty: FileSystemEntryType,
-    refs: &mut Vec<Vc<Box<dyn AssetReference>>>,
+    refs: &mut Vec<Vc<Box<dyn Source>>>,
 ) -> Result<Option<Vc<FileSystemPath>>> {
     let result = fs_path.resolve().await?.realpath_with_links().await?;
     for path in result.symlinks.iter() {
-        refs.push(Vc::upcast(AffectingResolvingAssetReference::new(*path)));
+        refs.push(Vc::upcast(FileSource::new(*path)));
     }
     let path = result.path;
     Ok(if *path.get_type().await? == ty {
@@ -856,8 +863,8 @@ pub fn package_json() -> Vc<Vec<String>> {
 
 #[turbo_tasks::value(shared)]
 pub enum FindContextFileResult {
-    Found(Vc<FileSystemPath>, Vec<Vc<Box<dyn AssetReference>>>),
-    NotFound(Vec<Vc<Box<dyn AssetReference>>>),
+    Found(Vc<FileSystemPath>, Vec<Vc<Box<dyn Source>>>),
+    NotFound(Vec<Vc<Box<dyn Source>>>),
 }
 
 #[turbo_tasks::function]
@@ -898,7 +905,7 @@ pub async fn find_context_file(
 #[turbo_tasks::value]
 struct FindPackageResult {
     packages: Vec<Vc<FileSystemPath>>,
-    references: Vec<Vc<Box<dyn AssetReference>>>,
+    affecting_sources: Vec<Vc<Box<dyn Source>>>,
 }
 
 #[turbo_tasks::function]
@@ -908,7 +915,7 @@ async fn find_package(
     options: Vc<ResolveModulesOptions>,
 ) -> Result<Vc<FindPackageResult>> {
     let mut packages = vec![];
-    let mut references = vec![];
+    let mut affecting_sources = vec![];
     let options = options.await?;
     for resolve_modules in &options.modules {
         match resolve_modules {
@@ -920,9 +927,11 @@ async fn find_package(
                 while context_value.is_inside_ref(root) {
                     for name in names.iter() {
                         let fs_path = context.join(name.clone());
-                        if let Some(fs_path) = dir_exists(fs_path, &mut references).await? {
+                        if let Some(fs_path) = dir_exists(fs_path, &mut affecting_sources).await? {
                             let fs_path = fs_path.join(package_name.clone());
-                            if let Some(fs_path) = dir_exists(fs_path, &mut references).await? {
+                            if let Some(fs_path) =
+                                dir_exists(fs_path, &mut affecting_sources).await?
+                            {
                                 packages.push(fs_path);
                             }
                         }
@@ -937,7 +946,10 @@ async fn find_package(
             }
             ResolveModules::Path(context) => {
                 let package_dir = context.join(package_name.clone());
-                if dir_exists(package_dir, &mut references).await?.is_some() {
+                if dir_exists(package_dir, &mut affecting_sources)
+                    .await?
+                    .is_some()
+                {
                     packages.push(package_dir.resolve().await?);
                 }
             }
@@ -946,7 +958,7 @@ async fn find_package(
     }
     Ok(FindPackageResult::cell(FindPackageResult {
         packages,
-        references,
+        affecting_sources,
     }))
 }
 
@@ -958,21 +970,21 @@ fn merge_results(results: Vec<Vc<ResolveResult>>) -> Vc<ResolveResult> {
     }
 }
 
-fn merge_results_with_references(
+fn merge_results_with_affecting_sources(
     results: Vec<Vc<ResolveResult>>,
-    references: Vec<Vc<Box<dyn AssetReference>>>,
+    affecting_sources: Vec<Vc<Box<dyn Source>>>,
 ) -> Vc<ResolveResult> {
-    if references.is_empty() {
+    if affecting_sources.is_empty() {
         return merge_results(results);
     }
     match results.len() {
-        0 => ResolveResult::unresolveable_with_references(references).into(),
+        0 => ResolveResult::unresolveable_with_affecting_sources(affecting_sources).into(),
         1 => results
             .into_iter()
             .next()
             .unwrap()
-            .with_references(references),
-        _ => ResolveResult::alternatives_with_references(results, references),
+            .with_affecting_sources(affecting_sources),
+        _ => ResolveResult::alternatives_with_affecting_sources(results, affecting_sources),
     }
 }
 
@@ -984,11 +996,11 @@ pub async fn resolve_raw(
 ) -> Result<Vc<ResolveResult>> {
     async fn to_result(path: Vc<FileSystemPath>) -> Result<Vc<ResolveResult>> {
         let RealPathResult { path, symlinks } = &*path.realpath_with_links().await?;
-        Ok(ResolveResult::asset_with_references(
+        Ok(ResolveResult::asset_with_affecting_sources(
             Vc::upcast(FileSource::new(*path)),
             symlinks
                 .iter()
-                .map(|p| Vc::upcast(AffectingResolvingAssetReference::new(*p)))
+                .map(|p| Vc::upcast(FileSource::new(*p)))
                 .collect(),
         )
         .cell())
@@ -1088,7 +1100,7 @@ async fn handle_resolve_plugins(
                 let new_result = new_result.await?;
                 changed = true;
                 new_primary.extend(new_result.primary.iter().cloned());
-                new_references.extend(new_result.references.iter().copied());
+                new_references.extend(new_result.affecting_sources.iter().copied());
             } else {
                 new_primary.push(primary.clone());
             }
@@ -1101,12 +1113,12 @@ async fn handle_resolve_plugins(
         return Ok(result);
     }
 
-    let mut references = result_value.references.clone();
-    references.append(&mut new_references);
+    let mut affecting_sources = result_value.affecting_sources.clone();
+    affecting_sources.append(&mut new_references);
 
     Ok(ResolveResult {
         primary: new_primary,
-        references,
+        affecting_sources,
     }
     .cell())
 }
@@ -1336,9 +1348,9 @@ async fn resolve_into_folder(
                         // we continue to try other alternatives
                         if !result.is_unresolveable_ref() {
                             let mut result = result.clone();
-                            result.add_reference_ref(Vc::upcast(
-                                AffectingResolvingAssetReference::new(package_json_path),
-                            ));
+                            result.add_affecting_source_ref(Vc::upcast(FileSource::new(
+                                package_json_path,
+                            )));
                             return Ok(result.into());
                         }
                     }
@@ -1423,7 +1435,10 @@ async fn resolve_module_request(
     .await?;
 
     if result.packages.is_empty() {
-        return Ok(ResolveResult::unresolveable_with_references(result.references.clone()).into());
+        return Ok(ResolveResult::unresolveable_with_affecting_sources(
+            result.affecting_sources.clone(),
+        )
+        .into());
     }
 
     let mut results = vec![];
@@ -1483,9 +1498,9 @@ async fn resolve_module_request(
         }
     }
 
-    Ok(merge_results_with_references(
+    Ok(merge_results_with_affecting_sources(
         results,
-        result.references.clone(),
+        result.affecting_sources.clone(),
     ))
 }
 
@@ -1549,7 +1564,7 @@ fn resolve_import_map_result_boxed<'a>(
 
 async fn resolve_alias_field_result(
     result: &JsonValue,
-    refs: Vec<Vc<Box<dyn AssetReference>>>,
+    refs: Vec<Vc<Box<dyn Source>>>,
     package_path: Vc<FileSystemPath>,
     resolve_options: Vc<ResolveOptions>,
     issue_context: Vc<FileSystemPath>,
@@ -1557,9 +1572,11 @@ async fn resolve_alias_field_result(
     field_name: &str,
 ) -> Result<Vc<ResolveResult>> {
     if result.as_bool() == Some(false) {
-        return Ok(
-            ResolveResult::primary_with_references(PrimaryResolveResult::Ignore, refs).cell(),
-        );
+        return Ok(ResolveResult::primary_with_affecting_sources(
+            PrimaryResolveResult::Ignore,
+            refs,
+        )
+        .cell());
     }
     if let Some(value) = result.as_str() {
         return Ok(resolve_internal(
@@ -1567,7 +1584,7 @@ async fn resolve_alias_field_result(
             Request::parse(Value::new(Pattern::Constant(value.to_string()))),
             resolve_options,
         )
-        .with_references(refs));
+        .with_affecting_sources(refs));
     }
     ResolvingIssue {
         severity: IssueSeverity::Error.cell(),
@@ -1580,7 +1597,7 @@ async fn resolve_alias_field_result(
     }
     .cell()
     .emit();
-    Ok(ResolveResult::unresolveable_with_references(refs).cell())
+    Ok(ResolveResult::unresolveable_with_affecting_sources(refs).cell())
 }
 
 async fn resolved(
@@ -1649,11 +1666,11 @@ async fn resolved(
         }
     }
 
-    Ok(ResolveResult::asset_with_references(
+    Ok(ResolveResult::asset_with_affecting_sources(
         Vc::upcast(FileSource::new(*path)),
         symlinks
             .iter()
-            .map(|p| Vc::upcast(AffectingResolvingAssetReference::new(*p)))
+            .map(|p| Vc::upcast(FileSource::new(*p)))
             .collect(),
     )
     .into())
@@ -1696,11 +1713,9 @@ fn handle_exports_imports_field(
         }
     }
     // other options do not apply anymore when an exports field exist
-    Ok(merge_results_with_references(
+    Ok(merge_results_with_affecting_sources(
         resolved_results,
-        vec![Vc::upcast(AffectingResolvingAssetReference::new(
-            package_json_path,
-        ))],
+        vec![Vc::upcast(FileSource::new(package_json_path))],
     ))
 }
 
@@ -1754,22 +1769,22 @@ async fn resolve_package_internal_with_imports_field(
 
 #[turbo_tasks::value]
 pub struct AffectingResolvingAssetReference {
-    path: Vc<FileSystemPath>,
+    source: Vc<Box<dyn Source>>,
 }
 
 #[turbo_tasks::value_impl]
 impl AffectingResolvingAssetReference {
     #[turbo_tasks::function]
-    pub fn new(path: Vc<FileSystemPath>) -> Vc<Self> {
-        Self::cell(AffectingResolvingAssetReference { path })
+    pub fn new(source: Vc<Box<dyn Source>>) -> Vc<Self> {
+        Self::cell(AffectingResolvingAssetReference { source })
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for AffectingResolvingAssetReference {
+impl ModuleReference for AffectingResolvingAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ResolveResult> {
-        ResolveResult::asset(Vc::upcast(FileSource::new(self.path))).into()
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::module(Vc::upcast(RawModule::new(self.source))).into()
     }
 }
 
@@ -1779,7 +1794,7 @@ impl ValueToString for AffectingResolvingAssetReference {
     async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
             "resolving is affected by {}",
-            self.path.to_string().await?
+            self.source.ident().to_string().await?
         )))
     }
 }

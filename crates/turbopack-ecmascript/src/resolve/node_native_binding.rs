@@ -12,7 +12,7 @@ use turbopack_core::{
     asset::{Asset, AssetContent},
     file_source::FileSource,
     module::{convert_asset_to_module, Module},
-    raw_module::{RawModule, RawModuleReference},
+    raw_module::RawModule,
     reference::ModuleReference,
     resolve::{
         pattern::Pattern, resolve_raw, AffectingResolvingAssetReference, ModuleResolveResult,
@@ -183,9 +183,9 @@ pub async fn resolve_node_pre_gyp_files(
                         .into_iter()
                         .map(|source| Vc::upcast(RawModule::new(source)))
                         .collect(),
-                    vec![Vc::upcast(RawModuleReference::new(Vc::upcast(
-                        AffectingResolvingAssetReference::new(config_file_path),
-                    )))],
+                    vec![Vc::upcast(AffectingResolvingAssetReference::new(
+                        Vc::upcast(FileSource::new(config_file_path)),
+                    ))],
                 )
                 .into());
             }
@@ -246,9 +246,9 @@ pub async fn resolve_node_gyp_build_files(
     let gyp_file = resolve_raw(context, binding_gyp_pat, true).await?;
     if let [PrimaryResolveResult::Asset(binding_gyp)] = &gyp_file.primary[..] {
         let mut merged_references = gyp_file
-            .references
+            .affecting_sources
             .iter()
-            .map(|&r| Vc::upcast(RawModuleReference::new(r)))
+            .map(|&r| Vc::upcast(AffectingResolvingAssetReference::new(r)))
             .collect::<Vec<_>>();
         if let AssetContent::File(file) = &*binding_gyp.content().await? {
             if let FileContent::Content(config_file) = &*file.await? {
@@ -272,9 +272,9 @@ pub async fn resolve_node_gyp_build_files(
                             resolved.insert(asset_to_source(asset).resolve().await?);
                             merged_references.extend(
                                 resolved_prebuilt_file
-                                    .references
+                                    .affecting_sources
                                     .iter()
-                                    .map(|&r| Vc::upcast(RawModuleReference::new(r))),
+                                    .map(|&r| Vc::upcast(AffectingResolvingAssetReference::new(r))),
                             );
                         }
                     }

@@ -42,11 +42,11 @@ use turbopack_core::{
     issue::{Issue, IssueExt},
     module::Module,
     output::OutputAsset,
-    raw_module::{RawModule, RawModuleReference},
+    raw_module::RawModule,
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType},
     resolve::{
-        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
-        ModuleResolveResult, ResolveResult,
+        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve,
+        AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ResolveResult,
     },
     source::{asset_to_source, Source},
 };
@@ -458,7 +458,7 @@ impl AssetContext for ModuleAssetContext {
                         ))
                     }
                 },
-                |i| async move { Ok(Vc::upcast(RawModuleReference::new(i))) },
+                |i| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(i))) },
             )
             .await?
             .into())
