@@ -37,27 +37,14 @@ struct Entry {
 }
 
 impl Yarn1Lockfile {
-    pub fn from_bytes(input: &[u8]) -> Result<Self, Error> {
-        let input = std::str::from_utf8(input)?;
+    pub fn from_bytes(input: &[u8]) -> Result<Self, super::Error> {
+        let input = std::str::from_utf8(input).map_err(Error::from)?;
         Self::from_str(input)
-    }
-
-    pub fn subgraph(&self, packages: &[String]) -> Result<Self, Error> {
-        let mut inner = Map::new();
-
-        for (key, entry) in packages.iter().filter_map(|key| {
-            let entry = self.inner.get(key)?;
-            Some((key, entry))
-        }) {
-            inner.insert(key.clone(), entry.clone());
-        }
-
-        Ok(Self { inner })
     }
 }
 
 impl FromStr for Yarn1Lockfile {
-    type Err = Error;
+    type Err = super::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = de::parse_syml(s)?;
@@ -99,12 +86,33 @@ impl Lockfile for Yarn1Lockfile {
             true => None,
         })
     }
+
+    fn subgraph(
+        &self,
+        _workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Box<dyn Lockfile>, super::Error> {
+        let mut inner = Map::new();
+
+        for (key, entry) in packages.iter().filter_map(|key| {
+            let entry = self.inner.get(key)?;
+            Some((key, entry))
+        }) {
+            inner.insert(key.clone(), entry.clone());
+        }
+
+        Ok(Box::new(Self { inner }))
+    }
+
+    fn encode(&self) -> Result<Vec<u8>, crate::Error> {
+        Ok(self.to_string().into_bytes())
+    }
 }
 
 pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {
     let lockfile = Yarn1Lockfile::from_bytes(contents)?;
-    let pruned_lockfile = lockfile.subgraph(packages)?;
-    Ok(pruned_lockfile.to_string().into_bytes())
+    let pruned_lockfile = lockfile.subgraph(&[], packages)?;
+    pruned_lockfile.encode()
 }
 
 impl Entry {

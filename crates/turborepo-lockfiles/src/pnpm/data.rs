@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
+use turbopath::RelativeUnixPathBuf;
 
 use super::{dep_path::DepPath, Error, LockfileVersion};
 
@@ -31,6 +32,8 @@ pub struct PnpmLockfile {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PatchFile {
+    // This should be a RelativeUnixPathBuf, but since that might cause unnecessary
+    // parse failures we wait until access to validate.
     path: String,
     hash: String,
 }
@@ -146,17 +149,6 @@ impl PnpmLockfile {
         Ok(this)
     }
 
-    pub fn patches(&self) -> Vec<String> {
-        let mut patches = self
-            .patched_dependencies
-            .iter()
-            .flatten()
-            .map(|(_, patch)| patch.path.clone())
-            .collect::<Vec<_>>();
-        patches.sort();
-        patches
-    }
-
     fn get_packages(&self, key: &str) -> Option<&PackageSnapshot> {
         self.packages
             .as_ref()
@@ -248,73 +240,6 @@ impl PnpmLockfile {
         }
     }
 
-    pub fn subgraph(
-        &self,
-        workspace_paths: &[String],
-        packages: &[String],
-    ) -> Result<Self, crate::Error> {
-        let importers = self
-            .importers
-            .iter()
-            .filter(|(key, _)| key.as_str() == "." || workspace_paths.contains(key))
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect::<Map<_, _>>();
-
-        let mut pruned_packages = Map::new();
-        for package in packages {
-            let entry = self
-                .get_packages(package.as_str())
-                .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
-            pruned_packages.insert(package.clone(), entry.clone());
-        }
-        for importer in importers.values() {
-            // Find all injected packages in each workspace and include it in
-            // the pruned lockfile
-            for dependency in
-                importer
-                    .dependencies_meta
-                    .iter()
-                    .flatten()
-                    .filter_map(|(dep, meta)| match meta.injected {
-                        Some(true) => Some(dep),
-                        _ => None,
-                    })
-            {
-                let (_, version) = importer
-                    .dependencies
-                    .find_resolution(dependency)
-                    .ok_or_else(|| Error::MissingInjectedPackage(dependency.clone()))?;
-
-                let entry = self
-                    .get_packages(version)
-                    .ok_or_else(|| crate::Error::MissingPackage(version.into()))?;
-                pruned_packages.insert(version.to_string(), entry.clone());
-            }
-        }
-
-        let patches = self
-            .patched_dependencies
-            .as_ref()
-            .map(|patches| Self::prune_patches(patches, &pruned_packages))
-            .transpose()?;
-
-        Ok(Self {
-            importers,
-            packages: match pruned_packages.is_empty() {
-                false => Some(pruned_packages),
-                true => None,
-            },
-            lockfile_version: self.lockfile_version.clone(),
-            never_built_dependencies: self.never_built_dependencies.clone(),
-            only_built_dependencies: self.only_built_dependencies.clone(),
-            overrides: self.overrides.clone(),
-            package_extensions_checksum: self.package_extensions_checksum.clone(),
-            patched_dependencies: patches,
-            time: None,
-            settings: self.settings.clone(),
-        })
-    }
-
     fn prune_patches(
         patches: &Map<String, PatchFile>,
         pruned_packages: &Map<String, PackageSnapshot>,
@@ -397,6 +322,88 @@ impl crate::Lockfile for PnpmLockfile {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
         ))
+    }
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
+        let importers = self
+            .importers
+            .iter()
+            .filter(|(key, _)| key.as_str() == "." || workspace_packages.contains(key))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Map<_, _>>();
+
+        let mut pruned_packages = Map::new();
+        for package in packages {
+            let entry = self
+                .get_packages(package.as_str())
+                .ok_or_else(|| crate::Error::MissingPackage(package.clone()))?;
+            pruned_packages.insert(package.clone(), entry.clone());
+        }
+        for importer in importers.values() {
+            // Find all injected packages in each workspace and include it in
+            // the pruned lockfile
+            for dependency in
+                importer
+                    .dependencies_meta
+                    .iter()
+                    .flatten()
+                    .filter_map(|(dep, meta)| match meta.injected {
+                        Some(true) => Some(dep),
+                        _ => None,
+                    })
+            {
+                let (_, version) = importer
+                    .dependencies
+                    .find_resolution(dependency)
+                    .ok_or_else(|| Error::MissingInjectedPackage(dependency.clone()))?;
+
+                let entry = self
+                    .get_packages(version)
+                    .ok_or_else(|| crate::Error::MissingPackage(version.into()))?;
+                pruned_packages.insert(version.to_string(), entry.clone());
+            }
+        }
+
+        let patches = self
+            .patched_dependencies
+            .as_ref()
+            .map(|patches| Self::prune_patches(patches, &pruned_packages))
+            .transpose()?;
+
+        Ok(Box::new(Self {
+            importers,
+            packages: match pruned_packages.is_empty() {
+                false => Some(pruned_packages),
+                true => None,
+            },
+            lockfile_version: self.lockfile_version.clone(),
+            never_built_dependencies: self.never_built_dependencies.clone(),
+            only_built_dependencies: self.only_built_dependencies.clone(),
+            overrides: self.overrides.clone(),
+            package_extensions_checksum: self.package_extensions_checksum.clone(),
+            patched_dependencies: patches,
+            time: None,
+            settings: self.settings.clone(),
+        }))
+    }
+
+    fn encode(&self) -> Result<Vec<u8>, crate::Error> {
+        Ok(serde_yaml::to_string(&self)?.into_bytes())
+    }
+
+    fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
+        let mut patches = self
+            .patched_dependencies
+            .iter()
+            .flatten()
+            .map(|(_, patch)| RelativeUnixPathBuf::new(&patch.path))
+            .collect::<Result<Vec<_>, turbopath::PathError>>()?;
+        patches.sort();
+        Ok(patches)
     }
 }
 
@@ -491,11 +498,11 @@ mod tests {
         let lockfile =
             PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-patch.yaml")).unwrap();
         assert_eq!(
-            lockfile.patches(),
+            lockfile.patches().unwrap(),
             vec![
-                "patches/@babel__core@7.20.12.patch".to_string(),
-                "patches/is-odd@3.0.1.patch".to_string(),
-                "patches/moleculer@0.14.28.patch".to_string(),
+                RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
             ]
         );
     }
@@ -725,11 +732,11 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            pruned.patches(),
+            pruned.patches().unwrap(),
             vec![
-                "patches/@babel__core@7.20.12.patch",
-                "patches/is-odd@3.0.1.patch",
-                "patches/moleculer@0.14.28.patch",
+                RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
             ]
         )
     }
@@ -743,7 +750,10 @@ mod tests {
                 &["/lodash@4.17.21(patch_hash=lgum37zgng4nfkynzh3cs7wdeq)".into()],
             )
             .unwrap();
-        assert_eq!(pruned.patches(), vec!["patches/lodash@4.17.21.patch"]);
+        assert_eq!(
+            pruned.patches().unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/lodash@4.17.21.patch").unwrap()]
+        );
 
         let pruned =
             lockfile
@@ -755,8 +765,11 @@ mod tests {
                 )
                 .unwrap();
         assert_eq!(
-            pruned.patches(),
-            vec!["patches/@babel__helper-string-parser@7.19.4.patch"]
+            pruned.patches().unwrap(),
+            vec![
+                RelativeUnixPathBuf::new("patches/@babel__helper-string-parser@7.19.4.patch")
+                    .unwrap()
+            ]
         )
     }
 

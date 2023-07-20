@@ -11,7 +11,7 @@ use turbopath::AbsoluteSystemPathBuf;
 #[cfg(feature = "run-stub")]
 use crate::commands::run;
 use crate::{
-    commands::{bin, daemon, generate, info, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
@@ -764,9 +764,17 @@ pub async fn run(
             let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
             Ok(Payload::Go(Box::new(base)))
         }
-        Command::Prune { .. } => {
+        Command::Prune {
+            scope,
+            docker,
+            output_dir,
+        } => {
+            let scope = scope.clone();
+            let docker = *docker;
+            let output_dir = output_dir.clone();
             let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
-            Ok(Payload::Go(Box::new(base)))
+            prune::prune(&base, &scope, docker, &output_dir)?;
+            Ok(Payload::Rust(Ok(0)))
         }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());

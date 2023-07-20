@@ -225,56 +225,6 @@ func toPackageManager(packageManager string) ffi_proto.PackageManager {
 	}
 }
 
-// Subgraph returns the contents of a lockfile subgraph
-func Subgraph(packageManager string, content []byte, workspaces []string, packages []string, resolutions map[string]string) ([]byte, error) {
-	var additionalData *ffi_proto.AdditionalBerryData
-	if resolutions != nil {
-		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
-	}
-	req := ffi_proto.SubgraphRequest{
-		Contents:       content,
-		Workspaces:     workspaces,
-		Packages:       packages,
-		PackageManager: toPackageManager(packageManager),
-		Resolutions:    additionalData,
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.subgraph(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.SubgraphResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-
-	if err := resp.GetError(); err != "" {
-		return nil, errors.New(err)
-	}
-
-	return resp.GetContents(), nil
-}
-
-// Patches returns all patch files referenced in the lockfile
-func Patches(content []byte, packageManager string) []string {
-	req := ffi_proto.PatchesRequest{
-		Contents:       content,
-		PackageManager: toPackageManager(packageManager),
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.patches(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.PatchesResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-	if err := resp.GetError(); err != "" {
-		panic(err)
-	}
-
-	return resp.GetPatches().GetPatches()
-}
-
 // RecursiveCopy copies src and its contents to dst
 func RecursiveCopy(src string, dst string) error {
 	req := ffi_proto.RecursiveCopyRequest{
