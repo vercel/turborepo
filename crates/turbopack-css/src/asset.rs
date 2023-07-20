@@ -179,14 +179,14 @@ impl CssChunkItem for CssModuleChunkItem {
             if let Some(import_ref) =
                 Vc::try_resolve_downcast_type::<ImportAssetReference>(*reference).await?
             {
-                for &asset in import_ref
+                for &module in import_ref
                     .resolve_reference()
-                    .primary_assets()
+                    .primary_modules()
                     .await?
                     .iter()
                 {
                     if let Some(placeable) =
-                        Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
+                        Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(module).await?
                     {
                         imports.push(CssImport::Internal(
                             import_ref,
@@ -197,14 +197,14 @@ impl CssChunkItem for CssModuleChunkItem {
             } else if let Some(compose_ref) =
                 Vc::try_resolve_downcast_type::<CssModuleComposeReference>(*reference).await?
             {
-                for &asset in compose_ref
+                for &module in compose_ref
                     .resolve_reference()
-                    .primary_assets()
+                    .primary_modules()
                     .await?
                     .iter()
                 {
                     if let Some(placeable) =
-                        Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
+                        Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(module).await?
                     {
                         imports.push(CssImport::Composes(placeable.as_chunk_item(context)));
                     }

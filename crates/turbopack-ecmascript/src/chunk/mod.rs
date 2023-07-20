@@ -329,13 +329,11 @@ impl Chunk for EcmascriptChunk {
         let assets = content
             .external_asset_references
             .iter()
-            .map(|r| r.resolve_reference().primary_assets())
+            .map(|r| r.resolve_reference().primary_output_assets())
             .try_join()
             .await?;
-        for &asset in assets.iter().flatten() {
-            if let Some(output_asset) = Vc::try_resolve_downcast(asset).await? {
-                references.push(output_asset);
-            }
+        for &output_asset in assets.iter().flatten() {
+            references.push(output_asset);
         }
 
         Ok(Vc::cell(references))

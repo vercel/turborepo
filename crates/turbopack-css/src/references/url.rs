@@ -59,9 +59,9 @@ impl UrlAssetReference {
         self: Vc<Self>,
         context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<ReferencedAsset>> {
-        for &asset in self.resolve_reference().primary_assets().await?.iter() {
+        for &module in self.resolve_reference().primary_modules().await?.iter() {
             if let Some(embeddable) =
-                Vc::try_resolve_sidecast::<Box<dyn CssEmbeddable>>(asset).await?
+                Vc::try_resolve_sidecast::<Box<dyn CssEmbeddable>>(module).await?
             {
                 return Ok(ReferencedAsset::Some(
                     embeddable.as_css_embed(context).embeddable_asset(),

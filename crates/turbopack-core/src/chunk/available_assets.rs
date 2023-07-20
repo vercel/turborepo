@@ -108,17 +108,9 @@ pub async fn chunkable_assets_set(root: Vc<Box<dyn Module>>) -> Result<Vc<Module
                         ) {
                             return Ok(chunkable
                                 .resolve_reference()
-                                .primary_assets()
+                                .primary_modules()
                                 .await?
-                                .iter()
-                                .map(|&asset| async move {
-                                    Ok(Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await?)
-                                })
-                                .try_join()
-                                .await?
-                                .into_iter()
-                                .flatten()
-                                .collect());
+                                .clone_value());
                         }
                     }
                     Ok(Vec::new())

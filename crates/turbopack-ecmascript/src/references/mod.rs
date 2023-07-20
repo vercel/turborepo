@@ -2057,25 +2057,7 @@ async fn require_resolve_visitor(
             OptionIssueSource::none(),
             try_to_severity(in_try),
         );
-        let mut values = resolved
-            .primary_assets()
-            .await?
-            .iter()
-            .map(|&asset| async move {
-                Ok(
-                    if let Some(module) = Vc::try_resolve_downcast::<Box<dyn Module>>(asset).await?
-                    {
-                        Some(require_resolve(module.ident().path()).await?)
-                    } else {
-                        None
-                    },
-                )
-            })
-            .try_join()
-            .await?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+        let mut values = resolved.primary_modules().await?.clone_value();
 
         match values.len() {
             0 => JsValue::unknown(

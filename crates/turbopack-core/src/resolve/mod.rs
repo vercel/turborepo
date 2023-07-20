@@ -303,21 +303,6 @@ impl ModuleResolveResult {
     }
 
     #[turbo_tasks::function]
-    pub async fn primary_assets(self: Vc<Self>) -> Result<Vc<Assets>> {
-        let this = self.await?;
-        Ok(Vc::cell(
-            this.primary
-                .iter()
-                .filter_map(|item| match *item {
-                    ModuleResolveResultItem::Module(a) => Some(Vc::upcast(a)),
-                    ModuleResolveResultItem::OutputAsset(a) => Some(Vc::upcast(a)),
-                    _ => None,
-                })
-                .collect(),
-        ))
-    }
-
-    #[turbo_tasks::function]
     pub async fn primary_modules(self: Vc<Self>) -> Result<Vc<Modules>> {
         let this = self.await?;
         Ok(Vc::cell(

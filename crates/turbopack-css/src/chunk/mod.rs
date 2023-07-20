@@ -398,16 +398,24 @@ impl OutputAsset for CssChunk {
         )
         .await?;
         let mut references = Vec::new();
-        let assets = content
+        let output_assets = content
             .external_asset_references
             .iter()
-            .map(|r| r.resolve_reference().primary_assets())
+            .map(|r| r.resolve_reference().primary_output_assets())
             .try_join()
             .await?;
-        for &asset in assets.iter().flatten() {
+        for &asset in output_assets.iter().flatten() {
             if let Some(output_asset) = Vc::try_resolve_downcast(asset).await? {
                 references.push(output_asset);
             }
+        }
+        let modules = content
+            .external_asset_references
+            .iter()
+            .map(|r| r.resolve_reference().primary_modules())
+            .try_join()
+            .await?;
+        for &asset in modules.iter().flatten() {
             if let Some(embeddable) =
                 Vc::try_resolve_sidecast::<Box<dyn CssEmbeddable>>(asset).await?
             {
