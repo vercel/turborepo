@@ -105,7 +105,7 @@ pub async fn url_resolve(
         rel_result
     };
     let result = origin.context().process_resolve_result(result, ty.clone());
-    Ok(handle_resolve_error(
+    handle_resolve_error(
         result,
         ty,
         origin.origin_path(),
@@ -114,7 +114,7 @@ pub async fn url_resolve(
         OptionIssueSource::some(issue_source),
         issue_severity,
     )
-    .await?)
+    .await
 }
 
 async fn specific_resolve(
