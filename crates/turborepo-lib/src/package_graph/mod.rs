@@ -4,6 +4,8 @@ use std::{
 };
 
 use anyhow::Result;
+use itertools::Itertools;
+use petgraph::visit::EdgeRef;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
@@ -63,8 +65,33 @@ impl PackageGraph {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
-    pub fn validate(&self) -> Result<()> {
-        // TODO
+    pub fn validate(&self) -> Result<(), builder::Error> {
+        // This is equivalent to AcyclicGraph.Cycles from Go's dag library
+        let cycles_lines = petgraph::algo::tarjan_scc(&self.workspace_graph)
+            .into_iter()
+            .filter(|cycle| cycle.len() > 1)
+            .map(|cycle| {
+                let workspaces = cycle
+                    .into_iter()
+                    .map(|id| self.workspace_graph.node_weight(id).unwrap());
+                format!("\t{}", workspaces.format(", "))
+            })
+            .join("\n");
+
+        if !cycles_lines.is_empty() {
+            return Err(builder::Error::CyclicDependencies(cycles_lines));
+        }
+
+        for edge in self.workspace_graph.edge_references() {
+            if edge.source() == edge.target() {
+                let node = self
+                    .workspace_graph
+                    .node_weight(edge.source())
+                    .expect("edge pointed to missing node");
+                return Err(builder::Error::SelfDependency(node.clone()));
+            }
+        }
+
         Ok(())
     }
 
@@ -143,6 +170,14 @@ impl fmt::Display for WorkspaceName {
     }
 }
 
+impl fmt::Display for WorkspaceNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WorkspaceNode::Root => f.write_str("ROOT_NODE"),
+            WorkspaceNode::Workspace(workspace) => workspace.fmt(f),
+        }
+    }
+}
 impl From<String> for WorkspaceName {
     fn from(value: String) -> Self {
         Self::Other(value)
@@ -157,6 +192,8 @@ impl<'a> From<&'a str> for WorkspaceName {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches::assert_matches;
+
     use serde_json::json;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -175,6 +212,7 @@ mod test {
         let closure =
             pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace(WorkspaceName::Root)));
         assert!(closure.contains(&WorkspaceNode::Root));
+        assert!(pkg_graph.validate().is_ok());
     }
 
     #[test]
@@ -213,6 +251,7 @@ mod test {
         .build()
         .unwrap();
 
+        assert!(pkg_graph.validate().is_ok());
         let closure = pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace("a".into())));
         assert_eq!(
             closure,
@@ -327,6 +366,7 @@ mod test {
         .build()
         .unwrap();
 
+        assert!(pkg_graph.validate().is_ok());
         let foo = WorkspaceName::from("foo");
         let bar = WorkspaceName::from("bar");
 
@@ -353,5 +393,88 @@ mod test {
             pkg_graph.transitive_external_dependencies([&foo, &bar].iter().copied()),
             HashSet::from_iter(vec![&a, &b, &c,])
         );
+    }
+
+    #[test]
+    fn test_circular_dependency() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_manger(Some(PackageManager::Npm))
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("package_a"),
+                PackageJson::from_value(json!({
+                    "name": "foo",
+                    "dependencies": {
+                        "bar": "*"
+                    }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_b"),
+                PackageJson::from_value(json!({
+                    "name": "bar",
+                    "dependencies": {
+                        "baz": "*",
+                    }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("package_c"),
+                PackageJson::from_value(json!({
+                    "name": "baz",
+                    "dependencies": {
+                        "foo": "*",
+                    }
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .unwrap();
+
+        assert_matches!(
+            pkg_graph.validate(),
+            Err(builder::Error::CyclicDependencies(_))
+        );
+    }
+
+    #[test]
+    fn test_self_dependency() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_manger(Some(PackageManager::Npm))
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("package_a"),
+                PackageJson::from_value(json!({
+                    "name": "foo",
+                    "dependencies": {
+                        "foo": "*"
+                    }
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .with_lockfile(Some(Box::new(MockLockfile {})))
+        .build()
+        .unwrap();
+
+        assert_matches!(pkg_graph.validate(), Err(builder::Error::SelfDependency(_)));
     }
 }

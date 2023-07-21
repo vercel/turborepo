@@ -42,6 +42,10 @@ pub enum Error {
     PackageJson(#[from] crate::package_json::Error),
     #[error("package.json must have a name field")]
     PackageJsonMissingName,
+    #[error("cyclic dependency detected:\n{0}")]
+    CyclicDependencies(String),
+    #[error("{0} depends on itself")]
+    SelfDependency(WorkspaceNode),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
 }
