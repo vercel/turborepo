@@ -2280,7 +2280,7 @@ impl Task {
                 current.add(*v);
             }
         }
-        Ok(Vc::into_raw(Vc::cell::<AutoSet<RawVc>>(
+        Ok(Vc::into_raw(Vc::<AutoSet<RawVc>>::cell(
             current.iter().copied().collect(),
         )))
     }
