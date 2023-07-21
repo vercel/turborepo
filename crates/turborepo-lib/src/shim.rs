@@ -88,6 +88,7 @@ impl ShimArgs {
                 is_forwarded_args = true;
             } else if arg == "--verbosity" {
                 // If we see `--verbosity` we expect the next arg to be a number.
+                remaining_turbo_args.push(arg);
                 found_verbosity_flag = true
             } else if arg.starts_with("--verbosity=") || found_verbosity_flag {
                 let verbosity_count = if found_verbosity_flag {
@@ -98,8 +99,10 @@ impl ShimArgs {
                 };
 
                 verbosity = verbosity_count.parse::<usize>().unwrap_or(0);
+                remaining_turbo_args.push(arg);
             } else if arg == "-v" || arg.starts_with("-vv") {
                 verbosity = arg[1..].len();
+                remaining_turbo_args.push(arg);
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
                 //cwd = Some(arg.into());
