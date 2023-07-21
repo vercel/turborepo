@@ -211,7 +211,7 @@ async fn build_internal(
         .map(|request_vc| async move {
             let ty = Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined));
             let request = request_vc.await?;
-            Ok(origin
+            origin
                 .resolve_asset(request_vc, origin.resolve_options(ty.clone()), ty)
                 .first_module()
                 .await?
@@ -221,7 +221,7 @@ async fn build_internal(
                         request.request().unwrap(),
                         project_dir
                     )
-                })?)
+                })
         })
         .try_join()
         .await?;
