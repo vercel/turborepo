@@ -137,9 +137,10 @@ func HashTaskHashable(task *TaskHashable) (string, error) {
 	}
 
 	{
-		arena := capnp.SingleSegment(nil)
-		_, seg, _ := capnp.NewMessage(arena)
-		deps, _ := turbo_capnp.NewTaskOutputs(seg)
+		deps, err := taskMsg.NewOutputs()
+		if err != nil {
+			return "", err
+		}
 
 		err = assignList(task.Outputs.Inclusions, deps.SetInclusions, seg)
 		if err != nil {
@@ -305,12 +306,12 @@ func HashLockfilePackages(packages []lockfile.Package) (string, error) {
 		return "", err
 	}
 
-	globalMsg, err := turbo_capnp.NewLockFilePackages(seg)
+	globalMsg, err := turbo_capnp.NewRootLockFilePackages(seg)
 	if err != nil {
 		return "", err
 	}
 
-	entries, err := turbo_capnp.NewPackage_List(seg, int32(len(packages)))
+	entries, err := globalMsg.NewPackages(int32(len(packages)))
 	for i, pkg := range packages {
 		entry := entries.At(i)
 
@@ -324,7 +325,7 @@ func HashLockfilePackages(packages []lockfile.Package) (string, error) {
 			return "", err
 		}
 
-		entry.SetFound(true)
+		entry.SetFound(pkg.Found)
 	}
 
 	out, err := HashMessage(globalMsg.Message())
@@ -335,7 +336,7 @@ func HashLockfilePackages(packages []lockfile.Package) (string, error) {
 	return out, nil
 }
 
-func HashFileHashes(packages map[turbopath.AnchoredUnixPath]string) (string, error) {
+func HashFileHashes(fileHashes map[turbopath.AnchoredUnixPath]string) (string, error) {
 	arena := capnp.SingleSegment(nil)
 
 	_, seg, err := capnp.NewMessage(arena)
@@ -343,18 +344,18 @@ func HashFileHashes(packages map[turbopath.AnchoredUnixPath]string) (string, err
 		return "", err
 	}
 
-	globalMsg, err := turbo_capnp.NewFileHashes(seg)
+	globalMsg, err := turbo_capnp.NewRootFileHashes(seg)
 	if err != nil {
 		return "", err
 	}
 
 	{
-		entries, err := globalMsg.NewFileHashes(int32(len(packages)))
+		entries, err := globalMsg.NewFileHashes(int32(len(fileHashes)))
 		if err != nil {
 			return "", err
 		}
 
-		err = assignSortedHashMap(packages, func(i int, key string, value string) error {
+		err = assignSortedHashMap(fileHashes, func(i int, key string, value string) error {
 			entry := entries.At(i)
 
 			err = entry.SetKey(key)

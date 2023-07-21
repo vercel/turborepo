@@ -125,6 +125,8 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
                 let mut package = packages_builder.reborrow().get(i as u32);
                 package.set_key(key);
                 package.set_version(version);
+                // we don't track this in rust, set it to false
+                package.set_found(false);
             }
         }
 
@@ -149,7 +151,7 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             // and set the entries in the capnp message
 
             let mut hashable: Vec<_> = file_hashes.into_iter().collect();
-            hashable.sort_by(|a, b| a.0.cmp(&b.0));
+            hashable.sort_by(|(path_a, _), (path_b, _)| path_a.cmp(&path_b));
 
             for (i, (key, value)) in hashable.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
