@@ -3,7 +3,9 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
-pub type Pipeline = HashMap<String, BookkeepingTaskDefinition>;
+use crate::run::task_id::TaskName;
+
+pub type Pipeline = HashMap<TaskName<'static>, BookkeepingTaskDefinition>;
 
 #[derive(Clone, Debug, Default, Serialize, PartialEq, Eq)]
 pub struct BookkeepingTaskDefinition {
