@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
+use itertools::Itertools;
 use petgraph::visit::EdgeRef;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
@@ -66,30 +67,19 @@ impl PackageGraph {
 
     pub fn validate(&self) -> Result<(), builder::Error> {
         // This is equivalent to AcyclicGraph.Cycles from Go's dag library
-        let cycles = petgraph::algo::tarjan_scc(&self.workspace_graph)
+        let cycles_lines = petgraph::algo::tarjan_scc(&self.workspace_graph)
             .into_iter()
             .filter(|cycle| cycle.len() > 1)
-            .collect::<Vec<_>>();
+            .map(|cycle| {
+                let workspaces = cycle
+                    .into_iter()
+                    .map(|id| self.workspace_graph.node_weight(id).unwrap());
+                format!("\t{}", workspaces.format(", "))
+            })
+            .join("\n");
 
-        if !cycles.is_empty() {
-            let lines = cycles
-                .into_iter()
-                .map(|cycle| {
-                    let cycle = cycle
-                        .into_iter()
-                        .map(|id| self.workspace_graph.node_weight(id).unwrap())
-                        .collect::<Vec<_>>();
-                    format!(
-                        "\t{}",
-                        cycle
-                            .into_iter()
-                            .map(|w| w.to_string())
-                            .collect::<Vec<_>>()
-                            .join(",")
-                    )
-                })
-                .collect::<Vec<_>>();
-            return Err(builder::Error::CyclicDependencies(lines.join("\n")));
+        if !cycles_lines.is_empty() {
+            return Err(builder::Error::CyclicDependencies(cycles_lines));
         }
 
         for edge in self.workspace_graph.edge_references() {
