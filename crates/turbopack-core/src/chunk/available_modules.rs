@@ -75,7 +75,7 @@ impl AvailableAssets {
             }
         }
         for root in this.roots.iter() {
-            if chunkable_assets_set(*root).await?.contains(&asset) {
+            if chunkable_modules_set(*root).await?.contains(&asset) {
                 return Ok(Vc::cell(true));
             }
         }
@@ -84,7 +84,7 @@ impl AvailableAssets {
 }
 
 #[turbo_tasks::function]
-pub async fn chunkable_assets_set(root: Vc<Box<dyn Module>>) -> Result<Vc<ModulesSet>> {
+pub async fn chunkable_modules_set(root: Vc<Box<dyn Module>>) -> Result<Vc<ModulesSet>> {
     let assets = AdjacencyMap::new()
         .skip_duplicates()
         .visit(once(root), |&asset: &Vc<Box<dyn Module>>| async move {

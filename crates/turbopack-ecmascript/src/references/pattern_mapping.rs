@@ -170,12 +170,12 @@ impl PatternMapping {
             Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(module).await?
         {
             if let ResolveType::EsmAsync(availability_info) = *resolve_type {
-                let available = if let Some(available_assets) = availability_info.available_assets()
-                {
-                    *available_assets.includes(Vc::upcast(chunkable)).await?
-                } else {
-                    false
-                };
+                let available =
+                    if let Some(available_modules) = availability_info.available_modules() {
+                        *available_modules.includes(Vc::upcast(chunkable)).await?
+                    } else {
+                        false
+                    };
                 if !available {
                     if let Some(loader) = <Box<dyn EcmascriptChunkItem>>::from_async_asset(
                         context,

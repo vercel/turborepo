@@ -16,11 +16,12 @@ pub mod source_map;
 
 pub use source_map::SourceMapReference;
 
-/// A reference to one or multiple [Asset]s or other special things.
-/// There are a bunch of optional traits that can influence how these references
-/// are handled. e. g. [ChunkableModuleReference]
+/// A reference to one or multiple [Module]s, [OutputAsset]s or other special
+/// things. There are a bunch of optional traits that can influence how these
+/// references are handled. e. g. [ChunkableModuleReference]
 ///
-/// [Asset]: crate::asset::Asset
+/// [Module]: crate::module::Module
+/// [OutputAsset]: crate::output::OutputAsset
 /// [ChunkableModuleReference]: crate::chunk::ChunkableModuleReference
 #[turbo_tasks::value_trait]
 pub trait ModuleReference: ValueToString {
@@ -134,11 +135,11 @@ impl SingleOutputAssetReference {
     }
 }
 
-/// Aggregates all [Asset]s referenced by an [Asset]. [AssetReference]
-/// This does not include transitively references [Asset]s, but it includes
-/// primary and secondary [Asset]s referenced.
+/// Aggregates all [Module]s referenced by an [Module]. [ModuleReference]
+/// This does not include transitively references [Module]s, but it includes
+/// primary and secondary [Module]s referenced.
 ///
-/// [Asset]: crate::asset::Asset
+/// [Module]: crate::module::Module
 #[turbo_tasks::function]
 pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
     let references_set = module.references().await?;

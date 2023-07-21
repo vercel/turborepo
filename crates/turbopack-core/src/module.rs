@@ -11,8 +11,8 @@ pub trait Module: Asset {
     /// all properties of the [Module].
     fn ident(&self) -> Vc<AssetIdent>;
 
-    /// Other things (most likely [Asset]s) referenced from this [Module].
-    // TODO refactor this to ensure that only [Module]s can be referenced
+    /// Other [Module]s or [OutputAsset]s referenced from this [Module].
+    // TODO refactor to avoid returning [OutputAsset]s here
     fn references(self: Vc<Self>) -> Vc<ModuleReferences> {
         ModuleReferences::empty()
     }

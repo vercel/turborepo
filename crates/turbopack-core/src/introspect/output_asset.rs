@@ -25,36 +25,6 @@ fn ty() -> Vc<String> {
     Vc::cell("output asset".to_string())
 }
 
-#[turbo_tasks::function]
-fn reference_ty() -> Vc<String> {
-    Vc::cell("reference".to_string())
-}
-
-#[turbo_tasks::function]
-fn placed_or_parallel_reference_ty() -> Vc<String> {
-    Vc::cell("placed/parallel reference".to_string())
-}
-
-#[turbo_tasks::function]
-fn placed_reference_ty() -> Vc<String> {
-    Vc::cell("placed reference".to_string())
-}
-
-#[turbo_tasks::function]
-fn parallel_reference_ty() -> Vc<String> {
-    Vc::cell("parallel reference".to_string())
-}
-
-#[turbo_tasks::function]
-fn isolated_parallel_reference_ty() -> Vc<String> {
-    Vc::cell("isolated parallel reference".to_string())
-}
-
-#[turbo_tasks::function]
-fn async_reference_ty() -> Vc<String> {
-    Vc::cell("async reference".to_string())
-}
-
 #[turbo_tasks::value_impl]
 impl Introspectable for IntrospectableOutputAsset {
     #[turbo_tasks::function]

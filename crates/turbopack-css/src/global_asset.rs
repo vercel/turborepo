@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::PassthroughAsset,
+    chunk::PassthroughModule,
     context::AssetContext,
     ident::AssetIdent,
     module::Module,
@@ -75,4 +75,4 @@ fn modifier() -> Vc<String> {
 
 /// A GlobalAsset is a transparent wrapper around an actual CSS asset.
 #[turbo_tasks::value_impl]
-impl PassthroughAsset for GlobalCssAsset {}
+impl PassthroughModule for GlobalCssAsset {}

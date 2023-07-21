@@ -273,8 +273,8 @@ impl Chunk for EcmascriptChunk {
         let mut modifiers = vec![];
 
         // Available assets are included
-        if let Some(available_assets) = this.availability_info.available_assets() {
-            modifiers.push(Vc::cell(available_assets.hash().await?.to_string()));
+        if let Some(available_modules) = this.availability_info.available_modules() {
+            modifiers.push(Vc::cell(available_modules.hash().await?.to_string()));
         }
 
         // Simplify when it's only a single main entry without extra info
@@ -327,7 +327,7 @@ impl Chunk for EcmascriptChunk {
         .await?;
         let mut references = Vec::new();
         let assets = content
-            .external_asset_references
+            .external_module_references
             .iter()
             .map(|r| r.resolve_reference().primary_output_assets())
             .try_join()
