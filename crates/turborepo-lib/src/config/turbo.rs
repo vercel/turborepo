@@ -11,7 +11,7 @@ use turborepo_cache::RemoteCacheOpts;
 use crate::{
     config::Error,
     package_json::PackageJson,
-    run::task_id::{get_package_task_from_id, is_package_task, root_task_id},
+    run::task_id::{TaskName, ROOT_PKG_NAME},
     task_graph::{
         BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable, TaskOutputMode, TaskOutputs,
     },
@@ -70,7 +70,7 @@ pub struct RawTurboJSON {
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(transparent)]
-struct RawPipeline(BTreeMap<String, RawTaskDefinition>);
+struct RawPipeline(BTreeMap<TaskName<'static>, RawTaskDefinition>);
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -289,24 +289,14 @@ impl RawTurboJSON {
         let mut this = self.clone();
         if let Some(pipeline) = &mut this.pipeline {
             pipeline.0.retain(|task_name, _| {
-                workspaces
-                    .iter()
-                    .any(|workspace| Self::is_task_in_package(task_name, workspace.as_ref()))
+                task_name.in_workspace(ROOT_PKG_NAME)
+                    || workspaces
+                        .iter()
+                        .any(|workspace| task_name.in_workspace(workspace.as_ref()))
             })
         }
 
         this
-    }
-
-    // TODO this will be moved to a more comprehensive task name module
-    // when porting the task graph
-    fn is_task_in_package(task: &str, workspace: &str) -> bool {
-        match task.split_once('#') {
-            // If a specific package task, then check that the task is for the given workspace
-            Some((package_name, _)) => package_name == workspace || package_name == "//",
-            // If there's no '#' then it isn't a specific package task
-            None => true,
-        }
     }
 }
 
@@ -434,11 +424,14 @@ impl TurboJson {
             // tasks
             (true, Ok(mut turbo_from_files)) => {
                 let mut pipeline = Pipeline::default();
-                for (task_id, task_definition) in turbo_from_files.pipeline {
-                    if is_package_task(&task_id) {
-                        return Err(Error::PackageTaskInSinglePackageMode { task_id });
+                for (task_name, task_definition) in turbo_from_files.pipeline {
+                    if task_name.is_package_task() {
+                        return Err(Error::PackageTaskInSinglePackageMode {
+                            task_id: task_name.to_string(),
+                        });
                     }
-                    pipeline.insert(root_task_id(&task_id), task_definition);
+
+                    pipeline.insert(TaskName::root_task(task_name.as_ref()), task_definition);
                 }
 
                 turbo_from_files.pipeline = pipeline;
@@ -449,7 +442,7 @@ impl TurboJson {
 
         for script_name in root_package_json.scripts.keys() {
             if !turbo_json.has_task(script_name) {
-                let task_name = root_task_id(script_name);
+                let task_name = TaskName::root_task(script_name);
                 // Explicitly set Cache to false in this definition and add the bookkeeping
                 // fields so downstream we can pretend that it was set on
                 // purpose (as if read from a config file) rather than
@@ -477,12 +470,11 @@ impl TurboJson {
 
     fn has_task(&self, task: &str) -> bool {
         for key in self.pipeline.keys() {
-            if key == task {
+            if key.as_ref() == task {
                 return true;
             }
-            if is_package_task(key) {
-                let (_, task_name) = get_package_task_from_id(key);
-                if task_name == task {
+            if let Some(task_id) = key.task_id() {
+                if task_id.task() == task {
                     return true;
                 }
             }
@@ -582,7 +574,7 @@ mod tests {
         },
         TurboJson {
             pipeline: [(
-                "//#build".to_string(),
+                "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -617,7 +609,7 @@ mod tests {
         },
         TurboJson {
             pipeline: [(
-                "//#build".to_string(),
+                "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -628,7 +620,7 @@ mod tests {
                 }
             ),
             (
-                "//#test".to_string(),
+                "//#test".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
