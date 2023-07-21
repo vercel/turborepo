@@ -9086,6 +9086,7 @@ dependencies = [
  "turbopack-dev",
  "turbopack-dev-server",
  "turbopack-ecmascript",
+ "turbopack-ecmascript-hmr-protocol",
  "turbopack-ecmascript-plugins",
  "turbopack-ecmascript-runtime",
  "turbopack-env",
@@ -9147,6 +9148,7 @@ dependencies = [
  "turbo-tasks-memory",
  "turbopack",
  "turbopack-bench",
+ "turbopack-build",
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-dev",
@@ -9315,6 +9317,7 @@ dependencies = [
  "turbopack-cli-utils",
  "turbopack-core",
  "turbopack-ecmascript",
+ "turbopack-ecmascript-hmr-protocol",
  "urlencoding",
 ]
 
@@ -9325,6 +9328,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "criterion",
+ "futures",
  "indexmap",
  "indoc",
  "lazy_static",
@@ -9352,6 +9356,16 @@ dependencies = [
  "turbopack-core",
  "turbopack-swc-utils",
  "url",
+]
+
+[[package]]
+name = "turbopack-ecmascript-hmr-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "turbopack-cli-utils",
+ "turbopack-core",
 ]
 
 [[package]]
