@@ -232,7 +232,7 @@ func TestFileWatchingSubfolderDeletion(t *testing.T) {
 // we get a deleted event at the root.
 //
 // ✅ macOS
-// ❌ Linux - we do not get an event when the root is recreated L287
+// ✅ Linux
 // ❌ Windows - we do not get an event when the root is recreated L287
 func TestFileWatchingRootDeletion(t *testing.T) {
 	logger := hclog.Default()
@@ -286,7 +286,7 @@ func TestFileWatchingRootDeletion(t *testing.T) {
 // file watching will continue, and a rename event will be sent.
 //
 // ✅ macOS
-// ❌ Linux - renaming generates file creation events of the new folder (and all the subcontents), not a rename
+// ✅ Linux
 // ❌ Windows - you cannot rename a watched folder (see https://github.com/fsnotify/fsnotify/issues/356)
 func TestFileWatchingSubfolderRename(t *testing.T) {
 	logger := hclog.Default()
@@ -406,7 +406,7 @@ func TestFileWatchingRootRename(t *testing.T) {
 // be watched, and raise events with the original path.
 //
 // ✅ macOS
-// ❌ Linux - L493 fails because symlinks do not produce events
+// ✅ Linux
 // ✅ Windows - requires admin permissions
 func TestFileWatchSymlinkCreate(t *testing.T) {
 	logger := hclog.Default()

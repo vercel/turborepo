@@ -74,15 +74,17 @@ func (f *fsNotifyBackend) onFileAdded(name turbopath.AbsoluteSystemPath) error {
 		}
 		return errors.Wrapf(err, "error checking lstat of new file %v", name)
 	}
-	if info.IsDir() {
+	if info.Mode()&os.ModeSymlink > 0 {
+		// do nothing for symlinks
+	} else if info.IsDir() {
 		// If a directory has been added, we need to synthesize events for everything it contains
 		if err := f.watchRecursively(name, []string{}, synthesizeEvents); err != nil {
 			return errors.Wrapf(err, "failed recursive watch of %v", name)
 		}
 	} else {
-		if err := f.watcher.Add(name.ToString()); err != nil {
-			return errors.Wrapf(err, "failed adding watch to %v", name)
-		}
+		// if err := f.watcher.Add(name.ToString()); err != nil {
+		// 	return errors.Wrapf(err, "failed adding watch to %v", name)
+		// }
 	}
 	return nil
 }
@@ -135,6 +137,13 @@ outer:
 			if eventType == FileAdded {
 				if err := f.onFileAdded(path); err != nil {
 					f.errors <- err
+				}
+			}
+			if eventType == FileRenamed {
+				// synthesize a delete event for a rename
+				f.events <- Event{
+					Path:      path,
+					EventType: FileDeleted,
 				}
 			}
 			f.events <- Event{
