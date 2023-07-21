@@ -10,6 +10,7 @@ use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Method, RequestBuilder};
 use serde::{Deserialize, Serialize};
+use turborepo_ci::{is_ci, Vendor};
 use url::Url;
 
 pub use crate::error::{Error, Result};
@@ -186,6 +187,16 @@ impl APIClient {
         Ok(response.json().await?)
     }
 
+    fn add_ci_header(mut request_builder: RequestBuilder) -> RequestBuilder {
+        if is_ci() {
+            if let Some(vendor_constant) = Vendor::get_constant() {
+                request_builder = request_builder.header("x-artifact-client-ci", vendor_constant);
+            }
+        }
+
+        request_builder
+    }
+
     fn add_team_params(
         mut request_builder: RequestBuilder,
         team_id: &str,
@@ -296,11 +307,11 @@ impl APIClient {
             .header("User-Agent", self.user_agent.clone())
             .body(artifact_body.to_vec());
 
-        // TODO: Add CI header
-
         if allow_auth {
             request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
         }
+
+        request_builder = Self::add_ci_header(request_builder);
 
         if let Some(tag) = tag {
             request_builder = request_builder.header("x-artifact-tag", tag);

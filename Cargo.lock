@@ -9603,6 +9603,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
+ "turborepo-ci",
  "url",
  "vercel-api-mock",
 ]
@@ -9639,6 +9640,13 @@ dependencies = [
  "turborepo-api-client",
  "vercel-api-mock",
  "zstd",
+]
+
+[[package]]
+name = "turborepo-ci"
+version = "0.1.0"
+dependencies = [
+ "tracing",
 ]
 
 [[package]]
