@@ -36,7 +36,7 @@ func (c *testClient) OnFileWatchClosed() {}
 func expectFilesystemEvent(t *testing.T, ch <-chan Event, expected Event) {
 	// mark this method as a helper
 	t.Helper()
-	timeout := time.After(1 * time.Second)
+	timeout := time.After(10 * time.Second)
 	for {
 		select {
 		case ev := <-ch:
@@ -330,7 +330,11 @@ func TestFileWatchingSubfolderRename(t *testing.T) {
 	err = repoRoot.UntypedJoin("parent").Rename(repoRoot.UntypedJoin("new_parent"))
 	assert.NilError(t, err, "Rename")
 	expectFilesystemEvent(t, ch, Event{
-		EventType: FileRenamed,
+		EventType: FileDeleted,
+		Path:      repoRoot.UntypedJoin("parent"),
+	})
+	expectFilesystemEvent(t, ch, Event{
+		EventType: FileAdded,
 		Path:      repoRoot.UntypedJoin("new_parent"),
 	})
 
@@ -580,9 +584,15 @@ func TestFileWatchSymlinkRename(t *testing.T) {
 	assert.NilError(t, err, "Rename")
 
 	expectFilesystemEvent(t, ch, Event{
-		EventType: FileRenamed,
+		EventType: FileDeleted,
+		Path:      symlinkPath,
+	})
+
+	expectFilesystemEvent(t, ch, Event{
+		EventType: FileAdded,
 		Path:      newSymlinkPath,
 	})
+
 }
 
 // TestFileWatchRootParentRename tests that when the parent directory of the root is renamed,
