@@ -17,7 +17,7 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func Test_isWorkspaceReference(t *testing.T) {
+func Test_isInternal(t *testing.T) {
 	rootpath, err := filepath.Abs(filepath.FromSlash("/some/repo"))
 	if err != nil {
 		t.Fatalf("failed to create absolute root path %v", err)
@@ -30,19 +30,23 @@ func Test_isWorkspaceReference(t *testing.T) {
 		name              string
 		packageVersion    string
 		dependencyVersion string
+		depName           string
 		want              bool
+		wantDepName       string
 	}{
 		{
 			name:              "handles exact match",
 			packageVersion:    "1.2.3",
 			dependencyVersion: "1.2.3",
 			want:              true,
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles semver range satisfied",
 			packageVersion:    "1.2.3",
 			dependencyVersion: "^1.0.0",
 			want:              true,
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles semver range not-satisfied",
@@ -55,18 +59,28 @@ func Test_isWorkspaceReference(t *testing.T) {
 			packageVersion:    "1.2.3",
 			dependencyVersion: "workspace:1.2.3",
 			want:              true,
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles workspace protocol with relative path",
 			packageVersion:    "1.2.3",
 			dependencyVersion: "workspace:../other-package/",
 			want:              true,
+			wantDepName:       "@scope/foo",
+		},
+		{
+			name:              "handles workspace protocol with relative path",
+			packageVersion:    "1.2.3",
+			dependencyVersion: "workspace:../@scope/foo",
+			want:              true,
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles npm protocol with satisfied semver range",
 			packageVersion:    "1.2.3",
 			dependencyVersion: "npm:^1.2.3",
 			want:              true, // default in yarn is to use the workspace version unless `enableTransparentWorkspaces: true`. This isn't currently being checked.
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles npm protocol with non-satisfied semver range",
@@ -85,18 +99,21 @@ func Test_isWorkspaceReference(t *testing.T) {
 			packageVersion:    "sometag",
 			dependencyVersion: "1.2.3",
 			want:              true, // for backwards compatability with the code before versions were verified
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles non-semver package version",
 			packageVersion:    "1.2.3",
 			dependencyVersion: "sometag",
 			want:              true, // for backwards compatability with the code before versions were verified
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles file:... inside repo",
 			packageVersion:    "1.2.3",
 			dependencyVersion: "file:../libB",
 			want:              true, // this is a sibling package
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles file:... outside repo",
@@ -109,6 +126,7 @@ func Test_isWorkspaceReference(t *testing.T) {
 			packageVersion:    "1.2.3",
 			dependencyVersion: "link:../libB",
 			want:              true, // this is a sibling package
+			wantDepName:       "@scope/foo",
 		},
 		{
 			name:              "handles link:... outside repo",
@@ -121,15 +139,48 @@ func Test_isWorkspaceReference(t *testing.T) {
 			packageVersion:    "0.0.0-development",
 			dependencyVersion: "*",
 			want:              true, // "*" should always match
+			wantDepName:       "@scope/foo",
+		},
+		{
+			name:              "handles pnpm alias star",
+			packageVersion:    "1.2.3",
+			depName:           "foo",
+			dependencyVersion: "workspace:@scope/foo@*",
+			want:              true,
+			wantDepName:       "@scope/foo",
+		},
+		{
+			name:              "handles pnpm alias tilda",
+			packageVersion:    "1.2.3",
+			depName:           "foo",
+			dependencyVersion: "workspace:@scope/foo@~",
+			want:              true,
+			wantDepName:       "@scope/foo",
+		},
+		{
+			name:              "handles pnpm alias caret",
+			packageVersion:    "1.2.3",
+			depName:           "foo",
+			dependencyVersion: "workspace:@scope/foo@^",
+			want:              true,
+			wantDepName:       "@scope/foo",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isWorkspaceReference(tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath)
-			if got != tt.want {
-				t.Errorf("isWorkspaceReference(%v, %v, %v, %v) got = %v, want %v", tt.packageVersion, tt.dependencyVersion, pkgDir, rootpath, got, tt.want)
+			splitter := dependencySplitter{
+				workspaces: map[string]*fs.PackageJSON{"@scope/foo": {Version: tt.packageVersion}},
+				pkgDir:     pkgDir,
+				rootPath:   rootpath,
 			}
+			depName := tt.depName
+			if depName == "" {
+				depName = "@scope/foo"
+			}
+			name, got := splitter.isInternal(depName, tt.dependencyVersion)
+			assert.Equal(t, got, tt.want, tt.name)
+			assert.Equal(t, name, tt.wantDepName, tt.name)
 		})
 	}
 }

@@ -228,7 +228,7 @@ mod test {
 
         let mut child = Command::new(node_bin).spawn().unwrap();
         pid_path
-            .create_with_contents(format!("{}", child.id()).as_ref())
+            .create_with_contents(format!("{}", child.id()))
             .unwrap();
 
         let running = Arc::new(AtomicBool::new(true));

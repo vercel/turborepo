@@ -12,33 +12,33 @@ use crate::{package_json::PackageJson, package_manager::PackageManager};
 
 mod builder;
 
-pub use builder::PackageGraphBuilder;
+pub use builder::{Error, PackageGraphBuilder};
 
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
     #[allow(dead_code)]
     node_lookup: HashMap<WorkspaceNode, petgraph::graph::NodeIndex>,
-    workspaces: HashMap<WorkspaceName, Entry>,
+    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Entry {
-    package_json: PackageJson,
-    package_json_path: AnchoredSystemPathBuf,
-    unresolved_external_dependencies: Option<HashSet<Package>>,
-    transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
+pub struct WorkspaceInfo {
+    pub package_json: PackageJson,
+    pub package_json_path: AnchoredSystemPathBuf,
+    pub unresolved_external_dependencies: Option<HashSet<Package>>,
+    pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
-impl Entry {
+impl WorkspaceInfo {
     pub fn package_json_path(&self) -> &AnchoredSystemPathBuf {
         &self.package_json_path
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
-struct Package {
+pub struct Package {
     name: String,
     version: String,
 }
@@ -124,7 +124,11 @@ impl PackageGraph {
         Some(&entry.package_json)
     }
 
-    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &Entry)> {
+    pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&WorkspaceInfo> {
+        self.workspaces.get(workspace)
+    }
+
+    pub fn workspaces(&self) -> impl Iterator<Item = (&WorkspaceName, &WorkspaceInfo)> {
         self.workspaces.iter()
     }
 
@@ -133,10 +137,16 @@ impl PackageGraph {
             .expect("package graph was built without root package.json")
     }
 
-    pub fn transitive_closure(&self, node: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
-        let idx = self.node_lookup.get(node)?;
+    pub fn transitive_closure<'a, I: IntoIterator<Item = &'a WorkspaceNode>>(
+        &self,
+        nodes: I,
+    ) -> HashSet<&WorkspaceNode> {
+        let indexes = nodes
+            .into_iter()
+            .filter_map(|node| self.node_lookup.get(node))
+            .copied();
         let mut visited = HashSet::new();
-        petgraph::visit::depth_first_search(&self.workspace_graph, Some(*idx), |event| {
+        petgraph::visit::depth_first_search(&self.workspace_graph, indexes, |event| {
             if let petgraph::visit::DfsEvent::Discover(n, _) = event {
                 visited.insert(
                     self.workspace_graph
@@ -145,13 +155,19 @@ impl PackageGraph {
                 );
             }
         });
-        Some(visited)
+        visited
     }
 
-    #[allow(dead_code)]
-    fn external_dependencies(&self, workspace: &WorkspaceName) -> Option<&HashSet<Package>> {
-        let entry = self.workspaces.get(workspace)?;
-        entry.unresolved_external_dependencies.as_ref()
+    pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a WorkspaceName>>(
+        &self,
+        workspaces: I,
+    ) -> HashSet<&turborepo_lockfiles::Package> {
+        workspaces
+            .into_iter()
+            .filter_map(|workspace| self.workspaces.get(workspace))
+            .filter_map(|entry| entry.transitive_dependencies.as_ref())
+            .flatten()
+            .collect()
     }
 }
 
@@ -203,9 +219,8 @@ mod test {
             .build()
             .unwrap();
 
-        let closure = pkg_graph
-            .transitive_closure(&WorkspaceNode::Workspace(WorkspaceName::Root))
-            .unwrap();
+        let closure =
+            pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace(WorkspaceName::Root)));
         assert!(closure.contains(&WorkspaceNode::Root));
         assert!(pkg_graph.validate().is_ok());
     }
@@ -247,10 +262,17 @@ mod test {
         .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
-        let closure = pkg_graph
-            .transitive_closure(&WorkspaceNode::Workspace("a".into()))
-            .unwrap();
-        assert!(closure.contains(&WorkspaceNode::Workspace("b".into())));
+        let closure = pkg_graph.transitive_closure(Some(&WorkspaceNode::Workspace("a".into())));
+        assert_eq!(
+            closure,
+            [
+                WorkspaceNode::Root,
+                WorkspaceNode::Workspace("a".into()),
+                WorkspaceNode::Workspace("b".into())
+            ]
+            .iter()
+            .collect::<HashSet<_>>()
+        );
         let b_external = pkg_graph
             .workspaces
             .get(&WorkspaceName::from("b"))
@@ -303,6 +325,18 @@ mod test {
                 _ => Ok(None),
             }
         }
+
+        fn subgraph(
+            &self,
+            _workspace_packages: &[String],
+            _packages: &[String],
+        ) -> std::result::Result<Box<dyn Lockfile>, turborepo_lockfiles::Error> {
+            unreachable!("lockfile pruning not necessary for package graph construction")
+        }
+
+        fn encode(&self) -> std::result::Result<Vec<u8>, turborepo_lockfiles::Error> {
+            unreachable!("lockfile encoding not necessary for package graph construction")
+        }
     }
 
     #[test]
@@ -317,7 +351,7 @@ mod test {
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
-                root.join_component("package_a"),
+                root.join_components(&["package_a", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "foo",
                     "dependencies": {
@@ -327,7 +361,7 @@ mod test {
                 .unwrap(),
             );
             map.insert(
-                root.join_component("package_b"),
+                root.join_components(&["package_b", "package.json"]),
                 PackageJson::from_value(json!({
                     "name": "bar",
                     "dependencies": {
@@ -343,34 +377,31 @@ mod test {
         .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
+        let foo = WorkspaceName::from("foo");
+        let bar = WorkspaceName::from("bar");
 
         let foo_deps = pkg_graph
             .workspaces
-            .get(&WorkspaceName::from("foo"))
+            .get(&foo)
             .unwrap()
             .transitive_dependencies
             .as_ref()
             .unwrap();
         let bar_deps = pkg_graph
             .workspaces
-            .get(&WorkspaceName::from("bar"))
+            .get(&bar)
             .unwrap()
             .transitive_dependencies
             .as_ref()
             .unwrap();
+        let a = turborepo_lockfiles::Package::new("key:a", "1");
+        let b = turborepo_lockfiles::Package::new("key:b", "1");
+        let c = turborepo_lockfiles::Package::new("key:c", "1");
+        assert_eq!(foo_deps, &HashSet::from_iter(vec![a.clone(), c.clone(),]));
+        assert_eq!(bar_deps, &HashSet::from_iter(vec![b.clone(), c.clone(),]));
         assert_eq!(
-            foo_deps,
-            &HashSet::from_iter(vec![
-                turborepo_lockfiles::Package::new("key:a", "1"),
-                turborepo_lockfiles::Package::new("key:c", "1")
-            ])
-        );
-        assert_eq!(
-            bar_deps,
-            &HashSet::from_iter(vec![
-                turborepo_lockfiles::Package::new("key:b", "1"),
-                turborepo_lockfiles::Package::new("key:c", "1")
-            ])
+            pkg_graph.transitive_external_dependencies([&foo, &bar].iter().copied()),
+            HashSet::from_iter(vec![&a, &b, &c,])
         );
     }
 

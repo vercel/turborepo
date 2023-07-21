@@ -9,6 +9,15 @@ import { workspace, run, raw } from "./commands";
 import cliPkg from "../package.json";
 import { GeneratorError } from "./utils/error";
 
+import { ProxyAgent } from "proxy-agent";
+import http from "http";
+import https from "https";
+
+// Support http proxy vars
+const agent = new ProxyAgent();
+http.globalAgent = agent;
+https.globalAgent = agent;
+
 const turboGenCli = new Command();
 
 turboGenCli

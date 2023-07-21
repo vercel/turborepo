@@ -13,6 +13,7 @@ pub use error::Error;
 pub use npm::*;
 pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
 use serde::Serialize;
+use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
@@ -36,6 +37,19 @@ pub trait Lockfile {
     // Given a lockfile key return all (prod/dev/optional) dependencies of that
     // package
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Box<dyn Lockfile>, Error>;
+
+    fn encode(&self) -> Result<Vec<u8>, Error>;
+
+    /// All patch files referenced in the lockfile
+    fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        Ok(Vec::new())
+    }
 }
 
 pub fn all_transitive_closures<L: Lockfile + ?Sized>(

@@ -5,7 +5,7 @@ use std::{
 
 use thiserror::Error;
 use turborepo_lockfiles::{
-    self, BerryLockfile, LockfileData, NpmLockfile, Package, PnpmLockfile, Yarn1Lockfile,
+    self, BerryLockfile, Lockfile, LockfileData, NpmLockfile, Package, PnpmLockfile, Yarn1Lockfile,
 };
 
 use super::{proto, Buffer};
@@ -185,18 +185,18 @@ fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
             let data = LockfileData::from_bytes(&request.contents)?;
             let lockfile = BerryLockfile::new(data, None)?;
             Ok(lockfile
-                .patches()
+                .patches()?
                 .into_iter()
-                .map(|p| {
-                    p.to_str()
-                        .expect("patch coming from yarn.lock isn't valid utf8")
-                        .to_string()
-                })
+                .map(|p| p.to_string())
                 .collect::<Vec<_>>())
         }
         proto::PackageManager::Pnpm => {
             let lockfile = PnpmLockfile::from_bytes(&request.contents)?;
-            Ok(lockfile.patches())
+            Ok(lockfile
+                .patches()?
+                .into_iter()
+                .map(|p| p.to_string())
+                .collect())
         }
         pm => Err(Error::UnsupportedPackageManager(pm)),
     }?;

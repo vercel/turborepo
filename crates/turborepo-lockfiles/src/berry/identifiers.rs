@@ -39,6 +39,7 @@ pub enum Error {
 }
 
 /// A package scope and name
+/// For example: typescript, @babel/core
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ident<'a> {
     scope: Option<Cow<'a, str>>,
@@ -46,6 +47,7 @@ pub struct Ident<'a> {
 }
 
 /// An identifier with a semver range
+/// For example: is-even@^1.0.0, next@npm:13.0.0
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Descriptor<'a> {
     pub ident: Ident<'a>,
@@ -55,6 +57,7 @@ pub struct Descriptor<'a> {
 /// An identifier  with a resolved version.
 /// They are similar to descriptors except that descriptors can reference
 /// multiple packages whereas a locator references exactly one.
+/// For example: is-number@npm:1.0.0, web@workspace:*
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Locator<'a> {
     pub ident: Ident<'a>,

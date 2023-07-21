@@ -4,6 +4,7 @@ use camino::{Utf8Component, Utf8Path};
 
 use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AnchoredSystemPath(Utf8Path);
 
 impl ToOwned for AnchoredSystemPath {

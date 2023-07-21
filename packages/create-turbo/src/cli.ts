@@ -8,6 +8,15 @@ import { logger } from "@turbo/utils";
 import { create } from "./commands";
 import cliPkg from "../package.json";
 
+import { ProxyAgent } from "proxy-agent";
+import http from "http";
+import https from "https";
+
+// Support http proxy vars
+const agent = new ProxyAgent();
+http.globalAgent = agent;
+https.globalAgent = agent;
+
 const createTurboCli = new Command();
 
 // create

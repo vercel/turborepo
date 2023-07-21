@@ -13,6 +13,7 @@ Make sure patches are part of the json output
   package.json
   packages
   patches
+  pnpm-lock.yaml
   pnpm-workspace.yaml
 
 Make sure the pnpm patches section is present

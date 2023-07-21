@@ -6,11 +6,12 @@ use std::{
 use petgraph::graph::{Graph, NodeIndex};
 use tracing::warn;
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    RelativeUnixPathBuf,
 };
 use turborepo_lockfiles::Lockfile;
 
-use super::{Entry, Package, PackageGraph, WorkspaceName, WorkspaceNode};
+use super::{Package, PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
 use crate::{package_json::PackageJson, package_manager::PackageManager};
 
 pub struct PackageGraphBuilder<'a> {
@@ -47,8 +48,6 @@ pub enum Error {
     SelfDependency(WorkspaceNode),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
-    #[error("TODO lockfile errors")]
-    Todo,
 }
 
 impl<'a> PackageGraphBuilder<'a> {
@@ -107,7 +106,7 @@ struct BuildState<'a, S> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     package_manager: PackageManager,
-    workspaces: HashMap<WorkspaceName, Entry>,
+    workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
     workspace_graph: Graph<WorkspaceNode, ()>,
     node_lookup: HashMap<WorkspaceNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
@@ -158,7 +157,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let mut workspaces = HashMap::new();
         workspaces.insert(
             WorkspaceName::Root,
-            Entry {
+            WorkspaceInfo {
                 package_json: root_package_json,
                 ..Default::default()
             },
@@ -185,7 +184,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
         let name = WorkspaceName::Other(json.name.clone().ok_or(Error::PackageJsonMissingName)?);
-        let entry = Entry {
+        let entry = WorkspaceInfo {
             package_json: json,
             package_json_path: relative_json_path,
             ..Default::default()
@@ -324,8 +323,20 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
     }
 
     fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
-        // TODO actual lockfile parsing
-        self.lockfile.take().map_or_else(|| Err(Error::Todo), Ok)
+        match self.lockfile.take() {
+            Some(lockfile) => Ok(lockfile),
+            None => {
+                let lockfile = self.package_manager.read_lockfile(
+                    self.repo_root,
+                    self.workspaces
+                        .get(&WorkspaceName::Root)
+                        .as_ref()
+                        .map(|e| &e.package_json)
+                        .expect("root workspace should have json"),
+                )?;
+                Ok(lockfile)
+            }
+        }
     }
 
     fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile>, Error> {
@@ -333,13 +344,12 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
 
         let lockfile = match self.populate_lockfile() {
             Ok(lockfile) => Some(lockfile),
-            Err(_) => {
-                // TODO: Re-enable this warning once we have lockfile parsing hooked up
-                // warn!(
-                //     "Issues occurred when constructing package graph. Turbo will function,
-                // but \      some features may not be available: {}",
-                //     e
-                // );
+            Err(e) => {
+                warn!(
+                    "Issues occurred when constructing package graph. Turbo will function, but \
+                     some features may not be available: {}",
+                    e
+                );
                 None
             }
         };
@@ -372,7 +382,11 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
         self.workspaces
             .values()
             .map(|entry| {
-                let workspace_path = entry.package_json_path.to_unix()?;
+                let workspace_path = entry
+                    .package_json_path
+                    .parent()
+                    .unwrap_or(AnchoredSystemPath::new("")?)
+                    .to_unix()?;
                 let workspace_string = workspace_path.as_str();
                 let external_deps = entry
                     .unresolved_external_dependencies
@@ -436,7 +450,7 @@ impl Dependencies {
     pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
-        workspaces: &HashMap<WorkspaceName, Entry>,
+        workspaces: &HashMap<WorkspaceName, WorkspaceInfo>,
         dependencies: I,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
@@ -445,23 +459,14 @@ impl Dependencies {
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = HashSet::new();
+        let splitter = DependencySplitter {
+            repo_root,
+            workspace_dir,
+            workspaces,
+        };
         for (name, version) in dependencies.into_iter() {
-            // TODO implement borrowing for workspaces to allow for zero copy queries
-            let workspace_name = WorkspaceName::Other(name.clone());
-            let is_internal = workspaces
-                .get(&workspace_name)
-                // This is the current Go behavior, in the future we might not want to paper over a
-                // missing version
-                .map(|e| e.package_json.version.as_deref().unwrap_or_default())
-                .map_or(false, |workspace_version| {
-                    DependencyVersion::new(version).matches_workspace_package(
-                        workspace_version,
-                        workspace_dir,
-                        repo_root,
-                    )
-                });
-            if is_internal {
-                internal.insert(workspace_name);
+            if let Some(workspace) = splitter.is_internal(name, version) {
+                internal.insert(workspace);
             } else {
                 external.insert(Package {
                     name: name.clone(),
@@ -470,6 +475,43 @@ impl Dependencies {
             }
         }
         Self { internal, external }
+    }
+}
+
+struct DependencySplitter<'a, 'b, 'c> {
+    repo_root: &'a AbsoluteSystemPath,
+    workspace_dir: &'b AbsoluteSystemPath,
+    workspaces: &'c HashMap<WorkspaceName, WorkspaceInfo>,
+}
+
+impl<'a, 'b, 'c> DependencySplitter<'a, 'b, 'c> {
+    fn is_internal(&self, name: &str, version: &str) -> Option<WorkspaceName> {
+        // TODO implement borrowing for workspaces to allow for zero copy queries
+        let workspace_name = WorkspaceName::Other(
+            version
+                .strip_prefix("workspace:")
+                .and_then(|version| version.rsplit_once('@'))
+                .filter(|(_, version)| *version == "*" || *version == "^" || *version == "~")
+                .map_or(name, |(actual_name, _)| actual_name)
+                .to_string(),
+        );
+        let is_internal = self
+            .workspaces
+            .get(&workspace_name)
+            // This is the current Go behavior, in the future we might not want to paper over a
+            // missing version
+            .map(|e| e.package_json.version.as_deref().unwrap_or_default())
+            .map_or(false, |workspace_version| {
+                DependencyVersion::new(version).matches_workspace_package(
+                    workspace_version,
+                    self.workspace_dir,
+                    self.repo_root,
+                )
+            });
+        match is_internal {
+            true => Some(workspace_name),
+            false => None,
+        }
     }
 }
 
@@ -558,9 +600,13 @@ impl<'a> fmt::Display for DependencyVersion<'a> {
     }
 }
 
-impl Entry {
+impl WorkspaceInfo {
     fn unix_dir_str(&self) -> Result<String, Error> {
-        let unix = self.package_json_path.to_unix()?;
+        let unix = self
+            .package_json_path
+            .parent()
+            .unwrap_or_else(|| AnchoredSystemPath::new("").expect("empty path is anchored"))
+            .to_unix()?;
         Ok(unix.to_string())
     }
 }
@@ -572,25 +618,34 @@ mod test {
 
     use super::*;
 
-    #[test_case("1.2.3", "1.2.3", true ; "handles exact match")]
-    #[test_case("1.2.3", "^1.0.0", true ; "handles semver range satisfied")]
-    #[test_case("2.3.4", "^1.0.0", false ; "handles semver range not satisfied")]
-    #[test_case("1.2.3", "workspace:1.2.3", true ; "handles workspace protocol with version")]
-    #[test_case("1.2.3", "workspace:*", true ; "handles workspace protocol with no version")]
-    #[test_case("1.2.3", "workspace:../other-packages/", true ; "handles workspace protocol with relative path")]
-    #[test_case("1.2.3", "npm:^1.2.3", true ; "handles npm protocol with satisfied semver range")]
-    #[test_case("2.3.4", "npm:^1.2.3", false ; "handles npm protocol with not satisfied semver range")]
-    #[test_case("1.2.3", "1.2.2-alpha-123abcd.0", false ; "handles pre-release versions")]
+    #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo") ; "handles exact match")]
+    #[test_case("1.2.3", None, "^1.0.0", Some("@scope/foo") ; "handles semver range satisfied")]
+    #[test_case("2.3.4", None, "^1.0.0", None ; "handles semver range not satisfied")]
+    #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo") ; "handles workspace protocol with version")]
+    #[test_case("1.2.3", None, "workspace:*", Some("@scope/foo") ; "handles workspace protocol with no version")]
+    #[test_case("1.2.3", None, "workspace:../other-packages/", Some("@scope/foo") ; "handles workspace protocol with relative path")]
+    #[test_case("1.2.3", None, "workspace:../@scope/foo", Some("@scope/foo") ; "handles workspace protocol with scoped relative path")]
+    #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo") ; "handles npm protocol with satisfied semver range")]
+    #[test_case("2.3.4", None, "npm:^1.2.3", None ; "handles npm protocol with not satisfied semver range")]
+    #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None ; "handles pre-release versions")]
     // for backwards compatability with the code before versions were verified
-    #[test_case("sometag", "1.2.3", true ; "handles non-semver package version")]
+    #[test_case("sometag", None, "1.2.3", Some("@scope/foo") ; "handles non-semver package version")]
     // for backwards compatability with the code before versions were verified
-    #[test_case("1.2.3", "sometag", true ; "handles non-semver dependency version")]
-    #[test_case("1.2.3", "file:../libB", true ; "handles file:.. inside repo")]
-    #[test_case("1.2.3", "file:../../../otherproject", false ; "handles file:.. outside repo")]
-    #[test_case("1.2.3", "link:../libB", true ; "handles link:.. inside repo")]
-    #[test_case("1.2.3", "link:../../../otherproject", false ; "handles link:.. outside repo")]
-    #[test_case("0.0.0-development", "*", true ; "handles development versions")]
-    fn test_matches_workspace_package(package_version: &str, range: &str, expected: bool) {
+    #[test_case("1.2.3", None, "sometag", Some("@scope/foo") ; "handles non-semver dependency version")]
+    #[test_case("1.2.3", None, "file:../libB", Some("@scope/foo") ; "handles file:.. inside repo")]
+    #[test_case("1.2.3", None, "file:../../../otherproject", None ; "handles file:.. outside repo")]
+    #[test_case("1.2.3", None, "link:../libB", Some("@scope/foo") ; "handles link:.. inside repo")]
+    #[test_case("1.2.3", None, "link:../../../otherproject", None ; "handles link:.. outside repo")]
+    #[test_case("0.0.0-development", None, "*", Some("@scope/foo") ; "handles development versions")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo") ; "handles pnpm alias star")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo") ; "handles pnpm alias tilda")]
+    #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo") ; "handles pnpm alias caret")]
+    fn test_matches_workspace_package(
+        package_version: &str,
+        dependency_name: Option<&str>,
+        range: &str,
+        expected: Option<&str>,
+    ) {
         let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
             "C:\\some\\repo"
         } else {
@@ -598,14 +653,32 @@ mod test {
         })
         .unwrap();
         let pkg_dir = root.join_components(&["packages", "libA"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                WorkspaceName::Other("@scope/foo".to_string()),
+                WorkspaceInfo {
+                    package_json: PackageJson {
+                        version: Some(package_version.to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw("unused").unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map
+        };
+
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+        };
 
         assert_eq!(
-            DependencyVersion::new(range).matches_workspace_package(
-                package_version,
-                &pkg_dir,
-                &root
-            ),
-            expected
+            splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
+            expected.map(WorkspaceName::from)
         );
     }
 

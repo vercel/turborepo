@@ -5,7 +5,7 @@ use turbopack_core::{
     chunk::{availability_info::AvailabilityInfo, Chunk, ChunkableModule, ChunkingContext},
     ident::AssetIdent,
     module::Module,
-    reference::{AssetReferences, SingleAssetReference},
+    reference::{ModuleReferences, SingleModuleReference},
     resolve::ModulePart,
 };
 
@@ -53,7 +53,7 @@ impl Module for EcmascriptModulePartAsset {
     }
 
     #[turbo_tasks::function]
-    async fn references(&self) -> Result<Vc<AssetReferences>> {
+    async fn references(&self) -> Result<Vc<ModuleReferences>> {
         let split_data = split_module(self.full_module).await?;
 
         let deps = match &*split_data {
@@ -75,7 +75,7 @@ impl Module for EcmascriptModulePartAsset {
         let mut assets = deps
             .iter()
             .map(|&part_id| {
-                Ok(Vc::upcast(SingleAssetReference::new(
+                Ok(Vc::upcast(SingleModuleReference::new(
                     Vc::upcast(EcmascriptModulePartAsset::new(
                         self.full_module,
                         ModulePart::internal(part_id),
@@ -156,18 +156,8 @@ impl EcmascriptModulePartAsset {
 
 #[turbo_tasks::function]
 async fn analyze(
-    full_module: Vc<EcmascriptModuleAsset>,
+    module: Vc<EcmascriptModuleAsset>,
     part: Vc<ModulePart>,
 ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
-    let module = full_module.await?;
-
-    Ok(analyze_ecmascript_module(
-        module.source,
-        Vc::upcast(full_module),
-        Value::new(module.ty),
-        module.transforms,
-        Value::new(module.options),
-        module.compile_time_info,
-        Some(part),
-    ))
+    Ok(analyze_ecmascript_module(module, Some(part)))
 }
