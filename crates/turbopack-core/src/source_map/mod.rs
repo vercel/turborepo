@@ -457,8 +457,8 @@ impl SectionedSourceMap {
         let mut builder = SourceMapBuilder::new(None);
         for section in &self.sections {
             let map = match &*section.map.await? {
-                SourceMap::Regular(m) => m.deref().deref().deref().clone(),
-                SourceMap::Sectioned(m) => m.flatten().await?.deref().deref().deref().clone(),
+                SourceMap::Regular(m) => (***m).clone(),
+                SourceMap::Sectioned(m) => (***m.flatten().await?).clone(),
             };
 
             for token in map.tokens() {
