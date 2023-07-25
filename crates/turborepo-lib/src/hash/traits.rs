@@ -1,13 +1,9 @@
-use std::io::BufWriter;
+use std::hash::Hasher;
 
-use capnp::{
-    message::{Allocator, Builder},
-    serialize,
-};
-use xxhash_rust::xxh64::xxh64;
+use capnp::message::{Allocator, Builder};
 
 pub trait TurboHash<A> {
-    fn hash(self) -> u64;
+    fn hash(self) -> String;
 }
 
 impl<T, A> TurboHash<A> for T
@@ -15,14 +11,21 @@ where
     T: Into<Builder<A>>,
     A: Allocator,
 {
-    fn hash(self) -> u64 {
-        let mut buf = Vec::new();
-        let write = BufWriter::new(&mut buf);
+    fn hash(self) -> String {
         let message = self.into();
 
-        debug_assert_eq!(message.get_segments_for_output().len(), 1);
+        debug_assert_eq!(
+            message.get_segments_for_output().len(),
+            1,
+            "message is not canonical"
+        );
 
-        serialize::write_message(write, &message).expect("bufwrited won't fail");
-        xxh64(&buf, 0)
+        let buf = message.get_segments_for_output()[0];
+
+        let mut hasher = twox_hash::XxHash64::with_seed(0);
+        hasher.write(buf);
+        let out = hasher.finish();
+
+        hex::encode(out.to_be_bytes())
     }
 }
