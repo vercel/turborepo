@@ -31,7 +31,7 @@ pub async fn minify(path: Vc<FileSystemPath>, code: Vc<Code>) -> Result<Vc<Code>
     let path = &*path.await?;
     let filename = path.file_name();
     write!(builder, "\n\n//# sourceMappingURL={}.map", filename)?;
-    return Ok(builder.build().cell());
+    Ok(builder.build().cell())
 }
 
 #[turbo_tasks::function]
