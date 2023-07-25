@@ -44,9 +44,12 @@ pub enum Error {
 
 // Files that should be copied from root and if they're required for install
 lazy_static! {
-    static ref ADDITIONAL_FILES: Vec<(&'static RelativeUnixPath, bool)> = vec![
-        (RelativeUnixPath::new(".gitignore").unwrap(), false),
-        (RelativeUnixPath::new(".npmrc").unwrap(), true),
+    static ref ADDITIONAL_FILES: Vec<(&'static RelativeUnixPath, Option<CopyDestination>)> = vec![
+        (RelativeUnixPath::new(".gitignore").unwrap(), None),
+        (
+            RelativeUnixPath::new(".npmrc").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
     ];
 }
 
@@ -81,7 +84,7 @@ pub fn prune(
     {
         prune.copy_file(
             &AnchoredSystemPathBuf::from_raw(workspace_config_path)?,
-            true,
+            Some(CopyDestination::All),
         )?;
     }
 
@@ -181,10 +184,10 @@ pub fn prune(
         }
 
         for patch in pruned_patches {
-            prune.copy_file(&patch.to_system_path(), true)?;
+            prune.copy_file(&patch.to_system_path(), Some(CopyDestination::Docker))?;
         }
     } else {
-        prune.copy_file(package_json(), true)?;
+        prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
     }
 
     Ok(())
@@ -197,6 +200,15 @@ struct Prune<'a> {
     full_directory: AbsoluteSystemPathBuf,
     docker: bool,
     scope: &'a [String],
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum CopyDestination {
+    // Copies to full and json
+    Docker,
+    // Copies to out, full, and json
+    // This behavior comes from a bug in the Go impl that people depend on.
+    All,
 }
 
 impl<'a> Prune<'a> {
@@ -271,7 +283,7 @@ impl<'a> Prune<'a> {
     fn copy_file(
         &self,
         path: &AnchoredSystemPath,
-        required_for_install: bool,
+        destination: Option<CopyDestination>,
     ) -> Result<(), Error> {
         let from_path = self.root.resolve(path);
         if !from_path.try_exists()? {
@@ -280,7 +292,16 @@ impl<'a> Prune<'a> {
         }
         let full_to = self.full_directory.resolve(path);
         turborepo_fs::copy_file(&from_path, full_to)?;
-        if self.docker && required_for_install {
+        if matches!(destination, Some(CopyDestination::All)) {
+            let out_to = self.out_directory.resolve(path);
+            turborepo_fs::copy_file(&from_path, out_to)?;
+        }
+        if self.docker
+            && matches!(
+                destination,
+                Some(CopyDestination::Docker) | Some(CopyDestination::All)
+            )
+        {
             let docker_to = self.docker_directory().resolve(path);
             turborepo_fs::copy_file(&from_path, docker_to)?;
         }
