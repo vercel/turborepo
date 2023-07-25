@@ -37,7 +37,7 @@ func Test_CapnpHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "5b222af1dea5828e", hash)
+	assert.Equal(t, "ff765ee2f83bc034", hash)
 }
 
 func Test_CapnpHashGlobal(t *testing.T) {
@@ -61,10 +61,10 @@ func Test_CapnpHashGlobal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "afa6b9c8d52c2642", hash)
+	assert.Equal(t, "1d13a81d4c129bed", hash)
 }
 
-func Test_CapnpLockfilePackages(t *testing.T) {
+func Test_LockfilePackagesEmpty(t *testing.T) {
 	packages := []lockfile.Package{}
 
 	hash, err := HashLockfilePackages(packages)
@@ -72,10 +72,10 @@ func Test_CapnpLockfilePackages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "3cbace99d7f9f070", hash)
+	assert.Equal(t, "459c029558afe716", hash)
 }
 
-func Test_CapnpLockfilePackages2(t *testing.T) {
+func Test_LockfilePackagesNonEmpty(t *testing.T) {
 	packages := []lockfile.Package{
 		{
 			Key:     "key",
@@ -89,7 +89,7 @@ func Test_CapnpLockfilePackages2(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "ae101a620fb8d207", hash)
+	assert.Equal(t, "9e60782f386d8ff1", hash)
 }
 
 func Test_CapnpLockfilePackages_InOrder(t *testing.T) {
@@ -111,7 +111,7 @@ func Test_CapnpLockfilePackages_InOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "e1c49e53fdbeb38a", hash)
+	assert.Equal(t, "765a46fa6c11f363", hash)
 }
 
 func Test_CapnpLockfilePackages_OutOfOrder(t *testing.T) {
@@ -133,7 +133,7 @@ func Test_CapnpLockfilePackages_OutOfOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "a9da37ee949583bd", hash)
+	assert.Equal(t, "1f5d2d372b4398db", hash)
 }
 
 func Test_CapnpFileHashes_Empty(t *testing.T) {
@@ -144,7 +144,7 @@ func Test_CapnpFileHashes_Empty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "a6dd8f3ed2853e94", hash)
+	assert.Equal(t, "459c029558afe716", hash)
 }
 
 func Test_CapnpFileHashes_NonEmpty(t *testing.T) {
@@ -158,7 +158,7 @@ func Test_CapnpFileHashes_NonEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "0f75c29eda3ab994", hash)
+	assert.Equal(t, "c9301c0bf1899c07", hash)
 }
 
 func Test_CapnpFileHashes_OrderResistant(t *testing.T) {
@@ -172,5 +172,5 @@ func Test_CapnpFileHashes_OrderResistant(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, "0f75c29eda3ab994", hash)
+	assert.Equal(t, "c9301c0bf1899c07", hash)
 }

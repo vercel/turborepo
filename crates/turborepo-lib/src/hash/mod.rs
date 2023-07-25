@@ -156,7 +156,7 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             // and set the entries in the capnp message
 
             let mut hashable: Vec<_> = file_hashes.into_iter().collect();
-            hashable.sort_by(|(path_a, _), (path_b, _)| path_a.cmp(&path_b));
+            hashable.sort_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
 
             for (i, (key, value)) in hashable.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
@@ -348,7 +348,7 @@ mod test {
     use crate::cli::EnvMode;
 
     #[test]
-    fn test_hash() {
+    fn task_hashable() {
         let task_hashable = TaskHashable {
             global_hash: "global_hash".to_string(),
             task_dependency_hashes: vec!["task_dependency_hash".to_string()],
@@ -368,11 +368,11 @@ mod test {
             dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
-        assert_eq!(task_hashable.hash(), 0xeebf0e00c6ebdede);
+        assert_eq!(task_hashable.hash(), "ff765ee2f83bc034");
     }
 
     #[test]
-    fn test_global_hash() {
+    fn global_hashable() {
         let global_hash = GlobalHashable {
             global_cache_key: "global_cache_key".to_string(),
             global_file_hash_map: vec![(
@@ -391,53 +391,53 @@ mod test {
             dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
-        assert_eq!(global_hash.hash(), 0xafa6b9c8d52c2642);
+        assert_eq!(global_hash.hash(), "1d13a81d4c129bed");
     }
 
-    #[test_case(vec![], 0x5ad853f4a1d54ca7 ; "empty")]
+    #[test_case(vec![], "459c029558afe716" ; "empty")]
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "version".to_string(),
-    }], 0xfa313c2673636d11 ; "non-empty")]
+    }], "9e60782f386d8ff1" ; "non-empty")]
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "version".to_string(),
     }, Package {
         key: "zey".to_string(),
         version: "version".to_string(),
-    }], 0x913c1a9f1293c9af ; "multiple in-order")]
+    }], "765a46fa6c11f363" ; "multiple in-order")]
     #[test_case(vec![Package {
         key: "zey".to_string(),
         version: "version".to_string(),
     }, Package {
         key: "key".to_string(),
         version: "version".to_string(),
-    }], 0x352892616b95cbe0 ; "care about order")]
-    fn test_lock_file_packages(vec: Vec<Package>, expected: u64) {
+    }], "1f5d2d372b4398db" ; "care about order")]
+    fn lock_file_packages(vec: Vec<Package>, expected: &str) {
         let packages = LockFilePackages(vec);
         assert_eq!(packages.hash(), expected);
     }
 
     #[test]
-    fn test_long_lock_file_packages() {
+    fn long_lock_file_packages() {
         let packages = (0..100).map(|i| Package {
             key: format!("key{}", i),
             version: format!("version{}", i),
         });
 
-        test_lock_file_packages(packages.collect(), 0x5c7f6bc5fa3d99ea);
+        lock_file_packages(packages.collect(), "06bb5d05e53dd455");
     }
 
-    #[test_case(vec![], 0x5ad853f4a1d54ca7 ; "empty")]
+    #[test_case(vec![], "459c029558afe716" ; "empty")]
     #[test_case(vec![
         ("a".to_string(), "b".to_string()),
         ("c".to_string(), "d".to_string()),
-    ], 0xF75C29EDA3AB994 ; "non-empty")]
+    ], "c9301c0bf1899c07" ; "non-empty")]
     #[test_case(vec![
         ("c".to_string(), "d".to_string()),
         ("a".to_string(), "b".to_string()),
-    ], 0xF75C29EDA3AB994 ; "order resistant")]
-    fn test_file_hashes(pairs: Vec<(String, String)>, expected: u64) {
+    ], "c9301c0bf1899c07" ; "order resistant")]
+    fn file_hashes(pairs: Vec<(String, String)>, expected: &str) {
         let file_hashes = FileHashes(
             pairs
                 .into_iter()

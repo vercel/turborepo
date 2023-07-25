@@ -185,9 +185,7 @@ func HashTaskHashable(task *TaskHashable) (string, error) {
 		return "", err
 	}
 
-	out, err := HashMessage(taskMsg.Message())
-
-	return out, nil
+	return HashMessage(taskMsg.Message())
 }
 
 // HashGlobalHashable performs the hash for a GlobalHashable, using capnproto for stable cross platform / language hashing
@@ -290,12 +288,7 @@ func HashGlobalHashable(global *GlobalHashable) (string, error) {
 		return "", err
 	}
 
-	out, err := HashMessage(globalMsg.Message())
-	if err != nil {
-		return "", err
-	}
-
-	return out, nil
+	return HashMessage(globalMsg.Message())
 }
 
 func HashLockfilePackages(packages []lockfile.Package) (string, error) {
@@ -328,12 +321,7 @@ func HashLockfilePackages(packages []lockfile.Package) (string, error) {
 		entry.SetFound(pkg.Found)
 	}
 
-	out, err := HashMessage(globalMsg.Message())
-	if err != nil {
-		return "", err
-	}
-
-	return out, nil
+	return HashMessage(globalMsg.Message())
 }
 
 func HashFileHashes(fileHashes map[turbopath.AnchoredUnixPath]string) (string, error) {
@@ -375,22 +363,29 @@ func HashFileHashes(fileHashes map[turbopath.AnchoredUnixPath]string) (string, e
 		}
 	}
 
-	out, err := HashMessage(globalMsg.Message())
-	if err != nil {
-		return "", err
-	}
-
-	return out, nil
+	return HashMessage(globalMsg.Message())
 }
 
+// HashMessage hashes a capnp message using xxhash
 func HashMessage(msg *capnp.Message) (string, error) {
-	bytes, err := msg.Marshal()
+	root, err := msg.Root()
 	if err != nil {
 		return "", err
 	}
 
+	bytes, err := capnp.Canonicalize(root.Struct())
+	if err != nil {
+		return "", err
+	}
+
+	println(hex.EncodeToString(bytes))
+
 	digest := xxhash.New()
-	digest.Write(bytes)
+	_, err = digest.Write(bytes)
+	if err != nil {
+		return "", err
+	}
+
 	out := digest.Sum(nil)
 
 	return hex.EncodeToString(out), nil
