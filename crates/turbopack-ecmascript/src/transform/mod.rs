@@ -4,7 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use swc_core::{
     base::SwcComments,
-    common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
+    common::{chain, comments::Comments, util::take::Take, FileName, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program, Script},
         preset_env::{
@@ -123,6 +123,7 @@ pub struct TransformContext<'a> {
     pub file_name_str: &'a str,
     pub file_name_hash: u128,
     pub file_path: Vc<FileSystemPath>,
+    pub swc_file_name: &'a FileName,
 }
 
 impl EcmascriptInputTransform {
