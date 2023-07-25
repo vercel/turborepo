@@ -48,7 +48,7 @@ corepack enable "${COREPACK_INSTALL_DIR_CMD}"
 
 # Set the packageManger version
 NPM_PACKAGE_MANAGER_VALUE="npm@8.1.2"
-PNPM_PACKAGE_MANAGER_VALUE="pnpm@6.26.1"
+PNPM_PACKAGE_MANAGER_VALUE="pnpm@8.6.10"
 YARN_PACKAGE_MANAGER_VALUE="yarn@1.22.17"
 
 if [ "$pkgManager" == "npm" ]; then
