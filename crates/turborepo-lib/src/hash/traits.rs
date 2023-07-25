@@ -18,7 +18,11 @@ where
     fn hash(self) -> u64 {
         let mut buf = Vec::new();
         let write = BufWriter::new(&mut buf);
-        serialize::write_message(write, &self.into()).expect("bufwrited won't fail");
+        let message = self.into();
+
+        debug_assert_eq!(message.get_segments_for_output().len(), 1);
+
+        serialize::write_message(write, &message).expect("bufwrited won't fail");
         xxh64(&buf, 0)
     }
 }
