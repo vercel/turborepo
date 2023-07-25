@@ -130,7 +130,12 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
             }
         }
 
-        message.into_inner()
+        let mut canon_builder = Builder::new(HeapAllocator::default());
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
     }
 }
 
@@ -160,7 +165,12 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             }
         }
 
-        message.into_inner()
+        let mut canon_builder = Builder::new(HeapAllocator::default());
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
     }
 }
 
@@ -238,7 +248,12 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
             }
         }
 
-        message.into_inner()
+        let mut canon_builder = Builder::new(HeapAllocator::default());
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
     }
 }
 
@@ -247,12 +262,12 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::global_hashable::Owned>::new_default();
 
-        let mut global_hashable = message.init_root();
+        let mut builder = message.init_root();
 
-        global_hashable.set_global_cache_key(&hashable.global_cache_key);
+        builder.set_global_cache_key(&hashable.global_cache_key);
 
         {
-            let mut entries = global_hashable
+            let mut entries = builder
                 .reborrow()
                 .init_global_file_hash_map(hashable.global_file_hash_map.len() as u32);
 
@@ -269,19 +284,17 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             }
         }
 
-        global_hashable.set_root_external_deps_hash(&hashable.root_external_deps_hash);
+        builder.set_root_external_deps_hash(&hashable.root_external_deps_hash);
 
         {
-            let mut entries = global_hashable
-                .reborrow()
-                .init_env(hashable.env.len() as u32);
+            let mut entries = builder.reborrow().init_env(hashable.env.len() as u32);
             for (i, env) in hashable.env.iter().enumerate() {
                 entries.set(i as u32, env);
             }
         }
 
         {
-            let mut resolved_env_vars = global_hashable
+            let mut resolved_env_vars = builder
                 .reborrow()
                 .init_resolved_env_vars(hashable.resolved_env_vars.len() as u32);
             for (i, env) in hashable.resolved_env_vars.iter().enumerate() {
@@ -290,7 +303,7 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
         }
 
         {
-            let mut pass_through_env = global_hashable
+            let mut pass_through_env = builder
                 .reborrow()
                 .init_pass_through_env(hashable.pass_through_env.len() as u32);
             for (i, env) in hashable.pass_through_env.iter().enumerate() {
@@ -298,16 +311,16 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             }
         }
 
-        global_hashable.set_env_mode(match hashable.env_mode {
+        builder.set_env_mode(match hashable.env_mode {
             EnvMode::Infer => proto_capnp::global_hashable::EnvMode::Infer,
             EnvMode::Loose => proto_capnp::global_hashable::EnvMode::Loose,
             EnvMode::Strict => proto_capnp::global_hashable::EnvMode::Strict,
         });
 
-        global_hashable.set_framework_inference(hashable.framework_inference);
+        builder.set_framework_inference(hashable.framework_inference);
 
         {
-            let mut dot_env = global_hashable
+            let mut dot_env = builder
                 .reborrow()
                 .init_dot_env(hashable.dot_env.len() as u32);
             for (i, env) in hashable.dot_env.iter().enumerate() {
@@ -315,7 +328,12 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             }
         }
 
-        message.into_inner()
+        let mut canon_builder = Builder::new(HeapAllocator::default());
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
     }
 }
 
@@ -350,7 +368,7 @@ mod test {
             dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
-        assert_eq!(task_hashable.hash(), 0x5b222af1dea5828e);
+        assert_eq!(task_hashable.hash(), 0xeebf0e00c6ebdede);
     }
 
     #[test]
@@ -376,31 +394,41 @@ mod test {
         assert_eq!(global_hash.hash(), 0xafa6b9c8d52c2642);
     }
 
-    #[test_case(vec![], 0x3CBACE99D7F9F070 ; "empty")]
+    #[test_case(vec![], 0x5ad853f4a1d54ca7 ; "empty")]
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "version".to_string(),
-    }], 0xAE101A620FB8D207 ; "non-empty")]
+    }], 0xfa313c2673636d11 ; "non-empty")]
     #[test_case(vec![Package {
         key: "key".to_string(),
         version: "version".to_string(),
     }, Package {
         key: "zey".to_string(),
         version: "version".to_string(),
-    }], 0xE1C49E53FDBEB38A ; "multiple in-order")]
+    }], 0x913c1a9f1293c9af ; "multiple in-order")]
     #[test_case(vec![Package {
         key: "zey".to_string(),
         version: "version".to_string(),
     }, Package {
         key: "key".to_string(),
         version: "version".to_string(),
-    }], 0xA9DA37EE949583BD ; "care about order")]
+    }], 0x352892616b95cbe0 ; "care about order")]
     fn test_lock_file_packages(vec: Vec<Package>, expected: u64) {
         let packages = LockFilePackages(vec);
         assert_eq!(packages.hash(), expected);
     }
 
-    #[test_case(vec![], 0xA6DD8F3ED2853E94 ; "empty")]
+    #[test]
+    fn test_long_lock_file_packages() {
+        let packages = (0..100).map(|i| Package {
+            key: format!("key{}", i),
+            version: format!("version{}", i),
+        });
+
+        test_lock_file_packages(packages.collect(), 0x5c7f6bc5fa3d99ea);
+    }
+
+    #[test_case(vec![], 0x5ad853f4a1d54ca7 ; "empty")]
     #[test_case(vec![
         ("a".to_string(), "b".to_string()),
         ("c".to_string(), "d".to_string()),
