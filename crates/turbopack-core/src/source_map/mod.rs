@@ -13,6 +13,9 @@ pub(crate) mod source_map_asset;
 
 pub use source_map_asset::SourceMapAsset;
 
+/// Represents an empty value in a u32 variable in the source_map crate.
+static SOURCE_MAP_CRATE_NONE_U32: u32 = !0;
+
 /// Allows callers to generate source maps.
 #[turbo_tasks::value_trait]
 pub trait GenerateSourceMap {
@@ -141,10 +144,10 @@ impl TryInto<sourcemap::RawToken> for Token {
             Self::Synthetic(t) => sourcemap::RawToken {
                 dst_col: t.generated_column as u32,
                 dst_line: t.generated_line as u32,
-                name_id: !0,
-                src_col: !0,
-                src_line: !0,
-                src_id: !0,
+                name_id: SOURCE_MAP_CRATE_NONE_U32,
+                src_col: SOURCE_MAP_CRATE_NONE_U32,
+                src_line: SOURCE_MAP_CRATE_NONE_U32,
+                src_id: SOURCE_MAP_CRATE_NONE_U32,
             },
         })
     }
@@ -244,8 +247,8 @@ impl SourceMap {
     #[turbo_tasks::function]
     pub async fn tokens(self: Vc<Self>) -> Result<Vc<Tokens>> {
         let crate_map = match &*self.await? {
-            Self::Regular(m) => m.deref().deref().deref().to_owned(),
-            Self::Sectioned(m) => m.flatten().await?.deref().deref().deref().to_owned(),
+            Self::Regular(m) => (***m).to_owned(),
+            Self::Sectioned(m) => (***m.flatten().await?).to_owned(),
         };
 
         Ok(Vc::cell(crate_map.tokens().map(|t| t.into()).collect()))
@@ -274,6 +277,7 @@ impl SourceMap {
                 let mut high = len;
                 let pos = SourcePos { line, column };
 
+                // A "greatest lower bound" binary search. We're looking for the closest section
                 // offset <= to our line/col.
                 while low < high {
                     let mid = (low + high) / 2;
@@ -315,52 +319,37 @@ impl SourceMap {
         };
 
         let mut builder = sourcemap::SourceMapBuilder::new(own_map.get_file());
-        let tokens = other
-            .tokens()
-            .await?
-            .iter()
-            .map(|other_token| async move {
-                let other_token = match other_token {
-                    Token::Synthetic(_) => panic!("Unexpected synthetic token"),
-                    Token::Original(t) => t,
-                };
+        let other_tokens = other.tokens().await?;
+        let tokens = other_tokens.iter().map(|other_token| {
+            let other_token = match other_token {
+                Token::Synthetic(_) => panic!("Unexpected synthetic token"),
+                Token::Original(t) => t,
+            };
 
-                Ok((
-                    (*self
-                        .lookup_token(other_token.original_line, other_token.original_column)
-                        .await?)
-                        .clone(),
-                    other_token.clone(),
-                ))
-            })
-            .try_join()
-            .await?;
+            (
+                own_map.lookup_token(
+                    other_token.original_line as u32,
+                    other_token.original_column as u32,
+                ),
+                other_token,
+            )
+        });
 
         let mut source_to_src_id = IndexMap::new();
-        for (original_token, other_token) in tokens {
-            if let Some(original_token) = original_token {
-                match original_token {
-                    Token::Original(original_token) => {
-                        let token = builder.add(
-                            other_token.generated_line as u32,
-                            other_token.generated_column as u32,
-                            original_token.original_line as u32,
-                            original_token.original_column as u32,
-                            Some(&original_token.original_file),
-                            original_token.name.as_deref(),
-                        );
-                        source_to_src_id.insert(original_token.original_file, token.src_id);
-                    }
-                    Token::Synthetic(_original_token) => {
-                        builder.add(
-                            other_token.generated_line as u32,
-                            other_token.generated_column as u32,
-                            !0,
-                            !0,
-                            None,
-                            None,
-                        );
-                    }
+        for (traced_token, other_token) in tokens {
+            if let Some(traced_token) = traced_token {
+                let original_file = traced_token.get_source();
+                let token = builder.add(
+                    other_token.generated_line as u32,
+                    other_token.generated_column as u32,
+                    traced_token.get_src_line(),
+                    traced_token.get_src_col(),
+                    original_file,
+                    traced_token.get_name(),
+                );
+
+                if let Some(original_file) = original_file {
+                    source_to_src_id.insert(original_file, token.src_id);
                 }
             }
         }
@@ -373,6 +362,19 @@ impl SourceMap {
         }
 
         Ok(Self::new_regular(builder.into_sourcemap()).into())
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for SourceMap {
+    #[turbo_tasks::function]
+    fn generate_source_map(self: Vc<Self>) -> Vc<OptionSourceMap> {
+        Vc::cell(Some(self))
+    }
+
+    #[turbo_tasks::function]
+    fn by_section(&self, _section: String) -> Vc<OptionSourceMap> {
+        Vc::cell(None)
     }
 }
 
@@ -462,9 +464,15 @@ impl SectionedSourceMap {
             };
 
             for token in map.tokens() {
+                let dst_line = token.get_dst_line();
                 let raw = builder.add(
-                    token.get_dst_line() + section.offset.line as u32,
-                    token.get_dst_col() + section.offset.column as u32,
+                    dst_line + section.offset.line as u32,
+                    token.get_dst_col()
+                        + if dst_line == 0 {
+                            section.offset.column as u32
+                        } else {
+                            0
+                        },
                     token.get_src_line(),
                     token.get_src_col(),
                     token.get_source(),

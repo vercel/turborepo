@@ -12,7 +12,7 @@ use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     code_builder::{Code, CodeBuilder},
-    source_map::{GenerateSourceMap, OptionSourceMap, SourceMap as TurbopackSourceMap},
+    source_map::GenerateSourceMap,
 };
 use turbopack_ecmascript::ParseResultSourceMap;
 
@@ -22,9 +22,7 @@ pub async fn minify(path: Vc<FileSystemPath>, code: Vc<Code>) -> Result<Vc<Code>
     let minified_code = perform_minify(path, code);
 
     let merged = match (original_map, *minified_code.generate_source_map().await?) {
-        (Some(original_map), Some(minify_map)) => Some(Vc::upcast(
-            TracedSourceMap(original_map.trace(minify_map)).cell(),
-        )),
+        (Some(original_map), Some(minify_map)) => Some(Vc::upcast(original_map.trace(minify_map))),
         _ => None,
     };
 
@@ -78,7 +76,7 @@ async fn perform_minify(path: Vc<FileSystemPath>, code_vc: Vc<Code>) -> Result<V
         })
     })?;
 
-    let (src, src_map_buf) = emit(cm.clone(), program)?;
+    let (src, src_map_buf) = print_program(cm.clone(), program)?;
 
     let mut builder = CodeBuilder::default();
     builder.push_source(
@@ -92,7 +90,10 @@ async fn perform_minify(path: Vc<FileSystemPath>, code_vc: Vc<Code>) -> Result<V
 }
 
 // From https://github.com/swc-project/swc/blob/11efd4e7c5e8081f8af141099d3459c3534c1e1d/crates/swc/src/lib.rs#L523-L560
-fn emit(cm: Arc<SwcSourceMap>, program: Program) -> Result<(String, Vec<(BytePos, LineCol)>)> {
+fn print_program(
+    cm: Arc<SwcSourceMap>,
+    program: Program,
+) -> Result<(String, Vec<(BytePos, LineCol)>)> {
     let mut src_map_buf = vec![];
 
     let src = {
@@ -126,20 +127,4 @@ fn emit(cm: Arc<SwcSourceMap>, program: Program) -> Result<(String, Vec<(BytePos
     };
 
     Ok((src, src_map_buf))
-}
-
-#[turbo_tasks::value(shared)]
-struct TracedSourceMap(Vc<TurbopackSourceMap>);
-
-#[turbo_tasks::value_impl]
-impl GenerateSourceMap for TracedSourceMap {
-    #[turbo_tasks::function]
-    fn generate_source_map(&self) -> Vc<OptionSourceMap> {
-        Vc::cell(Some(self.0))
-    }
-
-    #[turbo_tasks::function]
-    fn by_section(&self, _section: String) -> Vc<OptionSourceMap> {
-        Vc::cell(None)
-    }
 }
