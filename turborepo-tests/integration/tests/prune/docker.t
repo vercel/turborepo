@@ -15,6 +15,13 @@ Make sure patches are part of the json output
   patches
   pnpm-lock.yaml
   pnpm-workspace.yaml
+Make sure that pnpm-workspace.yaml is in the top out directory
+  $ ls out
+  full
+  json
+  package.json
+  pnpm-lock.yaml
+  pnpm-workspace.yaml
 
 Make sure the pnpm patches section is present
   $ cat out/json/package.json | jq '.pnpm.patchedDependencies'
