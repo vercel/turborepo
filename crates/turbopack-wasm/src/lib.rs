@@ -9,9 +9,15 @@
 #![feature(arbitrary_self_types)]
 #![feature(async_fn_in_trait)]
 
+mod loader;
+pub mod url;
+
+use std::collections::BTreeMap;
+
 use anyhow::{bail, Result};
-use indexmap::IndexSet;
-use turbo_tasks::{Value, ValueToString, Vc};
+use indexmap::indexmap;
+use turbo_tasks::{Value, Vc};
+use turbo_tasks_fs::{File, FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
@@ -19,10 +25,13 @@ use turbopack_core::{
     },
     context::AssetContext,
     ident::AssetIdent,
-    module::Module,
+    module::{Module, OptionModule},
     output::OutputAsset,
-    reference::{ModuleReferences, SingleOutputAssetReference},
+    reference::ModuleReferences,
+    reference_type::ReferenceType,
+    resolve::{origin::ResolveOrigin, parse::Request},
     source::Source,
+    virtual_source::VirtualSource,
 };
 use turbopack_ecmascript::{
     chunk::{
@@ -30,13 +39,41 @@ use turbopack_ecmascript::{
         EcmascriptChunkItemOptions, EcmascriptChunkPlaceable, EcmascriptChunkingContext,
         EcmascriptExports,
     },
-    references::async_module::{AsyncModule, OptionAsyncModule},
-    utils::StringifyJs,
+    references::async_module::OptionAsyncModule,
+    EcmascriptModuleAsset,
 };
+use wasmparser::{Chunk as WasmChunk, Parser, Payload};
+
+use crate::{loader::loader_source, url::WebAssemblyUrlModuleAsset};
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<String> {
     Vc::cell("wasm".to_string())
+}
+
+#[turbo_tasks::function]
+async fn binary_source(source: Vc<Box<dyn Source>>) -> Result<Vc<Box<dyn Source>>> {
+    let ext = source.ident().path().extension().await?;
+    if *ext == "wasm" {
+        return Ok(source);
+    }
+
+    let content = source.content().file_content().await?;
+
+    let file_content: Vc<FileContent> = if let FileContent::Content(file) = &*content {
+        let bytes = file.content().to_bytes()?;
+
+        let parsed = wat::parse_bytes(&bytes)?;
+
+        File::from(&*parsed).into()
+    } else {
+        FileContent::NotFound.cell()
+    };
+
+    Ok(Vc::upcast(VirtualSource::new(
+        source.ident().path().append("_.wasm".to_string()),
+        AssetContent::file(file_content),
+    )))
 }
 
 #[turbo_tasks::value]
@@ -54,15 +91,97 @@ impl WebAssemblyModuleAsset {
     }
 
     #[turbo_tasks::function]
-    async fn wasm_asset(
-        self: Vc<Self>,
-        context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Result<Vc<WebAssemblyAsset>> {
-        Ok(WebAssemblyAsset::cell(WebAssemblyAsset {
+    fn wasm_asset(&self, context: Vc<Box<dyn ChunkingContext>>) -> Vc<WebAssemblyAsset> {
+        WebAssemblyAsset {
             context,
-            source: self.await?.source,
-        }))
+            source: binary_source(self.source),
+        }
+        .cell()
     }
+
+    #[turbo_tasks::function]
+    async fn loader(self: Vc<Self>) -> Result<Vc<EcmascriptModuleAsset>> {
+        let this = self.await?;
+
+        let module = this.context.process(
+            loader_source(binary_source(this.source).ident(), self.analyze()),
+            Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
+                "WASM_PATH".to_string() => Vc::upcast(WebAssemblyUrlModuleAsset::new(this.source, this.context)),
+            }))),
+        );
+
+        let Some(esm_asset) =
+            Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?
+        else {
+            bail!("WASM loader was not processed into an EcmascriptModuleAsset");
+        };
+
+        Ok(esm_asset)
+    }
+
+    #[turbo_tasks::function]
+    async fn analyze(&self) -> Result<Vc<WebAssemblyAnalysis>> {
+        let content = binary_source(self.source).content().file_content().await?;
+
+        let mut analysis = WebAssemblyAnalysis::default();
+
+        let FileContent::Content(file) = &*content else {
+            return Ok(analysis.cell());
+        };
+
+        let mut bytes = &*file.content().to_bytes()?;
+
+        let mut parser = Parser::new(0);
+        loop {
+            let payload = match parser.parse(bytes, true)? {
+                WasmChunk::Parsed { consumed, payload } => {
+                    bytes = &bytes[consumed..];
+                    payload
+                }
+                // this state isn't possible with `eof = true`
+                WasmChunk::NeedMoreData(_) => unreachable!(),
+            };
+
+            match payload {
+                Payload::ImportSection(s) => {
+                    for import in s {
+                        let import = import?;
+
+                        analysis
+                            .imports
+                            .entry(import.module.to_string())
+                            .or_default()
+                            .push(import.name.to_string());
+                    }
+                }
+                Payload::ExportSection(s) => {
+                    for export in s {
+                        let export = export?;
+
+                        analysis.exports.push(export.name.to_string());
+                    }
+                }
+
+                // skip over code sections
+                Payload::CodeSectionStart { size, .. } => {
+                    parser.skip_section();
+                    bytes = &bytes[size as usize..];
+                }
+
+                Payload::End(_) => break,
+                _ => {}
+            }
+        }
+
+        Ok(analysis.cell())
+    }
+}
+
+#[turbo_tasks::value]
+#[derive(Default)]
+struct WebAssemblyAnalysis {
+    imports: BTreeMap<String, Vec<String>>,
+    exports: Vec<String>,
 }
 
 #[turbo_tasks::value_impl]
@@ -70,6 +189,11 @@ impl Module for WebAssemblyModuleAsset {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
         self.source.ident().with_modifier(modifier())
+    }
+
+    #[turbo_tasks::function]
+    async fn references(self: Vc<Self>) -> Vc<ModuleReferences> {
+        self.loader().references()
     }
 }
 
@@ -104,28 +228,41 @@ impl EcmascriptChunkPlaceable for WebAssemblyModuleAsset {
         self: Vc<Self>,
         context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
-            module: self,
-            context,
-            wasm_asset: self.wasm_asset(Vc::upcast(context)),
-        }))
+        Vc::upcast(
+            ModuleChunkItem {
+                module: self,
+                context,
+            }
+            .cell(),
+        )
     }
 
     #[turbo_tasks::function]
-    fn get_exports(&self) -> Vc<EcmascriptExports> {
-        EcmascriptExports::DynamicNamespace.into()
+    fn get_exports(self: Vc<Self>) -> Vc<EcmascriptExports> {
+        self.loader().get_exports()
     }
 
     #[turbo_tasks::function]
     fn get_async_module(self: Vc<Self>) -> Vc<OptionAsyncModule> {
-        Vc::cell(Some(
-            AsyncModule {
-                placeable: Vc::upcast(self),
-                references: IndexSet::new(),
-                has_top_level_await: true,
-            }
-            .cell(),
-        ))
+        self.loader().get_async_module()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ResolveOrigin for WebAssemblyModuleAsset {
+    #[turbo_tasks::function]
+    fn origin_path(&self) -> Vc<FileSystemPath> {
+        self.source.ident().path()
+    }
+
+    #[turbo_tasks::function]
+    fn context(&self) -> Vc<Box<dyn AssetContext>> {
+        self.context
+    }
+
+    #[turbo_tasks::function]
+    fn get_inner_asset(self: Vc<Self>, request: Vc<Request>) -> Vc<OptionModule> {
+        self.loader().get_inner_asset(request)
     }
 }
 
@@ -159,7 +296,6 @@ impl Asset for WebAssemblyAsset {
 struct ModuleChunkItem {
     module: Vc<WebAssemblyModuleAsset>,
     context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    wasm_asset: Vc<WebAssemblyAsset>,
 }
 
 #[turbo_tasks::value_impl]
@@ -171,13 +307,9 @@ impl ChunkItem for ModuleChunkItem {
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
-        Ok(Vc::cell(vec![Vc::upcast(SingleOutputAssetReference::new(
-            Vc::upcast(self.wasm_asset),
-            Vc::cell(format!(
-                "wasm(loader) {}",
-                self.wasm_asset.ident().to_string().await?
-            )),
-        ))]))
+        let loader = self.module.loader().as_chunk_item(self.context);
+
+        Ok(loader.references())
     }
 }
 
@@ -198,34 +330,19 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         &self,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
-        let path = self.wasm_asset.ident().path().await?;
-        let output_root = self.context.output_root().await?;
+        let loader_asset = self.module.loader();
 
-        let Some(path) = output_root.get_path_to(&path) else {
-            bail!("WASM asset ident is not relative to output root");
-        };
-
-        let code = format!(
-            "__turbopack_dynamic__(await __turbopack_wasm__({path}));",
-            path = StringifyJs(path)
-        )
-        .into();
-
-        let options = EcmascriptChunkItemOptions {
-            async_module: self
-                .module
-                .get_async_module()
-                .module_options(availability_info)
-                .await?
-                .clone_value(),
-            wasm: true,
-            ..Default::default()
-        };
+        let chunk_item_content = loader_asset
+            .as_chunk_item(self.context)
+            .content_with_availability_info(availability_info)
+            .await?;
 
         Ok(EcmascriptChunkItemContent {
-            inner_code: code,
-            options,
-            ..Default::default()
+            options: EcmascriptChunkItemOptions {
+                wasm: true,
+                ..chunk_item_content.options.clone()
+            },
+            ..chunk_item_content.clone_value()
         }
         .into())
     }

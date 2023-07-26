@@ -342,8 +342,7 @@ impl ModuleOptions {
             ModuleRule::new(
                 ModuleRuleCondition::any(vec![
                     ModuleRuleCondition::ResourcePathEndsWith(".wasm".to_string()),
-                    // TODO(WEB-1316): add support for `wat` files
-                    // ModuleRuleCondition::ResourcePathEndsWith(".wat".to_string()),
+                    ModuleRuleCondition::ResourcePathEndsWith(".wat".to_string()),
                 ]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::WebAssembly)],
             ),
