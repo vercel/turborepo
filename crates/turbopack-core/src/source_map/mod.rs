@@ -326,37 +326,32 @@ impl SourceMap {
 
         let mut builder = sourcemap::SourceMapBuilder::new(own_map.get_file());
         let other_tokens = other.tokens().await?;
-        let tokens = other_tokens.iter().map(|other_token| {
-            let other_token = match other_token {
-                Token::Synthetic(_) => panic!("Unexpected synthetic token"),
-                Token::Original(t) => t,
-            };
-
-            (
-                own_map.lookup_token(
-                    other_token.original_line as u32,
-                    other_token.original_column as u32,
-                ),
+        let traced_tokens = other_tokens.iter().map(|other_token| match other_token {
+            Token::Synthetic(_) => (None, other_token),
+            Token::Original(t) => (
+                own_map.lookup_token(t.original_line as u32, t.original_column as u32),
                 other_token,
-            )
+            ),
         });
 
         let mut source_to_src_id = IndexMap::new();
-        for (traced_token, other_token) in tokens {
-            if let Some(traced_token) = traced_token {
-                let original_file = traced_token.get_source();
-                let token = builder.add(
-                    other_token.generated_line as u32,
-                    other_token.generated_column as u32,
-                    traced_token.get_src_line(),
-                    traced_token.get_src_col(),
-                    original_file,
-                    traced_token.get_name(),
-                );
+        for (traced_token, other_token) in traced_tokens {
+            let original_file = traced_token.and_then(|t| t.get_source());
+            let token = builder.add(
+                other_token.generated_line() as u32,
+                other_token.generated_column() as u32,
+                traced_token
+                    .map(|t| t.get_src_line())
+                    .unwrap_or(SOURCEMAP_CRATE_NONE_U32),
+                traced_token
+                    .map(|t| t.get_src_col())
+                    .unwrap_or(SOURCEMAP_CRATE_NONE_U32),
+                original_file,
+                traced_token.and_then(|t| t.get_name()),
+            );
 
-                if let Some(original_file) = original_file {
-                    source_to_src_id.insert(original_file, token.src_id);
-                }
+            if let Some(original_file) = original_file {
+                source_to_src_id.insert(original_file, token.src_id);
             }
         }
 
