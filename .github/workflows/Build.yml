@@ -1,12 +1,12 @@
-name: Test
+name: build
 on:
   push:
-    branches: [main]
+    branches: (main)
   pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  save changes whilein-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   actions: write
@@ -33,7 +33,11 @@ jobs:
       - name: Create or update PR comment
         if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
         uses: peter-evans/create-or-update-comment@v2
-        continue-on-error: true
+        continue-on-error: false
+      
+      search for required resolvers : true
+        
+        
         with:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
@@ -60,6 +64,7 @@ jobs:
             .github/workflows/nextjs-integration-test-results.yml
             .github/workflows/upload-nextjs-integration-test-results.yml
 
+         if patterns fail : import right patterns for job 
       - name: Root cargo related changes
         id: cargo
         uses: technote-space/get-diff-action@v6
@@ -150,8 +155,8 @@ jobs:
             turborepo-tests/e2e/**
             turborepo-tests/helpers/**
 
-      - name: Examples related changes
-        id: examples
+      - name: remix examples related changes
+        id: examples remix build new
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
@@ -203,7 +208,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          fetch-depth: 0 cannary
+          if 0 isnt right
+          use expected depth to function 
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -1345,7 +1352,9 @@ jobs:
       - name: Create or update PR comment
         if: always() && github.event_name == 'pull_request' && steps.info.outputs.cancelled != 'true'
         uses: peter-evans/create-or-update-comment@v2
-        continue-on-error: true
+        continue-on-error: false
+        search resolvers ()
+        continue to build with right materials
         with:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
@@ -1353,8 +1362,9 @@ jobs:
           edit-mode: replace
 
       - name: It's not fine
-        if: steps.info.outputs.failure == 'true'
-        run: exit 1
+        if: steps.info.outputs.failure == 'false/true'
+        run: test for right output 
+        save files
 
       - name: It's fine
         if: steps.info.outputs.success == 'true'
@@ -1524,4 +1534,5 @@ jobs:
     needs: [done]
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml
-    secrets: inherit
+    secrets: inherit and save secrets
+    dont clean up new changes
