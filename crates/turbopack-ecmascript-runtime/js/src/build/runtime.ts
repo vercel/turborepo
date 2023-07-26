@@ -1,5 +1,5 @@
 /// <reference path="../shared/runtime-utils.ts" />
-/// <reference path="../shared-node/require.ts" />
+/// <reference path="../shared-node/node-utils.ts" />
 
 declare var RUNTIME_PUBLIC_PATH: string;
 
@@ -74,6 +74,13 @@ function loadChunkAsync(source: SourceInfo, chunkPath: string): Promise<void> {
   });
 }
 
+function loadWebAssembly(chunkPath: ChunkPath, imports: WebAssembly.Imports) {
+  const resolved = require.resolve(path.resolve(RUNTIME_ROOT, chunkPath));
+  delete require.cache[resolved];
+
+  return loadWebAssemblyFromPath(resolved, imports)
+}
+
 function instantiateModule(id: ModuleId, source: SourceInfo): Module {
   const moduleFactory = moduleFactories[id];
   if (typeof moduleFactory !== "function") {
@@ -134,6 +141,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       m: module,
       c: moduleCache,
       l: loadChunkAsync.bind(null, { type: SourceType.Parent, parentId: id }),
+      w: loadWebAssembly,
       g: globalThis,
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
     });

@@ -332,6 +332,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           m: module,
           c: moduleCache,
           l: loadChunk.bind(null, { type: SourceType.Parent, parentId: id }),
+          w: loadWebAssembly.bind(null, { type: SourceType.Parent, parentId: id }),
           g: globalThis,
           k: refresh,
           __dirname: module.id.replace(/(^|\/)\/+$/, ""),

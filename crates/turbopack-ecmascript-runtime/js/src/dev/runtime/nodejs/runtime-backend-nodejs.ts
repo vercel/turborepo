@@ -6,7 +6,7 @@
  */
 
 /// <reference path="../base/runtime-base.ts" />
-/// <reference path="../../../shared-node/require.ts" />
+/// <reference path="../../../shared-node/node-utils.ts" />
 
 interface RequireContextEntry {
   // Only the Node.js backend has this flag.
@@ -26,6 +26,37 @@ function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
   nodejsContext.x = externalRequire;
   nodejsContext.y = externalImport;
   return nodejsContext;
+}
+
+function resolveChunkPath(chunkPath: ChunkPath, source: SourceInfo) {
+  let fromChunkPath = undefined;
+  switch (source.type) {
+    case SourceType.Runtime:
+      fromChunkPath = source.chunkPath;
+      break;
+    case SourceType.Parent:
+      fromChunkPath = getFirstModuleChunk(source.parentId);
+      break;
+    case SourceType.Update:
+      break;
+  }
+
+  const path = require("path");
+  const resolved = require.resolve(
+    "./" + path.relative(path.dirname(fromChunkPath), chunkPath)
+  );
+
+  return resolved;
+}
+
+function loadWebAssembly(
+  source: SourceInfo,
+  chunkPath: ChunkPath,
+  imports: WebAssembly.Imports
+) {
+  const resolved = resolveChunkPath(chunkPath, source);
+
+  return loadWebAssemblyFromPath(resolved, imports);
 }
 
 let BACKEND: RuntimeBackend;
@@ -67,24 +98,10 @@ let BACKEND: RuntimeBackend;
       return;
     }
 
-    let fromChunkPath = undefined;
-    switch (source.type) {
-      case SourceType.Runtime:
-        fromChunkPath = source.chunkPath;
-        break;
-      case SourceType.Parent:
-        fromChunkPath = getFirstModuleChunk(source.parentId);
-        break;
-      case SourceType.Update:
-        break;
-    }
-
     // We'll only mark the chunk as loaded once the script has been executed,
     // which happens in `registerChunk`. Hence the absence of `resolve()`.
-    const path = require("path");
-    const resolved = require.resolve(
-      "./" + path.relative(path.dirname(fromChunkPath), chunkPath)
-    );
+    const resolved = resolveChunkPath(chunkPath, source);
+
     require(resolved);
   }
 })();
