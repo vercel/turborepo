@@ -13,8 +13,11 @@ pub(crate) mod source_map_asset;
 
 pub use source_map_asset::SourceMapAsset;
 
+// #[turbo_tasks::value]
+// struct CrateTokens(CrateRawToken);
+
 /// Represents an empty value in a u32 variable in the source_map crate.
-static SOURCE_MAP_CRATE_NONE_U32: u32 = !0;
+static SOURCEMAP_CRATE_NONE_U32: u32 = !0;
 
 /// Allows callers to generate source maps.
 #[turbo_tasks::value_trait]
@@ -134,7 +137,7 @@ impl TryInto<sourcemap::RawToken> for Token {
                 dst_col: t.generated_column as u32,
                 dst_line: t.generated_line as u32,
                 name_id: match t.name {
-                    None => !0,
+                    None => SOURCEMAP_CRATE_NONE_U32,
                     Some(name) => name.parse()?,
                 },
                 src_col: t.original_column as u32,
@@ -144,10 +147,10 @@ impl TryInto<sourcemap::RawToken> for Token {
             Self::Synthetic(t) => sourcemap::RawToken {
                 dst_col: t.generated_column as u32,
                 dst_line: t.generated_line as u32,
-                name_id: SOURCE_MAP_CRATE_NONE_U32,
-                src_col: SOURCE_MAP_CRATE_NONE_U32,
-                src_line: SOURCE_MAP_CRATE_NONE_U32,
-                src_id: SOURCE_MAP_CRATE_NONE_U32,
+                name_id: SOURCEMAP_CRATE_NONE_U32,
+                src_col: SOURCEMAP_CRATE_NONE_U32,
+                src_line: SOURCEMAP_CRATE_NONE_U32,
+                src_id: SOURCEMAP_CRATE_NONE_U32,
             },
         })
     }
@@ -246,12 +249,15 @@ impl SourceMap {
 
     #[turbo_tasks::function]
     pub async fn tokens(self: Vc<Self>) -> Result<Vc<Tokens>> {
-        let crate_map = match &*self.await? {
-            Self::Regular(m) => (***m).to_owned(),
-            Self::Sectioned(m) => (***m.flatten().await?).to_owned(),
-        };
-
-        Ok(Vc::cell(crate_map.tokens().map(|t| t.into()).collect()))
+        let this = &*self.await?;
+        Ok(Tokens(match this {
+            Self::Regular(m) => (&****m).tokens().map(|t| t.into()).collect(),
+            Self::Sectioned(m) => (&***m.flatten().await?)
+                .tokens()
+                .map(|t| t.into())
+                .collect(),
+        })
+        .cell())
     }
 
     /// Traces a generated line/column into an mapping token representing either
