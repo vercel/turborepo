@@ -34,6 +34,9 @@ export function getComparison(args: GetComparisonArgs): {
 
       return null;
     }
+  } else if (fallback) {
+    info(`Using ${fallback} to compare "${workspace}"`);
+    return { ref: fallback, type: "customFallback" };
   }
   return { ref: "HEAD^", type: "headRelative" };
 }
