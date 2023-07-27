@@ -130,7 +130,9 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
             }
         }
 
-        let mut canon_builder = Builder::new(HeapAllocator::default());
+        let size = builder.total_size().unwrap().word_count + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
@@ -165,7 +167,9 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             }
         }
 
-        let mut canon_builder = Builder::new(HeapAllocator::default());
+        let size = builder.total_size().unwrap().word_count + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
@@ -248,7 +252,9 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
             }
         }
 
-        let mut canon_builder = Builder::new(HeapAllocator::default());
+        let size = builder.total_size().unwrap().word_count + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
@@ -328,7 +334,9 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             }
         }
 
-        let mut canon_builder = Builder::new(HeapAllocator::default());
+        let size = builder.total_size().unwrap().word_count + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
