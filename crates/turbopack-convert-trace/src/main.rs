@@ -124,6 +124,16 @@ fn main() {
     let mut all_self_times = Vec::new();
     let mut name_counts: HashMap<Cow<'_, str>, usize> = HashMap::new();
 
+    fn get_name<'a>(
+        name: &'a str,
+        values: &IndexMap<Cow<'a, str>, TraceValue<'a>>,
+    ) -> Cow<'a, str> {
+        values
+            .get("name")
+            .and_then(|v| v.as_str().map(|s| format!("{s} ({name})").into()))
+            .unwrap_or(name.into())
+    }
+
     for data in trace_rows {
         match data {
             TraceRow::Start {
@@ -134,18 +144,20 @@ fn main() {
                 target,
                 values,
             } => {
+                let values = values.into_iter().collect();
+                let name = get_name(name, &values);
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
-                spans[internal_id].name = name.into();
+                spans[internal_id].name = name.clone();
                 spans[internal_id].target = target.into();
                 spans[internal_id].start = ts;
                 spans[internal_id].end = ts;
-                spans[internal_id].values = values.into_iter().collect();
+                spans[internal_id].values = values;
                 let internal_parent =
                     parent.map_or(0, |id| ensure_span(&mut active_ids, &mut spans, id));
                 spans[internal_id].parent = internal_parent;
                 let parent = &mut spans[internal_parent];
                 parent.items.push(SpanItem::Child(internal_id));
-                *name_counts.entry(Cow::Borrowed(name)).or_default() += 1;
+                *name_counts.entry(name).or_default() += 1;
             }
             TraceRow::End { ts, id } => {
                 // id might be reused
@@ -425,11 +437,7 @@ fn main() {
                             merged_tts = span.start;
                         }
                     }
-                    let name_json = if let Some(name_value) = span.values.get("name") {
-                        serde_json::to_string(&format!("{} {name_value}", span.name)).unwrap()
-                    } else {
-                        serde_json::to_string(&span.name).unwrap()
-                    };
+                    let name_json = serde_json::to_string(&span.name).unwrap();
                     let target_json = serde_json::to_string(&span.target).unwrap();
                     let args_json = serde_json::to_string(&span.values).unwrap();
                     if single {
@@ -451,14 +459,10 @@ fn main() {
                     let mut items = take(&mut span.items);
                     if graph {
                         let group_func = |item: &SpanItem| match item {
-                            SpanItem::SelfTime { .. } => (true, "", None),
+                            SpanItem::SelfTime { .. } => (true, ""),
                             SpanItem::Child(id) => {
                                 let span = &spans[*id];
-                                (
-                                    false,
-                                    &*span.name,
-                                    span.values.get("name").map(|v| v.to_string()),
-                                )
+                                (false, &*span.name)
                             }
                         };
                         items.sort_by_cached_key(group_func);
