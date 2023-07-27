@@ -1,6 +1,5 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    fs,
     path::Path,
 };
 
@@ -495,8 +494,9 @@ impl TurboJson {
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
     fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
-        let contents = fs::read_to_string(path)?;
-        let turbo_json: RawTurboJSON = serde_json::from_str(&contents)?;
+        let contents = path.read()?;
+        let turbo_json: RawTurboJSON =
+            serde_json::from_reader(json_comments::StripComments::new(contents.as_slice()))?;
 
         turbo_json.try_into()
     }
