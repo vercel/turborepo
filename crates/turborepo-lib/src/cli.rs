@@ -414,7 +414,7 @@ pub enum GenerateCommand {
 pub struct RunArgs {
     /// Override the filesystem cache directory.
     #[clap(long)]
-    pub cache_dir: Option<String>,
+    pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = 10)]
     pub cache_workers: u32,

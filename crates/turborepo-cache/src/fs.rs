@@ -1,5 +1,6 @@
 use std::{backtrace::Backtrace, fs::OpenOptions};
 
+use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -8,7 +9,7 @@ use crate::{
     CacheError, CacheResponse, CacheSource,
 };
 
-struct FSCache {
+pub struct FsCache {
     cache_directory: AbsoluteSystemPathBuf,
 }
 
@@ -25,10 +26,10 @@ impl CacheMetadata {
     }
 }
 
-impl FSCache {
+impl FsCache {
     fn resolve_cache_dir(
         repo_root: &AbsoluteSystemPath,
-        override_dir: Option<&str>,
+        override_dir: Option<&Utf8Path>,
     ) -> AbsoluteSystemPathBuf {
         if let Some(override_dir) = override_dir {
             AbsoluteSystemPathBuf::from_unknown(repo_root, override_dir)
@@ -38,13 +39,13 @@ impl FSCache {
     }
 
     pub fn new(
-        override_dir: Option<&str>,
+        override_dir: Option<&Utf8Path>,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<Self, CacheError> {
         let cache_directory = Self::resolve_cache_dir(repo_root, override_dir);
         cache_directory.create_dir_all()?;
 
-        Ok(FSCache { cache_directory })
+        Ok(FsCache { cache_directory })
     }
 
     pub fn fetch(
@@ -112,12 +113,12 @@ impl FSCache {
         })
     }
 
-    fn put(
+    pub fn put(
         &self,
         anchor: &AbsoluteSystemPath,
         hash: &str,
+        files: &[AnchoredSystemPathBuf],
         duration: u32,
-        files: Vec<AnchoredSystemPathBuf>,
     ) -> Result<(), CacheError> {
         let cache_path = self
             .cache_directory
@@ -173,7 +174,7 @@ mod test {
         let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
         test_case.initialize(repo_root_path)?;
 
-        let cache = FSCache::new(None, &repo_root_path)?;
+        let cache = FsCache::new(None, &repo_root_path)?;
 
         let expected_miss = cache
             .exists(&test_case.hash)

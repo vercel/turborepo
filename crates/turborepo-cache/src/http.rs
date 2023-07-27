@@ -6,25 +6,41 @@ use turborepo_api_client::{APIClient, Response};
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
-    CacheError, CacheResponse, CacheSource,
+    CacheError, CacheOpts, CacheResponse, CacheSource,
 };
 
 pub struct HttpCache {
     client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
+    token: String,
 }
 
 impl HttpCache {
     pub fn new(
         client: APIClient,
-        signer_verifier: Option<ArtifactSignatureAuthenticator>,
+        opts: CacheOpts,
         repo_root: AbsoluteSystemPathBuf,
+        team_id: &str,
+        token: &str,
     ) -> HttpCache {
+        let signer_verifier = if opts
+            .remote_cache_opts
+            .map_or(false, |remote_cache_opts| remote_cache_opts.signature)
+        {
+            Some(ArtifactSignatureAuthenticator {
+                team_id: team_id.as_bytes().to_vec(),
+                secret_key_override: None,
+            })
+        } else {
+            None
+        };
+
         HttpCache {
             client,
             signer_verifier,
             repo_root,
+            token: token.to_string(),
         }
     }
 
@@ -32,7 +48,7 @@ impl HttpCache {
         &self,
         anchor: &AbsoluteSystemPath,
         hash: &str,
-        files: Vec<AnchoredSystemPathBuf>,
+        files: &[AnchoredSystemPathBuf],
         duration: u32,
         token: &str,
     ) -> Result<(), CacheError> {
@@ -181,7 +197,7 @@ mod test {
     use crate::{
         http::HttpCache,
         test_cases::{get_test_cases, TestCase},
-        CacheSource,
+        CacheOpts, CacheSource,
     };
 
     #[tokio::test]
@@ -206,8 +222,11 @@ mod test {
         } = test_case;
 
         let api_client = APIClient::new(&format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let opts = CacheOpts::default();
+        let team_id = "my-team";
+        let token = "my-token";
 
-        let cache = HttpCache::new(api_client, None, repo_root_path.to_owned());
+        let cache = HttpCache::new(api_client, opts, repo_root_path.to_owned(), team_id, token);
 
         cache
             .put(

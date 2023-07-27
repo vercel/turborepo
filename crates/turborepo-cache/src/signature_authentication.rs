@@ -25,9 +25,9 @@ pub enum SignatureError {
 
 #[derive(Debug)]
 pub struct ArtifactSignatureAuthenticator {
-    team_id: Vec<u8>,
+    pub(crate) team_id: Vec<u8>,
     // An override for testing purposes (to avoid env var race conditions)
-    secret_key_override: Option<Vec<u8>>,
+    pub(crate) secret_key_override: Option<Vec<u8>>,
 }
 
 impl ArtifactSignatureAuthenticator {

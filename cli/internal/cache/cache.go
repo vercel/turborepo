@@ -115,9 +115,6 @@ func (o *Opts) resolveCacheDir(repoRoot turbopath.AbsoluteSystemPath) turbopath.
 	return DefaultLocation(repoRoot)
 }
 
-var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only
-allow reading and caching artifacts using the remote cache.`
-
 // New creates a new cache
 func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
 	c, err := newSyncCache(opts, repoRoot, client, recorder, onCacheRemoved)
@@ -143,7 +140,7 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client clien
 	// Further, since the httpCache can be removed at runtime, we need to insert a noopCache
 	// as a backup if you are configured to have *just* an httpCache.
 	//
-	// This is reduced from (!useFsCache && !useHTTPCache) || (!useFsCache & useHTTPCache)
+	// This is reduced from (!useFsCache && !useHTTPCache) || (!useFsCache && useHTTPCache)
 	useNoopCache := !useFsCache
 
 	// Build up an array of cache implementations, we can only ever have 1 or 2.
