@@ -17,7 +17,7 @@ impl AsyncCache {
         &mut self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-        files: Vec<AnchoredSystemPathBuf>,
+        files: &[AnchoredSystemPathBuf],
         duration: u32,
         token: &str,
     ) {

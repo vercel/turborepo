@@ -72,7 +72,7 @@ impl HttpCache {
         &self,
         writer: impl Write,
         anchor: &AbsoluteSystemPath,
-        files: Vec<AnchoredSystemPathBuf>,
+        files: &[AnchoredSystemPathBuf],
     ) -> Result<(), CacheError> {
         let mut cache_archive = CacheWriter::from_writer(writer, true)?;
         for file in files {

@@ -51,40 +51,40 @@ impl CacheMultiplexer {
         &mut self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-        files: Vec<AnchoredSystemPathBuf>,
+        files: &[AnchoredSystemPathBuf],
         duration: u32,
         token: &str,
     ) -> Result<(), CacheError> {
-        let (http_result, fs_result) = match (&self.http, &self.fs) {
+        let http_result = match (&self.http, &self.fs) {
             (Some(http), Some(fs)) => {
-                let (http_result, fs_result) = join(
-                    http.put(anchor, key, &files, duration, token),
-                    fs.put(anchor, key, &files, duration),
-                )
-                .await;
+                // This is serial, but spawning a task requires a static lifetime
+                // which we can't easily do with the HTTP cache. We could in theory
+                // put the cache behind an Arc<Mutex<>>
+                fs.put(anchor, key, &files, duration)?;
+                let http_result = http.put(anchor, key, &files, duration, token).await;
 
-                (Some(http_result), Some(fs_result))
+                Some(http_result)
             }
             (None, Some(fs)) => {
-                let fs_result = fs.put(anchor, key, &files, duration).await;
-                (None, Some(fs_result))
+                fs.put(anchor, key, &files, duration)?;
+
+                None
             }
             (Some(http), None) => {
                 let http_result = http.put(anchor, key, &files, duration, token).await;
-                (Some(http_result), None)
+
+                Some(http_result)
             }
             (None, None) => return Ok(()),
         };
 
-        if let Some(Err(http_err)) = http_result {
-            if let Err(CacheError::ApiClientError(
-                box turborepo_api_client::Error::CacheDisabled { .. },
-                ..,
-            )) = http_err
-            {
-                warn!("failed to put to http cache: cache disabled");
-                self.http = None;
-            }
+        if let Some(Err(CacheError::ApiClientError(
+            box turborepo_api_client::Error::CacheDisabled { .. },
+            ..,
+        ))) = http_result
+        {
+            warn!("failed to put to http cache: cache disabled");
+            self.http = None;
         }
 
         Ok(())
