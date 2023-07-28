@@ -26,6 +26,7 @@ use std::{
     eprintln,
     mem::take,
     ops::Range,
+    time::Instant,
 };
 
 use indexmap::IndexMap;
@@ -57,12 +58,18 @@ fn main() {
         .map_or(".turbopack/trace.log", String::as_str);
 
     eprint!("Reading content from {}...", arg);
+    let start = Instant::now();
 
     // Read file to string
     let file = std::fs::read(arg).unwrap();
-    eprintln!(" done ({} MiB)", file.len() / 1024 / 1024);
+    eprintln!(
+        " done ({} MiB, {:.3}s)",
+        file.len() / 1024 / 1024,
+        start.elapsed().as_secs_f32()
+    );
 
     eprint!("Parsing trace from content...");
+    let start = Instant::now();
 
     let mut trace_rows = Vec::new();
     let mut current = &file[..];
@@ -81,9 +88,14 @@ fn main() {
             }
         }
     }
-    eprintln!(" done ({} items)", trace_rows.len());
+    eprintln!(
+        " done ({} items, {:.3}s)",
+        trace_rows.len(),
+        start.elapsed().as_secs_f32()
+    );
 
     eprint!("Analysing trace into span tree...");
+    let start = Instant::now();
 
     let mut spans = Vec::new();
     spans.push(Span {
@@ -235,7 +247,11 @@ fn main() {
         }
     }
 
-    eprintln!(" done ({} spans)", spans.len());
+    eprintln!(
+        " done ({} spans, {:.3}s)",
+        spans.len(),
+        start.elapsed().as_secs_f64()
+    );
 
     let mut name_counts: Vec<(Cow<'_, str>, usize)> = name_counts.into_iter().collect();
     name_counts.sort_by_key(|(_, count)| Reverse(*count));
@@ -254,6 +270,7 @@ fn main() {
 
     if threads {
         eprint!("Distributing time into virtual threads...");
+        let start = Instant::now();
         let mut virtual_threads = Vec::new();
 
         let find_thread = |virtual_threads: &mut Vec<VirtualThread>,
@@ -368,11 +385,12 @@ fn main() {
                 );
             }
         }
-        eprintln!(" done");
+        eprintln!(" done ({:.3}s)", start.elapsed().as_secs_f32());
     }
 
     if single || merged {
         eprint!("Emitting span tree...");
+        let start = Instant::now();
 
         const CONCURRENCY_FIXED_POINT_FACTOR: u64 = 100;
         const CONCURRENCY_FIXED_POINT_FACTOR_F: f32 = 100.0;
@@ -436,10 +454,10 @@ fn main() {
                         let parent_name = &*span.name;
                         let mut groups = IndexMap::new();
                         let mut self_items = Vec::new();
-                        fn add_items_to_groups(
-                            groups: &mut IndexMap<&str, Vec<SpanItem>>,
+                        fn add_items_to_groups<'a>(
+                            groups: &mut IndexMap<Cow<'a, str>, Vec<SpanItem>>,
                             self_items: &mut Vec<SpanItem>,
-                            spans: &mut Vec<Span>,
+                            spans: &mut Vec<Span<'a>>,
                             parent_count: &mut u32,
                             parent_name: &str,
                             items: Vec<SpanItem>,
@@ -450,9 +468,7 @@ fn main() {
                                         self_items.push(item);
                                     }
                                     SpanItem::Child(id) => {
-                                        // SAFETY: We never mutate the `name` of the spans or the
-                                        // Vec itself. We only mutate the `items` Vec.
-                                        let key = unsafe { &*(&*spans[id].name as *const str) };
+                                        let key = spans[id].name.clone();
                                         if key == parent_name {
                                             // Recursion
                                             *parent_count += 1;
@@ -483,11 +499,10 @@ fn main() {
                         );
                         if !self_items.is_empty() {
                             groups
-                                .entry("SELF_TIME")
+                                .entry(Cow::Borrowed("SELF_TIME"))
                                 .or_default()
                                 .append(&mut self_items);
                         }
-                        // SAFETY: Lifetime of the keys in `groups` must end here.
                         let groups = groups.into_values().collect::<Vec<_>>();
                         let mut new_items = Vec::new();
                         for group in groups {
@@ -675,7 +690,7 @@ fn main() {
                 }
             }
         }
-        eprintln!(" done");
+        eprintln!(" done ({:.3}s)", start.elapsed().as_secs_f64());
     }
     println!();
     println!("]");
