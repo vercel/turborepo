@@ -53,7 +53,6 @@ function loadChunk(chunkPath: ChunkPath) {
   }
 
   const resolved = require.resolve(path.resolve(RUNTIME_ROOT, chunkPath));
-  delete require.cache[resolved];
   const chunkModules: ModuleFactories = require(resolved);
 
   for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
@@ -128,7 +127,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       y: externalImport,
       f: requireContext.bind(null, module),
       i: esmImport.bind(null, module),
-      s: esm.bind(null, module.exports),
+      s: esmExport.bind(null, module, module.exports),
       j: dynamicExport.bind(null, module, module.exports),
       v: exportValue.bind(null, module),
       n: exportNamespace.bind(null, module),

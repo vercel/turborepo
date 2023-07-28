@@ -30,8 +30,8 @@ pub struct TaskOutputs {
 }
 
 // TaskOutputMode defines the ways turbo can display task output during a run
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum TaskOutputMode {
     // FullTaskOutput will show all task output
     #[default]
@@ -39,13 +39,13 @@ pub enum TaskOutputMode {
     // None will hide all task output
     None,
     // Hash will display turbo-computed task hashes
-    Hash,
+    HashOnly,
     // New will show all new task output and turbo-computed task hashes for cached
     // output
-    New,
+    NewOnly,
     // Error will show task output for failures only; no cache miss/hit messages are
     // emitted
-    Error,
+    ErrorsOnly,
 }
 
 // taskDefinitionHashable exists as a definition for PristinePipeline, which is

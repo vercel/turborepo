@@ -1,6 +1,5 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    fs,
     path::Path,
 };
 
@@ -495,8 +494,9 @@ impl TurboJson {
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
     fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
-        let contents = fs::read_to_string(path)?;
-        let turbo_json: RawTurboJSON = serde_json::from_str(&contents)?;
+        let contents = path.read()?;
+        let turbo_json: RawTurboJSON =
+            serde_json::from_reader(json_comments::StripComments::new(contents.as_slice()))?;
 
         turbo_json.try_into()
     }
@@ -789,5 +789,29 @@ mod tests {
         .unwrap();
 
         assert_eq!(pruned_json, expected);
+    }
+
+    #[test_case("full", Some(TaskOutputMode::Full) ; "full")]
+    #[test_case("hash-only", Some(TaskOutputMode::HashOnly) ; "hash-only")]
+    #[test_case("new-only", Some(TaskOutputMode::NewOnly) ; "new-only")]
+    #[test_case("errors-only", Some(TaskOutputMode::ErrorsOnly) ; "errors-only")]
+    #[test_case("none", Some(TaskOutputMode::None) ; "none")]
+    #[test_case("junk", None ; "invalid value")]
+    fn test_parsing_output_mode(output_mode: &str, expected: Option<TaskOutputMode>) {
+        let json: Result<RawTurboJSON, _> = serde_json::from_value(serde_json::json!({
+            "pipeline": {
+                "build": {
+                    "outputMode": output_mode,
+                }
+            }
+        }));
+
+        let actual = json
+            .as_ref()
+            .ok()
+            .and_then(|j| j.pipeline.as_ref())
+            .and_then(|pipeline| pipeline.0.get("build"))
+            .and_then(|build| build.output_mode);
+        assert_eq!(actual, expected);
     }
 }
