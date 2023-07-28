@@ -90,7 +90,8 @@ pub async fn create_web_entry_source(
     browserslist_query: String,
 ) -> Result<Vc<Box<dyn ContentSource>>> {
     let compile_time_info = get_client_compile_time_info(browserslist_query, node_env);
-    let context = get_client_asset_context(project_path, execution_context, compile_time_info);
+    let context =
+        get_client_asset_context(project_path, execution_context, compile_time_info, node_env);
     let chunking_context =
         get_client_chunking_context(project_path, server_root, compile_time_info.environment());
     let entries = get_client_runtime_entries(project_path);
@@ -104,7 +105,7 @@ pub async fn create_web_entry_source(
             let ty = Value::new(ReferenceType::Entry(EntryReferenceSubType::Web));
             Ok(origin
                 .resolve_asset(request, origin.resolve_options(ty.clone()), ty)
-                .primary_assets()
+                .primary_modules()
                 .await?
                 .first()
                 .copied())

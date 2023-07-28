@@ -4,12 +4,15 @@ use turbopack_core::{
     chunk::{availability_info::AvailabilityInfo, ChunkItem},
     ident::AssetIdent,
     module::Module,
-    reference::AssetReferences,
+    reference::ModuleReferences,
 };
 
 use super::{asset::EcmascriptModulePartAsset, part_of_module, split_module};
 use crate::{
-    chunk::{EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkingContext},
+    chunk::{
+        placeable::EcmascriptChunkPlaceable, EcmascriptChunkItem, EcmascriptChunkItemContent,
+        EcmascriptChunkingContext,
+    },
     EcmascriptModuleContent,
 };
 
@@ -54,7 +57,16 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             availability_info,
         );
 
-        Ok(EcmascriptChunkItemContent::new(content, this.context))
+        let async_module_options = module
+            .full_module
+            .get_async_module()
+            .module_options(availability_info);
+
+        Ok(EcmascriptChunkItemContent::new(
+            content,
+            this.context,
+            async_module_options,
+        ))
     }
 
     #[turbo_tasks::function]
@@ -66,7 +78,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
 #[turbo_tasks::value_impl]
 impl ChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
-    async fn references(&self) -> Vc<AssetReferences> {
+    async fn references(&self) -> Vc<ModuleReferences> {
         self.module.references()
     }
 
