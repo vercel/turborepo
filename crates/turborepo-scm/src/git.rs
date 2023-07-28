@@ -126,7 +126,6 @@ impl Git {
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
     ) {
-        let turbo_root = turbo_root;
         let stdout = String::from_utf8(stdout).unwrap();
         for line in stdout.lines() {
             let path = RelativeUnixPath::new(line).unwrap();

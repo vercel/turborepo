@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     collections::{HashMap, HashSet},
     str::FromStr,
 };
@@ -261,6 +260,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                     let dependencies = self.pkg_graph.dependencies(&node);
                     let dependencies = dependencies
                         .iter()
+                        .flatten()
                         .flat_map(|i| i.name().map(str::to_string))
                         .collect::<Vec<_>>();
 
@@ -270,7 +270,11 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
 
                 if selector.include_dependents {
                     let dependents = self.pkg_graph.dependents(&node);
-                    for dependent in dependents.iter().flat_map(|i| i.name().map(str::to_string)) {
+                    for dependent in dependents
+                        .iter()
+                        .flatten()
+                        .flat_map(|i| i.name().map(str::to_string))
+                    {
                         walked_dependents.insert(dependent.clone());
 
                         // get the dependent's dependencies
@@ -284,6 +288,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
 
                             let x = dependent_dependencies
                                 .iter()
+                                .flatten()
                                 .flat_map(|i| i.name().map(str::to_string))
                                 .collect::<HashSet<_>>();
 
@@ -397,7 +402,11 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                     package_graph::WorkspaceName::Other(changed_package.clone()),
                 );
 
-                if dependencies.contains(&changed_node) {
+                if dependencies
+                    .as_ref()
+                    .map(|d| d.contains(&changed_node))
+                    .unwrap_or_default()
+                {
                     roots.insert(package.clone());
                     matched.insert(package);
                     break;
@@ -466,7 +475,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                     .unwrap();
                 let globber = wax::Glob::new(path.as_str())?;
                 let packages = self.pkg_graph.workspaces();
-                for (name, _) in packages.filter(|(name, info)| {
+                for (name, _) in packages.filter(|(_name, info)| {
                     let path = info.package_json_path.restore_anchor(self.turbo_root);
                     globber.is_match(path.as_std_path())
                 }) {
