@@ -186,7 +186,7 @@ impl SourceMap {
                 .zip(m.source_contents())
                 .map(|(source, content)| (source.to_string(), content.map(|s| s.to_string())))
                 .collect::<Vec<(String, Option<String>)>>(),
-            Self::Sectioned(m) => (&*m.source_contents().await?).to_vec(),
+            Self::Sectioned(m) => (*m.source_contents().await?).to_vec(),
         })
     }
 }
@@ -339,7 +339,7 @@ impl SourceMap {
                 Ok(match other_token {
                     Token::Synthetic(_) => (None, other_token),
                     Token::Original(t) => (
-                        (&*self
+                        (*self
                             .lookup_token(t.original_line, t.original_column)
                             .await?)
                             .clone(),
