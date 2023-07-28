@@ -1,7 +1,7 @@
-use std::{collections::hash_map::RandomState, io::Write, ops::Deref, sync::Arc};
+use std::{io::Write, ops::Deref, sync::Arc};
 
 use anyhow::Result;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sourcemap::{SourceMap as CrateMap, SourceMapBuilder};
 use turbo_tasks::{TryJoinIterExt, Vc};
@@ -525,7 +525,7 @@ impl SectionedSourceMap {
                         original_column: token.original_column,
                         name: token.name.clone(),
                     }),
-                    Token::Synthetic(token) => Token::Synthetic(SyntheticToken {
+                    Token::Synthetic(_) => Token::Synthetic(SyntheticToken {
                         generated_line,
                         generated_column,
                     }),
