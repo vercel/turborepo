@@ -47,6 +47,7 @@ fn main() {
     let threads = args.remove("--threads");
     let idle = args.remove("--idle");
     let graph = args.remove("--graph");
+    let collapse_names = args.remove("--collapse-names");
     if !single && !merged && !threads {
         merged = true;
     }
@@ -87,6 +88,7 @@ fn main() {
     let mut spans = Vec::new();
     spans.push(Span {
         parent: 0,
+        count: 1,
         name: "".into(),
         target: "".into(),
         start: 0,
@@ -106,6 +108,7 @@ fn main() {
                 entry.insert(internal_id);
                 let span = Span {
                     parent: 0,
+                    count: 1,
                     name: "".into(),
                     target: "".into(),
                     start: 0,
@@ -126,7 +129,11 @@ fn main() {
     fn get_name<'a>(
         name: &'a str,
         values: &IndexMap<Cow<'a, str>, TraceValue<'a>>,
+        collapse_names: bool,
     ) -> Cow<'a, str> {
+        if collapse_names && name != "turbo_tasks::function" {
+            return name.into();
+        }
         values
             .get("name")
             .and_then(|v| v.as_str().map(|s| format!("{s} ({name})").into()))
@@ -144,7 +151,7 @@ fn main() {
                 values,
             } => {
                 let values = values.into_iter().collect();
-                let name = get_name(name, &values);
+                let name = get_name(name, &values, collapse_names);
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 spans[internal_id].name = name.clone();
                 spans[internal_id].target = target.into();
@@ -207,6 +214,7 @@ fn main() {
                 let start = ts - duration;
                 spans.push(Span {
                     parent: internal_parent,
+                    count: 1,
                     name,
                     target: "".into(),
                     start,
@@ -422,61 +430,64 @@ fn main() {
             match task {
                 Task::Enter { id, root } => {
                     let mut span = take(&mut spans[id]);
-                    if root {
-                        if ts < span.start {
-                            ts = span.start;
-                        }
-                        if tts < span.start {
-                            tts = span.start;
-                        }
-                        if merged_ts < span.start {
-                            merged_ts = span.start;
-                        }
-                        if merged_tts < span.start {
-                            merged_tts = span.start;
-                        }
-                    }
-                    let name_json = serde_json::to_string(&span.name).unwrap();
-                    let target_json = serde_json::to_string(&span.target).unwrap();
-                    let args_json = serde_json::to_string(&span.values).unwrap();
-                    if single {
-                        pjson!(
-                            r#"{{"ph":"B","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
-                        );
-                    }
-                    if merged {
-                        pjson!(
-                            r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
-                        );
-                    }
-                    stack.push(Task::Exit {
-                        name_json,
-                        target_json,
-                        start: ts,
-                        start_scaled: tts,
-                    });
+                    let mut count = span.count;
                     let mut items = take(&mut span.items);
-                    if graph {
+                    if graph && !items.is_empty() {
+                        let parent_name = &*span.name;
                         let mut groups = IndexMap::new();
                         let mut self_items = Vec::new();
-                        for item in items {
-                            match item {
-                                SpanItem::SelfTime { .. } => {
-                                    self_items.push(item);
-                                }
-                                SpanItem::Child(id) => {
-                                    let span = &spans[id];
-                                    let group = groups.entry(&*span.name).or_insert_with(Vec::new);
-                                    group.push(item);
+                        fn add_items_to_groups(
+                            groups: &mut IndexMap<&str, Vec<SpanItem>>,
+                            self_items: &mut Vec<SpanItem>,
+                            spans: &mut Vec<Span>,
+                            parent_count: &mut u32,
+                            parent_name: &str,
+                            items: Vec<SpanItem>,
+                        ) {
+                            for item in items {
+                                match item {
+                                    SpanItem::SelfTime { .. } => {
+                                        self_items.push(item);
+                                    }
+                                    SpanItem::Child(id) => {
+                                        // SAFETY: We never mutate the `name` of the spans or the
+                                        // Vec itself. We only mutate the `items` Vec.
+                                        let key = unsafe { &*(&*spans[id].name as *const str) };
+                                        if key == parent_name {
+                                            // Recursion
+                                            *parent_count += 1;
+                                            let items = take(&mut spans[id].items);
+                                            add_items_to_groups(
+                                                groups,
+                                                self_items,
+                                                spans,
+                                                parent_count,
+                                                parent_name,
+                                                items,
+                                            );
+                                        } else {
+                                            let group = groups.entry(key).or_insert_with(Vec::new);
+                                            group.push(item);
+                                        }
+                                    }
                                 }
                             }
                         }
+                        add_items_to_groups(
+                            &mut groups,
+                            &mut self_items,
+                            &mut spans,
+                            &mut count,
+                            &parent_name,
+                            items,
+                        );
                         if !self_items.is_empty() {
                             groups
                                 .entry("SELF_TIME")
                                 .or_default()
                                 .extend(self_items.drain(..));
                         }
+                        // SAFETY: Lifetime of the keys in `groups` must end here.
                         let groups = groups.into_values().collect::<Vec<_>>();
                         let mut new_items = Vec::new();
                         for group in groups {
@@ -501,13 +512,51 @@ fn main() {
                                     }
                                     if count != 1 {
                                         let span = &mut spans[new_item_id];
-                                        span.name = format!("{count} x {}", span.name).into();
+                                        span.count = count;
                                     }
                                 }
                             }
                         }
                         items = new_items;
                     }
+                    if root {
+                        if ts < span.start {
+                            ts = span.start;
+                        }
+                        if tts < span.start {
+                            tts = span.start;
+                        }
+                        if merged_ts < span.start {
+                            merged_ts = span.start;
+                        }
+                        if merged_tts < span.start {
+                            merged_tts = span.start;
+                        }
+                    }
+                    let name_json = if count == 1 {
+                        serde_json::to_string(&span.name).unwrap()
+                    } else {
+                        serde_json::to_string(&format!("{count} x {}", span.name)).unwrap()
+                    };
+                    let target_json = serde_json::to_string(&span.target).unwrap();
+                    let args_json = serde_json::to_string(&span.values).unwrap();
+                    if single {
+                        pjson!(
+                            r#"{{"ph":"B","pid":1,"ts":{ts},"tts":{tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
+                        );
+                    }
+                    if merged {
+                        pjson!(
+                            r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
+                        );
+                    }
+                    stack.push(Task::Exit {
+                        name_json,
+                        target_json,
+                        start: ts,
+                        start_scaled: tts,
+                    });
+
                     for item in items.iter().rev() {
                         match item {
                             SpanItem::SelfTime {
@@ -640,6 +689,7 @@ struct SelfTimeStarted {
 #[derive(Debug, Default)]
 struct Span<'a> {
     parent: usize,
+    count: u32,
     name: Cow<'a, str>,
     target: Cow<'a, str>,
     start: u64,
