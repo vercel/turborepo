@@ -15,6 +15,7 @@ mod test_cases;
 
 use std::{backtrace, backtrace::Backtrace};
 
+pub use async_cache::AsyncCache;
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -88,11 +89,11 @@ pub struct CacheResponse {
 
 #[derive(Debug, Default)]
 pub struct CacheOpts<'a> {
-    override_dir: Option<&'a Utf8Path>,
-    skip_remote: bool,
-    skip_filesystem: bool,
-    workers: u32,
-    pub(crate) remote_cache_opts: Option<RemoteCacheOpts>,
+    pub override_dir: Option<&'a Utf8Path>,
+    pub skip_remote: bool,
+    pub skip_filesystem: bool,
+    pub workers: u32,
+    pub remote_cache_opts: Option<RemoteCacheOpts>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]

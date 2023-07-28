@@ -87,7 +87,7 @@ impl FsCache {
         ))
     }
 
-    fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
+    pub(crate) fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
         let uncompressed_cache_path = self
             .cache_directory
             .join_component(&format!("{}.tar", hash));

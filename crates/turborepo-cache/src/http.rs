@@ -19,13 +19,14 @@ pub struct HttpCache {
 impl HttpCache {
     pub fn new(
         client: APIClient,
-        opts: CacheOpts,
+        opts: &CacheOpts,
         repo_root: AbsoluteSystemPathBuf,
         team_id: &str,
         token: &str,
     ) -> HttpCache {
         let signer_verifier = if opts
             .remote_cache_opts
+            .as_ref()
             .map_or(false, |remote_cache_opts| remote_cache_opts.signature)
         {
             Some(ArtifactSignatureAuthenticator {
@@ -50,7 +51,6 @@ impl HttpCache {
         hash: &str,
         files: &[AnchoredSystemPathBuf],
         duration: u32,
-        token: &str,
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
@@ -62,7 +62,7 @@ impl HttpCache {
             .transpose()?;
 
         self.client
-            .put_artifact(hash, &artifact_body, duration, tag.as_deref(), token)
+            .put_artifact(hash, &artifact_body, duration, tag.as_deref(), &self.token)
             .await?;
 
         Ok(())
@@ -85,14 +85,12 @@ impl HttpCache {
     pub async fn exists(
         &self,
         hash: &str,
-        token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-        use_preflight: bool,
     ) -> Result<CacheResponse, CacheError> {
         let response = self
             .client
-            .artifact_exists(hash, token, team_id, team_slug, use_preflight)
+            .artifact_exists(hash, &self.token, team_id, team_slug)
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -117,17 +115,15 @@ impl HttpCache {
         }
     }
 
-    pub async fn retrieve(
+    pub async fn fetch(
         &self,
         hash: &str,
-        token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-        use_preflight: bool,
     ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         let response = self
             .client
-            .fetch_artifact(hash, token, team_id, team_slug, use_preflight)
+            .fetch_artifact(hash, &self.token, team_id, team_slug)
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -243,7 +239,7 @@ mod test {
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.retrieve(hash, "", "", None, false).await?;
+        let (cache_response, received_files) = cache.retrieve(hash, "", "", None).await?;
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {

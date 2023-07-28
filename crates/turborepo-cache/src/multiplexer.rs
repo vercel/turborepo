@@ -1,20 +1,24 @@
-use camino::Utf8Path;
-use futures::future::join;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_api_client::APIClient;
 
-use crate::{fs::FsCache, http::HttpCache, CacheError, CacheOpts};
+use crate::{fs::FsCache, http::HttpCache, CacheError, CacheOpts, CacheResponse};
 
 pub struct CacheMultiplexer {
+    // We use an `AtomicBool` instead of removing the cache because that would require
+    // wrapping the cache in a Mutex which would cause a lot of contention.
+    // This does create a mild race condition where we might use the cache
+    // even though another thread might be removing it, but that's fine.
+    should_use_http_cache: AtomicBool,
     fs: Option<FsCache>,
     http: Option<HttpCache>,
 }
 
 impl CacheMultiplexer {
     pub fn new(
-        opts: CacheOpts,
-        override_dir: Option<&Utf8Path>,
+        opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
         api_client: APIClient,
         team_id: &str,
@@ -35,47 +39,48 @@ impl CacheMultiplexer {
         }
 
         let fs_cache = use_fs_cache
-            .then(|| FsCache::new(override_dir, repo_root))
+            .then(|| FsCache::new(opts.override_dir, repo_root))
             .transpose()?;
 
         let http_cache = use_http_cache
             .then(|| HttpCache::new(api_client, opts, repo_root.to_owned(), team_id, token));
 
         Ok(CacheMultiplexer {
+            should_use_http_cache: AtomicBool::new(http_cache.is_some()),
             fs: fs_cache,
             http: http_cache,
         })
     }
 
+    // This is technically a TOCTOU bug, but at worst it'll cause
+    // a few extra cache requests.
+    fn get_http_cache(&self) -> Option<&HttpCache> {
+        if self.should_use_http_cache.load(Ordering::Relaxed) {
+            self.http.as_ref()
+        } else {
+            None
+        }
+    }
+
     pub async fn put(
-        &mut self,
+        &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
         files: &[AnchoredSystemPathBuf],
         duration: u32,
-        token: &str,
     ) -> Result<(), CacheError> {
-        let http_result = match (&self.http, &self.fs) {
-            (Some(http), Some(fs)) => {
-                // This is serial, but spawning a task requires a static lifetime
-                // which we can't easily do with the HTTP cache. We could in theory
-                // put the cache behind an Arc<Mutex<>>
-                fs.put(anchor, key, &files, duration)?;
-                let http_result = http.put(anchor, key, &files, duration, token).await;
+        self.fs
+            .as_ref()
+            .map(|fs| fs.put(anchor, key, &files, duration))
+            .transpose()?;
+
+        let http_result = match self.get_http_cache() {
+            Some(http) => {
+                let http_result = http.put(anchor, key, &files, duration).await;
 
                 Some(http_result)
             }
-            (None, Some(fs)) => {
-                fs.put(anchor, key, &files, duration)?;
-
-                None
-            }
-            (Some(http), None) => {
-                let http_result = http.put(anchor, key, &files, duration, token).await;
-
-                Some(http_result)
-            }
-            (None, None) => return Ok(()),
+            _ => None,
         };
 
         if let Some(Err(CacheError::ApiClientError(
@@ -84,9 +89,60 @@ impl CacheMultiplexer {
         ))) = http_result
         {
             warn!("failed to put to http cache: cache disabled");
-            self.http = None;
+            self.should_use_http_cache.store(false, Ordering::Relaxed);
         }
 
         Ok(())
+    }
+
+    pub async fn fetch(
+        &self,
+        anchor: &AbsoluteSystemPath,
+        key: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
+        if let Some(fs) = &self.fs {
+            if let Ok(cache_response) = fs.fetch(anchor, key) {
+                return Ok(cache_response);
+            }
+        }
+
+        if let Some(http) = self.get_http_cache() {
+            if let Ok((cache_response, files)) = http.fetch(key, team_id, team_slug).await {
+                // Store this into fs cache. We can ignore errors here because we know
+                // we have previously successfully stored in HTTP cache, and so the overall
+                // result is a success at fetching. Storing in lower-priority caches is an
+                // optimization.
+                if let Some(fs) = &self.fs {
+                    let _ = fs.put(anchor, key, &files, cache_response.time_saved);
+                }
+
+                return Ok((cache_response, files));
+            }
+        }
+
+        Err(CacheError::CacheMiss)
+    }
+
+    pub async fn exists(
+        &self,
+        key: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+    ) -> Result<CacheResponse, CacheError> {
+        if let Some(fs) = &self.fs {
+            if let Ok(cache_response) = fs.exists(key) {
+                return Ok(cache_response);
+            }
+        }
+
+        if let Some(http) = self.get_http_cache() {
+            if let Ok(cache_response) = http.exists(key, team_id, team_slug).await {
+                return Ok(cache_response);
+            }
+        }
+
+        Err(CacheError::CacheMiss)
     }
 }

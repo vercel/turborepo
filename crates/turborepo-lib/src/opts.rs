@@ -1,7 +1,4 @@
-#![allow(dead_code)]
 use anyhow::{anyhow, Result};
-use camino::Utf8Path;
-use serde::{Deserialize, Serialize};
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheOpts;
 
