@@ -22,8 +22,10 @@ use crate::ecmascript::node::{
     chunk::EcmascriptBuildNodeChunk, entry::chunk::EcmascriptBuildNodeEntryChunk,
 };
 
+#[derive(Debug, Default)]
 #[turbo_tasks::value(shared)]
 pub enum MinifyType {
+    #[default]
     Minify,
     NoMinify,
 }

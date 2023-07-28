@@ -16,7 +16,7 @@ use turbopack_ecmascript::{
 };
 
 use super::chunk::EcmascriptBuildNodeChunk;
-use crate::{chunking_context::MinifyType, minify::minify, BuildChunkingContext};
+use crate::{chunking_context::MinifyType, ecmascript::minify::minify, BuildChunkingContext};
 
 #[turbo_tasks::value]
 pub(super) struct EcmascriptBuildNodeChunkContent {

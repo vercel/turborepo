@@ -5,7 +5,6 @@
 
 pub(crate) mod chunking_context;
 pub(crate) mod ecmascript;
-pub(crate) mod minify;
 
 pub use chunking_context::{BuildChunkingContext, BuildChunkingContextBuilder, MinifyType};
 

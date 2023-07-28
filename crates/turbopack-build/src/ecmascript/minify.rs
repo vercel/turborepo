@@ -4,9 +4,20 @@ use anyhow::{Context, Result};
 use swc_core::{
     base::{try_with_handler, Compiler},
     common::{
+        comments::{Comments, SingleThreadedComments},
         BytePos, FileName, FilePathMapping, LineCol, Mark, SourceMap as SwcSourceMap, GLOBALS,
     },
-    ecma::{self, ast::Program, codegen::Node},
+    ecma::{
+        self,
+        ast::{EsVersion, Program},
+        codegen::{
+            text_writer::{self, JsWriter, WriteJs},
+            Emitter, Node,
+        },
+        minifier::option::{ExtraOptions, MinifyOptions},
+        parser::{lexer::Lexer, Parser, StringInput, Syntax},
+        visit::FoldWith,
+    },
 };
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
@@ -44,34 +55,47 @@ async fn perform_minify(path: Vc<FileSystemPath>, code_vc: Vc<Code>) -> Result<V
         code.source_code().to_str()?.to_string(),
     );
 
-    let lexer = ecma::parser::lexer::Lexer::new(
-        ecma::parser::Syntax::default(),
-        ecma::ast::EsVersion::latest(),
-        ecma::parser::StringInput::from(&*fm),
+    let lexer = Lexer::new(
+        Syntax::default(),
+        EsVersion::latest(),
+        StringInput::from(&*fm),
         None,
     );
-    let mut parser = ecma::parser::Parser::new_from(lexer);
+    let mut parser = Parser::new_from(lexer);
     let program = try_with_handler(cm.clone(), Default::default(), |handler| {
         GLOBALS.set(&Default::default(), || {
             let program = parser.parse_program().unwrap();
+            let comments = SingleThreadedComments::default();
             let unresolved_mark = Mark::new();
             let top_level_mark = Mark::new();
 
             Ok(compiler.run_transform(handler, false, || {
-                swc_core::ecma::minifier::optimize(
+                let mut program =
+                    program.fold_with(&mut swc_core::ecma::transforms::base::resolver(
+                        unresolved_mark,
+                        top_level_mark,
+                        false,
+                    ));
+
+                program = swc_core::ecma::minifier::optimize(
                     program,
                     cm.clone(),
+                    Some(&comments),
                     None,
-                    None,
-                    &ecma::minifier::option::MinifyOptions {
+                    &MinifyOptions {
                         compress: Some(Default::default()),
+                        mangle: Some(Default::default()),
                         ..Default::default()
                     },
-                    &ecma::minifier::option::ExtraOptions {
+                    &ExtraOptions {
                         top_level_mark,
                         unresolved_mark,
                     },
-                )
+                );
+
+                program.fold_with(&mut ecma::transforms::base::fixer::fixer(Some(
+                    &comments as &dyn Comments,
+                )))
             }))
         })
     })?;
@@ -99,16 +123,14 @@ fn print_program(
     let src = {
         let mut buf = vec![];
         {
-            let wr = Box::new(swc_core::ecma::codegen::text_writer::omit_trailing_semi(
-                Box::new(swc_core::ecma::codegen::text_writer::JsWriter::new(
-                    cm.clone(),
-                    "\n",
-                    &mut buf,
-                    Some(&mut src_map_buf),
-                )),
-            )) as Box<dyn swc_core::ecma::codegen::text_writer::WriteJs>;
+            let wr = Box::new(text_writer::omit_trailing_semi(Box::new(JsWriter::new(
+                cm.clone(),
+                "\n",
+                &mut buf,
+                Some(&mut src_map_buf),
+            )))) as Box<dyn WriteJs>;
 
-            let mut emitter = swc_core::ecma::codegen::Emitter {
+            let mut emitter = Emitter {
                 cfg: swc_core::ecma::codegen::Config {
                     minify: true,
                     ..Default::default()
