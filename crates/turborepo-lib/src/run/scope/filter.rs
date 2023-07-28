@@ -647,7 +647,7 @@ mod test {
         if let Some(idx) = name.rfind('/') {
             // check if the rightmost slash has an @
             if let Some(idx) = name[..idx].find('@') {
-                return (Some(&name[..idx]), &name[idx + 1..]);
+                return (Some(&name[..idx - 1]), &name[idx..]);
             }
 
             return (Some(&name[..idx]), &name[idx + 1..]);
@@ -693,7 +693,7 @@ mod test {
         let package_jsons = packages
             .iter()
             .map(|package_path| {
-                let (_path, name) = get_name(package_path);
+                let (_, name) = get_name(package_path);
                 (
                     turbo_root
                         .join_unix_path(RelativeUnixPathBuf::new(**package_path).unwrap())
@@ -705,7 +705,6 @@ mod test {
                                 .map(|name| (name.to_string(), "*".to_string()))
                                 .collect()
                         }),
-                        // path: Some(AnchoredSystemPathBuf::try_from(**package_path).unwrap()),
                         ..Default::default()
                     },
                 )
