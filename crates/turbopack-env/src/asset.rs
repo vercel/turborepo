@@ -42,7 +42,10 @@ impl Source for ProcessEnvAsset {
 impl Asset for ProcessEnvAsset {
     #[turbo_tasks::function]
     async fn content(&self) -> Result<Vc<AssetContent>> {
-        let env = self.env.read_all().await?;
+        let mut env = (*self.env.read_all().await?).clone();
+        // Sort keys for compatibility across platforms (e.g. Windows returns sorted
+        // environment variables)
+        env.sort_keys();
 
         // TODO: In SSR, we use the native process.env, which can only contain string
         // values. We need to inject literal values (to emulate webpack's
@@ -50,7 +53,7 @@ impl Asset for ProcessEnvAsset {
         let mut code = RopeBuilder::default();
         code += "const env = process.env = {...process.env};\n\n";
 
-        for (name, val) in &*env {
+        for (name, val) in &env {
             // It's assumed the env has passed through an EmbeddableProcessEnv, so the value
             // is ready to be directly embedded. Values _after_ an embeddable
             // env can be used to inject live code into the output.
