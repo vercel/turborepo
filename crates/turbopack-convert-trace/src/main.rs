@@ -478,14 +478,14 @@ fn main() {
                             &mut self_items,
                             &mut spans,
                             &mut count,
-                            &parent_name,
+                            parent_name,
                             items,
                         );
                         if !self_items.is_empty() {
                             groups
                                 .entry("SELF_TIME")
                                 .or_default()
-                                .extend(self_items.drain(..));
+                                .append(&mut self_items);
                         }
                         // SAFETY: Lifetime of the keys in `groups` must end here.
                         let groups = groups.into_values().collect::<Vec<_>>();
