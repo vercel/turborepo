@@ -30,7 +30,6 @@ use std::{
 
 use indexmap::IndexMap;
 use intervaltree::{Element, IntervalTree};
-use itertools::Itertools;
 use turbopack_cli_utils::tracing::{TraceRow, TraceValue};
 
 macro_rules! pjson {
@@ -458,21 +457,28 @@ fn main() {
                     });
                     let mut items = take(&mut span.items);
                     if graph {
-                        let group_func = |item: &SpanItem| match item {
-                            SpanItem::SelfTime { .. } => (true, ""),
-                            SpanItem::Child(id) => {
-                                let span = &spans[*id];
-                                (false, &*span.name)
+                        let mut groups = IndexMap::new();
+                        let mut self_items = Vec::new();
+                        for item in items {
+                            match item {
+                                SpanItem::SelfTime { .. } => {
+                                    self_items.push(item);
+                                }
+                                SpanItem::Child(id) => {
+                                    let span = &spans[id];
+                                    let group = groups.entry(&*span.name).or_insert_with(Vec::new);
+                                    group.push(item);
+                                }
                             }
-                        };
-                        items.sort_by_cached_key(group_func);
-                        // merge childen with the same name
+                        }
+                        if !self_items.is_empty() {
+                            groups
+                                .entry("SELF_TIME")
+                                .or_default()
+                                .extend(self_items.drain(..));
+                        }
+                        let groups = groups.into_values().collect::<Vec<_>>();
                         let mut new_items = Vec::new();
-                        let grouped_by = items.into_iter().group_by(group_func);
-                        let groups = grouped_by
-                            .into_iter()
-                            .map(|(_, group)| group.collect::<Vec<_>>())
-                            .collect::<Vec<_>>();
                         for group in groups {
                             let mut group = group.into_iter();
                             let new_item = group.next().unwrap();
@@ -483,6 +489,7 @@ fn main() {
                                 }
                                 SpanItem::Child(new_item_id) => {
                                     new_items.push(new_item);
+                                    let mut count = 1;
                                     for item in group {
                                         let SpanItem::Child(id) = item else {
                                             unreachable!();
@@ -490,6 +497,11 @@ fn main() {
                                         assert!(spans[id].name == spans[new_item_id].name);
                                         let old_items = take(&mut spans[id].items);
                                         spans[new_item_id].items.extend(old_items);
+                                        count += 1;
+                                    }
+                                    if count != 1 {
+                                        let span = &mut spans[new_item_id];
+                                        span.name = format!("{count} x {}", span.name).into();
                                     }
                                 }
                             }
