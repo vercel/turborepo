@@ -518,6 +518,10 @@ jobs:
         run: |
           cargo groups clippy turborepo-libraries --features rustls-tls
 
+      - name: Run ast-grep lints
+        run: |
+          pnpm --package=@ast-grep/cli dlx ast-grep scan $(cargo groups list turborepo-libraries | awk '{ print $2 }' | tr '\n' ' ')
+
   turbopack_rust_check:
     needs: [determine_jobs]
     # We test dependency changes only on main
@@ -568,6 +572,10 @@ jobs:
       - name: Run cargo clippy
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups clippy turbopack --features rustls-tls
+
+      - name: Run ast-grep lints
+        run: |
+          pnpm --package=@ast-grep/cli dlx ast-grep scan $(cargo groups list turbopack | awk '{ print $2 }' | tr '\n' ' ')
 
   next_dev_check:
     needs: [determine_jobs]
