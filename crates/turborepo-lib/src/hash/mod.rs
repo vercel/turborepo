@@ -130,7 +130,13 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
             }
         }
 
-        let mut canon_builder = Builder::new(HeapAllocator::default());
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
@@ -165,7 +171,13 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             }
         }
 
-        let mut canon_builder = Builder::new(HeapAllocator::default());
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
@@ -248,7 +260,13 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
             }
         }
 
-        let mut canon_builder = Builder::new(HeapAllocator::default());
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
@@ -328,7 +346,15 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             }
         }
 
-        let mut canon_builder = Builder::new(HeapAllocator::default());
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1;
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
             .set_root_canonical(builder.reborrow_as_reader())
             .expect("can't fail");
