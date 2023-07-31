@@ -346,6 +346,8 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             }
         }
 
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
         let size = builder
             .total_size()
             .expect("unable to calculate total size")
