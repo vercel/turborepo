@@ -520,7 +520,7 @@ jobs:
 
       - name: Run ast-grep lints
         run: |
-          pnpm --package=@ast-grep/cli dlx ast-grep scan $(cargo groups list turborepo-libraries | awk '{ print $2 }' | tr '\n' ' ')
+          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turborepo-libraries | awk '{ print $2 }' | tr '\n' ' ')
 
   turbopack_rust_check:
     needs: [determine_jobs]
@@ -575,7 +575,7 @@ jobs:
 
       - name: Run ast-grep lints
         run: |
-          pnpm --package=@ast-grep/cli dlx ast-grep scan $(cargo groups list turbopack | awk '{ print $2 }' | tr '\n' ' ')
+          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turbopack | awk '{ print $2 }' | tr '\n' ' ')
 
   next_dev_check:
     needs: [determine_jobs]
