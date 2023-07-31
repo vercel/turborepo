@@ -68,7 +68,9 @@ impl AsyncCache {
         self.real_cache.exists(key, team_id, team_slug).await
     }
 
-    // Mostly used for testing to ensure that the workers resolve
+    // Used for testing to ensure that the workers resolve
+    // before checking the cache.
+    #[cfg(test)]
     pub async fn wait(&mut self) {
         while let Some(worker) = self.workers.next().await {
             let _ = worker;

@@ -9,7 +9,7 @@ use crate::{
     CacheError, CacheResponse, CacheSource,
 };
 
-pub struct FsCache {
+pub struct FSCache {
     cache_directory: AbsoluteSystemPathBuf,
 }
 
@@ -26,7 +26,7 @@ impl CacheMetadata {
     }
 }
 
-impl FsCache {
+impl FSCache {
     fn resolve_cache_dir(
         repo_root: &AbsoluteSystemPath,
         override_dir: Option<&Utf8Path>,
@@ -45,7 +45,7 @@ impl FsCache {
         let cache_directory = Self::resolve_cache_dir(repo_root, override_dir);
         cache_directory.create_dir_all()?;
 
-        Ok(FsCache { cache_directory })
+        Ok(FSCache { cache_directory })
     }
 
     pub fn fetch(
@@ -174,7 +174,7 @@ mod test {
         let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
         test_case.initialize(repo_root_path)?;
 
-        let cache = FsCache::new(None, &repo_root_path)?;
+        let cache = FSCache::new(None, &repo_root_path)?;
 
         let expected_miss = cache
             .exists(&test_case.hash)

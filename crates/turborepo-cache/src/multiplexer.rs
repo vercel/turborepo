@@ -5,18 +5,18 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_api_client::APIClient;
 
 use crate::{
-    fs::FsCache,
+    fs::FSCache,
     http::{APIAuth, HTTPCache},
     CacheError, CacheOpts, CacheResponse,
 };
 
 pub struct CacheMultiplexer {
     // We use an `AtomicBool` instead of removing the cache because that would require
-    // wrapping the cache in a Mutex which would cause a lot of contention.
+    // wrapping the cache in a `Mutex` which would cause a lot of contention.
     // This does create a mild race condition where we might use the cache
     // even though another thread might be removing it, but that's fine.
     should_use_http_cache: AtomicBool,
-    fs: Option<FsCache>,
+    fs: Option<FSCache>,
     http: Option<HTTPCache>,
 }
 
@@ -29,20 +29,16 @@ impl CacheMultiplexer {
     ) -> Result<Self, CacheError> {
         let use_fs_cache = !opts.skip_filesystem;
         let use_http_cache = !opts.skip_remote;
+
         // Since the above two flags are not mutually exclusive it is possible to
         // configure yourself out of having a cache. We should tell you about it
         // but we shouldn't fail your build for that reason.
-        //
-        // Further, since the httpCache can be removed at runtime, we need to insert a
-        // noopCache as a backup if you are configured to have *just* an
-        // httpCache.
-        //
         if !use_fs_cache && !use_http_cache {
             warn!("no caches are enabled");
         }
 
         let fs_cache = use_fs_cache
-            .then(|| FsCache::new(opts.override_dir, repo_root))
+            .then(|| FSCache::new(opts.override_dir, repo_root))
             .transpose()?;
 
         let http_cache = use_http_cache

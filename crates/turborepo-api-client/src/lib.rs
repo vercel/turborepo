@@ -135,7 +135,7 @@ pub struct PreflightResponse {
 }
 
 #[derive(Deserialize)]
-struct ApiError {
+struct APIError {
     code: String,
     message: String,
 }
@@ -334,7 +334,7 @@ impl APIClient {
     }
 
     async fn handle_403(response: Response) -> Error {
-        let api_error: ApiError = match response.json().await {
+        let api_error: APIError = match response.json().await {
             Ok(api_error) => api_error,
             Err(e) => return Error::ReqwestError(e),
         };
