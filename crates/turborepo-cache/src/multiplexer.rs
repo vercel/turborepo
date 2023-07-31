@@ -1,10 +1,14 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use tracing::warn;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_api_client::APIClient;
 
-use crate::{fs::FsCache, http::HttpCache, CacheError, CacheOpts, CacheResponse};
+use crate::{
+    fs::FsCache,
+    http::{APIAuth, HTTPCache},
+    CacheError, CacheOpts, CacheResponse,
+};
 
 pub struct CacheMultiplexer {
     // We use an `AtomicBool` instead of removing the cache because that would require
@@ -13,7 +17,7 @@ pub struct CacheMultiplexer {
     // even though another thread might be removing it, but that's fine.
     should_use_http_cache: AtomicBool,
     fs: Option<FsCache>,
-    http: Option<HttpCache>,
+    http: Option<HTTPCache>,
 }
 
 impl CacheMultiplexer {
@@ -21,8 +25,7 @@ impl CacheMultiplexer {
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
         api_client: APIClient,
-        team_id: &str,
-        token: &str,
+        api_auth: Option<APIAuth>,
     ) -> Result<Self, CacheError> {
         let use_fs_cache = !opts.skip_filesystem;
         let use_http_cache = !opts.skip_remote;
@@ -43,7 +46,9 @@ impl CacheMultiplexer {
             .transpose()?;
 
         let http_cache = use_http_cache
-            .then(|| HttpCache::new(api_client, opts, repo_root.to_owned(), team_id, token));
+            .then_some(api_auth)
+            .flatten()
+            .map(|api_auth| HTTPCache::new(api_client, opts, repo_root.to_owned(), api_auth));
 
         Ok(CacheMultiplexer {
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
@@ -54,7 +59,7 @@ impl CacheMultiplexer {
 
     // This is technically a TOCTOU bug, but at worst it'll cause
     // a few extra cache requests.
-    fn get_http_cache(&self) -> Option<&HttpCache> {
+    fn get_http_cache(&self) -> Option<&HTTPCache> {
         if self.should_use_http_cache.load(Ordering::Relaxed) {
             self.http.as_ref()
         } else {
@@ -132,14 +137,20 @@ impl CacheMultiplexer {
         team_slug: Option<&str>,
     ) -> Result<CacheResponse, CacheError> {
         if let Some(fs) = &self.fs {
-            if let Ok(cache_response) = fs.exists(key) {
-                return Ok(cache_response);
+            match fs.exists(key) {
+                Ok(cache_response) => {
+                    return Ok(cache_response);
+                }
+                Err(err) => debug!("failed to check fs cache: {:?}", err),
             }
         }
 
         if let Some(http) = self.get_http_cache() {
-            if let Ok(cache_response) = http.exists(key, team_id, team_slug).await {
-                return Ok(cache_response);
+            match http.exists(key, team_id, team_slug).await {
+                Ok(cache_response) => {
+                    return Ok(cache_response);
+                }
+                Err(err) => debug!("failed to check http cache: {:?}", err),
             }
         }
 

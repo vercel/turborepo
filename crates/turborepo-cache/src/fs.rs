@@ -181,12 +181,8 @@ mod test {
             .expect_err("Expected cache miss");
         assert_matches!(expected_miss, CacheError::CacheMiss);
 
-        cache.put(
-            repo_root_path,
-            &test_case.hash,
-            test_case.duration,
-            test_case.files.iter().map(|f| f.path.clone()).collect(),
-        )?;
+        let files: Vec<_> = test_case.files.iter().map(|f| f.path.clone()).collect();
+        cache.put(repo_root_path, &test_case.hash, &files, test_case.duration)?;
 
         let expected_hit = cache.exists(&test_case.hash)?;
         assert_eq!(

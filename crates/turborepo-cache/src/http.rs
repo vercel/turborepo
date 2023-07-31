@@ -9,39 +9,43 @@ use crate::{
     CacheError, CacheOpts, CacheResponse, CacheSource,
 };
 
-pub struct HttpCache {
+pub struct HTTPCache {
     client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
     token: String,
 }
 
-impl HttpCache {
+pub struct APIAuth {
+    pub team_id: String,
+    pub token: String,
+}
+
+impl HTTPCache {
     pub fn new(
         client: APIClient,
         opts: &CacheOpts,
         repo_root: AbsoluteSystemPathBuf,
-        team_id: &str,
-        token: &str,
-    ) -> HttpCache {
+        api_auth: APIAuth,
+    ) -> HTTPCache {
         let signer_verifier = if opts
             .remote_cache_opts
             .as_ref()
             .map_or(false, |remote_cache_opts| remote_cache_opts.signature)
         {
             Some(ArtifactSignatureAuthenticator {
-                team_id: team_id.as_bytes().to_vec(),
+                team_id: api_auth.team_id.as_bytes().to_vec(),
                 secret_key_override: None,
             })
         } else {
             None
         };
 
-        HttpCache {
+        HTTPCache {
             client,
             signer_verifier,
             repo_root,
-            token: token.to_string(),
+            token: api_auth.token,
         }
     }
 
@@ -191,22 +195,28 @@ mod test {
     use vercel_api_mock::start_test_server;
 
     use crate::{
-        http::HttpCache,
+        http::{APIAuth, HTTPCache},
         test_cases::{get_test_cases, TestCase},
         CacheOpts, CacheSource,
     };
 
     #[tokio::test]
     async fn test_http_cache() -> Result<()> {
-        try_join_all(get_test_cases().into_iter().map(round_trip_test)).await?;
-
-        Ok(())
-    }
-
-    async fn round_trip_test(test_case: TestCase) -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
 
+        try_join_all(
+            get_test_cases()
+                .into_iter()
+                .map(|test_case| round_trip_test(test_case, port)),
+        )
+        .await?;
+
+        handle.abort();
+        Ok(())
+    }
+
+    async fn round_trip_test(test_case: TestCase, port: u16) -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
         test_case.initialize(&repo_root_path)?;
@@ -219,27 +229,24 @@ mod test {
 
         let api_client = APIClient::new(&format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let opts = CacheOpts::default();
-        let team_id = "my-team";
-        let token = "my-token";
+        let api_auth = APIAuth {
+            team_id: "my-team".to_string(),
+            token: "my-token".to_string(),
+        };
 
-        let cache = HttpCache::new(api_client, opts, repo_root_path.to_owned(), team_id, token);
+        let cache = HTTPCache::new(api_client, &opts, repo_root_path.to_owned(), api_auth);
 
+        let anchored_files: Vec<_> = files.iter().map(|f| f.path.clone()).collect();
         cache
-            .put(
-                &repo_root_path,
-                hash,
-                files.iter().map(|f| f.path.clone()).collect(),
-                duration,
-                "",
-            )
+            .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
 
-        let cache_response = cache.exists(hash, "", "", None, false).await?;
+        let cache_response = cache.exists(hash, "", None).await?;
 
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.retrieve(hash, "", "", None).await?;
+        let (cache_response, received_files) = cache.fetch(hash, "", None).await?;
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {
@@ -248,7 +255,6 @@ mod test {
             assert_eq!(std::fs::read_to_string(file_path)?, test_file.contents);
         }
 
-        handle.abort();
         Ok(())
     }
 }

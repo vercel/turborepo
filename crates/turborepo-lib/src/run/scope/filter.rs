@@ -20,7 +20,7 @@ impl PackageInference {
         pkg_graph: &package_graph::PackageGraph,
     ) -> Self {
         debug!(
-            "Using {} as a basis for selecting pacakges",
+            "Using {} as a basis for selecting packages",
             pkg_inference_path
         );
         let full_inference_path = turbo_root.resolve(pkg_inference_path);

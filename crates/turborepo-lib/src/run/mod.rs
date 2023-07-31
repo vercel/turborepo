@@ -4,9 +4,9 @@ mod global_hash;
 mod scope;
 pub mod task_id;
 
-use anyhow::{anyhow, Context as ErrorContext, Result};
+use anyhow::{Context as ErrorContext, Result};
 use tracing::{debug, info};
-use turborepo_cache::AsyncCache;
+use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
 
@@ -114,24 +114,20 @@ impl Run {
             vec![],
         )?;
 
-        let team_id = self
-            .base
-            .repo_config()?
-            .team_id()
-            .ok_or(anyhow!("team_id not set"))?;
+        let team_id = self.base.repo_config()?.team_id();
 
-        let token = self
-            .base
-            .user_config()?
-            .token()
-            .ok_or(anyhow!("token not set"))?;
+        let token = self.base.user_config()?.token();
+
+        let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
+            team_id: team_id.to_string(),
+            token: token.to_string(),
+        });
 
         let _turbo_cache = AsyncCache::new(
             &opts.cache_opts,
             &self.base.repo_root,
             self.base.api_client()?,
-            team_id,
-            token,
+            api_auth,
         )?;
 
         info!("created cache");

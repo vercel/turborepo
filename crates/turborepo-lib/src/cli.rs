@@ -994,7 +994,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    cache_dir: Some("foobar".to_string()),
+                    cache_dir: Some(Utf8PathBuf::from("foobar")),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
