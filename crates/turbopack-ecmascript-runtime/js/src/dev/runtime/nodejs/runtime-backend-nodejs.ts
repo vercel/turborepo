@@ -41,10 +41,8 @@ function resolveChunkPath(chunkPath: ChunkPath, source: SourceInfo) {
       break;
   }
 
-  const path = require("node:path/posix");
-  return require.resolve(
-    "./" + path.relative(path.dirname(fromChunkPath), chunkPath)
-  );
+  const path = require("node:path");
+  return path.resolve(__dirname, path.posix.relative(path.dirname(fromChunkPath), chunkPath));
 }
 
 function loadWebAssembly(
@@ -104,6 +102,6 @@ let BACKEND: RuntimeBackend;
   }
 })();
 
-function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
+function _eval(_: EcmascriptModuleEntry): ModuleFactory {
   throw new Error("HMR evaluation is not implemented on this backend");
 }

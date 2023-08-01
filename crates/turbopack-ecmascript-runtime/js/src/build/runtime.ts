@@ -52,7 +52,7 @@ function loadChunk(chunkPath: ChunkPath) {
     return;
   }
 
-  const resolved = require.resolve(path.resolve(RUNTIME_ROOT, chunkPath));
+  const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
   const chunkModules: ModuleFactories = require(resolved);
 
   for (const [moduleId, moduleFactory] of Object.entries(chunkModules)) {
@@ -77,7 +77,7 @@ function loadChunkAsync(source: SourceInfo, chunkPath: string): Promise<void> {
 function loadWebAssembly(chunkPath: ChunkPath, imports: WebAssembly.Imports) {
   const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
 
-  return loadWebAssemblyFromPath(resolved, imports)
+  return loadWebAssemblyFromPath(resolved, imports);
 }
 
 function instantiateModule(id: ModuleId, source: SourceInfo): Module {
