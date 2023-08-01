@@ -13,9 +13,6 @@ pub(crate) mod source_map_asset;
 
 pub use source_map_asset::SourceMapAsset;
 
-// #[turbo_tasks::value]
-// struct CrateTokens(CrateRawToken);
-
 /// Represents an empty value in a u32 variable in the sourcemap crate.
 static SOURCEMAP_CRATE_NONE_U32: u32 = !0;
 
@@ -50,7 +47,7 @@ pub struct SectionMapping(IndexMap<String, Vc<Box<dyn GenerateSourceMap>>>);
 pub struct OptionSourceMap(Option<Vc<SourceMap>>);
 
 #[turbo_tasks::value(transparent)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tokens(Vec<Token>);
 
 /// A token represents a mapping in a source map. It may either be Synthetic,
@@ -58,7 +55,7 @@ pub struct Tokens(Vec<Token>);
 /// in a user-authored source file, or it is Original, meaning it represents a
 /// real location in source file.
 #[turbo_tasks::value]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Token {
     Synthetic(SyntheticToken),
     Original(OriginalToken),
@@ -67,16 +64,16 @@ pub enum Token {
 /// A SyntheticToken represents a region of the generated file that was created
 /// by some build tool.
 #[turbo_tasks::value]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SyntheticToken {
-    generated_line: usize,
-    generated_column: usize,
+    pub generated_line: usize,
+    pub generated_column: usize,
 }
 
 /// An OriginalToken represents a region of the generated file that exists in
 /// user-authored source file.
 #[turbo_tasks::value]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OriginalToken {
     pub generated_line: usize,
     pub generated_column: usize,
@@ -410,7 +407,7 @@ impl GenerateSourceMap for SourceMap {
 pub struct RegularSourceMap(Arc<CrateMapWrapper>);
 
 impl RegularSourceMap {
-    fn new(map: CrateMap) -> Self {
+    pub fn new(map: CrateMap) -> Self {
         RegularSourceMap(Arc::new(CrateMapWrapper(map)))
     }
 }
@@ -485,12 +482,7 @@ impl SectionedSourceMap {
         for section in &self.sections {
             let map = section.map.await?;
             for (source, contents) in map.source_contents().await? {
-                match sources.entry(source) {
-                    indexmap::map::Entry::Occupied(_) => {}
-                    indexmap::map::Entry::Vacant(e) => {
-                        e.insert(contents);
-                    }
-                }
+                sources.entry(source).or_insert(contents);
             }
         }
 
@@ -500,11 +492,46 @@ impl SectionedSourceMap {
             .collect())
     }
 
-    #[async_recursion::async_recursion]
     pub async fn tokens(&self) -> Result<Vec<Token>> {
+        Ok(self.tokens_internal(0, 0, usize::MAX, usize::MAX).await?)
+    }
+
+    #[async_recursion::async_recursion]
+    async fn tokens_internal(
+        &self,
+        line_offset: usize,
+        column_offset: usize,
+        stop_line: usize,
+        stop_column: usize,
+    ) -> Result<Vec<Token>> {
         let mut tokens = vec![];
-        for section in &self.sections {
-            let section_tokens = &*section.map.await?.tokens().await?;
+        for (i, section) in self.sections.iter().enumerate() {
+            let (stop_line, stop_column) = if i + 1 < self.sections.len() {
+                let next_offset = self.sections[i + 1].offset;
+                let next_stop_line = std::cmp::min(stop_line, line_offset + next_offset.line);
+                let next_stop_column = if next_stop_line == stop_line {
+                    std::cmp::min(stop_column, column_offset + next_offset.column)
+                } else {
+                    column_offset + next_offset.column
+                };
+
+                (next_stop_line, next_stop_column)
+            } else {
+                (stop_line, stop_column)
+            };
+
+            let section_tokens = match &*section.map.await? {
+                SourceMap::Regular(m) => (*m).tokens().map(|t| t.into()).collect(),
+                SourceMap::Sectioned(s) => {
+                    s.tokens_internal(
+                        line_offset + section.offset.line,
+                        column_offset + section.offset.column,
+                        stop_line,
+                        stop_column,
+                    )
+                    .await?
+                }
+            };
 
             for token in section_tokens {
                 // Derived from https://github.com/getsentry/rust-sourcemap/blob/f1b758a251a5edddc0767f58f8391912c062c889/src/types.rs#L946
@@ -515,6 +542,12 @@ impl SectionedSourceMap {
                     } else {
                         0
                     };
+
+                if generated_line > stop_line
+                    || (generated_line == stop_line && generated_column >= stop_column)
+                {
+                    break;
+                }
 
                 tokens.push(match token {
                     Token::Original(token) => Token::Original(OriginalToken {
