@@ -297,8 +297,7 @@ function loadChunkAsync(source, chunkPath) {
     });
 }
 function loadWebAssembly(chunkPath, imports) {
-    const resolved = require.resolve(path.resolve(RUNTIME_ROOT, chunkPath));
-    delete require.cache[resolved];
+    const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
     return loadWebAssemblyFromPath(resolved, imports);
 }
 function instantiateModule(id, source) {

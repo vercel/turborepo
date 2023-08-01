@@ -75,8 +75,7 @@ function loadChunkAsync(source: SourceInfo, chunkPath: string): Promise<void> {
 }
 
 function loadWebAssembly(chunkPath: ChunkPath, imports: WebAssembly.Imports) {
-  const resolved = require.resolve(path.resolve(RUNTIME_ROOT, chunkPath));
-  delete require.cache[resolved];
+  const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
 
   return loadWebAssemblyFromPath(resolved, imports)
 }

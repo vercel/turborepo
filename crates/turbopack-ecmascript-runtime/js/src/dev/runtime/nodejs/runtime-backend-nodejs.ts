@@ -41,12 +41,10 @@ function resolveChunkPath(chunkPath: ChunkPath, source: SourceInfo) {
       break;
   }
 
-  const path = require("path");
-  const resolved = require.resolve(
+  const path = require("node:path/posix");
+  return require.resolve(
     "./" + path.relative(path.dirname(fromChunkPath), chunkPath)
   );
-
-  return resolved;
 }
 
 function loadWebAssembly(

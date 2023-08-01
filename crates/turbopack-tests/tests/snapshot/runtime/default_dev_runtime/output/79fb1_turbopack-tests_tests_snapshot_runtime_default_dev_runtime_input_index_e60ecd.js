@@ -386,6 +386,10 @@ function instantiateModule(id, source) {
     moduleCache[id] = module;
     moduleHotState.set(module, hotState);
     try {
+        const sourceInfo = {
+            type: SourceType.Parent,
+            parentId: id
+        };
         runModuleExecutionHooks(module, (refresh)=>{
             moduleFactory.call(module.exports, augmentContext({
                 a: asyncModule.bind(null, module),
@@ -399,14 +403,8 @@ function instantiateModule(id, source) {
                 n: exportNamespace.bind(null, module),
                 m: module,
                 c: moduleCache,
-                l: loadChunk.bind(null, {
-                    type: SourceType.Parent,
-                    parentId: id
-                }),
-                w: loadWebAssembly.bind(null, {
-                    type: SourceType.Parent,
-                    parentId: id
-                }),
+                l: loadChunk.bind(null, sourceInfo),
+                w: loadWebAssembly.bind(null, sourceInfo),
                 g: globalThis,
                 k: refresh,
                 __dirname: module.id.replace(/(^|\/)\/+$/, "")
