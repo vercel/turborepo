@@ -18,6 +18,7 @@ use turbopack_css::{CssInputTransform, CssModuleAssetType};
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptOptions, SpecifiedModuleType};
 use turbopack_mdx::MdxTransformOptions;
 use turbopack_node::transforms::{postcss::PostCssTransform, webpack::WebpackLoaders};
+use turbopack_wasm::source::WebAssemblySourceType;
 
 use crate::evaluate_context::node_evaluate_asset_context;
 
@@ -340,11 +341,20 @@ impl ModuleOptions {
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Static)],
             ),
             ModuleRule::new(
-                ModuleRuleCondition::any(vec![
-                    ModuleRuleCondition::ResourcePathEndsWith(".wasm".to_string()),
-                    ModuleRuleCondition::ResourcePathEndsWith(".wat".to_string()),
-                ]),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::WebAssembly)],
+                ModuleRuleCondition::any(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                    ".wasm".to_string(),
+                )]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::WebAssembly {
+                    source_ty: WebAssemblySourceType::Binary,
+                })],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::any(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                    ".wat".to_string(),
+                )]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::WebAssembly {
+                    source_ty: WebAssemblySourceType::Text,
+                })],
             ),
             ModuleRule::new(
                 ModuleRuleCondition::ResourcePathHasNoExtension,

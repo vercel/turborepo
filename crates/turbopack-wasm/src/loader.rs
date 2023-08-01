@@ -4,19 +4,16 @@ use anyhow::Result;
 use indoc::writedoc;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::File;
-use turbopack_core::{
-    asset::AssetContent, ident::AssetIdent, source::Source, virtual_source::VirtualSource,
-};
+use turbopack_core::{asset::AssetContent, source::Source, virtual_source::VirtualSource};
 use turbopack_ecmascript::utils::StringifyJs;
 
-use crate::WebAssemblyAnalysis;
+use crate::{analysis::analyze, source::WebAssemblySource};
 
+/// Create a javascript loader to instantiate the WebAssembly mode and has the
+/// necessary imports and exports to be processed by [turbopack_ecmascript].
 #[turbo_tasks::function]
-pub(crate) async fn loader_source(
-    wasm_ident: Vc<AssetIdent>,
-    analysis: Vc<WebAssemblyAnalysis>,
-) -> Result<Vc<Box<dyn Source>>> {
-    let analysis = analysis.await?;
+pub(crate) async fn loader_source(source: Vc<WebAssemblySource>) -> Result<Vc<Box<dyn Source>>> {
+    let analysis = analyze(source).await?;
 
     let mut code = String::new();
 
@@ -53,7 +50,7 @@ pub(crate) async fn loader_source(
     )?;
 
     Ok(Vc::upcast(VirtualSource::new(
-        wasm_ident.path().append("_.loader.mjs".to_string()),
+        source.ident().path().append("_.loader.mjs".to_string()),
         AssetContent::file(File::from(code).into()),
     )))
 }

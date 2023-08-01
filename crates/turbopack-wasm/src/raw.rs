@@ -20,39 +20,42 @@ use turbopack_ecmascript::{
     utils::StringifyJs,
 };
 
-use crate::{binary_source, WebAssemblyAsset};
+use crate::{output_asset::WebAssemblyAsset, source::WebAssemblySource};
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<String> {
-    Vc::cell("wasm url".to_string())
+    Vc::cell("wasm raw".to_string())
 }
 
+/// Exports the relative path to the WebAssembly file without loading it.
 #[turbo_tasks::value]
 #[derive(Clone)]
-pub struct WebAssemblyUrlModuleAsset {
-    pub source: Vc<Box<dyn Source>>,
-    pub context: Vc<Box<dyn AssetContext>>,
+pub struct RawWebAssemblyModuleAsset {
+    source: Vc<WebAssemblySource>,
+    asset_context: Vc<Box<dyn AssetContext>>,
 }
 
 #[turbo_tasks::value_impl]
-impl WebAssemblyUrlModuleAsset {
+impl RawWebAssemblyModuleAsset {
     #[turbo_tasks::function]
-    pub fn new(source: Vc<Box<dyn Source>>, context: Vc<Box<dyn AssetContext>>) -> Vc<Self> {
-        Self::cell(WebAssemblyUrlModuleAsset { source, context })
+    pub fn new(
+        source: Vc<WebAssemblySource>,
+        asset_context: Vc<Box<dyn AssetContext>>,
+    ) -> Vc<Self> {
+        Self::cell(RawWebAssemblyModuleAsset {
+            source,
+            asset_context,
+        })
     }
 
     #[turbo_tasks::function]
-    fn wasm_asset(&self, context: Vc<Box<dyn ChunkingContext>>) -> Vc<WebAssemblyAsset> {
-        WebAssemblyAsset {
-            context,
-            source: binary_source(self.source),
-        }
-        .cell()
+    fn wasm_asset(&self, chunking_context: Vc<Box<dyn ChunkingContext>>) -> Vc<WebAssemblyAsset> {
+        WebAssemblyAsset::new(self.source, chunking_context)
     }
 }
 
 #[turbo_tasks::value_impl]
-impl Module for WebAssemblyUrlModuleAsset {
+impl Module for RawWebAssemblyModuleAsset {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
         self.source.ident().with_modifier(modifier())
@@ -60,7 +63,7 @@ impl Module for WebAssemblyUrlModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl Asset for WebAssemblyUrlModuleAsset {
+impl Asset for RawWebAssemblyModuleAsset {
     #[turbo_tasks::function]
     fn content(&self) -> Vc<AssetContent> {
         self.source.content()
@@ -68,7 +71,7 @@ impl Asset for WebAssemblyUrlModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableModule for WebAssemblyUrlModuleAsset {
+impl ChunkableModule for RawWebAssemblyModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self: Vc<Self>,
@@ -84,14 +87,14 @@ impl ChunkableModule for WebAssemblyUrlModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl EcmascriptChunkPlaceable for WebAssemblyUrlModuleAsset {
+impl EcmascriptChunkPlaceable for RawWebAssemblyModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self: Vc<Self>,
         context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Vc<Box<dyn EcmascriptChunkItem>> {
         Vc::upcast(
-            UrlModuleChunkItem {
+            RawModuleChunkItem {
                 module: self,
                 context,
                 wasm_asset: self.wasm_asset(Vc::upcast(context)),
@@ -107,14 +110,14 @@ impl EcmascriptChunkPlaceable for WebAssemblyUrlModuleAsset {
 }
 
 #[turbo_tasks::value]
-struct UrlModuleChunkItem {
-    module: Vc<WebAssemblyUrlModuleAsset>,
+struct RawModuleChunkItem {
+    module: Vc<RawWebAssemblyModuleAsset>,
     context: Vc<Box<dyn EcmascriptChunkingContext>>,
     wasm_asset: Vc<WebAssemblyAsset>,
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkItem for UrlModuleChunkItem {
+impl ChunkItem for RawModuleChunkItem {
     #[turbo_tasks::function]
     fn asset_ident(&self) -> Vc<AssetIdent> {
         self.module.ident()
@@ -133,7 +136,7 @@ impl ChunkItem for UrlModuleChunkItem {
 }
 
 #[turbo_tasks::value_impl]
-impl EcmascriptChunkItem for UrlModuleChunkItem {
+impl EcmascriptChunkItem for RawModuleChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> Vc<Box<dyn EcmascriptChunkingContext>> {
         self.context
