@@ -181,7 +181,7 @@ impl SourceMap {
             Self::Regular(m) => m
                 .sources()
                 .zip(m.source_contents())
-                .map(|(source, content)| (source.to_string(), content.map(|s| s.to_string())))
+                .map(|(source, content)| (source.to_string(), content))
                 .collect::<Vec<(String, Option<String>)>>(),
             Self::Sectioned(m) => (*m.source_contents().await?).to_vec(),
         })
@@ -404,11 +404,26 @@ impl GenerateSourceMap for SourceMap {
 
 /// A regular source map covers an entire file.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RegularSourceMap(Arc<CrateMapWrapper>);
+pub struct RegularSourceMap {
+    map: Arc<CrateMapWrapper>,
+    source_contents: Vec<Option<String>>,
+}
 
 impl RegularSourceMap {
     pub fn new(map: CrateMap) -> Self {
-        RegularSourceMap(Arc::new(CrateMapWrapper(map)))
+        let source_contents = map
+            .source_contents()
+            .map(|o| o.map(|s| s.to_string()))
+            .collect();
+
+        RegularSourceMap {
+            map: Arc::new(CrateMapWrapper(map)),
+            source_contents,
+        }
+    }
+
+    pub fn source_contents(&self) -> Vec<Option<String>> {
+        self.source_contents.clone()
     }
 }
 
@@ -416,14 +431,14 @@ impl Deref for RegularSourceMap {
     type Target = Arc<CrateMapWrapper>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.map
     }
 }
 
 impl Eq for RegularSourceMap {}
 impl PartialEq for RegularSourceMap {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        Arc::ptr_eq(&self.map, &other.map)
     }
 }
 
@@ -432,9 +447,9 @@ impl PartialEq for RegularSourceMap {
 pub struct CrateMapWrapper(sourcemap::SourceMap);
 
 // Safety: CrateMap contains a raw pointer, which isn't Send, which is required
-// to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it. We don't
-// actually use the pointer, because we don't perform sourcesContent lookups,
-// so it's fine.
+// to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it.
+// source_contents() is copied into the struct itself in
+// RegularSourceMap::new(), which is safe to access there.
 unsafe impl Send for CrateMapWrapper {}
 unsafe impl Sync for CrateMapWrapper {}
 
