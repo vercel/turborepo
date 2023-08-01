@@ -507,44 +507,24 @@ impl SectionedSourceMap {
             .collect())
     }
 
-    pub async fn tokens(&self) -> Result<Vec<Token>> {
-        Ok(self.tokens_internal(0, 0, usize::MAX, usize::MAX).await?)
-    }
-
     #[async_recursion::async_recursion]
-    async fn tokens_internal(
-        &self,
-        line_offset: usize,
-        column_offset: usize,
-        stop_line: usize,
-        stop_column: usize,
-    ) -> Result<Vec<Token>> {
+    pub async fn tokens(&self) -> Result<Vec<Token>> {
         let mut tokens = vec![];
         for (i, section) in self.sections.iter().enumerate() {
             let (stop_line, stop_column) = if i + 1 < self.sections.len() {
                 let next_offset = self.sections[i + 1].offset;
-                let next_stop_line = std::cmp::min(stop_line, line_offset + next_offset.line);
-                let next_stop_column = if next_stop_line == stop_line {
-                    std::cmp::min(stop_column, column_offset + next_offset.column)
-                } else {
-                    column_offset + next_offset.column
-                };
-
-                (next_stop_line, next_stop_column)
+                (next_offset.line, next_offset.column)
             } else {
-                (stop_line, stop_column)
+                (usize::MAX, usize::MAX)
             };
 
-            let section_tokens = match &*section.map.await? {
+            let section_tokens: Vec<Token> = match &*section.map.await? {
                 SourceMap::Regular(m) => (*m).tokens().map(|t| t.into()).collect(),
-                SourceMap::Sectioned(s) => {
-                    s.tokens_internal(
-                        line_offset + section.offset.line,
-                        column_offset + section.offset.column,
-                        stop_line,
-                        stop_column,
+                SourceMap::Sectioned(_) => {
+                    unimplemented!(
+                        "Nested sectioned sourcemaps not yet implemented for \
+                         SectionedSourceMap::tokens()"
                     )
-                    .await?
                 }
             };
 

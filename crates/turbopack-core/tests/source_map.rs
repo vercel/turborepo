@@ -99,3 +99,44 @@ async fn sectioned_map_tokens_stop_at_next_section_when_column_exceeds_next_offs
         ]);
     }
 }
+
+#[tokio::test]
+#[should_panic]
+async fn sectioned_map_tokens_does_not_implement_nested_sections() {
+    run! {
+        register();
+
+        let sectioned_map = {
+            let first_map = {
+                let mut builder = SourceMapBuilder::new(None);
+                builder.add(0, 0, 0, 0, None, None);
+                builder.add(1, 0, 1, 0, None, None);
+                builder.into_sourcemap()
+            };
+
+            let second_map = {
+                let mut builder = SourceMapBuilder::new(None);
+                builder.add(0, 0, 0, 0, None, None);
+                builder.into_sourcemap()
+            };
+
+            SectionedSourceMap::new(vec![
+                SourceMapSection::new(
+                    SourcePos { line: 0, column: 0 },
+                    SourceMap::Regular(RegularSourceMap::new(first_map)).cell(),
+                ),
+                SourceMapSection::new(
+                    SourcePos { line: 1, column: 1 },
+                    SourceMap::Sectioned(SectionedSourceMap::new(vec![
+                        SourceMapSection::new(
+                            SourcePos { line: 0, column: 0 },
+                            SourceMap::Regular(RegularSourceMap::new(second_map)).cell()
+                        )
+                    ])).cell(),
+                ),
+            ])
+        };
+
+        let _ = sectioned_map.tokens().await?;
+    }
+}
