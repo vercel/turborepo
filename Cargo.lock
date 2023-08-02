@@ -9015,6 +9015,7 @@ dependencies = [
  "turbopack-mdx",
  "turbopack-node",
  "turbopack-static",
+ "turbopack-wasm",
 ]
 
 [[package]]
@@ -9578,6 +9579,22 @@ dependencies = [
  "turbopack-env",
  "turbopack-node",
  "turbopack-test-utils",
+]
+
+[[package]]
+name = "turbopack-wasm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "serde",
+ "turbo-tasks",
+ "turbo-tasks-build",
+ "turbo-tasks-fs",
+ "turbo-tasks-hash",
+ "turbopack-core",
+ "turbopack-css",
+ "turbopack-ecmascript",
 ]
 
 [[package]]
