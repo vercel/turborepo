@@ -255,7 +255,12 @@ function externalRequire(id, esm = false) {
 externalRequire.resolve = (id, options)=>{
     return require.resolve(id, options);
 };
-async function loadWebAssemblyFromPath(path, importsObj) {
+async function compileWebAssemblyFromPath(path) {
+    const { readFile } = require("fs/promises");
+    const buffer = await readFile(path);
+    return WebAssembly.compile(buffer);
+}
+async function instantiateWebAssemblyFromPath(path, importsObj) {
     const { readFile } = require("fs/promises");
     const buffer = await readFile(path);
     const { instance } = await WebAssembly.instantiate(buffer, importsObj);
@@ -298,7 +303,11 @@ function loadChunkAsync(source, chunkPath) {
 }
 function loadWebAssembly(chunkPath, imports) {
     const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
-    return loadWebAssemblyFromPath(resolved, imports);
+    return instantiateWebAssemblyFromPath(resolved, imports);
+}
+function loadWebAssemblyModule(chunkPath) {
+    const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
+    return compileWebAssemblyFromPath(resolved);
 }
 function instantiateModule(id, source) {
     const moduleFactory = moduleFactories[id];
@@ -355,6 +364,7 @@ function instantiateModule(id, source) {
                 parentId: id
             }),
             w: loadWebAssembly,
+            u: loadWebAssemblyModule,
             g: globalThis,
             __dirname: module1.id.replace(/(^|\/)[\/]+$/, "")
         });

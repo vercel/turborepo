@@ -40,6 +40,17 @@ async function loadWebAssembly(
   return instance.exports;
 }
 
+async function loadWebAssemblyModule(
+  _source: SourceInfo,
+  wasmChunkPath: ChunkPath
+): Promise<WebAssembly.Module> {
+  const chunkUrl = `/${getChunkRelativeUrl(wasmChunkPath)}`;
+
+  const req = fetch(chunkUrl);
+
+  return WebAssembly.compileStreaming(req);
+}
+
 (() => {
   BACKEND = {
     async registerChunk(chunkPath, params) {

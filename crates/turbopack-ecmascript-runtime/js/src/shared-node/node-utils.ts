@@ -38,6 +38,7 @@ function externalRequire(
 
   return interopEsm(raw, {}, true);
 }
+
 externalRequire.resolve = (
   id: string,
   options?: {
@@ -47,7 +48,17 @@ externalRequire.resolve = (
   return require.resolve(id, options);
 };
 
-async function loadWebAssemblyFromPath(
+async function compileWebAssemblyFromPath(
+  path: string
+): Promise<WebAssembly.Module> {
+  const { readFile } = require("fs/promises") as typeof import("fs/promises");
+
+  const buffer = await readFile(path);
+
+  return WebAssembly.compile(buffer);
+}
+
+async function instantiateWebAssemblyFromPath(
   path: string,
   importsObj: WebAssembly.Imports
 ): Promise<Exports> {

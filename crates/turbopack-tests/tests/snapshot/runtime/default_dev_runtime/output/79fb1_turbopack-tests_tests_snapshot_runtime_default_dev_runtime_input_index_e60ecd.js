@@ -405,6 +405,7 @@ function instantiateModule(id, source) {
                 c: moduleCache,
                 l: loadChunk.bind(null, sourceInfo),
                 w: loadWebAssembly.bind(null, sourceInfo),
+                u: loadWebAssemblyModule.bind(null, sourceInfo),
                 g: globalThis,
                 k: refresh,
                 __dirname: module.id.replace(/(^|\/)\/+$/, "")
@@ -1062,6 +1063,11 @@ async function loadWebAssembly(_source1, wasmChunkPath1, importsObj1) {
     const req1 = fetch(chunkUrl1);
     const { instance: instance1 } = await WebAssembly.instantiateStreaming(req1, importsObj1);
     return instance1.exports;
+}
+async function loadWebAssemblyModule(_source1, wasmChunkPath1) {
+    const chunkUrl1 = `/${getChunkRelativeUrl(wasmChunkPath1)}`;
+    const req1 = fetch(chunkUrl1);
+    return WebAssembly.compileStreaming(req1);
 }
 (()=>{
     BACKEND = {
