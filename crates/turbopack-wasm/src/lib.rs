@@ -43,23 +43,26 @@ fn modifier() -> Vc<String> {
 #[derive(Clone)]
 pub struct WebAssemblyModuleAsset {
     pub source: Vc<Box<dyn Source>>,
-    pub context: Vc<Box<dyn AssetContext>>,
+    pub asset_context: Vc<Box<dyn AssetContext>>,
 }
 
 #[turbo_tasks::value_impl]
 impl WebAssemblyModuleAsset {
     #[turbo_tasks::function]
-    pub fn new(source: Vc<Box<dyn Source>>, context: Vc<Box<dyn AssetContext>>) -> Vc<Self> {
-        Self::cell(WebAssemblyModuleAsset { source, context })
+    pub fn new(source: Vc<Box<dyn Source>>, asset_context: Vc<Box<dyn AssetContext>>) -> Vc<Self> {
+        Self::cell(WebAssemblyModuleAsset {
+            source,
+            asset_context,
+        })
     }
 
     #[turbo_tasks::function]
     async fn wasm_asset(
         self: Vc<Self>,
-        context: Vc<Box<dyn ChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<WebAssemblyAsset>> {
         Ok(WebAssemblyAsset::cell(WebAssemblyAsset {
-            context,
+            chunking_context,
             source: self.await?.source,
         }))
     }
@@ -86,11 +89,11 @@ impl ChunkableModule for WebAssemblyModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk(
         self: Vc<Self>,
-        context: Vc<Box<dyn ChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<Box<dyn Chunk>> {
         Vc::upcast(EcmascriptChunk::new(
-            context,
+            chunking_context,
             Vc::upcast(self),
             availability_info,
         ))
@@ -102,12 +105,12 @@ impl EcmascriptChunkPlaceable for WebAssemblyModuleAsset {
     #[turbo_tasks::function]
     fn as_chunk_item(
         self: Vc<Self>,
-        context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Vc<Box<dyn EcmascriptChunkItem>> {
         Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
             module: self,
-            context,
-            wasm_asset: self.wasm_asset(Vc::upcast(context)),
+            chunking_context,
+            wasm_asset: self.wasm_asset(Vc::upcast(chunking_context)),
         }))
     }
 
@@ -131,7 +134,7 @@ impl EcmascriptChunkPlaceable for WebAssemblyModuleAsset {
 
 #[turbo_tasks::value]
 struct WebAssemblyAsset {
-    context: Vc<Box<dyn ChunkingContext>>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
     source: Vc<Box<dyn Source>>,
 }
 
@@ -141,7 +144,7 @@ impl OutputAsset for WebAssemblyAsset {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let ident = self.source.ident().with_modifier(modifier());
 
-        let asset_path = self.context.chunk_path(ident, ".wasm".to_string());
+        let asset_path = self.chunking_context.chunk_path(ident, ".wasm".to_string());
 
         Ok(AssetIdent::from_path(asset_path))
     }
@@ -158,7 +161,7 @@ impl Asset for WebAssemblyAsset {
 #[turbo_tasks::value]
 struct ModuleChunkItem {
     module: Vc<WebAssemblyModuleAsset>,
-    context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     wasm_asset: Vc<WebAssemblyAsset>,
 }
 
@@ -185,7 +188,7 @@ impl ChunkItem for ModuleChunkItem {
 impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
     fn chunking_context(&self) -> Vc<Box<dyn EcmascriptChunkingContext>> {
-        self.context
+        self.chunking_context
     }
 
     #[turbo_tasks::function]
@@ -199,7 +202,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let path = self.wasm_asset.ident().path().await?;
-        let output_root = self.context.output_root().await?;
+        let output_root = self.chunking_context.output_root().await?;
 
         let Some(path) = output_root.get_path_to(&path) else {
             bail!("WASM asset ident is not relative to output root");
