@@ -277,7 +277,7 @@ function loadChunk(chunkPath) {
     if (!chunkPath.endsWith(".js")) {
         return;
     }
-    const resolved = require.resolve(path.resolve(RUNTIME_ROOT, chunkPath));
+    const resolved = path.resolve(RUNTIME_ROOT, chunkPath);
     const chunkModules = require(resolved);
     for (const [moduleId, moduleFactory] of Object.entries(chunkModules)){
         if (!moduleFactories[moduleId]) {
