@@ -35,7 +35,7 @@ env:
   DATADOG_TRACE_NEXTJS_TEST: "true"
   DD_ENV: "ci"
   # Turbopack specific customization for the test runner
-  TURBOPACK: 1
+  EXPERIMENTAL_TURBOPACK: 1
   __INTERNAL_CUSTOM_TURBOPACK_BINDINGS: ${{ github.workspace }}/packages/next-swc/native/next-swc.linux-x64-gnu.node
   NEXT_TEST_SKIP_RETRY_MANIFEST: ${{ github.workspace }}/integration-test-data/test-results/main/failed-test-path-list.json
   NEXT_TEST_CONTINUE_ON_ERROR: TRUE
@@ -78,8 +78,7 @@ jobs:
           npm i -g pnpm@$PNPM_VERSION && pnpm --version
           npm i -g yarn
           sudo npx playwright install-deps && pnpm playwright install
-          NEXT_TEST_MODE=dev node run-tests.js -g ${{ matrix.group }}/3 -c ${TEST_CONCURRENCY} --test-pattern '^(development|e2e|unit)/.*\.test\.(js|jsx|ts|tsx)$'
-          ls test
+          NEXT_TEST_MODE=dev node run-tests.js -g ${{ matrix.group }}/3 -c ${TEST_CONCURRENCY} --test-pattern '^(test\/(development|e2e|unit)|packages\/.*\/src\/.*)/.*\.test\.(js|jsx|ts|tsx)$'
           ls test/turbopack-test-junit-report
         # It is currently expected to fail some of next.js integration test, do not fail CI check.
         continue-on-error: true
@@ -92,7 +91,6 @@ jobs:
           name: Test trace reports
           path: |
             test/turbopack-test-junit-report
-          if-no-files-found: ignore
 
   test-prod:
     name: Next.js integration test (Production)
@@ -102,7 +100,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3]
+        group: [1, 2, 3, 4, 5]
 
     steps:
       - uses: actions/cache/restore@v3
@@ -116,7 +114,8 @@ jobs:
           npm i -g pnpm@$PNPM_VERSION && pnpm --version
           npm i -g yarn
           sudo npx playwright install-deps && pnpm playwright install
-          NEXT_TEST_MODE=start node run-tests.js -g ${{ matrix.group }}/3 -c ${TEST_CONCURRENCY} --test-pattern '^(production|e2e)/.*\.test\.(js|jsx|ts|tsx)$'
+          NEXT_TEST_MODE=start node run-tests.js -g ${{ matrix.group }}/5 -c ${TEST_CONCURRENCY} --test-pattern '^(test\/(production|e2e))/.*\.test\.(js|jsx|ts|tsx)$'
+          ls test/turbopack-test-junit-report
         continue-on-error: true
         env:
           NEXT_INTEGRATION_TEST: true
@@ -126,7 +125,6 @@ jobs:
           name: Test trace reports
           path: |
             test/turbopack-test-junit-report
-          if-no-files-found: ignore
 
   test-integration:
     name: Next.js integration test (Integration)
@@ -136,7 +134,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3, 4, 5, 6]
+        group: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
     steps:
       - uses: actions/cache/restore@v3
@@ -150,17 +148,17 @@ jobs:
           npm i -g pnpm@$PNPM_VERSION && pnpm --version
           npm i -g yarn
           sudo npx playwright install-deps && pnpm playwright install
-          node run-tests.js -g ${{ matrix.group }}/6 -c ${TEST_CONCURRENCY} --test-pattern '^(integration)/.*\.test\.(js|jsx|ts|tsx)$'
+          node run-tests.js -g ${{ matrix.group }}/12 -c ${TEST_CONCURRENCY} --test-pattern '^(test\/integration)/.*\.test\.(js|jsx|ts|tsx)$'
+          ls test/turbopack-test-junit-report
         continue-on-error: true
         env:
           NEXT_INTEGRATION_TEST: true
       - name: Upload test reports artifact
         uses: actions/upload-artifact@v3
         with:
-          name: Test trace reports
+          name: Upload test trace reports
           path: |
             test/turbopack-test-junit-report
-          if-no-files-found: ignore
 
   # Collect integration test results from execute_tests,
   # Store it as github artifact for next step to consume.
@@ -208,7 +206,7 @@ jobs:
       - name: Upload test trace to datadog
         continue-on-error: true
         run: |
-          npm install -g junit-report-merger@6.0.2 @datadog/datadog-ci@2.14.0
+          npm install -g junit-report-merger@6.0.2 @datadog/datadog-ci @aws-sdk/property-provider
           jrm ./nextjs-test-result-junit.xml "test/**/*.xml"
           ls -al ./*.xml
           # We'll tag this to the Turbopack service, not the next.js
