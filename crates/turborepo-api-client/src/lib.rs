@@ -3,12 +3,12 @@
 #![feature(error_generic_member_access)]
 #![deny(clippy::all)]
 
-use std::env;
+use std::{backtrace::Backtrace, env};
 
 use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
-use reqwest::{Method, RequestBuilder};
+use reqwest::{Method, RequestBuilder, StatusCode};
 use serde::{Deserialize, Serialize};
 use turborepo_ci::{is_ci, Vendor};
 use url::Url;
@@ -132,6 +132,12 @@ pub struct UserResponse {
 pub struct PreflightResponse {
     location: Url,
     allow_authorization_header: bool,
+}
+
+#[derive(Deserialize)]
+struct APIError {
+    code: String,
+    message: String,
 }
 
 pub struct APIClient {
@@ -317,11 +323,47 @@ impl APIClient {
             request_builder = request_builder.header("x-artifact-tag", tag);
         }
 
-        retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response = retry::make_retryable_request(request_builder).await?;
 
+        if response.status() == StatusCode::FORBIDDEN {
+            return Err(Self::handle_403(response).await);
+        }
+
+        response.error_for_status()?;
         Ok(())
+    }
+
+    async fn handle_403(response: Response) -> Error {
+        let api_error: APIError = match response.json().await {
+            Ok(api_error) => api_error,
+            Err(e) => return Error::ReqwestError(e),
+        };
+
+        if let Some(status_string) = api_error.code.strip_prefix("remote_caching_") {
+            let status = match status_string {
+                "disabled" => CachingStatus::Disabled,
+                "enabled" => CachingStatus::Enabled,
+                "over_limit" => CachingStatus::OverLimit,
+                "paused" => CachingStatus::Paused,
+                _ => {
+                    return Error::UnknownCachingStatus(
+                        status_string.to_string(),
+                        Backtrace::capture(),
+                    )
+                }
+            };
+
+            Error::CacheDisabled {
+                status,
+                message: api_error.message,
+            }
+        } else {
+            Error::UnknownStatus {
+                code: api_error.code,
+                message: api_error.message,
+                backtrace: Backtrace::capture(),
+            }
+        }
     }
 
     pub async fn fetch_artifact(
@@ -330,9 +372,8 @@ impl APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-        use_preflight: bool,
     ) -> Result<Response> {
-        self.get_artifact(hash, token, team_id, team_slug, use_preflight, Method::GET)
+        self.get_artifact(hash, token, team_id, team_slug, Method::GET)
             .await
     }
 
@@ -342,9 +383,8 @@ impl APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-        use_preflight: bool,
     ) -> Result<Response> {
-        self.get_artifact(hash, token, team_id, team_slug, use_preflight, Method::HEAD)
+        self.get_artifact(hash, token, team_id, team_slug, Method::HEAD)
             .await
     }
 
@@ -354,13 +394,12 @@ impl APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-        use_preflight: bool,
         method: Method,
     ) -> Result<Response> {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
         let mut allow_auth = true;
 
-        if use_preflight {
+        if self.use_preflight {
             let preflight_response = self
                 .do_preflight(token, &request_url, "GET", "Authorization, User-Agent")
                 .await?;
@@ -380,11 +419,13 @@ impl APIClient {
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
-        let response = retry::make_retryable_request(request_builder)
-            .await?
-            .error_for_status()?;
+        let response = retry::make_retryable_request(request_builder).await?;
 
-        Ok(response)
+        if response.status() == StatusCode::FORBIDDEN {
+            Err(Self::handle_403(response).await)
+        } else {
+            Ok(response.error_for_status()?)
+        }
     }
 
     pub async fn do_preflight(

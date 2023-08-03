@@ -6,6 +6,7 @@ pub mod task_id;
 
 use anyhow::{Context as ErrorContext, Result};
 use tracing::{debug, info};
+use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
 
@@ -112,6 +113,24 @@ impl Run {
             opts.run_opts.framework_inference,
             vec![],
         )?;
+
+        let team_id = self.base.repo_config()?.team_id();
+
+        let token = self.base.user_config()?.token();
+
+        let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
+            team_id: team_id.to_string(),
+            token: token.to_string(),
+        });
+
+        let _turbo_cache = AsyncCache::new(
+            &opts.cache_opts,
+            &self.base.repo_root,
+            self.base.api_client()?,
+            api_auth,
+        )?;
+
+        info!("created cache");
 
         Ok(())
     }

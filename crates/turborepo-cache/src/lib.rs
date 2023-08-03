@@ -1,17 +1,23 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
 #![feature(assert_matches)]
+#![feature(box_patterns)]
 #![deny(clippy::all)]
 
+mod async_cache;
 pub mod cache_archive;
 pub mod fs;
 pub mod http;
+mod multiplexer;
 pub mod signature_authentication;
 #[cfg(test)]
 mod test_cases;
 
 use std::{backtrace, backtrace::Backtrace};
 
+pub use async_cache::AsyncCache;
+use camino::Utf8Path;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::signature_authentication::SignatureError;
@@ -79,4 +85,19 @@ pub enum CacheSource {
 pub struct CacheResponse {
     source: CacheSource,
     time_saved: u32,
+}
+
+#[derive(Debug, Default)]
+pub struct CacheOpts<'a> {
+    pub override_dir: Option<&'a Utf8Path>,
+    pub skip_remote: bool,
+    pub skip_filesystem: bool,
+    pub workers: u32,
+    pub remote_cache_opts: Option<RemoteCacheOpts>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RemoteCacheOpts {
+    team_id: String,
+    signature: bool,
 }

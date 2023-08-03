@@ -414,7 +414,7 @@ pub enum GenerateCommand {
 pub struct RunArgs {
     /// Override the filesystem cache directory.
     #[clap(long)]
-    pub cache_dir: Option<String>,
+    pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = 10)]
     pub cache_workers: u32,
@@ -994,7 +994,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    cache_dir: Some("foobar".to_string()),
+                    cache_dir: Some(Utf8PathBuf::from("foobar")),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
