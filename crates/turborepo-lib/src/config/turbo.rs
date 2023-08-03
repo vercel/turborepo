@@ -565,6 +565,7 @@ mod tests {
     use crate::{
         config::{turbo::RawTaskDefinition, TurboJson},
         package_json::PackageJson,
+        run::task_id::TaskName,
         task_graph::{
             BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionHashable,
             TaskOutputMode, TaskOutputs,
@@ -841,7 +842,7 @@ mod tests {
             .as_ref()
             .ok()
             .and_then(|j| j.pipeline.as_ref())
-            .and_then(|pipeline| pipeline.0.get("build"))
+            .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
             .and_then(|build| build.output_mode);
         assert_eq!(actual, expected);
     }

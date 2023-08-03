@@ -197,7 +197,7 @@ impl fmt::Display for WorkspaceName {
 impl fmt::Display for WorkspaceNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WorkspaceNode::Root => f.write_str("ROOT_NODE"),
+            WorkspaceNode::Root => f.write_str("___ROOT___"),
             WorkspaceNode::Workspace(workspace) => workspace.fmt(f),
         }
     }
@@ -211,15 +211,6 @@ impl From<String> for WorkspaceName {
 impl<'a> From<&'a str> for WorkspaceName {
     fn from(value: &'a str) -> Self {
         Self::from(value.to_string())
-    }
-}
-
-impl fmt::Display for WorkspaceNode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            WorkspaceNode::Root => f.write_str("__ROOT__"),
-            WorkspaceNode::Workspace(workspace) => workspace.fmt(f),
-        }
     }
 }
 
