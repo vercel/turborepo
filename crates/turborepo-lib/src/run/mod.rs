@@ -10,9 +10,16 @@ use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
 
+use self::task_id::TaskName;
 use crate::{
-    commands::CommandBase, config::TurboJson, daemon::DaemonConnector, manager::Manager,
-    opts::Opts, package_graph::PackageGraph, package_json::PackageJson,
+    commands::CommandBase,
+    config::TurboJson,
+    daemon::DaemonConnector,
+    engine::{Engine, EngineBuilder},
+    manager::Manager,
+    opts::Opts,
+    package_graph::{PackageGraph, WorkspaceName},
+    package_json::PackageJson,
     run::global_hash::get_global_hash_inputs,
 };
 
@@ -82,7 +89,7 @@ impl Run {
 
         let scm = SCM::new(&self.base.repo_root);
 
-        let _filtered_pkgs =
+        let filtered_pkgs =
             scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph, &scm)?;
 
         // TODO: Add this back once scope/filter is implemented.
@@ -131,6 +138,31 @@ impl Run {
         )?;
 
         info!("created cache");
+        let engine = EngineBuilder::new(
+            &self.base.repo_root,
+            &pkg_dep_graph,
+            opts.run_opts.single_package,
+        )
+        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_turbo_jsons(Some(
+            Some((WorkspaceName::Root, root_turbo_json.clone()))
+                .into_iter()
+                .collect(),
+        ))
+        .with_tasks_only(opts.run_opts.only)
+        .with_workspaces(
+            filtered_pkgs
+                .iter()
+                .map(|workspace| WorkspaceName::from(workspace.as_str()))
+                .collect(),
+        )
+        .with_tasks(
+            opts.run_opts
+                .tasks
+                .iter()
+                .map(|task| TaskName::from(task.as_str()).into_owned()),
+        )
+        .build()?;
 
         Ok(())
     }

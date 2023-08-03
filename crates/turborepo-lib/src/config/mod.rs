@@ -61,6 +61,12 @@ pub enum Error {
     },
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
+    #[error("\"{actual}\". Use \"{wanted}\" instead")]
+    UnnecessaryPackageTaskSyntax { actual: String, wanted: String },
+    #[error("You can only extend from the root workspace")]
+    ExtendFromNonRoot,
+    #[error("No \"extends\" key found")]
+    NoExtends,
 }
 
 pub fn default_user_config_path() -> Result<Utf8PathBuf, Error> {

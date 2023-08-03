@@ -11,7 +11,7 @@ use turborepo_cache::RemoteCacheOpts;
 use crate::{
     config::Error,
     package_json::PackageJson,
-    run::task_id::{TaskName, ROOT_PKG_NAME},
+    run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
     task_graph::{
         BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable, TaskOutputMode, TaskOutputs,
     },
@@ -184,9 +184,9 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
                 } else if let Some(topo_dependency) =
                     dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
                 {
-                    topological_dependencies.push(topo_dependency.to_string());
+                    topological_dependencies.push(topo_dependency.to_string().into());
                 } else {
-                    task_dependencies.push(dependency);
+                    task_dependencies.push(dependency.into());
                 }
             }
         }
@@ -431,7 +431,7 @@ impl TurboJson {
                         });
                     }
 
-                    pipeline.insert(TaskName::root_task(task_name.as_ref()), task_definition);
+                    pipeline.insert(task_name.into_root_task(), task_definition);
                 }
 
                 turbo_from_files.pipeline = pipeline;
@@ -441,8 +441,9 @@ impl TurboJson {
         };
 
         for script_name in root_package_json.scripts.keys() {
-            if !turbo_json.has_task(script_name) {
-                let task_name = TaskName::root_task(script_name);
+            let task_name = TaskName::try_from(script_name.as_str()).unwrap();
+            if !turbo_json.has_task(&task_name) {
+                let task_name = task_name.into_root_task();
                 // Explicitly set Cache to false in this definition and add the bookkeeping
                 // fields so downstream we can pretend that it was set on
                 // purpose (as if read from a config file) rather than
@@ -468,15 +469,11 @@ impl TurboJson {
         Ok(turbo_json)
     }
 
-    fn has_task(&self, task: &str) -> bool {
+    fn has_task(&self, task_name: &TaskName) -> bool {
         for key in self.pipeline.keys() {
-            if key.as_ref() == task {
+            if key == task_name || (key.task() == task_name.task() && !task_name.is_package_task())
+            {
                 return true;
-            }
-            if let Some(task_id) = key.task_id() {
-                if task_id.task() == task {
-                    return true;
-                }
             }
         }
 
@@ -491,6 +488,48 @@ impl TurboJson {
             serde_json::from_reader(json_comments::StripComments::new(contents.as_slice()))?;
 
         turbo_json.try_into()
+    }
+
+    pub fn task(
+        &self,
+        task_id: &TaskId,
+        task_name: &TaskName,
+    ) -> Option<BookkeepingTaskDefinition> {
+        match self.pipeline.get(&task_id.as_task_name()) {
+            Some(task) => Some(task.clone()),
+            None => self.pipeline.get(task_name).cloned(),
+        }
+    }
+
+    pub fn validate(&self, validations: &[TurboJSONValidation]) -> Vec<Error> {
+        validations
+            .iter()
+            .flat_map(|validation| validation(self))
+            .collect()
+    }
+}
+
+type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;
+
+pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
+    turbo_json
+        .pipeline
+        .keys()
+        .filter(|task_name| task_name.is_package_task())
+        .map(|task_name| Error::UnnecessaryPackageTaskSyntax {
+            actual: task_name.to_string(),
+            wanted: task_name.task().to_string(),
+        })
+        .collect()
+}
+
+pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
+    match turbo_json.extends.first() {
+        Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
+            vec![Error::ExtendFromNonRoot]
+        }
+        None => vec![Error::NoExtends],
+        _ => vec![],
     }
 }
 
@@ -574,7 +613,7 @@ mod tests {
         },
         TurboJson {
             pipeline: [(
-                "//#build".into(),
+                "//#build".try_into().unwrap(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -609,7 +648,7 @@ mod tests {
         },
         TurboJson {
             pipeline: [(
-                "//#build".into(),
+                "//#build".try_into().unwrap(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -620,7 +659,7 @@ mod tests {
                 }
             ),
             (
-                "//#test".into(),
+                "//#test".try_into().unwrap(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -719,7 +758,7 @@ mod tests {
                 inputs: vec!["package/a/src/**".to_string()],
                 output_mode: TaskOutputMode::Full,
                 pass_through_env: vec!["AWS_SECRET_KEY".to_string()],
-                task_dependencies: vec!["cli#build".to_string()],
+                task_dependencies: vec!["cli#build".into()],
                 topological_dependencies: vec![],
                 persistent: true,
             }

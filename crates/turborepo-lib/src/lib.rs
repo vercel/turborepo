@@ -3,12 +3,14 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
 #![deny(clippy::all)]
+#![feature(option_get_or_insert_default)]
 
 mod child;
 mod cli;
 mod commands;
 mod config;
 mod daemon;
+mod engine;
 mod execution_state;
 pub(crate) mod globwatcher;
 mod manager;
