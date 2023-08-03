@@ -37,7 +37,7 @@ pub struct BuildChunkingContextBuilder {
 
 impl BuildChunkingContextBuilder {
     pub fn minify_type(mut self, minify_type: Vc<MinifyType>) -> Self {
-        self.context.minify_type = minify_type;
+        self.chunking_context.minify_type = minify_type;
         self
     }
 
