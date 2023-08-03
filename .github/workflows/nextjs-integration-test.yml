@@ -57,7 +57,10 @@ jobs:
     # This job name is being used in github action to collect test results. Do not change it, or should update
     # ./.github/actions/next-integration-stat to match the new name.
     name: Next.js integration test (Development)
-    timeout-minutes: 180
+    # Currently it is possible test grouping puts large number of failing tests suites in a single group,
+    # which ends up job timeouts. Temporarily relieve the timeout until we make progresses on the failing suites.
+    # ref: https://github.com/vercel/turbo/pull/5668
+    # timeout-minutes: 180
     runs-on: ubuntu-latest-16-core-oss
     needs: [setup_nextjs]
     strategy:
