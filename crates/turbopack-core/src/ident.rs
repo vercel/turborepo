@@ -1,19 +1,19 @@
 use std::fmt::Write;
 
 use anyhow::Result;
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash64Hasher};
 
-use crate::resolve::ModulePart;
+use crate::resolve::{pattern::QueryMap, ModulePart};
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
+#[turbo_tasks::value(serialization = "auto_for_input", shared)]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash)]
 pub struct AssetIdent {
     /// The primary path of the asset
     pub path: Vc<FileSystemPath>,
     /// The query string of the asset (e.g. `?foo=bar`)
-    pub query: Option<Vc<String>>,
+    pub query: Vc<QueryMap>,
     /// The fragment of the asset (e.g. `#foo`)
     pub fragment: Option<Vc<String>>,
     /// The assets that are nested in this asset
@@ -49,73 +49,96 @@ impl ValueToString for AssetIdent {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<String>> {
         let mut s = self.path.to_string().await?.clone_value();
-        if let Some(query) = &self.query {
-            write!(s, "?{}", query.await?)?;
+
+        let query = self.query.to_string().await?;
+        if !query.is_empty() {
+            write!(s, "?{}", &*query)?;
         }
+
         if let Some(fragment) = &self.fragment {
             write!(s, "#{}", fragment.await?)?;
         }
+
         for (key, asset) in &self.assets {
             write!(s, "/({})/{}", key.await?, asset.to_string().await?)?;
         }
+
         if !self.modifiers.is_empty() {
             s.push_str(" (");
+
             for (i, modifier) in self.modifiers.iter().enumerate() {
                 if i > 0 {
                     s.push_str(", ");
                 }
+
                 s.push_str(&modifier.await?);
             }
+
             s.push(')');
         }
+
         Ok(Vc::cell(s))
     }
 }
 
 #[turbo_tasks::value_impl]
 impl AssetIdent {
-    #[turbo_tasks::function]
-    pub fn new(ident: Value<AssetIdent>) -> Vc<Self> {
-        ident.into_value().cell()
-    }
-
     /// Creates an [AssetIdent] from a [Vc<FileSystemPath>]
     #[turbo_tasks::function]
     pub fn from_path(path: Vc<FileSystemPath>) -> Vc<Self> {
-        Self::new(Value::new(AssetIdent {
+        Self::cell(AssetIdent {
             path,
-            query: None,
+            query: QueryMap::empty(),
             fragment: None,
             assets: Vec::new(),
             modifiers: Vec::new(),
             part: None,
-        }))
+        })
     }
 
     #[turbo_tasks::function]
-    pub async fn with_modifier(self: Vc<Self>, modifier: Vc<String>) -> Result<Vc<Self>> {
-        let mut this = self.await?.clone_value();
+    pub fn with_query(&self, query: Vc<QueryMap>) -> Vc<Self> {
+        let mut this = self.clone();
+        this.query = this.query.merge(query);
+        this.cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn with_modifier(&self, modifier: Vc<String>) -> Vc<Self> {
+        let mut this = self.clone();
         this.add_modifier(modifier);
-        Ok(Self::new(Value::new(this)))
+        this.cell()
     }
 
     #[turbo_tasks::function]
-    pub async fn with_part(self: Vc<Self>, part: Vc<ModulePart>) -> Result<Vc<Self>> {
-        let mut this = self.await?.clone_value();
+    pub fn with_part(&self, part: Vc<ModulePart>) -> Vc<Self> {
+        let mut this = self.clone();
         this.part = Some(part);
-        Ok(Self::new(Value::new(this)))
+        this.cell()
     }
 
     #[turbo_tasks::function]
-    pub async fn rename_as(self: Vc<Self>, pattern: String) -> Result<Vc<Self>> {
-        let mut this = self.await?.clone_value();
+    pub fn with_path(&self, path: Vc<FileSystemPath>) -> Vc<Self> {
+        let mut this = self.clone();
+        this.path = path;
+        this.cell()
+    }
+
+    #[turbo_tasks::function]
+    pub async fn rename_as(&self, pattern: String) -> Result<Vc<Self>> {
+        let mut this = self.clone();
         this.rename_as_ref(&pattern).await?;
-        Ok(Self::new(Value::new(this)))
+        Ok(this.cell())
     }
 
     #[turbo_tasks::function]
-    pub async fn path(self: Vc<Self>) -> Result<Vc<FileSystemPath>> {
-        Ok(self.await?.path)
+    pub fn path(&self) -> Vc<FileSystemPath> {
+        self.path
+    }
+
+    #[turbo_tasks::function]
+    pub fn query(&self) -> Vc<QueryMap> {
+        self.query
     }
 
     /// Computes a unique output asset name for the given asset identifier.
@@ -124,18 +147,16 @@ impl AssetIdent {
     /// name generation logic.
     #[turbo_tasks::function]
     pub async fn output_name(
-        self: Vc<Self>,
+        &self,
         context_path: Vc<FileSystemPath>,
         expected_extension: String,
     ) -> Result<Vc<String>> {
-        let this = &*self.await?;
-
         // For clippy -- This explicit deref is necessary
-        let path = &*this.path.await?;
+        let path = &*self.path.await?;
         let mut name = if let Some(inner) = context_path.await?.get_path_to(path) {
             clean_separators(inner)
         } else {
-            clean_separators(&this.path.to_string().await?)
+            clean_separators(&self.path.to_string().await?)
         };
         let removed_extension = name.ends_with(&expected_extension);
         if removed_extension {
@@ -161,12 +182,17 @@ impl AssetIdent {
             assets,
             modifiers,
             part,
-        } = this;
-        if let Some(query) = query {
+        } = self;
+        for (key, value) in &*query.await? {
             0_u8.deterministic_hash(&mut hasher);
-            query.await?.deterministic_hash(&mut hasher);
+            key.deterministic_hash(&mut hasher);
+            value.deterministic_hash(&mut hasher);
             has_hash = true;
         }
+        // if let Some(query) = &*query.await? {
+        //     for (key, value) in query {
+        //     }
+        // }
         if let Some(fragment) = fragment {
             1_u8.deterministic_hash(&mut hasher);
             fragment.await?.deterministic_hash(&mut hasher);

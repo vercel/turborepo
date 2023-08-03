@@ -3,7 +3,7 @@ use std::io::Write;
 use anyhow::{bail, Result};
 use indoc::writedoc;
 use serde::Serialize;
-use turbo_tasks::{ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{ReadRef, TryJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -193,9 +193,9 @@ impl OutputAsset for EcmascriptDevEvaluateChunk {
             ident.add_modifier(chunk.ident().to_string());
         }
 
-        let ident = AssetIdent::new(Value::new(ident));
         Ok(AssetIdent::from_path(
-            self.chunking_context.chunk_path(ident, ".js".to_string()),
+            self.chunking_context
+                .chunk_path(ident.cell(), ".js".to_string()),
         ))
     }
 

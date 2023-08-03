@@ -170,7 +170,7 @@ impl ModuleCssAsset {
                             original: name.value.to_string(),
                             from: CssModuleComposeReference::new(
                                 Vc::upcast(self),
-                                Request::parse(Value::new(from.to_string().into())),
+                                Request::parse(from.to_string().into()),
                             ),
                         },
                         CssClassName::Local { name } => ModuleCssClass::Local {

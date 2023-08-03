@@ -2,9 +2,7 @@ use std::{collections::BTreeMap, future::Future, pin::Pin};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{
-    debug::ValueDebugFormat, trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc,
-};
+use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, TryJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 
 use super::{
@@ -282,7 +280,7 @@ async fn import_mapping_to_result(
             ImportMapResult::Result(ResolveResult::primary(ResolveResultItem::Empty).into())
         }
         ImportMapping::PrimaryAlternative(name, context) => {
-            let request = Request::parse(Value::new(name.to_string().into()));
+            let request = Request::parse(name.to_string().into());
 
             ImportMapResult::Alias(request, *context)
         }

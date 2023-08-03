@@ -5,24 +5,59 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, ReadRef, TaskInput, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPath, LinkContent, LinkType,
 };
 
 #[turbo_tasks::value(transparent)]
-pub struct QueryMap(#[turbo_tasks(trace_ignore)] Option<IndexMap<String, String>>);
+pub struct QueryMap(#[turbo_tasks(trace_ignore)] IndexMap<String, String>);
 
 #[turbo_tasks::value_impl]
 impl QueryMap {
     #[turbo_tasks::function]
-    pub fn none() -> Vc<Self> {
-        Vc::cell(None)
+    pub fn empty() -> Vc<Self> {
+        Vc::cell(IndexMap::new())
+    }
+
+    /// Merges other into self, keys in other will override keys in self, but
+    /// the order will be preserved (See [IndexMap::extend]).
+    #[turbo_tasks::function]
+    pub async fn merge(self: Vc<Self>, other: Vc<QueryMap>) -> Result<Vc<Self>> {
+        let this: ReadRef<QueryMap> = self.await?;
+        let other_map = &*other.await?;
+
+        if other_map.is_empty() {
+            return Ok(self);
+        }
+
+        if this.is_empty() {
+            return Ok(other);
+        }
+
+        let mut new_query = this.clone_value();
+        new_query.extend(other_map.clone());
+
+        Ok(Vc::cell(new_query))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for QueryMap {
+    #[turbo_tasks::function]
+    fn to_string(&self) -> Vc<String> {
+        Vc::cell(
+            self.0
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .intersperse("&".to_string())
+                .collect(),
+        )
     }
 }
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Clone, Debug, Default)]
+#[derive(PartialOrd, Ord, Hash, Clone, Debug, Default, TaskInput)]
 pub enum Pattern {
     Constant(String),
     #[default]
@@ -746,6 +781,7 @@ pub async fn read_matches(
     } else {
         true
     };
+
     if slow_path {
         // Slow path: There are infinite matches for the pattern
         // We will enumerate the filesystem to find matches

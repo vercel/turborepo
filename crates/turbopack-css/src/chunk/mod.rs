@@ -25,6 +25,7 @@ use turbopack_core::{
     module::Module,
     output::{OutputAsset, OutputAssets},
     reference::ModuleReference,
+    resolve::pattern::QueryMap,
     source_map::{GenerateSourceMap, OptionSourceMap},
 };
 use writer::expand_imports;
@@ -383,14 +384,15 @@ impl OutputAsset for CssChunk {
             ident
         } else {
             let (_, ident) = assets[0];
-            AssetIdent::new(Value::new(AssetIdent {
+            AssetIdent {
                 path: ident.path(),
-                query: None,
+                query: QueryMap::empty(),
                 fragment: None,
                 assets,
                 modifiers: Vec::new(),
                 part: None,
-            }))
+            }
+            .cell()
         };
 
         Ok(AssetIdent::from_path(

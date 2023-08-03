@@ -15,8 +15,8 @@ use turbopack_core::{
     raw_module::RawModule,
     reference::ModuleReference,
     resolve::{
-        pattern::Pattern, resolve_raw, AffectingResolvingAssetReference, ModuleResolveResult,
-        ResolveResultItem,
+        pattern::{Pattern, QueryMap},
+        resolve_raw, AffectingResolvingAssetReference, ModuleResolveResult, ResolveResultItem,
     },
     source::Source,
     target::{CompileTarget, Platform},
@@ -102,7 +102,7 @@ pub async fn resolve_node_pre_gyp_files(
         static ref LIBC_TEMPLATE: Regex =
             Regex::new(r"\{libc\}").expect("create node_libc regex failed");
     }
-    let config = resolve_raw(context_dir, config_file_pattern, true)
+    let config = resolve_raw(context_dir, config_file_pattern, QueryMap::empty(), true)
         .first_source()
         .await?;
     let compile_target = compile_target.await?;
@@ -246,7 +246,7 @@ pub async fn resolve_node_gyp_build_files(
                 .expect("create napi_build_version regex failed");
     }
     let binding_gyp_pat = Pattern::new(Pattern::Constant("binding.gyp".to_owned()));
-    let gyp_file = resolve_raw(context_dir, binding_gyp_pat, true);
+    let gyp_file = resolve_raw(context_dir, binding_gyp_pat, QueryMap::empty(), true);
     if let [binding_gyp] = &gyp_file.primary_sources().await?[..] {
         let mut merged_references = gyp_file
             .await?
@@ -267,6 +267,7 @@ pub async fn resolve_node_gyp_build_files(
                         let resolved_prebuilt_file = resolve_raw(
                             target_path,
                             Pattern::new(Pattern::Constant(format!("{}.node", name))),
+                            QueryMap::empty(),
                             true,
                         )
                         .await?;
@@ -308,6 +309,7 @@ pub async fn resolve_node_gyp_build_files(
             Pattern::Constant(".node".to_owned()),
         ])
         .into(),
+        QueryMap::empty(),
         true,
     )
     .as_raw_module_result())
@@ -369,6 +371,7 @@ pub async fn resolve_node_bindings_files(
         let resolved = resolve_raw(
             root_context_dir,
             Pattern::Constant("package.json".to_owned()).into(),
+            QueryMap::empty(),
             true,
         )
         .first_source()

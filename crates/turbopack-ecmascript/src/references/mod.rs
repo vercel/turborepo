@@ -460,7 +460,7 @@ pub(crate) async fn analyze_ecmascript_module(
     for r in eval_context.imports.references() {
         let r = EsmAssetReference::new(
             origin,
-            Request::parse(Value::new(r.module_path.to_string().into())),
+            Request::parse(r.module_path.to_string().into()),
             Value::new(r.annotations.clone()),
             if options.import_parts {
                 match &r.imported_symbol {
@@ -528,7 +528,7 @@ pub(crate) async fn analyze_ecmascript_module(
     let mut ignore_effect_span = None;
     // Check if it was a webpack entry
     if let Some((request, span)) = webpack_runtime {
-        let request = Request::parse(Value::new(request.into()));
+        let request = Request::parse(request.into());
         let runtime = resolve_as_webpack_runtime(origin, request, transforms);
 
         if let WebpackRuntime::Webpack5 { .. } = &*runtime.await? {
@@ -985,7 +985,7 @@ pub(crate) async fn analyze_ecmascript_module(
                 }
                 analysis.add_reference(UrlAssetReference::new(
                     origin,
-                    Request::parse(Value::new(pat)),
+                    Request::parse(pat),
                     compile_time_info.environment().rendering(),
                     Vc::cell(ast_path),
                     IssueSource::from_byte_offset(source, span.lo.to_usize(), span.hi.to_usize()),
@@ -1097,7 +1097,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                 }
                 analysis.add_reference(EsmAsyncAssetReference::new(
                     origin,
-                    Request::parse(Value::new(pat)),
+                    Request::parse(pat),
                     Vc::cell(ast_path.to_vec()),
                     issue_source(source, span),
                     in_try,
@@ -1129,7 +1129,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                 }
                 analysis.add_reference(CjsRequireAssetReference::new(
                     origin,
-                    Request::parse(Value::new(pat)),
+                    Request::parse(pat),
                     Vc::cell(ast_path.to_vec()),
                     issue_source(source, span),
                     in_try,
@@ -1172,7 +1172,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                 }
                 analysis.add_reference(CjsRequireResolveAssetReference::new(
                     origin,
-                    Request::parse(Value::new(pat)),
+                    Request::parse(pat),
                     Vc::cell(ast_path.to_vec()),
                     issue_source(source, span),
                     in_try,
@@ -1319,7 +1319,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     }
                     analysis.add_reference(CjsAssetReference::new(
                         origin,
-                        Request::parse(Value::new(pat)),
+                        Request::parse(pat),
                         issue_source(source, span),
                         in_try,
                     ));
@@ -1363,7 +1363,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                 }
                 analysis.add_reference(CjsAssetReference::new(
                     origin,
-                    Request::parse(Value::new(pat)),
+                    Request::parse(pat),
                     issue_source(source, span),
                     in_try,
                 ));
@@ -1520,7 +1520,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                                     let pat = js_value_to_pattern(pkg_or_dir);
                                     analysis.add_reference(CjsAssetReference::new(
                                         origin,
-                                        Request::parse(Value::new(pat)),
+                                        Request::parse(pat),
                                         issue_source(source, span),
                                         in_try,
                                     ));
@@ -1584,7 +1584,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
             if args.len() == 2 && args.get(1).and_then(|arg| arg.as_str()).is_some() {
                 analysis.add_reference(CjsAssetReference::new(
                     origin,
-                    Request::parse(Value::new(js_value_to_pattern(&args[1]))),
+                    Request::parse(js_value_to_pattern(&args[1])),
                     issue_source(source, span),
                     in_try,
                 ));
@@ -1761,7 +1761,7 @@ async fn handle_free_var_reference(
                         lookup_path,
                     ))
                 }),
-                Request::parse(Value::new(request.clone().into())),
+                Request::parse(request.clone().into()),
                 Default::default(),
                 state
                     .import_parts
@@ -2106,7 +2106,7 @@ async fn require_resolve_visitor(
 ) -> Result<JsValue> {
     Ok(if args.len() == 1 {
         let pat = js_value_to_pattern(&args[0]);
-        let request = Request::parse(Value::new(pat.clone()));
+        let request = Request::parse(pat);
         let resolved = cjs_resolve(
             origin,
             request,

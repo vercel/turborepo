@@ -73,7 +73,7 @@ impl Module for TsConfigModuleAsset {
                 .unwrap_or_else(|| "typescript".to_string());
             references.push(Vc::upcast(CompilerReference::new(
                 self.origin,
-                Request::parse(Value::new(compiler.to_string().into())),
+                Request::parse(compiler.to_string().into()),
             )));
             let require = read_from_tsconfigs(&configs, |json, source| {
                 if let JsonValue::Array(array) = &json["ts-node"]["require"] {
@@ -92,7 +92,7 @@ impl Module for TsConfigModuleAsset {
                 for (_, request) in require {
                     references.push(Vc::upcast(TsNodeRequireReference::new(
                         self.origin,
-                        Request::parse(Value::new(request.into())),
+                        Request::parse(request.into()),
                     )));
                 }
             }
@@ -142,7 +142,7 @@ impl Module for TsConfigModuleAsset {
             for (_, name) in types {
                 references.push(Vc::upcast(TsConfigTypesReference::new(
                     self.origin,
-                    Request::module(name, Value::new("".to_string().into()), QueryMap::none()),
+                    Request::module(name, "".to_string().into(), QueryMap::empty()),
                 )));
             }
         }

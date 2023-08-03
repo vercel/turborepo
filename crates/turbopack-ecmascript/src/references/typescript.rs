@@ -124,8 +124,8 @@ impl ModuleReference for TsReferenceTypeAssetReference {
             self.origin,
             Request::module(
                 self.module.clone(),
-                Value::new("".to_string().into()),
-                QueryMap::none(),
+                "".to_string().into(),
+                QueryMap::empty(),
             ),
         )
     }

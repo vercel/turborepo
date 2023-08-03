@@ -130,7 +130,7 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
 
         self.references.push(Vc::upcast(ImportAssetReference::new(
             self.origin,
-            Request::parse(Value::new(src.to_string().into())),
+            Request::parse(src.to_string().into()),
             Vc::cell(as_parent_path(ast_path)),
             ImportAttributes::new_from_prelude(i).into(),
             IssueSource::from_byte_offset(
@@ -158,7 +158,7 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
             let issue_span = u.span;
             self.references.push(Vc::upcast(UrlAssetReference::new(
                 self.origin,
-                Request::parse(Value::new(src.to_string().into())),
+                Request::parse(src.to_string().into()),
                 Vc::cell(as_parent_path(ast_path)),
                 IssueSource::from_byte_offset(
                     Vc::upcast(self.source),

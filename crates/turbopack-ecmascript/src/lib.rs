@@ -381,7 +381,7 @@ impl Module for EcmascriptModuleAsset {
                 ident.add_asset(Vc::cell(name.clone()), asset.ident());
             }
             ident.add_modifier(modifier());
-            Ok(AssetIdent::new(Value::new(ident)))
+            Ok(ident.cell())
         } else {
             Ok(self.source.ident().with_modifier(modifier()))
         }

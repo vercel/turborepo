@@ -2,7 +2,10 @@ use anyhow::Result;
 use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
     reference::ModuleReference,
-    resolve::{pattern::Pattern, resolve_raw, ModuleResolveResult},
+    resolve::{
+        pattern::{Pattern, QueryMap},
+        resolve_raw, ModuleResolveResult,
+    },
     source::Source,
 };
 
@@ -27,7 +30,7 @@ impl ModuleReference for FileSourceReference {
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         let context_dir = self.source.ident().path().parent();
 
-        resolve_raw(context_dir, self.path, false).as_raw_module_result()
+        resolve_raw(context_dir, self.path, QueryMap::empty(), false).as_raw_module_result()
     }
 }
 

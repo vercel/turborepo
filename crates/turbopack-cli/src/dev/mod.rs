@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use owo_colors::OwoColorize;
 use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value, Vc,
+    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, UpdateInfo, Vc,
 };
 use turbo_tasks_fs::FileSystem;
 use turbo_tasks_malloc::TurboMalloc;
@@ -268,9 +268,11 @@ async fn source(
     let entry_requests = entry_requests
         .iter()
         .map(|r| match r {
-            EntryRequest::Relative(p) => Request::relative(Value::new(p.clone().into()), false),
+            EntryRequest::Relative(p) => {
+                Request::relative(p.clone().into(), QueryMap::empty(), false)
+            }
             EntryRequest::Module(m, p) => {
-                Request::module(m.clone(), Value::new(p.clone().into()), QueryMap::none())
+                Request::module(m.clone(), p.clone().into(), QueryMap::empty())
             }
         })
         .collect();
