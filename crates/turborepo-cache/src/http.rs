@@ -80,7 +80,7 @@ impl HTTPCache {
     ) -> Result<(), CacheError> {
         let mut cache_archive = CacheWriter::from_writer(writer, true)?;
         for file in files {
-            cache_archive.add_file(anchor, &file)?;
+            cache_archive.add_file(anchor, file)?;
         }
 
         Ok(())

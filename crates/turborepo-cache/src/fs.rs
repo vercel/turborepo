@@ -127,7 +127,7 @@ impl FSCache {
         let mut cache_item = CacheWriter::create(&cache_path)?;
 
         for file in files {
-            cache_item.add_file(anchor, &file)?;
+            cache_item.add_file(anchor, file)?;
         }
 
         let metadata_path = self
@@ -174,17 +174,17 @@ mod test {
         let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
         test_case.initialize(repo_root_path)?;
 
-        let cache = FSCache::new(None, &repo_root_path)?;
+        let cache = FSCache::new(None, repo_root_path)?;
 
         let expected_miss = cache
-            .exists(&test_case.hash)
+            .exists(test_case.hash)
             .expect_err("Expected cache miss");
         assert_matches!(expected_miss, CacheError::CacheMiss);
 
         let files: Vec<_> = test_case.files.iter().map(|f| f.path.clone()).collect();
-        cache.put(repo_root_path, &test_case.hash, &files, test_case.duration)?;
+        cache.put(repo_root_path, test_case.hash, &files, test_case.duration)?;
 
-        let expected_hit = cache.exists(&test_case.hash)?;
+        let expected_hit = cache.exists(test_case.hash)?;
         assert_eq!(
             expected_hit,
             CacheResponse {
@@ -193,7 +193,7 @@ mod test {
             }
         );
 
-        let (status, files) = cache.fetch(&repo_root_path, &test_case.hash)?;
+        let (status, files) = cache.fetch(repo_root_path, test_case.hash)?;
         assert_eq!(
             status,
             CacheResponse {

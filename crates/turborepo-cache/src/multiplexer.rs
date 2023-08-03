@@ -72,12 +72,12 @@ impl CacheMultiplexer {
     ) -> Result<(), CacheError> {
         self.fs
             .as_ref()
-            .map(|fs| fs.put(anchor, key, &files, duration))
+            .map(|fs| fs.put(anchor, key, files, duration))
             .transpose()?;
 
         let http_result = match self.get_http_cache() {
             Some(http) => {
-                let http_result = http.put(anchor, key, &files, duration).await;
+                let http_result = http.put(anchor, key, files, duration).await;
 
                 Some(http_result)
             }
