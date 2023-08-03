@@ -123,6 +123,8 @@ pub struct TaskDefinition {
 }
 
 impl BookkeepingTaskDefinition {
+    // Useful for splitting out the metadata vs fields which allows for easier
+    // definition merging
     fn split(
         self,
     ) -> (
@@ -195,7 +197,7 @@ impl TaskDefinition {
     // defined_fields to determine which fields should be overwritten and when
     // 0-values should be respected.
     pub fn merge(&mut self, other: BookkeepingTaskDefinition) {
-        // TODO simplify these types via serde and proc macros
+        // TODO(olszewski) simplify this construction and throw off the shackles of Go
         let (
             meta,
             TaskDefinitionHashable {
@@ -234,9 +236,4 @@ impl FromIterator<BookkeepingTaskDefinition> for TaskDefinition {
                 def
             })
     }
-}
-
-#[cfg(test)]
-mod test {
-    // test the merging of task defns
 }

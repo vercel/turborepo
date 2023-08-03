@@ -8,7 +8,7 @@ use turbopath::AbsoluteSystemPath;
 
 use super::Engine;
 use crate::{
-    config::TurboJson,
+    config::{validate_extends, validate_no_package_task_syntax, TurboJson},
     package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
     run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
     task_graph::{BookkeepingTaskDefinition, TaskDefinition, TaskDefinitionHashable},
@@ -339,7 +339,8 @@ impl<'a> EngineBuilder<'a> {
         if task_id.package() != ROOT_PKG_NAME {
             match self.turbo_json(turbo_jsons, &WorkspaceName::from(task_id.package())) {
                 Ok(Some(workspace_json)) => {
-                    let validation_errors = workspace_json.validate(&[]);
+                    let validation_errors = workspace_json
+                        .validate(&[validate_no_package_task_syntax, validate_extends]);
                     if !validation_errors.is_empty() {
                         let error_lines = validation_errors
                             .into_iter()
