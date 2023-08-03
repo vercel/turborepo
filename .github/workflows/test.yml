@@ -194,6 +194,34 @@ jobs:
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
 
+  build_turborepo:
+    name: Build Turborepo
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          target: ${{ matrix.os.name }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+
   go_lint:
     name: Go linting
     runs-on: ubuntu-latest
@@ -252,7 +280,7 @@ jobs:
 
   go_integration:
     name: Go Integration Tests
-    needs: determine_jobs
+    needs: build_turborepo
     if: needs.determine_jobs.outputs.go_integration == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
@@ -277,11 +305,11 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict
+        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
   turborepo_e2e:
     name: Turborepo E2E Tests
-    needs: determine_jobs
+    needs: build_turborepo
     if: needs.determine_jobs.outputs.turborepo_e2e == 'true'
     timeout-minutes: 60
     runs-on: ${{ matrix.os.runner }}
@@ -307,7 +335,7 @@ jobs:
 
   turborepo_examples:
     name: Turborepo Examples
-    needs: determine_jobs
+    needs: build_turborepo
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
@@ -375,7 +403,7 @@ jobs:
     name: JS Package Tests
     timeout-minutes: 30
     if: needs.determine_jobs.outputs.turborepo_js == 'true'
-    needs: determine_jobs
+    needs: build_turborepo
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -651,7 +679,7 @@ jobs:
           comment_tag: check_next_swc_turbopack
 
   turborepo_rust_test:
-    needs: [turborepo_rust_check]
+    needs: [turborepo_rust_check, build_turborepo]
     strategy:
       fail-fast: false
       matrix:
