@@ -6,10 +6,10 @@ use std::{
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turborepo_cache::RemoteCacheOpts;
 
 use crate::{
     config::Error,
-    opts::RemoteCacheOpts,
     package_json::PackageJson,
     run::task_id::{get_package_task_from_id, is_package_task, root_task_id},
     task_graph::{

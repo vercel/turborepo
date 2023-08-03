@@ -1,5 +1,6 @@
 use std::{backtrace::Backtrace, fs::OpenOptions};
 
+use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -8,7 +9,7 @@ use crate::{
     CacheError, CacheResponse, CacheSource,
 };
 
-struct FSCache {
+pub struct FSCache {
     cache_directory: AbsoluteSystemPathBuf,
 }
 
@@ -28,7 +29,7 @@ impl CacheMetadata {
 impl FSCache {
     fn resolve_cache_dir(
         repo_root: &AbsoluteSystemPath,
-        override_dir: Option<&str>,
+        override_dir: Option<&Utf8Path>,
     ) -> AbsoluteSystemPathBuf {
         if let Some(override_dir) = override_dir {
             AbsoluteSystemPathBuf::from_unknown(repo_root, override_dir)
@@ -38,7 +39,7 @@ impl FSCache {
     }
 
     pub fn new(
-        override_dir: Option<&str>,
+        override_dir: Option<&Utf8Path>,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<Self, CacheError> {
         let cache_directory = Self::resolve_cache_dir(repo_root, override_dir);
@@ -86,7 +87,7 @@ impl FSCache {
         ))
     }
 
-    fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
+    pub(crate) fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
         let uncompressed_cache_path = self
             .cache_directory
             .join_component(&format!("{}.tar", hash));
@@ -112,12 +113,12 @@ impl FSCache {
         })
     }
 
-    fn put(
+    pub fn put(
         &self,
         anchor: &AbsoluteSystemPath,
         hash: &str,
+        files: &[AnchoredSystemPathBuf],
         duration: u32,
-        files: Vec<AnchoredSystemPathBuf>,
     ) -> Result<(), CacheError> {
         let cache_path = self
             .cache_directory
@@ -126,7 +127,7 @@ impl FSCache {
         let mut cache_item = CacheWriter::create(&cache_path)?;
 
         for file in files {
-            cache_item.add_file(anchor, &file)?;
+            cache_item.add_file(anchor, file)?;
         }
 
         let metadata_path = self
@@ -173,21 +174,17 @@ mod test {
         let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
         test_case.initialize(repo_root_path)?;
 
-        let cache = FSCache::new(None, &repo_root_path)?;
+        let cache = FSCache::new(None, repo_root_path)?;
 
         let expected_miss = cache
-            .exists(&test_case.hash)
+            .exists(test_case.hash)
             .expect_err("Expected cache miss");
         assert_matches!(expected_miss, CacheError::CacheMiss);
 
-        cache.put(
-            repo_root_path,
-            &test_case.hash,
-            test_case.duration,
-            test_case.files.iter().map(|f| f.path.clone()).collect(),
-        )?;
+        let files: Vec<_> = test_case.files.iter().map(|f| f.path.clone()).collect();
+        cache.put(repo_root_path, test_case.hash, &files, test_case.duration)?;
 
-        let expected_hit = cache.exists(&test_case.hash)?;
+        let expected_hit = cache.exists(test_case.hash)?;
         assert_eq!(
             expected_hit,
             CacheResponse {
@@ -196,7 +193,7 @@ mod test {
             }
         );
 
-        let (status, files) = cache.fetch(&repo_root_path, &test_case.hash)?;
+        let (status, files) = cache.fetch(repo_root_path, test_case.hash)?;
         assert_eq!(
             status,
             CacheResponse {
