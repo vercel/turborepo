@@ -10,7 +10,7 @@ impl TestFile {
     pub fn create(&self, repo_root: &AbsoluteSystemPath) -> Result<()> {
         let file_path = repo_root.resolve(&self.path);
         std::fs::create_dir_all(file_path.parent().unwrap())?;
-        std::fs::write(file_path, &self.contents)?;
+        std::fs::write(file_path, self.contents)?;
 
         Ok(())
     }

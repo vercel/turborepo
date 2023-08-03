@@ -45,6 +45,7 @@ default-members = [
   "crates/turbopack-swc-utils",
   "crates/turbopack-test-utils",
   "crates/turbopack-tests",
+  "crates/turbopack-wasm",
   "xtask",
 ]
 
@@ -72,13 +73,14 @@ lto = "off"
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
+async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
 mdxjs = { version = "0.1.14" }
 modularize_imports = { version = "0.33.0" }
 styled_components = { version = "0.60.0" }
 styled_jsx = { version = "0.37.0" }
-swc_core = { version = "0.79.22" }
+swc_core = { version = "0.79.33" }
 swc_emotion = { version = "0.36.0" }
 swc_relay = { version = "0.8.0" }
 testing = { version = "0.33.21" }
@@ -126,6 +128,7 @@ turbopack-static = { path = "crates/turbopack-static" }
 turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
 turbopack-test-utils = { path = "crates/turbopack-test-utils" }
 turbopack-tests = { path = "crates/turbopack-tests" }
+turbopack-wasm = { path = "crates/turbopack-wasm" }
 turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
@@ -213,6 +216,7 @@ serde_qs = "0.11.0"
 serde_with = "2.3.2"
 serde_yaml = "0.9.17"
 sha2 = "0.10.6"
+sourcemap = "6.0.2"
 syn = "1.0.107"
 tempfile = "3.3.0"
 test-case = "3.0.0"

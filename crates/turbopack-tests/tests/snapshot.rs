@@ -25,7 +25,7 @@ use turbopack::{
     resolve_options_context::ResolveOptionsContext,
     ModuleAssetContext,
 };
-use turbopack_build::BuildChunkingContext;
+use turbopack_build::{BuildChunkingContext, MinifyType};
 use turbopack_core::{
     asset::Asset,
     chunk::{ChunkableModule, ChunkingContext, EvaluatableAssetExt, EvaluatableAssets},
@@ -72,6 +72,8 @@ struct SnapshotOptions {
     #[serde(default = "default_entry")]
     entry: String,
     #[serde(default)]
+    minify_type: MinifyType,
+    #[serde(default)]
     runtime: Runtime,
     #[serde(default = "default_runtime_type")]
     runtime_type: RuntimeType,
@@ -98,6 +100,7 @@ impl Default for SnapshotOptions {
         SnapshotOptions {
             browserslist: default_browserslist(),
             entry: default_entry(),
+            minify_type: Default::default(),
             runtime: Default::default(),
             runtime_type: default_runtime_type(),
             environment: Default::default(),
@@ -162,7 +165,7 @@ async fn run(resource: PathBuf) -> Result<()> {
 
 #[turbo_tasks::function]
 async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
-    let test_path = Path::new(&resource);
+    let test_path = canonicalize(Path::new(&resource))?;
     assert!(test_path.exists(), "{} does not exist", resource);
     assert!(
         test_path.is_dir(),
@@ -296,6 +299,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 static_root_path,
                 env,
             )
+            .minify_type(options.minify_type.into())
             .runtime_type(options.runtime_type)
             .build(),
         ),
