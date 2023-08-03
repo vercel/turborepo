@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt};
 
 use serde::{Deserialize, Serialize};
 
-use crate::package_graph::{WorkspaceName, WorkspaceNode};
+use crate::package_graph::WorkspaceName;
 
 pub const TASK_DELIMITER: &str = "#";
 pub const ROOT_PKG_NAME: &str = "//";
@@ -46,7 +46,6 @@ impl<'a> TaskId<'a> {
         })
     }
 
-    // horrible name
     pub fn from_graph(workspace: &WorkspaceName, task_name: &TaskName) -> TaskId<'static> {
         task_name.task_id().map_or_else(
             || {
@@ -132,6 +131,8 @@ impl<'a> From<&'a str> for TaskName<'a> {
     }
 }
 
+// Utility method changing the liftime of an owned cow to reflect that it is
+// owned
 fn static_cow<'a, T: 'a + ToOwned + ?Sized>(cow: Cow<'a, T>) -> Cow<'static, T> {
     match cow {
         Cow::Borrowed(x) => Cow::Owned(x.to_owned()),

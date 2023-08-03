@@ -73,11 +73,11 @@ impl Engine<Building> {
     // Seals the task graph from being mutated
     pub fn seal(self) -> Engine<Built> {
         let Engine {
-            marker,
             task_graph,
             task_lookup,
             root_index,
             task_definitions,
+            ..
         } = self;
         Engine {
             marker: std::marker::PhantomData,
@@ -96,6 +96,7 @@ impl Default for Engine<Building> {
 }
 
 impl Engine<Built> {
+    #[allow(dead_code)]
     pub fn dependencies(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
         let index = self.task_lookup.get(task_id)?;
         Some(

@@ -15,7 +15,7 @@ use crate::{
     commands::CommandBase,
     config::TurboJson,
     daemon::DaemonConnector,
-    engine::{Engine, EngineBuilder},
+    engine::EngineBuilder,
     manager::Manager,
     opts::Opts,
     package_graph::{PackageGraph, WorkspaceName},
@@ -138,7 +138,7 @@ impl Run {
         )?;
 
         info!("created cache");
-        let engine = EngineBuilder::new(
+        let _engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
             opts.run_opts.single_package,

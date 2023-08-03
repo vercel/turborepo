@@ -11,17 +11,11 @@ use crate::{
     config::{validate_extends, validate_no_package_task_syntax, TurboJson},
     package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
     run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
-    task_graph::{BookkeepingTaskDefinition, TaskDefinition, TaskDefinitionHashable},
+    task_graph::{BookkeepingTaskDefinition, TaskDefinition},
 };
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Missing task definition for '{task_name}' ('{task_id}') in {workspace}")]
-    MissingTask {
-        task_name: String,
-        task_id: String,
-        workspace: WorkspaceName,
-    },
     #[error("Could not find the following tasks in project: {0}")]
     MissingTasks(String),
     #[error("No package.json for {workspace}")]
@@ -50,12 +44,6 @@ pub struct EngineBuilder<'a> {
     tasks: Vec<TaskName<'static>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
     tasks_only: bool,
-}
-
-#[derive(Debug)]
-struct Task {
-    name: TaskName<'static>,
-    definition: TaskDefinitionHashable,
 }
 
 impl<'a> EngineBuilder<'a> {
@@ -125,29 +113,19 @@ impl<'a> EngineBuilder<'a> {
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
 
-            match self.task_definition(&mut turbo_jsons, workspace, task, &task_id) {
-                // We can skip MissingTaskErrors because we'll validate against them later
-                // Return all other errors
-                Err(Error::Config(crate::config::Error::NoTurboJSON))
-                | Err(Error::MissingTask { .. }) => (),
-                Err(e) => {
-                    return Err(e);
-                }
-                // If we found a task definition, remove it from the missing list
-                Ok(_) => {
-                    missing_tasks.remove(task);
+            if self.has_task_definition(&mut turbo_jsons, workspace, task, &task_id)? {
+                missing_tasks.remove(task);
 
-                    // Even if a task definition was found, we _only_ want to add it as an entry
-                    // point to the task graph (i.e. the traversalQueue), if
-                    // it's:
-                    // - A task from the non-root workspace (i.e. tasks from every other workspace)
-                    // - A task that we *know* is rootEnabled task (in which case, the root
-                    //   workspace is acceptable)
-                    if !matches!(workspace, WorkspaceName::Root)
-                        || self.root_enabled_tasks.contains(task)
-                    {
-                        traversal_queue.push_back(task_id);
-                    }
+                // Even if a task definition was found, we _only_ want to add it as an entry
+                // point to the task graph (i.e. the traversalQueue), if
+                // it's:
+                // - A task from the non-root workspace (i.e. tasks from every other workspace)
+                // - A task that we *know* is rootEnabled task (in which case, the root
+                //   workspace is acceptable)
+                if !matches!(workspace, WorkspaceName::Root)
+                    || self.root_enabled_tasks.contains(task)
+                {
+                    traversal_queue.push_back(task_id);
                 }
             }
         }
@@ -268,13 +246,13 @@ impl<'a> EngineBuilder<'a> {
 
     // Helper methods used when building the engine
 
-    fn task_definition(
+    fn has_task_definition(
         &self,
         turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
         workspace: &WorkspaceName,
         task_name: &TaskName<'static>,
         task_id: &TaskId,
-    ) -> Result<Task, Error> {
+    ) -> Result<bool, Error> {
         let turbo_json = self
             .turbo_json(turbo_jsons, workspace)
             // If there was no turbo.json in the workspace, fallback to the root turbo.json
@@ -287,27 +265,18 @@ impl<'a> EngineBuilder<'a> {
             })?;
 
         let Some(turbo_json) = turbo_json else {
-            return self.task_definition(turbo_jsons, &WorkspaceName::Root, task_name, task_id);
+            return self.has_task_definition(turbo_jsons, &WorkspaceName::Root, task_name, task_id);
         };
 
         let task_id_as_name = task_id.as_task_name();
-        if let Some(definition) = turbo_json
-            .pipeline
-            .get(&task_id_as_name)
-            .or_else(|| turbo_json.pipeline.get(task_name))
+        if turbo_json.pipeline.contains_key(&task_id_as_name)
+            || turbo_json.pipeline.contains_key(task_name)
         {
-            Ok(Task {
-                name: task_name.clone(),
-                definition: definition.task_definition.clone(),
-            })
+            Ok(true)
         } else if !matches!(workspace, WorkspaceName::Root) {
-            self.task_definition(turbo_jsons, &WorkspaceName::Root, task_name, task_id)
+            self.has_task_definition(turbo_jsons, &WorkspaceName::Root, task_name, task_id)
         } else {
-            Err(Error::MissingTask {
-                task_name: task_name.to_string(),
-                task_id: task_id.to_string(),
-                workspace: workspace.clone(),
-            })
+            Ok(false)
         }
     }
 
@@ -428,34 +397,36 @@ mod test {
         package_manager::PackageManager,
     };
 
+    // Only used to prevent package graph construction from attempting to read
+    // lockfile from disk
     struct MockLockfile;
     impl Lockfile for MockLockfile {
         fn resolve_package(
             &self,
-            workspace_path: &str,
-            name: &str,
-            version: &str,
+            _workspace_path: &str,
+            _name: &str,
+            _version: &str,
         ) -> Result<Option<turborepo_lockfiles::Package>, turborepo_lockfiles::Error> {
-            todo!()
+            unreachable!()
         }
 
         fn all_dependencies(
             &self,
-            key: &str,
+            _key: &str,
         ) -> Result<Option<HashMap<String, String>>, turborepo_lockfiles::Error> {
-            todo!()
+            unreachable!()
         }
 
         fn subgraph(
             &self,
-            workspace_packages: &[String],
-            packages: &[String],
+            _workspace_packages: &[String],
+            _packages: &[String],
         ) -> Result<Box<dyn Lockfile>, turborepo_lockfiles::Error> {
-            todo!()
+            unreachable!()
         }
 
         fn encode(&self) -> Result<Vec<u8>, turborepo_lockfiles::Error> {
-            todo!()
+            unreachable!()
         }
     }
 
@@ -526,16 +497,16 @@ mod test {
         TurboJson::try_from(raw).unwrap()
     }
 
-    #[test_case(WorkspaceName::Root, "build", "//#build", Some("primary") ; "root task")]
-    #[test_case(WorkspaceName::from("a"), "build", "a#build", Some("special") ; "workspace task in root")]
-    #[test_case(WorkspaceName::from("b"), "build", "b#build", Some("outer") ; "workspace task in workspace")]
-    #[test_case(WorkspaceName::from("b"), "test", "b#test", Some("testing") ; "task missing from workspace")]
-    #[test_case(WorkspaceName::from("c"), "missing", "c#missing", None ; "task missing")]
+    #[test_case(WorkspaceName::Root, "build", "//#build", true ; "root task")]
+    #[test_case(WorkspaceName::from("a"), "build", "a#build", true ; "workspace task in root")]
+    #[test_case(WorkspaceName::from("b"), "build", "b#build", true ; "workspace task in workspace")]
+    #[test_case(WorkspaceName::from("b"), "test", "b#test", true ; "task missing from workspace")]
+    #[test_case(WorkspaceName::from("c"), "missing", "c#missing", false ; "task missing")]
     fn test_task_definition(
         workspace: WorkspaceName,
         task_name: &'static str,
         task_id: &'static str,
-        expected: Option<&str>,
+        expected: bool,
     ) {
         let repo_root_dir = TempDir::new("repo").unwrap();
         let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
@@ -574,18 +545,10 @@ mod test {
         let task_name = TaskName::from(task_name);
         let task_id = TaskId::try_from(task_id).unwrap();
 
-        let def =
-            engine_builder.task_definition(&mut turbo_jsons, &workspace, &task_name, &task_id);
-        match (def, expected) {
-            (Ok(task), Some(expected_input)) => assert!(
-                task.definition.inputs.contains(&expected_input.to_string()),
-                "didn't find {} in inputs",
-                expected_input,
-            ),
-            (Err(err), None) => assert_matches!(err, Error::MissingTask { .. }),
-            (Err(err), Some(_)) => panic!("expected to find task, got {err}"),
-            (Ok(task), None) => panic!("expected to be missing task found {:?}", task),
-        }
+        let has_def = engine_builder
+            .has_task_definition(&mut turbo_jsons, &workspace, &task_name, &task_id)
+            .unwrap();
+        assert_eq!(has_def, expected);
     }
 
     macro_rules! deps {
