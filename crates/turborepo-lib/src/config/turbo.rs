@@ -441,7 +441,7 @@ impl TurboJson {
         };
 
         for script_name in root_package_json.scripts.keys() {
-            let task_name = TaskName::try_from(script_name.as_str()).unwrap();
+            let task_name = TaskName::from(script_name.as_str());
             if !turbo_json.has_task(&task_name) {
                 let task_name = task_name.into_root_task();
                 // Explicitly set Cache to false in this definition and add the bookkeeping
@@ -614,7 +614,7 @@ mod tests {
         },
         TurboJson {
             pipeline: [(
-                "//#build".try_into().unwrap(),
+                "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -649,7 +649,7 @@ mod tests {
         },
         TurboJson {
             pipeline: [(
-                "//#build".try_into().unwrap(),
+                "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -660,7 +660,7 @@ mod tests {
                 }
             ),
             (
-                "//#test".try_into().unwrap(),
+                "//#test".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
