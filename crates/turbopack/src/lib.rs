@@ -190,8 +190,8 @@ async fn apply_module_type(
             *transforms,
             *options,
         )),
-        ModuleType::WebAssembly => Vc::upcast(WebAssemblyModuleAsset::new(
-            source,
+        ModuleType::WebAssembly { source_ty } => Vc::upcast(WebAssemblyModuleAsset::new(
+            WebAssemblySource::new(source, *source_ty),
             Vc::upcast(module_asset_context),
         )),
         ModuleType::Custom(custom) => custom.create_module(source, module_asset_context, part),
