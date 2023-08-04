@@ -37,10 +37,10 @@ importers:
         version: 5.30.0
       '@tensorflow/tfjs-node':
         specifier: ^3.20.0
-        version: 3.21.1(@tensorflow/tfjs-core@3.21.0)(long@5.2.0)(seedrandom@3.0.5)
+        version: 3.21.1(@tensorflow/tfjs-core@3.21.0)(long@5.2.3)(seedrandom@3.0.5)
       '@tpluscode/sparql-builder':
         specifier: ^0.3.12
-        version: 0.3.24(@zazuko/rdf-vocabularies@2022.6.29)(clownface@1.5.1)(safe-identifier@0.4.2)(sparql-http-client@2.4.2)(ts-morph@15.1.0)(ts-node@10.9.1)
+        version: 0.3.24(@zazuko/rdf-vocabularies@2023.1.19)(clownface@1.5.1)(safe-identifier@0.4.2)(sparql-http-client@2.4.2)(ts-morph@15.1.0)(ts-node@10.9.1)
       '@types/bindings':
         specifier: ^1.3.0
         version: 1.5.1
@@ -111,8 +111,8 @@ importers:
         specifier: ^6.1.0
         version: 6.2.0
       canvas:
-        specifier: ^2.9.0
-        version: 2.10.1
+        specifier: ^2.11.2
+        version: 2.11.2
       chromeless:
         specifier: ^1.5.2
         version: 1.5.2
@@ -157,7 +157,7 @@ importers:
         version: 7.24.0
       firebase-admin:
         specifier: ^9.7.0
-        version: 9.12.0(@firebase/app-compat@0.2.15)(@firebase/app-types@0.7.0)
+        version: 9.12.0(@firebase/app-compat@0.2.15)(@firebase/app-types@0.9.0)
       fluent-ffmpeg:
         specifier: ^2.1.2
         version: 2.1.2
@@ -184,7 +184,7 @@ importers:
         version: 3.1.0
       jest:
         specifier: ^27.4.5
-        version: 27.5.1(canvas@2.10.1)(ts-node@10.9.1)
+        version: 27.5.1(canvas@2.11.2)(ts-node@10.9.1)
       jimp:
         specifier: ^0.6.4
         version: 0.6.8
@@ -277,7 +277,7 @@ importers:
         version: 10.0.1
       remark-prism:
         specifier: ^1.3.6
-        version: 1.3.6(canvas@2.10.1)
+        version: 1.3.6(canvas@2.11.2)
       request:
         specifier: ^2.88.2
         version: 2.88.2
@@ -955,7 +955,7 @@ packages:
       '@firebase/component': 0.6.4
       '@firebase/logger': 0.4.0
       '@firebase/util': 1.9.3
-      tslib: 2.4.0
+      tslib: 2.6.1
     dev: true
 
   /@firebase/app-types@0.6.1:
@@ -968,6 +968,10 @@ packages:
 
   /@firebase/app-types@0.7.0:
     resolution: {integrity: sha512-6fbHQwDv2jp/v6bXhBw2eSRbNBpxHcd1NBF864UksSMVIqIyri9qpJB1Mn6sGZE+bnDsSQBC5j2TbMxYsJQkQg==}
+    dev: true
+
+  /@firebase/app-types@0.9.0:
+    resolution: {integrity: sha512-AeweANOIo0Mb8GiYm3xhTEBVCmPwTYAu9Hcd2qSkLuga/6+j9b1Jskl5bpiSQWy9eJ/j5pavxj6eYogmnuzm+Q==}
     dev: true
 
   /@firebase/app@0.6.11:
@@ -989,7 +993,7 @@ packages:
       '@firebase/logger': 0.4.0
       '@firebase/util': 1.9.3
       idb: 7.1.1
-      tslib: 2.4.0
+      tslib: 2.6.1
     dev: true
 
   /@firebase/auth-interop-types@0.1.5(@firebase/app-types@0.6.1)(@firebase/util@0.3.2):
@@ -1002,13 +1006,13 @@ packages:
       '@firebase/util': 0.3.2
     dev: true
 
-  /@firebase/auth-interop-types@0.1.6(@firebase/app-types@0.7.0)(@firebase/util@1.5.2):
+  /@firebase/auth-interop-types@0.1.6(@firebase/app-types@0.9.0)(@firebase/util@1.5.2):
     resolution: {integrity: sha512-etIi92fW3CctsmR9e3sYM3Uqnoq861M0Id9mdOPF6PWIg38BXL5k4upCNBggGUpLIS0H1grMOvy/wn1xymwe2g==}
     peerDependencies:
       '@firebase/app-types': 0.x
       '@firebase/util': 1.x
     dependencies:
-      '@firebase/app-types': 0.7.0
+      '@firebase/app-types': 0.9.0
       '@firebase/util': 1.5.2
     dev: true
 
@@ -1052,17 +1056,17 @@ packages:
     resolution: {integrity: sha512-rLMyrXuO9jcAUCaQXCMjCMUsWrba5fzHlNK24xz5j2W6A/SRmK8mZJ/hn7V0fViLbxC0lPMtrK1eYzk6Fg03jA==}
     dependencies:
       '@firebase/util': 1.9.3
-      tslib: 2.4.0
+      tslib: 2.6.1
     dev: true
 
-  /@firebase/database-compat@0.1.8(@firebase/app-compat@0.2.15)(@firebase/app-types@0.7.0):
+  /@firebase/database-compat@0.1.8(@firebase/app-compat@0.2.15)(@firebase/app-types@0.9.0):
     resolution: {integrity: sha512-dhXr5CSieBuKNdU96HgeewMQCT9EgOIkfF1GNy+iRrdl7BWLxmlKuvLfK319rmIytSs/vnCzcD9uqyxTeU/A3A==}
     peerDependencies:
       '@firebase/app-compat': 0.x
     dependencies:
       '@firebase/app-compat': 0.2.15
       '@firebase/component': 0.5.13
-      '@firebase/database': 0.12.8(@firebase/app-types@0.7.0)
+      '@firebase/database': 0.12.8(@firebase/app-types@0.9.0)
       '@firebase/database-types': 0.9.7
       '@firebase/logger': 0.3.2
       '@firebase/util': 1.5.2
@@ -1090,10 +1094,10 @@ packages:
       '@firebase/util': 1.5.2
     dev: true
 
-  /@firebase/database@0.12.8(@firebase/app-types@0.7.0):
+  /@firebase/database@0.12.8(@firebase/app-types@0.9.0):
     resolution: {integrity: sha512-JBQVfFLzfhxlQbl4OU6ov9fdsddkytBQdtSSR49cz48homj38ccltAhK6seum+BI7f28cV2LFHF9672lcN+qxA==}
     dependencies:
-      '@firebase/auth-interop-types': 0.1.6(@firebase/app-types@0.7.0)(@firebase/util@1.5.2)
+      '@firebase/auth-interop-types': 0.1.6(@firebase/app-types@0.9.0)(@firebase/util@1.5.2)
       '@firebase/component': 0.5.13
       '@firebase/logger': 0.3.2
       '@firebase/util': 1.5.2
@@ -1200,7 +1204,7 @@ packages:
   /@firebase/logger@0.4.0:
     resolution: {integrity: sha512-eRKSeykumZ5+cJPdxxJRgAC3G5NknY2GwEbKfymdnXtnT0Ucm4pspfR6GT4MUQEDuJwRVbVcSx85kgJulMoFFA==}
     dependencies:
-      tslib: 2.4.0
+      tslib: 2.6.1
     dev: true
 
   /@firebase/messaging-types@0.5.0(@firebase/app-types@0.6.1):
@@ -1314,7 +1318,7 @@ packages:
   /@firebase/util@1.9.3:
     resolution: {integrity: sha512-DY02CRhOZwpzO36fHpuVysz6JZrscPiBXD0fXp6qSrL9oNOx5KWICKdR95C0lSITzxp0TZosVyHqzatE8JbcjA==}
     dependencies:
-      tslib: 2.4.0
+      tslib: 2.6.1
     dev: true
 
   /@firebase/webchannel-wrapper@0.4.0:
@@ -1558,7 +1562,7 @@ packages:
       slash: 3.0.0
     dev: true
 
-  /@jest/core@27.5.1(canvas@2.10.1)(ts-node@10.9.1):
+  /@jest/core@27.5.1(canvas@2.11.2)(ts-node@10.9.1):
     resolution: {integrity: sha512-AK6/UTrvQD0Cd24NSqmIA6rKsu0tKIxfiCducZvqxYdmMisOYAsdItspT+fQDQYARPf8XgjAFZi0ogW2agH5nQ==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
     peerDependencies:
@@ -1579,13 +1583,13 @@ packages:
       exit: 0.1.2
       graceful-fs: 4.2.10
       jest-changed-files: 27.5.1
-      jest-config: 27.5.1(canvas@2.10.1)(ts-node@10.9.1)
+      jest-config: 27.5.1(canvas@2.11.2)(ts-node@10.9.1)
       jest-haste-map: 27.5.1
       jest-message-util: 27.5.1
       jest-regex-util: 27.5.1
       jest-resolve: 27.5.1
       jest-resolve-dependencies: 27.5.1
-      jest-runner: 27.5.1(canvas@2.10.1)
+      jest-runner: 27.5.1(canvas@2.11.2)
       jest-runtime: 27.5.1
       jest-snapshot: 27.5.1
       jest-util: 27.5.1
@@ -2114,7 +2118,7 @@ packages:
       detect-libc: 2.0.1
       https-proxy-agent: 5.0.1
       make-dir: 3.1.0
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       nopt: 5.0.0
       npmlog: 5.0.1
       rimraf: 3.0.2
@@ -2132,7 +2136,7 @@ packages:
       detect-libc: 2.0.1
       https-proxy-agent: 5.0.1
       make-dir: 3.1.0
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       nopt: 5.0.0
       npmlog: 5.0.1
       rimraf: 3.0.2
@@ -2176,48 +2180,48 @@ packages:
       - supports-color
     dev: true
 
-  /@msgpackr-extract/msgpackr-extract-darwin-arm64@2.1.2:
-    resolution: {integrity: sha512-TyVLn3S/+ikMDsh0gbKv2YydKClN8HaJDDpONlaZR+LVJmsxLFUgA+O7zu59h9+f9gX1aj/ahw9wqa6rosmrYQ==}
+  /@msgpackr-extract/msgpackr-extract-darwin-arm64@2.2.0:
+    resolution: {integrity: sha512-Z9LFPzfoJi4mflGWV+rv7o7ZbMU5oAU9VmzCgL240KnqDW65Y2HFCT3MW06/ITJSnbVLacmcEJA8phywK7JinQ==}
     cpu: [arm64]
     os: [darwin]
     requiresBuild: true
     dev: true
     optional: true
 
-  /@msgpackr-extract/msgpackr-extract-darwin-x64@2.1.2:
-    resolution: {integrity: sha512-YPXtcVkhmVNoMGlqp81ZHW4dMxK09msWgnxtsDpSiZwTzUBG2N+No2bsr7WMtBKCVJMSD6mbAl7YhKUqkp/Few==}
+  /@msgpackr-extract/msgpackr-extract-darwin-x64@2.2.0:
+    resolution: {integrity: sha512-vq0tT8sjZsy4JdSqmadWVw6f66UXqUCabLmUVHZwUFzMgtgoIIQjT4VVRHKvlof3P/dMCkbMJ5hB1oJ9OWHaaw==}
     cpu: [x64]
     os: [darwin]
     requiresBuild: true
     dev: true
     optional: true
 
-  /@msgpackr-extract/msgpackr-extract-linux-arm64@2.1.2:
-    resolution: {integrity: sha512-vHZ2JiOWF2+DN9lzltGbhtQNzDo8fKFGrf37UJrgqxU0yvtERrzUugnfnX1wmVfFhSsF8OxrfqiNOUc5hko1Zg==}
+  /@msgpackr-extract/msgpackr-extract-linux-arm64@2.2.0:
+    resolution: {integrity: sha512-hlxxLdRmPyq16QCutUtP8Tm6RDWcyaLsRssaHROatgnkOxdleMTgetf9JsdncL8vLh7FVy/RN9i3XR5dnb9cRA==}
     cpu: [arm64]
     os: [linux]
     requiresBuild: true
     dev: true
     optional: true
 
-  /@msgpackr-extract/msgpackr-extract-linux-arm@2.1.2:
-    resolution: {integrity: sha512-42R4MAFeIeNn+L98qwxAt360bwzX2Kf0ZQkBBucJ2Ircza3asoY4CDbgiu9VWklq8gWJVSJSJBwDI+c/THiWkA==}
+  /@msgpackr-extract/msgpackr-extract-linux-arm@2.2.0:
+    resolution: {integrity: sha512-SaJ3Qq4lX9Syd2xEo9u3qPxi/OB+5JO/ngJKK97XDpa1C587H9EWYO6KD8995DAjSinWvdHKRrCOXVUC5fvGOg==}
     cpu: [arm]
     os: [linux]
     requiresBuild: true
     dev: true
     optional: true
 
-  /@msgpackr-extract/msgpackr-extract-linux-x64@2.1.2:
-    resolution: {integrity: sha512-RjRoRxg7Q3kPAdUSC5EUUPlwfMkIVhmaRTIe+cqHbKrGZ4M6TyCA/b5qMaukQ/1CHWrqYY2FbKOAU8Hg0pQFzg==}
+  /@msgpackr-extract/msgpackr-extract-linux-x64@2.2.0:
+    resolution: {integrity: sha512-94y5PJrSOqUNcFKmOl7z319FelCLAE0rz/jPCWS+UtdMZvpa4jrQd+cJPQCLp2Fes1yAW/YUQj/Di6YVT3c3Iw==}
     cpu: [x64]
     os: [linux]
     requiresBuild: true
     dev: true
     optional: true
 
-  /@msgpackr-extract/msgpackr-extract-win32-x64@2.1.2:
-    resolution: {integrity: sha512-rIZVR48zA8hGkHIK7ED6+ZiXsjRCcAVBJbm8o89OKAMTmEAQ2QvoOxoiu3w2isAaWwzgtQIOFIqHwvZDyLKCvw==}
+  /@msgpackr-extract/msgpackr-extract-win32-x64@2.2.0:
+    resolution: {integrity: sha512-XrC0JzsqQSvOyM3t04FMLO6z5gCuhPE6k4FXuLK5xf52ZbdvcFe1yBmo7meCew9B8G2f0T9iu9t3kfTYRYROgA==}
     cpu: [x64]
     os: [win32]
     requiresBuild: true
@@ -2585,7 +2589,7 @@ packages:
       '@types/webgl-ext': 0.0.30
       '@webgpu/types': 0.1.16
       long: 4.0.0
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       seedrandom: 3.0.5
     transitivePeerDependencies:
       - encoding
@@ -2599,7 +2603,7 @@ packages:
     dependencies:
       '@tensorflow/tfjs-core': 3.21.0
       '@types/node-fetch': 2.6.2
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       seedrandom: 3.0.5
       string_decoder: 1.3.0
     transitivePeerDependencies:
@@ -2614,7 +2618,7 @@ packages:
       '@tensorflow/tfjs-core': 3.21.0
     dev: true
 
-  /@tensorflow/tfjs-node@3.21.1(@tensorflow/tfjs-core@3.21.0)(long@5.2.0)(seedrandom@3.0.5):
+  /@tensorflow/tfjs-node@3.21.1(@tensorflow/tfjs-core@3.21.0)(long@5.2.3)(seedrandom@3.0.5):
     resolution: {integrity: sha512-WV77fiuux6E5RR7FRD8RL3yCruhoHjZMI9yybztGLItJwco2YVjHr6h4TOjaZcIMnxu9748iV118MN2ZeLXbdQ==}
     engines: {node: '>=8.11.0'}
     requiresBuild: true
@@ -2622,7 +2626,7 @@ packages:
       '@tensorflow/tfjs-core': ^3.20.0
     dependencies:
       '@mapbox/node-pre-gyp': 1.0.9
-      '@tensorflow/tfjs': 3.21.0(long@5.2.0)(seedrandom@3.0.5)
+      '@tensorflow/tfjs': 3.21.0(long@5.2.3)(seedrandom@3.0.5)
       '@tensorflow/tfjs-core': 3.21.0
       adm-zip: 0.5.9
       google-protobuf: 3.21.2
@@ -2637,7 +2641,7 @@ packages:
       - supports-color
     dev: true
 
-  /@tensorflow/tfjs@3.21.0(long@5.2.0)(seedrandom@3.0.5):
+  /@tensorflow/tfjs@3.21.0(long@5.2.3)(seedrandom@3.0.5):
     resolution: {integrity: sha512-khcARd3/872llL/oF4ouR40qlT71mylU66PGT8kHP/GJ5YKj44sv8lDRjU7lOVlJK7jsJFWEsNVHI3eMc/GWNQ==}
     hasBin: true
     peerDependencies:
@@ -2652,7 +2656,7 @@ packages:
       argparse: 1.0.10
       chalk: 4.1.2
       core-js: 3.26.0
-      long: 5.2.0
+      long: 5.2.3
       regenerator-runtime: 0.13.10
       yargs: 16.2.0
     transitivePeerDependencies:
@@ -2694,6 +2698,28 @@ packages:
       ts-node: 10.9.1(@types/node@14.18.29)(typescript@4.8.4)
     dev: true
 
+  /@tpluscode/rdf-ns-builders@2.0.1(@zazuko/rdf-vocabularies@2023.1.19)(clownface@1.5.1)(safe-identifier@0.4.2)(ts-morph@15.1.0)(ts-node@10.9.1):
+    resolution: {integrity: sha512-P/pwfjhcj/JOZF3epheHiDd/f9tSkceydQBqBuqThpNX2NIg+4BSgwtG2YfKBa24mmGFfyzN6RVeFclhA8wZBw==}
+    hasBin: true
+    peerDependencies:
+      '@zazuko/rdf-vocabularies': '*'
+      clownface: ^1
+      safe-identifier: ^0.4.2
+      ts-morph: '>=11'
+      ts-node: '>= 8'
+    dependencies:
+      '@rdf-esm/data-model': 0.5.4
+      '@rdf-esm/namespace': 0.5.5
+      '@rdfjs/types': 1.1.0
+      '@zazuko/rdf-vocabularies': 2023.1.19
+      clownface: 1.5.1
+      commander: 7.2.0
+      fs-extra: 10.1.0
+      safe-identifier: 0.4.2
+      ts-morph: 15.1.0
+      ts-node: 10.9.1(@types/node@14.18.29)(typescript@4.8.4)
+    dev: true
+
   /@tpluscode/rdf-string@0.2.26(clownface@1.5.1)(safe-identifier@0.4.2)(ts-morph@15.1.0)(ts-node@10.9.1):
     resolution: {integrity: sha512-zfNGMmY8D9jVuJ9qHwNrIWMwhibIkO42/1KtCfo59m4vXYTfJrXcn1ny9pj5kuhbpSubRbJ69zmYxP4UrXVPQw==}
     dependencies:
@@ -2709,7 +2735,7 @@ packages:
       - ts-node
     dev: true
 
-  /@tpluscode/sparql-builder@0.3.24(@zazuko/rdf-vocabularies@2022.6.29)(clownface@1.5.1)(safe-identifier@0.4.2)(sparql-http-client@2.4.2)(ts-morph@15.1.0)(ts-node@10.9.1):
+  /@tpluscode/sparql-builder@0.3.24(@zazuko/rdf-vocabularies@2023.1.19)(clownface@1.5.1)(safe-identifier@0.4.2)(sparql-http-client@2.4.2)(ts-morph@15.1.0)(ts-node@10.9.1):
     resolution: {integrity: sha512-5DjQafLbdAOn3BwHv6eianSfO8jV54IJDy8usY6rO8Rz81e+BkpdUcqzx9gHoghISVgffgq2hwSLL44Fa/PG+Q==}
     peerDependencies:
       sparql-http-client: ^2.2.0
@@ -2717,7 +2743,7 @@ packages:
       '@rdf-esm/data-model': 0.5.4
       '@rdf-esm/term-set': 0.5.0
       '@rdfjs/types': 1.1.0
-      '@tpluscode/rdf-ns-builders': 2.0.1(@zazuko/rdf-vocabularies@2022.6.29)(clownface@1.5.1)(safe-identifier@0.4.2)(ts-morph@15.1.0)(ts-node@10.9.1)
+      '@tpluscode/rdf-ns-builders': 2.0.1(@zazuko/rdf-vocabularies@2023.1.19)(clownface@1.5.1)(safe-identifier@0.4.2)(ts-morph@15.1.0)(ts-node@10.9.1)
       '@tpluscode/rdf-string': 0.2.26(clownface@1.5.1)(safe-identifier@0.4.2)(ts-morph@15.1.0)(ts-node@10.9.1)
       debug: 4.3.4
       sparql-http-client: 2.4.2
@@ -4258,6 +4284,11 @@ packages:
       tslib: 1.14.1
     dev: true
 
+  /@xmldom/xmldom@0.8.10:
+    resolution: {integrity: sha512-2WALfTl4xo2SkGCYRt6rDTFfk9R1czmBvUQy12gK2KuRKIpWEhcbbzy8EZXtz/jkRqHX8bFEc6FC1HjX4TUWYw==}
+    engines: {node: '>=10.0.0'}
+    dev: true
+
   /@zazuko/node-fetch@2.6.6:
     resolution: {integrity: sha512-mrEqq7BJyNBlK5oT7U1S0EfLbFPpVHLXQJswhrN8Mv/3BKmWIBtMBaphK8AXF7XEhgK9vzRs/f3AIG8oHlPdpg==}
     engines: {node: 4.x || >=6.0.0}
@@ -4274,6 +4305,18 @@ packages:
       pkg-dir: 5.0.0
       rdf-ext: 1.3.5
       readable-stream: 3.6.0
+      string-to-stream: 3.0.1
+    dev: true
+
+  /@zazuko/rdf-vocabularies@2023.1.19:
+    resolution: {integrity: sha512-/vC/Ok8etIi4kflbOAoRr9JV95auJaUREV9lrWP3wDEMfhu8jVYogwi/OD1yA2pH6KIYPS2+z7LN1jxOe3G56g==}
+    hasBin: true
+    dependencies:
+      '@rdfjs/parser-n3': 1.1.4
+      commander: 5.1.0
+      pkg-dir: 5.0.0
+      rdf-ext: 1.3.5
+      readable-stream: 3.6.2
       string-to-stream: 3.0.1
     dev: true
 
@@ -4682,7 +4725,7 @@ packages:
     engines: {node: '>=6'}
     deprecated: The `apollo-server-env` package is part of Apollo Server v2 and v3, which are now deprecated (end-of-life October 22nd 2023). This package's functionality is now found in the `@apollo/utils.fetcher` package. See https://www.apollographql.com/docs/apollo-server/previous-versions/ for more details.
     dependencies:
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       util.promisify: 1.1.1
     transitivePeerDependencies:
       - encoding
@@ -5876,8 +5919,8 @@ packages:
     resolution: {integrity: sha512-0CNTVCLZggSh7bc5VkX5WWPWO+cyZbNd07IHIsSXLia/eAq+r836hgk+8BKoEh7949Mda87VUOitx5OddVj64A==}
     dev: true
 
-  /canvas@2.10.1:
-    resolution: {integrity: sha512-29pIjn9uwTUsIgJUNd7GXxKk8sg4iyJwLm1wIilNIqX1mVzXSc2nUij9exW1LqNpis1d2ebMYfMqTWcokZ4pdA==}
+  /canvas@2.11.2:
+    resolution: {integrity: sha512-ItanGBMrmRV7Py2Z+Xhs7cT+FNt5K0vPL4p9EZ/UX/Mu7hFbkxSjKF2KVtPwX7UYWp7dRKnrTvReflgrItJbdw==}
     engines: {node: '>=6'}
     requiresBuild: true
     dependencies:
@@ -8538,11 +8581,11 @@ packages:
       path-exists: 4.0.0
     dev: true
 
-  /firebase-admin@9.12.0(@firebase/app-compat@0.2.15)(@firebase/app-types@0.7.0):
+  /firebase-admin@9.12.0(@firebase/app-compat@0.2.15)(@firebase/app-types@0.9.0):
     resolution: {integrity: sha512-AtA7OH5RbIFGoc0gZOQgaYC6cdjdhZv4w3XgWoupkPKO1HY+0GzixOuXDa75kFeoVyhIyo4PkLg/GAC1dC1P6w==}
     engines: {node: '>=10.13.0'}
     dependencies:
-      '@firebase/database-compat': 0.1.8(@firebase/app-compat@0.2.15)(@firebase/app-types@0.7.0)
+      '@firebase/database-compat': 0.1.8(@firebase/app-compat@0.2.15)(@firebase/app-types@0.9.0)
       '@firebase/database-types': 0.7.3
       '@types/node': 14.18.29
       dicer: 0.3.1
@@ -8857,7 +8900,7 @@ packages:
       extend: 3.0.2
       https-proxy-agent: 5.0.1
       is-stream: 2.0.1
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -8866,12 +8909,13 @@ packages:
   /gaxios@4.3.3:
     resolution: {integrity: sha512-gSaYYIO1Y3wUtdfHmjDUZ8LWaxJQpiavzbF5Kq53akSzvmVg0RfyOcFDbO1KJ/KCGRFz2qG+lS81F0nkr7cRJA==}
     engines: {node: '>=10'}
+    requiresBuild: true
     dependencies:
       abort-controller: 3.0.0
       extend: 3.0.2
       https-proxy-agent: 5.0.1
       is-stream: 2.0.1
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -8891,6 +8935,7 @@ packages:
   /gcp-metadata@4.3.1:
     resolution: {integrity: sha512-x850LS5N7V1F3UcV7PoupzGsyD6iVwTVvsh3tbXfkctZnBnjW5yu5z1/3k3SehF7TyoTIe78rJs02GMMy+LF+A==}
     engines: {node: '>=10'}
+    requiresBuild: true
     dependencies:
       gaxios: 4.3.3
       json-bigint: 1.0.0
@@ -9176,7 +9221,7 @@ packages:
       fast-text-encoding: 1.0.6
       google-auth-library: 7.14.1
       is-stream-ended: 0.1.4
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       object-hash: 3.0.0
       proto3-json-serializer: 0.1.9
       protobufjs: 6.11.3
@@ -9198,6 +9243,7 @@ packages:
     resolution: {integrity: sha512-HHuHmkLgwjdmVRngf5+gSmpkyaRI6QmOg77J8tkNBHhNEI62sGHyw4/+UkgyZEI7h84NbWprXDJ+sa3xOYFvTg==}
     engines: {node: '>=10'}
     hasBin: true
+    requiresBuild: true
     dependencies:
       node-forge: 1.3.1
     dev: true
@@ -9354,6 +9400,7 @@ packages:
   /gtoken@5.3.2:
     resolution: {integrity: sha512-gkvEKREW7dXWF8NV8pVrKfW7WqReAmjjkMBh6lNCCGOM4ucS0r0YyXXl0r/9Yj8wcW/32ISkfc8h5mPTDbtifQ==}
     engines: {node: '>=10'}
+    requiresBuild: true
     dependencies:
       gaxios: 4.3.3
       google-p12-pem: 3.1.4
@@ -10625,7 +10672,7 @@ packages:
     resolution: {integrity: sha512-geDJjpoZ8N0kWexiwkX8F9NkTsXhetLPVbZFQ+JTW239QNOwvB0gniuR1Wc6f0AMTn7/mFGyXvHTifrCp/GH8Q==}
     requiresBuild: true
     dependencies:
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       unfetch: 4.2.0
     transitivePeerDependencies:
       - encoding
@@ -10760,7 +10807,7 @@ packages:
       - supports-color
     dev: true
 
-  /jest-cli@27.5.1(canvas@2.10.1)(ts-node@10.9.1):
+  /jest-cli@27.5.1(canvas@2.11.2)(ts-node@10.9.1):
     resolution: {integrity: sha512-Hc6HOOwYq4/74/c62dEE3r5elx8wjYqxY0r0G/nFrLDPMFRu6RA/u8qINOIkvhxG7mMQ5EJsOGfRpI8L6eFUVw==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
     hasBin: true
@@ -10770,14 +10817,14 @@ packages:
       node-notifier:
         optional: true
     dependencies:
-      '@jest/core': 27.5.1(canvas@2.10.1)(ts-node@10.9.1)
+      '@jest/core': 27.5.1(canvas@2.11.2)(ts-node@10.9.1)
       '@jest/test-result': 27.5.1
       '@jest/types': 27.5.1
       chalk: 4.1.2
       exit: 0.1.2
       graceful-fs: 4.2.10
       import-local: 3.1.0
-      jest-config: 27.5.1(canvas@2.10.1)(ts-node@10.9.1)
+      jest-config: 27.5.1(canvas@2.11.2)(ts-node@10.9.1)
       jest-util: 27.5.1
       jest-validate: 27.5.1
       prompts: 2.4.2
@@ -10790,7 +10837,7 @@ packages:
       - utf-8-validate
     dev: true
 
-  /jest-config@27.5.1(canvas@2.10.1)(ts-node@10.9.1):
+  /jest-config@27.5.1(canvas@2.11.2)(ts-node@10.9.1):
     resolution: {integrity: sha512-5sAsjm6tGdsVbW9ahcChPAFCk4IlkQUknH5AvKjuLTSlcO/wCZKyFdn7Rg0EkC+OGgWODEy2hDpWB1PgzH0JNA==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
     peerDependencies:
@@ -10809,13 +10856,13 @@ packages:
       glob: 7.2.3
       graceful-fs: 4.2.10
       jest-circus: 27.5.1
-      jest-environment-jsdom: 27.5.1(canvas@2.10.1)
+      jest-environment-jsdom: 27.5.1(canvas@2.11.2)
       jest-environment-node: 27.5.1
       jest-get-type: 27.5.1
       jest-jasmine2: 27.5.1
       jest-regex-util: 27.5.1
       jest-resolve: 27.5.1
-      jest-runner: 27.5.1(canvas@2.10.1)
+      jest-runner: 27.5.1(canvas@2.11.2)
       jest-util: 27.5.1
       jest-validate: 27.5.1
       micromatch: 4.0.5
@@ -10859,7 +10906,7 @@ packages:
       pretty-format: 27.5.1
     dev: true
 
-  /jest-environment-jsdom@27.5.1(canvas@2.10.1):
+  /jest-environment-jsdom@27.5.1(canvas@2.11.2):
     resolution: {integrity: sha512-TFBvkTC1Hnnnrka/fUb56atfDtJ9VMZ94JkjTbggl1PEpwrYtUBKMezB3inLmWqQsXYLcMwNoDQwoBTAvFfsfw==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
     dependencies:
@@ -10869,7 +10916,7 @@ packages:
       '@types/node': 14.18.29
       jest-mock: 27.5.1
       jest-util: 27.5.1
-      jsdom: 16.7.0(canvas@2.10.1)
+      jsdom: 16.7.0(canvas@2.11.2)
     transitivePeerDependencies:
       - bufferutil
       - canvas
@@ -11024,7 +11071,7 @@ packages:
       slash: 3.0.0
     dev: true
 
-  /jest-runner@27.5.1(canvas@2.10.1):
+  /jest-runner@27.5.1(canvas@2.11.2):
     resolution: {integrity: sha512-g4NPsM4mFCOwFKXO4p/H/kWGdJp9V8kURY2lX8Me2drgXqG7rrZAx5kv+5H7wtt/cdFIjhqYx1HrlqWHaOvDaQ==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
     dependencies:
@@ -11038,7 +11085,7 @@ packages:
       emittery: 0.8.1
       graceful-fs: 4.2.10
       jest-docblock: 27.5.1
-      jest-environment-jsdom: 27.5.1(canvas@2.10.1)
+      jest-environment-jsdom: 27.5.1(canvas@2.11.2)
       jest-environment-node: 27.5.1
       jest-haste-map: 27.5.1
       jest-leak-detector: 27.5.1
@@ -11170,7 +11217,7 @@ packages:
       supports-color: 8.1.1
     dev: true
 
-  /jest@27.5.1(canvas@2.10.1)(ts-node@10.9.1):
+  /jest@27.5.1(canvas@2.11.2)(ts-node@10.9.1):
     resolution: {integrity: sha512-Yn0mADZB89zTtjkPJEXwrac3LHudkQMR+Paqa8uxJHCBr9agxztUifWCyiYrjhMPBoUVBjyny0I7XH6ozDr7QQ==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
     hasBin: true
@@ -11180,9 +11227,9 @@ packages:
       node-notifier:
         optional: true
     dependencies:
-      '@jest/core': 27.5.1(canvas@2.10.1)(ts-node@10.9.1)
+      '@jest/core': 27.5.1(canvas@2.11.2)(ts-node@10.9.1)
       import-local: 3.1.0
-      jest-cli: 27.5.1(canvas@2.10.1)(ts-node@10.9.1)
+      jest-cli: 27.5.1(canvas@2.11.2)(ts-node@10.9.1)
     transitivePeerDependencies:
       - bufferutil
       - canvas
@@ -11267,7 +11314,7 @@ packages:
     resolution: {integrity: sha512-UVU9dibq2JcFWxQPA6KCqj5O42VOmAY3zQUfEKxU0KpTGXwNoCjkX1e13eHNvw/xPynt6pU0rZ1htjWTNTSXsg==}
     dev: true
 
-  /jsdom@16.7.0(canvas@2.10.1):
+  /jsdom@16.7.0(canvas@2.11.2):
     resolution: {integrity: sha512-u9Smc2G1USStM+s/x1ru5Sxrl6mPYCbByG1U/hUmqaVsm4tbNyS7CicOSRyuGQYZhTu0h84qkZZQ/I+dzizSVw==}
     engines: {node: '>=10'}
     peerDependencies:
@@ -11279,7 +11326,7 @@ packages:
       abab: 2.0.6
       acorn: 8.8.1
       acorn-globals: 6.0.0
-      canvas: 2.10.1
+      canvas: 2.11.2
       cssom: 0.4.4
       cssstyle: 2.3.0
       data-urls: 2.0.0
@@ -11324,6 +11371,7 @@ packages:
 
   /json-bigint@1.0.0:
     resolution: {integrity: sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ==}
+    requiresBuild: true
     dependencies:
       bignumber.js: 9.1.0
     dev: true
@@ -11966,6 +12014,10 @@ packages:
 
   /long@5.2.0:
     resolution: {integrity: sha512-9RTUNjK60eJbx3uz+TEGF7fUr29ZDxR5QzXcyDpeSfeH28S9ycINflOgOlppit5U+4kNTe83KQnMEerw7GmE8w==}
+    dev: true
+
+  /long@5.2.3:
+    resolution: {integrity: sha512-lcHwpNoggQTObv5apGNCTdJrO69eHOZMi4BNC+rTLER8iHAqGrUVeLh/irVIM7zTw2bOXA8T6uNPeujwOLg/2Q==}
     dev: true
 
   /longest-streak@3.1.0:
@@ -13181,26 +13233,26 @@ packages:
       safe-buffer: 5.2.1
     dev: true
 
-  /msgpackr-extract@2.1.2:
-    resolution: {integrity: sha512-cmrmERQFb19NX2JABOGtrKdHMyI6RUyceaPBQ2iRz9GnDkjBWFjNJC0jyyoOfZl2U/LZE3tQCCQc4dlRyA8mcA==}
+  /msgpackr-extract@2.2.0:
+    resolution: {integrity: sha512-0YcvWSv7ZOGl9Od6Y5iJ3XnPww8O7WLcpYMDwX+PAA/uXLDtyw94PJv9GLQV/nnp3cWlDhMoyKZIQLrx33sWog==}
     hasBin: true
     requiresBuild: true
     dependencies:
       node-gyp-build-optional-packages: 5.0.3
     optionalDependencies:
-      '@msgpackr-extract/msgpackr-extract-darwin-arm64': 2.1.2
-      '@msgpackr-extract/msgpackr-extract-darwin-x64': 2.1.2
-      '@msgpackr-extract/msgpackr-extract-linux-arm': 2.1.2
-      '@msgpackr-extract/msgpackr-extract-linux-arm64': 2.1.2
-      '@msgpackr-extract/msgpackr-extract-linux-x64': 2.1.2
-      '@msgpackr-extract/msgpackr-extract-win32-x64': 2.1.2
+      '@msgpackr-extract/msgpackr-extract-darwin-arm64': 2.2.0
+      '@msgpackr-extract/msgpackr-extract-darwin-x64': 2.2.0
+      '@msgpackr-extract/msgpackr-extract-linux-arm': 2.2.0
+      '@msgpackr-extract/msgpackr-extract-linux-arm64': 2.2.0
+      '@msgpackr-extract/msgpackr-extract-linux-x64': 2.2.0
+      '@msgpackr-extract/msgpackr-extract-win32-x64': 2.2.0
     dev: true
     optional: true
 
   /msgpackr@1.7.2:
     resolution: {integrity: sha512-mWScyHTtG6TjivXX9vfIy2nBtRupaiAj0HQ2mtmpmYujAmqZmaaEVPaSZ1NKLMvicaMLFzEaMk0ManxMRg8rMQ==}
     optionalDependencies:
-      msgpackr-extract: 2.1.2
+      msgpackr-extract: 2.2.0
     dev: true
 
   /mutationobserver-shim@0.3.7:
@@ -13346,18 +13398,6 @@ packages:
       whatwg-url: 5.0.0
     dev: true
 
-  /node-fetch@2.6.7:
-    resolution: {integrity: sha512-ZjMPFEfVx5j+y2yF35Kzx5sF7kDzxuDj6ziH4FFbOp87zKDZNx8yExJIb05OGF4Nlt9IHFIMBkRl41VdvcNdbQ==}
-    engines: {node: 4.x || >=6.0.0}
-    peerDependencies:
-      encoding: ^0.1.0
-    peerDependenciesMeta:
-      encoding:
-        optional: true
-    dependencies:
-      whatwg-url: 5.0.0
-    dev: true
-
   /node-forge@0.10.0:
     resolution: {integrity: sha512-PPmu8eEeG9saEUvI97fm4OYxXVB6bFvyNTyiUOBichBpFG8A1Ljw3bY62+5oOjDEMHRnd0Y7HQ+x7uzxOzC6JA==}
     engines: {node: '>= 6.0.0'}
@@ -13366,6 +13406,7 @@ packages:
   /node-forge@1.3.1:
     resolution: {integrity: sha512-dPEtOeMvF9VMcYV/1Wb8CPoVAXtp6MKMlcbAt4ddqmGqUJ6fQZFXkNZNkNlfevtNkGtaSoXf/vNNNSvgrdXwtA==}
     engines: {node: '>= 6.13.0'}
+    requiresBuild: true
     dev: true
 
   /node-gyp-build-optional-packages@5.0.3:
@@ -13422,7 +13463,7 @@ packages:
       concat-stream: 1.6.2
       cross-fetch: 3.1.8
       readable-error: 1.0.0
-      readable-stream: 3.6.0
+      readable-stream: 3.6.2
     transitivePeerDependencies:
       - encoding
     dev: true
@@ -14294,6 +14335,8 @@ packages:
     deprecated: v2.1.0 is deprecated, use v3.x.x instead
     hasBin: true
     requiresBuild: true
+    dependencies:
+      '@xmldom/xmldom': 0.8.10
     dev: true
     bundledDependencies:
       - '@xmldom/xmldom'
@@ -15139,7 +15182,7 @@ packages:
     resolution: {integrity: sha512-cr8wgJcj+SvPLichNhWhUTyXHcoD1EVgajVmvbtwYbMRw479KAaW03TTviQaJAUqgcWzIzkrWLtWkrY2FgwryQ==}
     dependencies:
       '@rdfjs/data-model': 1.3.4
-      readable-stream: 3.6.0
+      readable-stream: 3.6.2
     dev: true
 
   /react-dom@16.14.0(react@16.14.0):
@@ -15181,7 +15224,7 @@ packages:
   /readable-error@1.0.0:
     resolution: {integrity: sha512-CLnInu5bUphmFiZ3pD/BC6+Cg4/BzK6ZMvWfd0b2QMzYo159Z/f/nVFQ9L5IeMrqUxy0EFsp3XJ+BRfLfY13IQ==}
     dependencies:
-      readable-stream: 2.3.7
+      readable-stream: 2.3.8
     dev: true
 
   /readable-stream@2.3.7:
@@ -15196,8 +15239,29 @@ packages:
       util-deprecate: 1.0.2
     dev: true
 
+  /readable-stream@2.3.8:
+    resolution: {integrity: sha512-8p0AUk4XODgIewSi0l8Epjs+EVnWiK7NoDIEGU0HhE7+ZyY8D1IMY7odu5lRrFXGg71L15KG8QrPmum45RTtdA==}
+    dependencies:
+      core-util-is: 1.0.3
+      inherits: 2.0.4
+      isarray: 1.0.0
+      process-nextick-args: 2.0.1
+      safe-buffer: 5.1.2
+      string_decoder: 1.1.1
+      util-deprecate: 1.0.2
+    dev: true
+
   /readable-stream@3.6.0:
     resolution: {integrity: sha512-BViHy7LKeTz4oNnkcLJ+lVSL6vpiFeX6/d3oSH8zCW7UxP2onchk+vTGB143xuFjHS3deTgkKoXXymXqymiIdA==}
+    engines: {node: '>= 6'}
+    dependencies:
+      inherits: 2.0.4
+      string_decoder: 1.3.0
+      util-deprecate: 1.0.2
+    dev: true
+
+  /readable-stream@3.6.2:
+    resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
     dependencies:
       inherits: 2.0.4
@@ -15312,13 +15376,13 @@ packages:
       - supports-color
     dev: true
 
-  /remark-prism@1.3.6(canvas@2.10.1):
+  /remark-prism@1.3.6(canvas@2.11.2):
     resolution: {integrity: sha512-yYSXJ2MEK2DeD9UKDKFkQPcVqRx6aX2FYD1kE27ScogpZ/BBO8MoOO6gf/AKqfXvKGnP51wqvDEBmPseypgaug==}
     dependencies:
       classnames: 2.3.2
       css-selector-parser: 1.4.1
       escape-html: 1.0.3
-      jsdom: 16.7.0(canvas@2.10.1)
+      jsdom: 16.7.0(canvas@2.11.2)
       parse-numeric-range: 1.3.0
       parse5: 6.0.1
       parse5-htmlparser2-tree-adapter: 6.0.1
@@ -15785,7 +15849,7 @@ packages:
   /separate-stream@1.0.1:
     resolution: {integrity: sha512-UKFCzmddW2akOq40YdGehllv5gu6AD3y6nGSVuZuwI1kify2CiW7Zwsxx4ioaNLxx4LZaZMkcjdICHtSxpEpaA==}
     dependencies:
-      readable-stream: 3.6.0
+      readable-stream: 3.6.2
     dev: true
 
   /sequelize-pool@2.3.0:
@@ -16247,7 +16311,7 @@ packages:
       nodeify-fetch: 2.2.2
       promise-the-world: 1.0.1
       rdf-transform-triple-to-quad: 1.0.2
-      readable-stream: 3.6.0
+      readable-stream: 3.6.2
       separate-stream: 1.0.1
     transitivePeerDependencies:
       - encoding
@@ -16960,7 +17024,7 @@ packages:
     dependencies:
       http-proxy-agent: 4.0.1
       https-proxy-agent: 5.0.1
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       stream-events: 1.0.5
       uuid: 7.0.3
     transitivePeerDependencies:
@@ -16974,7 +17038,7 @@ packages:
     dependencies:
       http-proxy-agent: 4.0.1
       https-proxy-agent: 5.0.1
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       stream-events: 1.0.5
       uuid: 8.3.2
     transitivePeerDependencies:
@@ -16989,7 +17053,7 @@ packages:
     dependencies:
       http-proxy-agent: 5.0.0
       https-proxy-agent: 5.0.1
-      node-fetch: 2.6.7
+      node-fetch: 2.6.12
       stream-events: 1.0.5
       uuid: 8.3.2
     transitivePeerDependencies:
@@ -17061,7 +17125,7 @@ packages:
     resolution: {integrity: sha512-enaDQ4MUyP2W6ZyT6EsMzqBPZaM/avg8iuo+l2d3QCs0J+6RaqkHV/2/lOwDTueBHeJ/2LG9lrLW3d5rWPucuQ==}
     dependencies:
       inherits: 2.0.4
-      readable-stream: 3.6.0
+      readable-stream: 3.6.2
     dev: true
 
   /through2@4.0.2:
@@ -17333,6 +17397,10 @@ packages:
 
   /tslib@2.4.0:
     resolution: {integrity: sha512-d6xOpEDfsi2CZVlPQzGeux8XMwLT9hssAsaPYExaQMuYskwb+x1x7J371tWlbBdWHroy99KnVB6qIkUbs5X3UQ==}
+    dev: true
+
+  /tslib@2.6.1:
+    resolution: {integrity: sha512-t0hLfiEKfMUoqhG+U1oid7Pva4bbDPHYfJNiB7BiIjRkj1pyC++4N3huJfqY6aRH6VTB0rvtzQwjM4K6qpfOig==}
     dev: true
 
   /tsscmp@1.0.6:
