@@ -99,11 +99,11 @@ We can then import the config like this:
 ```js filename="apps/web/.eslintrc.js"
 module.exports = {
   root: true,
-  extends: ["custom"],
+  extends: ["eslint-config-custom"],
 };
 ```
 
-By adding `custom` to our `extends` array, we're telling ESLint to look for a package called `eslint-config-custom` - and it finds our workspace.
+By adding `eslint-config-custom` to our `extends` array, we're telling ESLint to look for a package called `eslint-config-custom` - and it finds our workspace.
 
 ### Summary
 
