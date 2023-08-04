@@ -55,7 +55,7 @@ pub use turbopack_ecmascript as ecmascript;
 use turbopack_json::JsonModuleAsset;
 use turbopack_mdx::MdxModuleAsset;
 use turbopack_static::StaticModuleAsset;
-use turbopack_wasm::WebAssemblyModuleAsset;
+use turbopack_wasm::{module_asset::WebAssemblyModuleAsset, source::WebAssemblySource};
 
 use self::{
     module_options::CustomModuleType,

@@ -153,20 +153,18 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         .route(
             "/v8/artifacts/:hash",
             head(|Path(hash): Path<String>| async move {
-                let duration = head_durations_ref
-                    .lock()
-                    .await
-                    .get(&hash)
-                    .cloned()
-                    .unwrap_or(0);
                 let mut headers = HeaderMap::new();
+
+                let Some(duration) = head_durations_ref.lock().await.get(&hash).cloned() else {
+                    return (StatusCode::NOT_FOUND, headers);
+                };
 
                 headers.insert(
                     "x-artifact-duration",
                     HeaderValue::from_str(&duration.to_string()).unwrap(),
                 );
 
-                headers
+                (StatusCode::OK, headers)
             }),
         )
         .route(

@@ -6,25 +6,46 @@ use turborepo_api_client::{APIClient, Response};
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
-    CacheError, CacheResponse, CacheSource,
+    CacheError, CacheOpts, CacheResponse, CacheSource,
 };
 
-pub struct HttpCache {
+pub struct HTTPCache {
     client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
+    token: String,
 }
 
-impl HttpCache {
+pub struct APIAuth {
+    pub team_id: String,
+    pub token: String,
+}
+
+impl HTTPCache {
     pub fn new(
         client: APIClient,
-        signer_verifier: Option<ArtifactSignatureAuthenticator>,
+        opts: &CacheOpts,
         repo_root: AbsoluteSystemPathBuf,
-    ) -> HttpCache {
-        HttpCache {
+        api_auth: APIAuth,
+    ) -> HTTPCache {
+        let signer_verifier = if opts
+            .remote_cache_opts
+            .as_ref()
+            .map_or(false, |remote_cache_opts| remote_cache_opts.signature)
+        {
+            Some(ArtifactSignatureAuthenticator {
+                team_id: api_auth.team_id.as_bytes().to_vec(),
+                secret_key_override: None,
+            })
+        } else {
+            None
+        };
+
+        HTTPCache {
             client,
             signer_verifier,
             repo_root,
+            token: api_auth.token,
         }
     }
 
@@ -32,9 +53,8 @@ impl HttpCache {
         &self,
         anchor: &AbsoluteSystemPath,
         hash: &str,
-        files: Vec<AnchoredSystemPathBuf>,
+        files: &[AnchoredSystemPathBuf],
         duration: u32,
-        token: &str,
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
@@ -46,7 +66,7 @@ impl HttpCache {
             .transpose()?;
 
         self.client
-            .put_artifact(hash, &artifact_body, duration, tag.as_deref(), token)
+            .put_artifact(hash, &artifact_body, duration, tag.as_deref(), &self.token)
             .await?;
 
         Ok(())
@@ -56,11 +76,11 @@ impl HttpCache {
         &self,
         writer: impl Write,
         anchor: &AbsoluteSystemPath,
-        files: Vec<AnchoredSystemPathBuf>,
+        files: &[AnchoredSystemPathBuf],
     ) -> Result<(), CacheError> {
         let mut cache_archive = CacheWriter::from_writer(writer, true)?;
         for file in files {
-            cache_archive.add_file(anchor, &file)?;
+            cache_archive.add_file(anchor, file)?;
         }
 
         Ok(())
@@ -69,14 +89,12 @@ impl HttpCache {
     pub async fn exists(
         &self,
         hash: &str,
-        token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-        use_preflight: bool,
     ) -> Result<CacheResponse, CacheError> {
         let response = self
             .client
-            .artifact_exists(hash, token, team_id, team_slug, use_preflight)
+            .artifact_exists(hash, &self.token, team_id, team_slug)
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -101,17 +119,15 @@ impl HttpCache {
         }
     }
 
-    pub async fn retrieve(
+    pub async fn fetch(
         &self,
         hash: &str,
-        token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-        use_preflight: bool,
     ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         let response = self
             .client
-            .fetch_artifact(hash, token, team_id, team_slug, use_preflight)
+            .fetch_artifact(hash, &self.token, team_id, team_slug)
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -179,22 +195,28 @@ mod test {
     use vercel_api_mock::start_test_server;
 
     use crate::{
-        http::HttpCache,
+        http::{APIAuth, HTTPCache},
         test_cases::{get_test_cases, TestCase},
-        CacheSource,
+        CacheOpts, CacheSource,
     };
 
     #[tokio::test]
     async fn test_http_cache() -> Result<()> {
-        try_join_all(get_test_cases().into_iter().map(round_trip_test)).await?;
-
-        Ok(())
-    }
-
-    async fn round_trip_test(test_case: TestCase) -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
 
+        try_join_all(
+            get_test_cases()
+                .into_iter()
+                .map(|test_case| round_trip_test(test_case, port)),
+        )
+        .await?;
+
+        handle.abort();
+        Ok(())
+    }
+
+    async fn round_trip_test(test_case: TestCase, port: u16) -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
         test_case.initialize(&repo_root_path)?;
@@ -206,25 +228,25 @@ mod test {
         } = test_case;
 
         let api_client = APIClient::new(&format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let opts = CacheOpts::default();
+        let api_auth = APIAuth {
+            team_id: "my-team".to_string(),
+            token: "my-token".to_string(),
+        };
 
-        let cache = HttpCache::new(api_client, None, repo_root_path.to_owned());
+        let cache = HTTPCache::new(api_client, &opts, repo_root_path.to_owned(), api_auth);
 
+        let anchored_files: Vec<_> = files.iter().map(|f| f.path.clone()).collect();
         cache
-            .put(
-                &repo_root_path,
-                hash,
-                files.iter().map(|f| f.path.clone()).collect(),
-                duration,
-                "",
-            )
+            .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
 
-        let cache_response = cache.exists(hash, "", "", None, false).await?;
+        let cache_response = cache.exists(hash, "", None).await?;
 
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.retrieve(hash, "", "", None, false).await?;
+        let (cache_response, received_files) = cache.fetch(hash, "", None).await?;
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {
@@ -233,7 +255,6 @@ mod test {
             assert_eq!(std::fs::read_to_string(file_path)?, test_file.contents);
         }
 
-        handle.abort();
         Ok(())
     }
 }
