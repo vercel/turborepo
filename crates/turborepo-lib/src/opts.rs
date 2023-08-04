@@ -1,7 +1,6 @@
-#![allow(dead_code)]
 use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
 use turbopath::AnchoredSystemPathBuf;
+use turborepo_cache::CacheOpts;
 
 use crate::{
     cli::{Command, DryRunMode, EnvMode, LogPrefix, RunArgs},
@@ -17,32 +16,6 @@ pub struct Opts<'a> {
     pub scope_opts: ScopeOpts,
 }
 
-#[derive(Debug, Default)]
-pub struct CacheOpts<'a> {
-    override_dir: Option<&'a str>,
-    skip_remote: bool,
-    skip_filesystem: bool,
-    workers: u32,
-    pub(crate) remote_cache_opts: Option<RemoteCacheOpts>,
-}
-
-impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
-    fn from(run_args: &'a RunArgs) -> Self {
-        CacheOpts {
-            override_dir: run_args.cache_dir.as_deref(),
-            skip_filesystem: run_args.remote_only,
-            workers: run_args.cache_workers,
-            ..CacheOpts::default()
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RemoteCacheOpts {
-    team_id: String,
-    signature: bool,
-}
-
 impl<'a> TryFrom<&'a Args> for Opts<'a> {
     type Error = anyhow::Error;
 
@@ -53,6 +26,7 @@ impl<'a> TryFrom<&'a Args> for Opts<'a> {
         let run_opts = RunOpts::try_from(run_args.as_ref())?;
         let cache_opts = CacheOpts::from(run_args.as_ref());
         let scope_opts = ScopeOpts::try_from(run_args.as_ref())?;
+
         Ok(Self {
             run_opts,
             cache_opts,
@@ -170,5 +144,16 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
             .map(AnchoredSystemPathBuf::from_raw)
             .transpose()?;
         Ok(Self { pkg_inference_root })
+    }
+}
+
+impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
+    fn from(run_args: &'a RunArgs) -> Self {
+        CacheOpts {
+            override_dir: run_args.cache_dir.as_deref(),
+            skip_filesystem: run_args.remote_only,
+            workers: run_args.cache_workers,
+            ..CacheOpts::default()
+        }
     }
 }
