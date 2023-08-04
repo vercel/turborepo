@@ -280,7 +280,7 @@ jobs:
 
   go_integration:
     name: Go Integration Tests
-    needs: build_turborepo
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.go_integration == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
@@ -309,7 +309,7 @@ jobs:
 
   turborepo_e2e:
     name: Turborepo E2E Tests
-    needs: build_turborepo
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_e2e == 'true'
     timeout-minutes: 60
     runs-on: ${{ matrix.os.runner }}
@@ -335,7 +335,7 @@ jobs:
 
   turborepo_examples:
     name: Turborepo Examples
-    needs: build_turborepo
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
@@ -403,7 +403,7 @@ jobs:
     name: JS Package Tests
     timeout-minutes: 30
     if: needs.determine_jobs.outputs.turborepo_js == 'true'
-    needs: build_turborepo
+    needs: [determine_jobs, build_turborepo]
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
