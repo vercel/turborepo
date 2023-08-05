@@ -155,7 +155,7 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 		return nil, err
 	}
 	apiClientConfig := executionState.APIClientConfig
-	spacesApiClientConfig := executionState.SpacesAPIClientConfig
+	spacesAPIClientConfig := executionState.SpacesAPIClientConfig
 
 	apiClient := client.NewClient(
 		apiClientConfig,
@@ -164,7 +164,7 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 	)
 
 	spacesClient := client.NewClient(
-		spacesApiClientConfig,
+		spacesAPIClientConfig,
 		logger,
 		h.TurboVersion,
 	)
