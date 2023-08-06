@@ -27,9 +27,9 @@ As of Next 13.2, configuring webpack loaders is possible for Next.js apps throug
 module.exports = {
   experimental: {
     turbo: {
-      loaders: {
+      rules: {
         // Option format
-        '.md': [
+        '*.md': [
           {
             loader: '@mdx-js/loader',
             options: {
@@ -38,12 +38,14 @@ module.exports = {
           },
         ],
         // Option-less format
-        '.mdx': ['@mdx-js/loader'],
+        '*.mdx': ['@mdx-js/loader'],
       },
     },
   },
 }
 ```
+
+Note: Prior to Next.js version 13.4.4, this config was named `experimental.turbo.loaders`.
 
 If you need to pass something like the result of importing an external package as a loader option, it's possible to wrap the webpack loader with your own, specifying options there. **This is an interim solution and should not be necessary in the future.** This loader wraps `@mdx-js/loader` and configures the `rehypePrism` rehype plugin:
 
@@ -70,7 +72,7 @@ Then, configure Next.js to load the wrapper loader:
 module.exports = {
   experimental: {
     turbo: {
-      loaders: {
+      rules: {
         '.mdx': ['./my-mdx-loader'],
       },
     },
