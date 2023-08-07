@@ -3,7 +3,7 @@
   "scripts": {
     "build": "turbo build",
     "clean": "turbo clean",
-    "dev": "turbo dev --no-cache  --continue",
+    "dev": "turbo dev --no-cache --continue --concurrency 11",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "lint": "turbo lint",
     "test": "turbo test"
