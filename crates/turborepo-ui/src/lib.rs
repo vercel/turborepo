@@ -50,11 +50,6 @@ impl UI {
         Self { should_strip_ansi }
     }
 
-    // STUB
-    pub fn is_ci(&self) -> bool {
-        env::var("CI").is_ok()
-    }
-
     /// Infer the color choice from environment variables and checking if stdout
     /// is a tty
     pub fn infer() -> Self {
