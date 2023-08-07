@@ -174,12 +174,11 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::webpack_target_node("integration/webpack-target-node/index.js")]
 #[case::whatwg_url("integration/whatwg-url.js")]
 #[case::when("integration/when.js")]
-// These two tests print a deprecation warning about using folders in exports field to stderr.
 #[case::package_exports_alt_folders_base(
-    CaseInput::new("integration/package-exports/pass/alt-folders.js").expected_stderr("DeprecationWarning")
+    CaseInput::new("integration/package-exports/pass/alt-folders.js").expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_folder(
-    CaseInput::new("integration/package-exports/pass/folder.js").expected_stderr("DeprecationWarning")
+    CaseInput::new("integration/package-exports/pass/folder.js").expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_alt_base("integration/package-exports/pass/alt.js")]
 #[case::package_exports_catch_all("integration/package-exports/pass/catch-all.js")]
@@ -202,7 +201,7 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::package_exports_package_sub_suffix_base("integration/package-exports/pass/sub-suffix.js")]
 #[case::package_exports_alt_folders_multiple(
     CaseInput::new("integration/package-exports/fail/alt-folders-multiple.js")
-        .expected_stderr("Error [ERR_MODULE_NOT_FOUND]: Cannot find module")
+        .expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_alt_multiple(
     CaseInput::new("integration/package-exports/fail/alt-multiple.js")
