@@ -105,6 +105,7 @@ impl RawVc {
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
     /// using it could break cache invalidation.
     pub(crate) fn into_strongly_consistent_read_untracked<T: Any + VcValueType>(
+        self,
     ) -> ReadRawVcFuture<T, VcValueTypeCast<T>> {
         ReadRawVcFuture::new_strongly_consistent_untracked(self)
     }
