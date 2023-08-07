@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod cache;
 mod global_hash;
 mod scope;
 pub mod task_id;
