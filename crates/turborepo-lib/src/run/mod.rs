@@ -142,13 +142,13 @@ mod test {
     use anyhow::Result;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
 
     use crate::{
         cli::{Command, RunArgs},
         commands::CommandBase,
         get_version,
         run::Run,
-        ui::UI,
         Args,
     };
 

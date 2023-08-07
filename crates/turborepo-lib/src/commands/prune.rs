@@ -7,13 +7,13 @@ use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
+use turborepo_ui::BOLD;
 
 use super::CommandBase;
 use crate::{
     config::RawTurboJSON,
     package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
     package_json::PackageJson,
-    ui::BOLD,
 };
 
 #[derive(Debug, thiserror::Error)]

@@ -1,0 +1,89 @@
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{BufRead, BufReader, Write},
+};
+
+use console::style;
+use tracing::{debug, warn};
+use turbopath::AbsoluteSystemPath;
+
+use crate::{Error, StyledObject, UI};
+
+#[allow(dead_code)]
+pub struct PrefixedUI<D: Display, W: Write> {
+    ui: UI,
+    prefix: StyledObject<D>,
+    output: W,
+}
+
+#[allow(dead_code)]
+impl<D: Display, W: Write> PrefixedUI<D, W> {
+    pub fn new(ui: UI, prefix: StyledObject<D>, output: W) -> Self {
+        Self { ui, prefix, output }
+    }
+
+    pub fn output(&mut self, message: impl Into<String>) -> Result<(), Error> {
+        let message = style(format!("{} {}", self.prefix, message.into()));
+        writeln!(self.output, "{}", self.ui.apply(message)).map_err(Error::CannotWriteLogs)?;
+
+        Ok(())
+    }
+}
+
+#[allow(dead_code)]
+pub fn replay_logs<D: Display, W: Write>(
+    mut output: PrefixedUI<D, W>,
+    log_file_name: &AbsoluteSystemPath,
+) -> Result<(), Error> {
+    debug!("start replaying logs");
+
+    let log_file = File::open(log_file_name).map_err(|err| {
+        warn!("error opening log file: {:?}", err);
+        Error::CannotReadLogs(err)
+    })?;
+
+    let log_reader = BufReader::new(log_file);
+
+    for line in log_reader.lines() {
+        let line = line.map_err(Error::CannotReadLogs)?;
+        output.output(line)?;
+    }
+
+    debug!("finish replaying logs");
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use anyhow::Result;
+    use tempfile::tempdir;
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use crate::{
+        log_replayer::{replay_logs, PrefixedUI},
+        CYAN, UI,
+    };
+
+    #[test]
+    fn test_replay_logs() -> Result<()> {
+        let ui = UI::new(false);
+        let mut output = Vec::new();
+        let prefixed_ui = PrefixedUI::new(ui, CYAN.apply_to(">"), &mut output);
+        let dir = tempdir()?;
+        let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
+        fs::write(&log_file_path, "\none fish\ntwo fish\nred fish\nblue fish")?;
+        replay_logs(prefixed_ui, &log_file_path)?;
+
+        assert_eq!(
+            String::from_utf8(output)?,
+            "\u{1b}[36m>\u{1b}[0m \n\u{1b}[36m>\u{1b}[0m one fish\n\u{1b}[36m>\u{1b}[0m two \
+             fish\n\u{1b}[36m>\u{1b}[0m red fish\n\u{1b}[36m>\u{1b}[0m blue fish\n"
+        );
+
+        Ok(())
+    }
+}

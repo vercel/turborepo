@@ -11,6 +11,7 @@ use tokio::sync::OnceCell;
 use tracing::debug;
 #[cfg(not(test))]
 use tracing::warn;
+use turborepo_ui::{start_spinner, BOLD, CYAN, GREY, UNDERLINE};
 
 use crate::{
     commands::{
@@ -18,7 +19,6 @@ use crate::{
         CommandBase,
     },
     get_version,
-    ui::{start_spinner, BOLD, CYAN, GREY, UNDERLINE},
 };
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
@@ -305,6 +305,7 @@ mod test {
     use tempfile::{tempdir, NamedTempFile};
     use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
     use vercel_api_mock::start_test_server;
 
     use crate::{
@@ -314,7 +315,6 @@ mod test {
             CommandBase,
         },
         config::{ClientConfigLoader, RepoConfigLoader, UserConfigLoader},
-        ui::UI,
         Args,
     };
 

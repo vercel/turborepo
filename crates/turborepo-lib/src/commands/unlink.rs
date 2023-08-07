@@ -1,8 +1,9 @@
 use std::{fs, fs::File};
 
 use anyhow::{Context, Result};
+use turborepo_ui::GREY;
 
-use crate::{cli::LinkTarget, commands::CommandBase, config::RawTurboJSON, ui::GREY};
+use crate::{cli::LinkTarget, commands::CommandBase, config::RawTurboJSON};
 
 enum UnlinkSpacesResult {
     Unlinked,

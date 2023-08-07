@@ -9824,6 +9824,7 @@ dependencies = [
  "turborepo-fs",
  "turborepo-lockfiles",
  "turborepo-scm",
+ "turborepo-ui",
  "uds_windows",
  "url",
  "vercel-api-mock",
@@ -9869,6 +9870,21 @@ dependencies = [
  "turbopath",
  "wax",
  "which",
+]
+
+[[package]]
+name = "turborepo-ui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "atty",
+ "console",
+ "indicatif",
+ "lazy_static",
+ "tempfile",
+ "thiserror",
+ "tracing",
+ "turbopath",
 ]
 
 [[package]]
