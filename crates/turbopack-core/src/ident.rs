@@ -189,10 +189,6 @@ impl AssetIdent {
             value.deterministic_hash(&mut hasher);
             has_hash = true;
         }
-        // if let Some(query) = &*query.await? {
-        //     for (key, value) in query {
-        //     }
-        // }
         if let Some(fragment) = fragment {
             1_u8.deterministic_hash(&mut hasher);
             fragment.await?.deterministic_hash(&mut hasher);
