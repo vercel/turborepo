@@ -49,7 +49,7 @@ pub use transform::{
     CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransforms, OptionTransformPlugin,
     TransformContext, TransformPlugin, UnsupportedServerActionIssue,
 };
-use turbo_tasks::{trace::TraceRawVcs, RawVc, ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{rope::Rope, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
