@@ -1,6 +1,4 @@
-import path from "path";
-import { existsSync } from "fs-extra";
-import { type Project, getWorkspaceDetails } from "@turbo/workspaces";
+import { type Project } from "@turbo/workspaces";
 import { exec } from "../utils";
 import type { MigrateCommandOptions } from "../types";
 
@@ -29,8 +27,11 @@ function getCurrentVersion(
   if (packageManager === "pnpm") {
     return exec(`pnpm turbo --version`, { cwd: project.paths.root });
   }
+  if (packageManager === "npm") {
+    return exec(`npm exec -c 'turbo --version'`, { cwd: project.paths.root });
+  }
 
-  return exec(`npm exec -c 'turbo --version'`, { cwd: project.paths.root });
+  return undefined;
 }
 
 export default getCurrentVersion;
