@@ -9,6 +9,7 @@ use tracing::{debug, info};
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
+use turborepo_ui::UI;
 
 use crate::{
     commands::CommandBase, config::TurboJson, daemon::DaemonConnector, manager::Manager,
@@ -61,7 +62,7 @@ impl Run {
         }
 
         // There's some warning handling code in Go that I'm ignoring
-        if self.base.ui.is_ci() && !opts.run_opts.no_daemon {
+        if UI::is_ci() && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {

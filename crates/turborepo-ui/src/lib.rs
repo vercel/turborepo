@@ -1,6 +1,6 @@
 mod log_replayer;
 
-use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
+use std::{borrow::Cow, env, f64::consts::PI, io::IsTerminal, time::Duration};
 
 use console::{Style, StyledObject};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -48,6 +48,10 @@ pub struct UI {
 impl UI {
     pub fn new(should_strip_ansi: bool) -> Self {
         Self { should_strip_ansi }
+    }
+
+    pub fn is_ci() -> bool {
+        turborepo_ci::is_ci() && std::io::stdout().is_terminal()
     }
 
     /// Infer the color choice from environment variables and checking if stdout
