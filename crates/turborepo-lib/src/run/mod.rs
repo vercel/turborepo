@@ -62,7 +62,7 @@ impl Run {
         }
 
         // There's some warning handling code in Go that I'm ignoring
-        if UI::is_ci() && !opts.run_opts.no_daemon {
+        if turborepo_ci::is_ci() && !std::io::stdout().is_terminal() && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {
