@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use console::{Style, StyledObject};
+use console::Style;
 
 static COLORS: OnceLock<[Style; 5]> = OnceLock::new();
 

@@ -3,7 +3,7 @@ use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheOpts;
 
 use crate::{
-    cli::{Command, DryRunMode, EnvMode, LogPrefix, RunArgs},
+    cli::{Command, DryRunMode, EnvMode, LogPrefix, OutputLogsMode, RunArgs},
     daemon::{DaemonClient, DaemonConnector},
     Args,
 };
@@ -26,19 +26,34 @@ impl<'a> TryFrom<&'a Args> for Opts<'a> {
         let run_opts = RunOpts::try_from(run_args.as_ref())?;
         let cache_opts = CacheOpts::from(run_args.as_ref());
         let scope_opts = ScopeOpts::try_from(run_args.as_ref())?;
+        let runcache_opts = RunCacheOpts::from(run_args.as_ref());
 
         Ok(Self {
             run_opts,
             cache_opts,
             scope_opts,
-            runcache_opts: RunCacheOpts::default(),
+            runcache_opts,
         })
     }
 }
 
 #[derive(Debug, Default)]
 pub struct RunCacheOpts {
+    pub(crate) skip_reads: bool,
+    pub(crate) skip_writes: bool,
+    pub(crate) task_output_mode_override: Option<OutputLogsMode>,
     pub(crate) output_watcher: Option<DaemonClient<DaemonConnector>>,
+}
+
+impl<'a> From<&'a RunArgs> for RunCacheOpts {
+    fn from(args: &'a RunArgs) -> Self {
+        RunCacheOpts {
+            skip_reads: args.force.flatten().is_some_and(|f| f),
+            skip_writes: args.no_cache,
+            task_output_mode_override: args.output_logs,
+            output_watcher: None,
+        }
+    }
 }
 
 #[derive(Debug)]
