@@ -2,7 +2,10 @@
 export { getTurboRoot } from "./getTurboRoot";
 export { getTurboConfigs, getWorkspaceConfigs } from "./getTurboConfigs";
 export { searchUp } from "./searchUp";
-export { getAvailablePackageManagers } from "./managers";
+export {
+  getAvailablePackageManagers,
+  getPackageManagersBinPaths,
+} from "./managers";
 export { isFolderEmpty } from "./isFolderEmpty";
 export { validateDirectory } from "./validateDirectory";
 export {

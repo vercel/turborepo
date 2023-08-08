@@ -19,7 +19,7 @@ export default async function transform(
   if (options.list) {
     console.log(
       transforms
-        .map((transform) => `- ${chalk.cyan(transform.value)}`)
+        .map((transform) => `- ${chalk.cyan(transform.name)}`)
         .join("\n")
     );
     return process.exit(0);
@@ -56,7 +56,12 @@ export default async function transform(
       message: "Which transform would you like to apply?",
       when: !transform,
       pageSize: transforms.length,
-      choices: transforms,
+      choices: transforms.map((t) => ({
+        name: `${chalk.bold(t.name)} - ${chalk.gray(
+          t.description
+        )} ${chalk.gray(`(${t.introducedIn})`)}`,
+        value: t.name,
+      })),
     },
   ]);
 
@@ -72,9 +77,9 @@ export default async function transform(
     return process.exit(1);
   }
 
-  const transformKeys = transforms.map((transform) => transform.value);
+  const transformKeys = transforms.map((transform) => transform.name);
   const transformData = transforms.find(
-    (transform) => transform.value === selectedTransformer
+    (transform) => transform.name === selectedTransformer
   );
 
   // validate transforms
@@ -87,7 +92,7 @@ export default async function transform(
   }
 
   // run the transform
-  const result = transformData.transformer({
+  const result = await transformData.transformer({
     root,
     options,
   });
