@@ -50,10 +50,6 @@ impl UI {
         Self { should_strip_ansi }
     }
 
-    pub fn is_ci() -> bool {
-        turborepo_ci::is_ci() && std::io::stdout().is_terminal()
-    }
-
     /// Infer the color choice from environment variables and checking if stdout
     /// is a tty
     pub fn infer() -> Self {

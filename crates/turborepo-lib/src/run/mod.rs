@@ -4,6 +4,8 @@ mod global_hash;
 mod scope;
 pub mod task_id;
 
+use std::io::IsTerminal;
+
 use anyhow::{Context as ErrorContext, Result};
 use tracing::{debug, info};
 use turborepo_cache::{http::APIAuth, AsyncCache};
@@ -62,7 +64,8 @@ impl Run {
         }
 
         // There's some warning handling code in Go that I'm ignoring
-        if turborepo_ci::is_ci() && !std::io::stdout().is_terminal() && !opts.run_opts.no_daemon {
+        let is_ci_and_not_tty = turborepo_ci::is_ci() && !std::io::stdout().is_terminal();
+        if is_ci_and_not_tty && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {
