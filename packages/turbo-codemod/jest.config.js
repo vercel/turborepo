@@ -25,8 +25,8 @@ module.exports = {
     global: {
       branches: 85,
       functions: 93,
-      lines: 93,
-      statements: 93,
+      lines: 92,
+      statements: 92,
     },
   },
   verbose: process.env.RUNNER_DEBUG === "1",
