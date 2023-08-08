@@ -4,35 +4,39 @@ use std::{
     io::{BufRead, BufReader, Write},
 };
 
-use console::style;
 use tracing::{debug, warn};
 use turbopath::AbsoluteSystemPath;
 
 use crate::{Error, StyledObject, UI};
 
 #[allow(dead_code)]
-pub struct PrefixedUI<D: Display, W: Write> {
+pub struct PrefixedUI<D: Display + Clone, W: Write> {
     ui: UI,
     prefix: StyledObject<D>,
     output: W,
 }
 
 #[allow(dead_code)]
-impl<D: Display, W: Write> PrefixedUI<D, W> {
+impl<D: Display + Clone, W: Write> PrefixedUI<D, W> {
     pub fn new(ui: UI, prefix: StyledObject<D>, output: W) -> Self {
         Self { ui, prefix, output }
     }
 
-    pub fn output(&mut self, message: impl Into<String>) -> Result<(), Error> {
-        let message = style(format!("{} {}", self.prefix, message.into()));
-        writeln!(self.output, "{}", self.ui.apply(message)).map_err(Error::CannotWriteLogs)?;
+    pub fn output(&mut self, message: impl Display) -> Result<(), Error> {
+        writeln!(
+            self.output,
+            "{} {}",
+            self.ui.apply(self.prefix.clone()),
+            message
+        )
+        .map_err(Error::CannotWriteLogs)?;
 
         Ok(())
     }
 }
 
 #[allow(dead_code)]
-pub fn replay_logs<D: Display, W: Write>(
+pub fn replay_logs<D: Display + Clone, W: Write>(
     mut output: PrefixedUI<D, W>,
     log_file_name: &AbsoluteSystemPath,
 ) -> Result<(), Error> {
