@@ -6,7 +6,7 @@ use std::{
 use anyhow::Result;
 use itertools::Itertools;
 use petgraph::visit::EdgeRef;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
 use crate::{package_json::PackageJson, package_manager::PackageManager};
@@ -114,6 +114,16 @@ impl PackageGraph {
         Some(&entry.package_json)
     }
 
+    pub fn workspace_dir(&self, workspace: &WorkspaceName) -> Option<&AnchoredSystemPath> {
+        let entry = self.workspaces.get(workspace)?;
+        Some(
+            entry
+                .package_json_path()
+                .parent()
+                .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap()),
+        )
+    }
+
     pub fn workspace_info(&self, workspace: &WorkspaceName) -> Option<&WorkspaceInfo> {
         self.workspaces.get(workspace)
     }
@@ -125,6 +135,20 @@ impl PackageGraph {
     pub fn root_package_json(&self) -> &PackageJson {
         self.package_json(&WorkspaceName::Root)
             .expect("package graph was built without root package.json")
+    }
+
+    pub fn dependencies(&self, workspace: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+        let index = self.node_lookup.get(workspace)?;
+        Some(
+            self.workspace_graph
+                .neighbors_directed(*index, petgraph::Outgoing)
+                .map(|index| {
+                    self.workspace_graph
+                        .node_weight(index)
+                        .expect("node index from neighbors should be present")
+                })
+                .collect(),
+        )
     }
 
     pub fn transitive_closure<'a, I: IntoIterator<Item = &'a WorkspaceNode>>(
@@ -173,7 +197,7 @@ impl fmt::Display for WorkspaceName {
 impl fmt::Display for WorkspaceNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WorkspaceNode::Root => f.write_str("ROOT_NODE"),
+            WorkspaceNode::Root => f.write_str("___ROOT___"),
             WorkspaceNode::Workspace(workspace) => workspace.fmt(f),
         }
     }
@@ -187,6 +211,15 @@ impl From<String> for WorkspaceName {
 impl<'a> From<&'a str> for WorkspaceName {
     fn from(value: &'a str) -> Self {
         Self::from(value.to_string())
+    }
+}
+
+impl AsRef<str> for WorkspaceName {
+    fn as_ref(&self) -> &str {
+        match self {
+            WorkspaceName::Root => "//",
+            WorkspaceName::Other(workspace) => workspace,
+        }
     }
 }
 
