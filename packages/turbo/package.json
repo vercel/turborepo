@@ -9,15 +9,12 @@
   "main": "./bin/turbo",
   "scripts": {
     "postversion": "node bump-version.js",
-    "postinstall": "node install.js"
   },
   "bin": {
     "turbo": "./bin/turbo"
   },
   "files": [
-    "bin",
-    "node-platform.js",
-    "install.js"
+    "bin"
   ],
   "optionalDependencies": {
     "turbo-darwin-64": "1.10.12",
