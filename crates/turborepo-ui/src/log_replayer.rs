@@ -25,7 +25,7 @@ impl<D: Display + Clone, W: Write> PrefixedUI<D, W> {
     pub fn output(&mut self, message: impl Display) -> Result<(), Error> {
         writeln!(
             self.output,
-            "{} {}",
+            "{}{}",
             self.ui.apply(self.prefix.clone()),
             message
         )
@@ -84,8 +84,8 @@ mod tests {
 
         assert_eq!(
             String::from_utf8(output)?,
-            "\u{1b}[36m>\u{1b}[0m \n\u{1b}[36m>\u{1b}[0m one fish\n\u{1b}[36m>\u{1b}[0m two \
-             fish\n\u{1b}[36m>\u{1b}[0m red fish\n\u{1b}[36m>\u{1b}[0m blue fish\n"
+            "\u{1b}[36m>\u{1b}[0m\n\u{1b}[36m>\u{1b}[0mone fish\n\u{1b}[36m>\u{1b}[0mtwo \
+             fish\n\u{1b}[36m>\u{1b}[0mred fish\n\u{1b}[36m>\u{1b}[0mblue fish\n"
         );
 
         Ok(())
