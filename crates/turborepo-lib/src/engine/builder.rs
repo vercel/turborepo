@@ -154,9 +154,9 @@ impl<'a> EngineBuilder<'a> {
                     .package_json(&WorkspaceName::from(task_id.package()))
                     .is_none()
             {
-                // If we have a pkg it should be in WorkspaceInfos.
+                // If we have a pkg it should be in PackageGraph.
                 // If we're hitting this error something has gone wrong earlier when building
-                // WorkspaceInfos or the workspace really doesn't exist and
+                // PackageGraph or the workspace really doesn't exist and
                 // turbo.json is misconfigured.
                 return Err(Error::MissingWorkspaceFromTask {
                     package: task_id.package().to_string(),

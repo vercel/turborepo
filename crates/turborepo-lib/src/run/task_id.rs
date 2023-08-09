@@ -131,7 +131,7 @@ impl<'a> From<&'a str> for TaskName<'a> {
     }
 }
 
-// Utility method changing the liftime of an owned cow to reflect that it is
+// Utility method changing the lifetime of an owned cow to reflect that it is
 // owned
 fn static_cow<'a, T: 'a + ToOwned + ?Sized>(cow: Cow<'a, T>) -> Cow<'static, T> {
     match cow {
