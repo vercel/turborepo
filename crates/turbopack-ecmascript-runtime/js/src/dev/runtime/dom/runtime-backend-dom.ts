@@ -27,14 +27,19 @@ function commonJsRequireContext(
   return commonJsRequire(sourceModule, entry.id());
 }
 
+function fetchWebAssembly(wasmChunkPath: ChunkPath) {
+  const chunkUrl = `/${getChunkRelativeUrl(wasmChunkPath)}`;
+
+  return fetch(chunkUrl);
+}
+
 async function loadWebAssembly(
   _source: SourceInfo,
   wasmChunkPath: ChunkPath,
   importsObj: WebAssembly.Imports
 ): Promise<Exports> {
-  const chunkUrl = `/${getChunkRelativeUrl(wasmChunkPath)}`;
+  const req = fetchWebAssembly(wasmChunkPath);
 
-  const req = fetch(chunkUrl);
   const { instance } = await WebAssembly.instantiateStreaming(req, importsObj);
 
   return instance.exports;
@@ -44,11 +49,9 @@ async function loadWebAssemblyModule(
   _source: SourceInfo,
   wasmChunkPath: ChunkPath
 ): Promise<WebAssembly.Module> {
-  const chunkUrl = `/${getChunkRelativeUrl(wasmChunkPath)}`;
+  const req = fetchWebAssembly(wasmChunkPath);
 
-  const req = fetch(chunkUrl);
-
-  return WebAssembly.compileStreaming(req);
+  return await WebAssembly.compileStreaming(req);
 }
 
 (() => {
