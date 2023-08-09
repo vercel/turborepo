@@ -205,10 +205,10 @@ async fn build_internal(
         .map(|r| async move {
             Ok(match &*r.await? {
                 EntryRequest::Relative(p) => {
-                    Request::relative(p.clone().into(), QueryMap::empty(), false)
+                    Request::relative(Value::new(p.clone().into()), QueryMap::empty(), false)
                 }
                 EntryRequest::Module(m, p) => {
-                    Request::module(m.clone(), p.clone().into(), QueryMap::empty())
+                    Request::module(m.clone(), Value::new(p.clone().into()), QueryMap::empty())
                 }
             })
         })

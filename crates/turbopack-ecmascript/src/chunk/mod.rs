@@ -284,15 +284,14 @@ impl Chunk for EcmascriptChunk {
         let ident = if assets.len() == 1 && modifiers.is_empty() {
             assets[0].1
         } else {
-            AssetIdent {
+            AssetIdent::new(Value::new(AssetIdent {
                 path,
                 query: QueryMap::empty(),
                 fragment: None,
                 assets,
                 modifiers,
                 part: None,
-            }
-            .cell()
+            }))
         };
 
         Ok(ident)

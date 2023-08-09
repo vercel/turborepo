@@ -1175,7 +1175,7 @@ async fn resolve_internal(
             for pattern in patterns {
                 results.push(resolve_internal(
                     lookup_path,
-                    Request::raw(pattern, *query, *force_in_lookup_dir),
+                    Request::raw(Value::new(pattern), *query, *force_in_lookup_dir),
                     options,
                 ));
             }
@@ -1193,7 +1193,7 @@ async fn resolve_internal(
         Request::ServerRelative { path, query } => {
             let mut new_pat = path.clone();
             new_pat.push_front(".".to_string().into());
-            let relative = Request::relative(new_pat, *query, true);
+            let relative = Request::relative(Value::new(new_pat), *query, true);
 
             ResolvingIssue {
                 severity: IssueSeverity::Error.cell(),
@@ -1316,13 +1316,14 @@ async fn resolve_into_folder(
                              escapes the current directory"
                         )
                     })?;
-                let request = Request::parse(str.into()).with_query(query);
+                let request = Request::parse(Value::new(str.into())).with_query(query);
                 return Ok(resolve_internal(package_path, request, options));
             }
             ResolveIntoPackage::MainField(name) => {
                 if let Some(package_json) = &*read_package_json(package_json_path).await? {
                     if let Some(field_value) = package_json[name].as_str() {
-                        let request = Request::parse(normalize_request(field_value).into());
+                        let request =
+                            Request::parse(Value::new(normalize_request(field_value).into()));
 
                         let result = &*resolve_internal(package_path, request, options).await?;
                         // we are not that strict when a main field fails to resolve
@@ -1495,7 +1496,7 @@ async fn resolve_module_request(
         let mut new_pat = path.clone();
         new_pat.push_front(".".to_string().into());
 
-        let relative = Request::relative(new_pat, query, true);
+        let relative = Request::relative(Value::new(new_pat), query, true);
         results.push(resolve_internal(*package_path, relative, options));
     }
 
@@ -1597,7 +1598,7 @@ async fn resolve_alias_field_result(
     if let Some(value) = result.as_str() {
         return Ok(resolve_internal(
             package_path,
-            Request::parse(Pattern::Constant(value.to_string())).with_query(query),
+            Request::parse(Value::new(Pattern::Constant(value.to_string()))).with_query(query),
             resolve_options,
         )
         .with_affecting_sources(refs));
@@ -1607,7 +1608,7 @@ async fn resolve_alias_field_result(
         severity: IssueSeverity::Error.cell(),
         file_path: issue_context,
         request_type: format!("alias field ({field_name})"),
-        request: Request::parse(Pattern::Constant(issue_request.to_string())),
+        request: Request::parse(Value::new(Pattern::Constant(issue_request.to_string()))),
         resolve_options,
         error_message: Some(format!("invalid alias field value: {}", result)),
         source: OptionIssueSource::none(),
@@ -1741,7 +1742,7 @@ fn handle_exports_imports_field(
     let mut resolved_results = Vec::new();
     for path in results {
         if let Some(path) = normalize_path(path) {
-            let request = Request::relative(format!("./{}", path).into(), query, false);
+            let request = Request::relative(Value::new(format!("./{}", path).into()), query, false);
             resolved_results.push(resolve_internal(package_path, request, options));
         }
     }

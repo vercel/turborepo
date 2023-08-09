@@ -346,7 +346,7 @@ pub async fn type_resolve(
         };
         Some(Request::module(
             format!("@types/{m}"),
-            p.clone(),
+            Value::new(p.clone()),
             QueryMap::empty(),
         ))
     } else {

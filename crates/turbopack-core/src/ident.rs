@@ -1,13 +1,13 @@
 use std::fmt::Write;
 
 use anyhow::Result;
-use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash64Hasher};
 
 use crate::resolve::{pattern::QueryMap, ModulePart};
 
-#[turbo_tasks::value(serialization = "auto_for_input", shared)]
+#[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash)]
 pub struct AssetIdent {
     /// The primary path of the asset
@@ -83,52 +83,57 @@ impl ValueToString for AssetIdent {
 
 #[turbo_tasks::value_impl]
 impl AssetIdent {
+    #[turbo_tasks::function]
+    pub fn new(ident: Value<AssetIdent>) -> Vc<Self> {
+        ident.into_value().cell()
+    }
+
     /// Creates an [AssetIdent] from a [Vc<FileSystemPath>]
     #[turbo_tasks::function]
     pub fn from_path(path: Vc<FileSystemPath>) -> Vc<Self> {
-        Self::cell(AssetIdent {
+        Self::new(Value::new(AssetIdent {
             path,
             query: QueryMap::empty(),
             fragment: None,
             assets: Vec::new(),
             modifiers: Vec::new(),
             part: None,
-        })
+        }))
     }
 
     #[turbo_tasks::function]
     pub fn with_query(&self, query: Vc<QueryMap>) -> Vc<Self> {
         let mut this = self.clone();
         this.query = this.query.merge(query);
-        this.cell()
+        Self::new(Value::new(this))
     }
 
     #[turbo_tasks::function]
     pub fn with_modifier(&self, modifier: Vc<String>) -> Vc<Self> {
         let mut this = self.clone();
         this.add_modifier(modifier);
-        this.cell()
+        Self::new(Value::new(this))
     }
 
     #[turbo_tasks::function]
     pub fn with_part(&self, part: Vc<ModulePart>) -> Vc<Self> {
         let mut this = self.clone();
         this.part = Some(part);
-        this.cell()
+        Self::new(Value::new(this))
     }
 
     #[turbo_tasks::function]
     pub fn with_path(&self, path: Vc<FileSystemPath>) -> Vc<Self> {
         let mut this = self.clone();
         this.path = path;
-        this.cell()
+        Self::new(Value::new(this))
     }
 
     #[turbo_tasks::function]
     pub async fn rename_as(&self, pattern: String) -> Result<Vc<Self>> {
         let mut this = self.clone();
         this.rename_as_ref(&pattern).await?;
-        Ok(this.cell())
+        Ok(Self::new(Value::new(this)))
     }
 
     #[turbo_tasks::function]

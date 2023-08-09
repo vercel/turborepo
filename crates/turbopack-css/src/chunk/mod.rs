@@ -384,15 +384,14 @@ impl OutputAsset for CssChunk {
             ident
         } else {
             let (_, ident) = assets[0];
-            AssetIdent {
+            AssetIdent::new(Value::new(AssetIdent {
                 path: ident.path(),
                 query: QueryMap::empty(),
                 fragment: None,
                 assets,
                 modifiers: Vec::new(),
                 part: None,
-            }
-            .cell()
+            }))
         };
 
         Ok(AssetIdent::from_path(

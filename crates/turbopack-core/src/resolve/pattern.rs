@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{trace::TraceRawVcs, ReadRef, TaskInput, Value, ValueToString, Vc};
+use turbo_tasks::{trace::TraceRawVcs, ReadRef, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPath, LinkContent, LinkType,
 };
@@ -57,7 +57,7 @@ impl ValueToString for QueryMap {
 }
 
 #[turbo_tasks::value(shared, serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Clone, Debug, Default, TaskInput)]
+#[derive(PartialOrd, Ord, Hash, Clone, Debug, Default)]
 pub enum Pattern {
     Constant(String),
     #[default]

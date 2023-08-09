@@ -2,7 +2,7 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use regex::Regex;
-use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 
 use super::pattern::{Pattern, QueryMap};
 
@@ -206,7 +206,11 @@ impl Request {
                 }
             }
             Pattern::Alternatives(list) => Request::Alternatives {
-                requests: list.into_iter().map(Request::parse).collect(),
+                requests: list
+                    .into_iter()
+                    .map(Value::new)
+                    .map(Request::parse)
+                    .collect(),
             },
         }
     }
@@ -215,8 +219,8 @@ impl Request {
 #[turbo_tasks::value_impl]
 impl Request {
     #[turbo_tasks::function]
-    pub fn parse(request: Pattern) -> Vc<Self> {
-        Self::cell(Request::parse_ref(request))
+    pub fn parse(request: Value<Pattern>) -> Vc<Self> {
+        Self::cell(Request::parse_ref(request.into_value()))
     }
 
     #[turbo_tasks::function]
@@ -225,28 +229,36 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub fn raw(path: Pattern, query: Vc<QueryMap>, force_in_lookup_dir: bool) -> Vc<Self> {
+    pub fn raw(
+        request: Value<Pattern>,
+        query: Vc<QueryMap>,
+        force_in_lookup_dir: bool,
+    ) -> Vc<Self> {
         Self::cell(Request::Raw {
-            path,
+            path: request.into_value(),
             force_in_lookup_dir,
             query,
         })
     }
 
     #[turbo_tasks::function]
-    pub fn relative(path: Pattern, query: Vc<QueryMap>, force_in_lookup_dir: bool) -> Vc<Self> {
+    pub fn relative(
+        request: Value<Pattern>,
+        query: Vc<QueryMap>,
+        force_in_lookup_dir: bool,
+    ) -> Vc<Self> {
         Self::cell(Request::Relative {
-            path,
+            path: request.into_value(),
             force_in_lookup_dir,
             query,
         })
     }
 
     #[turbo_tasks::function]
-    pub fn module(module: String, path: Pattern, query: Vc<QueryMap>) -> Vc<Self> {
+    pub fn module(module: String, path: Value<Pattern>, query: Vc<QueryMap>) -> Vc<Self> {
         Self::cell(Request::Module {
             module,
-            path,
+            path: path.into_value(),
             query,
         })
     }
@@ -270,17 +282,17 @@ impl Request {
                 let mut pat = Pattern::Constant(format!("./{module}"));
                 pat.push(path.clone());
                 // TODO add query
-                Self::parse(pat)
+                Self::parse(Value::new(pat))
             }
             Request::PackageInternal { path } => {
                 let mut pat = Pattern::Constant("./".to_string());
                 pat.push(path.clone());
-                Self::parse(pat)
+                Self::parse(Value::new(pat))
             }
             Request::Unknown { path } => {
                 let mut pat = Pattern::Constant("./".to_string());
                 pat.push(path.clone());
-                Self::parse(pat)
+                Self::parse(Value::new(pat))
             }
             Request::Alternatives { requests } => {
                 let requests = requests.iter().copied().map(Request::as_relative).collect();

@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use owo_colors::OwoColorize;
 use turbo_tasks::{
     util::{FormatBytes, FormatDuration},
-    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, UpdateInfo, Vc,
+    StatsType, TransientInstance, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value, Vc,
 };
 use turbo_tasks_fs::FileSystem;
 use turbo_tasks_malloc::TurboMalloc;
@@ -269,10 +269,10 @@ async fn source(
         .iter()
         .map(|r| match r {
             EntryRequest::Relative(p) => {
-                Request::relative(p.clone().into(), QueryMap::empty(), false)
+                Request::relative(Value::new(p.clone().into()), QueryMap::empty(), false)
             }
             EntryRequest::Module(m, p) => {
-                Request::module(m.clone(), p.clone().into(), QueryMap::empty())
+                Request::module(m.clone(), Value::new(p.clone().into()), QueryMap::empty())
             }
         })
         .collect();
