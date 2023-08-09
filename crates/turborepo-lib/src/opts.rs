@@ -43,7 +43,7 @@ pub struct RunCacheOpts {
 
 #[derive(Debug)]
 pub struct RunOpts<'a> {
-    tasks: &'a [String],
+    pub(crate) tasks: &'a [String],
     concurrency: u32,
     parallel: bool,
     pub(crate) env_mode: EnvMode,
@@ -52,7 +52,7 @@ pub struct RunOpts<'a> {
     profile: Option<&'a str>,
     continue_on_error: bool,
     passthrough_args: &'a [String],
-    only: bool,
+    pub(crate) only: bool,
     dry_run: bool,
     pub(crate) dry_run_json: bool,
     pub graph_dot: bool,
