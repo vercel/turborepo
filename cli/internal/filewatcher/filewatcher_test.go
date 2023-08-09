@@ -45,7 +45,7 @@ func expectFilesystemEvent(t *testing.T, ch <-chan Event, expected Event) {
 				return
 			}
 		case <-timeout:
-			t.Errorf("Timed out waiting for filesystem event at %v %v", expected.EventType, expected.Path)
+			t.Fatalf("Timed out waiting for filesystem event at %v %v", expected.EventType, expected.Path)
 			return
 		}
 	}
@@ -357,7 +357,7 @@ func TestFileWatchingSubfolderRename(t *testing.T) {
 // a delete event will be sent
 //
 // ✅ macOS
-// ❌ Linux - L415 fails because renames are respected and creating a file emits an event
+// ✅ Linux
 // ❌ Windows - you cannot rename a watched folder (see https://github.com/fsnotify/fsnotify/issues/356)
 func TestFileWatchingRootRename(t *testing.T) {
 	logger := hclog.Default()
@@ -536,10 +536,10 @@ func TestFileWatchSymlinkDelete(t *testing.T) {
 }
 
 // TestFileWatchSymlinkRename tests that when a symlink is renamed,
-// file watching raises a rename event for the virtual path
+// file watching raises a create event for the virtual path
 //
 // ✅ macOS
-// ❌ Linux - raises an event for creating the file
+// ✅ Linux
 // ❌ Windows - raises an event for creating the file
 func TestFileWatchSymlinkRename(t *testing.T) {
 	logger := hclog.Default()
@@ -651,11 +651,10 @@ func TestFileWatchRootParentRename(t *testing.T) {
 	// We got the root delete event, no guarantees about what happens after that
 }
 
-// TestFileWatchRootParentDelete tests that when the parent directory of the root is deleted,
-// file watching stops reporting events
+// TestFileWatchRootParentDelete tests that when the parent directory of the root is deleted
 //
 // ✅ macOS
-// ❌ Linux - L721 no create event is emitted
+// ✅ Linux
 // ❌ Windows - L721 no create event is emitted
 func TestFileWatchRootParentDelete(t *testing.T) {
 	logger := hclog.Default()
