@@ -22,6 +22,9 @@ pub fn get_terminal_package_colors() -> &'static [Style; 5] {
     })
 }
 
+/// Selects colors for tasks and caches accordingly.
+/// Shared between tasks so allows for concurrent access.
+#[derive(Default)]
 pub struct ColorSelector {
     idx: AtomicUsize,
     cache: HashMap<String, Style>,

@@ -70,7 +70,6 @@ impl DaemonClient<DaemonConnector> {
         self.stop().await?.connect().await.map_err(Into::into)
     }
 
-    #[allow(dead_code)]
     pub async fn get_changed_outputs(
         &mut self,
         hash: String,

@@ -1,5 +1,6 @@
 mod color_selector;
 mod log_replayer;
+mod prefixed;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
@@ -8,7 +9,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use thiserror::Error;
 
-pub use crate::color_selector::ColorSelector;
+pub use crate::{color_selector::ColorSelector, log_replayer::replay_logs, prefixed::PrefixedUI};
 
 #[derive(Debug, Error)]
 pub enum Error {

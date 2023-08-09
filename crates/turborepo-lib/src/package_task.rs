@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub struct PackageTask {
-    task_id: String,
+    pub task_id: String,
     task: String,
     package_name: String,
     pkg: PackageJson,

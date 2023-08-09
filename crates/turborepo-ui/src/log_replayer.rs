@@ -7,8 +7,9 @@ use std::{
 use tracing::{debug, warn};
 use turbopath::AbsoluteSystemPath;
 
-use crate::{Error, StyledObject, UI};
+use crate::{prefixed::PrefixedUI, Error, StyledObject, UI};
 
+<<<<<<< HEAD
 /// Writes to `output` with a prefix. The prefix is styled with `ui`.
 #[allow(dead_code)]
 pub struct PrefixedUI<D, W> {
@@ -40,9 +41,8 @@ impl<D: Display + Clone, W: Write> PrefixedUI<D, W> {
     }
 }
 
-#[allow(dead_code)]
-pub fn replay_logs<D: Display + Clone, W: Write>(
-    mut output: PrefixedUI<D, W>,
+pub fn replay_logs<W: Write>(
+    output: &mut PrefixedUI<W>,
     log_file_name: &AbsoluteSystemPath,
 ) -> Result<(), Error> {
     debug!("start replaying logs");
@@ -81,11 +81,11 @@ mod tests {
     fn test_replay_logs() -> Result<()> {
         let ui = UI::new(false);
         let mut output = Vec::new();
-        let prefixed_ui = PrefixedUI::new(ui, CYAN.apply_to(">"), &mut output);
+        let mut prefixed_ui = PrefixedUI::new(ui, CYAN.apply_to(">"), &mut output);
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
         fs::write(&log_file_path, "\none fish\ntwo fish\nred fish\nblue fish")?;
-        replay_logs(prefixed_ui, &log_file_path)?;
+        replay_logs(&mut prefixed_ui, &log_file_path)?;
 
         assert_eq!(
             String::from_utf8(output)?,
