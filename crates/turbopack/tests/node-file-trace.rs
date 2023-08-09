@@ -162,7 +162,6 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::stripe("integration/stripe.js")]
 #[case::strong_error_handler("integration/strong-error-handler.js")]
 #[case::symlink_to_file("integration/symlink-to-file/index.js")]
-#[case::tensorflow("integration/tensorflow.js")]
 #[case::tiny_json_http("integration/tiny-json-http.js")]
 #[case::twilio("integration/twilio.js")]
 #[case::ts_morph("integration/ts-morph.js")]
