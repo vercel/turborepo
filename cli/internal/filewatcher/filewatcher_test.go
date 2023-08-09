@@ -66,10 +66,15 @@ func expectNoFilesystemEvent(t *testing.T, ch <-chan Event) {
 	}
 }
 
+// Hack to avoid duplicate filenames. Count the number of test files we create.
+// Not thread-safe
+var testFileCount = 0
+
 func expectWatching(t *testing.T, c *testClient, dirs []turbopath.AbsoluteSystemPath) {
 	t.Helper()
-	now := time.Now()
-	filename := fmt.Sprintf("test-%v", now.UnixMilli())
+	thisFileCount := testFileCount
+	testFileCount++
+	filename := fmt.Sprintf("test-%v", thisFileCount)
 	for _, dir := range dirs {
 		file := dir.UntypedJoin(filename)
 		err := file.WriteFile([]byte("hello"), 0755)
