@@ -559,4 +559,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://sliitfoss.org",
     pinned: true,
   },
+  {
+    caption: "Vontigo",
+    image: "/images/logos/vontigo.svg",
+    infoLink: "https://www.vontigo.org",
+    pinned: true,
+  },
 ];
