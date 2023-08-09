@@ -10,7 +10,7 @@ use turbopath::AbsoluteSystemPath;
 use crate::{Error, StyledObject, UI};
 
 #[allow(dead_code)]
-pub struct PrefixedUI<D: Display + Clone, W: Write> {
+pub struct PrefixedUI<D, W> {
     ui: UI,
     prefix: StyledObject<D>,
     output: W,
