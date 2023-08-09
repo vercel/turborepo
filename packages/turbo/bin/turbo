@@ -191,7 +191,7 @@ function getBinaryPath() {
     const selfPath = require.resolve('turbo/package');
 
     let previous = null;
-    let current = path.join(selfPath, '..', 'package-lock.json');
+    let current = path.join(selfPath, '..', '..', 'package-lock.json');
 
     for (let i = 0; previous !== current && i < MAX_LOOKUPS; i++) {
       try {
