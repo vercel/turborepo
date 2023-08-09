@@ -19,6 +19,7 @@ mod opts;
 mod package_graph;
 mod package_json;
 mod package_manager;
+mod package_task;
 mod rewrite_json;
 mod run;
 mod shim;
