@@ -9,7 +9,9 @@ use turbo_tasks::{unit, IntoTraitRef, ReadRef, TransientInstance, Vc};
 use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack_core::{
     error::PrettyPrintError,
-    issue::{Issue, IssueContextExt, IssueSeverity, OptionIssueProcessingPathItems, PlainIssue},
+    issue::{
+        Issue, IssueDescriptionExt, IssueSeverity, OptionIssueProcessingPathItems, PlainIssue,
+    },
     server_fs::ServerFileSystem,
     version::{
         NotFoundVersion, PartialUpdate, TotalUpdate, Update, Version, VersionState,
@@ -288,7 +290,7 @@ impl Issue for FatalStreamIssue {
     }
 
     #[turbo_tasks::function]
-    fn context(&self) -> Vc<FileSystemPath> {
+    fn file_path(&self) -> Vc<FileSystemPath> {
         ServerFileSystem::new().root().join(self.resource.clone())
     }
 

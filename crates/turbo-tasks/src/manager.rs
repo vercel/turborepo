@@ -65,6 +65,8 @@ pub trait TurboTasksCallApi: Sync + Send {
 }
 
 pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
+    fn pin(&self) -> Arc<dyn TurboTasksApi>;
+
     fn invalidate(&self, task: TaskId);
     fn invalidate_with_reason(&self, task: TaskId, reason: StaticOrArc<dyn InvalidationReason>);
 
@@ -337,16 +339,18 @@ impl<B: Backend + 'static> TurboTasks<B> {
     }
 
     /// Creates a new root task
-    pub fn spawn_root_task(
-        &self,
-        functor: impl Fn() -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>
-            + Sync
-            + Send
-            + 'static,
-    ) -> TaskId {
-        let id = self
-            .backend
-            .create_transient_task(TransientTaskType::Root(Box::new(functor)), self);
+    pub fn spawn_root_task<T, F, Fut>(&self, functor: F) -> TaskId
+    where
+        F: Fn() -> Fut + Send + Sync + Clone + 'static,
+        Fut: Future<Output = Result<Vc<T>>> + Send,
+    {
+        let id = self.backend.create_transient_task(
+            TransientTaskType::Root(Box::new(move || {
+                let functor = functor.clone();
+                Box::pin(async move { Ok(functor().await?.node) })
+            })),
+            self,
+        );
         self.schedule(id);
         id
     }
@@ -355,13 +359,14 @@ impl<B: Backend + 'static> TurboTasks<B> {
     /// Creates a new root task, that is only executed once.
     /// Dependencies will not invalidate the task.
     #[track_caller]
-    pub fn spawn_once_task(
-        &self,
-        future: impl Future<Output = Result<RawVc>> + Send + 'static,
-    ) -> TaskId {
-        let id = self
-            .backend
-            .create_transient_task(TransientTaskType::Once(Box::pin(future)), self);
+    pub fn spawn_once_task<T, Fut>(&self, future: Fut) -> TaskId
+    where
+        Fut: Future<Output = Result<Vc<T>>> + Send + 'static,
+    {
+        let id = self.backend.create_transient_task(
+            TransientTaskType::Once(Box::pin(async move { Ok(future.await?.node) })),
+            self,
+        );
         self.schedule(id);
         id
     }
@@ -375,12 +380,14 @@ impl<B: Backend + 'static> TurboTasks<B> {
             let result = future.await?;
             tx.send(result)
                 .map_err(|_| anyhow!("unable to send result"))?;
-            Ok(Completion::new().node)
+            Ok(Completion::new())
         });
         // INVALIDATION: A Once task will never invalidate, therefore we don't need to
         // track a dependency
         let raw_result = read_task_output_untracked(self, task_id, false).await?;
-        raw_result.into_read_untracked::<Completion>(self).await?;
+        raw_result
+            .into_read_untracked_with_turbo_tasks::<Completion>(self)
+            .await?;
 
         Ok(rx.await?)
     }
@@ -833,7 +840,7 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
     ) -> TaskId {
         self.spawn_once_task(async move {
             future.await?;
-            Ok(Completion::new().node)
+            Ok(Completion::new())
         })
     }
 
@@ -849,7 +856,7 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
         }
         self.spawn_once_task(async move {
             future.await?;
-            Ok(Completion::new().node)
+            Ok(Completion::new())
         })
     }
 
@@ -863,12 +870,16 @@ impl<B: Backend + 'static> TurboTasksCallApi for TurboTasks<B> {
             this.finish_primary_job();
             future.await?;
             this.begin_primary_job();
-            Ok(Completion::new().node)
+            Ok(Completion::new())
         })
     }
 }
 
 impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
+    fn pin(&self) -> Arc<dyn TurboTasksApi> {
+        self.pin()
+    }
+
     #[instrument(level = Level::INFO, skip_all, name = "invalidate")]
     fn invalidate(&self, task: TaskId) {
         self.backend.invalidate_task(task, self);
@@ -1272,7 +1283,9 @@ pub async fn run_once<T: Send + 'static>(
     // INVALIDATION: A Once task will never invalidate, therefore we don't need to
     // track a dependency
     let raw_result = read_task_output_untracked(&*tt, task_id, false).await?;
-    raw_result.into_read_untracked::<Completion>(&*tt).await?;
+    raw_result
+        .into_read_untracked_with_turbo_tasks::<Completion>(&*tt)
+        .await?;
 
     Ok(rx.await?)
 }
@@ -1297,7 +1310,9 @@ pub async fn run_once_with_reason<T: Send + 'static>(
     // INVALIDATION: A Once task will never invalidate, therefore we don't need to
     // track a dependency
     let raw_result = read_task_output_untracked(&*tt, task_id, false).await?;
-    raw_result.into_read_untracked::<Completion>(&*tt).await?;
+    raw_result
+        .into_read_untracked_with_turbo_tasks::<Completion>(&*tt)
+        .await?;
 
     Ok(rx.await?)
 }
@@ -1449,21 +1464,6 @@ pub(crate) async fn read_task_cell(
 ) -> Result<CellContent> {
     loop {
         match this.try_read_task_cell(id, index)? {
-            Ok(result) => return Ok(result),
-            Err(listener) => listener.await,
-        }
-    }
-}
-
-/// INVALIDATION: Be careful with this, it will not track dependencies, so
-/// using it could break cache invalidation.
-pub(crate) async fn read_task_cell_untracked(
-    this: &dyn TurboTasksApi,
-    id: TaskId,
-    index: CellId,
-) -> Result<CellContent> {
-    loop {
-        match this.try_read_task_cell_untracked(id, index)? {
             Ok(result) => return Ok(result),
             Err(listener) => listener.await,
         }

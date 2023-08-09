@@ -4,7 +4,11 @@ module.exports = {
   testEnvironment: "node",
   testPathIgnorePatterns: ["/__fixtures__/", "/__tests__/test-utils.ts"],
   coveragePathIgnorePatterns: ["/__fixtures__/", "/__tests__/test-utils.ts"],
-  transformIgnorePatterns: ["/node_modules/(?!(ansi-regex)/)"],
+  transformIgnorePatterns: [
+    "node_modules/*",
+    "packages/turbo-utils/*",
+    "packages/turbo-workspaces/*",
+  ],
   modulePathIgnorePatterns: ["<rootDir>/node_modules", "<rootDir>/dist"],
   collectCoverage: true,
   verbose: process.env.RUNNER_DEBUG === "1",

@@ -55,11 +55,11 @@ export async function packageManager({
       // prompt for package manager if it wasn't provided as an argument, or if it was
       // provided, but isn't available (always allow npm)
       !packageManager ||
-      !availablePackageManagers?.[packageManager as PackageManager]?.available,
+      !availablePackageManagers?.[packageManager as PackageManager],
     choices: ["npm", "pnpm", "yarn"].map((p) => ({
       name: p,
       value: p,
-      disabled: availablePackageManagers?.[p as PackageManager]?.available
+      disabled: availablePackageManagers?.[p as PackageManager]
         ? false
         : `not installed`,
     })),
@@ -72,6 +72,6 @@ export async function packageManager({
 
   return {
     name: selectedPackageManager,
-    version: availablePackageManagers[selectedPackageManager].version,
+    version: availablePackageManagers[selectedPackageManager],
   };
 }

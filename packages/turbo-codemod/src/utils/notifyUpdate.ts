@@ -2,7 +2,7 @@ import chalk from "chalk";
 import checkForUpdate from "update-check";
 
 import cliPkgJson from "../../package.json";
-import getWorkspaceImplementation from "./getPackageManager";
+import { getWorkspaceDetails } from "@turbo/workspaces";
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
 
@@ -10,7 +10,9 @@ export default async function notifyUpdate(): Promise<void> {
   try {
     const res = await update;
     if (res?.latest) {
-      const ws = getWorkspaceImplementation();
+      const project = await getWorkspaceDetails({ root: process.cwd() });
+
+      const { packageManager } = project || {};
 
       console.log();
       console.log(
@@ -19,9 +21,9 @@ export default async function notifyUpdate(): Promise<void> {
       console.log(
         "You can update by running: " +
           chalk.cyan(
-            ws === "yarn"
+            packageManager === "yarn"
               ? "yarn global add @turbo/codemod"
-              : ws === "pnpm"
+              : packageManager === "pnpm"
               ? "pnpm i -g @turbo/codemod"
               : "npm i -g @turbo/codemod"
           )

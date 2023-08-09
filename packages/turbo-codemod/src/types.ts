@@ -2,9 +2,11 @@ import { TransformerResults } from "./runner";
 
 export type Transformer = {
   name: string;
-  value: string;
+  description: string;
   introducedIn: string;
-  transformer: (args: TransformerArgs) => TransformerResults;
+  transformer: (
+    args: TransformerArgs
+  ) => Promise<TransformerResults> | TransformerResults;
 };
 
 export type TransformerOptions = {

@@ -66,8 +66,8 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
-    pub(crate) fn git2_error_context(error: git2::Error, context: String) -> Self {
-        Error::Git2(error, context, Backtrace::capture())
+    pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
+        Error::Git2(error, error_context, Backtrace::capture())
     }
 }
 

@@ -34,7 +34,7 @@ use turbopack_core::{
     context::AssetContext,
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
-    issue::{Issue, IssueContextExt},
+    issue::{Issue, IssueDescriptionExt},
     module::Module,
     output::OutputAsset,
     reference_type::{EntryReferenceSubType, ReferenceType},
@@ -156,7 +156,7 @@ async fn run(resource: PathBuf) -> Result<()> {
         snapshot_issues(plain_issues, out.join("issues".to_string()), &REPO_ROOT)
             .await
             .context("Unable to handle issues")?;
-        Ok(unit().node)
+        Ok(unit())
     });
     tt.wait_task_completion(task, true).await?;
 
@@ -239,7 +239,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
             output_transforms: vec![],
         },
     ));
-    let context: Vc<Box<dyn AssetContext>> = Vc::upcast(ModuleAssetContext::new(
+    let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(ModuleAssetContext::new(
         Vc::cell(HashMap::new()),
         compile_time_info,
         ModuleOptionsContext {
@@ -278,9 +278,9 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         .cell(),
     ));
 
-    let runtime_entries = maybe_load_env(context, project_path)
+    let runtime_entries = maybe_load_env(asset_context, project_path)
         .await?
-        .map(|asset| EvaluatableAssets::one(asset.to_evaluatable(context)));
+        .map(|asset| EvaluatableAssets::one(asset.to_evaluatable(asset_context)));
 
     let chunk_root_path = path.join("output".to_string());
     let static_root_path = path.join("static".to_string());
@@ -299,7 +299,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 static_root_path,
                 env,
             )
-            .minify_type(options.minify_type.into())
+            .minify_type(options.minify_type)
             .runtime_type(options.runtime_type)
             .build(),
         ),
@@ -311,7 +311,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         .copied()
         .collect();
 
-    let entry_module = context.process(
+    let entry_module = asset_context.process(
         Vc::upcast(FileSource::new(entry_asset)),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
     );

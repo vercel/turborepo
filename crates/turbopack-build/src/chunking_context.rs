@@ -1,8 +1,10 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
+use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
-    TryJoinIterExt, Value, Vc,
+    trace::TraceRawVcs,
+    TaskInput, TryJoinIterExt, Value, Vc,
 };
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
@@ -22,8 +24,21 @@ use crate::ecmascript::node::{
     chunk::EcmascriptBuildNodeChunk, entry::chunk::EcmascriptBuildNodeEntryChunk,
 };
 
-#[derive(Debug, Default)]
-#[turbo_tasks::value(shared)]
+#[derive(
+    Debug,
+    Default,
+    TaskInput,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    TraceRawVcs,
+)]
 pub enum MinifyType {
     #[default]
     Minify,
@@ -32,28 +47,28 @@ pub enum MinifyType {
 
 /// A builder for [`Vc<BuildChunkingContext>`].
 pub struct BuildChunkingContextBuilder {
-    context: BuildChunkingContext,
+    chunking_context: BuildChunkingContext,
 }
 
 impl BuildChunkingContextBuilder {
-    pub fn minify_type(mut self, minify_type: Vc<MinifyType>) -> Self {
-        self.context.minify_type = minify_type;
+    pub fn minify_type(mut self, minify_type: MinifyType) -> Self {
+        self.chunking_context.minify_type = minify_type;
         self
     }
 
     pub fn runtime_type(mut self, runtime_type: RuntimeType) -> Self {
-        self.context.runtime_type = runtime_type;
+        self.chunking_context.runtime_type = runtime_type;
         self
     }
 
     pub fn layer(mut self, layer: impl Into<String>) -> Self {
-        self.context.layer = Some(layer.into());
+        self.chunking_context.layer = Some(layer.into());
         self
     }
 
     /// Builds the chunking context.
     pub fn build(self) -> Vc<BuildChunkingContext> {
-        BuildChunkingContext::new(Value::new(self.context))
+        BuildChunkingContext::new(Value::new(self.chunking_context))
     }
 }
 
@@ -77,7 +92,7 @@ pub struct BuildChunkingContext {
     /// The kind of runtime to include in the output.
     runtime_type: RuntimeType,
     /// Whether to minify resulting chunks
-    minify_type: Vc<MinifyType>,
+    minify_type: MinifyType,
 }
 
 impl BuildChunkingContext {
@@ -90,7 +105,7 @@ impl BuildChunkingContext {
         environment: Vc<Environment>,
     ) -> BuildChunkingContextBuilder {
         BuildChunkingContextBuilder {
-            context: BuildChunkingContext {
+            chunking_context: BuildChunkingContext {
                 context_path,
                 output_root,
                 chunk_root_path,
@@ -98,7 +113,7 @@ impl BuildChunkingContext {
                 layer: None,
                 environment,
                 runtime_type: Default::default(),
-                minify_type: MinifyType::Minify.cell(),
+                minify_type: MinifyType::Minify,
             },
         }
     }
@@ -113,7 +128,7 @@ impl BuildChunkingContext {
         self.runtime_type
     }
 
-    pub fn minify_type(&self) -> Vc<MinifyType> {
+    pub fn minify_type(&self) -> MinifyType {
         self.minify_type
     }
 }
@@ -296,9 +311,9 @@ impl ChunkingContext for BuildChunkingContext {
 
     #[turbo_tasks::function]
     async fn with_layer(self: Vc<Self>, layer: String) -> Result<Vc<Self>> {
-        let mut context = self.await?.clone_value();
-        context.layer = (!layer.is_empty()).then(|| layer.to_string());
-        Ok(BuildChunkingContext::new(Value::new(context)))
+        let mut chunking_context = self.await?.clone_value();
+        chunking_context.layer = (!layer.is_empty()).then(|| layer.to_string());
+        Ok(BuildChunkingContext::new(Value::new(chunking_context)))
     }
 
     #[turbo_tasks::function]

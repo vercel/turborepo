@@ -7,7 +7,7 @@ describe("get-transforms-for-migration", () => {
       toVersion: "1.10.0",
     });
 
-    expect(results.map((transform) => transform.value)).toEqual([
+    expect(results.map((transform) => transform.name)).toEqual([
       "add-package-manager",
       "create-turbo-config",
       "migrate-env-var-dependencies",
