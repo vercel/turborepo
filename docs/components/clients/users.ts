@@ -559,4 +559,10 @@ export const users: Array<TurboUser> = [
     infoLink: "https://sliitfoss.org",
     pinned: true,
   },
+  {
+    caption: "Mixcore Studio",
+    image: "/images/logos/mixcore-studio.svg",
+    infoLink: "https://mixcore.studio",
+    pinned: true,
+  },
 ];
