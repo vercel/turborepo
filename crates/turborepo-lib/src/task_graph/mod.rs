@@ -119,7 +119,7 @@ pub struct TaskDefinition {
 
     // Persistent indicates whether the Task is expected to exit or not
     // Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
-    persistent: bool,
+    pub persistent: bool,
 }
 
 impl BookkeepingTaskDefinition {
