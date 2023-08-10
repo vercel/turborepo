@@ -66,9 +66,9 @@ impl WebAssemblyModuleAsset {
 
     #[turbo_tasks::function]
     async fn loader(&self) -> Result<Vc<EcmascriptModuleAsset>> {
-        let query = self.source.ident().query().await?;
+        let query = &*self.source.ident().query().await?;
 
-        let loader_source = if query.contains_key("module") {
+        let loader_source = if query == "?module" {
             compiling_loader_source(self.source)
         } else {
             instantiating_loader_source(self.source)
