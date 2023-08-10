@@ -85,7 +85,7 @@ function getBinaryPath() {
       const resolvedPath = require.resolve(`${correctBinary}`);
       console.warn('Installation has succeeded.');
       return resolvedPath;
-      } catch (e) {
+    } catch (e) {
       console.warn('Installation has failed.');
     }
   }
@@ -159,7 +159,7 @@ function getBinaryPath() {
   // Investigate other failure modes.
 
   // Has the wrong platform's binaries available.
-  const availableBinaries = availablePlatforms.map(platform => availableArchs.map(arch => `turbo-${platform}-${arch}/bin/turbo${platform === 'windows' ? '.exe': ''}`)).flat();
+  const availableBinaries = availablePlatforms.map(platform => availableArchs.map(arch => `turbo-${platform}-${arch}/bin/turbo${platform === 'windows' ? '.exe' : ''}`)).flat();
   const definitelyWrongBinaries = availableBinaries.filter(binary => binary !== correctBinary || binary !== correctBinary);;
   const otherInstalled = definitelyWrongBinaries.filter(binaryPath => {
     try {
@@ -251,12 +251,12 @@ function getBinaryPath() {
 
 // Run the binary we got.
 try {
-  require("child_process").execFileSync(
+  child_process.execFileSync(
     getBinaryPath(),
     process.argv.slice(2),
     { stdio: "inherit" }
   );
-} catch(e) {
-    if(e && e.status) process.exit(e.status);
-    throw e;
+} catch (e) {
+  if (e && e.status) process.exit(e.status);
+  throw e;
 }
