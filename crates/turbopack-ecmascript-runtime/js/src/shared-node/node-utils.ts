@@ -48,27 +48,38 @@ externalRequire.resolve = (
   return require.resolve(id, options);
 };
 
-async function readWebAssembly(path: string) {
-  const { readFile } = require("fs/promises") as typeof import("fs/promises");
+function readWebAssemblyAsResponse(path: string) {
+  const { createReadStream } = require("fs") as typeof import("fs");
+  const { Readable } = require("stream") as typeof import("stream");
 
-  return await readFile(path);
+  const stream = createReadStream(path);
+
+  // @ts-ignore unfortunately there's a slight type mismatch with the stream.
+  return new Response(Readable.toWeb(stream), {
+    headers: {
+      "content-type": "application/wasm",
+    },
+  });
 }
 
 async function compileWebAssemblyFromPath(
   path: string
 ): Promise<WebAssembly.Module> {
-  const buffer = await readWebAssembly(path);
+  const response = readWebAssemblyAsResponse(path);
 
-  return await WebAssembly.compile(buffer);
+  return await WebAssembly.compileStreaming(response);
 }
 
 async function instantiateWebAssemblyFromPath(
   path: string,
   importsObj: WebAssembly.Imports
 ): Promise<Exports> {
-  const buffer = await readWebAssembly(path);
+  const response = readWebAssemblyAsResponse(path);
 
-  const { instance } = await WebAssembly.instantiate(buffer, importsObj);
+  const { instance } = await WebAssembly.instantiateStreaming(
+    response,
+    importsObj
+  );
 
   return instance.exports;
 }
