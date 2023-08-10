@@ -37,9 +37,10 @@ function getBinaryPath() {
   const TURBO_BINARY_PATH = process.env.TURBO_BINARY_PATH;
   if (TURBO_BINARY_PATH) {
     if (!fs.existsSync(TURBO_BINARY_PATH)) {
-      console.warn(
-        `[turbo] Ignoring bad configuration: TURBO_BINARY_PATH=${TURBO_BINARY_PATH}`
-      );
+      console.error(`Turborepo was unable to find the executable specified by TURBO_BINARY_PATH:\n${TURBO_BINARY_PATH}`);
+      console.error();
+      console.error(`TURBO_BINARY_PATH is intended for development use-cases. You likely want to unset the environment variable.`);
+      process.exit(1);
     } else {
       return TURBO_BINARY_PATH;
     }
