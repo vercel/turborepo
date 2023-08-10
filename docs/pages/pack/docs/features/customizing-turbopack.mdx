@@ -46,7 +46,7 @@ module.exports = {
 ```
 
 <Callout type="info">
-  Note: Prior to Next.js version 13.4.4, `experimental.turbo.rules` was named `experimental.turbo.loaders`.
+  Note: Prior to Next.js version 13.4.4, `experimental.turbo.rules` was named `experimental.turbo.loaders` and only accepted file extensions like `.mdx` instead of `*.mdx`.
 </Callout>
 
 If you need to pass something like the result of importing an external package as a loader option, it's possible to wrap the webpack loader with your own, specifying options there. **This is an interim solution and should not be necessary in the future.** This loader wraps `@mdx-js/loader` and configures the `rehypePrism` rehype plugin:
@@ -75,7 +75,7 @@ module.exports = {
   experimental: {
     turbo: {
       rules: {
-        '.mdx': ['./my-mdx-loader'],
+        '*.mdx': ['./my-mdx-loader'],
       },
     },
   },
