@@ -19,7 +19,7 @@ use self::{
         ResolveIntoPackage, ResolveModules, ResolveModulesOptions, ResolveOptions,
     },
     parse::Request,
-    pattern::{Pattern, QueryMap},
+    pattern::Pattern,
     remap::{ExportsField, ImportsField},
 };
 use crate::{
@@ -943,16 +943,17 @@ fn merge_results_with_affecting_sources(
 pub async fn resolve_raw(
     lookup_dir: Vc<FileSystemPath>,
     path: Vc<Pattern>,
-    query: Vc<QueryMap>,
     force_in_lookup_dir: bool,
 ) -> Result<Vc<ResolveResult>> {
-    async fn to_result(path: Vc<FileSystemPath>, query: Vc<QueryMap>) -> Result<Vc<ResolveResult>> {
+    async fn to_result(path: Vc<FileSystemPath>) -> Result<Vc<ResolveResult>> {
         let RealPathResult { path, symlinks } = &*path.realpath_with_links().await?;
         Ok(ResolveResult::source_with_affecting_sources(
-            Vc::upcast(FileSource::new_with_query(*path, query)),
+            Vc::upcast(FileSource::new(*path)),
             symlinks
                 .iter()
-                .map(|link_path| Vc::upcast(FileSource::new(*link_path)))
+                .copied()
+                .map(FileSource::new)
+                .map(Vc::upcast)
                 .collect(),
         )
         .cell())
@@ -977,7 +978,7 @@ pub async fn resolve_raw(
         } else {
             for m in matches.iter() {
                 if let PatternMatch::File(_, path) = m {
-                    results.push(to_result(*path, query).await?);
+                    results.push(to_result(*path).await?);
                 }
             }
         }
@@ -995,7 +996,7 @@ pub async fn resolve_raw(
         }
         for m in matches.iter() {
             if let PatternMatch::File(_, path) = m {
-                results.push(to_result(*path, query).await?);
+                results.push(to_result(*path).await?);
             }
         }
     }
@@ -1302,7 +1303,7 @@ async fn resolve_internal(
 async fn resolve_into_folder(
     package_path: Vc<FileSystemPath>,
     options: Vc<ResolveOptions>,
-    query: Vc<QueryMap>,
+    query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     let package_json_path = package_path.join("package.json".to_string());
     let options_value = options.await?;
@@ -1316,7 +1317,7 @@ async fn resolve_into_folder(
                              escapes the current directory"
                         )
                     })?;
-                let request = Request::parse(Value::new(str.into())).with_query(query);
+                let request = Request::parse(Value::new(str.into()));
                 return Ok(resolve_internal(package_path, request, options));
             }
             ResolveIntoPackage::MainField(name) => {
@@ -1355,7 +1356,8 @@ async fn resolve_into_folder(
                         conditions,
                         unspecified_conditions,
                         query,
-                    );
+                    )
+                    .await;
                 }
             }
         }
@@ -1369,56 +1371,54 @@ async fn resolve_module_request(
     options_value: &ResolveOptions,
     module: &str,
     path: &Pattern,
-    query: Vc<QueryMap>,
+    query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     // Check alias field for module aliases first
     for in_package in options_value.in_package.iter() {
-        match in_package {
-            ResolveInPackage::AliasField(field) => {
-                let FindContextFileResult::Found(package_json_path, refs) =
-                    &*find_context_file(lookup_path, package_json()).await?
-                else {
-                    continue;
-                };
+        // resolve_module_request is called when importing a node
+        // module, not a PackageInternal one, so the imports field
+        // doesn't apply.
+        let ResolveInPackage::AliasField(field) = in_package else {
+            continue;
+        };
 
-                let read = read_package_json(*package_json_path).await?;
-                let Some(package_json) = &*read else {
-                    continue;
-                };
+        let FindContextFileResult::Found(package_json_path, refs) =
+            &*find_context_file(lookup_path, package_json()).await?
+        else {
+            continue;
+        };
 
-                let Some(field_value) = package_json[field].as_object() else {
-                    continue;
-                };
+        let read = read_package_json(*package_json_path).await?;
+        let Some(package_json) = &*read else {
+            continue;
+        };
 
-                let package_path = package_json_path.parent();
-                let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
+        let Some(field_value) = package_json[field].as_object() else {
+            continue;
+        };
 
-                let Some(request) = full_pattern.into_string() else {
-                    continue;
-                };
+        let package_path = package_json_path.parent();
+        let full_pattern = Pattern::concat([module.to_string().into(), path.clone()]);
 
-                let Some(value) = field_value.get(&request) else {
-                    continue;
-                };
+        let Some(request) = full_pattern.into_string() else {
+            continue;
+        };
 
-                return resolve_alias_field_result(
-                    value,
-                    refs.clone(),
-                    package_path,
-                    options,
-                    *package_json_path,
-                    &request,
-                    field,
-                    query,
-                )
-                .await;
-            }
-            ResolveInPackage::ImportsField { .. } => {
-                // resolve_module_request is called when importing a node
-                // module, not a PackageInternal one, so the imports field
-                // doesn't apply.
-            }
-        }
+        let Some(value) = field_value.get(&request) else {
+            continue;
+        };
+
+        return resolve_alias_field_result(
+            value,
+            refs.clone(),
+            package_path,
+            options,
+            *package_json_path,
+            &request,
+            field,
+            query,
+        )
+        .await;
     }
 
     let result = find_package(
@@ -1449,7 +1449,7 @@ async fn resolve_module_request(
             results.push(resolve_into_folder(*package_path, options, query).await?);
         }
         if !could_match_others {
-            break;
+            continue;
         }
 
         for resolve_into_package in options_value.into_package.iter() {
@@ -1475,16 +1475,19 @@ async fn resolve_module_request(
                         todo!("pattern into an exports field is not implemented yet");
                     };
 
-                    results.push(handle_exports_imports_field(
-                        *package_path,
-                        package_json_path,
-                        options,
-                        exports_field,
-                        &format!(".{path}"),
-                        conditions,
-                        unspecified_conditions,
-                        query,
-                    )?);
+                    results.push(
+                        handle_exports_imports_field(
+                            *package_path,
+                            package_json_path,
+                            options,
+                            exports_field,
+                            &format!(".{path}"),
+                            conditions,
+                            unspecified_conditions,
+                            query,
+                        )
+                        .await?,
+                    );
 
                     // other options do not apply anymore when an exports
                     // field exist
@@ -1512,7 +1515,7 @@ async fn resolve_import_map_result(
     original_lookup_path: Vc<FileSystemPath>,
     original_request: Vc<Request>,
     options: Vc<ResolveOptions>,
-    query: Vc<QueryMap>,
+    query: Vc<String>,
 ) -> Result<Option<Vc<ResolveResult>>> {
     Ok(match result {
         ImportMapResult::Result(result) => Some(*result),
@@ -1525,11 +1528,7 @@ async fn resolve_import_map_result(
             {
                 None
             } else {
-                Some(resolve_internal(
-                    lookup_path,
-                    request.with_query(query),
-                    options,
-                ))
+                Some(resolve_internal(lookup_path, request, options))
             }
         }
         ImportMapResult::Alternatives(list) => {
@@ -1564,7 +1563,7 @@ fn resolve_import_map_result_boxed<'a>(
     original_lookup_path: Vc<FileSystemPath>,
     original_request: Vc<Request>,
     options: Vc<ResolveOptions>,
-    query: Vc<QueryMap>,
+    query: Vc<String>,
 ) -> Pin<Box<dyn Future<Output = ResolveImportMapResult> + Send + 'a>> {
     Box::pin(async move {
         resolve_import_map_result(
@@ -1587,7 +1586,7 @@ async fn resolve_alias_field_result(
     issue_context: Vc<FileSystemPath>,
     issue_request: &str,
     field_name: &str,
-    query: Vc<QueryMap>,
+    query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     if result.as_bool() == Some(false) {
         return Ok(
@@ -1629,7 +1628,7 @@ async fn resolved(
         ..
     }: &ResolveOptions,
     options: Vc<ResolveOptions>,
-    query: Vc<QueryMap>,
+    query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     let RealPathResult { path, symlinks } = &*fs_path.realpath_with_links().await?;
 
@@ -1700,13 +1699,15 @@ async fn resolved(
         Vc::upcast(FileSource::new_with_query(*path, query)),
         symlinks
             .iter()
-            .map(|link_path| Vc::upcast(FileSource::new(*link_path)))
+            .copied()
+            .map(FileSource::new)
+            .map(Vc::upcast)
             .collect(),
     )
     .into())
 }
 
-fn handle_exports_imports_field(
+async fn handle_exports_imports_field(
     package_path: Vc<FileSystemPath>,
     package_json_path: Vc<FileSystemPath>,
     options: Vc<ResolveOptions>,
@@ -1714,12 +1715,14 @@ fn handle_exports_imports_field(
     path: &str,
     conditions: &BTreeMap<String, ConditionValue>,
     unspecified_conditions: &ConditionValue,
-    query: Vc<QueryMap>,
+    query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     let mut results = Vec::new();
     let mut conditions_state = HashMap::new();
+
+    let req = format!("{}{}", path, &*query.await?);
     let values = exports_imports_field
-        .lookup(path)
+        .lookup(&req)
         .map(AliasMatch::try_into_self)
         .collect::<Result<Vec<_>>>()?;
 
@@ -1742,7 +1745,7 @@ fn handle_exports_imports_field(
     let mut resolved_results = Vec::new();
     for path in results {
         if let Some(path) = normalize_path(path) {
-            let request = Request::relative(Value::new(format!("./{}", path).into()), query, false);
+            let request = Request::parse(Value::new(format!("./{}", path).into()));
             resolved_results.push(resolve_internal(package_path, request, options));
         }
     }
@@ -1799,8 +1802,9 @@ async fn resolve_package_internal_with_imports_field(
         specifier,
         conditions,
         unspecified_conditions,
-        QueryMap::empty(),
+        Vc::<String>::empty(),
     )
+    .await
 }
 
 #[turbo_tasks::value]

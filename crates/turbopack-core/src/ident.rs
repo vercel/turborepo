@@ -5,7 +5,7 @@ use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64, DeterministicHash, Xxh3Hash64Hasher};
 
-use crate::resolve::{pattern::QueryMap, ModulePart};
+use crate::resolve::ModulePart;
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Clone, Debug, PartialOrd, Ord, Hash)]
@@ -13,7 +13,7 @@ pub struct AssetIdent {
     /// The primary path of the asset
     pub path: Vc<FileSystemPath>,
     /// The query string of the asset (e.g. `?foo=bar`)
-    pub query: Vc<QueryMap>,
+    pub query: Vc<String>,
     /// The fragment of the asset (e.g. `#foo`)
     pub fragment: Option<Vc<String>>,
     /// The assets that are nested in this asset
@@ -50,7 +50,7 @@ impl ValueToString for AssetIdent {
     async fn to_string(&self) -> Result<Vc<String>> {
         let mut s = self.path.to_string().await?.clone_value();
 
-        let query = self.query.to_string().await?;
+        let query = self.query.await?;
         if !query.is_empty() {
             write!(s, "?{}", &*query)?;
         }
@@ -93,7 +93,7 @@ impl AssetIdent {
     pub fn from_path(path: Vc<FileSystemPath>) -> Vc<Self> {
         Self::new(Value::new(AssetIdent {
             path,
-            query: QueryMap::empty(),
+            query: Vc::<String>::empty(),
             fragment: None,
             assets: Vec::new(),
             modifiers: Vec::new(),
@@ -102,9 +102,9 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn with_query(&self, query: Vc<QueryMap>) -> Vc<Self> {
+    pub fn with_query(&self, query: Vc<String>) -> Vc<Self> {
         let mut this = self.clone();
-        this.query = this.query.merge(query);
+        this.query = query;
         Self::new(Value::new(this))
     }
 
@@ -142,7 +142,7 @@ impl AssetIdent {
     }
 
     #[turbo_tasks::function]
-    pub fn query(&self) -> Vc<QueryMap> {
+    pub fn query(&self) -> Vc<String> {
         self.query
     }
 
@@ -188,10 +188,10 @@ impl AssetIdent {
             modifiers,
             part,
         } = self;
-        for (key, value) in &*query.await? {
+        let query = query.await?;
+        if !query.is_empty() {
             0_u8.deterministic_hash(&mut hasher);
-            key.deterministic_hash(&mut hasher);
-            value.deterministic_hash(&mut hasher);
+            query.deterministic_hash(&mut hasher);
             has_hash = true;
         }
         if let Some(fragment) = fragment {

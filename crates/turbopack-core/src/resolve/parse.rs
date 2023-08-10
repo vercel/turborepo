@@ -1,36 +1,35 @@
 use anyhow::Result;
-use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 
-use super::pattern::{Pattern, QueryMap};
+use super::pattern::Pattern;
 
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Clone, Debug)]
 pub enum Request {
     Raw {
         path: Pattern,
-        query: Vc<QueryMap>,
+        query: Vc<String>,
         force_in_lookup_dir: bool,
     },
     Relative {
         path: Pattern,
-        query: Vc<QueryMap>,
+        query: Vc<String>,
         force_in_lookup_dir: bool,
     },
     Module {
         module: String,
         path: Pattern,
-        query: Vc<QueryMap>,
+        query: Vc<String>,
     },
     ServerRelative {
         path: Pattern,
-        query: Vc<QueryMap>,
+        query: Vc<String>,
     },
     Windows {
         path: Pattern,
-        query: Vc<QueryMap>,
+        query: Vc<String>,
     },
     Empty,
     PackageInternal {
@@ -49,14 +48,14 @@ pub enum Request {
     },
 }
 
-fn split_off_query(raw: String) -> (Pattern, Vc<QueryMap>) {
+fn split_off_query(raw: String) -> (Pattern, Vc<String>) {
     let Some((raw, query)) = raw.split_once('?') else {
-        return (Pattern::Constant(raw), QueryMap::empty());
+        return (Pattern::Constant(raw), Vc::<String>::empty());
     };
 
     (
         Pattern::Constant(raw.to_string()),
-        Vc::cell(IndexMap::from_iter(qstring::QString::from(query))),
+        Vc::cell(format!("?{}", query)),
     )
 }
 
@@ -229,11 +228,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub fn raw(
-        request: Value<Pattern>,
-        query: Vc<QueryMap>,
-        force_in_lookup_dir: bool,
-    ) -> Vc<Self> {
+    pub fn raw(request: Value<Pattern>, query: Vc<String>, force_in_lookup_dir: bool) -> Vc<Self> {
         Self::cell(Request::Raw {
             path: request.into_value(),
             force_in_lookup_dir,
@@ -244,7 +239,7 @@ impl Request {
     #[turbo_tasks::function]
     pub fn relative(
         request: Value<Pattern>,
-        query: Vc<QueryMap>,
+        query: Vc<String>,
         force_in_lookup_dir: bool,
     ) -> Vc<Self> {
         Self::cell(Request::Relative {
@@ -255,7 +250,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub fn module(module: String, path: Value<Pattern>, query: Vc<QueryMap>) -> Vc<Self> {
+    pub fn module(module: String, path: Value<Pattern>, query: Vc<String>) -> Vc<Self> {
         Self::cell(Request::Module {
             module,
             path: path.into_value(),
@@ -302,7 +297,7 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub async fn with_query(self: Vc<Self>, query: Vc<QueryMap>) -> Result<Vc<Self>> {
+    pub async fn with_query(self: Vc<Self>, query: Vc<String>) -> Result<Vc<Self>> {
         Ok(match &*self.await? {
             Request::Raw {
                 path,
@@ -361,20 +356,20 @@ impl Request {
     }
 
     #[turbo_tasks::function]
-    pub fn query(&self) -> Vc<QueryMap> {
+    pub fn query(&self) -> Vc<String> {
         match self {
             Request::Raw { query, .. } => *query,
             Request::Relative { query, .. } => *query,
             Request::Module { query, .. } => *query,
             Request::ServerRelative { query, .. } => *query,
             Request::Windows { query, .. } => *query,
-            Request::Empty => QueryMap::empty(),
-            Request::PackageInternal { .. } => QueryMap::empty(),
-            Request::Uri { .. } => QueryMap::empty(),
-            Request::Unknown { .. } => QueryMap::empty(),
-            Request::Dynamic => QueryMap::empty(),
+            Request::Empty => Vc::<String>::empty(),
+            Request::PackageInternal { .. } => Vc::<String>::empty(),
+            Request::Uri { .. } => Vc::<String>::empty(),
+            Request::Unknown { .. } => Vc::<String>::empty(),
+            Request::Dynamic => Vc::<String>::empty(),
             // TODO: is this correct, should we return the first one instead?
-            Request::Alternatives { .. } => QueryMap::empty(),
+            Request::Alternatives { .. } => Vc::<String>::empty(),
         }
     }
 }

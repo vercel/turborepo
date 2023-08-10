@@ -25,7 +25,6 @@ use turbopack_core::{
     module::Module,
     output::OutputAssets,
     reference::ModuleReference,
-    resolve::pattern::QueryMap,
 };
 
 use self::content::ecmascript_chunk_content;
@@ -286,7 +285,7 @@ impl Chunk for EcmascriptChunk {
         } else {
             AssetIdent::new(Value::new(AssetIdent {
                 path,
-                query: QueryMap::empty(),
+                query: Vc::<String>::empty(),
                 fragment: None,
                 assets,
                 modifiers,

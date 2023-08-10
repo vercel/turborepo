@@ -21,7 +21,7 @@ use turbopack_core::{
         },
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        pattern::{Pattern, QueryMap},
+        pattern::Pattern,
         resolve, AliasPattern, ModuleResolveResult,
     },
     source::{OptionSource, Source},
@@ -347,7 +347,7 @@ pub async fn type_resolve(
         Some(Request::module(
             format!("@types/{m}"),
             Value::new(p.clone()),
-            QueryMap::empty(),
+            Vc::<String>::empty(),
         ))
     } else {
         None
