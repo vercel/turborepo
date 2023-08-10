@@ -74,18 +74,13 @@ func (f *fsNotifyBackend) onFileAdded(name turbopath.AbsoluteSystemPath) error {
 		}
 		return errors.Wrapf(err, "error checking lstat of new file %v", name)
 	}
-	if info.Mode()&os.ModeSymlink > 0 {
-		// do nothing for symlinks
-	} else if info.IsDir() {
+	if info.IsDir() {
 		// If a directory has been added, we need to synthesize events for everything it contains
 		if err := f.watchRecursively(name, []string{}, synthesizeEvents); err != nil {
 			return errors.Wrapf(err, "failed recursive watch of %v", name)
 		}
-	} else {
-		// if err := f.watcher.Add(name.ToString()); err != nil {
-		// 	return errors.Wrapf(err, "failed adding watch to %v", name)
-		// }
 	}
+	// Note that for symlinks and regular files, we don't add any watches, including traversing links
 	return nil
 }
 
