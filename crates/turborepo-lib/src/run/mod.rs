@@ -4,7 +4,8 @@ mod global_hash;
 mod scope;
 pub mod task_id;
 
-use anyhow::{Context as ErrorContext, Result};
+use anyhow::{anyhow, Context as ErrorContext, Result};
+use itertools::Itertools;
 use tracing::{debug, info};
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
@@ -138,7 +139,7 @@ impl Run {
         )?;
 
         info!("created cache");
-        let _engine = EngineBuilder::new(
+        let engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
             opts.run_opts.single_package,
@@ -164,6 +165,9 @@ impl Run {
         )
         .build()?;
 
+        engine
+            .validate(&pkg_dep_graph, opts.run_opts.concurrency)
+            .map_err(|errors| anyhow!("Validation failed:\n{}", errors.into_iter().join("\n")))?;
         Ok(())
     }
 }

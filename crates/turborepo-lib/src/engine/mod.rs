@@ -115,11 +115,10 @@ impl Engine<Built> {
         )
     }
 
-    #[allow(dead_code)]
     pub fn validate(
         &self,
         package_graph: &PackageGraph,
-        concurrency: usize,
+        concurrency: u32,
     ) -> Result<(), Vec<ValidateError>> {
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -218,7 +217,7 @@ pub enum ValidateError {
          of {concurrency}. Set --concurrency to at least {persistent_count}"
     )]
     PersistentTasksExceedConcurrency {
-        persistent_count: usize,
-        concurrency: usize,
+        persistent_count: u32,
+        concurrency: u32,
     },
 }
