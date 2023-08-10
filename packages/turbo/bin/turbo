@@ -31,6 +31,11 @@ function installUsingNPM() {
   );
 }
 
+// npm has multiple places that we need to look for a package name.
+function hasPackage(sourceObject, packageName) {
+  return !!sourceObject[packageName] || !!sourceObject[`node_modules/${packageName}`];
+}
+
 // This provides logging messages as it progresses towards calculating the binary path.
 function getBinaryPath() {
   // First we see if the user has configured a particular binary path.
@@ -199,10 +204,12 @@ function getBinaryPath() {
         const lockfile = fs.readFileSync(current);
         const parsedLockfile = JSON.parse(lockfile);
 
+        const sourceObject = parsedLockfile?.dependencies ?? parsedLockfile?.packages ?? {};
+
         // If we don't show up in the lockfile it's the wrong lockfile.
-        if (parsedLockfile?.dependencies?.turbo) {
+        if (hasPackage(sourceObject, 'turbo')) {
           // Check to see if all of `turbo-<PLATFORM>-<ARCH>` is included.
-          const hasAllPackages = Object.keys(parsedLockfile?.dependencies ?? {}).filter(dependency => availablePackages.includes(dependency)).length === availablePackages.length;
+          const hasAllPackages = availablePackages.every(package => hasPackage(sourceObject, package));
           if (!hasAllPackages) {
             console.error();
             console.error('***');
