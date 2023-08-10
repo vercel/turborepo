@@ -235,6 +235,11 @@ impl AbsoluteSystemPath {
         Ok(AbsoluteSystemPathBuf(cleaned_path))
     }
 
+    pub fn canonicalize(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let canonicalized = self.0.canonicalize_utf8()?;
+        Ok(AbsoluteSystemPathBuf(canonicalized))
+    }
+
     // note that this is *not* lstat. If this is a symlink, it
     // will return metadata for the target.
     pub fn stat(&self) -> Result<Metadata, PathError> {

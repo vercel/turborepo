@@ -7,7 +7,7 @@ use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
 };
-use crate::get_version;
+use crate::{get_version, globwatcher::HashGlobSetupError};
 
 pub mod proto {
     tonic::include_proto!("turbodprotocol");
@@ -151,7 +151,7 @@ pub enum DaemonError {
     InvalidTimeout(String),
     /// The server is unable to start file watching.
     #[error("unable to start file watching")]
-    FileWatching(#[from] notify::Error),
+    SetupFileWatching(#[from] HashGlobSetupError),
 
     #[error("unable to display output: {0}")]
     DisplayError(#[from] serde_json::Error),
