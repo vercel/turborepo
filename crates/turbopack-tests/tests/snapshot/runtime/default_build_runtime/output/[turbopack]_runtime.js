@@ -255,17 +255,23 @@ function externalRequire(id, esm = false) {
 externalRequire.resolve = (id, options)=>{
     return require.resolve(id, options);
 };
-async function readWebAssembly(path) {
-    const { readFile } = require("fs/promises");
-    return await readFile(path);
+function readWebAssemblyAsResponse(path) {
+    const { createReadStream } = require("fs");
+    const { Readable } = require("stream");
+    const stream = createReadStream(path);
+    return new Response(Readable.toWeb(stream), {
+        headers: {
+            "content-type": "application/wasm"
+        }
+    });
 }
 async function compileWebAssemblyFromPath(path) {
-    const buffer = await readWebAssembly(path);
-    return await WebAssembly.compile(buffer);
+    const response = readWebAssemblyAsResponse(path);
+    return await WebAssembly.compileStreaming(response);
 }
 async function instantiateWebAssemblyFromPath(path, importsObj) {
-    const buffer = await readWebAssembly(path);
-    const { instance } = await WebAssembly.instantiate(buffer, importsObj);
+    const response = readWebAssemblyAsResponse(path);
+    const { instance } = await WebAssembly.instantiateStreaming(response, importsObj);
     return instance.exports;
 }
 ;
