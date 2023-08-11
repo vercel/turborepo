@@ -589,15 +589,16 @@ fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol> {
 mod test {
     use std::{
         path::PathBuf,
-        sync::{Arc, Mutex},
+        sync::{atomic::AtomicUsize, Arc, Mutex},
         time::Duration,
     };
 
     use futures::{Stream, StreamExt};
+    use notify::{event::CreateKind, EventKind};
     use stop_token::StopSource;
     use test_case::test_case;
     use tokio::sync::watch;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::{GlobSymbol::*, GlobWatcher, WatchConfig};
     use crate::{ConfigError, WatchEvent};
@@ -661,34 +662,100 @@ mod test {
         (path, tmp)
     }
 
-    fn expect_watching(stream: impl Stream<Item = WatchEvent>) {}
+    static WATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    async fn expect_filesystem_event(
+        mut stream: impl Stream<Item = WatchEvent> + Unpin,
+        expected_path: &AbsoluteSystemPath,
+        expected_event: EventKind,
+    ) {
+        'outer: loop {
+            let next_stream_entry = stream.next();
+            let event = tokio::time::timeout(Duration::from_millis(100), next_stream_entry)
+                .await
+                .expect("timed out waiting for filesystem event")
+                .expect("missing event from stream")
+                .expect("underlying timeout error")
+                .expect("got config error");
+            println!("event {:?}", event);
+            for path in event.paths {
+                if path == expected_path && event.kind == expected_event {
+                    break 'outer;
+                }
+            }
+        }
+    }
+
+    async fn expect_watching(
+        mut stream: impl Stream<Item = WatchEvent> + Unpin,
+        dirs: &[&AbsoluteSystemPath],
+    ) {
+        for dir in dirs {
+            let count = WATCH_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let filename = dir.join_component(format!("test-{}", count).as_str());
+            filename.create_with_contents("hello").unwrap();
+
+            expect_filesystem_event(&mut stream, &filename, EventKind::Create(CreateKind::File))
+                .await;
+        }
+    }
 
     #[tokio::test]
     async fn test_file_watching() {
-        let (flush_dir, _) = temp_dir();
+        let (flush_dir, _tmp_flush) = temp_dir();
         let (watcher, config) = GlobWatcher::new(&flush_dir).unwrap();
-        let (repo_root, _) = temp_dir();
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.canonicalize().unwrap();
 
         repo_root.join_component(".git").create_dir_all().unwrap();
         repo_root
             .join_components(&["node_modules", "some-dep"])
             .create_dir_all()
             .unwrap();
-        repo_root
-            .join_components(&["parent", "child"])
-            .create_dir_all()
-            .unwrap();
-        repo_root
-            .join_components(&["parent", "sibling"])
-            .create_dir_all()
-            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+        let sibling_path = parent_path.join_component("sibling");
+        sibling_path.create_dir_all().unwrap();
 
         let stop = StopSource::new();
         let token = stop.token();
-        let stream = watcher.into_stream(token);
+        let mut stream = watcher.into_stream(token);
 
         config.add_root(&repo_root).await.unwrap();
 
-        expect_watching(stream);
+        expect_watching(&mut stream, &[&repo_root, &parent_path, &child_path]).await;
+
+        let foo_path = child_path.join_component("foo");
+        foo_path.create_with_contents("hello").unwrap();
+        expect_filesystem_event(&mut stream, &foo_path, EventKind::Create(CreateKind::File)).await;
+
+        let deep_path = sibling_path.join_components(&["deep", "path"]);
+        deep_path.create_dir_all().unwrap();
+        expect_filesystem_event(
+            &mut stream,
+            &sibling_path.join_component("deep"),
+            EventKind::Create(CreateKind::Folder),
+        )
+        .await;
+        expect_filesystem_event(
+            &mut stream,
+            &deep_path,
+            EventKind::Create(CreateKind::Folder),
+        )
+        .await;
+        expect_watching(
+            &mut stream,
+            &[
+                &repo_root,
+                &parent_path,
+                &child_path,
+                &deep_path,
+                &sibling_path.join_component("deep"),
+            ],
+        )
+        .await;
+
+        // TODO: implement default filtering (.git, node_modules)
     }
 }
