@@ -110,14 +110,19 @@ mod tests {
 
     use crate::{
         logs::{replay_logs, PrefixedUI},
-        CYAN, UI,
+        BOLD, CYAN, UI,
     };
 
     #[test]
     fn test_replay_logs() -> Result<()> {
         let ui = UI::new(false);
         let mut output = Vec::new();
-        let mut prefixed_ui = PrefixedUI::new(ui, CYAN.apply_to(">"), &mut output);
+        let mut prefixed_ui = PrefixedUI::new(
+            ui,
+            CYAN.apply_to(">".to_string()),
+            BOLD.apply_to(">!".to_string()),
+            &mut output,
+        );
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
         fs::write(&log_file_path, "\none fish\ntwo fish\nred fish\nblue fish")?;
