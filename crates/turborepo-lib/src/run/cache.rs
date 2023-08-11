@@ -1,14 +1,10 @@
-use std::{
-    fs::OpenOptions,
-    io::{BufWriter, Write},
-    rc::Rc,
-};
+use std::{io::Write, rc::Rc};
 
 use console::StyledObject;
 use tracing::{debug, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::{AsyncCache, CacheError, CacheResponse, CacheSource};
-use turborepo_ui::{replay_logs, ColorSelector, PrefixedUI, PrefixedWriter, GREY};
+use turborepo_ui::{replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY};
 
 use crate::{
     cli::OutputLogsMode,
@@ -126,37 +122,29 @@ impl TaskCache {
         Ok(())
     }
 
-    fn output_writer(
+    fn output_writer<W: Write>(
         &self,
         prefix: StyledObject<String>,
-        writer: impl Write,
-    ) -> Result<Box<dyn Write>, anyhow::Error> {
-        let pretty_writer = PrefixedWriter::new(prefix, writer);
+        writer: W,
+    ) -> Result<LogWriter<W>, anyhow::Error> {
+        let mut log_writer = LogWriter::default();
+        let prefixed_writer = PrefixedWriter::new(prefix, writer);
 
         if self.caching_disabled || self.run_cache.writes_disabled {
-            return Ok(Box::new(pretty_writer));
+            log_writer.with_prefixed_writer(prefixed_writer);
+            return Ok(log_writer);
         }
 
-        self.log_file_name.ensure_dir()?;
-
-        let mut options = OpenOptions::new();
-        options.create(true).write(true);
-
-        let log_file = self.log_file_name.open_with_options(options)?;
-
-        let buf_writer = BufWriter::new(log_file);
+        log_writer.with_log_file(&self.log_file_name)?;
 
         if matches!(
             self.task_output_mode,
-            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
+            OutputLogsMode::Full | OutputLogsMode::NewOnly
         ) {
-            Ok(Box::new(buf_writer))
-        } else {
-            Ok(Box::new(MultiWriter::new(vec![
-                Box::new(pretty_writer),
-                Box::new(buf_writer),
-            ])))
+            log_writer.with_prefixed_writer(prefixed_writer);
         }
+
+        Ok(log_writer)
     }
 
     async fn restore_outputs(

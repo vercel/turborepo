@@ -1,5 +1,5 @@
 mod color_selector;
-mod log_replayer;
+mod logs;
 mod prefixed;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
@@ -11,7 +11,7 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
-    log_replayer::replay_logs,
+    logs::{replay_logs, LogWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
 };
 

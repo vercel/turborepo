@@ -5,6 +5,10 @@ use tracing::error;
 
 use crate::UI;
 
+/// Writes messages with different prefixes, depending on log level. Note that
+/// this does output the prefix when message is empty, unlike the Go
+/// implementation. We do this because this behavior is what we actually
+/// want for replaying logs.
 pub struct PrefixedUI<W> {
     ui: UI,
     output_prefix: StyledObject<String>,

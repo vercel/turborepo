@@ -116,6 +116,10 @@ impl AbsoluteSystemPath {
         self.0.ancestors().map(Self::new_unchecked)
     }
 
+    pub fn create(&self) -> Result<File, io::Error> {
+        File::create(&self.0)
+    }
+
     pub fn create_dir_all(&self) -> Result<(), io::Error> {
         fs::create_dir_all(&self.0)
     }
