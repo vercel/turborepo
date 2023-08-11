@@ -18,13 +18,12 @@ func (e *NoWorkspacesFoundError) Error() string {
 }
 
 var nodejsYarn = PackageManager{
-	Name:         "nodejs-yarn",
-	Slug:         "yarn",
-	Command:      "yarn",
-	Specfile:     "package.json",
-	Lockfile:     "yarn.lock",
-	PackageDir:   "node_modules",
-	ArgSeparator: []string{"--"},
+	Name:       "nodejs-yarn",
+	Slug:       "yarn",
+	Command:    "yarn",
+	Specfile:   "package.json",
+	Lockfile:   "yarn.lock",
+	PackageDir: "node_modules",
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))
