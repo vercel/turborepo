@@ -235,9 +235,9 @@ impl AbsoluteSystemPath {
         Ok(AbsoluteSystemPathBuf(cleaned_path))
     }
 
-    pub fn canonicalize(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let canonicalized = self.0.canonicalize_utf8()?;
-        Ok(AbsoluteSystemPathBuf(canonicalized))
+    pub fn to_realpath(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let realpath = dunce::canonicalize(&self.0)?;
+        Ok(AbsoluteSystemPathBuf(Utf8PathBuf::try_from(realpath)?))
     }
 
     // note that this is *not* lstat. If this is a symlink, it

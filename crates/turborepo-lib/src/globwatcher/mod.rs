@@ -64,7 +64,7 @@ impl HashGlobWatcher<RecommendedWatcher> {
     ) -> Result<Self, HashGlobSetupError> {
         let (watcher, config) = GlobWatcher::new(flush_folder)?;
         let relative_to = relative_to
-            .canonicalize()
+            .to_realpath()
             .map_err(|e| HashGlobSetupError::PathError(e, relative_to.to_owned()))?
             .as_std_path()
             .to_owned();

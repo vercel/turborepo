@@ -83,7 +83,7 @@ impl GlobWatcher {
         let (send_config, receive_config) = tokio::sync::mpsc::unbounded_channel();
 
         flush_dir.create_dir_all()?;
-        let flush_dir = flush_dir.canonicalize()?;
+        let flush_dir = flush_dir.to_realpath()?;
 
         let watcher = notify::recommended_watcher(move |event: Result<Event, notify::Error>| {
             let span = span!(tracing::Level::TRACE, "watcher");
