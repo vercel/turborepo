@@ -260,6 +260,10 @@ impl AbsoluteSystemPath {
         fs::remove_file(&self.0)
     }
 
+    pub fn rename(&self, other: &Self) -> Result<(), io::Error> {
+        fs::rename(self, other)
+    }
+
     pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
     }

@@ -594,7 +594,10 @@ mod test {
     };
 
     use futures::{Stream, StreamExt};
-    use notify::{event::CreateKind, EventKind};
+    use notify::{
+        event::{CreateKind, RemoveKind},
+        EventKind,
+    };
     use stop_token::StopSource;
     use test_case::test_case;
     use tokio::sync::watch;
@@ -705,7 +708,7 @@ mod test {
         let (flush_dir, _tmp_flush) = temp_dir();
         let (watcher, config) = GlobWatcher::new(&flush_dir).unwrap();
         let (repo_root, _tmp_repo_root) = temp_dir();
-        let repo_root = repo_root.canonicalize().unwrap();
+        let repo_root = repo_root.to_realpath().unwrap();
 
         repo_root.join_component(".git").create_dir_all().unwrap();
         repo_root
@@ -757,5 +760,107 @@ mod test {
         .await;
 
         // TODO: implement default filtering (.git, node_modules)
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_subfolder_deletion() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        let (flush_dir, _tmp_flush) = temp_dir();
+        let (watcher, config) = GlobWatcher::new(&flush_dir).unwrap();
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let stop = StopSource::new();
+        let token = stop.token();
+        let mut stream = watcher.into_stream(token);
+
+        config.add_root(&repo_root).await.unwrap();
+
+        expect_watching(&mut stream, &[&repo_root, &parent_path, &child_path]).await;
+
+        // Delete parent folder during file watching
+        parent_path.remove_dir_all().unwrap();
+        expect_filesystem_event(
+            &mut stream,
+            &parent_path,
+            EventKind::Remove(RemoveKind::Folder),
+        )
+        .await;
+
+        // Ensure we get events when creating file in deleted directory
+        child_path.create_dir_all().unwrap();
+        expect_filesystem_event(
+            &mut stream,
+            &parent_path,
+            EventKind::Create(CreateKind::Folder),
+        )
+        .await;
+        expect_filesystem_event(
+            &mut stream,
+            &child_path,
+            EventKind::Create(CreateKind::Folder),
+        )
+        .await;
+
+        let foo_path = child_path.join_component("foo");
+        foo_path.create_with_contents("hello").unwrap();
+        expect_filesystem_event(&mut stream, &foo_path, EventKind::Create(CreateKind::File)).await;
+        // We cannot guarantee no more events, windows sends multiple delete
+        // events
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_root_deletion() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        let (flush_dir, _tmp_flush) = temp_dir();
+        let (watcher, config) = GlobWatcher::new(&flush_dir).unwrap();
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let stop = StopSource::new();
+        let token = stop.token();
+        let mut stream = watcher.into_stream(token);
+
+        config.add_root(&repo_root).await.unwrap();
+
+        expect_watching(&mut stream, &[&repo_root, &parent_path, &child_path]).await;
+
+        repo_root.remove_dir_all().unwrap();
+        expect_filesystem_event(
+            &mut stream,
+            &repo_root,
+            EventKind::Remove(RemoveKind::Folder),
+        )
+        .await;
     }
 }
