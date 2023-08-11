@@ -409,9 +409,9 @@ mod test {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn track_outputs() {
-        let (dir, _) = temp_dir();
+        let (dir, _tmp_dir) = temp_dir();
         setup(&dir);
-        let (flush, _) = temp_dir();
+        let (flush, _tmp_flush) = temp_dir();
         let watcher = Arc::new(super::HashGlobWatcher::new(&dir, &flush).unwrap());
 
         let stop = StopSource::new();
@@ -524,9 +524,9 @@ mod test {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_multiple_hashes() {
-        let (dir, _) = temp_dir();
+        let (dir, _tmp_dir) = temp_dir();
         setup(&dir);
-        let (flush, _) = temp_dir();
+        let (flush, _tmp_flush) = temp_dir();
         let watcher = Arc::new(super::HashGlobWatcher::new(&dir, &flush).unwrap());
 
         let stop = StopSource::new();
@@ -641,9 +641,9 @@ mod test {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn watch_single_file() {
-        let (dir, _) = temp_dir();
+        let (dir, _tmp_dir) = temp_dir();
         setup(&dir);
-        let (flush, _) = temp_dir();
+        let (flush, _tmp_flush) = temp_dir();
         let watcher = Arc::new(super::HashGlobWatcher::new(&dir, &flush).unwrap());
 
         let stop = StopSource::new();
@@ -705,9 +705,9 @@ mod test {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn delete_root_kill_daemon() {
-        let (dir, _) = temp_dir();
+        let (dir, _tmp_dir) = temp_dir();
         setup(&dir);
-        let (flush, _) = temp_dir();
+        let (flush, _tmp_flush) = temp_dir();
         let watcher = Arc::new(super::HashGlobWatcher::new(&dir, &flush).unwrap());
 
         let stop = StopSource::new();
