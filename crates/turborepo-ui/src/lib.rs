@@ -1,8 +1,19 @@
+mod log_replayer;
+
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
 use console::{Style, StyledObject};
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("cannot read logs: {0}")]
+    CannotReadLogs(std::io::Error),
+    #[error("cannot write logs: {0}")]
+    CannotWriteLogs(std::io::Error),
+}
 
 pub fn start_spinner(message: &str) -> ProgressBar {
     let pb = ProgressBar::new_spinner();
@@ -37,11 +48,6 @@ pub struct UI {
 impl UI {
     pub fn new(should_strip_ansi: bool) -> Self {
         Self { should_strip_ansi }
-    }
-
-    // STUB
-    pub fn is_ci(&self) -> bool {
-        env::var("CI").is_ok()
     }
 
     /// Infer the color choice from environment variables and checking if stdout

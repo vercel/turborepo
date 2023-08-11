@@ -16,12 +16,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
+use turborepo_ui::{UI, UNDERLINE};
 use wax::{Any, Glob, Pattern};
 
 use crate::{
     package_json::PackageJson,
     package_manager::{npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
-    ui::{UI, UNDERLINE},
 };
 
 #[derive(Debug, Deserialize)]

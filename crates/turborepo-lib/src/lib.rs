@@ -22,7 +22,6 @@ mod run;
 mod shim;
 mod task_graph;
 mod tracing;
-mod ui;
 
 use ::tracing::error;
 use anyhow::Result;

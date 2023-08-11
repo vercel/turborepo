@@ -1,7 +1,8 @@
 use anyhow::Result;
 use tracing::error;
+use turborepo_ui::GREY;
 
-use crate::{commands::CommandBase, ui::GREY};
+use crate::commands::CommandBase;
 
 pub fn logout(base: &mut CommandBase) -> Result<()> {
     if let Err(err) = base.user_config_mut()?.set_token(None) {

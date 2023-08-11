@@ -17,14 +17,14 @@ use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
 use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
-
 #[cfg(not(test))]
-use crate::ui::CYAN;
+use turborepo_ui::CYAN;
+use turborepo_ui::{BOLD, GREY, UNDERLINE};
+
 use crate::{
     cli::LinkTarget,
     commands::CommandBase,
     config::{RawTurboJSON, SpacesJson},
-    ui::{BOLD, GREY, UNDERLINE},
 };
 
 #[derive(Clone)]
@@ -478,13 +478,13 @@ mod test {
     use tempfile::{NamedTempFile, TempDir};
     use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
     use vercel_api_mock::start_test_server;
 
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
         config::{ClientConfigLoader, RawTurboJSON, RepoConfigLoader, UserConfigLoader},
-        ui::UI,
         Args,
     };
 
