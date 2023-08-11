@@ -14,7 +14,7 @@ use crate::{
     task_graph::TaskOutputs,
 };
 
-struct RunCache {
+pub struct RunCache {
     task_output_mode: Option<OutputLogsMode>,
     cache: AsyncCache,
     reads_disabled: bool,
@@ -86,7 +86,7 @@ impl RunCache {
     }
 }
 
-struct TaskCache {
+pub struct TaskCache {
     expanded_outputs: Vec<AnchoredSystemPathBuf>,
     run_cache: Rc<RunCache>,
     repo_relative_globs: TaskOutputs,
@@ -154,9 +154,10 @@ impl TaskCache {
         prefixed_ui: &mut PrefixedUI<impl Write>,
     ) -> Result<CacheResponse, anyhow::Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
-            if self.task_output_mode != OutputLogsMode::None
-                && self.task_output_mode != OutputLogsMode::ErrorsOnly
-            {
+            if !matches!(
+                self.task_output_mode,
+                OutputLogsMode::None | OutputLogsMode::ErrorsOnly
+            ) {
                 prefixed_ui.output(format!(
                     "cache bypass, force executing {}",
                     GREY.apply_to(&self.hash)
@@ -216,7 +217,26 @@ impl TaskCache {
                 })?;
 
             self.expanded_outputs = restored_files;
-            // TODO: Add notify_outputs_written
+
+            if let Some(daemon_client) = &mut self.daemon_client {
+                if let Err(err) = daemon_client
+                    .notify_outputs_written(
+                        self.hash.clone(),
+                        self.repo_relative_globs.inclusions.clone(),
+                        self.repo_relative_globs.exclusions.clone(),
+                        cache_status.time_saved,
+                    )
+                    .await
+                {
+                    // Don't fail the whole operation just because we failed to
+                    // watch the outputs
+                    prefixed_ui.warn(GREY.apply_to(format!(
+                        "Failed to mark outputs as cached for {}: {:?}",
+                        self.package_task.task_id, err
+                    )))
+                }
+            }
+
             cache_status
         } else {
             CacheResponse {

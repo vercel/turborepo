@@ -4,7 +4,6 @@ use turborepo_cache::CacheOpts;
 
 use crate::{
     cli::{Command, DryRunMode, EnvMode, LogPrefix, OutputLogsMode, RunArgs},
-    daemon::{DaemonClient, DaemonConnector},
     Args,
 };
 
@@ -42,7 +41,6 @@ pub struct RunCacheOpts {
     pub(crate) skip_reads: bool,
     pub(crate) skip_writes: bool,
     pub(crate) task_output_mode_override: Option<OutputLogsMode>,
-    pub(crate) output_watcher: Option<DaemonClient<DaemonConnector>>,
 }
 
 impl<'a> From<&'a RunArgs> for RunCacheOpts {
@@ -51,7 +49,6 @@ impl<'a> From<&'a RunArgs> for RunCacheOpts {
             skip_reads: args.force.flatten().is_some_and(|f| f),
             skip_writes: args.no_cache,
             task_output_mode_override: args.output_logs,
-            output_watcher: None,
         }
     }
 }

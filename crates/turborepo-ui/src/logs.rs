@@ -12,8 +12,6 @@ use crate::{prefixed::PrefixedUI, Error, PrefixedWriter};
 /// writer
 pub struct LogWriter<W> {
     log_file: Option<BufWriter<File>>,
-    // This is a Box<dyn Write> to accommodate grouped log output
-    // We could probably replace this with an enum
     prefixed_writer: Option<PrefixedWriter<W>>,
 }
 

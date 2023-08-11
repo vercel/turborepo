@@ -35,7 +35,7 @@ impl AsyncCache {
         anchor: AbsoluteSystemPathBuf,
         key: String,
         files: Vec<AnchoredSystemPathBuf>,
-        duration: u32,
+        duration: u64,
     ) {
         if self.workers.len() >= self.max_workers {
             let _ = self.workers.next().await.unwrap();

@@ -84,7 +84,7 @@ pub enum CacheSource {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CacheResponse {
     pub source: CacheSource,
-    pub time_saved: u32,
+    pub time_saved: u64,
 }
 
 #[derive(Debug, Default)]

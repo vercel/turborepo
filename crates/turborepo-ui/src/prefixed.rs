@@ -60,6 +60,7 @@ impl<W: Write> PrefixedUI<W> {
     }
 }
 
+/// Wraps a writer with a prefix before the actual message.
 pub struct PrefixedWriter<W> {
     prefix: StyledObject<String>,
     writer: W,
