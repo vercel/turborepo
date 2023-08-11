@@ -1,11 +1,14 @@
-use std::{fmt::Display, io::Write, rc::Rc};
+use std::{
+    fs::OpenOptions,
+    io::{BufWriter, Write},
+    rc::Rc,
+};
 
 use console::StyledObject;
-use tokio::sync::Mutex;
 use tracing::{debug, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::{AsyncCache, CacheError, CacheResponse, CacheSource};
-use turborepo_ui::{replay_logs, ColorSelector, PrefixedUI, GREY, UI};
+use turborepo_ui::{replay_logs, ColorSelector, PrefixedUI, PrefixedWriter, GREY};
 
 use crate::{
     cli::OutputLogsMode,
@@ -22,7 +25,7 @@ struct RunCache {
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
     color_selector: ColorSelector,
-    daemon_client: Option<Mutex<DaemonClient<DaemonConnector>>>,
+    daemon_client: Option<DaemonClient<DaemonConnector>>,
 }
 
 impl RunCache {
@@ -31,7 +34,7 @@ impl RunCache {
         repo_root: &AbsoluteSystemPath,
         opts: RunCacheOpts,
         color_selector: ColorSelector,
-        daemon_client: Option<Mutex<DaemonClient<DaemonConnector>>>,
+        daemon_client: Option<DaemonClient<DaemonConnector>>,
     ) -> Self {
         RunCache {
             task_output_mode: opts.task_output_mode_override,
@@ -82,6 +85,7 @@ impl RunCache {
             task_output_mode,
             caching_disabled,
             log_file_name,
+            daemon_client: self.daemon_client.clone(),
         }
     }
 }
@@ -95,18 +99,64 @@ struct TaskCache {
     task_output_mode: OutputLogsMode,
     caching_disabled: bool,
     log_file_name: AbsoluteSystemPathBuf,
+    daemon_client: Option<DaemonClient<DaemonConnector>>,
 }
 
 impl TaskCache {
-    fn replay_log_file<D: Display + Clone, W: Write>(
+    fn replay_log_file(
         &self,
-        prefixed_ui: &mut PrefixedUI<D, W>,
+        prefixed_ui: &mut PrefixedUI<impl Write>,
     ) -> Result<(), anyhow::Error> {
-        if self.log_file_name.try_exists()? {
+        if self.log_file_name.exists() {
             replay_logs(prefixed_ui, &self.log_file_name)?;
         }
 
         Ok(())
+    }
+
+    fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), anyhow::Error> {
+        if self.task_output_mode == OutputLogsMode::ErrorsOnly {
+            prefixed_ui.output(format!(
+                "cache miss, executing {}",
+                GREY.apply_to(&self.hash)
+            ));
+            self.replay_log_file(prefixed_ui)?;
+        }
+
+        Ok(())
+    }
+
+    fn output_writer(
+        &self,
+        prefix: StyledObject<String>,
+        writer: impl Write,
+    ) -> Result<Box<dyn Write>, anyhow::Error> {
+        let pretty_writer = PrefixedWriter::new(prefix, writer);
+
+        if self.caching_disabled || self.run_cache.writes_disabled {
+            return Ok(Box::new(pretty_writer));
+        }
+
+        self.log_file_name.ensure_dir()?;
+
+        let mut options = OpenOptions::new();
+        options.create(true).write(true);
+
+        let log_file = self.log_file_name.open_with_options(options)?;
+
+        let buf_writer = BufWriter::new(log_file);
+
+        if matches!(
+            self.task_output_mode,
+            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
+        ) {
+            Ok(Box::new(buf_writer))
+        } else {
+            Ok(Box::new(MultiWriter::new(vec![
+                Box::new(pretty_writer),
+                Box::new(buf_writer),
+            ])))
+        }
     }
 
     async fn restore_outputs(
@@ -121,21 +171,15 @@ impl TaskCache {
             {
                 prefixed_ui.output(format!(
                     "cache bypass, force executing {}",
-                    GREY.apply_to(self.hash)
-                ))?;
+                    GREY.apply_to(&self.hash)
+                ));
             }
 
             return Err(CacheError::CacheMiss.into());
         }
 
-        let changed_output_count = if let Some(daemon_client) = self.run_cache.daemon_client {
-            // TODO: Hook up daemon client
-            // Not implemented because unclear where we need to
-            // lock the daemon client. Should also print if we
-            // are failing to check client.
+        let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
             match daemon_client
-                .lock()
-                .await
                 .get_changed_outputs(
                     self.hash.to_string(),
                     self.repo_relative_globs.inclusions.clone(),
@@ -176,10 +220,12 @@ impl TaskCache {
                     if matches!(err, CacheError::CacheMiss) {
                         prefixed_ui.output(format!(
                             "cache miss, executing {}",
-                            GREY.apply_to(self.hash)
-                        ))?;
+                            GREY.apply_to(&self.hash)
+                        ));
                     }
-                });
+
+                    err
+                })?;
 
             self.expanded_outputs = restored_files;
             // TODO: Add notify_outputs_written
@@ -203,7 +249,7 @@ impl TaskCache {
                     "cache hit{}, suppressing logs {}",
                     more_context,
                     GREY.apply_to(&self.hash)
-                ))?;
+                ));
             }
             OutputLogsMode::Full => {
                 debug!("log file path: {}", self.log_file_name);
@@ -211,7 +257,7 @@ impl TaskCache {
                     "cache hit{}, suppressing logs {}",
                     more_context,
                     GREY.apply_to(&self.hash)
-                ))?;
+                ));
                 self.replay_log_file(prefixed_ui)?;
             }
             _ => {}

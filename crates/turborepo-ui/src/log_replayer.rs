@@ -1,5 +1,4 @@
 use std::{
-    fmt::Display,
     fs::File,
     io::{BufRead, BufReader, Write},
 };
@@ -7,7 +6,7 @@ use std::{
 use tracing::{debug, warn};
 use turbopath::AbsoluteSystemPath;
 
-use crate::{prefixed::PrefixedUI, Error, StyledObject, UI};
+use crate::{prefixed::PrefixedUI, Error};
 
 <<<<<<< HEAD
 /// Writes to `output` with a prefix. The prefix is styled with `ui`.
@@ -56,7 +55,7 @@ pub fn replay_logs<W: Write>(
 
     for line in log_reader.lines() {
         let line = line.map_err(Error::CannotReadLogs)?;
-        output.output(line)?;
+        output.output(line);
     }
 
     debug!("finish replaying logs");

@@ -50,7 +50,7 @@ impl AsyncCache {
     }
 
     pub async fn fetch(
-        &mut self,
+        &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
         team_id: &str,

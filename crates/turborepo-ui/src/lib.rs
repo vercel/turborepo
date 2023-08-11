@@ -9,7 +9,11 @@ use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use thiserror::Error;
 
-pub use crate::{color_selector::ColorSelector, log_replayer::replay_logs, prefixed::PrefixedUI};
+pub use crate::{
+    color_selector::ColorSelector,
+    log_replayer::replay_logs,
+    prefixed::{PrefixedUI, PrefixedWriter},
+};
 
 #[derive(Debug, Error)]
 pub enum Error {
