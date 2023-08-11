@@ -37,7 +37,6 @@ pub struct HashGlobWatcher<T: Watcher> {
     /// maps a glob to the hashes for which this glob hasn't changed
     glob_statuses: Arc<Mutex<HashMap<Glob, HashSet<Hash>>>>,
 
-    #[allow(dead_code)]
     watcher: Arc<Mutex<Option<GlobWatcher>>>,
     config: WatchConfig<T>,
 }

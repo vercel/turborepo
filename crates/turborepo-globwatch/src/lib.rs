@@ -149,6 +149,8 @@ impl GlobWatcher {
     }
 }
 
+type WatchEvent = Result<Result<Event, ConfigError>, TimedOutError>;
+
 impl GlobWatcher {
     /// Convert the watcher into a stream of events, handling config changes and
     /// flushing transparently.
@@ -159,11 +161,7 @@ impl GlobWatcher {
     pub fn into_stream(
         self,
         token: stop_token::StopToken,
-    ) -> impl Stream<Item = Result<Result<Event, ConfigError>, TimedOutError>>
-           + Send
-           + Sync
-           + 'static
-           + Unpin {
+    ) -> impl Stream<Item = WatchEvent> + Send + Sync + 'static + Unpin {
         let Self {
             setup_handle,
             flush_dir,
@@ -354,6 +352,14 @@ impl<T: Watcher> WatchConfig<T> {
                 }
             })
             .map_err(ConfigError::WatchError)
+    }
+
+    pub async fn add_root(&self, root: &AbsoluteSystemPath) -> Result<(), ConfigError> {
+        self.watcher
+            .lock()
+            .expect("watcher lock poisoned")
+            .watch(root.as_std_path(), notify::RecursiveMode::Recursive)
+            .map_err(|e| ConfigError::WatchError(vec![e]))
     }
 
     /// Register a single path to be included by the watcher.
@@ -587,11 +593,14 @@ mod test {
         time::Duration,
     };
 
+    use futures::{Stream, StreamExt};
+    use stop_token::StopSource;
     use test_case::test_case;
     use tokio::sync::watch;
+    use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{GlobSymbol::*, WatchConfig};
-    use crate::ConfigError;
+    use super::{GlobSymbol::*, GlobWatcher, WatchConfig};
+    use crate::{ConfigError, WatchEvent};
 
     #[test_case("foo/**", vec!["foo"])]
     #[test_case("foo/{a,b}", vec!["foo"])]
@@ -644,5 +653,42 @@ mod test {
                 }
             }
         }
+    }
+
+    fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        (path, tmp)
+    }
+
+    fn expect_watching(stream: impl Stream<Item = WatchEvent>) {}
+
+    #[tokio::test]
+    async fn test_file_watching() {
+        let (flush_dir, _) = temp_dir();
+        let (watcher, config) = GlobWatcher::new(&flush_dir).unwrap();
+        let (repo_root, _) = temp_dir();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        repo_root
+            .join_components(&["parent", "child"])
+            .create_dir_all()
+            .unwrap();
+        repo_root
+            .join_components(&["parent", "sibling"])
+            .create_dir_all()
+            .unwrap();
+
+        let stop = StopSource::new();
+        let token = stop.token();
+        let stream = watcher.into_stream(token);
+
+        config.add_root(&repo_root).await.unwrap();
+
+        expect_watching(stream);
     }
 }
