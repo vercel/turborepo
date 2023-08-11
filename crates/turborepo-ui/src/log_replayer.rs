@@ -9,6 +9,7 @@ use turbopath::AbsoluteSystemPath;
 
 use crate::{Error, StyledObject, UI};
 
+/// Writes to `output` with a prefix. The prefix is styled with `ui`.
 #[allow(dead_code)]
 pub struct PrefixedUI<D, W> {
     ui: UI,
@@ -22,6 +23,10 @@ impl<D: Display + Clone, W: Write> PrefixedUI<D, W> {
         Self { ui, prefix, output }
     }
 
+    /// Write `message` to `output` with the prefix. Note that this
+    /// does output the prefix when message is empty, unlike the Go
+    /// implementation. We do this because this behavior is what we actually
+    /// want for replaying logs.
     pub fn output(&mut self, message: impl Display) -> Result<(), Error> {
         writeln!(
             self.output,
