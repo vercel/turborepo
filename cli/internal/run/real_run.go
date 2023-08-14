@@ -451,7 +451,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	argsactual := append([]string{"run"}, packageTask.Task)
 	if len(passThroughArgs) > 0 {
 		// This will be either '--' or a typed nil
-		argsactual = append(argsactual, ec.packageManager.ArgSeparator...)
+		argsactual = append(argsactual, ec.packageManager.ArgSeparator(passThroughArgs)...)
 		argsactual = append(argsactual, passThroughArgs...)
 	}
 

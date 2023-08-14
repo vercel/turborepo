@@ -24,6 +24,17 @@ var nodejsYarn = PackageManager{
 	Specfile:   "package.json",
 	Lockfile:   "yarn.lock",
 	PackageDir: "node_modules",
+	ArgSeparator: func(userArgs []string) []string {
+		// Yarn warns and swallows a "--" token. If the user is passing "--", we need
+		// to prepend our own so that the user's doesn't get swallowed. If they are not
+		// passing their own, we don't need the "--" token and can avoid the warning.
+		for _, arg := range userArgs {
+			if arg == "--" {
+				return []string{"--"}
+			}
+		}
+		return nil
+	},
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))

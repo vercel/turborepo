@@ -19,7 +19,7 @@ var nodejsPnpm6 = PackageManager{
 	Specfile:                   "package.json",
 	Lockfile:                   "pnpm-lock.yaml",
 	PackageDir:                 "node_modules",
-	ArgSeparator:               []string{"--"},
+	ArgSeparator:               func(_userArgs []string) []string { return []string{"--"} },
 	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: getPnpmWorkspaceGlobs,
