@@ -32,6 +32,7 @@ use crate::{
     package_json::PackageJson,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
+    task_hash::PackageFileHashes,
 };
 
 #[derive(Debug)]
@@ -233,6 +234,16 @@ impl Run {
         let engine = Arc::new(engine);
         let visitor = Visitor::new(pkg_dep_graph, &opts);
         visitor.visit(engine).await?;
+
+        let package_file_hashes = PackageFileHashes::calculate_file_hashes(
+            scm,
+            engine.tasks(),
+            pkg_dep_graph.workspaces().collect(),
+            engine.task_definitions(),
+            &self.base.repo_root,
+        )?;
+
+        debug!("package file hashes: {:?}", package_file_hashes);
 
         Ok(())
     }

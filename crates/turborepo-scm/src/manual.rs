@@ -4,7 +4,7 @@ use globwalk::fix_glob_pattern;
 use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
 use wax::{any, Glob, Pattern};
 
 use crate::{package_deps::GitHashes, Error};
@@ -47,7 +47,7 @@ pub(crate) fn hash_files(
 
 pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
-    package_path: &AnchoredSystemPathBuf,
+    package_path: &AnchoredSystemPath,
     inputs: &[S],
 ) -> Result<GitHashes, Error> {
     let full_package_path = turbo_root.resolve(package_path);

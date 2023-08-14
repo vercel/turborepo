@@ -81,7 +81,7 @@ pub struct TaskDefinition {
 
     pass_through_env: Vec<String>,
 
-    dot_env: Vec<RelativeUnixPathBuf>,
+    pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
 
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:
@@ -97,7 +97,7 @@ pub struct TaskDefinition {
 
     // Inputs indicate the list of files this Task depends on. If any of those files change
     // we can conclude that any cached outputs or logs for this Task should be invalidated.
-    inputs: Vec<String>,
+    pub(crate) inputs: Vec<String>,
 
     // OutputMode determines how we should log the output.
     pub(crate) output_mode: OutputLogsMode,

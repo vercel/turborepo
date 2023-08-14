@@ -22,9 +22,8 @@ struct TaskHashable {
     dotEnv @12 :List(Text);
 
     enum EnvMode {
-      infer @0;
-      loose @1;
-      strict @2;
+      loose @0;
+      strict @1;
     }
 }
 

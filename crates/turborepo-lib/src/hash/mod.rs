@@ -10,10 +10,13 @@ use std::collections::HashMap;
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
+use turborepo_env::ResolvedEnvMode;
 
 use crate::cli::EnvMode;
 
 mod proto_capnp {
+    use turborepo_env::ResolvedEnvMode;
+
     use crate::cli::EnvMode;
 
     include!(concat!(env!("OUT_DIR"), "/src/hash/proto_capnp.rs"));
@@ -28,18 +31,17 @@ mod proto_capnp {
         }
     }
 
-    impl From<EnvMode> for task_hashable::EnvMode {
-        fn from(value: EnvMode) -> Self {
+    impl From<ResolvedEnvMode> for task_hashable::EnvMode {
+        fn from(value: ResolvedEnvMode) -> Self {
             match value {
-                EnvMode::Infer => task_hashable::EnvMode::Infer,
-                EnvMode::Loose => task_hashable::EnvMode::Loose,
-                EnvMode::Strict => task_hashable::EnvMode::Strict,
+                ResolvedEnvMode::Loose => task_hashable::EnvMode::Loose,
+                ResolvedEnvMode::Strict => task_hashable::EnvMode::Strict,
             }
         }
     }
 }
 
-struct TaskHashable {
+pub struct TaskHashable {
     // hashes
     global_hash: String,
     task_dependency_hashes: Vec<String>,
@@ -55,8 +57,8 @@ struct TaskHashable {
     // env
     env: Vec<String>,
     resolved_env_vars: EnvVarPairs,
-    pass_thru_env: Vec<String>,
-    env_mode: EnvMode,
+    pub(crate) pass_through_env: Vec<String>,
+    pub(crate) env_mode: ResolvedEnvMode,
     dot_env: Vec<turbopath::RelativeUnixPathBuf>,
 }
 
@@ -79,7 +81,9 @@ struct TaskOutputs {
 }
 
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
-struct FileHashes(HashMap<turbopath::RelativeUnixPathBuf, String>);
+
+#[derive(Debug, Clone)]
+pub struct FileHashes(pub HashMap<turbopath::RelativeUnixPathBuf, String>);
 
 impl From<TaskOutputs> for Builder<HeapAllocator> {
     fn from(value: TaskOutputs) -> Self {
@@ -240,8 +244,8 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
         {
             let mut pass_thru_env_builder = builder
                 .reborrow()
-                .init_pass_thru_env(task_hashable.pass_thru_env.len() as u32);
-            for (i, env) in task_hashable.pass_thru_env.iter().enumerate() {
+                .init_pass_thru_env(task_hashable.pass_through_env.len() as u32);
+            for (i, env) in task_hashable.pass_through_env.iter().enumerate() {
                 pass_thru_env_builder.set(i as u32, env);
             }
         }
@@ -372,6 +376,7 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
 #[cfg(test)]
 mod test {
     use test_case::test_case;
+    use turborepo_env::ResolvedEnvMode;
     use turborepo_lockfiles::Package;
 
     use super::{
@@ -395,8 +400,8 @@ mod test {
             pass_thru_args: vec!["pass_thru_args".to_string()],
             env: vec!["env".to_string()],
             resolved_env_vars: vec![],
-            pass_thru_env: vec!["pass_thru_env".to_string()],
-            env_mode: EnvMode::Infer,
+            pass_through_env: vec!["pass_thru_env".to_string()],
+            env_mode: ResolvedEnvMode::Loose,
             dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 

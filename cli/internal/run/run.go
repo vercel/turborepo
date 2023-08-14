@@ -292,7 +292,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		g.RootNode,
 		g.GlobalHash,
 		envAtExecutionStart,
-		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
+		// TODO(mehulkar): remove g.Pipeline, because we need to get task definitions from CompleteGraph instead
 		g.Pipeline,
 	)
 
