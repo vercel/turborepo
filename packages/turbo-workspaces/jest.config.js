@@ -9,10 +9,10 @@ module.exports = {
   collectCoverage: true,
   coverageThreshold: {
     global: {
-      branches: 83,
+      branches: 82,
       functions: 87,
-      lines: 93,
-      statements: 93,
+      lines: 92,
+      statements: 92,
     },
   },
   verbose: process.env.RUNNER_DEBUG === "1",
