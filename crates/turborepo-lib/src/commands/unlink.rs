@@ -1,9 +1,9 @@
-use std::{fs, fs::File};
+use std::fs;
 
 use anyhow::{Context, Result};
 use turborepo_ui::GREY;
 
-use crate::{cli::LinkTarget, commands::CommandBase, config::RawTurboJSON};
+use crate::{cli::LinkTarget, commands::CommandBase, config::RawTurboJSON, rewrite_json};
 
 enum UnlinkSpacesResult {
     Unlinked,
@@ -55,25 +55,13 @@ pub fn unlink(base: &mut CommandBase, target: LinkTarget) -> Result<()> {
 
 fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResult> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path)?;
 
-    let turbo_json_contents =
-        fs::read_to_string(&turbo_json_path).context("unable to open turbo.json file")?;
-    let mut turbo_json: RawTurboJSON = serde_json::from_str(&turbo_json_contents)?;
-    let has_spaces_id = turbo_json
-        .experimental_spaces
-        .unwrap_or_default()
-        .id
-        .is_some();
-    // remove the spaces config
-    // TODO: in the future unlink should possible just remove the spaces id
-    turbo_json.experimental_spaces = None;
-
-    // write turbo_json back to file
-    let config_file = File::create(&turbo_json_path)?;
-    serde_json::to_writer_pretty(&config_file, &turbo_json)?;
-
-    match has_spaces_id {
-        true => Ok(UnlinkSpacesResult::Unlinked),
-        false => Ok(UnlinkSpacesResult::NoSpacesFound),
+    let output = rewrite_json::unset_path(&turbo_json, &["experimentalSpaces", "id"])?;
+    if let Some(output) = output {
+        fs::write(turbo_json_path, output)?;
+        Ok(UnlinkSpacesResult::Unlinked)
+    } else {
+        Ok(UnlinkSpacesResult::NoSpacesFound)
     }
 }
