@@ -8,10 +8,10 @@ pub const TASK_DELIMITER: &str = "#";
 pub const ROOT_PKG_NAME: &str = "//";
 
 /// A task identifier as it will appear in the task graph
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct TaskId<'a> {
-    package: Cow<'a, str>,
-    task: Cow<'a, str>,
+    pub(crate) package: Cow<'a, str>,
+    pub(crate) task: Cow<'a, str>,
 }
 
 /// A task name as it appears in in a `turbo.json` it might be for all

@@ -32,6 +32,7 @@ use crate::{
     package_json::PackageJson,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
+    task_hash::PackageInputsHashes,
 };
 
 #[derive(Debug)]
@@ -205,13 +206,13 @@ impl Run {
             &self.base.repo_root,
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
-            root_turbo_json.global_deps,
+            &root_turbo_json.global_deps,
             &env_at_execution_start,
-            root_turbo_json.global_env,
-            root_turbo_json.global_pass_through_env,
+            &root_turbo_json.global_env,
+            &root_turbo_json.global_pass_through_env,
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
-            root_turbo_json.global_dot_env,
+            &root_turbo_json.global_dot_env,
         )?;
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
@@ -233,6 +234,19 @@ impl Run {
         let engine = Arc::new(engine);
         let visitor = Visitor::new(pkg_dep_graph, runcache, &opts);
         visitor.visit(engine).await?;
+
+        let tasks: Vec<_> = engine.tasks().collect();
+        let workspaces = pkg_dep_graph.workspaces().collect();
+
+        let package_file_hashes = PackageInputsHashes::calculate_file_hashes(
+            scm,
+            engine.tasks(),
+            workspaces,
+            engine.task_definitions(),
+            &self.base.repo_root,
+        )?;
+
+        debug!("package file hashes: {:?}", package_file_hashes);
 
         Ok(())
     }

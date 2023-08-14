@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use itertools::{Either, Itertools};
 use tracing::debug;
-use turbopath::{
-    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
 
 use crate::{hash_object::hash_objects, Error, Git, SCM};
 
@@ -27,7 +25,7 @@ impl SCM {
     pub fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        package_path: &AnchoredSystemPathBuf,
+        package_path: &AnchoredSystemPath,
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         match self {
@@ -79,7 +77,7 @@ impl Git {
     fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        package_path: &AnchoredSystemPathBuf,
+        package_path: &AnchoredSystemPath,
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         if inputs.is_empty() {
@@ -92,7 +90,7 @@ impl Git {
     fn get_package_file_hashes_from_index(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        package_path: &AnchoredSystemPathBuf,
+        package_path: &AnchoredSystemPath,
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
         let git_to_pkg_path = self.root.anchor(&full_pkg_path)?;
@@ -126,7 +124,7 @@ impl Git {
     fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        package_path: &AnchoredSystemPathBuf,
+        package_path: &AnchoredSystemPath,
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
