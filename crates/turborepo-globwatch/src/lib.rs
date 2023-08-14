@@ -354,6 +354,7 @@ impl<T: Watcher> WatchConfig<T> {
             .map_err(ConfigError::WatchError)
     }
 
+    /// add_root adds a *recursive* watch at a particular directory.
     pub async fn add_root(&self, root: &AbsoluteSystemPath) -> Result<(), ConfigError> {
         self.watcher
             .lock()
