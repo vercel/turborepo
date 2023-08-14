@@ -7,6 +7,7 @@ use clap_complete::{generate, Shell};
 use serde::Serialize;
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_ui::UI;
 
 #[cfg(feature = "run-stub")]
 use crate::commands::run;
@@ -15,7 +16,6 @@ use crate::{
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
-    ui::UI,
     Payload,
 };
 

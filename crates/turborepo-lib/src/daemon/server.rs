@@ -332,9 +332,10 @@ mod test {
 
     use tokio::select;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
 
     use super::DaemonServer;
-    use crate::{commands::CommandBase, ui::UI, Args};
+    use crate::{commands::CommandBase, Args};
 
     // the windows runner starts a new thread to accept uds requests,
     // so we need a multi-threaded runtime
