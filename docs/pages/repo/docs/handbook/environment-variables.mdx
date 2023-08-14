@@ -3,11 +3,11 @@ import { Tabs, Tab } from '../../../../components/Tabs';
 
 # Using Environment Variables
 
-Because environment variables are not captured in source code they're not as easily shared across machines. To set up environment variables for your repository you will need to take advantage of a number of Turborepo features.
+Because environment variables are not captured in source code, they're not as easily shared across machines. To set up environment variables for your repository you will need to take advantage of a number of Turborepo features.
 
 ## Working with Next.js and other libraries that load environment variables
 
-If your framework automatically loads environment variables from a particular file for you, you must make sure that `turbo` knows where that framework is going to load them from. This shows a baseline configuration for Next.js and Vite, who load their environment files themselves:
+If your framework automatically loads environment variables from a particular file, such as `.env`, you must indicate to `turbo` the location of these files. This shows a baseline configuration for Next.js and Vite, who load their environment files themselves:
 
 <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
