@@ -1,7 +1,9 @@
 mod builder;
+mod dot;
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     rc::Rc,
 };
 
@@ -109,5 +111,14 @@ impl Engine<Built> {
                 })
                 .collect(),
         )
+    }
+}
+
+impl fmt::Display for TaskNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TaskNode::Root => f.write_str("___ROOT___"),
+            TaskNode::Task(task) => task.fmt(f),
+        }
     }
 }

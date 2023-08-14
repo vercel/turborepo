@@ -204,7 +204,10 @@ impl fmt::Display for WorkspaceNode {
 }
 impl From<String> for WorkspaceName {
     fn from(value: String) -> Self {
-        Self::Other(value)
+        match value == "//" {
+            true => Self::Root,
+            false => Self::Other(value),
+        }
     }
 }
 

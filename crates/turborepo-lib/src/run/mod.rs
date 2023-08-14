@@ -4,8 +4,11 @@ mod global_hash;
 mod scope;
 pub mod task_id;
 
+use std::io::BufWriter;
+
 use anyhow::{Context as ErrorContext, Result};
 use tracing::{debug, info};
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
@@ -138,7 +141,7 @@ impl Run {
         )?;
 
         info!("created cache");
-        let _engine = EngineBuilder::new(
+        let engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
             opts.run_opts.single_package,
@@ -163,6 +166,22 @@ impl Run {
                 .map(|task| TaskName::from(task.as_str()).into_owned()),
         )
         .build()?;
+
+        if opts.run_opts.graph_file.is_some() || opts.run_opts.graph_dot {
+            match opts.run_opts.graph_file {
+                Some(graph_file) => {
+                    let graph_file = AbsoluteSystemPathBuf::from_unknown(
+                        &AbsoluteSystemPathBuf::cwd()?,
+                        graph_file,
+                    );
+                    let file = graph_file.open()?;
+                    let writer = BufWriter::new(file);
+                    engine.dot_graph(writer, opts.run_opts.single_package)?;
+                }
+                None => engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?,
+            }
+            return Ok(());
+        }
 
         Ok(())
     }

@@ -56,7 +56,7 @@ pub struct RunOpts<'a> {
     dry_run: bool,
     pub(crate) dry_run_json: bool,
     pub graph_dot: bool,
-    graph_file: Option<&'a str>,
+    pub graph_file: Option<&'a str>,
     pub(crate) no_daemon: bool,
     pub(crate) single_package: bool,
     log_prefix: LogPrefix,
