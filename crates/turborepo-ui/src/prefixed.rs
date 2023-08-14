@@ -89,8 +89,9 @@ impl<W: Write> Write for PrefixedWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let prefix = self.prefix.clone();
         let prefix = self.ui.apply(prefix);
-        self.writer.write(prefix.to_string().as_bytes())?;
-        self.writer.write(buf)
+        let prefix_bytes_written = self.writer.write(prefix.to_string().as_bytes())?;
+
+        Ok(prefix_bytes_written + self.writer.write(buf)?)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {

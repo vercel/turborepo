@@ -38,8 +38,7 @@ impl ColorSelector {
 
         let colors = get_terminal_package_colors();
 
-        let idx = self.idx.load(Ordering::Relaxed) + 1;
-        self.idx.store(idx, Ordering::Relaxed);
+        let idx = self.idx.fetch_add(1, Ordering::Relaxed);
         let color = colors[idx % colors.len()].clone();
         self.cache.insert(key.to_string(), color.clone());
 
@@ -47,7 +46,7 @@ impl ColorSelector {
     }
 
     pub fn prefix_with_color(&mut self, cache_key: &str, prefix: &str) -> String {
-        if prefix == "" {
+        if prefix.is_empty() {
             return "".into();
         }
 

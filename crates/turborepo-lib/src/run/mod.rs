@@ -184,6 +184,7 @@ impl Run {
             opts.runcache_opts,
             color_selector,
             daemon,
+            self.base.ui,
         );
 
         Ok(())

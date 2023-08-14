@@ -52,8 +52,8 @@ impl<W: Write> Write for LogWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match (&mut self.log_file, &mut self.prefixed_writer) {
             (Some(log_file), Some(prefixed_writer)) => {
-                log_file.write(buf)?;
-                prefixed_writer.write(buf)
+                let _ = prefixed_writer.write(buf)?;
+                log_file.write(buf)
             }
             (Some(log_file), None) => log_file.write(buf),
             (None, Some(prefixed_writer)) => prefixed_writer.write(buf),

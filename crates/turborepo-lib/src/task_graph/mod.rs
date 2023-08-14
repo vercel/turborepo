@@ -3,7 +3,10 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::{cli::OutputLogsMode, run::task_id::TaskName};
+use crate::{
+    cli::OutputLogsMode,
+    run::task_id::{TaskId, TaskName},
+};
 
 pub type Pipeline = HashMap<TaskName<'static>, BookkeepingTaskDefinition>;
 
@@ -173,6 +176,21 @@ macro_rules! set_field {
 }
 
 impl TaskDefinition {
+    pub fn hashable_outputs(&self, task_name: &TaskId) -> TaskOutputs {
+        let mut inclusion_outputs = vec![format!(".turbo/turbo-{}.log", task_name.task())];
+        inclusion_outputs.extend_from_slice(&self.outputs.inclusions[..]);
+
+        let mut hashable = TaskOutputs {
+            inclusions: inclusion_outputs,
+            exclusions: self.outputs.exclusions.clone(),
+        };
+
+        hashable.inclusions.sort();
+        hashable.exclusions.sort();
+
+        hashable
+    }
+
     // merge accepts a BookkeepingTaskDefinitions and
     // merges it into TaskDefinition. It uses the bookkeeping
     // defined_fields to determine which fields should be overwritten and when

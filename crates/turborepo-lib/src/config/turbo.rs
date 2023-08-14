@@ -567,8 +567,8 @@ mod tests {
         package_json::PackageJson,
         run::task_id::TaskName,
         task_graph::{
-            BookkeepingTaskDefinition, OutputLogsMode, TaskDefinitionExperiments,
-            TaskDefinitionHashable, TaskOutputs,
+            BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionHashable,
+            TaskOutputs,
         },
     };
 
