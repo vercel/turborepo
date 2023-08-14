@@ -97,6 +97,11 @@ jobs:
           name: Test trace reports
           path: |
             test/turbopack-test-junit-report
+      - name: Upload trace to datadog
+        run: |
+          npm install -g @datadog/datadog-ci @aws-sdk/property-provider
+          ls -al test/turbopack-test-junit-report
+          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack test/turbopack-test-junit-report
 
   test-prod:
     name: Next.js integration test (Production)
@@ -136,6 +141,11 @@ jobs:
           name: Test trace reports
           path: |
             test/turbopack-test-junit-report
+      - name: Upload trace to datadog
+        run: |
+          npm install -g @datadog/datadog-ci @aws-sdk/property-provider
+          ls -al test/turbopack-test-junit-report
+          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack test/turbopack-test-junit-report
 
   test-integration:
     name: Next.js integration test (Integration)
@@ -175,6 +185,11 @@ jobs:
           name: Test trace reports
           path: |
             test/turbopack-test-junit-report
+      - name: Upload trace to datadog
+        run: |
+          npm install -g @datadog/datadog-ci @aws-sdk/property-provider
+          ls -al test/turbopack-test-junit-report
+          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack test/turbopack-test-junit-report
 
   # Collect integration test results from execute_tests,
   # Store it as github artifact for next step to consume.
@@ -209,25 +224,24 @@ jobs:
     needs: [test-dev, test-prod, test-integration]
     name: Upload test trace to datadog
     runs-on: ubuntu-latest-8-core-oss
+    if: false
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Download test reports artifact
         id: download-test-reports
         uses: actions/download-artifact@v3
-        continue-on-error: true
         with:
           name: Test trace reports
           path: test
       - name: Upload test trace to datadog
-        continue-on-error: true
         run: |
           npm install -g junit-report-merger@6.0.2 @datadog/datadog-ci @aws-sdk/property-provider
-          jrm ./nextjs-test-result-junit.xml "test/**/*.xml"
+          # jrm ./nextjs-test-result-junit.xml "test/**/*.xml"
           ls -al ./test/*.xml
-          ls -al ./*.xml
+          # ls -al ./*.xml
           # We'll tag this to the Turbopack service, not the next.js
-          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack ./nextjs-test-result-junit.xml
+          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack ./test
 
       # For the debugging purpose, upload the test trace to github artifact.
       # So we can manually analyze test reports.
