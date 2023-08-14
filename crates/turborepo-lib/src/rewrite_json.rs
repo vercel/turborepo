@@ -48,7 +48,7 @@ pub fn set_path(
 
     // Find the token we'll be modifying and its path from the root.
     let current_path = &mut vec![];
-    let (closest_path, closest_node) = get_closest_node(&root, &path, current_path);
+    let (closest_path, closest_node) = get_closest_node(&root, path, current_path);
 
     // Pull the token metadata off of the token.
     let (property_count, range): (usize, jsonc_parser::common::Range) = match closest_node {
@@ -210,7 +210,7 @@ pub fn unset_path(
 
     // The key path can appear multiple times. This a vec that contains each time it
     // occurs.
-    let path_ranges = find_all_paths(&root, &path);
+    let path_ranges = find_all_paths(&root, path);
 
     if path_ranges.is_empty() {
         return Ok(None);

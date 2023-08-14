@@ -59,7 +59,7 @@ fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResul
 
     let output = rewrite_json::unset_path(&turbo_json, &["experimentalSpaces", "id"])?;
     if let Some(output) = output {
-        fs::write(turbo_json_path, &output)?;
+        fs::write(turbo_json_path, output)?;
         Ok(UnlinkSpacesResult::Unlinked)
     } else {
         Ok(UnlinkSpacesResult::NoSpacesFound)
