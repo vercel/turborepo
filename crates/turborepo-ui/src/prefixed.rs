@@ -1,4 +1,7 @@
-use std::{fmt::Display, io::Write};
+use std::{
+    fmt::{Debug, Display, Formatter},
+    io::Write,
+};
 
 use console::StyledObject;
 use tracing::error;
@@ -64,18 +67,29 @@ impl<W: Write> PrefixedUI<W> {
 pub struct PrefixedWriter<W> {
     prefix: StyledObject<String>,
     writer: W,
+    ui: UI,
+}
+
+impl<W> Debug for PrefixedWriter<W> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PrefixedWriter")
+            .field("prefix", &self.prefix)
+            .field("ui", &self.ui)
+            .finish()
+    }
 }
 
 impl<W: Write> PrefixedWriter<W> {
-    pub fn new(prefix: StyledObject<String>, writer: W) -> Self {
-        Self { prefix, writer }
+    pub fn new(ui: UI, prefix: StyledObject<String>, writer: W) -> Self {
+        Self { ui, prefix, writer }
     }
 }
 
 impl<W: Write> Write for PrefixedWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let prefix = self.prefix.to_string();
-        self.writer.write(prefix.as_bytes())?;
+        let prefix = self.prefix.clone();
+        let prefix = self.ui.apply(prefix);
+        self.writer.write(prefix.to_string().as_bytes())?;
         self.writer.write(buf)
     }
 

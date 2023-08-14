@@ -55,3 +55,17 @@ impl ColorSelector {
         style.apply_to(format!("{}: ", prefix)).to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_color_selector() {
+        let mut selector = super::ColorSelector::default();
+        let color1 = selector.color_for_key("key1");
+        let color2 = selector.color_for_key("key2");
+        let color3 = selector.color_for_key("key1");
+        assert_eq!(color1, color3);
+        assert_ne!(color1, color2);
+    }
+}
