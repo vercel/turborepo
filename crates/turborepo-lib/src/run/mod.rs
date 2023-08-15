@@ -6,13 +6,12 @@ pub mod task_id;
 
 use std::io::IsTerminal;
 
-use anyhow::{Context as ErrorContext, Result};
+use anyhow::{anyhow, Context as ErrorContext, Result};
 use itertools::Itertools;
 use tracing::{debug, info};
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
-use turborepo_ui::UI;
 
 use self::task_id::TaskName;
 use crate::{

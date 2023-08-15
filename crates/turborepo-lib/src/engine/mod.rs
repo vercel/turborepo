@@ -146,7 +146,7 @@ impl Engine<Built> {
                     let TaskNode::Task(dep_id) = self
                         .task_graph
                         .node_weight(dep_index)
-                        .expect("node index not in graph")
+                        .expect("index comes from iterating the graph and must be present")
                     else {
                         panic!("{task_id} depends on root task node");
                     };
@@ -184,7 +184,7 @@ impl Engine<Built> {
                 (count, errs)
             });
 
-        if persistent_count > concurrency {
+        if persistent_count >= concurrency {
             validation_errors.push(ValidateError::PersistentTasksExceedConcurrency {
                 persistent_count,
                 concurrency,
