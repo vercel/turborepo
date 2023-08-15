@@ -5,7 +5,7 @@
 mod nft_json;
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
     env::current_dir,
     fs,
     future::Future,
@@ -47,7 +47,7 @@ use turbopack_core::{
     issue::{IssueDescriptionExt, IssueReporter, IssueSeverity},
     module::{Module, Modules},
     output::OutputAsset,
-    reference::all_modules,
+    reference::ModuleReference,
     resolve::options::{ImportMapping, ResolvedMap},
 };
 
@@ -636,6 +636,52 @@ async fn main_operation(
         Args::Size { common: _ } => todo!(),
     }
     Ok(Vc::cell(Vec::new()))
+}
+
+/// Aggregates all [Module]s referenced by an [Module]. [ModuleReference]
+/// This does not include transitively references [Module]s, but it includes
+/// primary and secondary [Module]s referenced.
+#[turbo_tasks::function]
+pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
+    let references_set = module.references().await?;
+    let mut modules = Vec::new();
+    let mut queue = VecDeque::with_capacity(32);
+    for reference in references_set.iter() {
+        queue.push_back(reference.resolve_reference());
+    }
+    // that would be non-deterministic:
+    // while let Some(result) = race_pop(&mut queue).await {
+    // match &*result? {
+    while let Some(resolve_result) = queue.pop_front() {
+        modules.extend(resolve_result.primary_modules().await?.iter().copied());
+        for &reference in resolve_result.await?.get_references() {
+            queue.push_back(reference.resolve_reference());
+        }
+    }
+    Ok(Vc::cell(modules))
+}
+
+/// Aggregates all [Module]s referenced by an [Module] including transitively
+/// referenced [Module]s. This basically gives all [Module]s in a subgraph
+/// starting from the passed [Module].
+#[turbo_tasks::function]
+pub async fn all_modules(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
+    // TODO need to track import path here
+    let mut queue = VecDeque::with_capacity(32);
+    queue.push_back((asset, all_referenced_modules(asset)));
+    let mut assets = HashSet::new();
+    assets.insert(asset);
+    while let Some((parent, references)) = queue.pop_front() {
+        let references = references
+            .issue_file_path(parent.ident().path(), "expanding references of asset")
+            .await?;
+        for asset in references.await?.iter() {
+            if assets.insert(*asset) {
+                queue.push_back((*asset, all_referenced_modules(*asset)));
+            }
+        }
+    }
+    Ok(Vc::cell(assets.into_iter().collect()))
 }
 
 #[turbo_tasks::function]
