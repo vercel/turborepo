@@ -17,14 +17,15 @@ use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
 use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
-
 #[cfg(not(test))]
-use crate::ui::CYAN;
+use turborepo_ui::CYAN;
+use turborepo_ui::{BOLD, GREY, UNDERLINE};
+
 use crate::{
     cli::LinkTarget,
     commands::CommandBase,
     config::{RawTurboJSON, SpacesJson},
-    ui::{BOLD, GREY, UNDERLINE},
+    rewrite_json,
 };
 
 #[derive(Clone)]
@@ -443,29 +444,16 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
 
 fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path)?;
+    let space_id_json_value = format!("\"{}\"", space_id);
 
-    if !turbo_json_path.exists() {
-        return Err(anyhow!("turbo.json not found."));
-    }
+    let output = rewrite_json::set_path(
+        &turbo_json,
+        &["experimentalSpaces", "id"],
+        &space_id_json_value,
+    )?;
 
-    let turbo_json_file = File::open(&turbo_json_path)?;
-    let mut turbo_json: RawTurboJSON = serde_json::from_reader(turbo_json_file)?;
-    match turbo_json.experimental_spaces {
-        Some(mut spaces_config) => {
-            spaces_config.id = Some(space_id.to_string());
-            turbo_json.experimental_spaces = Some(spaces_config);
-        }
-        None => {
-            turbo_json.experimental_spaces = Some(SpacesJson {
-                id: Some(space_id.to_string()),
-                other: None,
-            });
-        }
-    }
-
-    // write turbo_json back to file
-    let config_file = File::create(&turbo_json_path)?;
-    serde_json::to_writer_pretty(&config_file, &turbo_json)?;
+    fs::write(turbo_json_path, output)?;
 
     Ok(())
 }
@@ -478,13 +466,13 @@ mod test {
     use tempfile::{NamedTempFile, TempDir};
     use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
     use vercel_api_mock::start_test_server;
 
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
         config::{ClientConfigLoader, RawTurboJSON, RepoConfigLoader, UserConfigLoader},
-        ui::UI,
         Args,
     };
 

@@ -364,8 +364,6 @@ jobs:
       # work out of box. We should take another stab at it later.
       - name: Setup Pnpm
         uses: pnpm/action-setup@v2.2.4
-        with:
-          version: 7.2.1
 
       - name: Make sure pnpm always has a cache
         shell: bash
@@ -736,9 +734,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Install tests dependencies
         working-directory: crates/turbopack/tests/node-file-trace
@@ -797,9 +793,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Setup Protoc
         uses: arduino/setup-protoc@v1
@@ -873,9 +867,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
@@ -940,9 +932,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
