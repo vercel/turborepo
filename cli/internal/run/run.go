@@ -307,6 +307,9 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		r.base.RepoRoot,
 	)
 
+	fmt.Printf("taskHashTracker.PackageInputsHashes %+v\n", taskHashTracker.PackageInputsHashes)
+	fmt.Printf("taskHashTracker.PackageInputsExpandedHashes %+v\n", taskHashTracker.PackageInputsExpandedHashes)
+
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")
 	}

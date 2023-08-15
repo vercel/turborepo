@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
+use serde::Serialize;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_env::ResolvedEnvMode;
@@ -40,9 +41,9 @@ impl TaskHashable {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct PackageFileHashes {
-    package_input_hashes: HashMap<TaskId<'static>, String>,
+    package_inputs_hashes: HashMap<TaskId<'static>, String>,
     package_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
 
@@ -130,7 +131,7 @@ impl PackageFileHashes {
         }
 
         Ok(PackageFileHashes {
-            package_input_hashes: hashes,
+            package_inputs_hashes: hashes,
             package_inputs_expanded_hashes: hash_objects,
         })
     }

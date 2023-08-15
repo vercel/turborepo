@@ -32,12 +32,12 @@ type Tracker struct {
 	EnvAtExecutionStart env.EnvironmentVariableMap
 	pipeline            fs.Pipeline
 
-	packageInputsHashes map[string]string
+	PackageInputsHashes map[string]string
 
-	// packageInputsExpandedHashes is a map of a hashkey to a list of files that are inputs to the task.
+	// PackageInputsExpandedHashes is a map of a hashkey to a list of files that are inputs to the task.
 	// Writes to this map happen during CalculateFileHash(). Since this happens synchronously
 	// before walking the task graph, it does not need to be protected by a mutex.
-	packageInputsExpandedHashes map[string]map[turbopath.AnchoredUnixPath]string
+	PackageInputsExpandedHashes map[string]map[turbopath.AnchoredUnixPath]string
 
 	// mu is a mutex that we can lock/unlock to read/write from maps
 	// the fields below should be protected by the mutex.
@@ -167,8 +167,8 @@ func (th *Tracker) CalculateFileHashes(
 	if err != nil {
 		return err
 	}
-	th.packageInputsHashes = hashes
-	th.packageInputsExpandedHashes = hashObjects
+	th.PackageInputsHashes = hashes
+	th.PackageInputsExpandedHashes = hashObjects
 	return nil
 }
 
@@ -240,7 +240,7 @@ func (th *Tracker) calculateDependencyHashes(dependencySet dag.Set) ([]string, e
 // that it has previously been called on its task-graph dependencies. File hashes must be calculated
 // first.
 func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.PackageTask, dependencySet dag.Set, frameworkInference bool, args []string) (string, error) {
-	hashOfFiles, ok := th.packageInputsHashes[packageTask.TaskID]
+	hashOfFiles, ok := th.PackageInputsHashes[packageTask.TaskID]
 	if !ok {
 		return "", fmt.Errorf("cannot find package-file hash for %v", packageTask.TaskID)
 	}
@@ -352,7 +352,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 
 // GetExpandedInputs gets the expanded set of inputs for a given PackageTask
 func (th *Tracker) GetExpandedInputs(packageTask *nodes.PackageTask) map[turbopath.AnchoredUnixPath]string {
-	expandedInputs := th.packageInputsExpandedHashes[packageTask.TaskID]
+	expandedInputs := th.PackageInputsExpandedHashes[packageTask.TaskID]
 	inputsCopy := make(map[turbopath.AnchoredUnixPath]string, len(expandedInputs))
 
 	for path, hash := range expandedInputs {
