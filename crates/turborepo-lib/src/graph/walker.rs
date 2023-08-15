@@ -1,10 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use futures::{
-    future::{join, join_all},
-    stream::FuturesUnordered,
-    StreamExt,
-};
+use futures::{future::join_all, stream::FuturesUnordered, StreamExt};
 use petgraph::{
     visit::{IntoNeighborsDirected, IntoNodeIdentifiers},
     Direction,
@@ -15,18 +11,22 @@ use tokio::{
 };
 use tracing::log::trace;
 
-pub struct Walker<N> {
+pub struct Walker<N, S> {
+    marker: std::marker::PhantomData<S>,
     cancel: watch::Sender<bool>,
     node_events: Option<mpsc::Receiver<(N, oneshot::Sender<()>)>>,
     join_handles: FuturesUnordered<JoinHandle<()>>,
 }
+
+pub struct Start;
+pub struct Walking;
 
 pub type WalkMessage<N> = (N, oneshot::Sender<()>);
 
 // These constraint might look very stiff, but since all of the petgraph graph
 // types use integers as node ids and GraphBase already constraints these types
 // to Copy + Eq so adding Hash + Send + 'static as bounds aren't unreasonable.
-impl<N: Eq + Hash + Copy + Send + 'static> Walker<N> {
+impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
     /// Create a new graph walker for a DAG that emits nodes only once all of
     /// their dependencies have been processed.
     /// The graph should not be modified after a walker is created as the nodes
@@ -119,9 +119,37 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N> {
             cancel,
             node_events: Some(node_rx),
             join_handles,
+            marker: std::marker::PhantomData,
         }
     }
 
+    /// Start walking the graph and return a channel that emits node
+    /// indices once all of the nodes dependencies have finished.
+    /// It is up to the caller to use the oneshot channel to mark
+    /// a node as being done.
+    pub fn walk(self) -> (Walker<N, Walking>, mpsc::Receiver<WalkMessage<N>>) {
+        let Self {
+            cancel,
+            mut node_events,
+            join_handles,
+            ..
+        } = self;
+        let node_events = node_events
+            .take()
+            .expect("walking graph with walker that has already been used");
+        (
+            Walker {
+                marker: std::marker::PhantomData,
+                cancel,
+                node_events: None,
+                join_handles,
+            },
+            node_events,
+        )
+    }
+}
+
+impl<N> Walker<N, Walking> {
     /// Cancel the walk
     /// Any nodes that are already in the queue to be emitted will still be
     /// sent, but no new nodes will be sent.
@@ -142,16 +170,6 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N> {
         }
 
         Ok(())
-    }
-
-    /// Start walking the graph and return a channel that emits node
-    /// indices once all of the nodes dependencies have finished.
-    /// It is up to the caller to use the oneshot channel to mark
-    /// a node as being done.
-    pub fn walk(&mut self) -> mpsc::Receiver<WalkMessage<N>> {
-        self.node_events
-            .take()
-            .expect("walking graph with walker that has already been used")
     }
 }
 
@@ -176,13 +194,14 @@ mod test {
         g.add_edge(a, b, ());
         g.add_edge(b, c, ());
 
-        let mut walker = Walker::new(&g);
+        let walker = Walker::new(&g);
         let mut visited = Vec::new();
-        let mut node_emitter = walker.walk();
+        let (walker, mut node_emitter) = walker.walk();
         while let Some((index, done)) = node_emitter.recv().await {
             visited.push(index);
             done.send(()).unwrap();
         }
+        walker.wait().await.unwrap();
         assert_eq!(visited, vec![c, b, a]);
     }
 
@@ -196,9 +215,9 @@ mod test {
         g.add_edge(a, b, ());
         g.add_edge(b, c, ());
 
-        let mut walker = Walker::new(&g);
+        let walker = Walker::new(&g);
         let mut visited = Vec::new();
-        let mut node_emitter = walker.walk();
+        let (mut walker, mut node_emitter) = walker.walk();
         while let Some((index, done)) = node_emitter.recv().await {
             // Cancel after we get the first node
             walker.cancel().unwrap();
@@ -234,9 +253,9 @@ mod test {
         g.add_edge(d, e, ());
 
         // We intentionally wait to mark e as finished until b has been finished
-        let mut walker = Walker::new(&g);
+        let walker = Walker::new(&g);
         let visited = Arc::new(Mutex::new(Vec::new()));
-        let mut node_emitter = walker.walk();
+        let (walker, mut node_emitter) = walker.walk();
         let (b_done, is_b_done) = oneshot::channel::<()>();
         let mut b_done = Some(b_done);
         let mut is_b_done = Some(is_b_done);
@@ -260,6 +279,7 @@ mod test {
                 done.send(()).unwrap();
             }
         }
+        walker.wait().await.unwrap();
         assert_eq!(visited.lock().unwrap().as_slice(), &[c, b, e, d, a]);
     }
 }
