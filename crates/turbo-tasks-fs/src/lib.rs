@@ -1120,7 +1120,7 @@ impl FileSystemPath {
                 Self::new_normalized(this.fs, path).resolve().await?,
             )))
         } else {
-            Ok(Vc::cell(None))
+            Ok(FileSystemPathOption::none())
         }
     }
 
@@ -1136,7 +1136,7 @@ impl FileSystemPath {
                 )));
             }
         }
-        Ok(Vc::cell(None))
+        Ok(FileSystemPathOption::none())
     }
 
     #[turbo_tasks::function]
