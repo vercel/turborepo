@@ -44,7 +44,7 @@ pub struct RunCacheOpts {
 #[derive(Debug)]
 pub struct RunOpts<'a> {
     pub(crate) tasks: &'a [String],
-    concurrency: u32,
+    pub(crate) concurrency: u32,
     parallel: bool,
     pub(crate) env_mode: EnvMode,
     // Whether or not to infer the framework for each workspace.

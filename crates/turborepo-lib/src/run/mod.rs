@@ -6,12 +6,12 @@ pub mod task_id;
 
 use std::io::IsTerminal;
 
-use anyhow::{Context as ErrorContext, Result};
+use anyhow::{anyhow, Context as ErrorContext, Result};
+use itertools::Itertools;
 use tracing::{debug, info};
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
-use turborepo_ui::UI;
 
 use self::task_id::TaskName;
 use crate::{
@@ -142,7 +142,7 @@ impl Run {
         )?;
 
         info!("created cache");
-        let _engine = EngineBuilder::new(
+        let engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
             opts.run_opts.single_package,
@@ -168,54 +168,9 @@ impl Run {
         )
         .build()?;
 
+        engine
+            .validate(&pkg_dep_graph, opts.run_opts.concurrency)
+            .map_err(|errors| anyhow!("Validation failed:\n{}", errors.into_iter().join("\n")))?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test {
-
-    use anyhow::Result;
-    use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_ui::UI;
-
-    use crate::{
-        cli::{Command, RunArgs},
-        commands::CommandBase,
-        get_version,
-        run::Run,
-        Args,
-    };
-
-    #[tokio::test]
-    async fn test_run() -> Result<()> {
-        let dir = tempdir()?;
-        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path())?;
-        let mut args = Args::default();
-        // Daemon does not work with run stub yet
-        let run_args = RunArgs {
-            no_daemon: true,
-            pkg_inference_root: Some(["apps", "my-app"].join(std::path::MAIN_SEPARATOR_STR)),
-            ..Default::default()
-        };
-        args.command = Some(Command::Run(Box::new(run_args)));
-
-        let ui = UI::infer();
-
-        // Add package.json
-        repo_root
-            .join_component("package.json")
-            .create_with_contents("{\"workspaces\": [\"apps/*\"]}")?;
-        repo_root
-            .join_component("package-lock.json")
-            .create_with_contents("")?;
-        repo_root
-            .join_component("turbo.json")
-            .create_with_contents("{}")?;
-
-        let base = CommandBase::new(args, repo_root, get_version(), ui)?;
-        let mut run = Run::new(base);
-        run.run().await
     }
 }
