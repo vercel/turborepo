@@ -131,6 +131,22 @@ function expandPaths({
   return paths;
 }
 
+function parseWorkspacePackages({
+  workspaces,
+}: {
+  workspaces: PackageJson["workspaces"];
+}): Array<string> {
+  if (!workspaces) {
+    return [];
+  }
+
+  if ("packages" in workspaces) {
+    return workspaces.packages;
+  }
+
+  return workspaces;
+}
+
 function expandWorkspaces({
   workspaceRoot,
   workspaceGlobs,
@@ -191,6 +207,7 @@ export {
   getWorkspaceInfo,
   expandPaths,
   expandWorkspaces,
+  parseWorkspacePackages,
   getPnpmWorkspaces,
   directoryInfo,
   getMainStep,
