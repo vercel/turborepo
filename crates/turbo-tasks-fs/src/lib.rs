@@ -1022,6 +1022,14 @@ impl FileSystemPath {
 pub struct FileSystemPathOption(Option<Vc<FileSystemPath>>);
 
 #[turbo_tasks::value_impl]
+impl FileSystemPathOption {
+    #[turbo_tasks::function]
+    pub fn none() -> Vc<Self> {
+        Vc::cell(None)
+    }
+}
+
+#[turbo_tasks::value_impl]
 impl FileSystemPath {
     /// Create a new Vc<FileSystemPath> from a path withing a FileSystem. The
     /// /-separated path is expected to be already normalized (this is asserted
