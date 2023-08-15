@@ -34,9 +34,10 @@ async function loadWebAssembly(
   throw new Error("loading WebAssembly is not supported");
 }
 
+
 async function loadWebAssemblyModule(
   _source: SourceInfo,
-  _id: ModuleId
+  _id: ModuleId,
 ): Promise<any> {
   throw new Error("loading WebAssembly is not supported");
 }
