@@ -176,7 +176,7 @@ impl Run {
                     );
                     let file = graph_file.open()?;
                     let writer = BufWriter::new(file);
-                    engine.dot_graph(writer, opts.run_opts.single_package)?;
+                    todo!("Need to implement different format support");
                 }
                 None => engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?,
             }
