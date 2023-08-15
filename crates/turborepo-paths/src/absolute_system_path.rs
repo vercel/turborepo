@@ -235,6 +235,11 @@ impl AbsoluteSystemPath {
         Ok(AbsoluteSystemPathBuf(cleaned_path))
     }
 
+    pub fn to_realpath(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let realpath = dunce::canonicalize(&self.0)?;
+        Ok(AbsoluteSystemPathBuf(Utf8PathBuf::try_from(realpath)?))
+    }
+
     // note that this is *not* lstat. If this is a symlink, it
     // will return metadata for the target.
     pub fn stat(&self) -> Result<Metadata, PathError> {

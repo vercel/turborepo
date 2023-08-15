@@ -4,8 +4,9 @@ use anyhow::Result;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_lockfiles::Lockfile;
+use turborepo_ui::UI;
 
-use crate::{cli::EnvMode, package_json::PackageJson, package_manager::PackageManager, ui::UI};
+use crate::{cli::EnvMode, package_json::PackageJson, package_manager::PackageManager};
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 

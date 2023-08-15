@@ -87,7 +87,7 @@ var nodejsPnpm = PackageManager{
 	// We are allowed to use nil here because ArgSeparator already has a type, so it's a typed nil,
 	// This could just as easily be []string{}, but the style guide says to prefer
 	// nil for empty slices.
-	ArgSeparator:               nil,
+	ArgSeparator:               func(_userArgs []string) []string { return nil },
 	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: getPnpmWorkspaceGlobs,

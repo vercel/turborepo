@@ -90,7 +90,7 @@ impl CssChunk {
             while !*path.is_inside(current).await? {
                 let parent = current.parent().resolve().await?;
                 if parent == current {
-                    return Ok(Vc::cell(None));
+                    return Ok(FileSystemPathOption::none());
                 }
                 current = parent;
             }
@@ -385,7 +385,7 @@ impl OutputAsset for CssChunk {
             let (_, ident) = assets[0];
             AssetIdent::new(Value::new(AssetIdent {
                 path: ident.path(),
-                query: None,
+                query: Vc::<String>::empty(),
                 fragment: None,
                 assets,
                 modifiers: Vec::new(),
