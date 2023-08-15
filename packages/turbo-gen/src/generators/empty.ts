@@ -17,7 +17,10 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     version: "0.0.0",
     private: true,
     scripts: {
-      build: "turbo build",
+      dev: "echo 'Add dev script here'",
+      build: "echo 'Add build script here'",
+      test: "echo 'Add test script here'",
+      lint: "echo 'Add lint script here'",
     },
   };
 
