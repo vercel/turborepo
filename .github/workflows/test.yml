@@ -222,8 +222,6 @@ jobs:
 
       - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
-      - run: readelf -p .comment target/debug/turbo
-
   go_lint:
     name: Go linting
     runs-on: ubuntu-latest
