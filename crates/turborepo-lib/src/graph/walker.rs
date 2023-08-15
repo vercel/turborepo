@@ -1,6 +1,10 @@
 use std::{collections::HashMap, hash::Hash};
 
-use futures::future::join_all;
+use futures::{
+    future::{join, join_all},
+    stream::FuturesUnordered,
+    StreamExt,
+};
 use petgraph::{
     visit::{IntoNeighborsDirected, IntoNodeIdentifiers},
     Direction,
@@ -14,7 +18,7 @@ use tracing::log::trace;
 pub struct Walker<N> {
     cancel: watch::Sender<bool>,
     node_events: Option<mpsc::Receiver<(N, oneshot::Sender<()>)>>,
-    join_handles: Vec<JoinHandle<()>>,
+    join_handles: FuturesUnordered<JoinHandle<()>>,
 }
 
 pub type WalkMessage<N> = (N, oneshot::Sender<()>);
@@ -23,7 +27,8 @@ pub type WalkMessage<N> = (N, oneshot::Sender<()>);
 // types use integers as node ids and GraphBase already constraints these types
 // to Copy + Eq so adding Hash + Send + 'static as bounds aren't unreasonable.
 impl<N: Eq + Hash + Copy + Send + 'static> Walker<N> {
-    /// Create a new graph walker for a DAG that emits nodes at a given
+    /// Create a new graph walker for a DAG that emits nodes only once all of
+    /// their dependencies have been processed.
     /// The graph should not be modified after a walker is created as the nodes
     /// emitted might no longer exist or might miss newly added edges.
     pub fn new<G: IntoNodeIdentifiers<NodeId = N> + IntoNeighborsDirected>(graph: G) -> Self {
@@ -39,7 +44,7 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N> {
         // We will be emitting at most txs.len() nodes so emitting a node should never
         // block
         let (node_tx, node_rx) = mpsc::channel(txs.len());
-        let mut join_handles = vec![];
+        let join_handles = FuturesUnordered::new();
         for node in graph.node_identifiers() {
             let tx = txs.remove(&node).expect("should have sender for all nodes");
             let mut cancel_rx = cancel_rx.clone();
@@ -128,11 +133,14 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N> {
     /// Primarily used after the walk is canceled to ensure all tasks
     /// have been stopped.
     pub async fn wait(self) -> Result<(), tokio::task::JoinError> {
-        let Self { join_handles, .. } = self;
+        let Self {
+            mut join_handles, ..
+        } = self;
         // Wait for all of the handles to finish up
-        for handle in join_handles {
-            handle.await.ok();
+        while let Some(result) = join_handles.next().await {
+            result?;
         }
+
         Ok(())
     }
 
