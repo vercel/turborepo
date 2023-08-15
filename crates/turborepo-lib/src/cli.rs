@@ -9,8 +9,6 @@ use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_ui::UI;
 
-#[cfg(feature = "run-stub")]
-use crate::commands::run;
 use crate::{
     commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
     get_version,
@@ -538,6 +536,12 @@ pub struct RunArgs {
     // Pass a string to enable posting Run Summaries to Vercel
     #[clap(long, hide = true)]
     pub experimental_space_id: Option<String>,
+
+    /// Opt-in to the rust codepath for running turbo
+    /// rather than using the go shim
+    #[cfg(feature = "run-stub")]
+    #[clap(long)]
+    pub experimental_rust_codepath: bool,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
@@ -751,10 +755,21 @@ pub async fn run(
         }
         #[cfg(feature = "run-stub")]
         Command::Run(args) => {
-            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
-            run::run(base).await?;
+            // in the case of enabling the run stub, we want to be able to opt-in
+            // to the rust codepath for running turbo
 
-            Ok(Payload::Rust(Ok(0)))
+            if args.tasks.is_empty() {
+                return Err(anyhow!("at least one task must be specified"));
+            }
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, UI::new(true))?;
+
+            if args.experimental_rust_codepath {
+                use crate::commands::run;
+                run::run(base).await?;
+                Ok(Payload::Rust(Ok(0)))
+            } else {
+                Ok(Payload::Go(Box::new(base)))
+            }
         }
         #[cfg(not(feature = "run-stub"))]
         Command::Run(args) => {
