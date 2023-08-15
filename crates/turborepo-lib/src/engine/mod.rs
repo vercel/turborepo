@@ -192,8 +192,8 @@ impl Engine<Built> {
         }
 
         match validation_errors.is_empty() {
-            true => Err(validation_errors),
-            false => Ok(()),
+            true => Ok(()),
+            false => Err(validation_errors),
         }
     }
 }
