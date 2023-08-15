@@ -38,8 +38,6 @@ fn render_graph<N>(
     // These are hardcoded writes from the Go side that we just copy
     writer.write_all(GRAPH_PRELUDE.as_bytes())?;
 
-    // do all of the edges
-    // create a list of edge strings and then
     let mut edges = graph
         .edge_references()
         .map(|edge| {
