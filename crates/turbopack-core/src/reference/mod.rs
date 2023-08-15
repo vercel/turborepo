@@ -168,6 +168,10 @@ pub async fn all_modules(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
     ))
 }
 
+/// Aggregates all [Module]s referenced by an [Module] including transitively
+/// referenced [Module]s, returning an Iterator of each. This function is
+/// designed to be composed into larger chains, eg mapping the output before
+/// constructing a Vc.
 pub async fn all_modules_iter(
     assets: impl Iterator<Item = Vc<Box<dyn Module>>>,
 ) -> Result<impl Iterator<Item = Vc<Box<dyn Module>>>> {
@@ -190,7 +194,7 @@ async fn get_primary_modules_helper(
         .into_iter())
 }
 
-/// Walks the asset graph from multiple assets and collect all referenced
+/// Walks the asset graph from multiple assets and collects all referenced
 /// assets.
 #[turbo_tasks::function]
 pub async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<OutputAssets>> {
@@ -201,6 +205,9 @@ pub async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<Out
     ))
 }
 
+/// Walks the asset graph from multiple assets and collects all referenced
+/// assets, returning an Iterator of each. This function is designed to be
+/// composed into larger chains, eg mapping the output before constructing a Vc.
 pub async fn all_assets_from_entries_iter(
     entries: impl Iterator<Item = Vc<Box<dyn OutputAsset>>>,
 ) -> Result<impl Iterator<Item = Vc<Box<dyn OutputAsset>>>> {
