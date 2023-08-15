@@ -31,10 +31,10 @@
 labeler:
   labels:
     # teams
-    - label: "team: turborepo"
+    - label: "owned-by: turborepo"
       when:
         isAnyFileOwnedByMatch: '@vercel\/turbo-oss'
-    - label: "team: turbopack"
+    - label: "owned-by: web-tooling"
       when:
         isAnyFileOwnedByMatch: '@vercel\/web-tooling'
 
