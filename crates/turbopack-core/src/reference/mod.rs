@@ -1,5 +1,3 @@
-use std::collections::{HashSet, VecDeque};
-
 use anyhow::Result;
 use turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
@@ -7,7 +5,6 @@ use turbo_tasks::{
 };
 
 use crate::{
-    issue::IssueDescriptionExt,
     module::{Module, Modules},
     output::{OutputAsset, OutputAssets},
     resolve::ModuleResolveResult,
@@ -135,31 +132,6 @@ impl SingleOutputAssetReference {
     }
 }
 
-/// Aggregates all [Module]s referenced by an [Module]. [ModuleReference]
-/// This does not include transitively references [Module]s, but it includes
-/// primary and secondary [Module]s referenced.
-///
-/// [Module]: crate::module::Module
-#[turbo_tasks::function]
-pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
-    let references_set = module.references().await?;
-    let mut modules = Vec::new();
-    let mut queue = VecDeque::with_capacity(32);
-    for reference in references_set.iter() {
-        queue.push_back(reference.resolve_reference());
-    }
-    // that would be non-deterministic:
-    // while let Some(result) = race_pop(&mut queue).await {
-    // match &*result? {
-    while let Some(resolve_result) = queue.pop_front() {
-        modules.extend(resolve_result.primary_modules().await?.iter().copied());
-        for &reference in resolve_result.await?.get_references() {
-            queue.push_back(reference.resolve_reference());
-        }
-    }
-    Ok(Vc::cell(modules))
-}
-
 /// Aggregates all primary [Module]s referenced by an [Module]. [AssetReference]
 /// This does not include transitively references [Module]s, only includes
 /// primary [Module]s referenced.
@@ -191,22 +163,31 @@ pub async fn primary_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<V
 /// starting from the passed [Module].
 #[turbo_tasks::function]
 pub async fn all_modules(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
-    // TODO need to track import path here
-    let mut queue = VecDeque::with_capacity(32);
-    queue.push_back((asset, all_referenced_modules(asset)));
-    let mut assets = HashSet::new();
-    assets.insert(asset);
-    while let Some((parent, references)) = queue.pop_front() {
-        let references = references
-            .issue_file_path(parent.ident().path(), "expanding references of asset")
-            .await?;
-        for asset in references.await?.iter() {
-            if assets.insert(*asset) {
-                queue.push_back((*asset, all_referenced_modules(*asset)));
-            }
-        }
-    }
-    Ok(Vc::cell(assets.into_iter().collect()))
+    Ok(Vc::cell(
+        all_modules_iter([asset].into_iter()).await?.collect(),
+    ))
+}
+
+pub async fn all_modules_iter(
+    assets: impl Iterator<Item = Vc<Box<dyn Module>>>,
+) -> Result<impl Iterator<Item = Vc<Box<dyn Module>>>> {
+    Ok(AdjacencyMap::new()
+        .skip_duplicates()
+        .visit(assets, get_primary_modules_helper)
+        .await
+        .completed()?
+        .into_inner()
+        .into_reverse_topological())
+}
+
+/// Computes the list of all chunk children of a given chunk.
+async fn get_primary_modules_helper(
+    asset: Vc<Box<dyn Module>>,
+) -> Result<impl Iterator<Item = Vc<Box<dyn Module>>> + Send> {
+    Ok(primary_referenced_modules(asset)
+        .await?
+        .clone_value()
+        .into_iter())
 }
 
 /// Walks the asset graph from multiple assets and collect all referenced
@@ -214,22 +195,26 @@ pub async fn all_modules(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
 #[turbo_tasks::function]
 pub async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<OutputAssets>> {
     Ok(Vc::cell(
-        AdjacencyMap::new()
-            .skip_duplicates()
-            .visit(
-                entries.await?.iter().copied().map(Vc::upcast),
-                get_referenced_assets,
-            )
-            .await
-            .completed()?
-            .into_inner()
-            .into_reverse_topological()
+        all_assets_from_entries_iter(entries.await?.iter().copied())
+            .await?
             .collect(),
     ))
 }
 
+pub async fn all_assets_from_entries_iter(
+    entries: impl Iterator<Item = Vc<Box<dyn OutputAsset>>>,
+) -> Result<impl Iterator<Item = Vc<Box<dyn OutputAsset>>>> {
+    Ok(AdjacencyMap::new()
+        .skip_duplicates()
+        .visit(entries, get_referenced_assets_helper)
+        .await
+        .completed()?
+        .into_inner()
+        .into_reverse_topological())
+}
+
 /// Computes the list of all chunk children of a given chunk.
-pub async fn get_referenced_assets(
+async fn get_referenced_assets_helper(
     asset: Vc<Box<dyn OutputAsset>>,
 ) -> Result<impl Iterator<Item = Vc<Box<dyn OutputAsset>>> + Send> {
     Ok(asset

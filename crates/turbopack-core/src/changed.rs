@@ -1,42 +1,19 @@
 use anyhow::Result;
-use turbo_tasks::{
-    graph::{GraphTraversal, NonDeterministic},
-    Completion, Completions, Vc,
-};
+use turbo_tasks::{Completion, Completions, Vc};
 
 use crate::{
     asset::Asset,
     module::Module,
     output::{OutputAsset, OutputAssets},
-    reference::primary_referenced_modules,
+    reference::{all_assets_from_entries_iter, all_modules_iter},
 };
-
-async fn get_referenced_output_assets(
-    parent: Vc<Box<dyn OutputAsset>>,
-) -> Result<impl Iterator<Item = Vc<Box<dyn OutputAsset>>> + Send> {
-    Ok(parent.references().await?.clone_value().into_iter())
-}
-
-async fn get_referenced_modules(
-    parent: Vc<Box<dyn Module>>,
-) -> Result<impl Iterator<Item = Vc<Box<dyn Module>>> + Send> {
-    Ok(primary_referenced_modules(parent)
-        .await?
-        .clone_value()
-        .into_iter())
-}
 
 /// Returns a completion that changes when any content of any asset in the whole
 /// asset graph changes.
 #[turbo_tasks::function]
 pub async fn any_content_changed_of_module(root: Vc<Box<dyn Module>>) -> Result<Vc<Completion>> {
-    let completions = NonDeterministic::new()
-        .skip_duplicates()
-        .visit([root], get_referenced_modules)
-        .await
-        .completed()?
-        .into_inner()
-        .into_iter()
+    let completions = all_modules_iter([root].into_iter())
+        .await?
         .map(|m| content_changed(Vc::upcast(m)))
         .collect();
 
@@ -49,13 +26,8 @@ pub async fn any_content_changed_of_module(root: Vc<Box<dyn Module>>) -> Result<
 pub async fn any_content_changed_of_output_asset(
     root: Vc<Box<dyn OutputAsset>>,
 ) -> Result<Vc<Completion>> {
-    let completions = NonDeterministic::new()
-        .skip_duplicates()
-        .visit([root], get_referenced_output_assets)
-        .await
-        .completed()?
-        .into_inner()
-        .into_iter()
+    let completions = all_assets_from_entries_iter([root].into_iter())
+        .await?
         .map(|m| content_changed(Vc::upcast(m)))
         .collect();
 
