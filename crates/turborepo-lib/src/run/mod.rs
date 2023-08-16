@@ -101,6 +101,8 @@ impl Run {
         let filtered_pkgs =
             scope::resolve_packages(&opts.scope_opts, &self.base.repo_root, &pkg_dep_graph, &scm)?;
 
+        println!("filtered_pkgs: {:?}", _filtered_pkgs);
+
         // TODO: Add this back once scope/filter is implemented.
         //       Currently this code has lifetime issues
         // if filtered_pkgs.len() != pkg_dep_graph.len() {

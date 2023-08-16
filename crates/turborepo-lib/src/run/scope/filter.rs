@@ -11,6 +11,7 @@ use wax::Pattern;
 use super::{
     change_detector::{PackageChangeDetector, SCMChangeDetector},
     simple_glob::{Match, SimpleGlob},
+    target_selector::{InvalidSelectorError, TargetSelector},
 };
 use crate::{
     package_graph::{self, PackageGraph},
@@ -226,6 +227,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         } else {
             self.pkg_graph
                 .workspaces()
+                .filter(|(name, _)| !name.to_string().eq(ROOT_PKG_NAME)) // the root package has to be explicitly included
                 .map(|(name, _)| name.to_string())
                 .collect()
         };
@@ -249,7 +251,11 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
 
         for selector in selectors {
             let selector_packages = self.filter_graph_with_selector(&selector)?;
-            let no_selectors = selector_packages.is_empty();
+
+            if selector_packages.is_empty() {
+                unmatched_selectors.push(selector);
+                continue;
+            }
 
             for package in selector_packages {
                 let node = package_graph::WorkspaceNode::Workspace(
@@ -308,10 +314,6 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                     // add  to the list of cherry picked packages
                     cherry_picked_packages.insert(package);
                 }
-            }
-
-            if no_selectors {
-                unmatched_selectors.push(selector);
             }
         }
 
@@ -422,7 +424,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         selector: &TargetSelector,
     ) -> Result<HashSet<String>, ResolutionError> {
         let mut entry_packages = HashSet::new();
-        let mut selector_used = false;
+        let mut selector_valid = false;
 
         let path = self
             .turbo_root
@@ -431,7 +433,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         let globber = wax::Glob::new(path.as_str()).unwrap();
 
         if !selector.from_ref.is_empty() {
-            selector_used = true;
+            selector_valid = true;
             let changed_packages =
                 self.packages_changed_in_range(&selector.from_ref, selector.to_ref())?;
             let package_path_lookup = self
@@ -464,7 +466,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                 }
             }
         } else if selector.parent_dir != AnchoredSystemPathBuf::default() {
-            selector_used = true;
+            selector_valid = true;
             if selector.parent_dir == AnchoredSystemPathBuf::from_raw(".").expect("valid anchored")
             {
                 entry_packages.insert(ROOT_PKG_NAME.to_owned());
@@ -485,7 +487,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         }
 
         if !selector.name_pattern.is_empty() {
-            if !selector_used {
+            if !selector_valid {
                 entry_packages = self.match_package_names_to_vertices(
                     &selector.name_pattern,
                     self.pkg_graph
@@ -493,13 +495,15 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                         .map(|(name, _)| name.to_string())
                         .collect(),
                 )?;
-                selector_used = true;
+                selector_valid = true;
             } else {
                 entry_packages = match_package_names(&selector.name_pattern, entry_packages)?;
             }
         }
 
-        if !selector_used {
+        // if neither a name pattern, parent dir, or from ref is provided, then
+        // the selector is invalid
+        if !selector_valid {
             Err(ResolutionError::InvalidSelector(
                 InvalidSelectorError::InvalidSelector(selector.raw.clone()),
             ))
@@ -579,7 +583,7 @@ pub enum ResolutionError {
     MultiplePackagesMatched,
     #[error("The provided filter matched a package that is not in the workspace")]
     PackageNotInWorkspace,
-    #[error("Invalid filter selector: {0}")]
+    #[error("selector not used: {0}")]
     InvalidSelector(#[from] InvalidSelectorError),
     #[error("Invalid regex pattern")]
     InvalidRegex(#[from] regex::Error),
@@ -587,45 +591,6 @@ pub enum ResolutionError {
     InvalidGlob(#[from] wax::BuildError),
     #[error("Unable to query SCM: {0}")]
     Scm(#[from] turborepo_scm::Error),
-}
-
-#[derive(Debug, Default)]
-pub struct TargetSelector {
-    include_dependencies: bool,
-    match_dependencies: bool,
-    include_dependents: bool,
-    exclude: bool,
-    exclude_self: bool,
-    follow_prod_deps_only: bool,
-    parent_dir: turbopath::AnchoredSystemPathBuf,
-    name_pattern: String,
-    from_ref: String,
-    to_ref_override: String,
-    raw: String,
-}
-
-impl TargetSelector {
-    pub fn to_ref(&self) -> &str {
-        if self.to_ref_override.is_empty() {
-            "HEAD"
-        } else {
-            &self.to_ref_override
-        }
-    }
-}
-
-impl FromStr for TargetSelector {
-    type Err = InvalidSelectorError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Err(InvalidSelectorError::InvalidSelector(s.to_string()))
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum InvalidSelectorError {
-    #[error("Invalid filter selector: {0}")]
-    InvalidSelector(String),
 }
 
 #[cfg(test)]
@@ -841,9 +806,9 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: AnchoredSystemPathBuf::try_from("packages/*").unwrap(),
-                ..Default::default()
-            }
+                parent_dir:
+    AnchoredSystemPathBuf::try_from("packages/*").unwrap(),
+    ..Default::default()         }
         ],
         None,
         &["project-0", "project-1"] ;
@@ -852,9 +817,9 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: AnchoredSystemPathBuf::try_from("project-5/**").unwrap(),
-                ..Default::default()
-            }
+                parent_dir:
+    AnchoredSystemPathBuf::try_from("project-5/**").unwrap(),
+    ..Default::default()         }
         ],
         None,
         &["project-5", "project-6"] ;
@@ -863,9 +828,9 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: AnchoredSystemPathBuf::try_from("project-5").unwrap(),
-                ..Default::default()
-            }
+                parent_dir:
+    AnchoredSystemPathBuf::try_from("project-5").unwrap(),
+    ..Default::default()         }
         ],
         None,
         &["project-5"] ;
