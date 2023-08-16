@@ -361,7 +361,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                     .join_unix_path(selector.parent_dir.to_unix().unwrap())
                     .unwrap();
                 let matcher = wax::Glob::new(path.as_str())?;
-                let p = info.package_json_path.restore_anchor(self.turbo_root);
+                let p = self.turbo_root.resolve(&info.package_json_path);
                 let matches = matcher.is_match(p.as_std_path());
 
                 if matches {
@@ -459,7 +459,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                         .get(&package)
                         .ok_or(ResolutionError::MissingPackageInfo(package.clone()))?;
 
-                    let path = path.restore_anchor(self.turbo_root);
+                    let path = self.turbo_root.resolve(path);
                     if globber.is_match(path.as_std_path()) {
                         entry_packages.insert(package);
                     }
@@ -478,7 +478,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                 let globber = wax::Glob::new(path.as_str())?;
                 let packages = self.pkg_graph.workspaces();
                 for (name, _) in packages.filter(|(_name, info)| {
-                    let path = info.package_json_path.restore_anchor(self.turbo_root);
+                    let path = self.turbo_root.resolve(&info.package_json_path);
                     globber.is_match(path.as_std_path())
                 }) {
                     entry_packages.insert(name.to_string());
