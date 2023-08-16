@@ -35,8 +35,6 @@
 #![feature(async_fn_in_trait)]
 #![feature(type_alias_impl_trait)]
 #![feature(never_type)]
-// Clippy's partial_eq lint doesn't like delegation: https://github.com/rust-lang/rust-clippy/issues/11178
-#![allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
 
 pub mod backend;
 mod collectibles;

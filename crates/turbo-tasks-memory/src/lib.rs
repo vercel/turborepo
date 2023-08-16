@@ -5,9 +5,6 @@
 #![feature(box_patterns)]
 #![feature(int_roundings)]
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(clippy::too_many_arguments)]
-// Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
-#![allow(clippy::needless_pass_by_ref_mut)]
 
 mod cell;
 mod concurrent_priority_queue;

@@ -137,8 +137,6 @@ async fn merge_duplicated_and_contained(
     }
     impl Eq for FloatOrd {}
 
-    // Clippy's partial_eq lint doesn't like delegation: https://github.com/rust-lang/rust-clippy/issues/11178
-    #[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
     impl PartialOrd for FloatOrd {
         fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
             self.0.partial_cmp(&other.0)
