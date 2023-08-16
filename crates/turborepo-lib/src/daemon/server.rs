@@ -86,8 +86,8 @@ impl DaemonServer<notify::RecommendedWatcher> {
         let daemon_root = base.daemon_file_root();
 
         let watcher = Arc::new(HashGlobWatcher::new(
-            base.repo_root.clone(),
-            daemon_root.join_component("flush").as_path().to_owned(),
+            &base.repo_root,
+            &daemon_root.join_component("flush"),
         )?);
 
         let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();

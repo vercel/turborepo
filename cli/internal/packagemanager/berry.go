@@ -10,12 +10,13 @@ import (
 )
 
 var nodejsBerry = PackageManager{
-	Name:       "nodejs-berry",
-	Slug:       "yarn",
-	Command:    "yarn",
-	Specfile:   "package.json",
-	Lockfile:   "yarn.lock",
-	PackageDir: "node_modules",
+	Name:         "nodejs-berry",
+	Slug:         "yarn",
+	Command:      "yarn",
+	Specfile:     "package.json",
+	Lockfile:     "yarn.lock",
+	PackageDir:   "node_modules",
+	ArgSeparator: func(_userArgs []string) []string { return nil },
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))

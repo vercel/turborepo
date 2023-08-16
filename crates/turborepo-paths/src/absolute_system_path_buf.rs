@@ -211,11 +211,6 @@ impl AbsoluteSystemPathBuf {
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
     }
-
-    pub fn to_realpath(&self) -> Result<Self, PathError> {
-        let realpath = dunce::canonicalize(&self.0)?;
-        Ok(Self(Utf8PathBuf::try_from(realpath)?))
-    }
 }
 
 impl TryFrom<PathBuf> for AbsoluteSystemPathBuf {
