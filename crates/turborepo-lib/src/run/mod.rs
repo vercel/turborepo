@@ -160,12 +160,7 @@ impl Run {
                 .collect(),
         ))
         .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(
-            filtered_pkgs
-                .iter()
-                .map(|workspace| WorkspaceName::from(workspace.as_str()))
-                .collect(),
-        )
+        .with_workspaces(filtered_pkgs.into_iter().collect())
         .with_tasks(
             opts.run_opts
                 .tasks

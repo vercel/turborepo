@@ -209,7 +209,7 @@ impl<'a> EngineBuilder<'a> {
                     // We don't need to add an edge from the root node if we're in this branch
                     if let WorkspaceNode::Workspace(dependency_workspace) = dependency_workspace {
                         has_topo_deps = true;
-                        let from_task_id = TaskId::from_graph(&dependency_workspace, from);
+                        let from_task_id = TaskId::from_graph(dependency_workspace, from);
                         let from_task_index = engine.get_index(&from_task_id);
                         engine
                             .task_graph

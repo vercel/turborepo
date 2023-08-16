@@ -79,12 +79,12 @@ impl FromStr for TargetSelector {
         };
 
         let re = Regex::new(r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]+\])?$").expect("valid");
-        let captures = re.captures(&selector);
+        let captures = re.captures(selector);
 
         let captures = match captures {
             Some(captures) => captures,
             None => {
-                return if let Some(relative_path) = is_selector_by_location(&selector) {
+                return if let Some(relative_path) = is_selector_by_location(selector) {
                     Ok(TargetSelector {
                         exclude,
                         include_dependencies,

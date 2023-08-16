@@ -201,7 +201,7 @@ impl AnchoredSystemPathBuf {
     }
 
     pub fn join(&self, other: &AnchoredSystemPath) -> AnchoredSystemPathBuf {
-        Self(self.0.join(&other))
+        Self(self.0.join(other))
     }
 }
 

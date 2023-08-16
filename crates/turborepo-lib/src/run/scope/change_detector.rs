@@ -4,10 +4,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_scm::SCM;
 use wax::Pattern;
 
-use crate::{
-    package_graph::{PackageGraph, WorkspaceName},
-    run::task_id::ROOT_PKG_NAME,
-};
+use crate::package_graph::{PackageGraph, WorkspaceName};
 
 pub trait PackageChangeDetector {
     /// Get the list of changed packages between two refs.
@@ -15,7 +12,7 @@ pub trait PackageChangeDetector {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<String>, turborepo_scm::Error>;
+    ) -> Result<HashSet<WorkspaceName>, turborepo_scm::Error>;
 }
 
 pub struct SCMChangeDetector<'a> {
@@ -33,7 +30,7 @@ impl<'a> PackageChangeDetector for SCMChangeDetector<'a> {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<String>, turborepo_scm::Error> {
+    ) -> Result<HashSet<WorkspaceName>, turborepo_scm::Error> {
         let mut changed_files = HashSet::new();
         if !from_ref.is_empty() {
             changed_files = self
@@ -48,7 +45,7 @@ impl<'a> PackageChangeDetector for SCMChangeDetector<'a> {
             return Ok(self
                 .pkg_graph
                 .workspaces()
-                .map(|(n, _)| n.to_string())
+                .map(|(n, _)| n.to_owned())
                 .collect());
         }
 
@@ -66,7 +63,7 @@ impl<'a> PackageChangeDetector for SCMChangeDetector<'a> {
             return Ok(self
                 .pkg_graph
                 .workspaces()
-                .map(|(n, _)| n.to_string())
+                .map(|(n, _)| n.to_owned())
                 .collect());
         }
         Ok(changed_pkgs)
@@ -119,7 +116,7 @@ impl<'a> SCMChangeDetector<'a> {
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
         graph: &PackageGraph,
-    ) -> Result<HashSet<String>, turborepo_scm::Error> {
+    ) -> Result<HashSet<WorkspaceName>, turborepo_scm::Error> {
         let mut changed_packages = HashSet::new();
         for file in files {
             let mut found = false;
@@ -129,14 +126,14 @@ impl<'a> SCMChangeDetector<'a> {
                 }
                 let package_path = entry.package_json_path();
                 if Self::is_file_in_package(file, package_path) {
-                    changed_packages.insert(name.to_string());
+                    changed_packages.insert(name.to_owned());
                     found = true;
                     break;
                 }
             }
             if !found {
                 // if the file is not in any package, it must be in the root package
-                changed_packages.insert(ROOT_PKG_NAME.to_string());
+                changed_packages.insert(WorkspaceName::Root);
             }
         }
 
@@ -152,8 +149,8 @@ impl<'a> SCMChangeDetector<'a> {
     fn get_changes_from_lockfile(
         &self,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
-        _from_ref: &str,
-    ) -> Result<(Vec<String>, bool), wax::BuildError> {
+        from_ref: &str,
+    ) -> Result<(Vec<WorkspaceName>, bool), wax::BuildError> {
         let lockfile_path = self
             .pkg_graph
             .package_manager()

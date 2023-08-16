@@ -54,6 +54,15 @@ pub enum WorkspaceNode {
     Workspace(WorkspaceName),
 }
 
+impl WorkspaceNode {
+    pub fn as_workspace(&self) -> &WorkspaceName {
+        match self {
+            WorkspaceNode::Workspace(name) => name,
+            WorkspaceNode::Root => &WorkspaceName::Root,
+        }
+    }
+}
+
 impl PackageGraph {
     pub fn builder(
         repo_root: &AbsoluteSystemPath,
