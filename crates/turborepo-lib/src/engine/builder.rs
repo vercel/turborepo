@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    rc::Rc,
-};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use itertools::Itertools;
 use turbopath::AbsoluteSystemPath;
@@ -163,11 +160,11 @@ impl<'a> EngineBuilder<'a> {
                     task_id: task_id.to_string(),
                 });
             }
-            let task_definition = Rc::new(TaskDefinition::from_iter(self.task_definition_chain(
+            let task_definition = TaskDefinition::from_iter(self.task_definition_chain(
                 &mut turbo_jsons,
                 &task_id,
                 &task_id.as_non_workspace_task_name(),
-            )?));
+            )?);
 
             // Skip this iteration of the loop if we've already seen this taskID
             if visited.contains(&task_id) {
@@ -175,8 +172,6 @@ impl<'a> EngineBuilder<'a> {
             }
 
             visited.insert(task_id.clone());
-
-            engine.add_definition(task_id.clone().into_owned(), task_definition.clone());
 
             // Note that the Go code has a whole if/else statement for putting stuff into
             // deps or calling e.AddDep the bool is cannot be true so we skip to
@@ -197,7 +192,7 @@ impl<'a> EngineBuilder<'a> {
 
             // Don't ask why, but for some reason we refer to the source as "to"
             // and the target node as "from"
-            let to_task_id = task_id.into_owned();
+            let to_task_id = task_id.clone().into_owned();
             let to_task_index = engine.get_index(&to_task_id);
 
             let dep_pkgs = self
@@ -235,6 +230,8 @@ impl<'a> EngineBuilder<'a> {
                     .add_edge(to_task_index, from_task_index, ());
                 traversal_queue.push_back(from_task_id);
             }
+
+            engine.add_definition(task_id.clone().into_owned(), task_definition);
 
             if !has_deps && !has_topo_deps {
                 engine.connect_to_root(&to_task_id);
