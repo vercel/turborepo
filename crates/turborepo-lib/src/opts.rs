@@ -165,7 +165,7 @@ impl LegacyFilter {
         let suffix = if self.include_dependencies { "..." } else { "" };
         if self.entrypoints.is_empty() {
             if let Some(since) = self.since.as_ref() {
-                vec![format!("[{}{}{}]", prefix, since, suffix)]
+                vec![format!("{}[{}]{}", prefix, since, suffix)]
             } else {
                 Vec::new()
             }
@@ -240,5 +240,40 @@ impl ScopeOpts {
             self.legacy_filter.as_filter_pattern(),
         ]
         .concat()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use test_case::test_case;
+
+    use super::LegacyFilter;
+
+    #[test_case(LegacyFilter {
+            include_dependencies: true,
+            skip_dependents: false,
+            entrypoints: vec![],
+            since: Some("since".to_string()),
+        }, &["...[since]..."])]
+    #[test_case(LegacyFilter {
+            include_dependencies: false,
+            skip_dependents: true,
+            entrypoints: vec![],
+            since: Some("since".to_string()),
+        }, &["[since]"])]
+    #[test_case(LegacyFilter {
+            include_dependencies: false,
+            skip_dependents: true,
+            entrypoints: vec!["entry".to_string()],
+            since: Some("since".to_string()),
+        }, &["entry...since"])]
+    fn basic_legacy_filter_pattern(filter: LegacyFilter, expected: &[&str]) {
+        assert_eq!(
+            filter.as_filter_pattern(),
+            expected
+                .into_iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        )
     }
 }
