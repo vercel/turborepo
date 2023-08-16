@@ -69,20 +69,6 @@ pub enum PackageManager {
     Yarn,
 }
 
-impl PackageManager {
-    pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-        let file_name = match self {
-            PackageManager::Berry => yarn::LOCKFILE,
-            PackageManager::Npm => npm::LOCKFILE,
-            PackageManager::Pnpm => pnpm::LOCKFILE,
-            PackageManager::Pnpm6 => pnpm::LOCKFILE,
-            PackageManager::Yarn => yarn::LOCKFILE,
-        };
-
-        turbo_root.join_component(file_name)
-    }
-}
-
 impl fmt::Display for PackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Do not change these without also changing `GetPackageManager` in
@@ -508,6 +494,18 @@ impl PackageManager {
                 unreachable!("npm and yarn 1 don't have a concept of patches")
             }
         }
+    }
+
+    pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        let file_name = match self {
+            PackageManager::Berry => yarn::LOCKFILE,
+            PackageManager::Npm => npm::LOCKFILE,
+            PackageManager::Pnpm => pnpm::LOCKFILE,
+            PackageManager::Pnpm6 => pnpm::LOCKFILE,
+            PackageManager::Yarn => yarn::LOCKFILE,
+        };
+
+        turbo_root.join_component(file_name)
     }
 }
 
