@@ -200,8 +200,8 @@ impl AnchoredSystemPathBuf {
         self.0.components()
     }
 
-    pub fn join(&self, other: &AnchoredSystemPathBuf) -> AnchoredSystemPathBuf {
-        Self(self.0.join(&other.0))
+    pub fn join(&self, other: &AnchoredSystemPath) -> AnchoredSystemPathBuf {
+        Self(self.0.join(&other))
     }
 
     pub fn restore_anchor(&self, path: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
