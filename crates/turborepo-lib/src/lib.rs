@@ -13,6 +13,7 @@ mod daemon;
 mod engine;
 mod execution_state;
 pub(crate) mod globwatcher;
+pub mod graph;
 mod manager;
 mod opts;
 mod package_graph;
