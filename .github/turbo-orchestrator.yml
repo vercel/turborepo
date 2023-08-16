@@ -30,7 +30,7 @@
 
 labeler:
   labels:
-    # teams
+    # owned-by
     - label: "owned-by: turborepo"
       when:
         isAnyFileOwnedByMatch: '@vercel\/turbo-oss'
@@ -39,10 +39,10 @@ labeler:
         isAnyFileOwnedByMatch: '@vercel\/web-tooling'
 
     # created-by
-    - label: "created-by: web-tooling team"
+    - label: "created-by: web-tooling"
       when:
         isPRAuthorMatch: "^(alexkirsz|Brooooooklyn|ForsakenHarmony|jridgewell|kdy1|kwonoj|padmaia|sokra|wbinnssmith)$"
-    - label: "created-by: turborepo team"
+    - label: "created-by: turborepo"
       when:
         isPRAuthorMatch: "^(gsoltis|gaspar09|nathanhammond|tknickman|mehulkar|chris-olszewski|NicholasLYang|arlyon)$"
 
