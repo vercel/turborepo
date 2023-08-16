@@ -205,7 +205,7 @@ impl AnchoredSystemPathBuf {
     }
 
     pub fn restore_anchor(&self, path: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-        path.join_unix_path(self.to_unix().unwrap()).unwrap()
+        path.join_path(self)
     }
 }
 
@@ -287,5 +287,16 @@ mod tests {
             (Err(result), Err(expected)) => assert_eq!(result, expected),
             (result, expected) => panic!("Expected {:?}, got {:?}", expected, result),
         }
+    }
+
+    #[test]
+    fn test_restore_anchor() {
+        let root = AbsoluteSystemPathBuf::new("/a/b/c").unwrap();
+        let path = AnchoredSystemPathBuf::from_raw("d/e/f").unwrap();
+        let expected = AbsoluteSystemPathBuf::new("/a/b/c/d/e/f").unwrap();
+
+        let result = path.restore_anchor(&root);
+
+        assert_eq!(result, expected);
     }
 }
