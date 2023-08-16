@@ -42,19 +42,20 @@ impl TaskHashable {
 }
 
 #[derive(Debug, Serialize)]
-pub struct PackageFileHashes {
-    package_inputs_hashes: HashMap<TaskId<'static>, String>,
-    package_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
+pub struct PackageInputsHashes {
+    // We make the TaskId a String for serialization purposes
+    package_inputs_hashes: HashMap<String, String>,
+    package_inputs_expanded_hashes: HashMap<String, FileHashes>,
 }
 
-impl PackageFileHashes {
+impl PackageInputsHashes {
     pub fn calculate_file_hashes<'a>(
         scm: SCM,
         all_tasks: impl Iterator<Item = &'a TaskNode>,
         workspaces: HashMap<&WorkspaceName, &WorkspaceInfo>,
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
-    ) -> Result<PackageFileHashes, Error> {
+    ) -> Result<PackageInputsHashes, Error> {
         let mut hash_tasks = Vec::new();
 
         for task in all_tasks {
@@ -126,11 +127,11 @@ impl PackageFileHashes {
             let file_hashes = FileHashes(hash_object);
             let hash = file_hashes.clone().hash();
 
-            hashes.insert(package_file_hash_inputs.task_id.clone(), hash);
-            hash_objects.insert(package_file_hash_inputs.task_id.clone(), file_hashes);
+            hashes.insert(package_file_hash_inputs.task_id.to_string(), hash);
+            hash_objects.insert(package_file_hash_inputs.task_id.to_string(), file_hashes);
         }
 
-        Ok(PackageFileHashes {
+        Ok(PackageInputsHashes {
             package_inputs_hashes: hashes,
             package_inputs_expanded_hashes: hash_objects,
         })

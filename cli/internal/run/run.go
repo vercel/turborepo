@@ -307,8 +307,11 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		r.base.RepoRoot,
 	)
 
-	fmt.Printf("taskHashTracker.PackageInputsHashes %+v\n", taskHashTracker.PackageInputsHashes)
-	fmt.Printf("taskHashTracker.PackageInputsExpandedHashes %+v\n", taskHashTracker.PackageInputsExpandedHashes)
+	if executionState.PackageInputsHashes != nil {
+		if err != checkPackageInputsHashes(executionState, taskHashTracker) {
+			return err
+		}
+	}
 
 	if err != nil {
 		return errors.Wrap(err, "error hashing package files")
@@ -424,6 +427,47 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		packageManager,
 		r.processes,
 	)
+}
+
+func checkPackageInputsHashes(executionState *turbostate.ExecutionState, taskHashTracker *taskhash.Tracker) error {
+	if len(taskHashTracker.PackageInputsHashes) != len(executionState.PackageInputsHashes.PackageInputsHashes) {
+		return fmt.Errorf("task hashes differ between Rust and Go: %v %v", executionState.PackageInputsHashes.PackageInputsHashes, taskHashTracker.PackageInputsHashes)
+	}
+
+	for taskId, taskHash := range taskHashTracker.PackageInputsHashes {
+		expectedTaskHash, ok := executionState.PackageInputsHashes.PackageInputsHashes[taskId]
+		if !ok {
+			return fmt.Errorf("failed to find task hash for %v", taskId)
+		}
+		if taskHash != expectedTaskHash {
+			return fmt.Errorf("task hash differs between Rust and Go: %v %v", expectedTaskHash, taskHash)
+		}
+	}
+
+	if len(taskHashTracker.PackageInputsExpandedHashes) != len(executionState.PackageInputsHashes.PackageInputsExpandedHashes) {
+		return fmt.Errorf("task hashes differ between Rust and Go: %v %v", executionState.PackageInputsHashes.PackageInputsExpandedHashes, taskHashTracker.PackageInputsExpandedHashes)
+	}
+
+	for pkg, taskHashes := range taskHashTracker.PackageInputsExpandedHashes {
+		expectedTaskHashes, ok := executionState.PackageInputsHashes.PackageInputsExpandedHashes[pkg]
+		if !ok {
+			return fmt.Errorf("failed to find task hashes for %v", pkg)
+		}
+		if len(taskHashes) != len(expectedTaskHashes) {
+			return fmt.Errorf("task hashes differ between Rust and Go: %v %v", expectedTaskHashes, taskHashes)
+		}
+		for taskId, taskHash := range taskHashes {
+			expectedTaskHash, ok := expectedTaskHashes[taskId]
+			if !ok {
+				return fmt.Errorf("failed to find task hash for %v", taskId)
+			}
+			if taskHash != expectedTaskHash {
+				return fmt.Errorf("task hash differs between Rust and Go: %v %v", expectedTaskHash, taskHash)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {

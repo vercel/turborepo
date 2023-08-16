@@ -32,7 +32,7 @@ use crate::{
     package_json::PackageJson,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
-    task_hash::PackageFileHashes,
+    task_hash::PackageInputsHashes,
 };
 
 #[derive(Debug)]
@@ -237,10 +237,8 @@ impl Run {
 
         let tasks: Vec<_> = engine.tasks().collect();
         let workspaces = pkg_dep_graph.workspaces().collect();
-        println!("tasks: {:?}", tasks);
-        println!("workspaces: {:?}", workspaces);
 
-        let package_file_hashes = PackageFileHashes::calculate_file_hashes(
+        let package_file_hashes = PackageInputsHashes::calculate_file_hashes(
             scm,
             engine.tasks(),
             workspaces,
