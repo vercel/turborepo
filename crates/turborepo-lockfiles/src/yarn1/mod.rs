@@ -109,8 +109,7 @@ impl Lockfile for Yarn1Lockfile {
     }
 
     fn global_change_key(&self) -> Vec<u8> {
-        // todo: need advice on impl for this
-        vec![]
+        vec![b'y', b'a', b'r', b'n', 0]
     }
 }
 

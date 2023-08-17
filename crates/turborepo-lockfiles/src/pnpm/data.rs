@@ -410,7 +410,7 @@ impl crate::Lockfile for PnpmLockfile {
     }
 
     fn global_change_key(&self) -> Vec<u8> {
-        let mut buf = vec![b'y', b'a', b'r', b'n', 0];
+        let mut buf = vec![b'p', b'n', b'p', b'm', 0];
         {
             let mut writer = BufWriter::new(&mut buf);
             writer.write_all(self.lockfile_version.version.as_bytes());
