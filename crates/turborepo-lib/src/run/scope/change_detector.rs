@@ -124,11 +124,12 @@ impl<'a> SCMChangeDetector<'a> {
                 if name == &WorkspaceName::Root {
                     continue;
                 }
-                let package_path = entry.package_json_path();
-                if Self::is_file_in_package(file, package_path) {
-                    changed_packages.insert(name.to_owned());
-                    found = true;
-                    break;
+                if let Some(package_path) = entry.package_json_path.parent() {
+                    if Self::is_file_in_package(file, package_path) {
+                        changed_packages.insert(name.to_owned());
+                        found = true;
+                        break;
+                    }
                 }
             }
             if !found {
