@@ -55,13 +55,18 @@ pub struct RunOpts<'a> {
     pub(crate) only: bool,
     dry_run: bool,
     pub(crate) dry_run_json: bool,
-    pub graph_dot: bool,
-    pub graph_file: Option<&'a str>,
+    pub graph: Option<GraphOpts<'a>>,
     pub(crate) no_daemon: bool,
     pub(crate) single_package: bool,
     log_prefix: LogPrefix,
     summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
+}
+
+#[derive(Debug)]
+pub enum GraphOpts<'a> {
+    Stdout,
+    File(&'a str),
 }
 
 const DEFAULT_CONCURRENCY: u32 = 10;
@@ -77,11 +82,10 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             .transpose()?
             .unwrap_or(DEFAULT_CONCURRENCY);
 
-        let (graph_dot, graph_file) = match &args.graph {
-            Some(file) if file.is_empty() => (true, None),
-            Some(file) => (false, Some(file.as_str())),
-            None => (false, None),
-        };
+        let graph = args.graph.as_deref().map(|file| match file {
+            "" => GraphOpts::Stdout,
+            f => GraphOpts::File(f),
+        });
 
         Ok(Self {
             tasks: args.tasks.as_slice(),
@@ -98,8 +102,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             only: args.only,
             no_daemon: args.no_daemon,
             single_package: args.single_package,
-            graph_dot,
-            graph_file,
+            graph,
             dry_run_json: matches!(args.dry_run, Some(DryRunMode::Json)),
             dry_run: args.dry_run.is_some(),
         })

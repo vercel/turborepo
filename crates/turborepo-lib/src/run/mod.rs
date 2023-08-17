@@ -20,7 +20,7 @@ use crate::{
     daemon::DaemonConnector,
     engine::EngineBuilder,
     manager::Manager,
-    opts::Opts,
+    opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
     run::global_hash::get_global_hash_inputs,
@@ -53,7 +53,7 @@ impl Run {
             PackageJson::load(&package_json_path).context("failed to read package.json")?;
         let mut opts = self.opts()?;
 
-        let _is_structured_output = opts.run_opts.graph_dot || opts.run_opts.dry_run_json;
+        let _is_structured_output = opts.run_opts.graph.is_some() || opts.run_opts.dry_run_json;
 
         let is_single_package = opts.run_opts.single_package;
 
@@ -167,16 +167,18 @@ impl Run {
         )
         .build()?;
 
-        if opts.run_opts.graph_file.is_some() || opts.run_opts.graph_dot {
-            match opts.run_opts.graph_file {
-                Some(graph_file) => {
+        if let Some(graph_opts) = opts.run_opts.graph {
+            match graph_opts {
+                GraphOpts::File(graph_file) => {
                     let graph_file =
                         AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
                     let file = graph_file.open()?;
                     let _writer = BufWriter::new(file);
                     todo!("Need to implement different format support");
                 }
-                None => engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?,
+                GraphOpts::Stdout => {
+                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
+                }
             }
             return Ok(());
         }
