@@ -1,7 +1,8 @@
 {
   "name": "turborepo-tests-e2e",
   "scripts": {
-    "test": "node -r esbuild-register index.ts"
+    "test": "node -r esbuild-register index.ts",
+    "test-rust-codepath": "EXPERIMENTAL_RUST_CODEPATH=true node -r esbuild-register index.ts"
   },
   "dependencies": {
     "esbuild": "^0.15.0",

@@ -539,8 +539,7 @@ pub struct RunArgs {
 
     /// Opt-in to the rust codepath for running turbo
     /// rather than using the go shim
-    #[cfg(feature = "run-stub")]
-    #[clap(long)]
+    #[clap(long, env, hide = true, default_value_t = false)]
     pub experimental_rust_codepath: bool,
 }
 
@@ -773,6 +772,9 @@ pub async fn run(
         }
         #[cfg(not(feature = "run-stub"))]
         Command::Run(args) => {
+            if args.experimental_rust_codepath {
+                warn!("rust codepath enabled, but not compiled with support");
+            }
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
