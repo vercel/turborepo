@@ -13,7 +13,7 @@ use serde::Serialize;
 pub use traits::TurboHash;
 use turborepo_env::ResolvedEnvMode;
 
-use crate::cli::EnvMode;
+use crate::{cli::EnvMode, task_graph::TaskOutputs};
 
 mod proto_capnp {
     use turborepo_env::ResolvedEnvMode;
@@ -42,25 +42,25 @@ mod proto_capnp {
     }
 }
 
-pub struct TaskHashable {
+pub struct TaskHashable<'a> {
     // hashes
-    global_hash: String,
-    task_dependency_hashes: Vec<String>,
-    hash_of_files: String,
-    external_deps_hash: String,
+    pub(crate) global_hash: &'a str,
+    pub(crate) task_dependency_hashes: Vec<&'a String>,
+    pub(crate) hash_of_files: &'a str,
+    pub(crate) external_deps_hash: String,
 
     // task
-    package_dir: turbopath::RelativeUnixPathBuf,
-    task: String,
-    outputs: TaskOutputs,
-    pass_thru_args: Vec<String>,
+    pub(crate) package_dir: turbopath::RelativeUnixPathBuf,
+    pub(crate) task: &'a str,
+    pub(crate) outputs: TaskOutputs,
+    pub(crate) pass_through_args: &'a [String],
 
     // env
-    env: Vec<String>,
-    resolved_env_vars: EnvVarPairs,
-    pub(crate) pass_through_env: Vec<String>,
+    pub(crate) env: &'a [String],
+    pub(crate) resolved_env_vars: EnvVarPairs,
+    pub(crate) pass_through_env: &'a [String],
     pub(crate) env_mode: ResolvedEnvMode,
-    dot_env: Vec<turbopath::RelativeUnixPathBuf>,
+    pub(crate) dot_env: &'a [turbopath::RelativeUnixPathBuf],
 }
 
 #[derive(Debug)]
@@ -74,11 +74,6 @@ pub struct GlobalHashable<'a> {
     pub env_mode: EnvMode,
     pub framework_inference: bool,
     pub dot_env: &'a [turbopath::RelativeUnixPathBuf],
-}
-
-struct TaskOutputs {
-    inclusions: Vec<String>,
-    exclusions: Vec<String>,
 }
 
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
@@ -198,7 +193,7 @@ impl From<FileHashes> for Builder<HeapAllocator> {
 
 type EnvVarPairs = Vec<String>;
 
-impl From<TaskHashable> for Builder<HeapAllocator> {
+impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
     fn from(task_hashable: TaskHashable) -> Self {
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::task_hashable::Owned>::new_default();
@@ -230,8 +225,8 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
         {
             let mut pass_thru_args_builder = builder
                 .reborrow()
-                .init_pass_thru_args(task_hashable.pass_thru_args.len() as u32);
-            for (i, arg) in task_hashable.pass_thru_args.iter().enumerate() {
+                .init_pass_thru_args(task_hashable.pass_through_args.len() as u32);
+            for (i, arg) in task_hashable.pass_through_args.iter().enumerate() {
                 pass_thru_args_builder.set(i as u32, arg);
             }
         }
@@ -399,7 +394,7 @@ mod test {
                 inclusions: vec!["inclusions".to_string()],
                 exclusions: vec!["exclusions".to_string()],
             },
-            pass_thru_args: vec!["pass_thru_args".to_string()],
+            pass_through_args: vec!["pass_thru_args".to_string()],
             env: vec!["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: vec!["pass_thru_env".to_string()],

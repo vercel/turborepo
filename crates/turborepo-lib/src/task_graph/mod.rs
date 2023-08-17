@@ -77,9 +77,9 @@ pub struct TaskDefinition {
     pub(crate) cache: bool,
 
     // This field is custom-marshalled from `env` and `depends_on``
-    env: Vec<String>,
+    pub(crate) env: Vec<String>,
 
-    pass_through_env: Vec<String>,
+    pub(crate) pass_through_env: Vec<String>,
 
     pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
 
