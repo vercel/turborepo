@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
 };
 
@@ -28,7 +28,7 @@ pub struct PackageGraph {
 pub struct WorkspaceInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
-    pub unresolved_external_dependencies: Option<HashSet<Package>>,
+    pub unresolved_external_dependencies: Option<BTreeMap<PackageName, PackageVersion>>,
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
@@ -38,10 +38,13 @@ impl WorkspaceInfo {
     }
 }
 
+type PackageName = String;
+type PackageVersion = String;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Package {
-    name: String,
-    version: String,
+    name: PackageName,
+    version: PackageVersion,
 }
 
 /// Name of workspaces with a special marker for the workspace root
@@ -303,10 +306,9 @@ mod test {
             .unresolved_external_dependencies
             .as_ref()
             .unwrap();
-        assert!(b_external.contains(&Package {
-            name: "c".into(),
-            version: "1.2.3".into()
-        }));
+
+        let pkg_version = b_external.get("c").unwrap();
+        assert_eq!(pkg_version, "1.2.3");
     }
 
     struct MockLockfile {}
