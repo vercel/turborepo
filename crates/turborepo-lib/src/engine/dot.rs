@@ -24,10 +24,10 @@ const GRAPH_PRELUDE: &str = "digraph {\n\tcompound = \"true\"
 
 fn render_graph<N>(
     graph: &Graph<N, ()>,
-    display_node: impl Fn(&N) -> String,
+    mut display_node: impl FnMut(&N) -> String,
     mut writer: impl io::Write,
 ) -> Result<(), io::Error> {
-    let get_node = |i| {
+    let mut get_node = |i| {
         display_node(
             graph
                 .node_weight(i)
