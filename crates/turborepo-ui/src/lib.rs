@@ -1,4 +1,6 @@
-mod log_replayer;
+mod color_selector;
+mod logs;
+mod prefixed;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
@@ -6,6 +8,12 @@ use console::{Style, StyledObject};
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use thiserror::Error;
+
+pub use crate::{
+    color_selector::ColorSelector,
+    logs::{replay_logs, LogWriter},
+    prefixed::{PrefixedUI, PrefixedWriter},
+};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -40,7 +48,7 @@ pub fn start_spinner(message: &str) -> ProgressBar {
 }
 
 /// Helper struct to apply any necessary formatting to UI output
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct UI {
     pub should_strip_ansi: bool,
 }

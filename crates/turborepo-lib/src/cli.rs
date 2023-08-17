@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_ui::UI;
@@ -23,7 +23,7 @@ use crate::{
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
     #[serde(rename = "full")]
     Full,

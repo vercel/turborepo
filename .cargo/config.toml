@@ -23,4 +23,14 @@ tp-check = "check --workspace --exclude turbo --exclude turborepo-* --exclude tu
 tp-clippy = "clippy --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude vercel-api-mock --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
 
 [target.'cfg(all())']
-rustflags = ["--cfg", "tokio_unstable", "-Zshare-generics=y", "-Csymbol-mangling-version=v0", "-Aclippy::too_many_arguments"]
+rustflags = [
+  "--cfg",
+  "tokio_unstable",
+  "-Zshare-generics=y",
+  "-Csymbol-mangling-version=v0",
+  "-Aclippy::too_many_arguments",
+  # Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
+  "-Aclippy::needless_pass_by_ref_mut",
+  # Clippy's partial_eq lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11178
+  "-Aclippy::incorrect_partial_ord_impl_on_ord_type",
+]

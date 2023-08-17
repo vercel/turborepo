@@ -257,7 +257,7 @@ func GlobalChange(packageManager string, prevContents []byte, currContents []byt
 		CurrContents:   currContents,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.patches(reqBuf)
+	resBuf := C.global_change(reqBuf)
 	reqBuf.Free()
 
 	resp := ffi_proto.GlobalChangeResponse{}

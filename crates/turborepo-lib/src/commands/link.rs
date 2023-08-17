@@ -21,12 +21,7 @@ use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
 
-use crate::{
-    cli::LinkTarget,
-    commands::CommandBase,
-    config::{RawTurboJSON, SpacesJson},
-    rewrite_json,
-};
+use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
 
 #[derive(Clone)]
 pub(crate) enum SelectedTeam<'a> {
