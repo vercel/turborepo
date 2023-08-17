@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    io::{BufWriter, Write},
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -134,6 +137,16 @@ impl Lockfile for NpmLockfile {
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
         Ok(serde_json::to_vec_pretty(&self)?)
+    }
+
+    fn global_change_key(&self) -> Vec<u8> {
+        let mut buf = vec![b'n', b'p', b'm', 0];
+        {
+            let mut writer = BufWriter::new(&mut buf);
+            writer.write_all(&self.lockfile_version.to_be_bytes()[..]);
+            serde_json::to_writer(writer, &self.other.get("requires"));
+        }
+        buf
     }
 }
 

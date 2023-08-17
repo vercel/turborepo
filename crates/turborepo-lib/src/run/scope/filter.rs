@@ -9,7 +9,7 @@ use turborepo_scm::SCM;
 use wax::Pattern;
 
 use super::{
-    change_detector::{PackageChangeDetector, SCMChangeDetector},
+    change_detector::{ChangeDetectError, PackageChangeDetector, SCMChangeDetector},
     simple_glob::{Match, SimpleGlob},
     target_selector::{InvalidSelectorError, TargetSelector},
 };
@@ -504,7 +504,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<WorkspaceName>, turborepo_scm::Error> {
+    ) -> Result<HashSet<WorkspaceName>, ChangeDetectError> {
         self.change_detector.changed_packages(from_ref, to_ref)
     }
 
@@ -579,6 +579,8 @@ pub enum ResolutionError {
     InvalidGlob(#[from] wax::BuildError),
     #[error("Unable to query SCM: {0}")]
     Scm(#[from] turborepo_scm::Error),
+    #[error("Unable to calculate changes: {0}")]
+    ChangeDetectError(#[from] ChangeDetectError),
 }
 
 #[cfg(test)]
@@ -590,10 +592,13 @@ mod test {
 
     use super::{FilterResolver, PackageInference, TargetSelector};
     use crate::{
-        package_graph::PackageGraph,
+        package_graph::{PackageGraph, WorkspaceName},
         package_json::PackageJson,
         package_manager::PackageManager,
-        run::{scope::change_detector::PackageChangeDetector, task_id::ROOT_PKG_NAME},
+        run::{
+            scope::change_detector::{ChangeDetectError, PackageChangeDetector},
+            task_id::ROOT_PKG_NAME,
+        },
     };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
@@ -909,7 +914,13 @@ mod test {
 
         let packages = resolver.get_filtered_packages(selectors).unwrap();
 
-        assert_eq!(packages, expected.iter().map(|s| s.to_string()).collect());
+        assert_eq!(
+            packages,
+            expected
+                .iter()
+                .map(|s| WorkspaceName::Other(s.to_string()))
+                .collect()
+        );
     }
 
     #[test]
@@ -927,7 +938,12 @@ mod test {
             }])
             .unwrap();
 
-        assert_eq!(packages, vec!["bar".to_string()].into_iter().collect());
+        assert_eq!(
+            packages,
+            vec![WorkspaceName::Other("bar".to_string())]
+                .into_iter()
+                .collect()
+        );
     }
 
     #[test]
@@ -945,7 +961,12 @@ mod test {
             }])
             .unwrap();
 
-        assert_eq!(packages, vec!["@foo/bar".to_string()].into_iter().collect());
+        assert_eq!(
+            packages,
+            vec![WorkspaceName::Other("@foo/bar".to_string())]
+                .into_iter()
+                .collect()
+        );
     }
 
     #[test]
@@ -1073,10 +1094,16 @@ mod test {
         );
 
         let packages = resolver.get_filtered_packages(selectors).unwrap();
-        assert_eq!(packages, expected.iter().map(|s| s.to_string()).collect());
+        assert_eq!(
+            packages,
+            expected
+                .iter()
+                .map(|s| crate::package_graph::WorkspaceName::Other(s.to_string()))
+                .collect()
+        );
     }
 
-    struct TestChangeDetector<'a>(HashMap<(&'a str, &'a str), HashSet<String>>);
+    struct TestChangeDetector<'a>(HashMap<(&'a str, &'a str), HashSet<WorkspaceName>>);
 
     impl<'a> TestChangeDetector<'a> {
         fn new(pairs: &[(&'a str, &'a str, &[&'a str])]) -> Self {
@@ -1084,7 +1111,10 @@ mod test {
             for (from, to, changed) in pairs {
                 map.insert(
                     (*from, *to),
-                    changed.iter().map(|s| s.to_string()).collect(),
+                    changed
+                        .iter()
+                        .map(|s| WorkspaceName::Other(s.to_string()))
+                        .collect(),
                 );
             }
 
@@ -1097,7 +1127,7 @@ mod test {
             &self,
             from: &str,
             to: &str,
-        ) -> Result<HashSet<String>, turborepo_scm::Error> {
+        ) -> Result<HashSet<WorkspaceName>, ChangeDetectError> {
             Ok(self
                 .0
                 .get(&(from, to))

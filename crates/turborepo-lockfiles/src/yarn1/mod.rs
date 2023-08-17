@@ -107,6 +107,11 @@ impl Lockfile for Yarn1Lockfile {
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
         Ok(self.to_string().into_bytes())
     }
+
+    fn global_change_key(&self) -> Vec<u8> {
+        // todo: need advice on impl for this
+        vec![]
+    }
 }
 
 pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {

@@ -203,6 +203,71 @@ impl PackageGraph {
             .flatten()
             .collect()
     }
+
+    /// Returns a list of changed packages based on the contents of a previous
+    /// `Lockfile`. This assumes that none of the package.json in the workspace
+    /// change, it is the responsibility of the caller to verify this.
+    pub fn changed_packages(
+        &self,
+        previous: &dyn Lockfile,
+    ) -> Result<Vec<WorkspaceName>, ChangedPackagesError> {
+        let current = if let Some(lockfile) = self.lockfile() {
+            lockfile
+        } else {
+            return Err(ChangedPackagesError::NoLockfile);
+        };
+
+        let external_deps = self
+            .workspaces()
+            .filter_map(|(a, b)| {
+                b.unresolved_external_dependencies.as_ref().map(|b| {
+                    (
+                        a.to_string(),
+                        b.iter()
+                            .map(|(name, version)| (name.to_owned(), version.to_owned()))
+                            .collect(),
+                    )
+                })
+            })
+            .collect::<HashMap<_, HashMap<_, _>>>();
+
+        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps)?;
+
+        let current_key = current.global_change_key();
+        let previous_key = previous.global_change_key();
+
+        let global_change = current_key != previous_key;
+
+        let (changed, root_change) = self
+            .workspaces
+            .iter()
+            .filter(|(name, info)| {
+                closures.get(info.package_json_path().as_str())
+                    != info.transitive_dependencies.as_ref()
+            })
+            .fold((vec![], false), |(mut changed, all), (name, info)| {
+                if WorkspaceName::Root.eq(name) {
+                    (changed, true)
+                } else {
+                    changed.push(name.to_owned());
+                    (changed, all)
+                }
+            });
+
+        Ok(if global_change || root_change {
+            self.workspaces.iter().map(|w| w.0.to_owned()).collect()
+        } else {
+            changed
+        })
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ChangedPackagesError {
+    #[error("No lockfile")]
+    NoLockfile,
+    #[error("Lockfile error")]
+    Lockfile(#[from] turborepo_lockfiles::Error),
 }
 
 impl fmt::Display for WorkspaceName {
@@ -381,6 +446,10 @@ mod test {
 
         fn encode(&self) -> std::result::Result<Vec<u8>, turborepo_lockfiles::Error> {
             unreachable!("lockfile encoding not necessary for package graph construction")
+        }
+
+        fn global_change_key(&self) -> Vec<u8> {
+            unreachable!()
         }
     }
 

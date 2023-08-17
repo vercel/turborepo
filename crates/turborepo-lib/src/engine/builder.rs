@@ -425,6 +425,10 @@ mod test {
         fn encode(&self) -> Result<Vec<u8>, turborepo_lockfiles::Error> {
             unreachable!()
         }
+
+        fn global_change_key(&self) -> Vec<u8> {
+            unreachable!()
+        }
     }
 
     macro_rules! package_jsons {

@@ -1,4 +1,7 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    io::{BufWriter, Write},
+};
 
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
@@ -404,6 +407,24 @@ impl crate::Lockfile for PnpmLockfile {
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
+    }
+
+    fn global_change_key(&self) -> Vec<u8> {
+        let mut buf = vec![b'y', b'a', b'r', b'n', 0];
+        {
+            let mut writer = BufWriter::new(&mut buf);
+            writer.write_all(self.lockfile_version.version.as_bytes());
+            writer.write_all(
+                self.package_extensions_checksum
+                    .as_deref()
+                    .unwrap_or("")
+                    .as_bytes(),
+            );
+            serde_json::to_writer(&mut writer, &self.overrides);
+            serde_json::to_writer(&mut writer, &self.patched_dependencies);
+            serde_json::to_writer(&mut writer, &self.settings);
+        }
+        buf
     }
 }
 

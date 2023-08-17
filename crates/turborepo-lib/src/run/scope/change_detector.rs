@@ -4,7 +4,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_scm::SCM;
 use wax::Pattern;
 
-use crate::package_graph::{PackageGraph, WorkspaceName};
+use crate::package_graph::{ChangedPackagesError, PackageGraph, WorkspaceName};
 
 pub trait PackageChangeDetector {
     /// Get the list of changed packages between two refs.
@@ -12,7 +12,7 @@ pub trait PackageChangeDetector {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<WorkspaceName>, turborepo_scm::Error>;
+    ) -> Result<HashSet<WorkspaceName>, ChangeDetectError>;
 }
 
 pub struct SCMChangeDetector<'a> {
@@ -30,7 +30,7 @@ impl<'a> PackageChangeDetector for SCMChangeDetector<'a> {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<WorkspaceName>, turborepo_scm::Error> {
+    ) -> Result<HashSet<WorkspaceName>, ChangeDetectError> {
         let mut changed_files = HashSet::new();
         if !from_ref.is_empty() {
             changed_files = self
@@ -54,10 +54,10 @@ impl<'a> PackageChangeDetector for SCMChangeDetector<'a> {
         let mut changed_pkgs =
             self.get_changed_packages(filtered_changed_files.into_iter(), self.pkg_graph)?;
 
-        let (lockfile_changes, full_changes) =
-            self.get_changes_from_lockfile(&changed_files, from_ref)?;
+        // if we run into issues, don't error, just assume all pacakges have changed
+        let lockfile_changes = self.get_changes_from_lockfile(&changed_files, from_ref);
 
-        if !full_changes {
+        if let Ok(lockfile_changes) = lockfile_changes {
             changed_pkgs.extend(lockfile_changes);
         } else {
             return Ok(self
@@ -146,11 +146,14 @@ impl<'a> SCMChangeDetector<'a> {
             .all(|(a, b)| a == b)
     }
 
+    /// Get a list of changes from the lockfile.
+    ///
+    /// Returning Ok(None) here indicates
     fn get_changes_from_lockfile(
         &self,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
         from_ref: &str,
-    ) -> Result<(Vec<WorkspaceName>, bool), wax::BuildError> {
+    ) -> Result<Vec<WorkspaceName>, ChangeDetectError> {
         let lockfile_path = self
             .pkg_graph
             .package_manager()
@@ -159,16 +162,42 @@ impl<'a> SCMChangeDetector<'a> {
         let matcher = wax::Glob::new(lockfile_path.as_str())?;
 
         if !changed_files.iter().any(|f| matcher.is_match(f.as_path())) {
-            return Ok((vec![], false));
+            return Ok(vec![]);
         }
 
-        // todo: implement once lockfile parsing is supported
-        // let previous_file = self.scm.previous_content(from_ref,
-        // &lockfile_path).unwrap(); let previous_lockfile = parse_lockfile();
-        // let additional_packages = changed_packages(prev_lockfile);
+        let previous_file = self.scm.previous_content(from_ref, &lockfile_path)?;
+        let previous_lockfile = self
+            .pkg_graph
+            .package_manager()
+            .parse_lockfile(self.pkg_graph.root_package_json(), &previous_file)?;
 
-        let additional_packages = vec![];
+        let additional_packages = self
+            .pkg_graph
+            .changed_packages(previous_lockfile.as_ref())?;
 
-        Ok((additional_packages, false))
+        Ok(additional_packages)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ChangeDetectError {
+    #[error("SCM error: {0}")]
+    Scm(#[from] turborepo_scm::Error),
+    #[error("Wax error: {0}")]
+    Wax(#[from] wax::BuildError),
+    #[error("Package manager error: {0}")]
+    PackageManager(#[from] crate::package_manager::Error),
+    #[error("No lockfile")]
+    NoLockfile,
+    #[error("Lockfile error: {0}")]
+    Lockfile(turborepo_lockfiles::Error),
+}
+
+impl From<ChangedPackagesError> for ChangeDetectError {
+    fn from(value: ChangedPackagesError) -> Self {
+        match value {
+            ChangedPackagesError::NoLockfile => Self::NoLockfile,
+            ChangedPackagesError::Lockfile(e) => Self::Lockfile(e),
+        }
     }
 }

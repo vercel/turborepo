@@ -6,6 +6,7 @@ mod ser;
 
 use std::{
     collections::{HashMap, HashSet},
+    io::{BufWriter, Write},
     iter,
     rc::Rc,
 };
@@ -546,6 +547,23 @@ impl Lockfile for BerryLockfile {
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
+    }
+
+    fn global_change_key(&self) -> Vec<u8> {
+        let mut buf = vec![b'b', b'e', b'r', b'r', b'y', 0];
+        {
+            let mut writer = BufWriter::new(&mut buf);
+            writer.write(&self.data.metadata.version.to_be_bytes()[..]);
+            writer.write(
+                self.data
+                    .metadata
+                    .cache_key
+                    .as_deref()
+                    .unwrap_or("")
+                    .as_bytes(),
+            );
+        }
+        buf
     }
 }
 
