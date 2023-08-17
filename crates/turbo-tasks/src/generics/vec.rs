@@ -49,11 +49,10 @@ impl<T> ValueDefault for Vec<Vc<T>> {
 
 #[turbo_tasks::function]
 async fn vec_dbg_depth(vec: Vc<Vec<Vc<()>>>, depth: usize) -> Result<Vc<ValueDebugString>> {
-    Ok(vec
-        .await?
+    vec.await?
         .value_debug_format(depth)
         .try_to_value_debug_string()
-        .await?)
+        .await
 }
 
 impl<T> ValueDebug for Vec<Vc<T>> {

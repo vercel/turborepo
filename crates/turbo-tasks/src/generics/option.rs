@@ -52,11 +52,11 @@ async fn option_dbg_depth(
     option: Vc<Option<Vc<()>>>,
     depth: usize,
 ) -> Result<Vc<ValueDebugString>> {
-    Ok(option
+    option
         .await?
         .value_debug_format(depth)
         .try_to_value_debug_string()
-        .await?)
+        .await
 }
 
 impl<T> ValueDebug for Option<Vc<T>> {

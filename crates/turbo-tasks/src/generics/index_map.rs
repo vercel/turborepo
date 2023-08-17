@@ -53,11 +53,11 @@ async fn index_map_dbg_depth(
     index_map: Vc<IndexMap<Vc<()>, Vc<()>>>,
     depth: usize,
 ) -> Result<Vc<ValueDebugString>> {
-    Ok(index_map
+    index_map
         .await?
         .value_debug_format(depth)
         .try_to_value_debug_string()
-        .await?)
+        .await
 }
 
 impl<K, V> ValueDebug for IndexMap<Vc<K>, Vc<V>> {

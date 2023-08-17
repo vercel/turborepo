@@ -53,11 +53,11 @@ async fn index_set_dbg_depth(
     index_set: Vc<IndexSet<Vc<()>>>,
     depth: usize,
 ) -> Result<Vc<ValueDebugString>> {
-    Ok(index_set
+    index_set
         .await?
         .value_debug_format(depth)
         .try_to_value_debug_string()
-        .await?)
+        .await
 }
 
 impl<T> ValueDebug for IndexSet<Vc<T>> {
