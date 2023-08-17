@@ -42,7 +42,7 @@ fn index_set_default() -> Vc<IndexSet<Vc<()>>> {
 
 impl<T> ValueDefault for IndexSet<Vc<T>> {
     fn value_default() -> Vc<Self> {
-        // Safety: `index_set_default` creates a None variant, which is a valid
+        // Safety: `index_set_default` creates an empty set, which is a valid
         // representation of any index set of `Vc`.
         unsafe { Vc::<Self>::from_repr(index_set_default()) }
     }

@@ -42,7 +42,7 @@ fn index_map_default() -> Vc<IndexMap<Vc<()>, Vc<()>>> {
 
 impl<K, V> ValueDefault for IndexMap<Vc<K>, Vc<V>> {
     fn value_default() -> Vc<Self> {
-        // Safety: `index_map_default` creates a None variant, which is a valid
+        // Safety: `index_map_default` creates an empty map, which is a valid
         // representation of any index set of `Vc`.
         unsafe { Vc::<Self>::from_repr(index_map_default()) }
     }
