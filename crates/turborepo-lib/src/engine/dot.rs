@@ -68,6 +68,15 @@ mod test {
         let build = graph.add_node("build");
         graph.add_edge(root, build, ());
         render_graph(&graph, |n| n.to_string(), &mut bytes).unwrap();
-        assert_eq!(String::from_utf8(bytes).unwrap(), "");
+        assert_eq!(
+            String::from_utf8(bytes).unwrap(),
+            "digraph {
+\tcompound = \"true\"
+\tnewrank = \"true\"
+\tsubgraph \"root\" {
+\t\t\"[root] ___ROOT___\" -> \"[root] build\"
+\t}
+}\n\n"
+        );
     }
 }
