@@ -158,9 +158,9 @@ pub fn value_impl(args: TokenStream, input: TokenStream) -> TokenStream {
                     }
 
                     #[doc(hidden)]
-                    pub(crate) static #native_function_ident: #native_function_ty = #ty::#native_function_ident;
+                    pub(crate) static #native_function_ident: #native_function_ty = <#ty>::#native_function_ident;
                     #[doc(hidden)]
-                    pub(crate) static #native_function_id_ident: #native_function_id_ty = #ty::#native_function_id_ident;
+                    pub(crate) static #native_function_id_ident: #native_function_id_ty = <#ty>::#native_function_id_ident;
                 })
             }
         }
