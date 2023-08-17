@@ -32,6 +32,7 @@ where
             unsafe {
                 // Downcast the cell content to the expected representation type, then
                 // transmute it to the expected type.
+                // See https://users.rust-lang.org/t/transmute-doesnt-work-on-generic-types/87272/9
                 std::mem::transmute_copy::<
                     ManuallyDrop<ReadRef<<T::Read as VcRead<T>>::Repr>>,
                     Self::Output,

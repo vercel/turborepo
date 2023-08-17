@@ -93,7 +93,7 @@ async fn all_in_one() {
         assert_eq!(&*set.await?, &IndexSet::<Vc<u32>>::default());
         assert_eq!(set.dbg().await?.to_string(), "{}");
 
-        let map: Vc<IndexMap<Vc<u32>, Vc<u32>>> = Vc::cell(IndexMap::from([(vc_42, vc_42)]));
+        let map: Vc<IndexMap<_, _>> = Vc::cell(IndexMap::from([(vc_42, vc_42)]));
         assert_eq!(*map.len().await?, 1);
         assert_eq!(*map.is_empty().await?, false);
         assert_eq!(&*map.await?, &IndexMap::from([(vc_42, vc_42)]));

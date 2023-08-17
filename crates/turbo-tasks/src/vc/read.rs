@@ -5,19 +5,31 @@ use super::traits::VcValueType;
 /// Trait that controls [`Vc`]'s read representation.
 ///
 /// Has two implementations:
-/// * [`VcDefaultRepr`]
-/// * [`VcTransparentRepr`]
+/// * [`VcDefaultRead`]
+/// * [`VcTransparentRead`]
 ///
 /// This trait must remain sealed within this crate.
 pub trait VcRead<T>
 where
     T: VcValueType,
 {
-    /// The read target type.
+    /// The read target type. This is the type that will be returned when
+    /// `.await`ing a `Vc` of a value type.
+    ///
+    /// For instance, the target of `.await`ing a `Vc<Completion>` will be a
+    /// `Completion`. When using `#[turbo_tasks::value(transparent)]`, the
+    /// target will be different than the value type.
     type Target;
+
     /// The representation type. This is what will be used to
     /// serialize/deserialize the value, and this determines the
     /// type that the value will be upcasted to for storage.
+    ///
+    /// For instance, when storing generic collection types such as
+    /// `Vec<Vc<ValueType>>`, we first cast them to a shared `Vec<Vc<()>>`
+    /// type instead, which has an equivalent memory representation to any
+    /// `Vec<Vc<T>>` type. This allows sharing implementations of methods and
+    /// traits between all `Vec<Vc<T>>`.
     type Repr: VcValueType;
 
     /// Convert a reference to a value to a reference to the target type.
@@ -76,6 +88,7 @@ where
         // `Target` are #[repr(transparent)]. This is guaranteed by the
         // `#[turbo_tasks::value(transparent)]` macro.
         // We can't use `std::mem::transmute` here as it doesn't support generic types.
+        // See https://users.rust-lang.org/t/transmute-doesnt-work-on-generic-types/87272/9
         unsafe {
             std::mem::transmute_copy::<ManuallyDrop<&T>, &Self::Target>(&ManuallyDrop::new(value))
         }
