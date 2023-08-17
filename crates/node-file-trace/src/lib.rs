@@ -638,9 +638,9 @@ async fn main_operation(
     Ok(Vc::cell(Vec::new()))
 }
 
-/// Aggregates all [Module]s referenced by an [Module]. [ModuleReference]
-/// This does not include transitively references [Module]s, but it includes
-/// primary and secondary [Module]s referenced.
+/// Aggregates all [Module]s referenced by a [Module] through [ModuleReference]s.
+/// This does not include transitively referenced [Module]s, but it includes
+/// primary and secondary referenced [Module]s.
 #[turbo_tasks::function]
 pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
     let references_set = module.references().await?;
@@ -661,7 +661,7 @@ pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Mo
     Ok(Vc::cell(modules))
 }
 
-/// Aggregates all [Module]s referenced by an [Module] including transitively
+/// Aggregates all [Module]s referenced by a [Module], including transitively
 /// referenced [Module]s. This basically gives all [Module]s in a subgraph
 /// starting from the passed [Module].
 #[turbo_tasks::function]
