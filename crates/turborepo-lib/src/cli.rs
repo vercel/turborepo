@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_ui::UI;
 
