@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod cache;
 mod global_hash;
 mod scope;
 pub mod task_id;
@@ -12,6 +13,7 @@ use tracing::{debug, info};
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
+use turborepo_ui::ColorSelector;
 
 use self::task_id::TaskName;
 use crate::{
@@ -23,7 +25,7 @@ use crate::{
     opts::Opts,
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
-    run::global_hash::get_global_hash_inputs,
+    run::{cache::RunCache, global_hash::get_global_hash_inputs},
 };
 
 #[derive(Debug)]
@@ -72,6 +74,8 @@ impl Run {
 
         // There's some warning handling code in Go that I'm ignoring
         let is_ci_and_not_tty = turborepo_ci::is_ci() && !std::io::stdout().is_terminal();
+
+        let mut daemon = None;
         if is_ci_and_not_tty && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
@@ -84,7 +88,7 @@ impl Run {
 
             let client = connector.connect().await?;
             debug!("running in daemon mode");
-            opts.runcache_opts.output_watcher = Some(client);
+            daemon = Some(client);
         }
 
         pkg_dep_graph
@@ -134,7 +138,7 @@ impl Run {
             token: token.to_string(),
         });
 
-        let _turbo_cache = AsyncCache::new(
+        let async_cache = AsyncCache::new(
             &opts.cache_opts,
             &self.base.repo_root,
             self.base.api_client()?,
@@ -171,6 +175,18 @@ impl Run {
         engine
             .validate(&pkg_dep_graph, opts.run_opts.concurrency)
             .map_err(|errors| anyhow!("Validation failed:\n{}", errors.into_iter().join("\n")))?;
+
+        let color_selector = ColorSelector::default();
+
+        let _runcache = RunCache::new(
+            async_cache,
+            &self.base.repo_root,
+            opts.runcache_opts,
+            color_selector,
+            daemon,
+            self.base.ui,
+        );
+
         Ok(())
     }
 }

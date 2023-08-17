@@ -13,13 +13,13 @@ pub mod proto {
     tonic::include_proto!("turbodprotocol");
 }
 
-#[derive(Debug)]
-pub struct DaemonClient<T> {
+#[derive(Debug, Clone)]
+pub struct DaemonClient<T: Clone> {
     client: TurbodClient<tonic::transport::Channel>,
     connect_settings: T,
 }
 
-impl<T> DaemonClient<T> {
+impl<T: Clone> DaemonClient<T> {
     /// Interrogate the server for its version.
     pub(super) async fn handshake(&mut self) -> Result<(), DaemonError> {
         let _ret = self
@@ -70,7 +70,6 @@ impl DaemonClient<DaemonConnector> {
         self.stop().await?.connect().await.map_err(Into::into)
     }
 
-    #[allow(dead_code)]
     pub async fn get_changed_outputs(
         &mut self,
         hash: String,

@@ -68,7 +68,7 @@ impl CacheMultiplexer {
         anchor: &AbsoluteSystemPath,
         key: &str,
         files: &[AnchoredSystemPathBuf],
-        duration: u32,
+        duration: u64,
     ) -> Result<(), CacheError> {
         self.fs
             .as_ref()

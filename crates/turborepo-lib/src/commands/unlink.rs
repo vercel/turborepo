@@ -3,7 +3,7 @@ use std::fs;
 use anyhow::{Context, Result};
 use turborepo_ui::GREY;
 
-use crate::{cli::LinkTarget, commands::CommandBase, config::RawTurboJSON, rewrite_json};
+use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
 
 enum UnlinkSpacesResult {
     Unlinked,

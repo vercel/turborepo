@@ -54,7 +54,7 @@ impl HTTPCache {
         anchor: &AbsoluteSystemPath,
         hash: &str,
         files: &[AnchoredSystemPathBuf],
-        duration: u32,
+        duration: u64,
     ) -> Result<(), CacheError> {
         let mut artifact_body = Vec::new();
         self.write(&mut artifact_body, anchor, files).await?;
@@ -105,14 +105,14 @@ impl HTTPCache {
         })
     }
 
-    fn get_duration_from_response(response: &Response) -> Result<u32, CacheError> {
+    fn get_duration_from_response(response: &Response) -> Result<u64, CacheError> {
         if let Some(duration_value) = response.headers().get("x-artifact-duration") {
             let duration = duration_value
                 .to_str()
                 .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))?;
 
             duration
-                .parse::<u32>()
+                .parse::<u64>()
                 .map_err(|_| CacheError::InvalidDuration(Backtrace::capture()))
         } else {
             Ok(0)
