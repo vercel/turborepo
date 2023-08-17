@@ -170,10 +170,8 @@ impl Run {
         if opts.run_opts.graph_file.is_some() || opts.run_opts.graph_dot {
             match opts.run_opts.graph_file {
                 Some(graph_file) => {
-                    let graph_file = AbsoluteSystemPathBuf::from_unknown(
-                        &AbsoluteSystemPathBuf::cwd()?,
-                        graph_file,
-                    );
+                    let graph_file =
+                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
                     let file = graph_file.open()?;
                     let _writer = BufWriter::new(file);
                     todo!("Need to implement different format support");
