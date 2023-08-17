@@ -18,7 +18,7 @@ impl TestFile {
 
 pub(crate) struct TestCase {
     pub files: Vec<TestFile>,
-    pub duration: u32,
+    pub duration: u64,
     pub hash: &'static str,
 }
 

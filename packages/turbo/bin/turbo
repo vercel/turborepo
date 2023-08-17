@@ -66,7 +66,12 @@ function getBinaryPath() {
   // The only place where the binary can be at this point is `require.resolve`-able
   // relative to this package as it should be installed as an optional dependency.
 
-  const { platform, arch } = process;
+  let { platform, arch } = process;
+  // Node uses `win32` but we want to use `windows` for consistency with
+  // our package naming conventions (i.e. `turbo-windows-64`).
+  if (platform === "win32") {
+    platform = "windows";
+  }
   const resolvedArch = arch === 'x64' ? '64' : arch;
   const ext = platform === 'windows' ? '.exe' : '';
 

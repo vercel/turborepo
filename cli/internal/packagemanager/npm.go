@@ -15,7 +15,7 @@ var nodejsNpm = PackageManager{
 	Specfile:     "package.json",
 	Lockfile:     "package-lock.json",
 	PackageDir:   "node_modules",
-	ArgSeparator: []string{"--"},
+	ArgSeparator: func(_userArgs []string) []string { return []string{"--"} },
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))

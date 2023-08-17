@@ -1,17 +1,20 @@
 #![allow(dead_code)]
 
+mod cache;
 mod global_hash;
 mod scope;
 pub mod task_id;
 
-use std::io::BufWriter;
+use std::io::{BufWriter, IsTerminal};
 
-use anyhow::{Context as ErrorContext, Result};
+use anyhow::{anyhow, Context as ErrorContext, Result};
+use itertools::Itertools;
 use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
+use turborepo_ui::ColorSelector;
 
 use self::task_id::TaskName;
 use crate::{
@@ -23,7 +26,7 @@ use crate::{
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
-    run::global_hash::get_global_hash_inputs,
+    run::{cache::RunCache, global_hash::get_global_hash_inputs},
 };
 
 #[derive(Debug)]
@@ -71,7 +74,10 @@ impl Run {
         }
 
         // There's some warning handling code in Go that I'm ignoring
-        if self.base.ui.is_ci() && !opts.run_opts.no_daemon {
+        let is_ci_and_not_tty = turborepo_ci::is_ci() && !std::io::stdout().is_terminal();
+
+        let mut daemon = None;
+        if is_ci_and_not_tty && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {
@@ -83,7 +89,7 @@ impl Run {
 
             let client = connector.connect().await?;
             debug!("running in daemon mode");
-            opts.runcache_opts.output_watcher = Some(client);
+            daemon = Some(client);
         }
 
         pkg_dep_graph
@@ -133,7 +139,7 @@ impl Run {
             token: token.to_string(),
         });
 
-        let _turbo_cache = AsyncCache::new(
+        let async_cache = AsyncCache::new(
             &opts.cache_opts,
             &self.base.repo_root,
             self.base.api_client()?,
@@ -167,6 +173,10 @@ impl Run {
         )
         .build()?;
 
+        engine
+            .validate(&pkg_dep_graph, opts.run_opts.concurrency)
+            .map_err(|errors| anyhow!("Validation failed:\n{}", errors.into_iter().join("\n")))?;
+
         if let Some(graph_opts) = opts.run_opts.graph {
             match graph_opts {
                 GraphOpts::File(graph_file) => {
@@ -183,54 +193,17 @@ impl Run {
             return Ok(());
         }
 
+        let color_selector = ColorSelector::default();
+
+        let _runcache = RunCache::new(
+            async_cache,
+            &self.base.repo_root,
+            opts.runcache_opts,
+            color_selector,
+            daemon,
+            self.base.ui,
+        );
+
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test {
-
-    use anyhow::Result;
-    use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
-
-    use crate::{
-        cli::{Command, RunArgs},
-        commands::CommandBase,
-        get_version,
-        run::Run,
-        ui::UI,
-        Args,
-    };
-
-    #[tokio::test]
-    async fn test_run() -> Result<()> {
-        let dir = tempdir()?;
-        let repo_root = AbsoluteSystemPathBuf::try_from(dir.path())?;
-        let mut args = Args::default();
-        // Daemon does not work with run stub yet
-        let run_args = RunArgs {
-            no_daemon: true,
-            pkg_inference_root: Some(["apps", "my-app"].join(std::path::MAIN_SEPARATOR_STR)),
-            ..Default::default()
-        };
-        args.command = Some(Command::Run(Box::new(run_args)));
-
-        let ui = UI::infer();
-
-        // Add package.json
-        repo_root
-            .join_component("package.json")
-            .create_with_contents("{\"workspaces\": [\"apps/*\"]}")?;
-        repo_root
-            .join_component("package-lock.json")
-            .create_with_contents("")?;
-        repo_root
-            .join_component("turbo.json")
-            .create_with_contents("{}")?;
-
-        let base = CommandBase::new(args, repo_root, get_version(), ui)?;
-        let mut run = Run::new(base);
-        run.run().await
     }
 }

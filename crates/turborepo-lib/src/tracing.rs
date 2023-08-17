@@ -22,8 +22,7 @@ use tracing_subscriber::{
     reload::{self, Error, Handle},
     EnvFilter, Layer, Registry,
 };
-
-use crate::ui::UI;
+use turborepo_ui::UI;
 
 type StdOutLog = Filtered<
     tracing_subscriber::fmt::Layer<Registry, DefaultFields, TurboFormatter>,

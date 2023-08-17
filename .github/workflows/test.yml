@@ -364,8 +364,6 @@ jobs:
       # work out of box. We should take another stab at it later.
       - name: Setup Pnpm
         uses: pnpm/action-setup@v2.2.4
-        with:
-          version: 7.2.1
 
       - name: Make sure pnpm always has a cache
         shell: bash
@@ -599,7 +597,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments" cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments -Aclippy::needless_pass_by_ref_mut -Aclippy::incorrect_partial_ord_impl_on_ord_type" cargo groups clippy turbopack --features rustls-tls
 
       - name: Run ast-grep lints
         run: |
@@ -736,9 +734,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Install tests dependencies
         working-directory: crates/turbopack/tests/node-file-trace
@@ -797,9 +793,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Setup Protoc
         uses: arduino/setup-protoc@v1
@@ -873,9 +867,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
@@ -940,9 +932,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
@@ -1058,7 +1048,7 @@ jobs:
         env:
           DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
         run: |
-          npm install -g @datadog/datadog-ci @aws-sdk/property-provider
+          npm install -g @datadog/datadog-ci@2.18.1
           # Query raw benchmark output, create key:value pairs for each benchmark entries.
           # The generated key name is compact format the path of the benchmark entry, i.e
           # `base.hmr_to_commit.CSR.1000.mean`
@@ -1417,7 +1407,7 @@ jobs:
           node-version: 18
 
       - name: Install datadog
-        run: npm install -g @datadog/datadog-ci
+        run: npm install -g @datadog/datadog-ci@2.18.1
 
       - name: Download test results
         uses: actions/download-artifact@v3

@@ -40,8 +40,8 @@ pub enum Error {
     TurboPath(#[from] turbopath::PathError),
     #[error("unable to parse workspace package.json: {0}")]
     PackageJson(#[from] crate::package_json::Error),
-    #[error("package.json must have a name field")]
-    PackageJsonMissingName,
+    #[error("package.json must have a name field:\n{0}")]
+    PackageJsonMissingName(AbsoluteSystemPathBuf),
     #[error("cyclic dependency detected:\n{0}")]
     CyclicDependencies(String),
     #[error("{0} depends on itself")]
@@ -183,7 +183,11 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
     ) -> Result<(), Error> {
         let relative_json_path =
             AnchoredSystemPathBuf::relative_path_between(self.repo_root, &package_json_path);
-        let name = WorkspaceName::Other(json.name.clone().ok_or(Error::PackageJsonMissingName)?);
+        let name = WorkspaceName::Other(
+            json.name
+                .clone()
+                .ok_or(Error::PackageJsonMissingName(package_json_path))?,
+        );
         let entry = WorkspaceInfo {
             package_json: json,
             package_json_path: relative_json_path,

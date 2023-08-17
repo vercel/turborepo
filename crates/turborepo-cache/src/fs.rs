@@ -16,7 +16,7 @@ pub struct FSCache {
 #[derive(Debug, Deserialize, Serialize)]
 struct CacheMetadata {
     hash: String,
-    duration: u32,
+    duration: u64,
 }
 
 impl CacheMetadata {
@@ -118,7 +118,7 @@ impl FSCache {
         anchor: &AbsoluteSystemPath,
         hash: &str,
         files: &[AnchoredSystemPathBuf],
-        duration: u32,
+        duration: u64,
     ) -> Result<(), CacheError> {
         let cache_path = self
             .cache_directory

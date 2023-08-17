@@ -56,6 +56,8 @@ runs:
       shell: bash
       run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
+    - uses: rui314/setup-mold@v1
+
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
       with:

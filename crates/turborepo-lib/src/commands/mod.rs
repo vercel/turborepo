@@ -5,13 +5,13 @@ use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::APIClient;
+use turborepo_ui::UI;
 
 use crate::{
     config::{
         default_user_config_path, get_repo_config_path, ClientConfig, ClientConfigLoader,
         RepoConfig, RepoConfigLoader, UserConfig, UserConfigLoader,
     },
-    ui::UI,
     Args,
 };
 
@@ -185,8 +185,9 @@ impl CommandBase {
 mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
 
-    use crate::{get_version, ui::UI};
+    use crate::get_version;
 
     #[cfg(not(target_os = "windows"))]
     #[test_case("/tmp/turborepo", "6e0cfa616f75a61c"; "basic example")]

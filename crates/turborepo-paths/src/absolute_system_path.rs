@@ -116,6 +116,10 @@ impl AbsoluteSystemPath {
         self.0.ancestors().map(Self::new_unchecked)
     }
 
+    pub fn create(&self) -> Result<File, io::Error> {
+        File::create(&self.0)
+    }
+
     pub fn create_dir_all(&self) -> Result<(), io::Error> {
         fs::create_dir_all(&self.0)
     }
@@ -233,6 +237,11 @@ impl AbsoluteSystemPath {
             .map_err(|_| PathError::InvalidUnicode(self.0.as_str().to_owned()))?;
 
         Ok(AbsoluteSystemPathBuf(cleaned_path))
+    }
+
+    pub fn to_realpath(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let realpath = dunce::canonicalize(&self.0)?;
+        Ok(AbsoluteSystemPathBuf(Utf8PathBuf::try_from(realpath)?))
     }
 
     // note that this is *not* lstat. If this is a symlink, it

@@ -284,7 +284,7 @@ impl APIClient {
         &self,
         hash: &str,
         artifact_body: &[u8],
-        duration: u32,
+        duration: u64,
         tag: Option<&str>,
         token: &str,
     ) -> Result<()> {

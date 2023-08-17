@@ -2,8 +2,10 @@
 #![feature(box_patterns)]
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
-#![deny(clippy::all)]
 #![feature(option_get_or_insert_default)]
+#![deny(clippy::all)]
+// Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
+#![allow(clippy::needless_pass_by_ref_mut)]
 
 mod child;
 mod cli;
@@ -13,16 +15,17 @@ mod daemon;
 mod engine;
 mod execution_state;
 pub(crate) mod globwatcher;
+pub mod graph;
 mod manager;
 mod opts;
 mod package_graph;
 mod package_json;
 mod package_manager;
+mod rewrite_json;
 mod run;
 mod shim;
 mod task_graph;
 mod tracing;
-mod ui;
 
 use ::tracing::error;
 use anyhow::Result;

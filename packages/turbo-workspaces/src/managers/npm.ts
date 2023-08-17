@@ -19,6 +19,7 @@ import {
   expandWorkspaces,
   getWorkspacePackageManager,
   expandPaths,
+  parseWorkspacePackages,
 } from "../utils";
 
 /**
@@ -48,6 +49,9 @@ async function read(args: ReadArgs): Promise<Project> {
 
   const packageJson = getPackageJson(args);
   const { name, description } = getWorkspaceInfo(args);
+  const workspaceGlobs = parseWorkspacePackages({
+    workspaces: packageJson.workspaces,
+  });
   return {
     name,
     description,
@@ -57,9 +61,9 @@ async function read(args: ReadArgs): Promise<Project> {
       lockFile: "package-lock.json",
     }),
     workspaceData: {
-      globs: packageJson.workspaces || [],
+      globs: workspaceGlobs,
       workspaces: expandWorkspaces({
-        workspaceGlobs: packageJson.workspaces,
+        workspaceGlobs: workspaceGlobs,
         ...args,
       }),
     },
