@@ -2,7 +2,7 @@
 export type Schema = RootSchema | WorkspaceSchema;
 
 export interface BaseSchema {
-  /** @default https://turbo.build/schema.json */
+  /** @defaultValue https://turbo.build/schema.json */
   $schema?: string;
   /**
    * An object representing the task dependency graph of your project. turbo interprets
@@ -11,8 +11,9 @@ export interface BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#pipeline
    *
-   * @default {}
+   * @defaultValue `{}`
    */
+  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
   pipeline: {
     /**
      * The name of a task that can be executed by turbo. If turbo finds a workspace
@@ -34,7 +35,7 @@ export interface WorkspaceSchema extends BaseSchema {
    *
    * Currently, only the "//" value is allowed.
    *
-   * @default ["//"]
+   * @defaultValue ["//"]
    */
   extends: string[];
 }
@@ -56,7 +57,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
    *
-   * @default []
+   * @defaultValue []
    */
   globalDependencies?: string[];
 
@@ -67,7 +68,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
    *
-   * @default []
+   * @defaultValue []
    */
   globalEnv?: EnvWildcard[];
 
@@ -77,8 +78,8 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
    *
-   * @default null
-   * @deprecated
+   * @defaultValue null
+   * @deprecated use `globalPassThroughEnv` instead
    */
   experimentalGlobalPassThroughEnv?: null | string[];
 
@@ -88,7 +89,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalPassThroughEnv
    *
-   * @default null
+   * @defaultValue null
    */
   globalPassThroughEnv?: null | EnvWildcard[];
 
@@ -98,7 +99,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#globalDotEnv
    *
-   * @default null
+   * @defaultValue null
    */
   globalDotEnv?: null | AnchoredUnixPath[];
 
@@ -107,7 +108,7 @@ export interface RootSchema extends BaseSchema {
    *
    * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
    *
-   * @default {}
+   * @defaultValue `{}`
    */
   remoteCache?: RemoteCache;
 }
@@ -127,7 +128,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#dependson
    *
-   * @default []
+   * @defaultValue []
    */
   dependsOn?: string[];
 
@@ -137,11 +138,11 @@ export interface Pipeline {
    * Note: If you are migrating from a turbo version 1.5 or below,
    * you may be used to prefixing your variables with a $.
    * You no longer need to use the $ prefix.
-   * (e.g. $GITHUB_TOKEN -> GITHUB_TOKEN)
+   * (e.g. $GITHUB_TOKEN → GITHUB_TOKEN)
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#env
    *
-   * @default []
+   * @defaultValue []
    */
   env?: EnvWildcard[];
 
@@ -152,8 +153,8 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
    *
-   * @default null
-   * @deprecated
+   * @defaultValue null
+   * @deprecated use `passThroughEnv` instead
    */
   experimentalPassThroughEnv?: null | string[];
 
@@ -164,7 +165,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#passThroughEnv
    *
-   * @default null
+   * @defaultValue null
    */
   passThroughEnv?: null | EnvWildcard[];
 
@@ -174,7 +175,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#dotEnv
    *
-   * @default null
+   * @defaultValue null
    */
   dotEnv?: null | AnchoredUnixPath[];
 
@@ -187,7 +188,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#outputs
    *
-   * @default []
+   * @defaultValue []
    */
   outputs?: string[];
 
@@ -198,7 +199,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#cache
    *
-   * @default true
+   * @defaultValue true
    */
   cache?: boolean;
 
@@ -215,7 +216,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
    *
-   * @default []
+   * @defaultValue []
    */
   inputs?: string[];
 
@@ -234,7 +235,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/command-line-reference#--output-logs
    *
-   * @default full
+   * @defaultValue full
    */
   outputMode?: OutputMode;
 
@@ -245,7 +246,7 @@ export interface Pipeline {
    *
    * Documentation: https://turbo.build/repo/docs/reference/configuration#persistent
    *
-   * @default false
+   * @defaultValue false
    */
   persistent?: boolean;
 }
@@ -257,7 +258,7 @@ export interface RemoteCache {
    * variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`. Turborepo will reject any downloaded artifacts
    * that have an invalid signature or are missing a signature.
    *
-   * @default false
+   * @defaultValue false
    */
   signature?: boolean;
 }

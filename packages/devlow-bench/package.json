@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "bin": "dist/cli.js",
   "scripts": {
+    "lint": "eslint src/**/*",
     "prerelease": "pnpm run build:ts",
     "build:ts": "tsc"
   },
@@ -29,10 +30,12 @@
     "@types/inquirer": "^9.0.3",
     "@types/minimist": "^1.2.2",
     "@types/node": "^20.3.0",
-    "@types/split2": "^4.2.0"
+    "@types/split2": "^4.2.0",
+    "eslint": "^8.47.0"
   },
   "dependencies": {
     "@datadog/datadog-api-client": "^1.13.0",
+    "@turbo/eslint-config": "workspace:*",
     "chalk": "2.4.2",
     "inquirer": "^9.2.7",
     "minimist": "^1.2.8",
