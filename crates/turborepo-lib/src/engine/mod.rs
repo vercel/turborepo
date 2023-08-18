@@ -4,7 +4,6 @@ mod dot;
 use std::{
     collections::{HashMap, HashSet},
     fmt,
-    rc::Rc,
 };
 
 pub use builder::EngineBuilder;
@@ -39,7 +38,7 @@ pub struct Engine<S = Built> {
     task_graph: Graph<TaskNode, ()>,
     root_index: petgraph::graph::NodeIndex,
     task_lookup: HashMap<TaskId<'static>, petgraph::graph::NodeIndex>,
-    task_definitions: HashMap<TaskId<'static>, Rc<TaskDefinition>>,
+    task_definitions: HashMap<TaskId<'static>, TaskDefinition>,
 }
 
 impl Engine<Building> {
@@ -71,8 +70,8 @@ impl Engine<Building> {
     pub fn add_definition(
         &mut self,
         task_id: TaskId<'static>,
-        definition: Rc<TaskDefinition>,
-    ) -> Option<Rc<TaskDefinition>> {
+        definition: TaskDefinition,
+    ) -> Option<TaskDefinition> {
         self.task_definitions.insert(task_id, definition)
     }
 
