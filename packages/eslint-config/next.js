@@ -8,14 +8,14 @@ module.exports = {
     "@vercel/style-guide/eslint/browser",
     "@vercel/style-guide/eslint/react",
     "@vercel/style-guide/eslint/next",
-  ].map((config) => require.resolve(config)),
+  ].map(require.resolve),
   parserOptions: {
-    project: project,
+    project,
   },
   settings: {
     "import/resolver": {
       typescript: {
-        project: project,
+        project,
       },
     },
   },

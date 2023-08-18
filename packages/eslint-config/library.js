@@ -6,14 +6,14 @@ module.exports = {
   extends: [
     "@vercel/style-guide/eslint/node",
     "@vercel/style-guide/eslint/typescript",
-  ].map((config) => require.resolve(config)),
+  ].map(require.resolve),
   parserOptions: {
-    project: project,
+    project,
   },
   settings: {
     "import/resolver": {
       typescript: {
-        project: project,
+        project,
       },
     },
   },
