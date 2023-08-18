@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 use anyhow::Result;
 use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::APIClient;
 use turborepo_ui::UI;
 
@@ -169,6 +169,15 @@ impl CommandBase {
         let mut hasher = Sha256::new();
         hasher.update(self.repo_root.as_bytes());
         hex::encode(&hasher.finalize()[..8])
+    }
+
+    /// Current working directory for the turbo command
+    pub fn cwd(&self) -> &AbsoluteSystemPath {
+        // Earlier in execution
+        // self.cli_args.cwd = Some(repo_root.as_path())
+        // happens.
+        // We directly use repo_root to avoid converting back to absolute system path
+        &self.repo_root
     }
 }
 
