@@ -154,13 +154,9 @@ impl Matcher {
 pub fn infer_framework(workspace: &WorkspaceInfo, is_monorepo: bool) -> Option<&'static Framework> {
     let frameworks = get_frameworks();
 
-    for framework in frameworks {
-        if framework.dependency_match.test(workspace, is_monorepo) {
-            return Some(framework);
-        }
-    }
-
-    None
+    frameworks
+        .iter()
+        .find(|framework| framework.dependency_match.test(workspace, is_monorepo))
 }
 
 #[cfg(test)]
