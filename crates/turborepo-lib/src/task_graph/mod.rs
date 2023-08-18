@@ -22,9 +22,7 @@ pub struct BookkeepingTaskDefinition {
 // experimental. We keep these separated so we can compute a global hash without
 // these.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskDefinitionExperiments {
-    pub(crate) pass_through_env: Vec<String>,
-}
+pub struct TaskDefinitionExperiments {}
 
 // TaskOutputs represents the patterns for including and excluding files from
 // outputs

@@ -745,9 +745,7 @@ mod tests {
                 "DependsOn".to_string()
             ].into_iter().collect(),
             experimental_fields: HashSet::new(),
-            experimental: TaskDefinitionExperiments {
-                pass_through_env: vec![],
-            },
+            experimental: TaskDefinitionExperiments {},
             task_definition: TaskDefinitionHashable {
                 dot_env: vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()],
                 env: vec!["OS".to_string()],
