@@ -201,8 +201,12 @@ Check out the section on [running tasks](/repo/docs/core-concepts/monorepos/runn
 
 ### 7. Caching the results of `prisma generate`
 
-`prisma generate` outputs files to the filesystem, usually inside `node_modules`. In theory, it should be possible to cache the output of `prisma generate` with Turborepo to save a few seconds.
+By default, Prisma will output generated clients to `node_modules`. When using `pnpm`, this can cause the generated clients to be put root workspace's `node_modules`, which can mean multiple packages are writing to the same place.
 
-However, Prisma behaves differently with different package managers. This can lead to unpredictable results, which might lead to broken deployments in some situations. Instead of documenting the intricacies of each approach, we recommend _not_ caching the results of `prisma generate`. Since `prisma generate` usually only takes 5-6 seconds, and tends not to take longer with larger `schema` files, this seems like a fine trade-off.
+To avoid that, set the output of the schema to be relative to the *database package's* workspace. This approach should be portable across pnpm/yarn/etc.
 
-You may wish to experiment with this yourself. If you find a solution that you feel works, feel free to [add an issue](https://github.com/vercel/turbo/issues/new/choose) and we can update this section.
+```txt filename="schema.prisma"
+  output        = "../node_modules/.prisma/client-package-a"
+```
+
+TODO: If `build` depends on two tasks that are not cacheable, doesn't that make `build` not cache-able?
