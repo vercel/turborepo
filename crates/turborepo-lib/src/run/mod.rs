@@ -199,13 +199,15 @@ impl Run {
             return Ok(());
         }
 
+        let root_workspace = pkg_dep_graph
+            .workspace_info(&WorkspaceName::Root)
+            .expect("must have root workspace");
+
         let global_hash_inputs = get_global_hash_inputs(
-            root_external_dependencies,
+            root_workspace,
             &self.base.repo_root,
-            pkg_dep_graph.root_package_json(),
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
-            // TODO: Fill in these vec![] once turbo.json is ported
             root_turbo_json.global_deps,
             &env_at_execution_start,
             root_turbo_json.global_env,
@@ -256,13 +258,13 @@ impl Run {
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        let root_external_dependencies =
-            pkg_dep_graph.transitive_external_dependencies(std::iter::once(&WorkspaceName::Root));
+        let root_workspace = pkg_dep_graph
+            .workspace_info(&WorkspaceName::Root)
+            .expect("must have root workspace");
 
         let global_hash_inputs = get_global_hash_inputs(
-            root_external_dependencies,
+            root_workspace,
             &self.base.repo_root,
-            pkg_dep_graph.root_package_json(),
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
             root_turbo_json.global_deps,

@@ -1,11 +1,9 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
-
-use crate::hash::{LockFilePackages, TurboHash};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -75,23 +73,6 @@ impl PackageJson {
             .flatten()
             .chain(self.dev_dependencies.iter().flatten())
             .chain(self.optional_dependencies.iter().flatten())
-    }
-
-    pub fn get_external_deps_hash(
-        &self,
-        external_deps: HashSet<&turborepo_lockfiles::Package>,
-    ) -> String {
-        let mut transitive_deps = Vec::with_capacity(external_deps.len());
-        for dependency in external_deps {
-            transitive_deps.push(dependency.clone());
-        }
-
-        transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
-            std::cmp::Ordering::Equal => a.version.cmp(&b.version),
-            other => other,
-        });
-
-        LockFilePackages(transitive_deps).hash()
     }
 }
 

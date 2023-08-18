@@ -12,7 +12,7 @@ use turborepo_scm::SCM;
 use crate::{
     cli::EnvMode,
     hash::{GlobalHashable, TurboHash},
-    package_json::PackageJson,
+    package_graph::WorkspaceInfo,
     package_manager::PackageManager,
 };
 
@@ -41,9 +41,8 @@ pub struct GlobalHashableInputs {
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
-    root_external_dependencies: HashSet<&turborepo_lockfiles::Package>,
+    root_workspace: &WorkspaceInfo,
     root_path: &AbsoluteSystemPath,
-    root_package_json: &PackageJson,
     package_manager: &PackageManager,
     lockfile: Option<&L>,
     global_file_dependencies: Vec<String>,
@@ -107,8 +106,7 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
         }
     }
 
-    let root_external_dependencies_hash =
-        root_package_json.get_external_deps_hash(root_external_dependencies);
+    let root_external_dependencies_hash = root_workspace.get_external_deps_hash();
 
     debug!(
         "rust external deps hash: {}",
@@ -168,8 +166,6 @@ impl GlobalHashableInputs {
             framework_inference: self.framework_inference,
             dot_env: self.dot_env,
         };
-
-        println!("global hashable: {:#?}", global_hashable);
 
         global_hashable.hash()
     }
