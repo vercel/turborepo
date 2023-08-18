@@ -41,12 +41,6 @@ impl WorkspaceInfo {
 type PackageName = String;
 type PackageVersion = String;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub struct Package {
-    name: PackageName,
-    version: PackageVersion,
-}
-
 /// Name of workspaces with a special marker for the workspace root
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 pub enum WorkspaceName {
