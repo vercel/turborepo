@@ -1,10 +1,12 @@
 import fs from "fs";
 import path from "path";
-import { getTurboRoot } from "./getTurboRoot";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
 import { Schema } from "@turbo/types";
 import JSON5 from "json5";
+
+import { getTurboRoot } from "./getTurboRoot";
+import type { PackageJson } from "./types";
 
 const ROOT_GLOB = "turbo.json";
 const ROOT_WORKSPACE_GLOB = "package.json";
@@ -24,11 +26,6 @@ export type TurboConfig = {
 };
 
 export type TurboConfigs = Array<TurboConfig>;
-
-interface PackageJson {
-  turbo?: Schema;
-  workspaces?: { packages: Array<string> } | Array<string>;
-}
 
 interface Options {
   cache?: boolean;

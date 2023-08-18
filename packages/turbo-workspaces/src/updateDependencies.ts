@@ -1,14 +1,8 @@
 import fs from "fs-extra";
 import chalk from "chalk";
 import path from "path";
-import {
-  Project,
-  Workspace,
-  DependencyList,
-  PackageManagerDetails,
-  Options,
-  PackageJsonDependencies,
-} from "./types";
+import type { DependencyList, DependencyGroups } from "@turbo/utils";
+import { Project, Workspace, PackageManagerDetails, Options } from "./types";
 import { Logger } from "./logger";
 import { getPackageJson } from "./utils";
 
@@ -65,14 +59,14 @@ export default function updateDependencies({
   });
 
   // collect stats as we go for consolidated output at the end
-  const stats: Record<keyof PackageJsonDependencies, Array<string>> = {
+  const stats: Record<keyof DependencyGroups, Array<string>> = {
     dependencies: [],
     devDependencies: [],
     peerDependencies: [],
     optionalDependencies: [],
   };
 
-  const allDependencyKeys: Array<keyof PackageJsonDependencies> = [
+  const allDependencyKeys: Array<keyof DependencyGroups> = [
     "dependencies",
     "devDependencies",
     "peerDependencies",
@@ -93,7 +87,7 @@ export default function updateDependencies({
     }
   });
 
-  const toLog = (key: keyof PackageJsonDependencies) => {
+  const toLog = (key: keyof DependencyGroups) => {
     const total = stats[key].length;
     if (total > 0) {
       return `${chalk.green(total.toString())} ${key}`;
