@@ -1,7 +1,9 @@
 mod builder;
+mod dot;
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     rc::Rc,
 };
 
@@ -220,4 +222,13 @@ pub enum ValidateError {
         persistent_count: u32,
         concurrency: u32,
     },
+}
+
+impl fmt::Display for TaskNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TaskNode::Root => f.write_str("___ROOT___"),
+            TaskNode::Task(task) => task.fmt(f),
+        }
+    }
 }
