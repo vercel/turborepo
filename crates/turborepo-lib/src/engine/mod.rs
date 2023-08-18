@@ -1,8 +1,6 @@
 mod builder;
 mod dot;
 
-use std::collections::{HashMap, HashSet};
-
 use std::{
     collections::{HashMap, HashSet},
     fmt,
