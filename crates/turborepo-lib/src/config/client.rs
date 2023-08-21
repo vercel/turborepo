@@ -68,7 +68,7 @@ impl ClientConfigLoader {
             .try_deserialize();
 
         config_attempt
-            .map_err(|err| Error::Config(err))
+            .map_err(Error::Config)
             .map(|config| ClientConfig { config })
     }
 }
