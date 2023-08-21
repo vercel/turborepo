@@ -1,12 +1,6 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use swc_core::{
-    common::pass::AstKindPath,
-    css::{
-        ast::*,
-        visit::{AstParentKind, VisitMut, VisitMutAstPath, VisitMutWith, VisitMutWithPath},
-    },
-};
+use swc_core::common::pass::AstKindPath;
 
 use crate::code_gen::VisitorFactory;
 
