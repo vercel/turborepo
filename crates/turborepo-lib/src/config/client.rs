@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use config::{Config, ConfigError, Environment};
+use config::{Config, Environment};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Error;
@@ -57,7 +57,7 @@ impl ClientConfigLoader {
             environment,
         } = self;
 
-        let config_attempt: Result<ClientConfigValue, Error> = Config::builder()
+        let config_attempt = Config::builder()
             .set_default("remote_cache_timeout", DEFAULT_TIMEOUT)?
             .add_source(Environment::with_prefix("turbo").source(environment))
             .set_override_option("remote_cache_timeout", remote_cache_timeout)?
@@ -67,7 +67,9 @@ impl ClientConfigLoader {
             // This goes wrong when TURBO_REMOTE_CACHE_TIMEOUT can't be deserialized to u64
             .try_deserialize();
 
-        config_attempt.map(|config| ClientConfig { config })
+        config_attempt
+            .map_err(|err| Error::Config(err))
+            .map(|config| ClientConfig { config })
     }
 }
 
