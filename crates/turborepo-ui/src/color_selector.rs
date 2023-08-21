@@ -112,4 +112,13 @@ mod tests {
         // We only inserted 2 keys so next index should be 2
         assert_eq!(selector.inner.read().unwrap().idx, 2);
     }
+
+    #[test]
+    fn test_color_selector_wraps_around() {
+        let selector = super::ColorSelector::default();
+        for key in &["1", "2", "3", "4", "5", "6"] {
+            selector.color_for_key(key);
+        }
+        assert_eq!(selector.color_for_key("1"), selector.color_for_key("6"));
+    }
 }
