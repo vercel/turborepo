@@ -18,6 +18,7 @@ Make sure patches are part of the json output
 Make sure patches are part of the json output
   $ ls out/full
   apps
+  package.json
   packages
   patches
   pnpm-workspace.yaml
@@ -26,7 +27,6 @@ Make sure that pnpm-workspace.yaml is in the top out directory
   $ ls out
   full
   json
-  package.json
   pnpm-lock.yaml
   pnpm-workspace.yaml
 
