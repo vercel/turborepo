@@ -187,7 +187,7 @@ pub fn prune(
             prune.copy_file(&patch.to_system_path(), Some(CopyDestination::Docker))?;
         }
     } else {
-        prune.copy_file(package_json(), Some(CopyDestination::All))?;
+        prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
     }
 
     Ok(())
