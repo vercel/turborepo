@@ -41,11 +41,11 @@ go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
 
 .PHONY: turborepo-ffi-install
 turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
-	cp ../crates/turborepo-ffi/target/debug/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
+	cp ../crates/turborepo-ffi/target/x86_64-unknown-linux-musl/debug/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
 
 .PHONY: turborepo-ffi
 turborepo-ffi:
-	cd ../crates/turborepo-ffi && cargo build --target-dir ./target
+	cd ../crates/turborepo-ffi && cargo build --target x86_64-unknown-linux-musl --target-dir ./target
 
 .PHONY: turborepo-ffi-copy-bindings
 turborepo-ffi-copy-bindings:
@@ -337,4 +337,3 @@ fixture-%:
 	rm -rf testbed
 	mkdir -p testbed
 	../turborepo-tests/integration/tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
-
