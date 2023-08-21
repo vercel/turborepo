@@ -57,7 +57,7 @@ impl ClientConfigLoader {
             environment,
         } = self;
 
-        let config_attempt: Result<ClientConfigValue, ConfigError> = Config::builder()
+        let config_attempt: Result<ClientConfigValue, Error> = Config::builder()
             .set_default("remote_cache_timeout", DEFAULT_TIMEOUT)?
             .add_source(Environment::with_prefix("turbo").source(environment))
             .set_override_option("remote_cache_timeout", remote_cache_timeout)?
