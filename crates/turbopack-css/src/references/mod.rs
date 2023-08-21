@@ -1,14 +1,8 @@
 use anyhow::Result;
-use swc_core::{
-    common::{
-        errors::{Handler, HANDLER},
-        source_map::Pos,
-        Globals, Spanned, GLOBALS,
-    },
-    css::{
-        ast::{ImportHref, ImportPrelude, Url, UrlValue},
-        visit::{AstNodePath, AstParentKind, VisitAstPath, VisitWithPath},
-    },
+use swc_core::common::{
+    errors::{Handler, HANDLER},
+    source_map::Pos,
+    Globals, Spanned, GLOBALS,
 };
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
