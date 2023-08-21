@@ -1,10 +1,9 @@
 import path from "path";
 import fs from "fs-extra";
 import chalk from "chalk";
-import { logger } from "@turbo/utils";
+import { logger, type PackageJson, type DependencyGroups } from "@turbo/utils";
 import { gatherAddRequirements } from "../utils/gatherAddRequirements";
 import type { TurboGeneratorArguments } from "./types";
-import type { PackageJson, DependencyGroups } from "../types";
 
 export async function generate({ project, opts }: TurboGeneratorArguments) {
   const { name, location, dependencies } = await gatherAddRequirements({
