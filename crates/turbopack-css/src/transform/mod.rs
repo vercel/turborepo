@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use lightningcss::stylesheet::StyleSheet;
 use swc_core::common::SourceMap;
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -21,7 +22,7 @@ pub struct TransformContext<'a> {
 impl CssInputTransform {
     pub async fn apply(
         &self,
-        stylesheet: &mut Stylesheet,
+        stylesheet: &mut StyleSheet<'static, 'static>,
         &TransformContext { source_map: _ }: &TransformContext<'_>,
     ) -> Result<()> {
         match *self {
