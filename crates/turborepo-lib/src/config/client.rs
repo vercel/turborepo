@@ -132,11 +132,11 @@ mod test {
     #[test]
     fn test_client_arg_env_variable() -> Result<()> {
         #[derive(Debug)]
-        struct TestCase<'a> {
+        struct TestCase {
             arg: Option<u64>,
             env: String,
             output: u64,
-            want_err: Option<&'a str>,
+            want_err: Option<&'static str>,
         }
 
         let tests = [

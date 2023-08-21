@@ -70,9 +70,7 @@ impl CommandBase {
 
     pub fn repo_config_mut(&mut self) -> Result<&mut RepoConfig, ConfigError> {
         // Approximates `get_mut_or_try_init`
-        self.repo_config
-            .get_or_try_init(|| self.repo_config_init())?;
-
+        self.repo_config()?;
         Ok(self.repo_config.get_mut().unwrap())
     }
 
@@ -100,9 +98,7 @@ impl CommandBase {
 
     pub fn user_config_mut(&mut self) -> Result<&mut UserConfig, ConfigError> {
         // Approximates `get_mut_or_try_init`
-        self.user_config
-            .get_or_try_init(|| self.user_config_init())?;
-
+        self.user_config()?;
         Ok(self.user_config.get_mut().unwrap())
     }
 
@@ -119,9 +115,7 @@ impl CommandBase {
 
     pub fn client_config_mut(&mut self) -> Result<&mut ClientConfig, ConfigError> {
         // Approximates `get_mut_or_try_init`
-        self.client_config
-            .get_or_try_init(|| self.client_config_init())?;
-
+        self.client_config()?;
         Ok(self.client_config.get_mut().unwrap())
     }
 
