@@ -1,13 +1,7 @@
 use anyhow::Result;
-use swc_core::{
-    common::{Globals, GLOBALS},
-    css::{
-        ast::{AtRule, AtRulePrelude, Rule},
-        codegen::{writer::basic::BasicCssWriter, CodeGenerator, Emit},
-        visit::{VisitMutWith, VisitMutWithPath},
-    },
-};
-use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
+use lightningcss::{printer::Printer, rules::CssRule, stylesheet::PrinterOptions};
+use swc_core::common::{Globals, GLOBALS};
+use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -288,20 +282,16 @@ impl CssChunkItem for CssModuleChunkItem {
                 )
             });
 
-            let mut code_string = String::new();
-            let mut srcmap = vec![];
-
-            let mut code_gen = CodeGenerator::new(
-                BasicCssWriter::new(&mut code_string, Some(&mut srcmap), Default::default()),
-                Default::default(),
-            );
-
-            code_gen.emit(&stylesheet)?;
+            let mut srcmap = Default::default();
+            let result = stylesheet.to_css(PrinterOptions {
+                source_map: Some(&mut srcmap),
+                ..Default::default()
+            })?;
 
             let srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap).cell();
 
             Ok(CssChunkItemContent {
-                inner_code: code_string.into(),
+                inner_code: result.code.into(),
                 imports,
                 source_map: Some(srcmap),
             }
