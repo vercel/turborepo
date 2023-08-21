@@ -4,6 +4,8 @@ use anyhow::Result;
 use config::{Config, ConfigError, Environment};
 use serde::{Deserialize, Serialize};
 
+use crate::config::Error;
+
 const DEFAULT_TIMEOUT: u64 = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,7 +51,7 @@ impl ClientConfigLoader {
         self
     }
 
-    pub fn load(self) -> Result<ClientConfig> {
+    pub fn load(self) -> Result<ClientConfig, Error> {
         let Self {
             remote_cache_timeout,
             environment,
@@ -60,17 +62,12 @@ impl ClientConfigLoader {
             .add_source(Environment::with_prefix("turbo").source(environment))
             .set_override_option("remote_cache_timeout", remote_cache_timeout)?
             .build()?
+            // Deserialize is the only user-input-fallible step.
+            // Everything else is programmer error.
+            // This goes wrong when TURBO_REMOTE_CACHE_TIMEOUT can't be deserialized to u64
             .try_deserialize();
 
-        // This goes wrong when TURBO_REMOTE_CACHE_TIMEOUT can't be deserialized to u64
-        match config_attempt {
-            Err(_) => Ok(ClientConfig {
-                config: ClientConfigValue {
-                    remote_cache_timeout: DEFAULT_TIMEOUT,
-                },
-            }),
-            Ok(config) => Ok(ClientConfig { config }),
-        }
+        config_attempt.map(|config| ClientConfig { config })
     }
 }
 

@@ -298,12 +298,11 @@ async fn run_sso_one_shot_server(
 
 #[cfg(test)]
 mod test {
-    use std::fs;
+    use std::{cell::OnceCell, fs};
 
     use reqwest::Url;
     use serde::Deserialize;
     use tempfile::{tempdir, NamedTempFile};
-    use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::UI;
     use vercel_api_mock::start_test_server;
