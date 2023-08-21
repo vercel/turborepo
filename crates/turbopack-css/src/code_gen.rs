@@ -1,4 +1,3 @@
-use swc_core::css::visit::{AstParentKind, VisitMut};
 use turbo_tasks::Vc;
 use turbopack_core::chunk::ChunkingContext;
 
