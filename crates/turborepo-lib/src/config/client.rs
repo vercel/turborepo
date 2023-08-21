@@ -132,10 +132,11 @@ mod test {
     #[test]
     fn test_client_arg_env_variable() -> Result<()> {
         #[derive(Debug)]
-        struct TestCase {
+        struct TestCase<'a> {
             arg: Option<u64>,
             env: String,
             output: u64,
+            want_err: Option<&'a str>,
         }
 
         let tests = [
@@ -143,61 +144,79 @@ mod test {
                 arg: Some(0),
                 env: String::from("0"),
                 output: 0,
+                want_err: None,
             },
             TestCase {
                 arg: Some(0),
                 env: String::from("2"),
                 output: 0,
+                want_err: None,
             },
             TestCase {
                 arg: Some(0),
                 env: String::from("garbage"),
                 output: 0,
+                want_err: None,
             },
             TestCase {
                 arg: Some(0),
                 env: String::from(""),
                 output: 0,
+                want_err: None,
             },
             TestCase {
                 arg: Some(1),
                 env: String::from("0"),
                 output: 1,
+                want_err: None,
             },
             TestCase {
                 arg: Some(1),
                 env: String::from("2"),
                 output: 1,
+                want_err: None,
             },
             TestCase {
                 arg: Some(1),
                 env: String::from("garbage"),
                 output: 1,
+                want_err: None,
             },
             TestCase {
                 arg: Some(1),
                 env: String::from(""),
                 output: 1,
+                want_err: None,
             },
             TestCase {
                 arg: None,
                 env: String::from("0"),
                 output: 0,
+                want_err: None,
             },
             TestCase {
                 arg: None,
                 env: String::from("2"),
                 output: 2,
+                want_err: None,
             },
             TestCase {
                 arg: None,
                 env: String::from("garbage"),
                 output: DEFAULT_TIMEOUT,
+                want_err: Some(
+                    "invalid type: string \"garbage\", expected an integer for key \
+                     `remote_cache_timeout` in the environment",
+                ),
             },
             TestCase {
                 arg: None,
                 env: String::from(""),
                 output: DEFAULT_TIMEOUT,
+                want_err: Some(
+                    "invalid type: string \"\", expected an integer for key \
+                     `remote_cache_timeout` in the environment",
+                ),
             },
         ];
 
@@ -210,9 +229,13 @@ mod test {
                     env.insert("TURBO_REMOTE_CACHE_TIMEOUT".into(), test.env.clone());
                     Some(env)
                 })
-                .load()?;
+                .load();
 
-            assert_eq!(config.remote_cache_timeout(), test.output);
+            if test.want_err.is_none() {
+                assert_eq!(config.unwrap().remote_cache_timeout(), test.output);
+            } else {
+                assert_eq!(config.err().unwrap().to_string(), test.want_err.unwrap());
+            }
         }
 
         // We can only hit the actual system for env vars in a single test
@@ -221,9 +244,13 @@ mod test {
             set_var("TURBO_REMOTE_CACHE_TIMEOUT", test.env.clone());
             let config = ClientConfigLoader::new()
                 .with_remote_cache_timeout(test.arg)
-                .load()?;
+                .load();
 
-            assert_eq!(config.remote_cache_timeout(), test.output);
+            if test.want_err.is_none() {
+                assert_eq!(config.unwrap().remote_cache_timeout(), test.output);
+            } else {
+                assert_eq!(config.err().unwrap().to_string(), test.want_err.unwrap());
+            }
         }
 
         Ok(())
