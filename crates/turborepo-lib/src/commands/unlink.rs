@@ -11,26 +11,48 @@ enum UnlinkSpacesResult {
 }
 
 fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
-    base.delete_repo_config_file()
-        .context("could not unlink. Something went wrong")?;
+    let repo_config: &mut crate::config::RepoConfig = base.repo_config_mut()?;
+    let needs_disabling = repo_config.team_id().is_some() || repo_config.team_slug().is_some();
 
-    println!(
-        "{}",
-        base.ui.apply(GREY.apply_to("> Disabled Remote Caching"))
-    );
+    if needs_disabling {
+        base.repo_config_mut()?.set_team_id(None)?;
+
+        println!(
+            "{}",
+            base.ui.apply(GREY.apply_to("> Disabled Remote Caching"))
+        );
+    } else {
+        println!(
+            "{}",
+            base.ui
+                .apply(GREY.apply_to("> No Remote Caching config found"))
+        );
+    }
 
     Ok(())
 }
 
 fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
+    let repo_config: &mut crate::config::RepoConfig = base.repo_config_mut()?;
+    let needs_disabling =
+        repo_config.space_team_id().is_some() || repo_config.space_team_slug().is_some();
+
+    if needs_disabling {
+        base.repo_config_mut()?.set_space_team_id(None)?;
+    }
+
+    // Space config is _also_ in turbo.json.
     let result =
         remove_spaces_from_turbo_json(base).context("could not unlink. Something went wrong")?;
 
-    match result {
-        UnlinkSpacesResult::Unlinked => {
+    match (needs_disabling, result) {
+        (_, UnlinkSpacesResult::Unlinked) => {
             println!("{}", base.ui.apply(GREY.apply_to("> Unlinked Spaces")));
         }
-        UnlinkSpacesResult::NoSpacesFound => {
+        (true, _) => {
+            println!("{}", base.ui.apply(GREY.apply_to("> Unlinked Spaces")));
+        }
+        (false, UnlinkSpacesResult::NoSpacesFound) => {
             println!(
                 "{}",
                 base.ui.apply(GREY.apply_to("> No Spaces config found"))
