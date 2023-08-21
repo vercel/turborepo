@@ -8,7 +8,7 @@ use std::{
     fmt,
     fs::{File, Metadata, OpenOptions, Permissions},
     io,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
@@ -359,6 +359,20 @@ impl AbsoluteSystemPath {
 impl<'a> From<&'a AbsoluteSystemPath> for CandidatePath<'a> {
     fn from(value: &'a AbsoluteSystemPath) -> Self {
         CandidatePath::from(value.0.as_std_path())
+    }
+}
+
+impl PartialEq<&AbsoluteSystemPath> for Path {
+    fn eq(&self, other: &&AbsoluteSystemPath) -> bool {
+        Utf8Path::from_path(self)
+            .map(|path| &other.0 == path)
+            .unwrap_or(false)
+    }
+}
+
+impl PartialEq<&AbsoluteSystemPath> for PathBuf {
+    fn eq(&self, other: &&AbsoluteSystemPath) -> bool {
+        self.as_path().eq(other)
     }
 }
 
