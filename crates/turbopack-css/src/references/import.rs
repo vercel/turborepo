@@ -1,10 +1,16 @@
 use anyhow::Result;
-use lightningcss::rules::{
-    import::ImportRule,
-    layer::{LayerName, LayerStatementRule},
-    media::MediaRule,
-    supports::SupportsRule,
-    CssRule,
+use lightningcss::{
+    printer::Printer,
+    rules::{
+        import::ImportRule,
+        layer::{LayerName, LayerStatementRule},
+        media::MediaRule,
+        supports::SupportsRule,
+        unknown::UnknownAtRule,
+        CssRule,
+    },
+    stylesheet::PrinterOptions,
+    traits::ToCss,
 };
 use swc_core::common::DUMMY_SP;
 use turbo_tasks::{Value, ValueToString, Vc};
@@ -104,15 +110,16 @@ impl ImportAttributes {
         }
 
         // something random that's never gonna be in real css
-        let mut rule = Rule::ListOfComponentValues(Box::new(ListOfComponentValues {
-            span: DUMMY_SP,
-            children: vec![ComponentValue::PreservedToken(Box::new(token(
-                Token::String {
-                    value: Default::default(),
-                    raw: r#""""__turbopack_placeholder__""""#.into(),
-                },
-            )))],
-        }));
+        // Box::new(ListOfComponentValues {
+        //     span: DUMMY_SP,
+        //     children: vec![ComponentValue::PreservedToken(Box::new(token(
+        //         Token::String {
+        //             value: Default::default(),
+        //             raw: r#""""__turbopack_placeholder__""""#.into(),
+        //         },
+        //     )))],
+        // })
+        let mut rule = CssRule::Unknown(UnknownAtRule {});
 
         fn at_rule(name: &str, prelude: CssRule, inner_rule: Rule) -> Rule {
             Rule::AtRule(Box::new(AtRule {
@@ -149,18 +156,8 @@ impl ImportAttributes {
         }
 
         let mut output = String::new();
-        let mut code_gen = CodeGenerator::new(
-            BasicCssWriter::new(
-                &mut output,
-                None,
-                BasicCssWriterConfig {
-                    indent_width: 0,
-                    ..Default::default()
-                },
-            ),
-            Default::default(),
-        );
-        code_gen.emit(&rule)?;
+        let mut printer = Printer::new(&mut output, PrinterOptions::default());
+        rule.to_css(&mut printer)?;
 
         let (open, close) = output
             .split_once(r#""""__turbopack_placeholder__""""#)
