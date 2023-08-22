@@ -283,12 +283,11 @@ mod test {
         assert_eq!(visited.lock().unwrap().as_slice(), &[c, b, e, d, a]);
     }
 
-    // test that long running nodes block dependents, but others can continue
     #[tokio::test]
     async fn test_multiple_roots() {
         // a -- b -- c
-        //   \
-        // d - e
+        //          /
+        // d -- e -
         let mut g = Graph::new();
         let a = g.add_node("a");
         let b = g.add_node("b");
@@ -298,6 +297,7 @@ mod test {
         g.add_edge(a, b, ());
         g.add_edge(b, c, ());
         g.add_edge(d, e, ());
+        g.add_edge(e, c, ());
 
         // We intentionally wait to mark e as finished until b has been finished
         let walker = Walker::new(&g);
