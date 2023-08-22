@@ -1,16 +1,23 @@
 use std::{
+    fmt::Debug,
+    future::IntoFuture,
+    path::{Path, PathBuf},
     result::Result,
     sync::{Arc, Mutex},
-    path::{Path, PathBuf},
-    fmt::Debug,
     thread,
-    time::{Duration, Instant}, future::IntoFuture
+    time::{Duration, Instant},
 };
+
 use notify::event::{CreateKind, EventAttributes};
 //use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
-use notify_debouncer_full::{notify::*, new_debouncer, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap};
+use notify_debouncer_full::{
+    new_debouncer, notify::*, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
+};
 use thiserror::Error;
-use tokio::{sync::{broadcast, mpsc}, task::JoinHandle};
+use tokio::{
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use walkdir::WalkDir;
 
@@ -30,13 +37,13 @@ enum WatchError {
     #[error("filewatching stopped")]
     Stopped(#[from] std::sync::mpsc::RecvError),
     #[error("enumerating recursive watch: {0}")]
-    WalkDir(#[from] walkdir::Error)
+    WalkDir(#[from] walkdir::Error),
 }
 
 // impl DiskWatcher {
 //     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-//     fn restore_if_watching(&self, dir_path: &Path, root_path: &Path) -> Result<()> {
-//         if self.watching.contains(dir_path) {
+//     fn restore_if_watching(&self, dir_path: &Path, root_path: &Path) ->
+// Result<()> {         if self.watching.contains(dir_path) {
 //             let mut watcher = self.watcher.lock().unwrap();
 //             self.start_watching(&mut watcher, dir_path, root_path)?;
 //         }
@@ -44,8 +51,8 @@ enum WatchError {
 //     }
 
 //     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-//     fn ensure_watching(&self, dir_path: &Path, root_path: &Path) -> Result<()> {
-//         if self.watching.contains(dir_path) {
+//     fn ensure_watching(&self, dir_path: &Path, root_path: &Path) ->
+// Result<()> {         if self.watching.contains(dir_path) {
 //             return Ok(());
 //         }
 //         let mut watcher = self.watcher.lock().unwrap();
@@ -61,40 +68,24 @@ enum WatchError {
 //         watcher: &mut std::sync::MutexGuard<Option<RecommendedWatcher>>,
 //         dir_path: &Path,
 //         root_path: &Path,
-//     ) -> Result<()> {
-//         if let Some(watcher) = watcher.as_mut() {
-//             let mut path = dir_path;
-//             while let Err(err) = watcher.watch(path, RecursiveMode::NonRecursive) {
-//                 if path == root_path {
-//                     return Err(err).context(format!(
-//                         "Unable to watch {} (tried up to {})",
-//                         dir_path.display(),
-//                         path.display()
-//                     ));
-//                 }
-//                 let Some(parent_path) = path.parent() else {
-//                     return Err(err).context(format!(
-//                         "Unable to watch {} (tried up to {})",
-//                         dir_path.display(),
-//                         path.display()
-//                     ));
-//                 };
-//                 path = parent_path;
-//             }
-//         }
-//         Ok(())
+//     ) -> Result<()> { if let Some(watcher) = watcher.as_mut() { let mut path
+//       = dir_path; while let Err(err) = watcher.watch(path,
+//       RecursiveMode::NonRecursive) { if path == root_path { return
+//       Err(err).context(format!( "Unable to watch {} (tried up to {})",
+//       dir_path.display(), path.display() )); } let Some(parent_path) =
+//       path.parent() else { return Err(err).context(format!( "Unable to watch
+//       {} (tried up to {})", dir_path.display(), path.display() )); }; path =
+//       parent_path; } } Ok(())
 //     }
 // }
 
 struct FileSystemWatcher {
     sender: broadcast::Sender<DebouncedEvent>,
-    exit_ch: tokio::sync::oneshot::Sender<()>
-    //watcher: Arc<Mutex<RecommendedWatcher>>,
+    exit_ch: tokio::sync::oneshot::Sender<()>, //watcher: Arc<Mutex<RecommendedWatcher>>,
 }
 
 impl FileSystemWatcher {
     pub fn new(root: &AbsoluteSystemPath) -> Self {
-
         let (sender, _) = broadcast::channel(1024);
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let watch_root = root.to_owned();
@@ -136,10 +127,7 @@ impl FileSystemWatcher {
                 }
             }
         });
-        Self {
-            sender,
-            exit_ch
-        }
+        Self { sender, exit_ch }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<DebouncedEvent> {
@@ -147,7 +135,11 @@ impl FileSystemWatcher {
     }
 }
 
-fn watch_recursively(root: &Path, watcher: &mut RecommendedWatcher, sender: Option<(Instant, &broadcast::Sender<DebouncedEvent>)>) -> Result<(), WatchError> {
+fn watch_recursively(
+    root: &Path,
+    watcher: &mut RecommendedWatcher,
+    sender: Option<(Instant, &broadcast::Sender<DebouncedEvent>)>,
+) -> Result<(), WatchError> {
     for dir in WalkDir::new(root).follow_links(false).into_iter() {
         let dir = dir?;
         if dir.file_type().is_dir() {
@@ -163,9 +155,9 @@ fn watch_recursively(root: &Path, watcher: &mut RecommendedWatcher, sender: Opti
                 event: Event {
                     paths: vec![dir.path().to_owned()],
                     kind: EventKind::Create(create_kind),
-                    attrs: EventAttributes::default()
+                    attrs: EventAttributes::default(),
                 },
-                time: *instant
+                time: *instant,
             };
             // It's ok if we fail to send, it means we're shutting down
             let _ = sender.send(event);
@@ -175,18 +167,18 @@ fn watch_recursively(root: &Path, watcher: &mut RecommendedWatcher, sender: Opti
     Ok(())
 }
 
-fn run_watcher(root: &AbsoluteSystemPath, sender: mpsc::Sender<DebounceEventResult>) -> Result<Debouncer<RecommendedWatcher, FileIdMap>, WatchError> {
-    //let (tx, recv) = mpsc::channel();
+fn run_watcher(
+    root: &AbsoluteSystemPath,
+    sender: mpsc::Sender<DebounceEventResult>,
+) -> Result<Debouncer<RecommendedWatcher, FileIdMap>, WatchError> {
     let mut debouncer = new_debouncer(Duration::from_millis(1), None, move |res| {
-        futures::executor::block_on(async {
-            // It's ok if we fail to send, it means we're shutting down
-            let _ = sender.send(res).await;
-        })
+        let _ = sender.blocking_send(res);
     })?;
 
-    //let mut watcher = watcher(sender, Duration::from_millis(1))?;
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    debouncer.watcher().watch(&root_path, RecursiveMode::Recursive)?;
+    debouncer
+        .watcher()
+        .watch(&root.as_std_path(), RecursiveMode::Recursive)?;
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     //debouncer.watcher().watch(root.as_std_path(), RecursiveMode::Recursive)?;
     // Don't synthesize initial events
@@ -196,12 +188,12 @@ fn run_watcher(root: &AbsoluteSystemPath, sender: mpsc::Sender<DebounceEventResu
 
 #[cfg(test)]
 mod test {
-    use std::{time::Duration, sync::atomic::AtomicUsize};
+    use std::{sync::atomic::AtomicUsize, time::Duration};
 
-    use notify::{EventKind, event::CreateKind};
+    use notify::{event::CreateKind, EventKind};
     use notify_debouncer_full::DebouncedEvent;
     use tokio::sync::broadcast;
-    use turbopath::{AbsoluteSystemPathBuf, AbsoluteSystemPath};
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::FileSystemWatcher;
 
@@ -213,11 +205,13 @@ mod test {
         let watcher = FileSystemWatcher::new(&root);
         let mut events_channel = watcher.subscribe();
 
-        println!("writing");
-        root.join_component("foo").create_with_contents("hello world").unwrap();
+        root.join_component("foo")
+            .create_with_contents("hello world")
+            .unwrap();
 
-        let event = tokio::time::timeout(Duration::from_millis(2000), events_channel.recv()).await.unwrap();
-        println!("test event {:?}", event);
+        let event = tokio::time::timeout(Duration::from_millis(2000), events_channel.recv())
+            .await
+            .unwrap();
     }
 
     fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {
@@ -226,7 +220,11 @@ mod test {
         (path, tmp)
     }
 
-    async fn expect_filesystem_event(recv: &mut broadcast::Receiver<DebouncedEvent>, expected_path: &AbsoluteSystemPath, expected_event: EventKind) {
+    async fn expect_filesystem_event(
+        recv: &mut broadcast::Receiver<DebouncedEvent>,
+        expected_path: &AbsoluteSystemPath,
+        expected_event: EventKind,
+    ) {
         println!("WAIT FOR {}", expected_path);
         'outer: loop {
             let event = tokio::time::timeout(Duration::from_millis(1000), recv.recv())
@@ -245,15 +243,17 @@ mod test {
 
     static WATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-    async fn expect_watching(recv: &mut broadcast::Receiver<DebouncedEvent>, dirs: &[&AbsoluteSystemPath]) {
+    async fn expect_watching(
+        recv: &mut broadcast::Receiver<DebouncedEvent>,
+        dirs: &[&AbsoluteSystemPath],
+    ) {
         for dir in dirs {
             let count = WATCH_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let filename = dir.join_component(format!("test-{}", count).as_str());
             println!("WRITING {}", filename);
             filename.create_with_contents("hello").unwrap();
 
-            expect_filesystem_event(recv, &filename, EventKind::Create(CreateKind::File))
-                .await;
+            expect_filesystem_event(recv, &filename, EventKind::Create(CreateKind::File)).await;
         }
     }
 
@@ -296,12 +296,7 @@ mod test {
             EventKind::Create(CreateKind::Folder),
         )
         .await;
-        expect_filesystem_event(
-            &mut recv,
-            &deep_path,
-            EventKind::Create(CreateKind::Folder),
-        )
-        .await;
+        expect_filesystem_event(&mut recv, &deep_path, EventKind::Create(CreateKind::Folder)).await;
         expect_watching(
             &mut recv,
             &[
