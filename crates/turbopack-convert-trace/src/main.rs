@@ -253,6 +253,20 @@ fn main() {
         start.elapsed().as_secs_f64()
     );
 
+    if !active_ids.is_empty() {
+        let active_spans = active_ids
+            .into_values()
+            .map(|id| &spans[id])
+            .filter(|span| span.end == span.start)
+            .collect::<Vec<_>>();
+        if !active_spans.is_empty() {
+            eprintln!("{} spans still active:", active_spans.len());
+            for span in active_spans {
+                eprintln!("- {}", span.name);
+            }
+        }
+    }
+
     let mut name_counts: Vec<(Cow<'_, str>, usize)> = name_counts.into_iter().collect();
     name_counts.sort_by_key(|(_, count)| Reverse(*count));
 
@@ -391,6 +405,7 @@ fn main() {
     if single || merged {
         eprint!("Emitting span tree...");
         let start = Instant::now();
+        let mut span_counter = 0;
 
         const CONCURRENCY_FIXED_POINT_FACTOR: u64 = 100;
         const CONCURRENCY_FIXED_POINT_FACTOR_F: f32 = 100.0;
@@ -438,6 +453,7 @@ fn main() {
             .rev()
             .filter_map(|(id, span)| {
                 if span.parent == 0 {
+                    span_counter += 1;
                     Some(Task::Enter { id, root: true })
                 } else {
                     None
@@ -603,6 +619,14 @@ fn main() {
                                 }
                             }
                             SpanItem::Child(id) => {
+                                span_counter += 1;
+                                if span_counter % 12543 == 0 {
+                                    eprint!(
+                                        "\rEmitting span tree... {} / {}",
+                                        span_counter,
+                                        spans.len()
+                                    );
+                                }
                                 stack.push(Task::Enter {
                                     id: *id,
                                     root: false,
@@ -690,7 +714,12 @@ fn main() {
                 }
             }
         }
-        eprintln!(" done ({:.3}s)", start.elapsed().as_secs_f64());
+        eprintln!(
+            "\rEmitting span tree... {} / {} done ({:.3}s)",
+            spans.len(),
+            spans.len(),
+            start.elapsed().as_secs_f64()
+        );
     }
     println!();
     println!("]");
