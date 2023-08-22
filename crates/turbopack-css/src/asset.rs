@@ -1,5 +1,5 @@
 use anyhow::Result;
-use lightningcss::{printer::Printer, rules::CssRule, stylesheet::PrinterOptions};
+use lightningcss::{rules::CssRule, stylesheet::PrinterOptions};
 use swc_core::common::{Globals, GLOBALS};
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
