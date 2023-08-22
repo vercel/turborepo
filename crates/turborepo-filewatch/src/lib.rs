@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use notify::event::{CreateKind, EventAttributes};
+use notify::event::{CreateKind, EventAttributes, RemoveKind};
 //use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use notify_debouncer_full::{
     new_debouncer, notify::*, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
@@ -96,22 +96,23 @@ impl FileSystemWatcher {
         tokio::task::spawn(async move {
             let mut debouncer = debouncer;
             let mut exit_signal = exit_signal;
-            loop {
+            'outer: loop {
                 tokio::select! {
-                    _ = &mut exit_signal => { println!("exit ch dropped"); return Ok::<(), WatchError>(()); },
+                    _ = &mut exit_signal => { println!("exit ch dropped"); break 'outer; },
                     Some(event) = recv_file_events.recv().into_future() => {
                         //let event = recv_file_events.recv()?;
                         match event {
                             Ok(events) => {
                                 for event in events {
-                                    let time = event.time;
-                                    println!("event {:?}", event);
                                     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-                                    if event.event.kind == EventKind::Create(CreateKind::Folder) {
-                                        for new_path in &event.event.paths {
-                                            println!("new {}", new_path.display());
-                                            //debouncer.watcher().watch(&new_path, RecursiveMode::Recursive)?;
-                                            watch_recursively(&new_path, debouncer.watcher(), Some((time, &broadcast_sender)))?;
+                                    {
+                                        let time = event.time;
+                                        if event.event.kind == EventKind::Create(CreateKind::Folder) {
+                                            for new_path in &event.event.paths {
+                                                println!("new {}", new_path.display());
+                                                //debouncer.watcher().watch(&new_path, RecursiveMode::Recursive)?;
+                                                watch_recursively(&new_path, debouncer.watcher(), Some((time, &broadcast_sender)))?;
+                                            }
                                         }
                                     }
                                     // we don't care if we fail to send, it just means no one is currently watching
@@ -126,6 +127,8 @@ impl FileSystemWatcher {
                     }
                 }
             }
+            println!("DONE");
+            Ok::<(), WatchError>(())
         });
         Self { sender, exit_ch }
     }
@@ -172,6 +175,7 @@ fn run_watcher(
     sender: mpsc::Sender<DebounceEventResult>,
 ) -> Result<Debouncer<RecommendedWatcher, FileIdMap>, WatchError> {
     let mut debouncer = new_debouncer(Duration::from_millis(1), None, move |res| {
+        println!("event {:?}", res);
         let _ = sender.blocking_send(res);
     })?;
 
@@ -190,7 +194,10 @@ fn run_watcher(
 mod test {
     use std::{sync::atomic::AtomicUsize, time::Duration};
 
-    use notify::{event::CreateKind, EventKind};
+    use notify::{
+        event::{CreateKind, RemoveKind},
+        EventKind,
+    };
     use notify_debouncer_full::DebouncedEvent;
     use tokio::sync::broadcast;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -227,7 +234,7 @@ mod test {
     ) {
         println!("WAIT FOR {}", expected_path);
         'outer: loop {
-            let event = tokio::time::timeout(Duration::from_millis(1000), recv.recv())
+            let event = tokio::time::timeout(Duration::from_millis(3000), recv.recv())
                 .await
                 .expect("timed out waiting for filesystem event")
                 .expect("sender was dropped");
@@ -250,7 +257,6 @@ mod test {
         for dir in dirs {
             let count = WATCH_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let filename = dir.join_component(format!("test-{}", count).as_str());
-            println!("WRITING {}", filename);
             filename.create_with_contents("hello").unwrap();
 
             expect_filesystem_event(recv, &filename, EventKind::Create(CreateKind::File)).await;
@@ -310,5 +316,66 @@ mod test {
         .await;
 
         // TODO: implement default filtering (.git, node_modules)
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_subfolder_deletion() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root);
+        let mut recv = watcher.subscribe();
+
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        // Delete parent folder during file watching
+        println!("REMOVING {}", parent_path);
+        //parent_path.remove_dir_all().unwrap();
+        child_path.remove_dir_all().unwrap();
+        println!("REMOVED");
+        expect_filesystem_event(
+            &mut recv,
+            &parent_path,
+            EventKind::Remove(RemoveKind::Folder),
+        )
+        .await;
+
+        println!("CREATING");
+        // Ensure we get events when creating file in deleted directory
+        child_path.create_dir_all().unwrap();
+        expect_filesystem_event(
+            &mut recv,
+            &parent_path,
+            EventKind::Create(CreateKind::Folder),
+        )
+        .await;
+        expect_filesystem_event(
+            &mut recv,
+            &child_path,
+            EventKind::Create(CreateKind::Folder),
+        )
+        .await;
+
+        let foo_path = child_path.join_component("foo");
+        foo_path.create_with_contents("hello").unwrap();
+        expect_filesystem_event(&mut recv, &foo_path, EventKind::Create(CreateKind::File)).await;
+        // We cannot guarantee no more events, windows sends multiple delete
+        // events
     }
 }
