@@ -260,7 +260,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                 let node = package_graph::WorkspaceNode::Workspace(package.clone());
 
                 if selector.include_dependencies {
-                    let dependencies = self.pkg_graph.dependencies(&node);
+                    let dependencies = self.pkg_graph.immediate_dependencies(&node);
                     let dependencies = dependencies
                         .iter()
                         .flatten()
@@ -272,8 +272,8 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                 }
 
                 if selector.include_dependents {
-                    let dependents = self.pkg_graph.dependents(&node);
-                    for dependent in dependents.iter().flatten().map(|i| i.as_workspace()) {
+                    let dependents = self.pkg_graph.ancestors(&node);
+                    for dependent in dependents.iter().map(|i| i.as_workspace()) {
                         walked_dependents.insert(dependent.clone());
 
                         // get the dependent's dependencies
@@ -282,7 +282,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                                 package_graph::WorkspaceNode::Workspace(dependent.to_owned());
 
                             let dependent_dependencies =
-                                self.pkg_graph.dependencies(&dependent_node);
+                                self.pkg_graph.immediate_dependencies(&dependent_node);
 
                             let dependent_dependencies = dependent_dependencies
                                 .iter()
@@ -381,7 +381,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             }
 
             let workspace_node = package_graph::WorkspaceNode::Workspace(package.clone());
-            let dependencies = self.pkg_graph.dependencies(&workspace_node);
+            let dependencies = self.pkg_graph.immediate_dependencies(&workspace_node);
 
             for changed_package in &changed_packages {
                 if !selector.exclude_self && package.eq(changed_package) {

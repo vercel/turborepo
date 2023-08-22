@@ -5,7 +5,10 @@ use std::{
 
 use anyhow::Result;
 use itertools::Itertools;
-use petgraph::visit::EdgeRef;
+use petgraph::{
+    visit::{depth_first_search, EdgeRef, Reversed},
+    Directed,
+};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
@@ -153,7 +156,18 @@ impl PackageGraph {
             .expect("package graph was built without root package.json")
     }
 
-    pub fn dependencies(&self, workspace: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+    /// Gets all the nodes that directly depend on this one, that is to say
+    /// have a edge to `workspace`.
+    ///
+    /// Example:
+    ///
+    /// a -> b -> c
+    ///
+    /// immediate_dependencies(a) -> {b}
+    pub fn immediate_dependencies(
+        &self,
+        workspace: &WorkspaceNode,
+    ) -> Option<HashSet<&WorkspaceNode>> {
         let index = self.node_lookup.get(workspace)?;
         Some(
             self.workspace_graph
@@ -167,7 +181,18 @@ impl PackageGraph {
         )
     }
 
-    pub fn dependents(&self, workspace: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+    /// Gets all the nodes that directly depend on this one, that is to say
+    /// have a edge to `workspace`.
+    ///
+    /// Example:
+    ///
+    /// a -> b -> c
+    ///
+    /// immediate_ancestors(c) -> {b}
+    pub fn immediate_ancestors(
+        &self,
+        workspace: &WorkspaceNode,
+    ) -> Option<HashSet<&WorkspaceNode>> {
         let index = self.node_lookup.get(workspace)?;
         Some(
             self.workspace_graph
@@ -181,16 +206,61 @@ impl PackageGraph {
         )
     }
 
-    pub fn transitive_closure<'a, I: IntoIterator<Item = &'a WorkspaceNode>>(
-        &self,
+    /// For a given workspace in the repo, returns the set of workspaces
+    /// that this one depends on, excluding those that are unresolved.
+    ///
+    /// Example:
+    ///
+    /// a -> b -> c (external)
+    ///
+    /// dependencies(a) = {b, c}
+    pub fn dependencies<'a>(&'a self, node: &WorkspaceNode) -> HashSet<&'a WorkspaceNode> {
+        let mut dependencies =
+            self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
+        dependencies.remove(node);
+        dependencies
+    }
+
+    /// For a given workspace in the repo, returns the set of workspaces
+    /// that depend on this one, excluding those that are unresolved.
+    ///
+    /// Example:
+    ///
+    /// a -> b -> c (external)
+    ///
+    /// ancestors(c) = {a, b}
+    pub fn ancestors(&self, node: &WorkspaceNode) -> HashSet<&WorkspaceNode> {
+        let mut dependents =
+            self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming);
+        dependents.remove(node);
+        dependents
+    }
+
+    /// Returns the transitive closure of the given nodes in the workspace
+    /// graph. Note that this includes the nodes themselves. If you want just
+    /// the dependencies, or the dependents, use `dependencies` or `ancestors`.
+    /// Alternatively, if you need just direct dependents, use
+    /// `immediate_dependents`.
+    pub fn transitive_closure<'a, 'b, I: IntoIterator<Item = &'b WorkspaceNode>>(
+        &'a self,
         nodes: I,
-    ) -> HashSet<&WorkspaceNode> {
-        let indexes = nodes
+    ) -> HashSet<&'a WorkspaceNode> {
+        self.transitive_closure_inner(nodes, petgraph::Direction::Outgoing)
+    }
+
+    fn transitive_closure_inner<'a, 'b, I: IntoIterator<Item = &'b WorkspaceNode>>(
+        &'a self,
+        nodes: I,
+        direction: petgraph::Direction,
+    ) -> HashSet<&'a WorkspaceNode> {
+        let indices = nodes
             .into_iter()
             .filter_map(|node| self.node_lookup.get(node))
             .copied();
+
         let mut visited = HashSet::new();
-        petgraph::visit::depth_first_search(&self.workspace_graph, indexes, |event| {
+
+        let visitor = |event| {
             if let petgraph::visit::DfsEvent::Discover(n, _) = event {
                 visited.insert(
                     self.workspace_graph
@@ -198,7 +268,17 @@ impl PackageGraph {
                         .expect("node index found during dfs doesn't exist"),
                 );
             }
-        });
+        };
+
+        match direction {
+            petgraph::Direction::Outgoing => {
+                depth_first_search(&self.workspace_graph, indices, visitor)
+            }
+            petgraph::Direction::Incoming => {
+                depth_first_search(Reversed(&self.workspace_graph), indices, visitor)
+            }
+        };
+
         visited
     }
 
