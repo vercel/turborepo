@@ -1,5 +1,6 @@
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turborepo_scm::SCM;
 
 use crate::package_graph::{self, PackageGraph};
 
@@ -52,8 +53,25 @@ impl PackageInference {
     }
 }
 
-struct Resolver<'a> {
+pub struct Resolver<'a> {
     pkg_graph: &'a PackageGraph,
     turbo_root: &'a AbsoluteSystemPath,
     inference: Option<PackageInference>,
+    scm: &'a SCM,
+}
+
+impl<'a> Resolver<'a> {
+    pub(crate) fn new(
+        pkg_graph: &'a PackageGraph,
+        turbo_root: &'a AbsoluteSystemPath,
+        inference: Option<PackageInference>,
+        scm: &'a SCM,
+    ) -> Self {
+        Self {
+            pkg_graph,
+            turbo_root,
+            inference,
+            scm,
+        }
+    }
 }
