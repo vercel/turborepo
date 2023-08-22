@@ -75,15 +75,15 @@ impl AnchoredSystemPath {
 
     pub fn to_unix(&self) -> RelativeUnixPathBuf {
         #[cfg(unix)]
-        {
-            return RelativeUnixPathBuf::new(self.0.as_str())
-                .expect("anchored system path is relative");
-        }
+        let buf = RelativeUnixPathBuf::new(self.0.as_str());
+
         #[cfg(not(unix))]
-        {
+        let buf = {
             use crate::IntoUnix;
             let unix_buf = self.0.into_unix();
-            RelativeUnixPathBuf::new(unix_buf).expect("anchored system path is relative")
-        }
+            RelativeUnixPathBuf::new(unix_buf)
+        };
+
+        buf.unwrap_or_else(|_| panic!("anchored system path is relative: {}", self.0.as_str()))
     }
 }
