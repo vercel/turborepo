@@ -4,6 +4,7 @@ mod execute;
 use std::collections::{HashMap, HashSet};
 
 pub use builder::EngineBuilder;
+pub use execute::{ExecutionOptions, Message};
 use petgraph::Graph;
 
 use crate::{
@@ -111,6 +112,12 @@ impl Engine<Built> {
                 })
                 .collect(),
         )
+    }
+
+    // TODO get rid of static lifetime and figure out right way to tell compiler the
+    // lifetime of the return ref
+    pub fn task_definition(&self, task_id: &TaskId<'static>) -> Option<&TaskDefinition> {
+        self.task_definitions.get(task_id)
     }
 
     pub fn validate(
