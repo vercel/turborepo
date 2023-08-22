@@ -1,7 +1,7 @@
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 
-use crate::package_graph;
+use crate::package_graph::{self, PackageGraph};
 
 pub struct PackageInference {
     package_name: Option<String>,
@@ -50,4 +50,10 @@ impl PackageInference {
             directory_root: pkg_inference_path.to_owned(),
         }
     }
+}
+
+struct Resolver<'a> {
+    pkg_graph: &'a PackageGraph,
+    turbo_root: &'a AbsoluteSystemPath,
+    inference: Option<PackageInference>,
 }
