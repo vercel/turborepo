@@ -77,6 +77,7 @@ func NewRunSummary(
 	repoPath turbopath.RelativeSystemPath,
 	turboVersion string,
 	apiClient *client.APIClient,
+	spacesClient *client.APIClient,
 	runOpts util.RunOpts,
 	packages []string,
 	globalEnvMode util.EnvMode,
@@ -121,7 +122,7 @@ func NewRunSummary(
 		synthesizedCommand: synthesizedCommand,
 	}
 
-	rsm.spacesClient = newSpacesClient(spaceID, apiClient)
+	rsm.spacesClient = newSpacesClient(spaceID, spacesClient)
 	if rsm.spacesClient.enabled {
 		go rsm.spacesClient.start()
 		payload := newSpacesRunCreatePayload(&rsm)

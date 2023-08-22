@@ -368,6 +368,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		rs.Opts.scopeOpts.PackageInferenceRoot,
 		r.base.TurboVersion,
 		r.base.APIClient,
+		r.base.SpacesAPIClient,
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,

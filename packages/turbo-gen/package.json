@@ -1,6 +1,6 @@
 {
   "name": "@turbo/gen",
-  "version": "1.10.13-canary.1",
+  "version": "1.10.13-canary.2",
   "description": "Extend a Turborepo",
   "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsup",
     "test": "jest",
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint src/**/*",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
@@ -34,6 +34,7 @@
     "validate-npm-package-name": "^5.0.0"
   },
   "devDependencies": {
+    "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/utils": "workspace:*",
@@ -42,7 +43,6 @@
     "@types/jest": "^27.4.0",
     "@types/node": "^18.17.2",
     "@types/validate-npm-package-name": "^4.0.0",
-    "eslint": "^7.23.0",
     "jest": "^27.4.3",
     "ts-jest": "^27.1.1",
     "tsup": "^6.7.0",

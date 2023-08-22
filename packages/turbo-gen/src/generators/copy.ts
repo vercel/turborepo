@@ -2,10 +2,14 @@ import path from "path";
 import fs from "fs-extra";
 import chalk from "chalk";
 import { CopyFilterAsync } from "fs-extra";
-import { createProject, logger } from "@turbo/utils";
+import {
+  createProject,
+  logger,
+  type DependencyGroups,
+  type PackageJson,
+} from "@turbo/utils";
 import { gatherAddRequirements } from "../utils/gatherAddRequirements";
 import type { TurboGeneratorArguments } from "./types";
-import { DependencyGroups, PackageJson } from "../types";
 
 export async function generate({ project, opts }: TurboGeneratorArguments) {
   const { name, type, location, source, dependencies } =

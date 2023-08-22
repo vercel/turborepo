@@ -5,11 +5,12 @@ mod global_hash;
 mod scope;
 pub mod task_id;
 
-use std::io::IsTerminal;
+use std::io::{BufWriter, IsTerminal};
 
 use anyhow::{anyhow, Context as ErrorContext, Result};
 use itertools::Itertools;
 use tracing::{debug, info};
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
@@ -22,7 +23,7 @@ use crate::{
     daemon::DaemonConnector,
     engine::EngineBuilder,
     manager::Manager,
-    opts::Opts,
+    opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
     run::{cache::RunCache, global_hash::get_global_hash_inputs},
@@ -55,7 +56,7 @@ impl Run {
             PackageJson::load(&package_json_path).context("failed to read package.json")?;
         let mut opts = self.opts()?;
 
-        let _is_structured_output = opts.run_opts.graph_dot || opts.run_opts.dry_run_json;
+        let _is_structured_output = opts.run_opts.graph.is_some() || opts.run_opts.dry_run_json;
 
         let is_single_package = opts.run_opts.single_package;
 
@@ -175,6 +176,22 @@ impl Run {
         engine
             .validate(&pkg_dep_graph, opts.run_opts.concurrency)
             .map_err(|errors| anyhow!("Validation failed:\n{}", errors.into_iter().join("\n")))?;
+
+        if let Some(graph_opts) = opts.run_opts.graph {
+            match graph_opts {
+                GraphOpts::File(graph_file) => {
+                    let graph_file =
+                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
+                    let file = graph_file.open()?;
+                    let _writer = BufWriter::new(file);
+                    todo!("Need to implement different format support");
+                }
+                GraphOpts::Stdout => {
+                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
+                }
+            }
+            return Ok(());
+        }
 
         let color_selector = ColorSelector::default();
 

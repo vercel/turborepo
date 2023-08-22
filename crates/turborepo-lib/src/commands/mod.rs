@@ -1,16 +1,15 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, cell::OnceCell};
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use tokio::sync::OnceCell;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::APIClient;
 use turborepo_ui::UI;
 
 use crate::{
     config::{
         default_user_config_path, get_repo_config_path, ClientConfig, ClientConfigLoader,
-        RepoConfig, RepoConfigLoader, UserConfig, UserConfigLoader,
+        Error as ConfigError, RepoConfig, RepoConfigLoader, UserConfig, UserConfigLoader,
     },
     Args,
 };
@@ -55,18 +54,24 @@ impl CommandBase {
         })
     }
 
-    fn create_repo_config(&self) -> Result<()> {
+    fn repo_config_init(&self) -> Result<RepoConfig, ConfigError> {
         let repo_config_path = get_repo_config_path(self.repo_root.borrow());
 
-        let repo_config = RepoConfigLoader::new(repo_config_path)
+        RepoConfigLoader::new(repo_config_path)
             .with_api(self.args.api.clone())
             .with_login(self.args.login.clone())
             .with_team_slug(self.args.team.clone())
-            .load()?;
+            .load()
+    }
 
-        self.repo_config.set(repo_config)?;
+    pub fn repo_config(&self) -> Result<&RepoConfig, ConfigError> {
+        self.repo_config.get_or_try_init(|| self.repo_config_init())
+    }
 
-        Ok(())
+    pub fn repo_config_mut(&mut self) -> Result<&mut RepoConfig, ConfigError> {
+        // Approximates `get_mut_or_try_init`
+        self.repo_config()?;
+        Ok(self.repo_config.get_mut().unwrap())
     }
 
     // NOTE: This deletes the repo config file. It does *not* remove the
@@ -81,62 +86,37 @@ impl CommandBase {
         Ok(())
     }
 
-    fn create_user_config(&self) -> Result<()> {
-        let user_config = UserConfigLoader::new(default_user_config_path()?)
+    fn user_config_init(&self) -> Result<UserConfig, ConfigError> {
+        UserConfigLoader::new(default_user_config_path()?)
             .with_token(self.args.token.clone())
-            .load()?;
-        self.user_config.set(user_config)?;
-
-        Ok(())
+            .load()
     }
 
-    fn create_client_config(&self) -> Result<()> {
-        let client_config = ClientConfigLoader::new()
-            .with_remote_cache_timeout(self.args.remote_cache_timeout)
-            .load()?;
-        self.client_config.set(client_config)?;
-
-        Ok(())
+    pub fn user_config(&self) -> Result<&UserConfig, ConfigError> {
+        self.user_config.get_or_try_init(|| self.user_config_init())
     }
 
-    pub fn repo_config_mut(&mut self) -> Result<&mut RepoConfig> {
-        if self.repo_config.get().is_none() {
-            self.create_repo_config()?;
-        }
-
-        Ok(self.repo_config.get_mut().unwrap())
-    }
-
-    pub fn repo_config(&self) -> Result<&RepoConfig> {
-        if self.repo_config.get().is_none() {
-            self.create_repo_config()?;
-        }
-
-        Ok(self.repo_config.get().unwrap())
-    }
-
-    pub fn user_config_mut(&mut self) -> Result<&mut UserConfig> {
-        if self.user_config.get().is_none() {
-            self.create_user_config()?;
-        }
-
+    pub fn user_config_mut(&mut self) -> Result<&mut UserConfig, ConfigError> {
+        // Approximates `get_mut_or_try_init`
+        self.user_config()?;
         Ok(self.user_config.get_mut().unwrap())
     }
 
-    pub fn user_config(&self) -> Result<&UserConfig> {
-        if self.user_config.get().is_none() {
-            self.create_user_config()?;
-        }
-
-        Ok(self.user_config.get().unwrap())
+    fn client_config_init(&self) -> Result<ClientConfig, ConfigError> {
+        ClientConfigLoader::new()
+            .with_remote_cache_timeout(self.args.remote_cache_timeout)
+            .load()
     }
 
-    pub fn client_config(&self) -> Result<&ClientConfig> {
-        if self.client_config.get().is_none() {
-            self.create_client_config()?;
-        }
+    pub fn client_config(&self) -> Result<&ClientConfig, ConfigError> {
+        self.client_config
+            .get_or_try_init(|| self.client_config_init())
+    }
 
-        Ok(self.client_config.get().unwrap())
+    pub fn client_config_mut(&mut self) -> Result<&mut ClientConfig, ConfigError> {
+        // Approximates `get_mut_or_try_init`
+        self.client_config()?;
+        Ok(self.client_config.get_mut().unwrap())
     }
 
     pub fn args(&self) -> &Args {
@@ -169,6 +149,15 @@ impl CommandBase {
         let mut hasher = Sha256::new();
         hasher.update(self.repo_root.as_bytes());
         hex::encode(&hasher.finalize()[..8])
+    }
+
+    /// Current working directory for the turbo command
+    pub fn cwd(&self) -> &AbsoluteSystemPath {
+        // Earlier in execution
+        // self.cli_args.cwd = Some(repo_root.as_path())
+        // happens.
+        // We directly use repo_root to avoid converting back to absolute system path
+        &self.repo_root
     }
 }
 

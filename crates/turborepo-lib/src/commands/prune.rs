@@ -168,7 +168,7 @@ pub fn prune(
 
         let original = prune.root.resolve(package_json());
         let permissions = original.symlink_metadata()?.permissions();
-        let new_package_json_path = prune.out_directory.resolve(package_json());
+        let new_package_json_path = prune.full_directory.resolve(package_json());
         new_package_json_path.create_with_contents(&pruned_json_contents)?;
         #[cfg(unix)]
         new_package_json_path.set_mode(permissions.mode())?;

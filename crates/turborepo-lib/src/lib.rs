@@ -3,6 +3,7 @@
 #![feature(error_generic_member_access)]
 #![feature(provide_any)]
 #![feature(option_get_or_insert_default)]
+#![feature(once_cell_try)]
 #![deny(clippy::all)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]
@@ -14,6 +15,7 @@ mod config;
 mod daemon;
 mod engine;
 mod execution_state;
+mod framework;
 pub(crate) mod globwatcher;
 pub mod graph;
 mod manager;

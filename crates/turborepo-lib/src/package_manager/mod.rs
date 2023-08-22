@@ -432,9 +432,9 @@ impl PackageManager {
 
     pub fn lockfile_name(&self) -> &'static str {
         match self {
-            PackageManager::Npm => "package-lock.json",
-            PackageManager::Pnpm | PackageManager::Pnpm6 => "pnpm-lock.yaml",
-            PackageManager::Yarn | PackageManager::Berry => "yarn.lock",
+            PackageManager::Npm => npm::LOCKFILE,
+            PackageManager::Pnpm | PackageManager::Pnpm6 => pnpm::LOCKFILE,
+            PackageManager::Yarn | PackageManager::Berry => yarn::LOCKFILE,
         }
     }
 

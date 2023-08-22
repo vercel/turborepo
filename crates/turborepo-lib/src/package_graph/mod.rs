@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
 };
 
@@ -28,7 +28,7 @@ pub struct PackageGraph {
 pub struct WorkspaceInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
-    pub unresolved_external_dependencies: Option<HashSet<Package>>,
+    pub unresolved_external_dependencies: Option<BTreeMap<PackageName, PackageVersion>>,
     pub transitive_dependencies: Option<HashSet<turborepo_lockfiles::Package>>,
 }
 
@@ -38,11 +38,8 @@ impl WorkspaceInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub struct Package {
-    name: String,
-    version: String,
-}
+type PackageName = String;
+type PackageVersion = String;
 
 /// Name of workspaces with a special marker for the workspace root
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -204,7 +201,10 @@ impl fmt::Display for WorkspaceNode {
 }
 impl From<String> for WorkspaceName {
     fn from(value: String) -> Self {
-        Self::Other(value)
+        match value == "//" {
+            true => Self::Root,
+            false => Self::Other(value),
+        }
     }
 }
 
@@ -303,10 +303,9 @@ mod test {
             .unresolved_external_dependencies
             .as_ref()
             .unwrap();
-        assert!(b_external.contains(&Package {
-            name: "c".into(),
-            version: "1.2.3".into()
-        }));
+
+        let pkg_version = b_external.get("c").unwrap();
+        assert_eq!(pkg_version, "1.2.3");
     }
 
     struct MockLockfile {}
