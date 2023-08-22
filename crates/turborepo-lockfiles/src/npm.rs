@@ -4,7 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::{Error, Lockfile, Package};
 
@@ -141,11 +141,15 @@ impl Lockfile for NpmLockfile {
 
     fn global_change_key(&self) -> Vec<u8> {
         let mut buf = vec![b'n', b'p', b'm', 0];
-        {
-            let mut writer = BufWriter::new(&mut buf);
-            writer.write_all(&self.lockfile_version.to_be_bytes()[..]);
-            serde_json::to_writer(writer, &self.other.get("requires"));
-        }
+
+        serde_json::to_writer(
+            &mut buf,
+            &json!({
+                "requires": &self.other.get("requires"),
+                "version": &self.lockfile_version,
+            }),
+        );
+
         buf
     }
 }

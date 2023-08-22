@@ -4,6 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use turbopath::RelativeUnixPathBuf;
 
 use super::{dep_path::DepPath, Error, LockfileVersion};
@@ -411,19 +412,18 @@ impl crate::Lockfile for PnpmLockfile {
 
     fn global_change_key(&self) -> Vec<u8> {
         let mut buf = vec![b'p', b'n', b'p', b'm', 0];
-        {
-            let mut writer = BufWriter::new(&mut buf);
-            writer.write_all(self.lockfile_version.version.as_bytes());
-            writer.write_all(
-                self.package_extensions_checksum
-                    .as_deref()
-                    .unwrap_or("")
-                    .as_bytes(),
-            );
-            serde_json::to_writer(&mut writer, &self.overrides);
-            serde_json::to_writer(&mut writer, &self.patched_dependencies);
-            serde_json::to_writer(&mut writer, &self.settings);
-        }
+
+        serde_json::to_writer(
+            &mut buf,
+            &json!({
+                "version": self.lockfile_version.version,
+                "checksum": self.package_extensions_checksum,
+                "overrides": self.overrides,
+                "patched_deps": self.patched_dependencies,
+                "settings": self.settings,
+            }),
+        );
+
         buf
     }
 }
