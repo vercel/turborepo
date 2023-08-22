@@ -4,7 +4,7 @@ mod execute;
 use std::collections::{HashMap, HashSet};
 
 pub use builder::EngineBuilder;
-pub use execute::{ExecutionOptions, Message};
+pub use execute::{ExecuteError, ExecutionOptions, Message};
 use petgraph::Graph;
 
 use crate::{

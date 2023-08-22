@@ -5,7 +5,6 @@ use regex::Regex;
 use tokio::sync::mpsc;
 
 use crate::{
-    cli::EnvMode,
     engine::{Engine, ExecutionOptions},
     opts::Opts,
     package_graph::{PackageGraph, WorkspaceName},
@@ -31,6 +30,8 @@ pub enum Error {
     RecursiveTurbo { task_name: String, command: String },
     #[error("Could not find definition for task")]
     MissingDefinition,
+    #[error("error while executing engine: {0}")]
+    Engine(#[from] crate::engine::ExecuteError),
 }
 
 impl<'a> Visitor<'a> {
@@ -77,7 +78,7 @@ impl<'a> Visitor<'a> {
                 _ => (),
             }
 
-            let task_def = engine
+            let _task_def = engine
                 .task_definition(&info)
                 .ok_or(Error::MissingDefinition)?;
 
@@ -91,7 +92,7 @@ impl<'a> Visitor<'a> {
         }
 
         // Wait for the engine task to finish and for all of our tasks to finish
-        let engine_result = engine_handle.await.expect("engine execution panicked");
+        engine_handle.await.expect("engine execution panicked")?;
         // This will poll the futures until they are all completed
         while let Some(result) = tasks.next().await {
             result.expect("task executor panicked");

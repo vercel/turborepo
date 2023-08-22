@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
+pub use visitor::{Error, Visitor};
 
 use crate::{
     cli::OutputLogsMode,
