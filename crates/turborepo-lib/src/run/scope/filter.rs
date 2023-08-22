@@ -226,7 +226,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             self.pkg_graph
                 .workspaces()
                 // todo: a type-level way of dealing with non-root packages
-                .filter(|(name, _)| WorkspaceName::Root.eq(name)) // the root package has to be explicitly included
+                .filter(|(name, _)| !WorkspaceName::Root.eq(name)) // the root package has to be explicitly included
                 .map(|(name, _)| name.to_owned())
                 .collect()
         };
@@ -918,7 +918,11 @@ mod test {
             packages,
             expected
                 .iter()
-                .map(|s| WorkspaceName::Other(s.to_string()))
+                .map(|s| if ROOT_PKG_NAME.eq(*s) {
+                    WorkspaceName::Root
+                } else {
+                    WorkspaceName::Other(s.to_string())
+                })
                 .collect()
         );
     }
@@ -1098,7 +1102,11 @@ mod test {
             packages,
             expected
                 .iter()
-                .map(|s| crate::package_graph::WorkspaceName::Other(s.to_string()))
+                .map(|s| if ROOT_PKG_NAME.eq(*s) {
+                    WorkspaceName::Root
+                } else {
+                    WorkspaceName::Other(s.to_string())
+                })
                 .collect()
         );
     }
@@ -1113,7 +1121,13 @@ mod test {
                     (*from, *to),
                     changed
                         .iter()
-                        .map(|s| WorkspaceName::Other(s.to_string()))
+                        .map(|s| {
+                            if ROOT_PKG_NAME.eq(*s) {
+                                WorkspaceName::Root
+                            } else {
+                                WorkspaceName::Other(s.to_string())
+                            }
+                        })
                         .collect(),
                 );
             }

@@ -562,7 +562,7 @@ mod tests {
         for mgr in &[PackageManager::Pnpm, PackageManager::Pnpm6] {
             let found = mgr.get_package_jsons(&basic).unwrap();
             let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
-            assert_eq!(found, basic_expected);
+            assert_eq!(found, basic_expected, "{}", mgr);
         }
     }
 
