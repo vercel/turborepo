@@ -8,10 +8,7 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    check_path, AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, PathError,
-    PathValidation,
-};
+use crate::{check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);

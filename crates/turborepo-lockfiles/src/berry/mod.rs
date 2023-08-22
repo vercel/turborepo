@@ -6,7 +6,6 @@ mod ser;
 
 use std::{
     collections::{HashMap, HashSet},
-    io::{BufWriter, Write},
     iter,
     rc::Rc,
 };
@@ -559,7 +558,8 @@ impl Lockfile for BerryLockfile {
                 "version": &self.data.metadata.version,
                 "cache_key": &self.data.metadata.cache_key,
             }),
-        );
+        )
+        .expect("writing to Vec cannot fail");
 
         buf
     }

@@ -13,10 +13,7 @@ use super::{
     simple_glob::{Match, SimpleGlob},
     target_selector::{InvalidSelectorError, TargetSelector},
 };
-use crate::{
-    package_graph::{self, PackageGraph, WorkspaceName, WorkspaceNode},
-    run::task_id::ROOT_PKG_NAME,
-};
+use crate::package_graph::{self, PackageGraph, WorkspaceName};
 
 pub struct PackageInference {
     package_name: Option<String>,
@@ -916,14 +913,7 @@ mod test {
 
         assert_eq!(
             packages,
-            expected
-                .iter()
-                .map(|s| if ROOT_PKG_NAME.eq(*s) {
-                    WorkspaceName::Root
-                } else {
-                    WorkspaceName::Other(s.to_string())
-                })
-                .collect()
+            expected.iter().map(|s| WorkspaceName::from(*s)).collect()
         );
     }
 
@@ -1100,14 +1090,7 @@ mod test {
         let packages = resolver.get_filtered_packages(selectors).unwrap();
         assert_eq!(
             packages,
-            expected
-                .iter()
-                .map(|s| if ROOT_PKG_NAME.eq(*s) {
-                    WorkspaceName::Root
-                } else {
-                    WorkspaceName::Other(s.to_string())
-                })
-                .collect()
+            expected.iter().map(|s| WorkspaceName::from(*s)).collect()
         );
     }
 
@@ -1119,16 +1102,7 @@ mod test {
             for (from, to, changed) in pairs {
                 map.insert(
                     (*from, *to),
-                    changed
-                        .iter()
-                        .map(|s| {
-                            if ROOT_PKG_NAME.eq(*s) {
-                                WorkspaceName::Root
-                            } else {
-                                WorkspaceName::Other(s.to_string())
-                            }
-                        })
-                        .collect(),
+                    changed.iter().map(|s| WorkspaceName::from(*s)).collect(),
                 );
             }
 

@@ -170,7 +170,7 @@ mod tests {
         let (_tmp, turbo_root) = tmp_dir();
 
         let pkg_path = AnchoredSystemPathBuf::from_raw("child-dir/libA").unwrap();
-        let unix_pkg_path = pkg_path.to_unix().unwrap();
+        let unix_pkg_path = pkg_path.to_unix();
         let file_hash: Vec<(&str, &str, Option<&str>)> = vec![
             ("top-level-file", "top-level-file-contents", None),
             ("other-dir/other-dir-file", "other-dir-file-contents", None),

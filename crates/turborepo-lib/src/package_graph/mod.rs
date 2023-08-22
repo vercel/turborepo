@@ -5,10 +5,7 @@ use std::{
 
 use anyhow::Result;
 use itertools::Itertools;
-use petgraph::{
-    visit::{depth_first_search, EdgeRef, Reversed},
-    Directed,
-};
+use petgraph::visit::{depth_first_search, EdgeRef, Reversed};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
@@ -189,6 +186,7 @@ impl PackageGraph {
     /// a -> b -> c
     ///
     /// immediate_ancestors(c) -> {b}
+    #[allow(dead_code)]
     pub fn immediate_ancestors(
         &self,
         workspace: &WorkspaceNode,
@@ -214,6 +212,7 @@ impl PackageGraph {
     /// a -> b -> c (external)
     ///
     /// dependencies(a) = {b, c}
+    #[allow(dead_code)]
     pub fn dependencies<'a>(&'a self, node: &WorkspaceNode) -> HashSet<&'a WorkspaceNode> {
         let mut dependencies =
             self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
@@ -305,7 +304,7 @@ impl PackageGraph {
 
         let external_deps = self
             .workspaces()
-            .filter_map(|(name, info)| {
+            .filter_map(|(_name, info)| {
                 info.unresolved_external_dependencies.as_ref().map(|dep| {
                     (
                         info.package_path().to_unix().to_string(),
@@ -329,12 +328,12 @@ impl PackageGraph {
         } else {
             self.workspaces
                 .iter()
-                .filter(|(name, info)| {
+                .filter(|(_name, info)| {
                     closures.get(info.package_path().as_str())
                         != info.transitive_dependencies.as_ref()
                 })
-                .map(|(name, info)| match name {
-                    n => Some(n.to_owned()),
+                .map(|(name, _info)| match name {
+                    WorkspaceName::Other(n) => Some(WorkspaceName::Other(n.to_owned())),
                     // if the root package has changed, then we should report `None`
                     // since all packages need to be revalidated
                     WorkspaceName::Root => None,

@@ -1,7 +1,4 @@
-use std::{
-    borrow::Cow,
-    io::{BufWriter, Write},
-};
+use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -422,7 +419,8 @@ impl crate::Lockfile for PnpmLockfile {
                 "patched_deps": self.patched_dependencies,
                 "settings": self.settings,
             }),
-        );
+        )
+        .expect("writing to Vec cannot fail");
 
         buf
     }

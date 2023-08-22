@@ -258,7 +258,7 @@ mod test {
         let result = TargetSelector::from_str(raw_selector);
 
         match result {
-            Ok(got) => {
+            Ok(_got) => {
                 panic!("expected error when parsing {}", raw_selector);
             }
             Err(e) => {

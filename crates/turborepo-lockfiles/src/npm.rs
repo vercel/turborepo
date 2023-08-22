@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    io::{BufWriter, Write},
-};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -148,7 +145,8 @@ impl Lockfile for NpmLockfile {
                 "requires": &self.other.get("requires"),
                 "version": &self.lockfile_version,
             }),
-        );
+        )
+        .expect("writing to Vec cannot fail");
 
         buf
     }

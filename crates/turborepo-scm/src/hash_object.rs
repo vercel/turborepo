@@ -85,7 +85,7 @@ mod test {
                 .collect();
 
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
-            let pkg_prefix = git_to_pkg_path.to_unix().unwrap();
+            let pkg_prefix = git_to_pkg_path.to_unix();
 
             let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
@@ -102,7 +102,7 @@ mod test {
 
         for (to_hash, pkg_path) in error_tests {
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
-            let pkg_prefix = git_to_pkg_path.to_unix().unwrap();
+            let pkg_prefix = git_to_pkg_path.to_unix();
 
             let to_hash = to_hash
                 .into_iter()

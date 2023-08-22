@@ -270,10 +270,7 @@ mod test {
     fn basic_legacy_filter_pattern(filter: LegacyFilter, expected: &[&str]) {
         assert_eq!(
             filter.as_filter_pattern(),
-            expected
-                .into_iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<_>>()
+            expected.iter().map(|s| s.to_string()).collect::<Vec<_>>()
         )
     }
 }
