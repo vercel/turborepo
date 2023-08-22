@@ -1,12 +1,11 @@
-import { Metadata } from "next";
-import Head from "next/head";
+import type { Metadata } from "next";
 import { Button } from "ui";
 
 export const metadata: Metadata = {
   title: "Docs - Turborepo Example",
 };
 
-export default function Home() {
+export default function Home(): JSX.Element {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center py-2">
       <main className="mx-auto w-auto px-4 pt-16 pb-8 sm:pt-24 lg:px-8">
