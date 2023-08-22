@@ -1,6 +1,10 @@
 use anyhow::Result;
 use lightningcss::rules::{
-    import::ImportRule, layer::LayerStatementRule, media::MediaRule, supports::SupportsRule,
+    import::ImportRule,
+    layer::{LayerName, LayerStatementRule},
+    media::MediaRule,
+    supports::SupportsRule,
+    CssRule,
 };
 use swc_core::common::DUMMY_SP;
 use turbo_tasks::{Value, ValueToString, Vc};
@@ -30,12 +34,12 @@ pub struct ImportAttributes {
 
 impl ImportAttributes {
     pub fn new_from_prelude(prelude: &ImportRule<'static>) -> Self {
-        let layer_name = prelude.layer_name.as_ref().map(|l| match l {
-            box ImportLayerName::Ident(_) => LayerName {
+        let layer_name = prelude.layer.as_ref().and_then(|l| match l {
+            box LayerName::Ident(_) => LayerName {
                 span: DUMMY_SP,
                 name: vec![],
             },
-            box ImportLayerName::Function(f) => {
+            box LayerName::Function(f) => {
                 assert_eq!(f.value.len(), 1);
                 assert!(matches!(&f.value[0], ComponentValue::LayerName(_)));
                 if let ComponentValue::LayerName(layer_name) = &f.value[0] {
@@ -110,7 +114,7 @@ impl ImportAttributes {
             )))],
         }));
 
-        fn at_rule(name: &str, prelude: AtRulePrelude, inner_rule: Rule) -> Rule {
+        fn at_rule(name: &str, prelude: CssRule, inner_rule: Rule) -> Rule {
             Rule::AtRule(Box::new(AtRule {
                 span: DUMMY_SP,
                 name: AtRuleName::Ident(Ident {
@@ -130,7 +134,7 @@ impl ImportAttributes {
         if let Some(media) = &self.media {
             rule = at_rule(
                 "media",
-                AtRulePrelude::MediaPrelude(MediaQueryList {
+                CssRule::Media(MediaQueryList {
                     span: DUMMY_SP,
                     queries: media.clone(),
                 }),
@@ -138,18 +142,10 @@ impl ImportAttributes {
             );
         }
         if let Some(supports) = &self.supports {
-            rule = at_rule(
-                "supports",
-                AtRulePrelude::SupportsPrelude(supports.clone()),
-                rule,
-            );
+            rule = at_rule("supports", CssRule::Supports(supports.clone()), rule);
         }
         if let Some(layer_name) = &self.layer_name {
-            rule = at_rule(
-                "layer",
-                AtRulePrelude::LayerPrelude(LayerPrelude::Name(layer_name.clone())),
-                rule,
-            );
+            rule = at_rule("layer", CssRule::LayerStatement(layer_name.clone()), rule);
         }
 
         let mut output = String::new();
