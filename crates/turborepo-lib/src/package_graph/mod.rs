@@ -221,11 +221,7 @@ impl PackageGraph {
         &self,
         previous: &dyn Lockfile,
     ) -> Result<Vec<WorkspaceName>, ChangedPackagesError> {
-        let current = if let Some(lockfile) = self.lockfile() {
-            lockfile
-        } else {
-            return Err(ChangedPackagesError::NoLockfile);
-        };
+        let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
 
         let external_deps = self
             .workspaces()
