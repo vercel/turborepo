@@ -1,4 +1,7 @@
 use anyhow::Result;
+use lightningcss::rules::{
+    import::ImportRule, layer::LayerStatementRule, media::MediaRule, supports::SupportsRule,
+};
 use swc_core::common::DUMMY_SP;
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
@@ -18,15 +21,15 @@ use crate::{
 #[turbo_tasks::value(into = "new")]
 pub struct ImportAttributes {
     #[turbo_tasks(trace_ignore)]
-    pub layer_name: Option<LayerName>,
+    pub layer_name: Option<LayerStatementRule<'static>>,
     #[turbo_tasks(trace_ignore)]
-    pub supports: Option<SupportsCondition>,
+    pub supports: Option<SupportsRule<'static>>,
     #[turbo_tasks(trace_ignore)]
-    pub media: Option<Vec<MediaQuery>>,
+    pub media: Option<Vec<MediaRule<'static>>>,
 }
 
 impl ImportAttributes {
-    pub fn new_from_prelude(prelude: &ImportPrelude) -> Self {
+    pub fn new_from_prelude(prelude: &ImportRule<'static>) -> Self {
         let layer_name = prelude.layer_name.as_ref().map(|l| match l {
             box ImportLayerName::Ident(_) => LayerName {
                 span: DUMMY_SP,
