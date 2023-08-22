@@ -1,4 +1,5 @@
 use anyhow::Result;
+use lightningcss::values::url::Url;
 use swc_core::common::{
     errors::{Handler, HANDLER},
     source_map::Pos,
@@ -93,17 +94,6 @@ impl<'a> ModuleReferencesVisitor<'a> {
     }
 }
 
-fn url_string(u: &Url) -> &str {
-    match &u.value {
-        None => {
-            println!("invalid css url: no value");
-            ""
-        }
-        Some(box UrlValue::Str(s)) => s.value.as_ref(),
-        Some(box UrlValue::Raw(r)) => r.value.as_ref(),
-    }
-}
-
 pub fn as_parent_path(ast_path: &AstNodePath<'_>) -> Vec<AstParentKind> {
     ast_path.iter().map(|n| n.kind()).collect()
 }
@@ -144,7 +134,7 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
             return u.visit_children_with_path(self, ast_path);
         }
 
-        let src = url_string(u);
+        let src = &*u.url;
 
         // ignore internal urls like `url(#noiseFilter)`
         // ignore server-relative urls like `url(/foo)`
