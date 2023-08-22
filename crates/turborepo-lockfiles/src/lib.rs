@@ -60,6 +60,8 @@ pub trait Lockfile {
     fn global_change_key(&self) -> Vec<u8>;
 }
 
+/// Takes a lockfile, and a map of package root paths -> (package name, version)
+/// and calcualtes the transitive closures for all of them
 pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspaces: HashMap<String, HashMap<String, String>>,

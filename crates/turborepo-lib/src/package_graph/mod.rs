@@ -36,6 +36,16 @@ impl WorkspaceInfo {
     pub fn package_json_path(&self) -> &AnchoredSystemPath {
         &self.package_json_path
     }
+
+    /// Get the path to this workspace.
+    ///
+    /// note: This is infallible because pacakge_json_path is guaranteed to have
+    ///       at least one segment
+    pub fn package_path(&self) -> &AnchoredSystemPath {
+        self.package_json_path
+            .parent()
+            .expect("at least one segment")
+    }
 }
 
 type PackageName = String;
@@ -219,11 +229,11 @@ impl PackageGraph {
 
         let external_deps = self
             .workspaces()
-            .filter_map(|(a, b)| {
-                b.unresolved_external_dependencies.as_ref().map(|b| {
+            .filter_map(|(name, info)| {
+                info.unresolved_external_dependencies.as_ref().map(|dep| {
                     (
-                        a.to_string(),
-                        b.iter()
+                        info.package_path().to_unix().to_string(),
+                        dep.iter()
                             .map(|(name, version)| (name.to_owned(), version.to_owned()))
                             .collect(),
                     )
