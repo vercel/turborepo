@@ -308,7 +308,7 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn copy_workspace(&self, package_json_path: &AnchoredSystemPathBuf) -> Result<(), Error> {
+    fn copy_workspace(&self, package_json_path: &AnchoredSystemPath) -> Result<(), Error> {
         let package_json_path = self.root.resolve(package_json_path);
         let original_dir = package_json_path
             .parent()

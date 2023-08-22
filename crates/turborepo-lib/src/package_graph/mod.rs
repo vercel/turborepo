@@ -33,7 +33,7 @@ pub struct WorkspaceInfo {
 }
 
 impl WorkspaceInfo {
-    pub fn package_json_path(&self) -> &AnchoredSystemPathBuf {
+    pub fn package_json_path(&self) -> &AnchoredSystemPath {
         &self.package_json_path
     }
 }

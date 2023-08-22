@@ -49,7 +49,7 @@ impl PackageInference {
                 // do so in a consistent manner
                 return Self {
                     package_name: Some(workspace_name.to_string()),
-                    directory_root: workspace_entry.package_json_path().clone(),
+                    directory_root: workspace_entry.package_json_path().to_owned(),
                 };
             }
             let inferred_path_is_between_root_and_pkg = full_inference_path.contains(&pkg_path);
