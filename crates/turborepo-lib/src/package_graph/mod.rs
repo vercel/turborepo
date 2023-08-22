@@ -42,8 +42,8 @@ impl WorkspaceInfo {
 
     /// Get the path to this workspace.
     ///
-    /// note: This is infallible because pacakge_json_path is guaranteed to have
-    ///       at least one segment
+    /// note: This is infallible because `package_json_path` is guaranteed to
+    /// have       at least one segment
     pub fn package_path(&self) -> &AnchoredSystemPath {
         self.package_json_path
             .parent()
@@ -335,6 +335,8 @@ impl PackageGraph {
                 })
                 .map(|(name, info)| match name {
                     n => Some(n.to_owned()),
+                    // if the root package has changed, then we should report `None`
+                    // since all packages need to be revalidated
                     WorkspaceName::Root => None,
                 })
                 .collect::<Option<Vec<WorkspaceName>>>()
