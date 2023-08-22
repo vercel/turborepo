@@ -16,6 +16,10 @@
 //! - `--merged`: Shows all cpu time scaled by the concurrency.
 //! - `--threads`: Shows cpu time distributed on infinite virtual cpus/threads.
 //! - `--idle`: Adds extra info spans when cpus are idle.
+//! - `--graph`: Collapse spans with the same name into a single span per
+//!   parent.
+//! - `--collapse-names`: Collapse spans with the same type into a single span
+//!   per parent.
 //!
 //! Default is `--merged`.
 
@@ -163,7 +167,7 @@ fn main() {
                 values,
             } => {
                 let values = values.into_iter().collect();
-                let name = get_name(name, &values, collapse_names);
+                let name = get_name(name, &values, collapse_names && parent.is_some());
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 spans[internal_id].name = name.clone();
                 spans[internal_id].target = target.into();
