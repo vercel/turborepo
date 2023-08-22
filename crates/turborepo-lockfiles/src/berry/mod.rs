@@ -7,7 +7,6 @@ mod ser;
 use std::{
     collections::{HashMap, HashSet},
     iter,
-    rc::Rc,
 };
 
 use de::SemverString;
@@ -40,11 +39,11 @@ pub enum Error {
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 pub struct BerryLockfile {
-    data: Rc<LockfileData>,
+    data: LockfileData,
     resolutions: Map<Descriptor<'static>, Locator<'static>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver,
-    locator_package: Map<Locator<'static>, Rc<BerryPackage>>,
+    locator_package: Map<Locator<'static>, BerryPackage>,
     // Map of regular locators to patch locators that apply to them
     patches: Map<Locator<'static>, Locator<'static>>,
     // Descriptors that come from default package extensions that ship with berry
@@ -55,12 +54,12 @@ pub struct BerryLockfile {
 
 // This is the direct representation of the lockfile as it appears on disk.
 // More internal tracking is required for effectively altering the lockfile
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LockfileData {
     #[serde(rename = "__metadata")]
     metadata: Metadata,
     #[serde(flatten)]
-    packages: Map<String, Rc<BerryPackage>>,
+    packages: Map<String, BerryPackage>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Clone)]
@@ -137,7 +136,7 @@ impl BerryLockfile {
             .unwrap_or_default();
 
         let mut this = Self {
-            data: Rc::new(lockfile),
+            data: lockfile,
             resolutions: descriptor_locator,
             locator_package,
             resolver,
