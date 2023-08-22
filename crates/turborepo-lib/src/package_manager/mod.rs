@@ -497,15 +497,7 @@ impl PackageManager {
     }
 
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
-        let file_name = match self {
-            PackageManager::Berry => yarn::LOCKFILE,
-            PackageManager::Npm => npm::LOCKFILE,
-            PackageManager::Pnpm => pnpm::LOCKFILE,
-            PackageManager::Pnpm6 => pnpm::LOCKFILE,
-            PackageManager::Yarn => yarn::LOCKFILE,
-        };
-
-        turbo_root.join_component(file_name)
+        turbo_root.join_component(self.lockfile_name())
     }
 }
 
