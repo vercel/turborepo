@@ -1,3 +1,3 @@
 module.exports = {
-  extends: ["eslint-config-custom/next"],
+  extends: ["custom/next"],
 };
