@@ -199,10 +199,6 @@ impl AbsoluteSystemPath {
         ))
     }
 
-    pub fn join_path(&self, path: &AnchoredSystemPath) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(self.0.join(path))
-    }
-
     pub fn anchor(&self, path: &AbsoluteSystemPath) -> Result<AnchoredSystemPathBuf, PathError> {
         AnchoredSystemPathBuf::new(self, path)
     }
