@@ -187,34 +187,26 @@ pub enum InvalidSelectorError {
 pub fn is_selector_by_location(
     raw_selector: &str,
 ) -> Option<Result<AnchoredSystemPathBuf, InvalidSelectorError>> {
-    if !raw_selector.starts_with('.') {
-        return None;
-    }
+    let mut raw_selector_inner = raw_selector;
 
-    // ., ./, or .\
-    if raw_selector.len() == 1
-        || raw_selector.chars().nth(1) == Some('/')
-        || raw_selector.chars().nth(1) == Some('\\')
-    {
-        return Some(
-            AnchoredSystemPathBuf::try_from(raw_selector)
-                .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string())),
-        );
-    }
+    // detecting ./ and ../
+    for _ in 0..2 {
+        let Some(raw_selector_stripped) = raw_selector_inner.strip_prefix('.') else {
+            return None;
+        };
 
-    if raw_selector.chars().nth(1) != Some('.') {
-        return None;
-    }
+        if raw_selector_stripped.is_empty()
+            || raw_selector_stripped.starts_with('/')
+            || raw_selector_stripped.starts_with('\\')
+        {
+            return Some(
+                AnchoredSystemPathBuf::try_from(raw_selector).map_err(|_| {
+                    InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string())
+                }),
+            );
+        }
 
-    // .., ../, or ..\
-    if raw_selector.len() == 2
-        || raw_selector.chars().nth(2) == Some('/')
-        || raw_selector.chars().nth(2) == Some('\\')
-    {
-        return Some(
-            AnchoredSystemPathBuf::try_from(raw_selector)
-                .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(raw_selector.to_string())),
-        );
+        raw_selector_inner = raw_selector_stripped;
     }
 
     None
