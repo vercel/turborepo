@@ -1264,7 +1264,7 @@ jobs:
         # Skip `cli` workspace for now. It has the lint task, but in GitHub CI
         # we need to set up golangci-lint to make it work. Go linting is run in the "Go linting"
         # job in this workflow. We can move that in here in the next step.
-        run: turbo run lint --filter=!cli
+        run: turbo run lint:prettier --filter=!cli
 
   final:
     name: Ok
