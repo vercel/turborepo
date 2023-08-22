@@ -350,7 +350,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             } else {
                 let path = self
                     .turbo_root
-                    .join_unix_path(selector.parent_dir.to_unix().unwrap())
+                    .join_unix_path(selector.parent_dir.to_unix())
                     .unwrap();
                 let matcher = wax::Glob::new(path.as_str())?;
                 let p = self.turbo_root.resolve(&info.package_json_path);
@@ -416,7 +416,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
 
         let path = self
             .turbo_root
-            .join_unix_path(selector.parent_dir.to_unix().unwrap())
+            .join_unix_path(selector.parent_dir.to_unix())
             .unwrap();
         let globber = wax::Glob::new(path.as_str()).unwrap();
 
@@ -461,7 +461,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             } else {
                 let path = self
                     .turbo_root
-                    .join_unix_path(selector.parent_dir.to_unix().unwrap())
+                    .join_unix_path(selector.parent_dir.to_unix())
                     .unwrap();
                 let globber = wax::Glob::new(path.as_str())?;
                 let packages = self.pkg_graph.workspaces();

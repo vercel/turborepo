@@ -40,7 +40,7 @@ pub(crate) fn hash_files(
             }
         };
         let hash = git_like_hash_file(&path, &metadata)?;
-        hashes.insert(file.to_unix()?, hash);
+        hashes.insert(file.to_unix(), hash);
     }
     Ok(hashes)
 }
@@ -94,7 +94,7 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
         }
         let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
         let relative_path = full_package_path.anchor(path)?;
-        let relative_path = relative_path.to_unix()?;
+        let relative_path = relative_path.to_unix();
         if let Some(include_pattern) = include_pattern.as_ref() {
             if !include_pattern.is_match(relative_path.as_str()) {
                 continue;

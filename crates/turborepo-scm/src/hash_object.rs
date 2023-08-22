@@ -14,7 +14,7 @@ pub(crate) fn hash_objects(
             Ok(hash) => {
                 let package_relative_path =
                     AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
-                        .to_unix()?;
+                        .to_unix();
                 hashes.insert(package_relative_path, hash.to_string());
             }
             Err(e) => {

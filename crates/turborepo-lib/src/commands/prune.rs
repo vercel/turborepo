@@ -111,7 +111,7 @@ pub fn prune(
                     .package_json_path()
                     .parent()
                     .unwrap()
-                    .to_unix()?
+                    .to_unix()
                     .to_string(),
             );
 
