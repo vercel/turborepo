@@ -1,10 +1,11 @@
+mod change_detector;
 mod filter;
+mod simple_glob;
 
 use std::collections::HashSet;
 
 use anyhow::Result;
-use filter::{PackageInference, Resolver};
-use tracing::warn;
+use filter::{FilterResolver, PackageInference};
 use turbopath::AbsoluteSystemPath;
 use turborepo_scm::SCM;
 
@@ -19,10 +20,9 @@ pub fn resolve_packages(
     let pkg_inference = opts.pkg_inference_root.as_ref().map(|pkg_inference_path| {
         PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
     });
-    let _resolver = Resolver::new(pkg_graph, turbo_root, pkg_inference, scm);
-    let mut filter_patterns = opts.filter_patterns.clone();
-    filter_patterns.extend(opts.legacy_filter.as_filter_pattern());
-    let is_all_packages = filter_patterns.is_empty() && opts.pkg_inference_root.is_none();
-    warn!("resolve packages not implemented yet");
-    Ok(HashSet::new())
+
+    let filtered_packages = FilterResolver::new(opts, pkg_graph, turbo_root, pkg_inference, scm)
+        .resolve(&opts.get_filters())?;
+
+    Ok(filtered_packages)
 }

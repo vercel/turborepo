@@ -8,7 +8,10 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation};
+use crate::{
+    check_path, AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, PathError,
+    PathValidation,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
@@ -195,6 +198,14 @@ impl AnchoredSystemPathBuf {
 
     pub fn components(&self) -> Utf8Components {
         self.0.components()
+    }
+
+    pub fn join(&self, other: &AnchoredSystemPathBuf) -> AnchoredSystemPathBuf {
+        Self(self.0.join(other.0.to_owned()))
+    }
+
+    pub fn restore_anchor(&self, path: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        path.join_unix_path(self.to_unix().unwrap()).unwrap()
     }
 }
 
