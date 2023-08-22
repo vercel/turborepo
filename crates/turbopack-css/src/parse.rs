@@ -210,21 +210,7 @@ async fn parse_content(
         CssModuleAssetType::Default => Default::default(),
         CssModuleAssetType::Module => {
             let imports = swc_core::css::modules::imports::analyze_imports(&parsed_stylesheet);
-            let basename = BASENAME_RE
-                .captures(fs_path.file_name())
-                .context("Must include basename preceding .")?
-                .get(0)
-                .context("Must include basename preceding .")?
-                .as_str();
-            // Truncate this as u32 so it's formated as 8-character hex in the suffic below
-            let path_hash = turbo_tasks_hash::hash_xxh3_hash64(ident_str) as u32;
-            let result = swc_core::css::modules::compile(
-                &mut parsed_stylesheet,
-                // TODO swc_css_modules should take `impl TransformConfig + '_`
-                ModuleTransformConfig {
-                    suffix: format!("__{}__{:x}", basename, path_hash),
-                },
-            );
+
             let mut exports = result.renamed.into_iter().collect::<IndexMap<_, _>>();
             // exports should be reported deterministically
             // TODO(sokra) report in order of occurrence within swc_css_modules using an
