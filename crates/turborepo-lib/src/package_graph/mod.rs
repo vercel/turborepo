@@ -248,27 +248,23 @@ impl PackageGraph {
 
         let global_change = current_key != previous_key;
 
-        let (changed, root_change) = self
-            .workspaces
-            .iter()
-            .filter(|(name, info)| {
-                closures.get(info.package_json_path().as_str())
-                    != info.transitive_dependencies.as_ref()
-            })
-            .fold((vec![], false), |(mut changed, all), (name, info)| {
-                if WorkspaceName::Root.eq(name) {
-                    (changed, true)
-                } else {
-                    changed.push(name.to_owned());
-                    (changed, all)
-                }
-            });
-
-        Ok(if global_change || root_change {
-            self.workspaces.iter().map(|w| w.0.to_owned()).collect()
+        let changed = if global_change {
+            None
         } else {
-            changed
-        })
+            self.workspaces
+                .iter()
+                .filter(|(name, info)| {
+                    closures.get(info.package_path().as_str())
+                        != info.transitive_dependencies.as_ref()
+                })
+                .map(|(name, info)| match name {
+                    n => Some(n.to_owned()),
+                    WorkspaceName::Root => None,
+                })
+                .collect::<Option<Vec<WorkspaceName>>>()
+        };
+
+        Ok(changed.unwrap_or_else(|| self.workspaces.keys().cloned().collect()))
     }
 }
 
