@@ -27,11 +27,14 @@ impl CssInputTransform {
     ) -> Result<()> {
         match *self {
             CssInputTransform::Nested => {
-                stylesheet.visit_mut_with(&mut swc_core::css::compat::compiler::Compiler::new(
-                    swc_core::css::compat::compiler::Config {
-                        process: swc_core::css::compat::feature::Features::NESTING,
-                    },
-                ));
+                // TODO(kdy1): Apply nested transform using lightningcss
+                // stylesheet.visit_mut_with(&mut
+                // swc_core::css::compat::compiler::Compiler::new(
+                //     swc_core::css::compat::compiler::Config {
+                //         process:
+                // swc_core::css::compat::feature::Features::NESTING,
+                //     },
+                // ));
             }
             CssInputTransform::Custom => todo!(),
         }
