@@ -8,7 +8,6 @@ use axum::{extract::Query, response::Redirect, routing::get, Router};
 use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
-use tracing::debug;
 #[cfg(not(test))]
 use tracing::warn;
 use turborepo_ui::{start_spinner, BOLD, CYAN, GREY, UNDERLINE};
@@ -18,6 +17,7 @@ use crate::{
         link::{verify_caching_enabled, REMOTE_CACHING_INFO, REMOTE_CACHING_URL},
         CommandBase,
     },
+    config::Error,
     get_version,
 };
 
@@ -26,8 +26,18 @@ const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 
 pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
+    let repo_config = base.repo_config()?;
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
-    let mut login_url = Url::parse(&format!("{}/api/auth/sso", base.repo_config()?.login_url()))?;
+    let login_url_configuration = repo_config.login_url();
+    let mut login_url = Url::parse(login_url_configuration)?;
+
+    login_url
+        .path_segments_mut()
+        .map_err(|_: ()| Error::LoginUrlCannotBeABase {
+            value: login_url_configuration.to_string(),
+        })?
+        .extend(["api", "auth", "sso"]);
+
     login_url
         .query_pairs_mut()
         .append_pair("teamId", sso_team)
@@ -111,16 +121,25 @@ fn make_token_name() -> Result<String> {
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
     let repo_config = base.repo_config()?;
-    let login_url_base = repo_config.login_url();
-    debug!("turbo v{}", get_version());
-    debug!("api url: {}", repo_config.api_url());
-    debug!("login url: {login_url_base}");
-
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
-    let login_url = format!("{login_url_base}/turborepo/token?redirect_uri={redirect_url}");
+    let login_url_configuration = repo_config.login_url();
+    let mut login_url = Url::parse(login_url_configuration)?;
+
+    login_url
+        .path_segments_mut()
+        .map_err(|_: ()| Error::LoginUrlCannotBeABase {
+            value: login_url_configuration.to_string(),
+        })?
+        .extend(["turborepo", "token"]);
+
+    login_url
+        .query_pairs_mut()
+        .append_pair("redirect_uri", &redirect_url);
+
     println!(">>> Opening browser to {login_url}");
-    direct_user_to_url(&login_url);
     let spinner = start_spinner("Waiting for your authorization...");
+    direct_user_to_url(login_url.as_str());
+
     let token_cell = Arc::new(OnceCell::new());
     run_login_one_shot_server(
         DEFAULT_PORT,
