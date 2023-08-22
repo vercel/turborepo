@@ -1,14 +1,5 @@
 use anyhow::Result;
-use swc_core::{
-    common::DUMMY_SP,
-    css::{
-        ast::*,
-        codegen::{
-            writer::basic::{BasicCssWriter, BasicCssWriterConfig},
-            CodeGenerator, Emit,
-        },
-    },
-};
+use swc_core::common::DUMMY_SP;
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingContext},
