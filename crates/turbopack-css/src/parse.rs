@@ -229,16 +229,6 @@ async fn parse_content(
     .into())
 }
 
-struct ModuleTransformConfig {
-    suffix: String,
-}
-
-impl TransformConfig for ModuleTransformConfig {
-    fn new_name_for(&self, local: &JsWord) -> JsWord {
-        format!("{}{}", *local, self.suffix).into()
-    }
-}
-
 /// Trait to be implemented by assets which can be parsed as CSS.
 #[turbo_tasks::value_trait]
 pub trait ParseCss {
