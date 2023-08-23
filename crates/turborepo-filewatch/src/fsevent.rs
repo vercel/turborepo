@@ -19,7 +19,8 @@ use std::{
     collections::HashMap,
     ffi::CStr,
     fmt,
-    os::raw,
+    io::ErrorKind,
+    os::{raw, unix::prelude::MetadataExt},
     path::{Path, PathBuf},
     ptr,
     sync::{Arc, Mutex},
@@ -28,9 +29,12 @@ use std::{
 
 use fsevent_sys as fs;
 use fsevent_sys::core_foundation as cf;
-use notify::{Config, Error, EventHandler, RecursiveMode, Result, Watcher};
+use notify::{
+    event::{CreateKind, DataChange, Flag, MetadataKind, ModifyKind, RemoveKind, RenameMode},
+    Config, Error, Event, EventHandler, EventKind, RecursiveMode, Result, Watcher, WatcherKind,
+};
 
-use crate::event::*;
+//use crate::event::*;
 
 type Sender<T> = std::sync::mpsc::Sender<T>;
 
@@ -73,6 +77,7 @@ pub struct FsEventWatcher {
     event_handler: Arc<Mutex<dyn EventHandler>>,
     runloop: Option<(cf::CFRunLoopRef, thread::JoinHandle<()>)>,
     recursive_info: HashMap<PathBuf, bool>,
+    device: Option<i32>,
 }
 
 impl fmt::Debug for FsEventWatcher {
@@ -275,7 +280,6 @@ extern "C" {
 
 impl FsEventWatcher {
     fn from_event_handler(event_handler: Arc<Mutex<dyn EventHandler>>) -> Result<Self> {
-        println!("CREATING");
         Ok(FsEventWatcher {
             paths: unsafe {
                 cf::CFArrayCreateMutable(cf::kCFAllocatorDefault, 0, &cf::kCFTypeArrayCallBacks)
@@ -288,6 +292,7 @@ impl FsEventWatcher {
             event_handler,
             runloop: None,
             recursive_info: HashMap::new(),
+            device: None,
         })
     }
 
@@ -372,8 +377,18 @@ impl FsEventWatcher {
 
     // https://github.com/thibaudgg/rb-fsevent/blob/master/ext/fsevent_watch/main.c
     fn append_path(&mut self, path: &Path, recursive_mode: RecursiveMode) -> Result<()> {
-        if !path.exists() {
-            return Err(Error::path_not_found().add_path(path.into()));
+        let device = match std::fs::symlink_metadata(path) {
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                Err(Error::path_not_found().add_path(path.into()))
+            }
+            Err(e) => Err(Error::io(e)),
+            Ok(metadata) => Ok(metadata.dev() as i32),
+        }?;
+
+        if self.device.is_none() {
+            self.device = Some(device);
+        } else if self.device != Some(device) {
+            return Err(Error::generic("cannot watch multiple devices"));
         }
         let canonical_path = path.to_path_buf().canonicalize()?;
         let str_path = path.to_str().unwrap();
@@ -399,6 +414,9 @@ impl FsEventWatcher {
             // TODO: Reconstruct and add paths to error
             return Err(Error::path_not_found());
         }
+        let device = self
+            .device
+            .ok_or_else(|| Error::generic("no device set for stream"))?;
 
         // We need to associate the stream context with our callback in order to
         // propagate events to the rest of the system. This will be owned by the
@@ -419,10 +437,11 @@ impl FsEventWatcher {
         };
 
         let stream = unsafe {
-            fs::FSEventStreamCreate(
+            fs::FSEventStreamCreateRelativeToDevice(
                 cf::kCFAllocatorDefault,
                 callback,
                 &stream_context,
+                device,
                 self.paths,
                 self.since_when,
                 self.latency,
@@ -517,13 +536,12 @@ unsafe fn callback_impl(
     let event_handler = &(*info).event_handler;
 
     for p in 0..num_events {
-        let path = CStr::from_ptr(*event_paths.add(p))
+        let raw_path = CStr::from_ptr(*event_paths.add(p))
             .to_str()
             .expect("Invalid UTF8 string.");
-        let path = PathBuf::from(path);
+        let path = PathBuf::from(format!("/{}", raw_path));
 
         let flag = *event_flags.add(p);
-        let orig = flag;
         let flag = StreamFlags::from_bits(flag).unwrap_or_else(|| {
             panic!("Unable to decode StreamFlags: {}", flag);
         });
@@ -547,7 +565,6 @@ unsafe fn callback_impl(
             continue;
         }
 
-        println!("EEVV {} {} ({})", path.display(), orig as u32, p);
         for ev in translate_flags(flag, true).into_iter() {
             // TODO: precise
             let ev = ev.add_path(path.clone());
@@ -578,8 +595,8 @@ impl Watcher for FsEventWatcher {
             .map_err(|err| Error::generic(&format!("internal channel disconnect: {:?}", err)))?
     }
 
-    fn kind() -> crate::WatcherKind {
-        crate::WatcherKind::Fsevent
+    fn kind() -> WatcherKind {
+        WatcherKind::Fsevent
     }
 }
 

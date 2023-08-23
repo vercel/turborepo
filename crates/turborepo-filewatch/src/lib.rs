@@ -1,38 +1,33 @@
 use std::{
     fmt::Debug,
     future::IntoFuture,
-    path::{Path, PathBuf},
+    path::Path,
     result::Result,
-    sync::{Arc, Mutex},
-    thread,
     time::{Duration, Instant},
 };
 
+use fsevent::FsEventWatcher;
 use itertools::Itertools;
-use notify::event::{CreateKind, EventAttributes, RemoveKind};
-//use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+    event::{CreateKind, EventAttributes},
+    Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use notify_debouncer_full::{
-    new_debouncer, notify::*, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
+    new_debouncer, new_debouncer_opt, DebounceEventHandler, DebounceEventResult, DebouncedEvent,
+    Debouncer, FileIdMap,
 };
 use thiserror::Error;
-use tokio::{
-    sync::{broadcast, mpsc},
-    task::JoinHandle,
-};
+use tokio::sync::{broadcast, mpsc};
 use turbopath::AbsoluteSystemPath;
 use walkdir::WalkDir;
 
 #[cfg(target_os = "macos")]
 mod fsevent;
 
-#[derive(Default)]
-struct DiskWatcher {
-    watcher: Mutex<Option<RecommendedWatcher>>,
-    /// Keeps track of which directories are currently watched. This is only
-    /// used on a OS that doesn't support recursive watching.
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    watching: dashmap::DashSet<PathBuf>,
-}
+#[cfg(not(target_os = "macos"))]
+type Backend = RecommendedWatcher;
+#[cfg(target_os = "macos")]
+type Backend = FsEventWatcher;
 
 #[derive(Debug, Error)]
 enum WatchError {
@@ -46,70 +41,35 @@ enum WatchError {
     Setup(String),
 }
 
-// impl DiskWatcher {
-//     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-//     fn restore_if_watching(&self, dir_path: &Path, root_path: &Path) ->
-// Result<()> {         if self.watching.contains(dir_path) {
-//             let mut watcher = self.watcher.lock().unwrap();
-//             self.start_watching(&mut watcher, dir_path, root_path)?;
-//         }
-//         Ok(())
-//     }
-
-//     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-//     fn ensure_watching(&self, dir_path: &Path, root_path: &Path) ->
-// Result<()> {         if self.watching.contains(dir_path) {
-//             return Ok(());
-//         }
-//         let mut watcher = self.watcher.lock().unwrap();
-//         if self.watching.insert(dir_path.to_path_buf()) {
-//             self.start_watching(&mut watcher, dir_path, root_path)?;
-//         }
-//         Ok(())
-//     }
-
-//     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-//     fn start_watching(
-//         &self,
-//         watcher: &mut std::sync::MutexGuard<Option<RecommendedWatcher>>,
-//         dir_path: &Path,
-//         root_path: &Path,
-//     ) -> Result<()> { if let Some(watcher) = watcher.as_mut() { let mut path
-//       = dir_path; while let Err(err) = watcher.watch(path,
-//       RecursiveMode::NonRecursive) { if path == root_path { return
-//       Err(err).context(format!( "Unable to watch {} (tried up to {})",
-//       dir_path.display(), path.display() )); } let Some(parent_path) =
-//       path.parent() else { return Err(err).context(format!( "Unable to watch
-//       {} (tried up to {})", dir_path.display(), path.display() )); }; path =
-//       parent_path; } } Ok(())
-//     }
-// }
-
 struct FileSystemWatcher {
     sender: broadcast::Sender<DebouncedEvent>,
     exit_ch: tokio::sync::oneshot::Sender<()>, //watcher: Arc<Mutex<RecommendedWatcher>>,
 }
 
 impl FileSystemWatcher {
-    pub fn new(root: &AbsoluteSystemPath) -> Self {
+    pub fn new(root: &AbsoluteSystemPath) -> Result<Self, WatchError> {
         let (sender, _) = broadcast::channel(1024);
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let watch_root = root.to_owned();
         let broadcast_sender = sender.clone();
-        let debouncer = run_watcher(&watch_root, send_file_events, &mut recv_file_events).unwrap();
-        println!("watching {}", &watch_root);
+        let debouncer = run_watcher(&watch_root, send_file_events).unwrap();
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
+        #[cfg(target_os = "macos")]
+        futures::executor::block_on(async {
+            wait_for_cookie(&watch_root, &mut recv_file_events).await
+        })?;
         tokio::task::spawn(async move {
-            #[cfg(target_os = "macos")]
-            wait_for_cookie(&watch_root, &mut recv_file_events).await?;
-
+            // Ensure we move the debouncer to our task
+            #[cfg(target_os = "linux")]
             let mut debouncer = debouncer;
+            #[cfg(not(target_os = "linux"))]
+            let _debouncer = debouncer;
+
             let mut exit_signal = exit_signal;
             'outer: loop {
                 tokio::select! {
                     _ = &mut exit_signal => { println!("exit ch dropped"); break 'outer; },
                     Some(event) = recv_file_events.recv().into_future() => {
-                        //let event = recv_file_events.recv()?;
                         match event {
                             Ok(events) => {
                                 for event in events {
@@ -118,8 +78,6 @@ impl FileSystemWatcher {
                                         let time = event.time;
                                         if event.event.kind == EventKind::Create(CreateKind::Folder) {
                                             for new_path in &event.event.paths {
-                                                println!("new {}", new_path.display());
-                                                //debouncer.watcher().watch(&new_path, RecursiveMode::Recursive)?;
                                                 watch_recursively(&new_path, debouncer.watcher(), Some((time, &broadcast_sender)))?;
                                             }
                                         }
@@ -139,7 +97,7 @@ impl FileSystemWatcher {
             println!("DONE");
             Ok::<(), WatchError>(())
         });
-        Self { sender, exit_ch }
+        Ok(Self { sender, exit_ch })
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<DebouncedEvent> {
@@ -174,7 +132,6 @@ fn watch_recursively(
             // It's ok if we fail to send, it means we're shutting down
             let _ = sender.send(event);
         }
-        println!("ADD {}", dir.path().display());
     }
     Ok(())
 }
@@ -182,10 +139,13 @@ fn watch_recursively(
 fn run_watcher(
     root: &AbsoluteSystemPath,
     sender: mpsc::Sender<DebounceEventResult>,
-    recv: &mut mpsc::Receiver<DebounceEventResult>,
-) -> Result<Debouncer<RecommendedWatcher, FileIdMap>, WatchError> {
+) -> Result<Debouncer<Backend, FileIdMap>, WatchError> {
+    #[cfg(target_os = "macos")]
+    let mut debouncer = make_debouncer(move |res| {
+        let _ = sender.blocking_send(res);
+    })?;
+    #[cfg(not(target_os = "macos"))]
     let mut debouncer = new_debouncer(Duration::from_millis(1), None, move |res| {
-        println!("event {:?}", res);
         let _ = sender.blocking_send(res);
     })?;
 
@@ -194,12 +154,24 @@ fn run_watcher(
         .watcher()
         .watch(&root.as_std_path(), RecursiveMode::Recursive)?;
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    //debouncer.watcher().watch(root.as_std_path(), RecursiveMode::Recursive)?;
     // Don't synthesize initial events
     watch_recursively(root.as_std_path(), debouncer.watcher(), None)?;
     Ok(debouncer)
 }
 
+fn make_debouncer<F: DebounceEventHandler>(
+    event_handler: F,
+) -> Result<Debouncer<Backend, FileIdMap>, notify::Error> {
+    new_debouncer_opt::<F, FsEventWatcher, FileIdMap>(
+        Duration::from_millis(1),
+        None,
+        event_handler,
+        FileIdMap::new(),
+        notify::Config::default(),
+    )
+}
+
+#[cfg(target_os = "macos")]
 async fn wait_for_cookie(
     root: &AbsoluteSystemPath,
     recv: &mut mpsc::Receiver<DebounceEventResult>,
@@ -225,11 +197,9 @@ async fn wait_for_cookie(
             })?;
         for event in events {
             for path in &event.paths {
-                println!("CHECKING {} {:?}", path.display(), event.kind);
                 if path == (&cookie_path as &AbsoluteSystemPath)
                 /* && event.kind == EventKind::Create(CreateKind::File) */
                 {
-                    println!("FOUND COOKIE");
                     let _ = cookie_path.remove();
                     return Ok(());
                 }
@@ -243,7 +213,7 @@ mod test {
     use std::{sync::atomic::AtomicUsize, time::Duration};
 
     use notify::{
-        event::{CreateKind, RemoveKind},
+        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
         EventKind,
     };
     use notify_debouncer_full::DebouncedEvent;
@@ -255,9 +225,12 @@ mod test {
     #[tokio::test]
     async fn test_hello() {
         let tmp_dir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
 
-        let watcher = FileSystemWatcher::new(&root);
+        let watcher = FileSystemWatcher::new(&root).unwrap();
         let mut events_channel = watcher.subscribe();
 
         root.join_component("foo")
@@ -280,17 +253,15 @@ mod test {
         expected_path: &AbsoluteSystemPath,
         expected_event: EventKind,
     ) {
-        println!("WAIT FOR {}", expected_path);
         'outer: loop {
             let event = tokio::time::timeout(Duration::from_millis(3000), recv.recv())
                 .await
                 .expect("timed out waiting for filesystem event")
                 .expect("sender was dropped");
+            println!("event {:?}", event);
             for path in event.event.paths {
                 if path == expected_path && event.event.kind == expected_event {
                     break 'outer;
-                } else {
-                    println!("{}, {:?}", path.display(), event.event.kind);
                 }
             }
         }
@@ -334,7 +305,7 @@ mod test {
         let sibling_path = parent_path.join_component("sibling");
         sibling_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root);
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
         let mut recv = watcher.subscribe();
 
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
@@ -387,16 +358,13 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root);
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
         let mut recv = watcher.subscribe();
 
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
         // Delete parent folder during file watching
-        println!("REMOVING {}", parent_path);
-        //parent_path.remove_dir_all().unwrap();
-        child_path.remove_dir_all().unwrap();
-        println!("REMOVED");
+        parent_path.remove_dir_all().unwrap();
         expect_filesystem_event(
             &mut recv,
             &parent_path,
@@ -404,7 +372,6 @@ mod test {
         )
         .await;
 
-        println!("CREATING");
         // Ensure we get events when creating file in deleted directory
         child_path.create_dir_all().unwrap();
         expect_filesystem_event(
@@ -425,5 +392,70 @@ mod test {
         expect_filesystem_event(&mut recv, &foo_path, EventKind::Create(CreateKind::File)).await;
         // We cannot guarantee no more events, windows sends multiple delete
         // events
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_root_deletion() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let mut recv = watcher.subscribe();
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        repo_root.remove_dir_all().unwrap();
+        expect_filesystem_event(&mut recv, &repo_root, EventKind::Remove(RemoveKind::Folder)).await;
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_subfolder_rename() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let mut recv = watcher.subscribe();
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        let new_parent = repo_root.join_component("new_parent");
+        parent_path.rename(&new_parent).unwrap();
+
+        expect_filesystem_event(
+            &mut recv,
+            &new_parent,
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+        )
+        .await;
     }
 }

@@ -157,6 +157,10 @@ impl AbsoluteSystemPath {
         fs::remove_dir_all(&self.0)
     }
 
+    pub fn rename(&self, other: &Self) -> Result<(), io::Error> {
+        fs::rename(&self.0, &other.0)
+    }
+
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
     }
