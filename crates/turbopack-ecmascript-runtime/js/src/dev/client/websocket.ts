@@ -17,7 +17,7 @@ function getSocketProtocol(assetPrefix: string): string {
   return protocol === "http:" ? "ws" : "wss";
 }
 
-type WebSocketMessage = Record<string, any> & {
+export type WebSocketMessage = Record<string, any> & {
   type: string;
 };
 

@@ -3,20 +3,16 @@
 /// <reference path="../runtime/base/protocol.d.ts" />
 /// <reference path="../runtime/base/extensions.d.ts" />
 
+import type { WebSocketMessage } from "./websocket";
+
 type SendMessage = typeof import("./websocket").sendMessage;
 
 export type ClientOptions = {
-  assetPrefix: string;
   addMessageListener: typeof import("./websocket").addMessageListener;
   sendMessage: SendMessage;
 };
 
-// TURBOPACK CLient
-export function connect({
-  assetPrefix,
-  addMessageListener,
-  sendMessage,
-}: ClientOptions) {
+export function connect({ addMessageListener, sendMessage }: ClientOptions) {
   addMessageListener((msg) => {
     switch (msg.type) {
       case "turbopack-connected":
@@ -494,8 +490,7 @@ export function setHooks(newHooks: typeof hooks) {
   Object.assign(hooks, newHooks);
 }
 
-function handleSocketMessage(event: any) {
-  const msg = JSON.parse(event.data);
+function handleSocketMessage(msg: WebSocketMessage) {
   sortIssues(msg.issues);
 
   const hasCriticalIssues = handleIssues(msg);
