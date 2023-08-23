@@ -1,6 +1,7 @@
-import child_process from "child_process";
-import { checkCommit } from "../src/checkCommit";
+// eslint-disable-next-line camelcase
+import child_process from "node:child_process";
 import { mockEnv } from "@turbo/test-utils";
+import { checkCommit } from "../src/checkCommit";
 
 describe("checkCommit()", () => {
   describe("on Vercel", () => {
