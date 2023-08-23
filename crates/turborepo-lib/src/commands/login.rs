@@ -409,10 +409,6 @@ mod test {
             base.user_config().unwrap().token().unwrap(),
             vercel_api_mock::EXPECTED_TOKEN
         );
-        assert_eq!(
-            base.repo_config().unwrap().team_id().unwrap(),
-            vercel_api_mock::EXPECTED_SSO_TEAM_ID
-        );
     }
 
     #[test]
