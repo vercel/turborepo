@@ -508,7 +508,7 @@ impl DiskFileSystem {
 
     fn invalidate_from_write(&self, full_path: &Path, invalidators: HashSet<Invalidator>) {
         if !invalidators.is_empty() {
-            if let Some(path) = format_absolute_fs_path(&full_path, &self.name, self.root_path()) {
+            if let Some(path) = format_absolute_fs_path(full_path, &self.name, self.root_path()) {
                 if invalidators.len() == 1 {
                     let invalidator = invalidators.into_iter().next().unwrap();
                     invalidator.invalidate_with_reason(Write { path });
