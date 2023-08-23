@@ -295,7 +295,10 @@ fn main() {
                     parents.drain(10..parents.len() - 10);
                     parents.insert(10, "...")
                 }
-                let message = parents.into_iter().intersperse(" > ").collect::<String>();
+                let message = parents
+                    .into_iter()
+                    .intersperse("\n  > ")
+                    .collect::<String>();
                 eprintln!("- {}", message);
             }
         }
