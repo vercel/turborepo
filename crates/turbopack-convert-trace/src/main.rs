@@ -23,6 +23,8 @@
 //!
 //! Default is `--merged`.
 
+#![feature(iter_intersperse)]
+
 use std::{
     borrow::Cow,
     cmp::{max, min, Reverse},
@@ -262,11 +264,35 @@ fn main() {
             .into_values()
             .map(|id| &spans[id])
             .filter(|span| span.end == span.start)
+            .filter(|span| {
+                !span.items.iter().any(|item| {
+                    if let &SpanItem::Child(c) = item {
+                        spans[c].end == spans[c].start
+                    } else {
+                        false
+                    }
+                })
+            })
             .collect::<Vec<_>>();
         if !active_spans.is_empty() {
             eprintln!("{} spans still active:", active_spans.len());
             for span in active_spans {
-                eprintln!("- {}", span.name);
+                let mut parents = Vec::new();
+                let mut current = span;
+                loop {
+                    parents.push(current);
+                    if current.parent == 0 {
+                        break;
+                    }
+                    current = &spans[current.parent];
+                }
+                let message = parents
+                    .iter()
+                    .rev()
+                    .map(|span| &*span.name)
+                    .intersperse(" > ")
+                    .collect::<String>();
+                eprintln!("- {}", message);
             }
         }
     }
@@ -275,7 +301,7 @@ fn main() {
     name_counts.sort_by_key(|(_, count)| Reverse(*count));
 
     eprintln!("Top 10 span names:");
-    for (name, count) in name_counts.into_iter().take(10) {
+    for (name, count) in name_counts.into_iter().take(50) {
         eprintln!("{}x {}", count, name);
     }
 
