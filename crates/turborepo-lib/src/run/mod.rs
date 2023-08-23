@@ -5,7 +5,10 @@ mod global_hash;
 mod scope;
 pub mod task_id;
 
-use std::io::{BufWriter, IsTerminal};
+use std::{
+    io::{BufWriter, IsTerminal},
+    sync::Arc,
+};
 
 use anyhow::{anyhow, Context as ErrorContext, Result};
 use itertools::Itertools;
@@ -27,6 +30,7 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
     run::{cache::RunCache, global_hash::get_global_hash_inputs},
+    task_graph::Visitor,
 };
 
 #[derive(Debug)]
@@ -205,6 +209,11 @@ impl Run {
             daemon,
             self.base.ui,
         );
+
+        let pkg_dep_graph = Arc::new(pkg_dep_graph);
+        let engine = Arc::new(engine);
+        let visitor = Visitor::new(pkg_dep_graph, &opts);
+        visitor.visit(engine).await?;
 
         Ok(())
     }
