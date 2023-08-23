@@ -3,17 +3,24 @@
 /// <reference path="../runtime/base/protocol.d.ts" />
 /// <reference path="../runtime/base/extensions.d.ts" />
 
-import { addEventListener, sendMessage } from "./websocket";
+type SendMessage = typeof import("./websocket").sendMessage;
 
 export type ClientOptions = {
   assetPrefix: string;
+  addEventListener: typeof import("./websocket").addEventListener;
+  sendMessage: SendMessage;
 };
 
-export function connect({ assetPrefix }: ClientOptions) {
+// TURBOPACK CLient
+export function connect({
+  assetPrefix,
+  addEventListener,
+  sendMessage,
+}: ClientOptions) {
   addEventListener((event) => {
     switch (event.type) {
       case "connected":
-        handleSocketConnected();
+        handleSocketConnected(sendMessage);
         break;
       case "message":
         const msg: ServerMessage = JSON.parse(event.message.data);
@@ -28,13 +35,13 @@ export function connect({ assetPrefix }: ClientOptions) {
   }
   globalThis.TURBOPACK_CHUNK_UPDATE_LISTENERS = {
     push: ([chunkPath, callback]: [ChunkPath, UpdateCallback]) => {
-      subscribeToChunkUpdate(chunkPath, callback);
+      subscribeToChunkUpdate(chunkPath, sendMessage, callback);
     },
   };
 
   if (Array.isArray(queued)) {
     for (const [chunkPath, callback] of queued) {
-      subscribeToChunkUpdate(chunkPath, callback);
+      subscribeToChunkUpdate(chunkPath, sendMessage, callback);
     }
   }
 }
@@ -46,7 +53,7 @@ type UpdateCallbackSet = {
 
 const updateCallbackSets: Map<ResourceKey, UpdateCallbackSet> = new Map();
 
-function sendJSON(message: ClientMessage) {
+function sendJSON(sendMessage: SendMessage, message: ClientMessage) {
   sendMessage(JSON.stringify(message));
 }
 
@@ -59,23 +66,26 @@ function resourceKey(resource: ResourceIdentifier): ResourceKey {
   });
 }
 
-function subscribeToUpdates(resource: ResourceIdentifier): () => void {
-  sendJSON({
+function subscribeToUpdates(
+  sendMessage: SendMessage,
+  resource: ResourceIdentifier
+): () => void {
+  sendJSON(sendMessage, {
     type: "subscribe",
     ...resource,
   });
 
   return () => {
-    sendJSON({
+    sendJSON(sendMessage, {
       type: "unsubscribe",
       ...resource,
     });
   };
 }
 
-function handleSocketConnected() {
+function handleSocketConnected(sendMessage: SendMessage) {
   for (const key of updateCallbackSets.keys()) {
-    subscribeToUpdates(JSON.parse(key));
+    subscribeToUpdates(sendMessage, JSON.parse(key));
   }
 }
 
@@ -517,18 +527,21 @@ function handleSocketMessage(msg: ServerMessage) {
 
 export function subscribeToChunkUpdate(
   chunkPath: ChunkPath,
+  sendMessage: SendMessage,
   callback: UpdateCallback
 ): () => void {
   return subscribeToUpdate(
     {
       path: chunkPath,
     },
+    sendMessage,
     callback
   );
 }
 
 export function subscribeToUpdate(
   resource: ResourceIdentifier,
+  sendMessage: SendMessage,
   callback: UpdateCallback
 ) {
   const key = resourceKey(resource);
@@ -537,7 +550,7 @@ export function subscribeToUpdate(
   if (!existingCallbackSet) {
     callbackSet = {
       callbacks: new Set([callback]),
-      unsubscribe: subscribeToUpdates(resource),
+      unsubscribe: subscribeToUpdates(sendMessage, resource),
     };
     updateCallbackSets.set(key, callbackSet);
   } else {
