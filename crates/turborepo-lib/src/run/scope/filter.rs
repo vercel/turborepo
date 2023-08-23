@@ -1,10 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
+    path::Path,
     str::FromStr,
 };
 
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath};
 use turborepo_scm::SCM;
 use wax::Pattern;
 
@@ -345,13 +346,9 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             if selector.parent_dir == AnchoredSystemPathBuf::default() {
                 entry_packages.insert(name.to_owned());
             } else {
-                let path = self
-                    .turbo_root
-                    .join_unix_path(selector.parent_dir.to_unix())
-                    .unwrap();
-                let matcher = wax::Glob::new(path.as_str())?;
-                let p = self.turbo_root.resolve(&info.package_json_path);
-                let matches = matcher.is_match(p.as_std_path());
+                let path = selector.parent_dir.to_unix();
+                let parent_dir_matcher = wax::Glob::new(path.as_str())?;
+                let matches = parent_dir_matcher.is_match(info.package_json_path.as_path());
 
                 if matches {
                     entry_packages.insert(name.to_owned());
@@ -411,11 +408,8 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         let mut entry_packages = HashSet::new();
         let mut selector_valid = false;
 
-        let path = self
-            .turbo_root
-            .join_unix_path(selector.parent_dir.to_unix())
-            .unwrap();
-        let globber = wax::Glob::new(path.as_str()).unwrap();
+        let path = selector.parent_dir.to_unix();
+        let parent_dir_globber = wax::Glob::new(path.as_str()).unwrap();
 
         if !selector.from_ref.is_empty() {
             selector_valid = true;
@@ -436,7 +430,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                 if package == WorkspaceName::Root {
                     // The root package changed, only add it if
                     // the parentDir is equivalent to the root
-                    if globber.matched(&self.turbo_root.into()).is_some() {
+                    if parent_dir_globber.matched(&Path::new(".").into()).is_some() {
                         entry_packages.insert(package);
                     }
                 } else {
@@ -444,8 +438,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
                         .get(&package)
                         .ok_or(ResolutionError::MissingPackageInfo(package.to_string()))?;
 
-                    let path = self.turbo_root.resolve(path);
-                    if globber.is_match(path.as_std_path()) {
+                    if parent_dir_globber.is_match(path.as_path()) {
                         entry_packages.insert(package);
                     }
                 }
@@ -456,15 +449,10 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             {
                 entry_packages.insert(WorkspaceName::Root);
             } else {
-                let path = self
-                    .turbo_root
-                    .join_unix_path(selector.parent_dir.to_unix())
-                    .unwrap();
-                let globber = wax::Glob::new(path.as_str())?;
                 let packages = self.pkg_graph.workspaces();
                 for (name, _) in packages.filter(|(_name, info)| {
-                    let path = self.turbo_root.resolve(&info.package_json_path);
-                    globber.is_match(path.as_std_path())
+                    let path = info.package_json_path.as_path();
+                    parent_dir_globber.is_match(path)
                 }) {
                     entry_packages.insert(name.to_owned());
                 }
