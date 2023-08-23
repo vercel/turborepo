@@ -198,7 +198,7 @@ impl Run {
         let _runcache = RunCache::new(
             async_cache,
             &self.base.repo_root,
-            opts.runcache_opts,
+            &opts.runcache_opts,
             color_selector,
             daemon,
             self.base.ui,

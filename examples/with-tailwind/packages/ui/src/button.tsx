@@ -1,6 +1,6 @@
 import * as React from "react";
 
-export const Button = () => {
+export function Button(): JSX.Element {
   return (
     <div className="rounded-md ">
       <a href="https://turbo.build/repo/docs">
@@ -13,4 +13,4 @@ export const Button = () => {
       </a>
     </div>
   );
-};
+}

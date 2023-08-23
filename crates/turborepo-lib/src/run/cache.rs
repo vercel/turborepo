@@ -31,7 +31,7 @@ impl RunCache {
     pub fn new(
         cache: AsyncCache,
         repo_root: &AbsoluteSystemPath,
-        opts: RunCacheOpts,
+        opts: &RunCacheOpts,
         color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
         ui: UI,
