@@ -25,7 +25,7 @@
 
     // run prettier check before eslint
     "lint": {
-      "dependsOn": ["lint:prettier"]
+      "dependsOn": ["lint:prettier", "^build"]
     },
 
     // root lint task runs toml check

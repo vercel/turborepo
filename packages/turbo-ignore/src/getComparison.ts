@@ -1,5 +1,5 @@
 import { info } from "./logger";
-import { TurboIgnoreArgs } from "./types";
+import type { TurboIgnoreArgs } from "./types";
 
 export interface GetComparisonArgs extends TurboIgnoreArgs {
   // the workspace to check for changes
@@ -17,23 +17,32 @@ export function getComparison(args: GetComparisonArgs): {
     if (process.env.VERCEL_GIT_PREVIOUS_SHA) {
       // use the commit SHA of the last successful deployment for this project / branch
       info(
-        `Found previous deployment ("${process.env.VERCEL_GIT_PREVIOUS_SHA}") for "${workspace}" on branch "${process.env.VERCEL_GIT_COMMIT_REF}"`
+        `Found previous deployment ("${
+          process.env.VERCEL_GIT_PREVIOUS_SHA
+        }") for "${workspace}"${
+          process.env.VERCEL_GIT_COMMIT_REF
+            ? ` on branch "${process.env.VERCEL_GIT_COMMIT_REF}"`
+            : ""
+        }`
       );
       return {
         ref: process.env.VERCEL_GIT_PREVIOUS_SHA,
         type: "previousDeploy",
       };
-    } else {
-      info(
-        `No previous deployments found for "${workspace}" on branch "${process.env.VERCEL_GIT_COMMIT_REF}".`
-      );
-      if (fallback) {
-        info(`Falling back to ref ${fallback}`);
-        return { ref: fallback, type: "customFallback" };
-      }
-
-      return null;
     }
+    info(
+      `No previous deployments found for "${workspace}"${
+        process.env.VERCEL_GIT_COMMIT_REF
+          ? ` on branch "${process.env.VERCEL_GIT_COMMIT_REF}"`
+          : ""
+      }`
+    );
+    if (fallback) {
+      info(`Falling back to ref ${fallback}`);
+      return { ref: fallback, type: "customFallback" };
+    }
+
+    return null;
   } else if (fallback) {
     info(`Using ${fallback} to compare "${workspace}"`);
     return { ref: fallback, type: "customFallback" };

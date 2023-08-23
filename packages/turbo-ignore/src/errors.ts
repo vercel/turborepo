@@ -1,9 +1,9 @@
-import { NonFatalErrorKey, NonFatalErrors } from "./types";
+import type { NonFatalErrorKey, NonFatalErrors } from "./types";
 
 export const NON_FATAL_ERRORS: NonFatalErrors = {
   MISSING_LOCKFILE: {
     regex:
-      /reading (yarn.lock|package-lock.json|pnpm-lock.yaml):.*?no such file or directory/i,
+      /reading (?:yarn.lock|package-lock.json|pnpm-lock.yaml):.*?no such file or directory/i,
     message: `turbo-ignore could not complete - no lockfile found, please commit one to your repository`,
   },
   NO_PACKAGE_MANAGER: {

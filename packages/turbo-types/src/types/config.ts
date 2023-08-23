@@ -37,7 +37,7 @@ export interface WorkspaceSchema extends BaseSchema {
    *
    * @defaultValue ["//"]
    */
-  extends: string[];
+  extends: Array<string>;
 }
 
 export interface RootSchema extends BaseSchema {
@@ -59,7 +59,7 @@ export interface RootSchema extends BaseSchema {
    *
    * @defaultValue []
    */
-  globalDependencies?: string[];
+  globalDependencies?: Array<string>;
 
   /**
    * A list of environment variables for implicit global hash dependencies.
@@ -70,7 +70,7 @@ export interface RootSchema extends BaseSchema {
    *
    * @defaultValue []
    */
-  globalEnv?: EnvWildcard[];
+  globalEnv?: Array<EnvWildcard>;
 
   /**
    * An allowlist of environment variables that should be made to all tasks, but
@@ -81,7 +81,7 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue null
    * @deprecated use `globalPassThroughEnv` instead
    */
-  experimentalGlobalPassThroughEnv?: null | string[];
+  experimentalGlobalPassThroughEnv?: null | Array<string>;
 
   /**
    * An allowlist of environment variables that should be made to all tasks, but
@@ -91,7 +91,7 @@ export interface RootSchema extends BaseSchema {
    *
    * @defaultValue null
    */
-  globalPassThroughEnv?: null | EnvWildcard[];
+  globalPassThroughEnv?: null | Array<EnvWildcard>;
 
   /**
    * A priority-ordered (most-significant to least-significant) array of project-anchored
@@ -101,7 +101,7 @@ export interface RootSchema extends BaseSchema {
    *
    * @defaultValue null
    */
-  globalDotEnv?: null | AnchoredUnixPath[];
+  globalDotEnv?: null | Array<AnchoredUnixPath>;
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
@@ -130,7 +130,7 @@ export interface Pipeline {
    *
    * @defaultValue []
    */
-  dependsOn?: string[];
+  dependsOn?: Array<string>;
 
   /**
    * A list of environment variables that this task depends on.
@@ -144,7 +144,7 @@ export interface Pipeline {
    *
    * @defaultValue []
    */
-  env?: EnvWildcard[];
+  env?: Array<EnvWildcard>;
 
   /**
    * An allowlist of environment variables that should be made available in this
@@ -156,7 +156,7 @@ export interface Pipeline {
    * @defaultValue null
    * @deprecated use `passThroughEnv` instead
    */
-  experimentalPassThroughEnv?: null | string[];
+  experimentalPassThroughEnv?: null | Array<string>;
 
   /**
    * An allowlist of environment variables that should be made available in this
@@ -167,7 +167,7 @@ export interface Pipeline {
    *
    * @defaultValue null
    */
-  passThroughEnv?: null | EnvWildcard[];
+  passThroughEnv?: null | Array<EnvWildcard>;
 
   /**
    * A priority-ordered (most-significant to least-significant) array of workspace-anchored
@@ -177,7 +177,7 @@ export interface Pipeline {
    *
    * @defaultValue null
    */
-  dotEnv?: null | AnchoredUnixPath[];
+  dotEnv?: null | Array<AnchoredUnixPath>;
 
   /**
    * The set of glob patterns indicating a task's cacheable filesystem outputs.
@@ -190,7 +190,7 @@ export interface Pipeline {
    *
    * @defaultValue []
    */
-  outputs?: string[];
+  outputs?: Array<string>;
 
   /**
    * Whether or not to cache the outputs of the task.
@@ -218,7 +218,7 @@ export interface Pipeline {
    *
    * @defaultValue []
    */
-  inputs?: string[];
+  inputs?: Array<string>;
 
   /**
    * Output mode for the task.
