@@ -12,12 +12,12 @@ export type ClientOptions = {
 
 export function connect({ addMessageListener, sendMessage }: ClientOptions) {
   addMessageListener((msg) => {
-    switch (msg.type) {
+    switch (msg.event) {
       case "turbopack-connected":
         handleSocketConnected(sendMessage);
         break;
       default:
-        handleSocketMessage(msg as ServerMessage);
+        handleSocketMessage(msg.data as ServerMessage);
         break;
     }
   });
