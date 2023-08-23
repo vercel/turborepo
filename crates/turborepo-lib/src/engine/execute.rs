@@ -142,10 +142,6 @@ impl Engine {
     }
 }
 
-// the visitor fn
-// Visitor is just a channel that we send task info into along w/ callback
-// oneshot
-
 impl<T, U> Message<T, U> {
     pub fn new(info: T) -> (Self, oneshot::Receiver<U>) {
         let (callback, receiver) = oneshot::channel();
