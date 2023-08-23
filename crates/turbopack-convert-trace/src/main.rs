@@ -286,12 +286,16 @@ fn main() {
                     }
                     current = &spans[current.parent];
                 }
-                let message = parents
+                let mut parents = parents
                     .iter()
                     .rev()
                     .map(|span| &*span.name)
-                    .intersperse(" > ")
-                    .collect::<String>();
+                    .collect::<Vec<_>>();
+                if parents.len() > 10 {
+                    parents.drain(10..parents.len() - 10);
+                    parents.insert(10, "...")
+                }
+                let message = parents.into_iter().intersperse(" > ").collect::<String>();
                 eprintln!("- {}", message);
             }
         }
