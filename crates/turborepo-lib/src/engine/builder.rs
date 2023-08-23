@@ -197,7 +197,7 @@ impl<'a> EngineBuilder<'a> {
 
             let dep_pkgs = self
                 .package_graph
-                .dependencies(&WorkspaceNode::Workspace(to_task_id.package().into()));
+                .immediate_dependencies(&WorkspaceNode::Workspace(to_task_id.package().into()));
 
             let mut has_deps = false;
             let mut has_topo_deps = false;
@@ -423,6 +423,10 @@ mod test {
         }
 
         fn encode(&self) -> Result<Vec<u8>, turborepo_lockfiles::Error> {
+            unreachable!()
+        }
+
+        fn global_change_key(&self) -> Vec<u8> {
             unreachable!()
         }
     }

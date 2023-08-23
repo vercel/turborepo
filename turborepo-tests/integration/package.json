@@ -3,6 +3,7 @@
   "scripts": {
     "test:setup": "./setup.sh",
     "test": "./test.sh",
+    "test:rust-codepath": "EXPERIMENTAL_RUST_CODEPATH=true ./test.sh",
     "test:interactive": ".cram_env/bin/prysk -i --shell=`which bash` tests",
     "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"

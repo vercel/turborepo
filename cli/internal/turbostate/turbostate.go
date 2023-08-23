@@ -39,27 +39,28 @@ type RunPayload struct {
 	//   "foo" -> flag passed and file name attached: emit to file
 	// The mirror for this in Rust is `Option<String>` with the default value
 	// for the flag being `Some("")`.
-	Graph               *string  `json:"graph"`
-	Ignore              []string `json:"ignore"`
-	IncludeDependencies bool     `json:"include_dependencies"`
-	NoCache             bool     `json:"no_cache"`
-	NoDaemon            bool     `json:"no_daemon"`
-	NoDeps              bool     `json:"no_deps"`
-	Only                bool     `json:"only"`
-	OutputLogs          string   `json:"output_logs"`
-	LogOrder            string   `json:"log_order"`
-	PassThroughArgs     []string `json:"pass_through_args"`
-	Parallel            bool     `json:"parallel"`
-	Profile             string   `json:"profile"`
-	RemoteOnly          bool     `json:"remote_only"`
-	Scope               []string `json:"scope"`
-	Since               string   `json:"since"`
-	SinglePackage       bool     `json:"single_package"`
-	Summarize           bool     `json:"summarize"`
-	Tasks               []string `json:"tasks"`
-	PkgInferenceRoot    string   `json:"pkg_inference_root"`
-	LogPrefix           string   `json:"log_prefix"`
-	ExperimentalSpaceID string   `json:"experimental_space_id"`
+	Graph                    *string  `json:"graph"`
+	Ignore                   []string `json:"ignore"`
+	IncludeDependencies      bool     `json:"include_dependencies"`
+	NoCache                  bool     `json:"no_cache"`
+	NoDaemon                 bool     `json:"no_daemon"`
+	NoDeps                   bool     `json:"no_deps"`
+	Only                     bool     `json:"only"`
+	OutputLogs               string   `json:"output_logs"`
+	LogOrder                 string   `json:"log_order"`
+	PassThroughArgs          []string `json:"pass_through_args"`
+	Parallel                 bool     `json:"parallel"`
+	Profile                  string   `json:"profile"`
+	RemoteOnly               bool     `json:"remote_only"`
+	Scope                    []string `json:"scope"`
+	Since                    string   `json:"since"`
+	SinglePackage            bool     `json:"single_package"`
+	Summarize                bool     `json:"summarize"`
+	Tasks                    []string `json:"tasks"`
+	PkgInferenceRoot         string   `json:"pkg_inference_root"`
+	LogPrefix                string   `json:"log_prefix"`
+	ExperimentalSpaceID      string   `json:"experimental_space_id"`
+	ExperimentalRustCodepath bool     `json:"experimental_rust_codepath"`
 }
 
 // Command consists of the data necessary to run a command.

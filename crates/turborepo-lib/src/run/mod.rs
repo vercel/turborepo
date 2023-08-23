@@ -98,20 +98,27 @@ impl Run {
 
         let scm = SCM::new(&self.base.repo_root);
 
-        let filtered_pkgs =
-            scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph, &scm)?;
+        let filtered_pkgs = {
+            let mut filtered_pkgs = scope::resolve_packages(
+                &opts.scope_opts,
+                &self.base.repo_root,
+                &pkg_dep_graph,
+                &scm,
+            )?;
 
-        // TODO: Add this back once scope/filter is implemented.
-        //       Currently this code has lifetime issues
-        // if filtered_pkgs.len() != pkg_dep_graph.len() {
-        //     for target in targets {
-        //         let key = task_id::root_task_id(target);
-        //         if pipeline.contains_key(&key) {
-        //             filtered_pkgs.insert(task_id::ROOT_PKG_NAME.to_string());
-        //             break;
-        //         }
-        //     }
-        // }
+            if filtered_pkgs.len() != pkg_dep_graph.len() {
+                for target in self.targets() {
+                    let task_name = TaskName::from(target.as_str());
+                    if root_turbo_json.pipeline.contains_key(&task_name) {
+                        filtered_pkgs.insert(WorkspaceName::Root);
+                        break;
+                    }
+                }
+            };
+
+            filtered_pkgs
+        };
+
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let _global_hash_inputs = get_global_hash_inputs(
@@ -159,12 +166,7 @@ impl Run {
                 .collect(),
         ))
         .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(
-            filtered_pkgs
-                .iter()
-                .map(|workspace| WorkspaceName::from(workspace.as_str()))
-                .collect(),
-        )
+        .with_workspaces(filtered_pkgs.into_iter().collect())
         .with_tasks(
             opts.run_opts
                 .tasks

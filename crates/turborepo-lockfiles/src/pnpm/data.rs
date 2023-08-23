@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use turbopath::RelativeUnixPathBuf;
 
 use super::{dep_path::DepPath, Error, LockfileVersion};
@@ -404,6 +405,24 @@ impl crate::Lockfile for PnpmLockfile {
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
+    }
+
+    fn global_change_key(&self) -> Vec<u8> {
+        let mut buf = vec![b'p', b'n', b'p', b'm', 0];
+
+        serde_json::to_writer(
+            &mut buf,
+            &json!({
+                "version": self.lockfile_version.version,
+                "checksum": self.package_extensions_checksum,
+                "overrides": self.overrides,
+                "patched_deps": self.patched_dependencies,
+                "settings": self.settings,
+            }),
+        )
+        .expect("writing to Vec cannot fail");
+
+        buf
     }
 }
 
