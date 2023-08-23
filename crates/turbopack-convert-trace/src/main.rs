@@ -301,7 +301,7 @@ fn main() {
     name_counts.sort_by_key(|(_, count)| Reverse(*count));
 
     eprintln!("Top 10 span names:");
-    for (name, count) in name_counts.into_iter().take(50) {
+    for (name, count) in name_counts.into_iter().take(10) {
         eprintln!("{}x {}", count, name);
     }
 
