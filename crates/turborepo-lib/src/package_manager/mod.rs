@@ -495,6 +495,10 @@ impl PackageManager {
             }
         }
     }
+
+    pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        turbo_root.join_component(self.lockfile_name())
+    }
 }
 
 #[cfg(test)]
@@ -558,7 +562,7 @@ mod tests {
         for mgr in &[PackageManager::Pnpm, PackageManager::Pnpm6] {
             let found = mgr.get_package_jsons(&basic).unwrap();
             let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
-            assert_eq!(found, basic_expected);
+            assert_eq!(found, basic_expected, "{}", mgr);
         }
     }
 

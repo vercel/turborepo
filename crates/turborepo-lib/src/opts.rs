@@ -144,9 +144,57 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32> {
     }
 }
 
+// LegacyFilter holds the options in use before the filter syntax. They have
+// their own rules for how they are compiled into filter expressions.
+#[derive(Debug, Default)]
+pub struct LegacyFilter {
+    // include_dependencies is whether to include pkg.dependencies in execution (defaults to false)
+    include_dependencies: bool,
+    // skip_dependents is whether to skip dependent impacted consumers in execution (defaults to
+    // false)
+    skip_dependents: bool,
+    // entrypoints is a list of package entrypoints
+    entrypoints: Vec<String>,
+    // since is the git ref used to calculate changed packages
+    since: Option<String>,
+}
+
+impl LegacyFilter {
+    pub fn as_filter_pattern(&self) -> Vec<String> {
+        let prefix = if self.skip_dependents { "" } else { "..." };
+        let suffix = if self.include_dependencies { "..." } else { "" };
+        if self.entrypoints.is_empty() {
+            if let Some(since) = self.since.as_ref() {
+                vec![format!("{}[{}]{}", prefix, since, suffix)]
+            } else {
+                Vec::new()
+            }
+        } else {
+            let since = self
+                .since
+                .as_ref()
+                .map_or_else(String::new, |s| format!("...{}", s));
+            self.entrypoints
+                .iter()
+                .map(|pattern| {
+                    if pattern.starts_with('!') {
+                        pattern.to_owned()
+                    } else {
+                        format!("{}{}{}{}", prefix, pattern, since, suffix)
+                    }
+                })
+                .collect()
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ScopeOpts {
     pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
+    pub legacy_filter: LegacyFilter,
+    pub global_deps: Vec<String>,
+    pub filter_patterns: Vec<String>,
+    pub ignore_patterns: Vec<String>,
 }
 
 impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
@@ -158,7 +206,19 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
             .as_ref()
             .map(AnchoredSystemPathBuf::from_raw)
             .transpose()?;
-        Ok(Self { pkg_inference_root })
+        let legacy_filter = LegacyFilter {
+            include_dependencies: args.include_dependencies,
+            skip_dependents: args.no_deps,
+            entrypoints: args.scope.clone(),
+            since: args.since.clone(),
+        };
+        Ok(Self {
+            global_deps: args.global_deps.clone(),
+            pkg_inference_root,
+            legacy_filter,
+            filter_patterns: args.filter.clone(),
+            ignore_patterns: args.ignore.clone(),
+        })
     }
 }
 
@@ -170,5 +230,47 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
             workers: run_args.cache_workers,
             ..CacheOpts::default()
         }
+    }
+}
+
+impl ScopeOpts {
+    pub fn get_filters(&self) -> Vec<String> {
+        [
+            self.filter_patterns.clone(),
+            self.legacy_filter.as_filter_pattern(),
+        ]
+        .concat()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use test_case::test_case;
+
+    use super::LegacyFilter;
+
+    #[test_case(LegacyFilter {
+            include_dependencies: true,
+            skip_dependents: false,
+            entrypoints: vec![],
+            since: Some("since".to_string()),
+        }, &["...[since]..."])]
+    #[test_case(LegacyFilter {
+            include_dependencies: false,
+            skip_dependents: true,
+            entrypoints: vec![],
+            since: Some("since".to_string()),
+        }, &["[since]"])]
+    #[test_case(LegacyFilter {
+            include_dependencies: false,
+            skip_dependents: true,
+            entrypoints: vec!["entry".to_string()],
+            since: Some("since".to_string()),
+        }, &["entry...since"])]
+    fn basic_legacy_filter_pattern(filter: LegacyFilter, expected: &[&str]) {
+        assert_eq!(
+            filter.as_filter_pattern(),
+            expected.iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        )
     }
 }

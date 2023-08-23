@@ -7,13 +7,13 @@ mod ser;
 use std::{
     collections::{HashMap, HashSet},
     iter,
-    rc::Rc,
 };
 
 use de::SemverString;
 use identifiers::{Descriptor, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
 
@@ -40,11 +40,11 @@ pub enum Error {
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
 pub struct BerryLockfile {
-    data: Rc<LockfileData>,
+    data: LockfileData,
     resolutions: Map<Descriptor<'static>, Locator<'static>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver,
-    locator_package: Map<Locator<'static>, Rc<BerryPackage>>,
+    locator_package: Map<Locator<'static>, BerryPackage>,
     // Map of regular locators to patch locators that apply to them
     patches: Map<Locator<'static>, Locator<'static>>,
     // Descriptors that come from default package extensions that ship with berry
@@ -55,12 +55,12 @@ pub struct BerryLockfile {
 
 // This is the direct representation of the lockfile as it appears on disk.
 // More internal tracking is required for effectively altering the lockfile
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LockfileData {
     #[serde(rename = "__metadata")]
     metadata: Metadata,
     #[serde(flatten)]
-    packages: Map<String, Rc<BerryPackage>>,
+    packages: Map<String, BerryPackage>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Clone)]
@@ -137,7 +137,7 @@ impl BerryLockfile {
             .unwrap_or_default();
 
         let mut this = Self {
-            data: Rc::new(lockfile),
+            data: lockfile,
             resolutions: descriptor_locator,
             locator_package,
             resolver,
@@ -546,6 +546,21 @@ impl Lockfile for BerryLockfile {
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
+    }
+
+    fn global_change_key(&self) -> Vec<u8> {
+        let mut buf = vec![b'b', b'e', b'r', b'r', b'y', 0];
+
+        serde_json::to_writer(
+            &mut buf,
+            &json!({
+                "version": &self.data.metadata.version,
+                "cache_key": &self.data.metadata.cache_key,
+            }),
+        )
+        .expect("writing to Vec cannot fail");
+
+        buf
     }
 }
 

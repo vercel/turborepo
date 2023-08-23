@@ -196,6 +196,10 @@ impl AnchoredSystemPathBuf {
     pub fn components(&self) -> Utf8Components {
         self.0.components()
     }
+
+    pub fn join(&self, other: &AnchoredSystemPath) -> AnchoredSystemPathBuf {
+        Self(self.0.join(other))
+    }
 }
 
 impl From<AnchoredSystemPathBuf> for PathBuf {

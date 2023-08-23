@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 use itertools::Itertools;
-use petgraph::visit::EdgeRef;
+use petgraph::visit::{depth_first_search, EdgeRef, Reversed};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
@@ -33,8 +33,18 @@ pub struct WorkspaceInfo {
 }
 
 impl WorkspaceInfo {
-    pub fn package_json_path(&self) -> &AnchoredSystemPathBuf {
+    pub fn package_json_path(&self) -> &AnchoredSystemPath {
         &self.package_json_path
+    }
+
+    /// Get the path to this workspace.
+    ///
+    /// note: This is infallible because `package_json_path` is guaranteed to
+    /// have       at least one segment
+    pub fn package_path(&self) -> &AnchoredSystemPath {
+        self.package_json_path
+            .parent()
+            .expect("at least one segment")
     }
 }
 
@@ -52,6 +62,15 @@ pub enum WorkspaceName {
 pub enum WorkspaceNode {
     Root,
     Workspace(WorkspaceName),
+}
+
+impl WorkspaceNode {
+    pub fn as_workspace(&self) -> &WorkspaceName {
+        match self {
+            WorkspaceNode::Workspace(name) => name,
+            WorkspaceNode::Root => &WorkspaceName::Root,
+        }
+    }
 }
 
 impl PackageGraph {
@@ -134,7 +153,18 @@ impl PackageGraph {
             .expect("package graph was built without root package.json")
     }
 
-    pub fn dependencies(&self, workspace: &WorkspaceNode) -> Option<HashSet<&WorkspaceNode>> {
+    /// Gets all the nodes that directly depend on this one, that is to say
+    /// have a edge to `workspace`.
+    ///
+    /// Example:
+    ///
+    /// a -> b -> c
+    ///
+    /// immediate_dependencies(a) -> {b}
+    pub fn immediate_dependencies(
+        &self,
+        workspace: &WorkspaceNode,
+    ) -> Option<HashSet<&WorkspaceNode>> {
         let index = self.node_lookup.get(workspace)?;
         Some(
             self.workspace_graph
@@ -148,16 +178,88 @@ impl PackageGraph {
         )
     }
 
-    pub fn transitive_closure<'a, I: IntoIterator<Item = &'a WorkspaceNode>>(
+    /// Gets all the nodes that directly depend on this one, that is to say
+    /// have a edge to `workspace`.
+    ///
+    /// Example:
+    ///
+    /// a -> b -> c
+    ///
+    /// immediate_ancestors(c) -> {b}
+    #[allow(dead_code)]
+    pub fn immediate_ancestors(
         &self,
+        workspace: &WorkspaceNode,
+    ) -> Option<HashSet<&WorkspaceNode>> {
+        let index = self.node_lookup.get(workspace)?;
+        Some(
+            self.workspace_graph
+                .neighbors_directed(*index, petgraph::Incoming)
+                .map(|index| {
+                    self.workspace_graph
+                        .node_weight(index)
+                        .expect("node index from neighbors should be present")
+                })
+                .collect(),
+        )
+    }
+
+    /// For a given workspace in the repo, returns the set of workspaces
+    /// that this one depends on, excluding those that are unresolved.
+    ///
+    /// Example:
+    ///
+    /// a -> b -> c (external)
+    ///
+    /// dependencies(a) = {b, c}
+    #[allow(dead_code)]
+    pub fn dependencies<'a>(&'a self, node: &WorkspaceNode) -> HashSet<&'a WorkspaceNode> {
+        let mut dependencies =
+            self.transitive_closure_inner(Some(node), petgraph::Direction::Outgoing);
+        dependencies.remove(node);
+        dependencies
+    }
+
+    /// For a given workspace in the repo, returns the set of workspaces
+    /// that depend on this one, excluding those that are unresolved.
+    ///
+    /// Example:
+    ///
+    /// a -> b -> c (external)
+    ///
+    /// ancestors(c) = {a, b}
+    pub fn ancestors(&self, node: &WorkspaceNode) -> HashSet<&WorkspaceNode> {
+        let mut dependents =
+            self.transitive_closure_inner(Some(node), petgraph::Direction::Incoming);
+        dependents.remove(node);
+        dependents
+    }
+
+    /// Returns the transitive closure of the given nodes in the workspace
+    /// graph. Note that this includes the nodes themselves. If you want just
+    /// the dependencies, or the dependents, use `dependencies` or `ancestors`.
+    /// Alternatively, if you need just direct dependents, use
+    /// `immediate_dependents`.
+    pub fn transitive_closure<'a, 'b, I: IntoIterator<Item = &'b WorkspaceNode>>(
+        &'a self,
         nodes: I,
-    ) -> HashSet<&WorkspaceNode> {
-        let indexes = nodes
+    ) -> HashSet<&'a WorkspaceNode> {
+        self.transitive_closure_inner(nodes, petgraph::Direction::Outgoing)
+    }
+
+    fn transitive_closure_inner<'a, 'b, I: IntoIterator<Item = &'b WorkspaceNode>>(
+        &'a self,
+        nodes: I,
+        direction: petgraph::Direction,
+    ) -> HashSet<&'a WorkspaceNode> {
+        let indices = nodes
             .into_iter()
             .filter_map(|node| self.node_lookup.get(node))
             .copied();
+
         let mut visited = HashSet::new();
-        petgraph::visit::depth_first_search(&self.workspace_graph, indexes, |event| {
+
+        let visitor = |event| {
             if let petgraph::visit::DfsEvent::Discover(n, _) = event {
                 visited.insert(
                     self.workspace_graph
@@ -165,7 +267,17 @@ impl PackageGraph {
                         .expect("node index found during dfs doesn't exist"),
                 );
             }
-        });
+        };
+
+        match direction {
+            petgraph::Direction::Outgoing => {
+                depth_first_search(&self.workspace_graph, indices, visitor)
+            }
+            petgraph::Direction::Incoming => {
+                depth_first_search(Reversed(&self.workspace_graph), indices, visitor)
+            }
+        };
+
         visited
     }
 
@@ -180,6 +292,65 @@ impl PackageGraph {
             .flatten()
             .collect()
     }
+
+    /// Returns a list of changed packages based on the contents of a previous
+    /// `Lockfile`. This assumes that none of the package.json in the workspace
+    /// change, it is the responsibility of the caller to verify this.
+    pub fn changed_packages(
+        &self,
+        previous: &dyn Lockfile,
+    ) -> Result<Vec<WorkspaceName>, ChangedPackagesError> {
+        let current = self.lockfile().ok_or(ChangedPackagesError::NoLockfile)?;
+
+        let external_deps = self
+            .workspaces()
+            .filter_map(|(_name, info)| {
+                info.unresolved_external_dependencies.as_ref().map(|dep| {
+                    (
+                        info.package_path().to_unix().to_string(),
+                        dep.iter()
+                            .map(|(name, version)| (name.to_owned(), version.to_owned()))
+                            .collect(),
+                    )
+                })
+            })
+            .collect::<HashMap<_, HashMap<_, _>>>();
+
+        let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps)?;
+
+        let current_key = current.global_change_key();
+        let previous_key = previous.global_change_key();
+
+        let global_change = current_key != previous_key;
+
+        let changed = if global_change {
+            None
+        } else {
+            self.workspaces
+                .iter()
+                .filter(|(_name, info)| {
+                    closures.get(info.package_path().as_str())
+                        != info.transitive_dependencies.as_ref()
+                })
+                .map(|(name, _info)| match name {
+                    WorkspaceName::Other(n) => Some(WorkspaceName::Other(n.to_owned())),
+                    // if the root package has changed, then we should report `None`
+                    // since all packages need to be revalidated
+                    WorkspaceName::Root => None,
+                })
+                .collect::<Option<Vec<WorkspaceName>>>()
+        };
+
+        Ok(changed.unwrap_or_else(|| self.workspaces.keys().cloned().collect()))
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ChangedPackagesError {
+    #[error("No lockfile")]
+    NoLockfile,
+    #[error("Lockfile error")]
+    Lockfile(#[from] turborepo_lockfiles::Error),
 }
 
 impl fmt::Display for WorkspaceName {
@@ -358,6 +529,10 @@ mod test {
 
         fn encode(&self) -> std::result::Result<Vec<u8>, turborepo_lockfiles::Error> {
             unreachable!("lockfile encoding not necessary for package graph construction")
+        }
+
+        fn global_change_key(&self) -> Vec<u8> {
+            unreachable!()
         }
     }
 
