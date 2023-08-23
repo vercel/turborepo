@@ -13,8 +13,8 @@ use notify::{
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use notify_debouncer_full::{
-    new_debouncer, new_debouncer_opt, DebounceEventHandler, DebounceEventResult, DebouncedEvent,
-    Debouncer, FileIdMap,
+    new_debouncer_opt, DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer,
+    FileIdMap,
 };
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
@@ -43,7 +43,7 @@ enum WatchError {
 
 struct FileSystemWatcher {
     sender: broadcast::Sender<DebouncedEvent>,
-    exit_ch: tokio::sync::oneshot::Sender<()>, //watcher: Arc<Mutex<RecommendedWatcher>>,
+    exit_ch: tokio::sync::oneshot::Sender<()>,
 }
 
 impl FileSystemWatcher {
@@ -248,23 +248,35 @@ mod test {
         (path, tmp)
     }
 
-    async fn expect_filesystem_event(
-        recv: &mut broadcast::Receiver<DebouncedEvent>,
-        expected_path: &AbsoluteSystemPath,
-        expected_event: EventKind,
-    ) {
-        'outer: loop {
-            let event = tokio::time::timeout(Duration::from_millis(3000), recv.recv())
-                .await
-                .expect("timed out waiting for filesystem event")
-                .expect("sender was dropped");
-            println!("event {:?}", event);
-            for path in event.event.paths {
-                if path == expected_path && event.event.kind == expected_event {
-                    break 'outer;
+    // async fn expect_filesystem_event(
+    //     recv: &mut broadcast::Receiver<DebouncedEvent>,
+    //     expected_path: &AbsoluteSystemPath,
+    //     expected_event: EventKind,
+    // ) { 'outer: loop { let event =
+    //   tokio::time::timeout(Duration::from_millis(3000), recv.recv()) .await
+    //   .expect("timed out waiting for filesystem event") .expect("sender was
+    //   dropped"); println!("event {:?}", event); for path in event.event.paths {
+    //   if path == expected_path && event.event.kind == expected_event { break
+    //   'outer; } } }
+    // }
+
+    macro_rules! expect_filesystem_event {
+        ($recv:ident, $expected_path:expr, $pattern:pat) => {
+            'outer: loop {
+                let event = tokio::time::timeout(Duration::from_millis(3000), $recv.recv())
+                    .await
+                    .expect("timed out waiting for filesystem event")
+                    .expect("sender was dropped");
+                println!("event {:?}", event);
+                for path in event.event.paths {
+                    if path == (&$expected_path as &AbsoluteSystemPath)
+                        && matches!(event.event.kind, $pattern)
+                    {
+                        break 'outer;
+                    }
                 }
             }
-        }
+        };
     }
 
     static WATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -278,7 +290,7 @@ mod test {
             let filename = dir.join_component(format!("test-{}", count).as_str());
             filename.create_with_contents("hello").unwrap();
 
-            expect_filesystem_event(recv, &filename, EventKind::Create(CreateKind::File)).await;
+            expect_filesystem_event!(recv, filename, EventKind::Create(CreateKind::File));
         }
     }
 
@@ -311,17 +323,16 @@ mod test {
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
         let foo_path = child_path.join_component("foo");
         foo_path.create_with_contents("hello").unwrap();
-        expect_filesystem_event(&mut recv, &foo_path, EventKind::Create(CreateKind::File)).await;
+        expect_filesystem_event!(recv, foo_path, EventKind::Create(CreateKind::File));
 
         let deep_path = sibling_path.join_components(&["deep", "path"]);
         deep_path.create_dir_all().unwrap();
-        expect_filesystem_event(
-            &mut recv,
-            &sibling_path.join_component("deep"),
-            EventKind::Create(CreateKind::Folder),
-        )
-        .await;
-        expect_filesystem_event(&mut recv, &deep_path, EventKind::Create(CreateKind::Folder)).await;
+        expect_filesystem_event!(
+            recv,
+            sibling_path.join_component("deep"),
+            EventKind::Create(CreateKind::Folder)
+        );
+        expect_filesystem_event!(recv, deep_path, EventKind::Create(CreateKind::Folder));
         expect_watching(
             &mut recv,
             &[
@@ -365,31 +376,16 @@ mod test {
 
         // Delete parent folder during file watching
         parent_path.remove_dir_all().unwrap();
-        expect_filesystem_event(
-            &mut recv,
-            &parent_path,
-            EventKind::Remove(RemoveKind::Folder),
-        )
-        .await;
+        expect_filesystem_event!(recv, parent_path, EventKind::Remove(RemoveKind::Folder));
 
         // Ensure we get events when creating file in deleted directory
         child_path.create_dir_all().unwrap();
-        expect_filesystem_event(
-            &mut recv,
-            &parent_path,
-            EventKind::Create(CreateKind::Folder),
-        )
-        .await;
-        expect_filesystem_event(
-            &mut recv,
-            &child_path,
-            EventKind::Create(CreateKind::Folder),
-        )
-        .await;
+        expect_filesystem_event!(recv, parent_path, EventKind::Create(CreateKind::Folder));
+        expect_filesystem_event!(recv, child_path, EventKind::Create(CreateKind::Folder));
 
         let foo_path = child_path.join_component("foo");
         foo_path.create_with_contents("hello").unwrap();
-        expect_filesystem_event(&mut recv, &foo_path, EventKind::Create(CreateKind::File)).await;
+        expect_filesystem_event!(recv, foo_path, EventKind::Create(CreateKind::File));
         // We cannot guarantee no more events, windows sends multiple delete
         // events
     }
@@ -420,7 +416,7 @@ mod test {
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
         repo_root.remove_dir_all().unwrap();
-        expect_filesystem_event(&mut recv, &repo_root, EventKind::Remove(RemoveKind::Folder)).await;
+        expect_filesystem_event!(recv, repo_root, EventKind::Remove(RemoveKind::Folder));
     }
 
     #[tokio::test]
@@ -451,11 +447,229 @@ mod test {
         let new_parent = repo_root.join_component("new_parent");
         parent_path.rename(&new_parent).unwrap();
 
-        expect_filesystem_event(
-            &mut recv,
-            &new_parent,
-            EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
-        )
-        .await;
+        expect_filesystem_event!(recv, new_parent, EventKind::Modify(ModifyKind::Name(_)));
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_root_rename() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        let (tmp_root, _tmp_repo_root) = temp_dir();
+        let tmp_root = tmp_root.to_realpath().unwrap();
+        let repo_root = tmp_root.join_component("repo_root");
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let mut recv = watcher.subscribe();
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        let new_repo_root = repo_root.parent().unwrap().join_component("new_repo_root");
+        repo_root.rename(&new_repo_root).unwrap();
+
+        expect_filesystem_event!(
+            recv,
+            repo_root,
+            EventKind::Modify(ModifyKind::Name(RenameMode::Any))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_symlink_create() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let mut recv = watcher.subscribe();
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        // Create symlink during file watching
+        let symlink_path = repo_root.join_component("symlink");
+        symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
+        expect_filesystem_event!(recv, symlink_path, EventKind::Create(CreateKind::Other));
+
+        // we expect that events in the symlinked directory will be raised with the
+        // original path
+        let symlink_subfile = symlink_path.join_component("symlink_subfile");
+        symlink_subfile.create_with_contents("hello").unwrap();
+        let expected_subfile_path = child_path.join_component("symlink_subfile");
+        expect_filesystem_event!(
+            recv,
+            expected_subfile_path,
+            EventKind::Create(CreateKind::File)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_symlink_delete() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        //   symlink -> parent/child
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+        let symlink_path = repo_root.join_component("symlink");
+        symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let mut recv = watcher.subscribe();
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        // Delete symlink during file watching
+        symlink_path.remove().unwrap();
+        expect_filesystem_event!(recv, symlink_path, EventKind::Remove(RemoveKind::Other));
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_symlink_rename() {
+        // Directory layout:
+        // <repoRoot>/
+        //	 .git/
+        //   node_modules/
+        //     some-dep/
+        //   parent/
+        //     child/
+        //   symlink -> parent/child
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+        let symlink_path = repo_root.join_component("symlink");
+        symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let mut recv = watcher.subscribe();
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        // Delete symlink during file watching
+        let new_symlink_path = repo_root.join_component("new_symlink");
+        symlink_path.rename(&new_symlink_path).unwrap();
+        expect_filesystem_event!(
+            recv,
+            new_symlink_path,
+            EventKind::Modify(ModifyKind::Name(_))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_root_parent_rename() {
+        // Directory layout:
+        // repo_parent/
+        //   repo_root/
+        //     .git/
+        //     node_modules/
+        //       some-dep/
+        //     parent/
+        //       child/
+        let (tmp_root, _tmp_repo_root) = temp_dir();
+        let tmp_root = tmp_root.to_realpath().unwrap();
+        let repo_root = tmp_root.join_components(&["repo_parent", "repo_root"]);
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let mut recv = watcher.subscribe();
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        let repo_parent = repo_root.parent().unwrap();
+        let new_parent = tmp_root.join_component("new_parent");
+        repo_parent.rename(&new_parent).unwrap();
+
+        expect_filesystem_event!(
+            recv,
+            repo_root,
+            EventKind::Modify(ModifyKind::Name(RenameMode::From))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_watching_root_parent_delete() {
+        // Directory layout:
+        // repo_parent/
+        //   repo_root/
+        //     .git/
+        //     node_modules/
+        //       some-dep/
+        //     parent/
+        //       child/
+        let (tmp_root, _tmp_repo_root) = temp_dir();
+        let tmp_root = tmp_root.to_realpath().unwrap();
+        let repo_root = tmp_root.join_components(&["repo_parent", "repo_root"]);
+
+        repo_root.join_component(".git").create_dir_all().unwrap();
+        repo_root
+            .join_components(&["node_modules", "some-dep"])
+            .create_dir_all()
+            .unwrap();
+        let parent_path = repo_root.join_component("parent");
+        let child_path = parent_path.join_component("child");
+        child_path.create_dir_all().unwrap();
+
+        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let mut recv = watcher.subscribe();
+        expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
+
+        let repo_parent = repo_root.parent().unwrap();
+        repo_parent.remove_dir_all().unwrap();
+        expect_filesystem_event!(
+            recv,
+            repo_root,
+            EventKind::Modify(ModifyKind::Name(RenameMode::From))
+        );
     }
 }

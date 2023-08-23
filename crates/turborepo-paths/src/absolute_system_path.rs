@@ -363,6 +363,7 @@ impl AbsoluteSystemPath {
 impl<'a> From<&'a AbsoluteSystemPath> for CandidatePath<'a> {
     fn from(value: &'a AbsoluteSystemPath) -> Self {
         CandidatePath::from(value.0.as_std_path())
+    }
 }
 
 impl PartialEq<AbsoluteSystemPath> for Path {
@@ -374,6 +375,7 @@ impl PartialEq<AbsoluteSystemPath> for Path {
 }
 
 impl PartialEq<AbsoluteSystemPath> for PathBuf {
+    fn eq(&self, other: &AbsoluteSystemPath) -> bool {
         self.as_path().eq(other)
     }
 }
