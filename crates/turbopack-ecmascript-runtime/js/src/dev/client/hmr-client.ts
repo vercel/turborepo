@@ -7,23 +7,22 @@ type SendMessage = typeof import("./websocket").sendMessage;
 
 export type ClientOptions = {
   assetPrefix: string;
-  addEventListener: typeof import("./websocket").addEventListener;
+  addMessageListener: typeof import("./websocket").addMessageListener;
   sendMessage: SendMessage;
 };
 
 // TURBOPACK CLient
 export function connect({
   assetPrefix,
-  addEventListener,
+  addMessageListener,
   sendMessage,
 }: ClientOptions) {
-  addEventListener((event) => {
-    switch (event.type) {
-      case "connected":
+  addMessageListener((msg) => {
+    switch (msg.type) {
+      case "turbopack-connected":
         handleSocketConnected(sendMessage);
         break;
-      case "message":
-        const msg: ServerMessage = JSON.parse(event.message.data);
+      default:
         handleSocketMessage(msg);
         break;
     }
@@ -495,7 +494,8 @@ export function setHooks(newHooks: typeof hooks) {
   Object.assign(hooks, newHooks);
 }
 
-function handleSocketMessage(msg: ServerMessage) {
+function handleSocketMessage(event: any) {
+  const msg = JSON.parse(event.data);
   sortIssues(msg.issues);
 
   const hasCriticalIssues = handleIssues(msg);
