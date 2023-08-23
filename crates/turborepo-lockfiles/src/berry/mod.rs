@@ -14,6 +14,7 @@ use de::SemverString;
 use identifiers::{Descriptor, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
 
@@ -546,6 +547,21 @@ impl Lockfile for BerryLockfile {
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
+    }
+
+    fn global_change_key(&self) -> Vec<u8> {
+        let mut buf = vec![b'b', b'e', b'r', b'r', b'y', 0];
+
+        serde_json::to_writer(
+            &mut buf,
+            &json!({
+                "version": &self.data.metadata.version,
+                "cache_key": &self.data.metadata.cache_key,
+            }),
+        )
+        .expect("writing to Vec cannot fail");
+
+        buf
     }
 }
 

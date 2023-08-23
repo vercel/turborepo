@@ -83,7 +83,7 @@ impl<'a> CacheWriter<'a> {
         let file_info = source_path.symlink_metadata()?;
 
         // Normalize the path within the cache
-        let mut file_path = file_path.to_unix()?;
+        let mut file_path = file_path.to_unix();
         file_path.make_canonical_for_tar(file_info.is_dir());
 
         let mut header = Self::create_header(&source_path, &file_info)?;

@@ -50,8 +50,18 @@ pub trait Lockfile {
     fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
         Ok(Vec::new())
     }
+
+    /// Present a global change key which is compared against two lockfiles
+    ///
+    /// Impl notes: please prefix this key with some magic identifier
+    /// to prevent clashes. we are not worried about inter-version
+    /// compatibility so these keys don't need to be stable. They are
+    /// ephemeral.
+    fn global_change_key(&self) -> Vec<u8>;
 }
 
+/// Takes a lockfile, and a map of workspace directory paths -> (package name,
+/// version) and calculates the transitive closures for all of them
 pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspaces: HashMap<String, HashMap<String, String>>,

@@ -394,7 +394,7 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
                     .package_json_path
                     .parent()
                     .unwrap_or(AnchoredSystemPath::new("")?)
-                    .to_unix()?;
+                    .to_unix();
                 let workspace_string = workspace_path.as_str();
                 let external_deps = entry
                     .unresolved_external_dependencies
@@ -609,7 +609,7 @@ impl WorkspaceInfo {
             .package_json_path
             .parent()
             .unwrap_or_else(|| AnchoredSystemPath::new("").expect("empty path is anchored"))
-            .to_unix()?;
+            .to_unix();
         Ok(unix.to_string())
     }
 }
