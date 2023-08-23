@@ -71,13 +71,13 @@ function subscribeToUpdates(
   resource: ResourceIdentifier
 ): () => void {
   sendJSON(sendMessage, {
-    type: "subscribe",
+    type: "turbopack-subscribe",
     ...resource,
   });
 
   return () => {
     sendJSON(sendMessage, {
-      type: "unsubscribe",
+      type: "turbopack-unsubscribe",
       ...resource,
     });
   };
