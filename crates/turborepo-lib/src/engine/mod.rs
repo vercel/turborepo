@@ -150,7 +150,7 @@ impl Engine<Built> {
                         .expect("index comes from iterating the graph and must be present")
                     else {
                         // No need to check the root node
-                        return Ok(false);
+                        continue;
                     };
 
                     let task_definition = self.task_definitions.get(dep_id).ok_or_else(|| {
