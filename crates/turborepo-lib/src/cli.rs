@@ -5,7 +5,7 @@ use camino::Utf8PathBuf;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_ui::UI;
 
@@ -773,7 +773,7 @@ pub async fn run(
         #[cfg(not(feature = "run-stub"))]
         Command::Run(args) => {
             if args.experimental_rust_codepath {
-                warn!("rust codepath enabled, but not compiled with support");
+                tracing::warn!("rust codepath enabled, but not compiled with support");
             }
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
