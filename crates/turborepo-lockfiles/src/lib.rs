@@ -25,7 +25,7 @@ pub struct Package {
 // This trait will only be used when migrating the Go lockfile implementations
 // to Rust. Once the migration is complete we will leverage petgraph for doing
 // our graph calculations.
-pub trait Lockfile {
+pub trait Lockfile: Send + Sync {
     // Given a workspace, a package it imports and version returns the key, resolved
     // version, and if it was found
     fn resolve_package(
