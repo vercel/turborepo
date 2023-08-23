@@ -20,6 +20,7 @@ pub mod references;
 pub mod resolve;
 pub(crate) mod special_cases;
 pub(crate) mod static_code;
+mod swc_comments;
 pub mod text;
 pub(crate) mod transform;
 pub mod tree_shake;
