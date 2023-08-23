@@ -2410,13 +2410,13 @@ dependencies = [
 
 [[package]]
 name = "filetime"
-version = "0.2.21"
+version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cbc844cecaee9d4443931972e1289c8ff485cb4cc2767cb03ca139ed6885153"
+checksum = "d4029edd3e734da6fe05b6cd7bd2960760a616bd2ddd0d59a0124746d6272af0"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "redox_syscall 0.2.16",
+ "redox_syscall 0.3.5",
  "windows-sys 0.48.0",
 ]
 
@@ -4545,20 +4545,21 @@ dependencies = [
 
 [[package]]
 name = "notify"
-version = "6.0.1"
+version = "6.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5738a2795d57ea20abec2d6d76c6081186709c0024187cd5977265eda6598b51"
+checksum = "6205bd8bb1e454ad2e27422015fb5e4f2bcc7e08fa8f27058670d208324a4d2d"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.3.3",
  "crossbeam-channel",
  "filetime",
  "fsevent-sys 4.1.0",
  "inotify 0.9.6",
  "kqueue",
  "libc",
+ "log",
  "mio 0.8.6",
  "walkdir",
- "windows-sys 0.45.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -4568,7 +4569,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "416969970ec751a5d702a88c6cd19ac1332abe997fce43f96db0418550426241"
 dependencies = [
  "file-id",
- "notify 6.0.1",
+ "notify 6.1.1",
  "parking_lot",
  "walkdir",
 ]
@@ -9794,8 +9795,12 @@ name = "turborepo-filewatch"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitflags 1.3.2",
  "dashmap",
- "notify 6.0.1",
+ "fsevent-sys 4.1.0",
+ "itertools",
+ "libc",
+ "notify 6.1.1",
  "notify-debouncer-full",
  "tempfile",
  "thiserror",

@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use itertools::Itertools;
 use notify::event::{CreateKind, EventAttributes, RemoveKind};
 //use notify::{watcher, DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use notify_debouncer_full::{
@@ -18,8 +19,11 @@ use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::AbsoluteSystemPath;
 use walkdir::WalkDir;
+
+#[cfg(target_os = "macos")]
+mod fsevent;
 
 #[derive(Default)]
 struct DiskWatcher {
@@ -38,6 +42,8 @@ enum WatchError {
     Stopped(#[from] std::sync::mpsc::RecvError),
     #[error("enumerating recursive watch: {0}")]
     WalkDir(#[from] walkdir::Error),
+    #[error("filewatching failed to start: {0}")]
+    Setup(String),
 }
 
 // impl DiskWatcher {
@@ -90,10 +96,13 @@ impl FileSystemWatcher {
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let watch_root = root.to_owned();
         let broadcast_sender = sender.clone();
-        let debouncer = run_watcher(&watch_root, send_file_events).unwrap();
+        let debouncer = run_watcher(&watch_root, send_file_events, &mut recv_file_events).unwrap();
         println!("watching {}", &watch_root);
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         tokio::task::spawn(async move {
+            #[cfg(target_os = "macos")]
+            wait_for_cookie(&watch_root, &mut recv_file_events).await?;
+
             let mut debouncer = debouncer;
             let mut exit_signal = exit_signal;
             'outer: loop {
@@ -173,6 +182,7 @@ fn watch_recursively(
 fn run_watcher(
     root: &AbsoluteSystemPath,
     sender: mpsc::Sender<DebounceEventResult>,
+    recv: &mut mpsc::Receiver<DebounceEventResult>,
 ) -> Result<Debouncer<RecommendedWatcher, FileIdMap>, WatchError> {
     let mut debouncer = new_debouncer(Duration::from_millis(1), None, move |res| {
         println!("event {:?}", res);
@@ -188,6 +198,44 @@ fn run_watcher(
     // Don't synthesize initial events
     watch_recursively(root.as_std_path(), debouncer.watcher(), None)?;
     Ok(debouncer)
+}
+
+async fn wait_for_cookie(
+    root: &AbsoluteSystemPath,
+    recv: &mut mpsc::Receiver<DebounceEventResult>,
+) -> Result<(), WatchError> {
+    let cookie_path = root.join_component(".turbo-cookie");
+    cookie_path.create_with_contents("cookie").map_err(|e| {
+        WatchError::Setup(format!("failed to write cookie to {}: {}", cookie_path, e))
+    })?;
+    loop {
+        let events = tokio::time::timeout(Duration::from_millis(2000), recv.recv())
+            .await
+            .map_err(|_| WatchError::Setup("waiting for cookie timed out".to_string()))?
+            .ok_or_else(|| {
+                WatchError::Setup(
+                    "filewatching closed before cookie file  was observed".to_string(),
+                )
+            })?
+            .map_err(|errs| {
+                WatchError::Setup(format!(
+                    "initial watch encountered errors: {}",
+                    errs.into_iter().map(|e| e.to_string()).join(", ")
+                ))
+            })?;
+        for event in events {
+            for path in &event.paths {
+                println!("CHECKING {} {:?}", path.display(), event.kind);
+                if path == (&cookie_path as &AbsoluteSystemPath)
+                /* && event.kind == EventKind::Create(CreateKind::File) */
+                {
+                    println!("FOUND COOKIE");
+                    let _ = cookie_path.remove();
+                    return Ok(());
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
