@@ -3,8 +3,6 @@
 /// <reference path="../runtime/base/protocol.d.ts" />
 /// <reference path="../runtime/base/extensions.d.ts" />
 
-import type { WebSocketMessage } from "./websocket";
-
 type SendMessage = typeof import("./websocket").sendMessage;
 
 export type ClientOptions = {
@@ -19,7 +17,7 @@ export function connect({ addMessageListener, sendMessage }: ClientOptions) {
         handleSocketConnected(sendMessage);
         break;
       default:
-        handleSocketMessage(msg);
+        handleSocketMessage(msg as ServerMessage);
         break;
     }
   });
@@ -490,7 +488,7 @@ export function setHooks(newHooks: typeof hooks) {
   Object.assign(hooks, newHooks);
 }
 
-function handleSocketMessage(msg: WebSocketMessage) {
+function handleSocketMessage(msg: ServerMessage) {
   sortIssues(msg.issues);
 
   const hasCriticalIssues = handleIssues(msg);
