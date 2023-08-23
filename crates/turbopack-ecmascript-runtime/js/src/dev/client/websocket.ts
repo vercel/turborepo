@@ -19,10 +19,10 @@ function getSocketProtocol(assetPrefix: string): string {
 
 export type WebSocketMessage =
   | {
-      event: "turbopack-connected";
+      type: "turbopack-connected";
     }
   | {
-      event: "turbopack-message";
+      type: "turbopack-message";
       data: Record<string, any>;
     };
 
@@ -51,7 +51,7 @@ export function connectHMR(options: HMROptions) {
     console.log("[HMR] connecting...");
 
     function handleOnline() {
-      const connected = { event: "turbopack-connected" as const };
+      const connected = { type: "turbopack-connected" as const };
       eventCallbacks.forEach((cb) => {
         cb(connected);
       });
@@ -64,7 +64,7 @@ export function connectHMR(options: HMROptions) {
       // lastActivity = Date.now()
 
       const message = {
-        event: "turbopack-message" as const,
+        type: "turbopack-message" as const,
         data: JSON.parse(event.data),
       };
       eventCallbacks.forEach((cb) => {
