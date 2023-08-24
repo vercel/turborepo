@@ -3,7 +3,7 @@ use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheOpts;
 
 use crate::{
-    cli::{Command, DryRunMode, EnvMode, LogPrefix, OutputLogsMode, RunArgs},
+    cli::{Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, RunArgs},
     Args,
 };
 
@@ -70,9 +70,11 @@ pub struct RunOpts<'a> {
     pub graph: Option<GraphOpts<'a>>,
     pub(crate) no_daemon: bool,
     pub(crate) single_package: bool,
-    log_prefix: LogPrefix,
+    pub log_prefix: LogPrefix,
+    pub log_order: LogOrder,
     summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
+    pub is_github_actions: bool,
 }
 
 #[derive(Debug)]
@@ -99,9 +101,18 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             f => GraphOpts::File(f),
         });
 
+        let (is_github_actions, log_order, log_prefix) =
+            match (args.log_order, turborepo_ci::Vendor::get_constant()) {
+                (LogOrder::Auto, Some("GITHUB_ACTIONS")) => {
+                    (true, LogOrder::Grouped, LogPrefix::None)
+                }
+                _ => (false, args.log_order, args.log_prefix),
+            };
+
         Ok(Self {
             tasks: args.tasks.as_slice(),
-            log_prefix: args.log_prefix,
+            log_prefix,
+            log_order,
             summarize: args.summarize,
             experimental_space_id: args.experimental_space_id.clone(),
             framework_inference: args.framework_inference,
@@ -117,6 +128,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             graph,
             dry_run_json: matches!(args.dry_run, Some(DryRunMode::Json)),
             dry_run: args.dry_run.is_some(),
+            is_github_actions,
         })
     }
 }
