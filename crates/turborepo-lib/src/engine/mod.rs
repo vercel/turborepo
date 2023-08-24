@@ -149,7 +149,8 @@ impl Engine<Built> {
                         .node_weight(dep_index)
                         .expect("index comes from iterating the graph and must be present")
                     else {
-                        panic!("{task_id} depends on root task node");
+                        // No need to check the root node
+                        continue;
                     };
 
                     let task_definition = self.task_definitions.get(dep_id).ok_or_else(|| {

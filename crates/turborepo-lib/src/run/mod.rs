@@ -177,7 +177,12 @@ impl Run {
 
         engine
             .validate(&pkg_dep_graph, opts.run_opts.concurrency)
-            .map_err(|errors| anyhow!("Validation failed:\n{}", errors.into_iter().join("\n")))?;
+            .map_err(|errors| {
+                anyhow!(
+                    "error preparing engine: Invalid persistent task configuration:\n{}",
+                    errors.into_iter().join("\n")
+                )
+            })?;
 
         if let Some(graph_opts) = opts.run_opts.graph {
             match graph_opts {
