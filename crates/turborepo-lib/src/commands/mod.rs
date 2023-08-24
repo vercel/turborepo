@@ -57,7 +57,7 @@ impl CommandBase {
         })
     }
 
-    fn turbo_config_init(&self) -> Result<ConfigurationOptions, String> {
+    fn turbo_config_init(&self) -> Result<ConfigurationOptions, anyhow::Error> {
         TurborepoConfigBuilder::new(&self.repo_root)
             // The below should be deprecated and removed.
             .with_api_url(self.args.api.clone())
@@ -68,7 +68,7 @@ impl CommandBase {
             .build()
     }
 
-    pub fn turbo_config(&self) -> Result<&ConfigurationOptions, String> {
+    pub fn turbo_config(&self) -> Result<&ConfigurationOptions, anyhow::Error> {
         self.config.get_or_try_init(|| self.turbo_config_init())
     }
 

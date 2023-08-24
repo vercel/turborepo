@@ -9,7 +9,11 @@ use crate::{
     package_json::PackageJson,
 };
 
+const DEFAULT_API_URL: &str = "https://vercel.com/api";
+const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 20;
+
+use anyhow::{anyhow, Error};
 
 macro_rules! create_builder {
     ($func_name:ident, $property_name:ident, $type:ty) => {
@@ -69,17 +73,17 @@ impl ConfigurationOptions {
 
     #[allow(dead_code)]
     pub fn signature(&self) -> bool {
-        self.signature.as_deref().unwrap_or_default()
+        self.signature.unwrap_or_default()
     }
 
     #[allow(dead_code)]
     pub fn preflight(&self) -> bool {
-        self.preflight.as_deref().unwrap_or_default()
+        self.preflight.unwrap_or_default()
     }
 
     #[allow(dead_code)]
-    pub fn timeout(&self) -> bool {
-        self.timeout.as_deref().unwrap_or(DEFAULT_TIMEOUT)
+    pub fn timeout(&self) -> u64 {
+        self.timeout.unwrap_or(DEFAULT_TIMEOUT)
     }
 }
 
@@ -176,31 +180,31 @@ impl config::Source for ConfigurationOptions {
     }
 }
 
-fn get_global_config() -> Result<ConfigurationOptions, String> {
+fn get_global_config() -> Result<ConfigurationOptions, Error> {
     let global_config_path = default_user_config_path().map_err(|e| {
         dbg!(e);
-        "global_path"
+        anyhow!("global_path")
     })?;
     let contents = std::fs::read_to_string(global_config_path).map_err(|e| {
         dbg!(e);
-        "global_read"
+        anyhow!("global_read")
     })?;
     let global_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
         dbg!(e);
-        "global_de"
+        anyhow!("global_de")
     })?;
     Ok(global_config)
 }
 
-fn get_local_config(repo_root: &AbsoluteSystemPath) -> Result<ConfigurationOptions, String> {
+fn get_local_config(repo_root: &AbsoluteSystemPath) -> Result<ConfigurationOptions, Error> {
     let local_config_path = repo_root.join_components(&[".turbo", "config.json"]);
     let contents = local_config_path.read_to_string().map_err(|e| {
         dbg!(e);
-        "local_read"
+        anyhow!("local_read")
     })?;
     let local_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
         dbg!(e);
-        "local_de"
+        anyhow!("local_de")
     })?;
     Ok(local_config)
 }
@@ -211,9 +215,7 @@ fn get_lowercased_env_vars() -> HashMap<String, String> {
         .collect()
 }
 
-fn get_env_var_config(
-    environment: HashMap<String, String>,
-) -> Result<ConfigurationOptions, String> {
+fn get_env_var_config(environment: HashMap<String, String>) -> Result<ConfigurationOptions, Error> {
     let mut vercel_artifacts_mapping = HashMap::new();
     vercel_artifacts_mapping.insert(String::from("vercel_artifacts_token"), "token");
     vercel_artifacts_mapping.insert(String::from("vercel_artifacts_owner"), "team_id");
@@ -254,7 +256,7 @@ fn get_env_var_config(
         match signature.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(String::from("parse_signature")),
+            _ => return Err(anyhow!("parse_signature")),
         }
     } else {
         None
@@ -265,7 +267,7 @@ fn get_env_var_config(
         match preflight.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(String::from("parse_preflight")),
+            _ => return Err(anyhow!("parse_preflight")),
         }
     } else {
         None
@@ -275,7 +277,7 @@ fn get_env_var_config(
     let timeout = if let Some(timeout) = output_map.get("timeout").cloned() {
         Some(timeout.parse::<u64>().map_err(|e| {
             dbg!(e);
-            "parse_timeout"
+            anyhow!("parse_timeout")
         })?)
     } else {
         None
@@ -316,7 +318,7 @@ impl TurborepoConfigBuilder {
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
 
-    pub fn build(&self) -> Result<ConfigurationOptions, String> {
+    pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
         // - shared configuration (package.json .turbo)
         // - shared configuration (turbo.json)
@@ -329,12 +331,12 @@ impl TurborepoConfigBuilder {
         let root_package_json = PackageJson::load(&self.repo_root.join_component("package.json"))
             .map_err(|e| {
             dbg!(e);
-            "package_json"
+            anyhow!("package_json")
         })?;
         let turbo_json =
             RawTurboJSON::read(&self.repo_root.join_component("turbo.json")).map_err(|e| {
                 dbg!(e);
-                "raw_turbo_json"
+                anyhow!("raw_turbo_json")
             })?;
         let global_config = get_global_config()?;
         let local_config = get_local_config(&self.repo_root)?;
@@ -349,52 +351,52 @@ impl TurborepoConfigBuilder {
             .set_override_option("api_url", self.override_config.api_url.clone())
             .map_err(|e| {
                 dbg!(e);
-                "api_url"
+                anyhow!("api_url")
             })?
             .set_override_option("login_url", self.override_config.login_url.clone())
             .map_err(|e| {
                 dbg!(e);
-                "login_url"
+                anyhow!("login_url")
             })?
             .set_override_option("team_slug", self.override_config.team_slug.clone())
             .map_err(|e| {
                 dbg!(e);
-                "team_slug"
+                anyhow!("team_slug")
             })?
             .set_override_option("team_id", self.override_config.team_id.clone())
             .map_err(|e| {
                 dbg!(e);
-                "team_id"
+                anyhow!("team_id")
             })?
             .set_override_option("token", self.override_config.token.clone())
             .map_err(|e| {
                 dbg!(e);
-                "token"
+                anyhow!("token")
             })?
             .set_override_option("signature", self.override_config.signature.clone())
             .map_err(|e| {
                 dbg!(e);
-                "signature"
+                anyhow!("signature")
             })?
             .set_override_option("preflight", self.override_config.preflight.clone())
             .map_err(|e| {
                 dbg!(e);
-                "preflight"
+                anyhow!("preflight")
             })?
             .set_override_option("timeout", self.override_config.timeout.clone())
             .map_err(|e| {
                 dbg!(e);
-                "timeout"
+                anyhow!("timeout")
             })?
             .build()
             .map_err(|e| {
                 dbg!(e);
-                "build"
+                anyhow!("build")
             })?
             .try_deserialize()
             .map_err(|e| {
                 dbg!(e);
-                "try_deserialize"
+                anyhow!("try_deserialize")
             })?;
 
         Ok(output)

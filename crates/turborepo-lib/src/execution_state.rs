@@ -56,7 +56,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
             team_slug: config.team_slug(),
             api_url: config.api_url(),
             use_preflight: config.preflight(),
-            timeout: config.remote_cache_timeout(),
+            timeout: config.timeout(),
         };
 
         let spaces_api_client_config = SpacesAPIClientConfig {
@@ -65,7 +65,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
             team_slug: config.team_slug(),
             api_url: config.api_url(),
             use_preflight: config.preflight(),
-            timeout: config.remote_cache_timeout(),
+            timeout: config.timeout(),
         };
 
         Ok(ExecutionState {
