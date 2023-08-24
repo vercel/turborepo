@@ -108,23 +108,6 @@ impl CommandBase {
         Ok(self.user_config.get_mut().unwrap())
     }
 
-    fn client_config_init(&self) -> Result<ClientConfig, ConfigError> {
-        ClientConfigLoader::new()
-            .with_remote_cache_timeout(self.args.remote_cache_timeout)
-            .load()
-    }
-
-    pub fn client_config(&self) -> Result<&ClientConfig, ConfigError> {
-        self.client_config
-            .get_or_try_init(|| self.client_config_init())
-    }
-
-    pub fn client_config_mut(&mut self) -> Result<&mut ClientConfig, ConfigError> {
-        // Approximates `get_mut_or_try_init`
-        self.client_config()?;
-        Ok(self.client_config.get_mut().unwrap())
-    }
-
     pub fn args(&self) -> &Args {
         &self.args
     }
