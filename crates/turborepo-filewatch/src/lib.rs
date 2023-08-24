@@ -160,6 +160,7 @@ fn run_watcher(
     Ok(debouncer)
 }
 
+#[cfg(target_os = "macos")]
 fn make_debouncer<F: DebounceEventHandler>(
     event_handler: F,
 ) -> Result<Debouncer<Backend, FileIdMap>, notify::Error> {
