@@ -1,17 +1,20 @@
 #![allow(dead_code)]
 
+mod cache;
 mod global_hash;
 mod scope;
 pub mod task_id;
 
-use std::io::IsTerminal;
+use std::io::{BufWriter, IsTerminal};
 
 use anyhow::{anyhow, Context as ErrorContext, Result};
 use itertools::Itertools;
 use tracing::{debug, info};
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::{http::APIAuth, AsyncCache};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
+use turborepo_ui::ColorSelector;
 
 use self::task_id::TaskName;
 use crate::{
@@ -20,10 +23,10 @@ use crate::{
     daemon::DaemonConnector,
     engine::EngineBuilder,
     manager::Manager,
-    opts::Opts,
+    opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
-    run::global_hash::get_global_hash_inputs,
+    run::{cache::RunCache, global_hash::get_global_hash_inputs},
 };
 
 #[derive(Debug)]
@@ -53,7 +56,7 @@ impl Run {
             PackageJson::load(&package_json_path).context("failed to read package.json")?;
         let mut opts = self.opts()?;
 
-        let _is_structured_output = opts.run_opts.graph_dot || opts.run_opts.dry_run_json;
+        let _is_structured_output = opts.run_opts.graph.is_some() || opts.run_opts.dry_run_json;
 
         let is_single_package = opts.run_opts.single_package;
 
@@ -72,6 +75,8 @@ impl Run {
 
         // There's some warning handling code in Go that I'm ignoring
         let is_ci_and_not_tty = turborepo_ci::is_ci() && !std::io::stdout().is_terminal();
+
+        let mut daemon = None;
         if is_ci_and_not_tty && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
@@ -84,7 +89,7 @@ impl Run {
 
             let client = connector.connect().await?;
             debug!("running in daemon mode");
-            opts.runcache_opts.output_watcher = Some(client);
+            daemon = Some(client);
         }
 
         pkg_dep_graph
@@ -93,20 +98,27 @@ impl Run {
 
         let scm = SCM::new(&self.base.repo_root);
 
-        let filtered_pkgs =
-            scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph, &scm)?;
+        let filtered_pkgs = {
+            let mut filtered_pkgs = scope::resolve_packages(
+                &opts.scope_opts,
+                &self.base.repo_root,
+                &pkg_dep_graph,
+                &scm,
+            )?;
 
-        // TODO: Add this back once scope/filter is implemented.
-        //       Currently this code has lifetime issues
-        // if filtered_pkgs.len() != pkg_dep_graph.len() {
-        //     for target in targets {
-        //         let key = task_id::root_task_id(target);
-        //         if pipeline.contains_key(&key) {
-        //             filtered_pkgs.insert(task_id::ROOT_PKG_NAME.to_string());
-        //             break;
-        //         }
-        //     }
-        // }
+            if filtered_pkgs.len() != pkg_dep_graph.len() {
+                for target in self.targets() {
+                    let task_name = TaskName::from(target.as_str());
+                    if root_turbo_json.pipeline.contains_key(&task_name) {
+                        filtered_pkgs.insert(WorkspaceName::Root);
+                        break;
+                    }
+                }
+            };
+
+            filtered_pkgs
+        };
+
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let _global_hash_inputs = get_global_hash_inputs(
@@ -134,7 +146,7 @@ impl Run {
             token: token.to_string(),
         });
 
-        let _turbo_cache = AsyncCache::new(
+        let async_cache = AsyncCache::new(
             &opts.cache_opts,
             &self.base.repo_root,
             self.base.api_client()?,
@@ -154,12 +166,7 @@ impl Run {
                 .collect(),
         ))
         .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(
-            filtered_pkgs
-                .iter()
-                .map(|workspace| WorkspaceName::from(workspace.as_str()))
-                .collect(),
-        )
+        .with_workspaces(filtered_pkgs.into_iter().collect())
         .with_tasks(
             opts.run_opts
                 .tasks
@@ -171,6 +178,34 @@ impl Run {
         engine
             .validate(&pkg_dep_graph, opts.run_opts.concurrency)
             .map_err(|errors| anyhow!("Validation failed:\n{}", errors.into_iter().join("\n")))?;
+
+        if let Some(graph_opts) = opts.run_opts.graph {
+            match graph_opts {
+                GraphOpts::File(graph_file) => {
+                    let graph_file =
+                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
+                    let file = graph_file.open()?;
+                    let _writer = BufWriter::new(file);
+                    todo!("Need to implement different format support");
+                }
+                GraphOpts::Stdout => {
+                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
+                }
+            }
+            return Ok(());
+        }
+
+        let color_selector = ColorSelector::default();
+
+        let _runcache = RunCache::new(
+            async_cache,
+            &self.base.repo_root,
+            &opts.runcache_opts,
+            color_selector,
+            daemon,
+            self.base.ui,
+        );
+
         Ok(())
     }
 }

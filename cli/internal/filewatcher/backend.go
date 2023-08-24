@@ -79,11 +79,8 @@ func (f *fsNotifyBackend) onFileAdded(name turbopath.AbsoluteSystemPath) error {
 		if err := f.watchRecursively(name, []string{}, synthesizeEvents); err != nil {
 			return errors.Wrapf(err, "failed recursive watch of %v", name)
 		}
-	} else {
-		if err := f.watcher.Add(name.ToString()); err != nil {
-			return errors.Wrapf(err, "failed adding watch to %v", name)
-		}
 	}
+	// Note that for symlinks and regular files, we don't add any watches, including traversing links
 	return nil
 }
 
@@ -135,6 +132,13 @@ outer:
 			if eventType == FileAdded {
 				if err := f.onFileAdded(path); err != nil {
 					f.errors <- err
+				}
+			}
+			if eventType == FileRenamed {
+				// synthesize a delete event for a rename
+				f.events <- Event{
+					Path:      path,
+					EventType: FileDeleted,
 				}
 			}
 			f.events <- Event{

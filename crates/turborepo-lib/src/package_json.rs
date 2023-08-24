@@ -91,7 +91,7 @@ mod test {
     #[test_case(json!({"name": "foo", "pnpm": {"another-field": 1}}) ; "pnpm without patches")]
     fn test_roundtrip(json: Value) {
         let package_json: PackageJson = serde_json::from_value(json.clone()).unwrap();
-        let actual = serde_json::to_value(&package_json).unwrap();
+        let actual = serde_json::to_value(package_json).unwrap();
         assert_eq!(actual, json);
     }
 

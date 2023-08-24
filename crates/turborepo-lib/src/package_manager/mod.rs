@@ -432,9 +432,9 @@ impl PackageManager {
 
     pub fn lockfile_name(&self) -> &'static str {
         match self {
-            PackageManager::Npm => "package-lock.json",
-            PackageManager::Pnpm | PackageManager::Pnpm6 => "pnpm-lock.yaml",
-            PackageManager::Yarn | PackageManager::Berry => "yarn.lock",
+            PackageManager::Npm => npm::LOCKFILE,
+            PackageManager::Pnpm | PackageManager::Pnpm6 => pnpm::LOCKFILE,
+            PackageManager::Yarn | PackageManager::Berry => yarn::LOCKFILE,
         }
     }
 
@@ -494,6 +494,10 @@ impl PackageManager {
                 unreachable!("npm and yarn 1 don't have a concept of patches")
             }
         }
+    }
+
+    pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        turbo_root.join_component(self.lockfile_name())
     }
 }
 
@@ -558,7 +562,7 @@ mod tests {
         for mgr in &[PackageManager::Pnpm, PackageManager::Pnpm6] {
             let found = mgr.get_package_jsons(&basic).unwrap();
             let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
-            assert_eq!(found, basic_expected);
+            assert_eq!(found, basic_expected, "{}", mgr);
         }
     }
 

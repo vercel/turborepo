@@ -21,12 +21,7 @@ use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
 
-use crate::{
-    cli::LinkTarget,
-    commands::CommandBase,
-    config::{RawTurboJSON, SpacesJson},
-    rewrite_json,
-};
+use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
 
 #[derive(Clone)]
 pub(crate) enum SelectedTeam<'a> {
@@ -248,6 +243,11 @@ pub async fn link(
                 )
             })?;
 
+            fs::create_dir_all(base.repo_root.join_component(".turbo"))
+                .context("could not create .turbo directory")?;
+            base.repo_config_mut()?
+                .set_space_team_id(Some(team_id.to_string()))?;
+
             println!(
                 "
     {} {} linked to {}
@@ -460,11 +460,10 @@ fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> 
 
 #[cfg(test)]
 mod test {
-    use std::fs;
+    use std::{cell::OnceCell, fs};
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
-    use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::UI;
     use vercel_api_mock::start_test_server;

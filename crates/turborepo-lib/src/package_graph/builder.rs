@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt,
 };
 
@@ -11,8 +11,12 @@ use turbopath::{
 };
 use turborepo_lockfiles::Lockfile;
 
-use super::{Package, PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
-use crate::{package_json::PackageJson, package_manager::PackageManager};
+use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
+use crate::{
+    package_graph::{PackageName, PackageVersion},
+    package_json::PackageJson,
+    package_manager::PackageManager,
+};
 
 pub struct PackageGraphBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
@@ -390,16 +394,14 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
                     .package_json_path
                     .parent()
                     .unwrap_or(AnchoredSystemPath::new("")?)
-                    .to_unix()?;
+                    .to_unix();
                 let workspace_string = workspace_path.as_str();
                 let external_deps = entry
                     .unresolved_external_dependencies
                     .as_ref()
                     .map(|deps| {
                         deps.iter()
-                            .map(|Package { name, version }| {
-                                (name.to_string(), version.to_string())
-                            })
+                            .map(|(name, version)| (name.to_string(), version.to_string()))
                             .collect()
                     })
                     .unwrap_or_default();
@@ -447,7 +449,7 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
 
 struct Dependencies {
     internal: HashSet<WorkspaceName>,
-    external: HashSet<Package>,
+    external: BTreeMap<PackageName, PackageVersion>,
 }
 
 impl Dependencies {
@@ -462,7 +464,7 @@ impl Dependencies {
             .parent()
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
-        let mut external = HashSet::new();
+        let mut external = BTreeMap::new();
         let splitter = DependencySplitter {
             repo_root,
             workspace_dir,
@@ -472,10 +474,7 @@ impl Dependencies {
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);
             } else {
-                external.insert(Package {
-                    name: name.clone(),
-                    version: version.clone(),
-                });
+                external.insert(name.clone(), version.clone());
             }
         }
         Self { internal, external }
@@ -610,7 +609,7 @@ impl WorkspaceInfo {
             .package_json_path
             .parent()
             .unwrap_or_else(|| AnchoredSystemPath::new("").expect("empty path is anchored"))
-            .to_unix()?;
+            .to_unix();
         Ok(unix.to_string())
     }
 }

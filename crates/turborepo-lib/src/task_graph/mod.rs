@@ -3,7 +3,10 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::run::task_id::TaskName;
+use crate::{
+    cli::OutputLogsMode,
+    run::task_id::{TaskId, TaskName},
+};
 
 pub type Pipeline = HashMap<TaskName<'static>, BookkeepingTaskDefinition>;
 
@@ -19,9 +22,7 @@ pub struct BookkeepingTaskDefinition {
 // experimental. We keep these separated so we can compute a global hash without
 // these.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskDefinitionExperiments {
-    pub(crate) pass_through_env: Vec<String>,
-}
+pub struct TaskDefinitionExperiments {}
 
 // TaskOutputs represents the patterns for including and excluding files from
 // outputs
@@ -29,25 +30,6 @@ pub struct TaskDefinitionExperiments {
 pub struct TaskOutputs {
     pub inclusions: Vec<String>,
     pub exclusions: Vec<String>,
-}
-
-// TaskOutputMode defines the ways turbo can display task output during a run
-#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum TaskOutputMode {
-    // FullTaskOutput will show all task output
-    #[default]
-    Full,
-    // None will hide all task output
-    None,
-    // Hash will display turbo-computed task hashes
-    HashOnly,
-    // New will show all new task output and turbo-computed task hashes for cached
-    // output
-    NewOnly,
-    // Error will show task output for failures only; no cache miss/hit messages are
-    // emitted
-    ErrorsOnly,
 }
 
 // taskDefinitionHashable exists as a definition for PristinePipeline, which is
@@ -61,7 +43,7 @@ pub struct TaskDefinitionHashable {
     pub(crate) topological_dependencies: Vec<TaskName<'static>>,
     pub(crate) task_dependencies: Vec<TaskName<'static>>,
     pub(crate) inputs: Vec<String>,
-    pub(crate) output_mode: TaskOutputMode,
+    pub(crate) output_mode: OutputLogsMode,
     pub(crate) persistent: bool,
     pub(crate) env: Vec<String>,
     pub(crate) pass_through_env: Vec<String>,
@@ -76,7 +58,7 @@ impl Default for TaskDefinitionHashable {
             topological_dependencies: Vec::new(),
             task_dependencies: Vec::new(),
             inputs: Vec::new(),
-            output_mode: TaskOutputMode::default(),
+            output_mode: OutputLogsMode::default(),
             persistent: false,
             env: Vec::new(),
             pass_through_env: Vec::new(),
@@ -88,8 +70,8 @@ impl Default for TaskDefinitionHashable {
 // Constructed from a RawTaskDefinition
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct TaskDefinition {
-    outputs: TaskOutputs,
-    cache: bool,
+    pub outputs: TaskOutputs,
+    pub(crate) cache: bool,
 
     // This field is custom-marshalled from `env` and `depends_on``
     env: Vec<String>,
@@ -115,7 +97,7 @@ pub struct TaskDefinition {
     inputs: Vec<String>,
 
     // OutputMode determines how we should log the output.
-    output_mode: TaskOutputMode,
+    pub(crate) output_mode: OutputLogsMode,
 
     // Persistent indicates whether the Task is expected to exit or not
     // Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
@@ -192,6 +174,21 @@ macro_rules! set_field {
 }
 
 impl TaskDefinition {
+    pub fn hashable_outputs(&self, task_name: &TaskId) -> TaskOutputs {
+        let mut inclusion_outputs = vec![format!(".turbo/turbo-{}.log", task_name.task())];
+        inclusion_outputs.extend_from_slice(&self.outputs.inclusions[..]);
+
+        let mut hashable = TaskOutputs {
+            inclusions: inclusion_outputs,
+            exclusions: self.outputs.exclusions.clone(),
+        };
+
+        hashable.inclusions.sort();
+        hashable.exclusions.sort();
+
+        hashable
+    }
+
     // merge accepts a BookkeepingTaskDefinitions and
     // merges it into TaskDefinition. It uses the bookkeeping
     // defined_fields to determine which fields should be overwritten and when

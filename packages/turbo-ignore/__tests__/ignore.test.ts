@@ -1,12 +1,16 @@
-import child_process, { ChildProcess, ExecException } from "child_process";
-import turboIgnore from "../src/ignore";
+// eslint-disable-next-line camelcase
+import child_process, {
+  type ChildProcess,
+  type ExecException,
+} from "node:child_process";
 import {
   spyConsole,
   spyExit,
-  SpyExit,
+  type SpyExit,
   mockEnv,
   validateLogs,
 } from "@turbo/test-utils";
+import { turboIgnore } from "../src/ignore";
 
 function expectBuild(mockExit: SpyExit) {
   expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -27,7 +31,7 @@ describe("turboIgnore()", () => {
       .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
-            "error" as unknown as ExecException,
+            { message: "error details" } as unknown as ExecException,
             "stdout",
             "stderr"
           ) as unknown as ChildProcess;
@@ -45,7 +49,7 @@ describe("turboIgnore()", () => {
       expect.anything()
     );
 
-    validateLogs(["UNKNOWN_ERROR: error"], mockConsole.error, {
+    validateLogs(["UNKNOWN_ERROR: error details"], mockConsole.error, {
       prefix: "≫  ",
     });
 
@@ -250,7 +254,7 @@ describe("turboIgnore()", () => {
     expect(mockConsole.log).toHaveBeenNthCalledWith(
       4,
       "≫  ",
-      'No previous deployments found for "test-app" on branch "my-branch".'
+      'No previous deployments found for "test-app" on branch "my-branch"'
     );
     expectBuild(mockExit);
   });

@@ -282,4 +282,68 @@ mod test {
         walker.wait().await.unwrap();
         assert_eq!(visited.lock().unwrap().as_slice(), &[c, b, e, d, a]);
     }
+
+    #[tokio::test]
+    async fn test_multiple_roots() {
+        // a -- b -- c
+        //          /
+        // d -- e -
+        let mut g = Graph::new();
+        let a = g.add_node("a");
+        let b = g.add_node("b");
+        let c = g.add_node("c");
+        let d = g.add_node("d");
+        let e = g.add_node("e");
+        g.add_edge(a, b, ());
+        g.add_edge(b, c, ());
+        g.add_edge(d, e, ());
+        g.add_edge(e, c, ());
+
+        // We intentionally wait to mark e as finished until b has been finished
+        let walker = Walker::new(&g);
+        let visited = Arc::new(Mutex::new(Vec::new()));
+        let (walker, mut node_emitter) = walker.walk();
+        let (b_done, is_b_done) = oneshot::channel::<()>();
+        let (d_done, is_d_done) = oneshot::channel::<()>();
+        let mut b_done = Some(b_done);
+        let mut is_b_done = Some(is_b_done);
+        let mut d_done = Some(d_done);
+        let mut is_d_done = Some(is_d_done);
+        while let Some((index, done)) = node_emitter.recv().await {
+            if index == e {
+                // don't mark as done until we get the signal that b is finished
+                let is_b_done = is_b_done.take().unwrap();
+                let visited = visited.clone();
+                tokio::spawn(async move {
+                    is_b_done.await.unwrap();
+                    visited.lock().unwrap().push(index);
+                    done.send(()).unwrap();
+                });
+            } else if index == b {
+                // send the signal that b is finished
+                visited.lock().unwrap().push(index);
+                done.send(()).unwrap();
+                b_done.take().unwrap().send(()).unwrap();
+            } else if index == a {
+                // don't mark as done until d finishes
+                let is_d_done = is_d_done.take().unwrap();
+                let visited = visited.clone();
+                tokio::spawn(async move {
+                    is_d_done.await.unwrap();
+                    visited.lock().unwrap().push(index);
+                    done.send(()).unwrap();
+                });
+            } else if index == d {
+                // send the signal that b is finished
+                visited.lock().unwrap().push(index);
+                done.send(()).unwrap();
+                d_done.take().unwrap().send(()).unwrap();
+            } else {
+                visited.lock().unwrap().push(index);
+                done.send(()).unwrap();
+            }
+        }
+        walker.wait().await.unwrap();
+        assert_eq!(visited.lock().unwrap().as_slice(), &[c, b, e, d, a]);
+    }
 }

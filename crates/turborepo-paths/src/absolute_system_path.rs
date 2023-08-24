@@ -14,6 +14,7 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use path_clean::PathClean;
+use wax::CandidatePath;
 
 use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
@@ -114,6 +115,10 @@ impl AbsoluteSystemPath {
 
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
         self.0.ancestors().map(Self::new_unchecked)
+    }
+
+    pub fn create(&self) -> Result<File, io::Error> {
+        File::create(&self.0)
     }
 
     pub fn create_dir_all(&self) -> Result<(), io::Error> {
@@ -348,6 +353,12 @@ impl AbsoluteSystemPath {
         fs::set_permissions(&self.0, permissions)?;
 
         Ok(())
+    }
+}
+
+impl<'a> From<&'a AbsoluteSystemPath> for CandidatePath<'a> {
+    fn from(value: &'a AbsoluteSystemPath) -> Self {
+        CandidatePath::from(value.0.as_std_path())
     }
 }
 
