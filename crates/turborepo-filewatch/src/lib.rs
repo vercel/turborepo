@@ -14,7 +14,7 @@ use notify::{
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use notify_debouncer_full::{
-    new_bouncer, new_debouncer_opt, DebounceEventHandler, DebounceEventResult, DebouncedEvent,
+    new_debouncer, new_debouncer_opt, DebounceEventHandler, DebounceEventResult, DebouncedEvent,
     Debouncer, FileIdMap,
 };
 use thiserror::Error;
