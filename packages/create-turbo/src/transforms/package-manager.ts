@@ -1,5 +1,5 @@
 import { convert } from "@turbo/workspaces";
-import { TransformInput, TransformResult } from "./types";
+import type { TransformInput, TransformResult } from "./types";
 
 const meta = {
   name: "package-manager",

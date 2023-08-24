@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 
+import http from "node:http";
+import https from "node:https";
 import chalk from "chalk";
 import { Command } from "commander";
-import notifyUpdate from "./utils/notifyUpdate";
 import { logger } from "@turbo/utils";
-
-import { create } from "./commands";
-import cliPkg from "../package.json";
-
 import { ProxyAgent } from "proxy-agent";
-import http from "http";
-import https from "https";
+import cliPkg from "../package.json";
+import { notifyUpdate } from "./utils/notifyUpdate";
+import { create } from "./commands";
 
 // Support http proxy vars
 const agent = new ProxyAgent();
@@ -65,13 +63,12 @@ createTurboCli
   .parseAsync()
   .then(notifyUpdate)
   .catch(async (reason) => {
+    // eslint-disable-next-line no-console
     console.log();
-    if (reason.command) {
-      logger.error(`${chalk.bold(reason.command)} has failed.`);
-    } else {
-      logger.error("Unexpected error. Please report it as a bug:");
-      console.log(reason);
-    }
+    logger.error("Unexpected error. Please report it as a bug:");
+    // eslint-disable-next-line no-console
+    console.log(reason);
+    // eslint-disable-next-line no-console
     console.log();
     await notifyUpdate();
     process.exit(1);
