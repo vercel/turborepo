@@ -13,8 +13,7 @@ mod child;
 
 use std::time::Duration;
 
-use tokio::{sync::oneshot, task::JoinSet};
-use tower::timeout;
+use tokio::task::JoinSet;
 use tracing::{debug, trace};
 
 pub struct Open(Vec<child::Child>);
