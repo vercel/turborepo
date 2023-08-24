@@ -170,11 +170,13 @@ where
 
         match *level {
             Level::ERROR => {
-                write_string::<Red, Black>(writer.by_ref(), self.is_ansi, level.as_str())
+                // The padding spaces are necessary to match the formatting of Go
+                write_string::<Red, Black>(writer.by_ref(), self.is_ansi, " ERROR ")
                     .and_then(|_| write_message::<Red, Default>(writer, self.is_ansi, event))
             }
             Level::WARN => {
-                write_string::<Yellow, Black>(writer.by_ref(), self.is_ansi, level.as_str())
+                // The padding spaces are necessary to match the formatting of Go
+                write_string::<Yellow, Black>(writer.by_ref(), self.is_ansi, " WARNING ")
                     .and_then(|_| write_message::<Yellow, Default>(writer, self.is_ansi, event))
             }
             Level::INFO => write_message::<Default, Default>(writer, self.is_ansi, event),

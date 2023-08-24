@@ -104,7 +104,7 @@ Verbosity level 2
 
 Make sure users can only use one verbosity flag
   $ ${TURBO} build -v --verbosity=1
-  ERROR the argument '-v...' cannot be used with '--verbosity <COUNT>'
+   ERROR  the argument '-v...' cannot be used with '--verbosity <COUNT>'
   
   Usage: turbo [OPTIONS] [COMMAND]
   
@@ -120,12 +120,12 @@ TURBO_LOG_VERBOSITY should be respoected
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .+ (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::daemon::connector: looking for pid in lockfile: .+ (re)
-  ERROR unable to connect: daemon is not running
+  Turbo error: unable to connect: daemon is not running
   [1]
 
 verbosity overrides TURBO_LOG_VERBOSITY global setting
   $ TURBO_LOG_VERBOSITY=debug ${TURBO} daemon status -v
-  ERROR unable to connect: daemon is not running
+  Turbo error: unable to connect: daemon is not running
   [1]
 
 verbosity doesn't override TURBO_LOG_VERBOSITY package settings
@@ -136,5 +136,5 @@ verbosity doesn't override TURBO_LOG_VERBOSITY package settings
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .+ (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::daemon::connector: looking for pid in lockfile: .+ (re)
-  ERROR unable to connect: daemon is not running
+  Turbo error: unable to connect: daemon is not running
   [1]

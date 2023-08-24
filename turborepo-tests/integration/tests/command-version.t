@@ -7,5 +7,5 @@ Test version matches that of version.txt
 
 TODO: resolve ambiguity
   $ ${TURBO} -v
-  ERROR No command specified
+  Turbo error: No command specified
   [1]

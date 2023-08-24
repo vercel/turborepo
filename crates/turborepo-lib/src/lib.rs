@@ -30,7 +30,6 @@ mod shim;
 mod task_graph;
 mod tracing;
 
-use ::tracing::error;
 use anyhow::Result;
 pub use child::spawn_child;
 
@@ -58,7 +57,9 @@ pub fn main() -> Payload {
     match shim::run() {
         Ok(payload) => payload,
         Err(err) => {
-            error!("{}", err.to_string());
+            // This raw print matches the Go behavior, once we no longer care
+            // about matching formatting we should remove this.
+            println!("Turbo error: {err}");
             Payload::Rust(Err(err))
         }
     }
