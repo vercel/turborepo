@@ -36,22 +36,6 @@ export type Workspace = {
 
 export type WorkspaceInfo = Pick<Workspace, "name" | "description">;
 
-export type DependencyList = Record<string, string>;
-
-export type PackageJsonDependencies = {
-  dependencies?: DependencyList;
-  devDependencies?: DependencyList;
-  peerDependencies?: DependencyList;
-  optionalDependencies?: DependencyList;
-};
-
-export type PackageJson = PackageJsonDependencies & {
-  name?: string;
-  description?: string;
-  workspaces?: Array<string>;
-  packageManager?: string;
-};
-
 export type DetectArgs = {
   workspaceRoot: string;
 };

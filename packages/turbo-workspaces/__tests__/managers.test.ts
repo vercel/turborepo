@@ -2,7 +2,7 @@ import path from "path";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { Logger } from "../src/logger";
 import MANAGERS from "../src/managers";
-import { PackageJson } from "../src/types";
+import type { PackageJson } from "@turbo/utils";
 import fs from "fs-extra";
 import {
   generateDetectMatrix,
@@ -114,7 +114,7 @@ describe("managers", () => {
           expect(packageJson?.packageManager?.split("@")[0]).toEqual(
             fixtureManager
           );
-          if (fixtureType === "basic") {
+          if (fixtureType === "monorepo") {
             if (fixtureManager === "pnpm") {
               expect(project.paths.workspaceConfig).toBeDefined();
               if (project.paths.workspaceConfig) {
@@ -135,7 +135,7 @@ describe("managers", () => {
           }
         } else {
           expect(packageJson?.packageManager).toBeUndefined();
-          if (fixtureType === "basic") {
+          if (fixtureType === "monorepo") {
             expect(packageJson?.workspaces).toBeUndefined();
 
             if (fixtureManager === "pnpm") {
@@ -175,6 +175,86 @@ describe("managers", () => {
         }
         const project = await MANAGERS[toManager].read({
           workspaceRoot: path.join(root),
+        });
+
+        expect(project.name).toEqual(
+          fixtureType === "monorepo" ? `${toManager}-workspaces` : toManager
+        );
+        expect(project.packageManager).toEqual(toManager);
+
+        // paths
+        expect(project.paths.root).toMatch(
+          new RegExp(`^.*\/${directoryName}$`)
+        );
+        expect(project.paths.packageJson).toMatch(
+          new RegExp(`^.*\/${directoryName}\/package.json$`)
+        );
+
+        if (fixtureManager === "pnpm") {
+          new RegExp(`^.*\/${directoryName}\/pnpm-lock.yaml$`);
+        } else if (fixtureManager === "yarn") {
+          new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
+        } else if (fixtureManager === "npm") {
+          new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+        } else {
+          throw new Error("Invalid fixtureManager");
+        }
+
+        if (fixtureType === "non-monorepo") {
+          expect(project.workspaceData.workspaces).toEqual([]);
+          expect(project.workspaceData.globs).toEqual([]);
+        } else {
+          expect(project.workspaceData.globs).toEqual(["apps/*", "packages/*"]);
+          project.workspaceData.workspaces.forEach((workspace) => {
+            const type = ["web", "docs"].includes(workspace.name)
+              ? "apps"
+              : "packages";
+            expect(workspace.paths.packageJson).toMatch(
+              new RegExp(
+                `^.*${directoryName}\/${type}\/${workspace.name}\/package.json$`
+              )
+            );
+            expect(workspace.paths.root).toMatch(
+              new RegExp(`^.*${directoryName}\/${type}\/${workspace.name}$`)
+            );
+          });
+        }
+      }
+    );
+  });
+
+  describe("read - alternate workspace format", () => {
+    test.each(generateReadMatrix())(
+      "reads $toManager workspaces using alternate format from $fixtureManager $fixtureType project - (shouldThrow: $shouldThrow)",
+      async ({ fixtureManager, fixtureType, toManager, shouldThrow }) => {
+        const { root, directoryName, readJson, write } = useFixture({
+          fixture: `./${fixtureManager}/${fixtureType}`,
+        });
+
+        // alter the fixtures package.json to use the alternate workspace format
+        const packageJsonPath = path.join(root, "package.json");
+        const packageJson = readJson<PackageJson>(packageJsonPath);
+        if (packageJson && packageJson.workspaces) {
+          packageJson.workspaces = {
+            packages: packageJson.workspaces as Array<string>,
+          };
+          write(packageJsonPath, JSON.stringify(packageJson, null, 2));
+        }
+
+        const read = async () =>
+          MANAGERS[toManager].read({ workspaceRoot: root });
+        if (shouldThrow) {
+          if (toManager === "pnpm") {
+            expect(read).rejects.toThrow(`Not a pnpm project`);
+          } else if (toManager === "yarn") {
+            expect(read).rejects.toThrow(`Not a yarn project`);
+          } else if (toManager === "npm") {
+            expect(read).rejects.toThrow(`Not an npm project`);
+          }
+          return;
+        }
+        const project = await MANAGERS[toManager].read({
+          workspaceRoot: root,
         });
 
         expect(project.name).toEqual(

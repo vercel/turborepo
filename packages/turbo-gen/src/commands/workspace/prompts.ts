@@ -4,11 +4,15 @@ import inquirer from "inquirer";
 import { minimatch } from "minimatch";
 import validName from "validate-npm-package-name";
 import type { Project, Workspace } from "@turbo/workspaces";
-import { validateDirectory, logger } from "@turbo/utils";
+import {
+  validateDirectory,
+  logger,
+  type DependencyGroups,
+  type PackageJson,
+} from "@turbo/utils";
 import { getWorkspaceStructure } from "../../utils/getWorkspaceStructure";
 import type { WorkspaceType } from "../../generators/types";
 import { getWorkspaceList } from "../../utils/getWorkspaceList";
-import type { DependencyGroups, PackageJson } from "../../types";
 
 export async function name({
   override,

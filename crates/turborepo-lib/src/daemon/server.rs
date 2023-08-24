@@ -86,8 +86,8 @@ impl DaemonServer<notify::RecommendedWatcher> {
         let daemon_root = base.daemon_file_root();
 
         let watcher = Arc::new(HashGlobWatcher::new(
-            base.repo_root.clone(),
-            daemon_root.join_component("flush").as_path().to_owned(),
+            &base.repo_root,
+            &daemon_root.join_component("flush"),
         )?);
 
         let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
@@ -332,9 +332,10 @@ mod test {
 
     use tokio::select;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
 
     use super::DaemonServer;
-    use crate::{commands::CommandBase, ui::UI, Args};
+    use crate::{commands::CommandBase, Args};
 
     // the windows runner starts a new thread to accept uds requests,
     // so we need a multi-threaded runtime

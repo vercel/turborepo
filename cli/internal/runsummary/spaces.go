@@ -260,7 +260,7 @@ type spacesRunPayload struct {
 	EndTime        int64               `json:"endTime,omitempty"`        // when the run ended. we should never submit start and end at the same time.
 	Status         string              `json:"status,omitempty"`         // Status is "running" or "completed"
 	Type           string              `json:"type,omitempty"`           // hardcoded to "TURBO"
-	ExitCode       int                 `json:"exitCode,omitempty"`       // exit code for the full run
+	ExitCode       *int                `json:"exitCode,omitempty"`       // exit code for the full run
 	Command        string              `json:"command,omitempty"`        // the thing that kicked off the turbo run
 	RepositoryPath string              `json:"repositoryPath,omitempty"` // where the command was invoked from
 	Context        string              `json:"context,omitempty"`        // the host on which this Run was executed (e.g. Github Action, Vercel, etc)
@@ -289,7 +289,7 @@ type spacesTask struct {
 	StartTime    int64             `json:"startTime,omitempty"`
 	EndTime      int64             `json:"endTime,omitempty"`
 	Cache        spacesCacheStatus `json:"cache,omitempty"`
-	ExitCode     int               `json:"exitCode,omitempty"`
+	ExitCode     *int              `json:"exitCode,omitempty"`
 	Dependencies []string          `json:"dependencies,omitempty"`
 	Dependents   []string          `json:"dependents,omitempty"`
 	Logs         string            `json:"log"`
@@ -325,7 +325,7 @@ func newSpacesDonePayload(runsummary *RunSummary) *spacesRunPayload {
 	return &spacesRunPayload{
 		Status:   "completed",
 		EndTime:  endTime,
-		ExitCode: runsummary.ExecutionSummary.exitCode,
+		ExitCode: &runsummary.ExecutionSummary.exitCode,
 	}
 }
 
@@ -341,7 +341,7 @@ func newSpacesTaskPayload(taskSummary *TaskSummary, logs []byte) *spacesTask {
 		StartTime:    startTime,
 		EndTime:      endTime,
 		Cache:        spacesCacheStatus(taskSummary.CacheSummary), // wrapped so we can remove fields
-		ExitCode:     *taskSummary.Execution.exitCode,
+		ExitCode:     taskSummary.Execution.exitCode,
 		Dependencies: taskSummary.Dependencies,
 		Dependents:   taskSummary.Dependents,
 		Logs:         string(logs),

@@ -4,18 +4,16 @@ use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_ui::UI;
 
-#[cfg(feature = "run-stub")]
-use crate::commands::run;
 use crate::{
     commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
-    ui::UI,
     Payload,
 };
 
@@ -23,7 +21,7 @@ use crate::{
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
     #[serde(rename = "full")]
     Full,
@@ -538,6 +536,11 @@ pub struct RunArgs {
     // Pass a string to enable posting Run Summaries to Vercel
     #[clap(long, hide = true)]
     pub experimental_space_id: Option<String>,
+
+    /// Opt-in to the rust codepath for running turbo
+    /// rather than using the go shim
+    #[clap(long, env, hide = true, default_value_t = false)]
+    pub experimental_rust_codepath: bool,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
@@ -751,13 +754,27 @@ pub async fn run(
         }
         #[cfg(feature = "run-stub")]
         Command::Run(args) => {
-            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
-            run::run(base).await?;
+            // in the case of enabling the run stub, we want to be able to opt-in
+            // to the rust codepath for running turbo
 
-            Ok(Payload::Rust(Ok(0)))
+            if args.tasks.is_empty() {
+                return Err(anyhow!("at least one task must be specified"));
+            }
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, UI::new(true))?;
+
+            if args.experimental_rust_codepath {
+                use crate::commands::run;
+                run::run(base).await?;
+                Ok(Payload::Rust(Ok(0)))
+            } else {
+                Ok(Payload::Go(Box::new(base)))
+            }
         }
         #[cfg(not(feature = "run-stub"))]
         Command::Run(args) => {
+            if args.experimental_rust_codepath {
+                tracing::warn!("rust codepath enabled, but not compiled with support");
+            }
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }

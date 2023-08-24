@@ -9,12 +9,11 @@ use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_cache::RemoteCacheOpts;
 
 use crate::{
+    cli::OutputLogsMode,
     config::Error,
     package_json::PackageJson,
-    run::task_id::{get_package_task_from_id, is_package_task, root_task_id},
-    task_graph::{
-        BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable, TaskOutputMode, TaskOutputs,
-    },
+    run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
+    task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable, TaskOutputs},
 };
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
@@ -70,7 +69,7 @@ pub struct RawTurboJSON {
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(transparent)]
-struct RawPipeline(BTreeMap<String, RawTaskDefinition>);
+struct RawPipeline(BTreeMap<TaskName<'static>, RawTaskDefinition>);
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -92,7 +91,7 @@ struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     outputs: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    output_mode: Option<TaskOutputMode>,
+    output_mode: Option<OutputLogsMode>,
 }
 
 const CONFIG_FILE: &str = "turbo.json";
@@ -184,9 +183,9 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
                 } else if let Some(topo_dependency) =
                     dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
                 {
-                    topological_dependencies.push(topo_dependency.to_string());
+                    topological_dependencies.push(topo_dependency.to_string().into());
                 } else {
-                    task_dependencies.push(dependency);
+                    task_dependencies.push(dependency.into());
                 }
             }
         }
@@ -289,24 +288,14 @@ impl RawTurboJSON {
         let mut this = self.clone();
         if let Some(pipeline) = &mut this.pipeline {
             pipeline.0.retain(|task_name, _| {
-                workspaces
-                    .iter()
-                    .any(|workspace| Self::is_task_in_package(task_name, workspace.as_ref()))
+                task_name.in_workspace(ROOT_PKG_NAME)
+                    || workspaces
+                        .iter()
+                        .any(|workspace| task_name.in_workspace(workspace.as_ref()))
             })
         }
 
         this
-    }
-
-    // TODO this will be moved to a more comprehensive task name module
-    // when porting the task graph
-    fn is_task_in_package(task: &str, workspace: &str) -> bool {
-        match task.split_once('#') {
-            // If a specific package task, then check that the task is for the given workspace
-            Some((package_name, _)) => package_name == workspace || package_name == "//",
-            // If there's no '#' then it isn't a specific package task
-            None => true,
-        }
     }
 }
 
@@ -434,11 +423,14 @@ impl TurboJson {
             // tasks
             (true, Ok(mut turbo_from_files)) => {
                 let mut pipeline = Pipeline::default();
-                for (task_id, task_definition) in turbo_from_files.pipeline {
-                    if is_package_task(&task_id) {
-                        return Err(Error::PackageTaskInSinglePackageMode { task_id });
+                for (task_name, task_definition) in turbo_from_files.pipeline {
+                    if task_name.is_package_task() {
+                        return Err(Error::PackageTaskInSinglePackageMode {
+                            task_id: task_name.to_string(),
+                        });
                     }
-                    pipeline.insert(root_task_id(&task_id), task_definition);
+
+                    pipeline.insert(task_name.into_root_task(), task_definition);
                 }
 
                 turbo_from_files.pipeline = pipeline;
@@ -448,8 +440,9 @@ impl TurboJson {
         };
 
         for script_name in root_package_json.scripts.keys() {
-            if !turbo_json.has_task(script_name) {
-                let task_name = root_task_id(script_name);
+            let task_name = TaskName::from(script_name.as_str());
+            if !turbo_json.has_task(&task_name) {
+                let task_name = task_name.into_root_task();
                 // Explicitly set Cache to false in this definition and add the bookkeeping
                 // fields so downstream we can pretend that it was set on
                 // purpose (as if read from a config file) rather than
@@ -475,16 +468,11 @@ impl TurboJson {
         Ok(turbo_json)
     }
 
-    fn has_task(&self, task: &str) -> bool {
+    fn has_task(&self, task_name: &TaskName) -> bool {
         for key in self.pipeline.keys() {
-            if key == task {
+            if key == task_name || (key.task() == task_name.task() && !task_name.is_package_task())
+            {
                 return true;
-            }
-            if is_package_task(key) {
-                let (_, task_name) = get_package_task_from_id(key);
-                if task_name == task {
-                    return true;
-                }
             }
         }
 
@@ -499,6 +487,48 @@ impl TurboJson {
             serde_json::from_reader(json_comments::StripComments::new(contents.as_slice()))?;
 
         turbo_json.try_into()
+    }
+
+    pub fn task(
+        &self,
+        task_id: &TaskId,
+        task_name: &TaskName,
+    ) -> Option<BookkeepingTaskDefinition> {
+        match self.pipeline.get(&task_id.as_task_name()) {
+            Some(task) => Some(task.clone()),
+            None => self.pipeline.get(task_name).cloned(),
+        }
+    }
+
+    pub fn validate(&self, validations: &[TurboJSONValidation]) -> Vec<Error> {
+        validations
+            .iter()
+            .flat_map(|validation| validation(self))
+            .collect()
+    }
+}
+
+type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;
+
+pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
+    turbo_json
+        .pipeline
+        .keys()
+        .filter(|task_name| task_name.is_package_task())
+        .map(|task_name| Error::UnnecessaryPackageTaskSyntax {
+            actual: task_name.to_string(),
+            wanted: task_name.task().to_string(),
+        })
+        .collect()
+}
+
+pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
+    match turbo_json.extends.first() {
+        Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
+            vec![Error::ExtendFromNonRoot]
+        }
+        None => vec![Error::NoExtends],
+        _ => vec![],
     }
 }
 
@@ -532,11 +562,13 @@ mod tests {
 
     use super::RawTurboJSON;
     use crate::{
+        cli::OutputLogsMode,
         config::{turbo::RawTaskDefinition, TurboJson},
         package_json::PackageJson,
+        run::task_id::TaskName,
         task_graph::{
             BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionHashable,
-            TaskOutputMode, TaskOutputs,
+            TaskOutputs,
         },
     };
 
@@ -582,7 +614,7 @@ mod tests {
         },
         TurboJson {
             pipeline: [(
-                "//#build".to_string(),
+                "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -617,7 +649,7 @@ mod tests {
         },
         TurboJson {
             pipeline: [(
-                "//#build".to_string(),
+                "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -628,7 +660,7 @@ mod tests {
                 }
             ),
             (
-                "//#test".to_string(),
+                "//#test".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
                     task_definition: TaskDefinitionHashable {
@@ -697,7 +729,7 @@ mod tests {
             outputs: Some(vec!["package/a/dist".to_string()]),
             cache: Some(false),
             inputs: Some(vec!["package/a/src/**".to_string()]),
-            output_mode: Some(TaskOutputMode::Full),
+            output_mode: Some(OutputLogsMode::Full),
             persistent: Some(true),
         },
         BookkeepingTaskDefinition {
@@ -713,9 +745,7 @@ mod tests {
                 "DependsOn".to_string()
             ].into_iter().collect(),
             experimental_fields: HashSet::new(),
-            experimental: TaskDefinitionExperiments {
-                pass_through_env: vec![],
-            },
+            experimental: TaskDefinitionExperiments {},
             task_definition: TaskDefinitionHashable {
                 dot_env: vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()],
                 env: vec!["OS".to_string()],
@@ -725,9 +755,9 @@ mod tests {
                 },
                 cache: false,
                 inputs: vec!["package/a/src/**".to_string()],
-                output_mode: TaskOutputMode::Full,
+                output_mode: OutputLogsMode::Full,
                 pass_through_env: vec!["AWS_SECRET_KEY".to_string()],
-                task_dependencies: vec!["cli#build".to_string()],
+                task_dependencies: vec!["cli#build".into()],
                 topological_dependencies: vec![],
                 persistent: true,
             }
@@ -791,13 +821,13 @@ mod tests {
         assert_eq!(pruned_json, expected);
     }
 
-    #[test_case("full", Some(TaskOutputMode::Full) ; "full")]
-    #[test_case("hash-only", Some(TaskOutputMode::HashOnly) ; "hash-only")]
-    #[test_case("new-only", Some(TaskOutputMode::NewOnly) ; "new-only")]
-    #[test_case("errors-only", Some(TaskOutputMode::ErrorsOnly) ; "errors-only")]
-    #[test_case("none", Some(TaskOutputMode::None) ; "none")]
+    #[test_case("full", Some(OutputLogsMode::Full) ; "full")]
+    #[test_case("hash-only", Some(OutputLogsMode::HashOnly) ; "hash-only")]
+    #[test_case("new-only", Some(OutputLogsMode::NewOnly) ; "new-only")]
+    #[test_case("errors-only", Some(OutputLogsMode::ErrorsOnly) ; "errors-only")]
+    #[test_case("none", Some(OutputLogsMode::None) ; "none")]
     #[test_case("junk", None ; "invalid value")]
-    fn test_parsing_output_mode(output_mode: &str, expected: Option<TaskOutputMode>) {
+    fn test_parsing_output_mode(output_mode: &str, expected: Option<OutputLogsMode>) {
         let json: Result<RawTurboJSON, _> = serde_json::from_value(serde_json::json!({
             "pipeline": {
                 "build": {
@@ -810,7 +840,7 @@ mod tests {
             .as_ref()
             .ok()
             .and_then(|j| j.pipeline.as_ref())
-            .and_then(|pipeline| pipeline.0.get("build"))
+            .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
             .and_then(|build| build.output_mode);
         assert_eq!(actual, expected);
     }

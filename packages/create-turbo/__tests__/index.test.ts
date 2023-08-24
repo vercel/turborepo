@@ -39,18 +39,9 @@ describe("create-turbo", () => {
       const mockAvailablePackageManagers = jest
         .spyOn(turboUtils, "getAvailablePackageManagers")
         .mockResolvedValue({
-          npm: {
-            available: true,
-            version: "8.19.2",
-          },
-          yarn: {
-            available: true,
-            version: "1.22.10",
-          },
-          pnpm: {
-            available: true,
-            version: "7.22.2",
-          },
+          npm: "8.19.2",
+          yarn: "1.22.10",
+          pnpm: "7.22.2",
         });
 
       const mockCreateProject = jest

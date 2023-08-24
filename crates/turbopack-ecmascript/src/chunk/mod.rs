@@ -42,7 +42,7 @@ use crate::utils::FormatIter;
 
 #[turbo_tasks::value]
 pub struct EcmascriptChunk {
-    pub context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    pub chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     pub main_entries: Vc<EcmascriptChunkPlaceables>,
     pub omit_entries: Option<Vc<EcmascriptChunkPlaceables>>,
     pub availability_info: AvailabilityInfo,
@@ -55,13 +55,13 @@ pub struct EcmascriptChunks(Vec<Vc<EcmascriptChunk>>);
 impl EcmascriptChunk {
     #[turbo_tasks::function]
     pub fn new_normalized(
-        context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         main_entries: Vc<EcmascriptChunkPlaceables>,
         omit_entries: Option<Vc<EcmascriptChunkPlaceables>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<Self> {
         EcmascriptChunk {
-            context,
+            chunking_context,
             main_entries,
             omit_entries,
             availability_info: availability_info.into_value(),
@@ -71,12 +71,13 @@ impl EcmascriptChunk {
 
     #[turbo_tasks::function]
     pub async fn new(
-        context: Vc<Box<dyn ChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
         main_entry: Vc<Box<dyn EcmascriptChunkPlaceable>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<Self>> {
         let Some(context) =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(context).await?
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
         else {
             bail!("Ecmascript chunking context not found");
         };
@@ -91,11 +92,12 @@ impl EcmascriptChunk {
 
     #[turbo_tasks::function]
     pub async fn new_root(
-        context: Vc<Box<dyn ChunkingContext>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
         main_entry: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     ) -> Result<Vc<Self>> {
         let Some(context) =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(context).await?
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
         else {
             bail!("Ecmascript chunking context not found");
         };
@@ -112,7 +114,7 @@ impl EcmascriptChunk {
 
     #[turbo_tasks::function]
     pub async fn new_root_with_entries(
-        context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         main_entry: Vc<Box<dyn EcmascriptChunkPlaceable>>,
         other_entries: Vc<EcmascriptChunkPlaceables>,
     ) -> Result<Vc<Self>> {
@@ -120,7 +122,7 @@ impl EcmascriptChunk {
         main_entries.push(main_entry);
 
         Ok(Self::new_normalized(
-            context,
+            chunking_context,
             Vc::cell(main_entries),
             None,
             Value::new(AvailabilityInfo::Root {
@@ -148,7 +150,7 @@ impl EcmascriptChunk {
             while !*path.is_inside_or_equal(current).await? {
                 let parent = current.parent().resolve().await?;
                 if parent == current {
-                    return Ok(Vc::cell(None));
+                    return Ok(FileSystemPathOption::none());
                 }
                 current = parent;
             }
@@ -163,7 +165,7 @@ impl EcmascriptChunk {
             .main_entries
             .await?
             .iter()
-            .map(|&entry| entry.as_chunk_item(this.context).id())
+            .map(|&entry| entry.as_chunk_item(this.chunking_context).id())
             .collect();
         Ok(Vc::cell(entries))
     }
@@ -177,13 +179,13 @@ impl EcmascriptChunk {
         let b = right.await?;
 
         let a = ecmascript_chunk_content(
-            a.context,
+            a.chunking_context,
             a.main_entries,
             a.omit_entries,
             Value::new(a.availability_info),
         );
         let b = ecmascript_chunk_content(
-            b.context,
+            b.chunking_context,
             b.main_entries,
             b.omit_entries,
             Value::new(b.availability_info),
@@ -283,7 +285,7 @@ impl Chunk for EcmascriptChunk {
         } else {
             AssetIdent::new(Value::new(AssetIdent {
                 path,
-                query: None,
+                query: Vc::<String>::empty(),
                 fragment: None,
                 assets,
                 modifiers,
@@ -296,13 +298,13 @@ impl Chunk for EcmascriptChunk {
 
     #[turbo_tasks::function]
     fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
-        Vc::upcast(self.context)
+        Vc::upcast(self.chunking_context)
     }
 
     #[turbo_tasks::function]
     async fn parallel_chunks(&self) -> Result<Vc<Chunks>> {
         let content = ecmascript_chunk_content(
-            self.context,
+            self.chunking_context,
             self.main_entries,
             self.omit_entries,
             Value::new(self.availability_info),
@@ -319,7 +321,7 @@ impl Chunk for EcmascriptChunk {
     async fn references(self: Vc<Self>) -> Result<Vc<OutputAssets>> {
         let this = self.await?;
         let content = ecmascript_chunk_content(
-            this.context,
+            this.chunking_context,
             this.main_entries,
             this.omit_entries,
             Value::new(this.availability_info),
@@ -377,7 +379,7 @@ impl EcmascriptChunk {
     pub async fn chunk_content(self: Vc<Self>) -> Result<Vc<EcmascriptChunkContent>> {
         let this = self.await?;
         Ok(ecmascript_chunk_content(
-            this.context,
+            this.chunking_context,
             this.main_entries,
             this.omit_entries,
             Value::new(this.availability_info),
@@ -432,7 +434,7 @@ impl Introspectable for EcmascriptChunk {
         let mut details = String::new();
         let this = self.await?;
         let chunk_content = ecmascript_chunk_content(
-            this.context,
+            this.chunking_context,
             this.main_entries,
             this.omit_entries,
             Value::new(this.availability_info),

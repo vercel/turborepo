@@ -6,8 +6,14 @@ import * as checkGitStatus from "../src/utils/checkGitStatus";
 import * as getCurrentVersion from "../src/commands/migrate/steps/getCurrentVersion";
 import * as getLatestVersion from "../src/commands/migrate/steps/getLatestVersion";
 import * as getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
-import * as workspaceImplementation from "../src/utils/getPackageManager";
-import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";
+import * as turboWorkspaces from "@turbo/workspaces";
+import * as turboUtils from "@turbo/utils";
+import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
+
+jest.mock("@turbo/workspaces", () => ({
+  __esModule: true,
+  ...jest.requireActual("@turbo/workspaces"),
+}));
 
 describe("migrate", () => {
   const mockExit = spyExit();
@@ -36,15 +42,24 @@ describe("migrate", () => {
       .mockResolvedValue("1.7.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
-      .mockReturnValue("pnpm install -g turbo@latest");
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
-      .mockReturnValue(packageManager);
+      .mockResolvedValue("pnpm install -g turbo@latest");
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+      });
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -81,16 +96,16 @@ describe("migrate", () => {
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
   });
 
   it("migrates from 1.0.0 to 1.2.0 (dry run)", async () => {
@@ -113,18 +128,27 @@ describe("migrate", () => {
       .mockResolvedValue("1.2.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
-      .mockReturnValue("pnpm install -g turbo@latest");
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
-      .mockReturnValue(packageManager);
+      .mockResolvedValue("pnpm install -g turbo@latest");
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+      });
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
 
     const packageJson = readJson("package.json");
     const turboJson = readJson("turbo.json");
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: true,
       print: false,
@@ -140,16 +164,16 @@ describe("migrate", () => {
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
   });
 
   it("next version can be passed as an option", async () => {
@@ -172,15 +196,24 @@ describe("migrate", () => {
       .mockResolvedValue("1.7.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
-      .mockReturnValue("pnpm install -g turbo@latest");
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
-      .mockReturnValue(packageManager);
+      .mockResolvedValue("pnpm install -g turbo@latest");
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+      });
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -218,16 +251,16 @@ describe("migrate", () => {
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
   });
 
   it("current version can be passed as an option", async () => {
@@ -247,16 +280,24 @@ describe("migrate", () => {
       .mockResolvedValue("1.7.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
-      .mockReturnValue("pnpm install -g turbo@latest");
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
+      .mockResolvedValue("pnpm install -g turbo@latest");
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+      });
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
 
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
-      .mockReturnValue(packageManager);
-
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -293,21 +334,24 @@ describe("migrate", () => {
     expect(mockedCheckGitStatus).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
   });
 
   it("exits if the current version is the same as the new version", async () => {
     const { root } = useFixture({
       fixture: "old-turbo",
     });
+
+    const packageManager = "pnpm";
+    const packageManagerVersion = "1.2.3";
 
     // setup mocks
     const mockedCheckGitStatus = jest
@@ -319,8 +363,16 @@ describe("migrate", () => {
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "default")
       .mockResolvedValue("1.7.0");
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -333,17 +385,20 @@ describe("migrate", () => {
     expect(mockedCheckGitStatus).toHaveBeenCalled();
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
-    mockedGetLatestVersion.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
   });
 
   it("continues when migration doesn't require codemods", async () => {
     const { root } = useFixture({
       fixture: "old-turbo",
     });
+
+    const packageManager = "npm";
 
     // setup mocks
     const mockedCheckGitStatus = jest
@@ -357,12 +412,20 @@ describe("migrate", () => {
       .mockResolvedValue("1.3.1");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
-      .mockReturnValue("npm install turbo@1.3.1");
+      .mockResolvedValue("npm install turbo@1.3.1");
     const mockExecSync = jest
       .spyOn(childProcess, "execSync")
       .mockReturnValue("installed");
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -374,8 +437,18 @@ describe("migrate", () => {
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockExecSync).toHaveBeenCalledWith("npm install turbo@1.3.1", {
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
+    expect(mockExecSync).toHaveBeenNthCalledWith(1, "turbo bin", {
       cwd: root,
+      stdio: "ignore",
+    });
+    expect(mockExecSync).toHaveBeenNthCalledWith(2, "turbo daemon stop", {
+      cwd: root,
+      stdio: "ignore",
+    });
+    expect(mockExecSync).toHaveBeenNthCalledWith(3, "npm install turbo@1.3.1", {
+      cwd: root,
+      stdio: "pipe",
     });
 
     // restore mocks
@@ -383,6 +456,7 @@ describe("migrate", () => {
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
     mockExecSync.mockRestore();
   });
 
@@ -406,18 +480,27 @@ describe("migrate", () => {
       .mockResolvedValue("1.7.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
-      .mockReturnValue("pnpm install -g turbo@1.7.0");
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
-      .mockReturnValue(packageManager);
+      .mockResolvedValue("pnpm install -g turbo@1.7.0");
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+      });
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
     const mockExecSync = jest
       .spyOn(childProcess, "execSync")
       .mockReturnValue("installed");
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -454,20 +537,33 @@ describe("migrate", () => {
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
     expect(mockExecSync).toHaveBeenCalled();
-    expect(mockExecSync).toHaveBeenCalledWith("pnpm install -g turbo@1.7.0", {
+    expect(mockExecSync).toHaveBeenNthCalledWith(1, "turbo bin", {
       cwd: root,
+      stdio: "ignore",
     });
+    expect(mockExecSync).toHaveBeenNthCalledWith(2, "turbo daemon stop", {
+      cwd: root,
+      stdio: "ignore",
+    });
+    expect(mockExecSync).toHaveBeenNthCalledWith(
+      3,
+      "pnpm install -g turbo@1.7.0",
+      {
+        cwd: root,
+        stdio: "pipe",
+      }
+    );
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
     mockExecSync.mockRestore();
   });
 
@@ -491,18 +587,27 @@ describe("migrate", () => {
       .mockResolvedValue("1.7.0");
     const mockedGetTurboUpgradeCommand = jest
       .spyOn(getTurboUpgradeCommand, "default")
-      .mockReturnValue(undefined);
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
-      .mockReturnValue(packageManager);
+      .mockResolvedValue(undefined);
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+      });
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
     const mockExecSync = jest
       .spyOn(childProcess, "execSync")
       .mockReturnValue("installed");
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -541,17 +646,25 @@ describe("migrate", () => {
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
     expect(mockedGetTurboUpgradeCommand).toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
-    expect(mockExecSync).not.toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
+    expect(mockExecSync).toHaveBeenCalledTimes(2);
+    expect(mockExecSync).toHaveBeenNthCalledWith(1, "turbo bin", {
+      cwd: root,
+      stdio: "ignore",
+    });
+    expect(mockExecSync).toHaveBeenNthCalledWith(2, "turbo daemon stop", {
+      cwd: root,
+      stdio: "ignore",
+    });
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
     mockedGetTurboUpgradeCommand.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
     mockExecSync.mockRestore();
   });
 
@@ -560,6 +673,8 @@ describe("migrate", () => {
       fixture: "old-turbo",
     });
 
+    const packageManager = "pnpm";
+
     // setup mocks
     const mockedCheckGitStatus = jest
       .spyOn(checkGitStatus, "default")
@@ -567,8 +682,16 @@ describe("migrate", () => {
     const mockedGetCurrentVersion = jest
       .spyOn(getCurrentVersion, "default")
       .mockReturnValue(undefined);
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -602,7 +725,7 @@ describe("migrate", () => {
       .spyOn(getLatestVersion, "default")
       .mockResolvedValue(undefined);
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -638,7 +761,7 @@ describe("migrate", () => {
       .spyOn(getLatestVersion, "default")
       .mockRejectedValue(new Error("failed to fetch version"));
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,
@@ -676,14 +799,23 @@ describe("migrate", () => {
     const mockedGetLatestVersion = jest
       .spyOn(getLatestVersion, "default")
       .mockResolvedValue("1.7.0");
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
-    const mockedGetWorkspaceImplementation = jest
-      .spyOn(workspaceImplementation, "default")
-      .mockReturnValue(packageManager);
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+      });
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: true,
       print: false,
@@ -696,15 +828,15 @@ describe("migrate", () => {
     expect(mockedCheckGitStatus).not.toHaveBeenCalled();
     expect(mockedGetCurrentVersion).toHaveBeenCalled();
     expect(mockedGetLatestVersion).toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetWorkspaceImplementation).toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
     mockedGetCurrentVersion.mockRestore();
     mockedGetLatestVersion.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetWorkspaceImplementation.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
   });
 
   it("exits if invalid directory is passed", async () => {
@@ -717,7 +849,7 @@ describe("migrate", () => {
       .spyOn(checkGitStatus, "default")
       .mockReturnValue(undefined);
 
-    await migrate("~/path/that/does/not/exist" as MigrateCommandArgument, {
+    await migrate("~/path/that/does/not/exist", {
       force: false,
       dry: false,
       print: false,
@@ -743,7 +875,7 @@ describe("migrate", () => {
       .spyOn(checkGitStatus, "default")
       .mockReturnValue(undefined);
 
-    await migrate(root as MigrateCommandArgument, {
+    await migrate(root, {
       force: false,
       dry: false,
       print: false,

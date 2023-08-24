@@ -21,7 +21,9 @@ pub use env::MappedEnvironment;
 pub use repo::{get_repo_config_path, RepoConfig, RepoConfigLoader};
 use serde::Serialize;
 use thiserror::Error;
-pub use turbo::{RawTurboJSON, SpacesJson, TurboJson};
+pub use turbo::{
+    validate_extends, validate_no_package_task_syntax, RawTurboJSON, SpacesJson, TurboJson,
+};
 pub use user::{UserConfig, UserConfigLoader};
 
 #[derive(Debug, Error)]
@@ -35,6 +37,11 @@ pub enum Error {
          one"
     )]
     NoTurboJSON,
+    #[error(
+        "loginUrl is configured to \"{value}\", but cannot be a base URL. This happens in \
+         situations like using a `data:` URL."
+    )]
+    LoginUrlCannotBeABase { value: String },
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
@@ -61,6 +68,12 @@ pub enum Error {
     },
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
+    #[error("\"{actual}\". Use \"{wanted}\" instead")]
+    UnnecessaryPackageTaskSyntax { actual: String, wanted: String },
+    #[error("You can only extend from the root workspace")]
+    ExtendFromNonRoot,
+    #[error("No \"extends\" key found")]
+    NoExtends,
 }
 
 pub fn default_user_config_path() -> Result<Utf8PathBuf, Error> {

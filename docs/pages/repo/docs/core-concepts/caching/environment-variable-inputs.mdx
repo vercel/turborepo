@@ -84,22 +84,25 @@ Exclusion patterns apply only to the set of variables matched via inclusions.
 
 ## Loose & Strict Environment Modes
 
-Turborepo offers two environment variable modes for tasks: loose mode and strict mode. This controls which environment variables are made available to each task at execution time.
+Turborepo offers two different modes for handling environment variable in tasks: `loose` mode and `strict` mode. The mode controls which environment variables are made available to each task at execution time.
 
 ### Loose Mode
 
-By default, and when `turbo` is invoked with `--env-mode=loose`, all environment variables from the machine are made available to every single task. This is described as "loose" environment mode. This ensures the greatest compatibility while accepting some risk that a task will implicitly have access to an unspecified environment variable. A user may configure a particular environment variable that results in task behavior change, but, because it was not specified inside of `turbo.json`, the created cache artifact may not be suitable for sharing.
+Loose mode, the default behavior, does not filter any environment variables. Therefore, all environment variables from the machine are made available to every single task. This ensures the greatest compatibility while accepting some risk that a task will implicitly have access to an unspecified environment variable. A user may run a task with a different value of an environment variable, but incorrectly see FULL TURBO because the environment variable was not configured in `turbo.json`.
 
 ### Strict Mode
 
-In strict mode, when `turbo` is invoked with `--env-mode=strict`, only [important system environment variables](#system-environment-variables) and environment variables enumerated inside of `turbo.json` will be made available to a task. There are four fields that enable specification of environment variables:
+Strict mode, which can be enabled with `turbo --env-mode=strict`, filters out environment variables.
 
-- **Hashed Environment Variables:** `globalEnv` and `env`
-- **Unhashed Environment Variables:** `globalPassThroughEnv` and `passThroughEnv`
+Only [important system environment variables](#system-environment-variables) and environment variables configured inside of `turbo.json` will be made available to a task.
+
+If you want an environment variable to be part of the cache key, use [Hashed Environment Variables](#hashed-environment-variables).
+
+If you **do not** want an environment variable to be part of the cache key, use [Unhashed Environment Variables](#unhashed-environment-variables).
 
 #### System Environment Variables
 
-Turborepo passes in the following environment variables to all tasks:
+Turborepo passes in the following environment variables to all tasks, even in strict mode:
 
 - `PATH`
 - `SHELL`
@@ -107,15 +110,15 @@ Turborepo passes in the following environment variables to all tasks:
 
 #### Hashed Environment Variables
 
-All hashed environment variables that appear in `globalEnv` and `env` will always be made available to tasks. These variables are included in the hash and as a consequence are unable to result in differences in cache artifact outputs with the same hash.
+Hashed environment variables, defined in `globalEnv` and `env`, will be made available to tasks and included in the hashed cache key.
+
+Environment variables such as `NODE_ENV` whose value can change the task outputs, should be included in `globalEnv` or `env`.
 
 #### Unhashed Environment Variables
 
-Unhashed environment variables in `globalPassThroughEnv` and `passThroughEnv` are values which may be needed in order to _perform_ a task but should not be included in the hash. These are values that would be reasonably expected to differ from machine to machine, but those differences would not be expected to have material consequences on the cache artifact creation.
+Unhashed environment variables, defined in `globalPassThroughEnv` and `passThroughEnv`, will be made available to tasks but _not_ included in the hashed cache key.
 
-One example of a possible use case is `NPM_TOKEN`, a value that can change per-user, but whose purpose in a task may simply be to allow read access to a particular registry. Sharing of a single `NPM_TOKEN` is a bad security practice, and including it in `globalEnv` means that you can't share caches between people. Including it in `globalPassThroughEnv` enables it to be used in all tasks while still enabling shared cache artifacts.
-
-Only values present in `globalPassThroughEnv` and `passThroughEnv` will be made available. Nonexistence means that no values will be passed through.
+Access tokens such as `NPM_TOKEN` that change per-user, but result in the same task outputs, should be defined in `globalPassThroughEnv` and `passThroughEnv`.
 
 ### Infer Mode
 
@@ -165,7 +168,7 @@ These fields are _ordered_ lists of Unix-formatted (`/`-separated) paths, relati
 ## Framework Inference
 
 <Callout type="info">
-  This feature can be disabled by passing [`--framework-inference=false`](../reference/command-line-reference/run#--framework-inference) to your `turbo` command.
+  This feature can be disabled by passing [`--framework-inference=false`](/repo/docs/reference/command-line-reference/run#--framework-inference) to your `turbo` command.
 </Callout>
 
 By default, Turborepo attempts to detect the framework for workspaces inside of your turborepo and uses this to help ensure that all of the default environment variables are properly considered for task hashes.

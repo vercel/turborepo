@@ -1,24 +1,15 @@
-import os from "os";
 import path from "path";
 import fs from "fs-extra";
 import { gte } from "semver";
 
+import {
+  getAvailablePackageManagers,
+  getPackageManagersBinPaths,
+} from "@turbo/utils";
+import { type Project, type PackageManager } from "@turbo/workspaces";
 import { exec } from "../utils";
-import getPackageManager, {
-  PackageManager,
-} from "../../../utils/getPackageManager";
-import getPackageManagerVersion from "../../../utils/getPackageManagerVersion";
 
 type InstallType = "dependencies" | "devDependencies";
-
-function getGlobalBinaryPaths(): Record<PackageManager, string | undefined> {
-  return {
-    // we run these from a tmpdir to avoid corepack interference
-    yarn: exec(`yarn global bin`, { cwd: os.tmpdir() }),
-    npm: exec(`npm bin --global`, { cwd: os.tmpdir() }),
-    pnpm: exec(`pnpm  bin --global`, { cwd: os.tmpdir() }),
-  };
-}
 
 function getGlobalUpgradeCommand(
   packageManager: PackageManager,
@@ -30,7 +21,7 @@ function getGlobalUpgradeCommand(
     case "npm":
       return `npm install turbo@${to} --global`;
     case "pnpm":
-      return `pnpm install turbo@${to} --global`;
+      return `pnpm add turbo@${to} --global`;
   }
 }
 
@@ -81,7 +72,7 @@ function getLocalUpgradeCommand({
     case "pnpm":
       return renderCommand([
         "pnpm",
-        "install",
+        "add",
         `turbo@${to}`,
         installType === "devDependencies" && "--save-dev",
         isUsingWorkspaces && "-w",
@@ -89,18 +80,12 @@ function getLocalUpgradeCommand({
   }
 }
 
-function getInstallType({ directory }: { directory: string }): {
-  installType?: InstallType;
-  isUsingWorkspaces?: boolean;
-} {
+function getInstallType({ root }: { root: string }): InstallType | undefined {
   // read package.json to make sure we have a reference to turbo
-  const packageJsonPath = path.join(directory, "package.json");
-  const pnpmWorkspaceConfig = path.join(directory, "pnpm-workspace.yaml");
-  const isPnpmWorkspaces = fs.existsSync(pnpmWorkspaceConfig);
-
+  const packageJsonPath = path.join(root, "package.json");
   if (!fs.existsSync(packageJsonPath)) {
     console.error(`Unable to find package.json at ${packageJsonPath}`);
-    return { installType: undefined, isUsingWorkspaces: undefined };
+    return undefined;
   }
 
   const packageJson = fs.readJsonSync(packageJsonPath);
@@ -108,19 +93,12 @@ function getInstallType({ directory }: { directory: string }): {
     packageJson.devDependencies && "turbo" in packageJson.devDependencies;
   const isDependency =
     packageJson.dependencies && "turbo" in packageJson.dependencies;
-  let isUsingWorkspaces = "workspaces" in packageJson || isPnpmWorkspaces;
 
   if (isDependency || isDevDependency) {
-    return {
-      installType: isDependency ? "dependencies" : "devDependencies",
-      isUsingWorkspaces,
-    };
+    return isDependency ? "dependencies" : "devDependencies";
   }
 
-  return {
-    installType: undefined,
-    isUsingWorkspaces,
-  };
+  return undefined;
 }
 
 /**
@@ -130,19 +108,18 @@ function getInstallType({ directory }: { directory: string }): {
 
   We try global first to let turbo handle the inference, then we try local.
 **/
-export default function getTurboUpgradeCommand({
-  directory,
+export default async function getTurboUpgradeCommand({
+  project,
   to,
 }: {
-  directory: string;
+  project: Project;
   to?: string;
 }) {
   const turboBinaryPathFromGlobal = exec(`turbo bin`, {
-    cwd: directory,
+    cwd: project.paths.root,
     stdio: "pipe",
   });
-  const packageManagerGlobalBinaryPaths = getGlobalBinaryPaths();
-
+  const packageManagerGlobalBinaryPaths = await getPackageManagersBinPaths();
   const globalPackageManager = Object.keys(
     packageManagerGlobalBinaryPaths
   ).find((packageManager) => {
@@ -153,24 +130,23 @@ export default function getTurboUpgradeCommand({
     }
 
     return false;
-  }) as PackageManager;
+  }) as PackageManager | undefined;
 
   if (turboBinaryPathFromGlobal && globalPackageManager) {
     // figure which package manager we need to upgrade
     return getGlobalUpgradeCommand(globalPackageManager, to);
   } else {
-    const packageManager = getPackageManager({ directory });
+    const { packageManager } = project;
     // we didn't find a global install, so we'll try to find a local one
-    const { installType, isUsingWorkspaces } = getInstallType({ directory });
-    if (packageManager && installType) {
-      const packageManagerVersion = getPackageManagerVersion(
-        packageManager,
-        directory
-      );
+    const isUsingWorkspaces = project.workspaceData.globs.length > 0;
+    const installType = getInstallType({ root: project.paths.root });
+    const availablePackageManagers = await getAvailablePackageManagers();
+    const version = availablePackageManagers[packageManager];
 
+    if (packageManager && version && installType) {
       return getLocalUpgradeCommand({
         packageManager,
-        packageManagerVersion,
+        packageManagerVersion: version,
         installType,
         isUsingWorkspaces,
         to,

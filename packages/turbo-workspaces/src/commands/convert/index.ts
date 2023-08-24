@@ -15,13 +15,13 @@ function isPackageManagerDisabled({
 }: {
   packageManager: PackageManager;
   currentWorkspaceManger: PackageManager;
-  availablePackageManagers: Record<PackageManager, { available: boolean }>;
+  availablePackageManagers: Record<PackageManager, string | undefined>;
 }) {
   if (currentWorkspaceManger === packageManager) {
     return "already in use";
   }
 
-  if (!availablePackageManagers[packageManager].available) {
+  if (!availablePackageManagers[packageManager]) {
     return "not installed";
   }
 
@@ -100,8 +100,7 @@ export default async function convertCommand(
     project,
     to: {
       name: selectedPackageManager,
-      version: availablePackageManagers[selectedPackageManager]
-        .version as string,
+      version: availablePackageManagers[selectedPackageManager],
     },
     logger,
     options,

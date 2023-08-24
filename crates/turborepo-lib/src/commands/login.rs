@@ -8,26 +8,29 @@ use axum::{extract::Query, response::Redirect, routing::get, Router};
 use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
-use tracing::debug;
 #[cfg(not(test))]
 use tracing::warn;
+use turborepo_ui::{start_spinner, BOLD, CYAN};
 
-use crate::{
-    commands::{
-        link::{verify_caching_enabled, REMOTE_CACHING_INFO, REMOTE_CACHING_URL},
-        CommandBase,
-    },
-    get_version,
-    ui::{start_spinner, BOLD, CYAN, GREY, UNDERLINE},
-};
+use crate::{commands::CommandBase, config::Error};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 
 pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
+    let repo_config = base.repo_config()?;
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
-    let mut login_url = Url::parse(&format!("{}/api/auth/sso", base.repo_config()?.login_url()))?;
+    let login_url_configuration = repo_config.login_url();
+    let mut login_url = Url::parse(login_url_configuration)?;
+
+    login_url
+        .path_segments_mut()
+        .map_err(|_: ()| Error::LoginUrlCannotBeABase {
+            value: login_url_configuration.to_string(),
+        })?
+        .extend(["api", "auth", "sso"]);
+
     login_url
         .query_pairs_mut()
         .append_pair("teamId", sso_team)
@@ -38,11 +41,11 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     let spinner = start_spinner("Waiting for your authorization...");
     direct_user_to_url(login_url.as_str());
 
-    let verification_token = Arc::new(OnceCell::new());
-    run_sso_one_shot_server(DEFAULT_PORT, verification_token.clone()).await?;
+    let token_cell = Arc::new(OnceCell::new());
+    run_sso_one_shot_server(DEFAULT_PORT, token_cell.clone()).await?;
     spinner.finish_and_clear();
 
-    let token = verification_token
+    let token = token_cell
         .get()
         .ok_or_else(|| anyhow!("no token auth token found"))?;
 
@@ -66,37 +69,16 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
         )))
     );
 
-    if let Some(team_id) = verified_user.team_id {
-        verify_caching_enabled(&api_client, &team_id, &verified_user.token, None).await?;
-        base.repo_config_mut()?.set_team_id(Some(team_id))?;
-        println!(
-            "{}
-
-{}
-  For more info, see {}
-
+    println!(
+        "{}
 {}
 ",
-            base.ui
-                .apply(CYAN.apply_to(format!("Remote Caching enabled for {}", sso_team))),
-            REMOTE_CACHING_INFO,
-            base.ui.apply(UNDERLINE.apply_to(REMOTE_CACHING_URL)),
-            base.ui
-                .apply(GREY.apply_to("To disable Remote Caching, run `npx turbo unlink`"))
-        )
-    } else {
-        println!(
-            "{}
-{}
-",
-            base.ui.apply(
-                CYAN.apply_to(
-                    "To connect to your Remote Cache, run the following in any turborepo:"
-                )
-            ),
-            base.ui.apply(BOLD.apply_to("`npx turbo link`"))
-        );
-    }
+        base.ui.apply(
+            CYAN.apply_to("To connect to your Remote Cache, run the following in any turborepo:")
+        ),
+        base.ui.apply(BOLD.apply_to("`npx turbo link`"))
+    );
+
     Ok(())
 }
 
@@ -111,16 +93,25 @@ fn make_token_name() -> Result<String> {
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
     let repo_config = base.repo_config()?;
-    let login_url_base = repo_config.login_url();
-    debug!("turbo v{}", get_version());
-    debug!("api url: {}", repo_config.api_url());
-    debug!("login url: {login_url_base}");
-
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
-    let login_url = format!("{login_url_base}/turborepo/token?redirect_uri={redirect_url}");
+    let login_url_configuration = repo_config.login_url();
+    let mut login_url = Url::parse(login_url_configuration)?;
+
+    login_url
+        .path_segments_mut()
+        .map_err(|_: ()| Error::LoginUrlCannotBeABase {
+            value: login_url_configuration.to_string(),
+        })?
+        .extend(["turborepo", "token"]);
+
+    login_url
+        .query_pairs_mut()
+        .append_pair("redirect_uri", &redirect_url);
+
     println!(">>> Opening browser to {login_url}");
-    direct_user_to_url(&login_url);
     let spinner = start_spinner("Waiting for your authorization...");
+    direct_user_to_url(login_url.as_str());
+
     let token_cell = Arc::new(OnceCell::new());
     run_login_one_shot_server(
         DEFAULT_PORT,
@@ -130,6 +121,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
     .await?;
 
     spinner.finish_and_clear();
+
     let token = token_cell
         .get()
         .ok_or_else(|| anyhow!("Failed to get token"))?;
@@ -298,13 +290,13 @@ async fn run_sso_one_shot_server(
 
 #[cfg(test)]
 mod test {
-    use std::fs;
+    use std::{cell::OnceCell, fs};
 
     use reqwest::Url;
     use serde::Deserialize;
     use tempfile::{tempdir, NamedTempFile};
-    use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
     use vercel_api_mock::start_test_server;
 
     use crate::{
@@ -314,7 +306,6 @@ mod test {
             CommandBase,
         },
         config::{ClientConfigLoader, RepoConfigLoader, UserConfigLoader},
-        ui::UI,
         Args,
     };
 
@@ -417,10 +408,6 @@ mod test {
         assert_eq!(
             base.user_config().unwrap().token().unwrap(),
             vercel_api_mock::EXPECTED_TOKEN
-        );
-        assert_eq!(
-            base.repo_config().unwrap().team_id().unwrap(),
-            vercel_api_mock::EXPECTED_SSO_TEAM_ID
         );
     }
 

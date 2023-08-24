@@ -115,11 +115,9 @@ describe("raw", () => {
       // and what they are called with
       const mockWorkspace = jest
         .spyOn(workspace, "workspace")
-        .mockImplementation(() => Promise.resolve(undefined));
+        .mockResolvedValue(undefined);
 
-      const mockRun = jest
-        .spyOn(run, "run")
-        .mockImplementation(() => Promise.resolve(undefined));
+      const mockRun = jest.spyOn(run, "run").mockResolvedValue(undefined);
 
       await raw(command, { json: JSON.stringify(options) });
 

@@ -15,9 +15,6 @@ jobs:
     runs-on: ubuntu-latest-16-core-oss
     outputs:
       output1: ${{ steps.build-next-swc-turbopack-patch.outputs.success }}
-    env:
-      # pnpm version should match to what upstream next.js uses
-      PNPM_VERSION: 7.24.3
     steps:
       - name: Get number of CPU cores
         uses: SimenB/github-actions-cpu-cores@v1
@@ -76,7 +73,7 @@ jobs:
         run: |
           wget https://github.com/sharkdp/hyperfine/releases/download/v1.16.1/hyperfine_1.16.1_amd64.deb
           sudo dpkg -i hyperfine_1.16.1_amd64.deb
-          npm i -g pnpm@$PNPM_VERSION && pnpm --version
+          corepack enable
           pnpm install --loglevel error
 
       - name: Build next-swc with latest turbopack

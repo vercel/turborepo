@@ -194,6 +194,34 @@ jobs:
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
 
+  build_turborepo:
+    name: Build Turborepo
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.go == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          target: ${{ matrix.os.name }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+
   go_lint:
     name: Go linting
     runs-on: ubuntu-latest
@@ -252,7 +280,7 @@ jobs:
 
   go_integration:
     name: Go Integration Tests
-    needs: determine_jobs
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.go_integration == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
@@ -277,11 +305,11 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict
+        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
   turborepo_e2e:
     name: Turborepo E2E Tests
-    needs: determine_jobs
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_e2e == 'true'
     timeout-minutes: 60
     runs-on: ${{ matrix.os.runner }}
@@ -307,7 +335,7 @@ jobs:
 
   turborepo_examples:
     name: Turborepo Examples
-    needs: determine_jobs
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
@@ -336,8 +364,6 @@ jobs:
       # work out of box. We should take another stab at it later.
       - name: Setup Pnpm
         uses: pnpm/action-setup@v2.2.4
-        with:
-          version: 7.2.1
 
       - name: Make sure pnpm always has a cache
         shell: bash
@@ -375,7 +401,7 @@ jobs:
     name: JS Package Tests
     timeout-minutes: 30
     if: needs.determine_jobs.outputs.turborepo_js == 'true'
-    needs: determine_jobs
+    needs: [determine_jobs, build_turborepo]
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -571,7 +597,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          RUSTFLAGS="-D warnings -A deprecated" cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments -Aclippy::needless_pass_by_ref_mut -Aclippy::incorrect_partial_ord_impl_on_ord_type" cargo groups clippy turbopack --features rustls-tls
 
       - name: Run ast-grep lints
         run: |
@@ -651,7 +677,7 @@ jobs:
           comment_tag: check_next_swc_turbopack
 
   turborepo_rust_test:
-    needs: [turborepo_rust_check]
+    needs: [turborepo_rust_check, build_turborepo]
     strategy:
       fail-fast: false
       matrix:
@@ -708,9 +734,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Install tests dependencies
         working-directory: crates/turbopack/tests/node-file-trace
@@ -769,9 +793,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Setup Protoc
         uses: arduino/setup-protoc@v1
@@ -845,9 +867,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
@@ -912,9 +932,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          # TODO: update to Node 18. Currently fails because the node-canvas dependency doesn't compile for node 18
-          # Did not spend too much time investigating so it could be an easy fix.
-          node-version: 16
+          node-version: 18
 
       - name: Build benchmarks for tests
         timeout-minutes: 120
@@ -1030,7 +1048,7 @@ jobs:
         env:
           DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
         run: |
-          npm install -g @datadog/datadog-ci @aws-sdk/property-provider
+          npm install -g @datadog/datadog-ci@2.18.1
           # Query raw benchmark output, create key:value pairs for each benchmark entries.
           # The generated key name is compact format the path of the benchmark entry, i.e
           # `base.hmr_to_commit.CSR.1000.mean`
@@ -1246,7 +1264,11 @@ jobs:
         # Skip `cli` workspace for now. It has the lint task, but in GitHub CI
         # we need to set up golangci-lint to make it work. Go linting is run in the "Go linting"
         # job in this workflow. We can move that in here in the next step.
-        run: turbo run lint --filter=!cli
+        run: turbo run lint:prettier --filter=!cli
+
+        # workspaces are added here as their lint issues are fixed
+      - name: Lint check
+        run: turbo run lint --filter=turbo-ignore --filter=@turbo/types --filter=eslint-config-turbo
 
   final:
     name: Ok
@@ -1389,7 +1411,7 @@ jobs:
           node-version: 18
 
       - name: Install datadog
-        run: npm install -g @datadog/datadog-ci
+        run: npm install -g @datadog/datadog-ci@2.18.1
 
       - name: Download test results
         uses: actions/download-artifact@v3

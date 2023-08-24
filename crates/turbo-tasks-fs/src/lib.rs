@@ -879,25 +879,25 @@ pub struct FileSystemPath {
 }
 
 impl FileSystemPath {
-    pub fn is_inside_ref(&self, context: &FileSystemPath) -> bool {
-        if self.fs == context.fs && self.path.starts_with(&context.path) {
-            if context.path.is_empty() {
+    pub fn is_inside_ref(&self, other: &FileSystemPath) -> bool {
+        if self.fs == other.fs && self.path.starts_with(&other.path) {
+            if other.path.is_empty() {
                 true
             } else {
-                self.path.as_bytes().get(context.path.len()) == Some(&b'/')
+                self.path.as_bytes().get(other.path.len()) == Some(&b'/')
             }
         } else {
             false
         }
     }
 
-    pub fn is_inside_or_equal_ref(&self, context: &FileSystemPath) -> bool {
-        if self.fs == context.fs && self.path.starts_with(&context.path) {
-            if context.path.is_empty() {
+    pub fn is_inside_or_equal_ref(&self, other: &FileSystemPath) -> bool {
+        if self.fs == other.fs && self.path.starts_with(&other.path) {
+            if other.path.is_empty() {
                 true
             } else {
                 matches!(
-                    self.path.as_bytes().get(context.path.len()),
+                    self.path.as_bytes().get(other.path.len()),
                     Some(&b'/') | None
                 )
             }
@@ -1022,6 +1022,14 @@ impl FileSystemPath {
 pub struct FileSystemPathOption(Option<Vc<FileSystemPath>>);
 
 #[turbo_tasks::value_impl]
+impl FileSystemPathOption {
+    #[turbo_tasks::function]
+    pub fn none() -> Vc<Self> {
+        Vc::cell(None)
+    }
+}
+
+#[turbo_tasks::value_impl]
 impl FileSystemPath {
     /// Create a new Vc<FileSystemPath> from a path withing a FileSystem. The
     /// /-separated path is expected to be already normalized (this is asserted
@@ -1112,7 +1120,7 @@ impl FileSystemPath {
                 Self::new_normalized(this.fs, path).resolve().await?,
             )))
         } else {
-            Ok(Vc::cell(None))
+            Ok(FileSystemPathOption::none())
         }
     }
 
@@ -1128,7 +1136,7 @@ impl FileSystemPath {
                 )));
             }
         }
-        Ok(Vc::cell(None))
+        Ok(FileSystemPathOption::none())
     }
 
     #[turbo_tasks::function]

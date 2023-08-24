@@ -2,13 +2,8 @@ import fs from "fs-extra";
 import path from "path";
 import glob from "fast-glob";
 import yaml from "js-yaml";
-import {
-  PackageJson,
-  PackageManager,
-  Project,
-  Workspace,
-  WorkspaceInfo,
-} from "./types";
+import { PackageManager, Project, Workspace, WorkspaceInfo } from "./types";
+import type { PackageJson } from "@turbo/utils";
 import { ConvertError } from "./errors";
 
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
@@ -131,6 +126,22 @@ function expandPaths({
   return paths;
 }
 
+function parseWorkspacePackages({
+  workspaces,
+}: {
+  workspaces: PackageJson["workspaces"];
+}): Array<string> {
+  if (!workspaces) {
+    return [];
+  }
+
+  if ("packages" in workspaces) {
+    return workspaces.packages;
+  }
+
+  return workspaces;
+}
+
 function expandWorkspaces({
   workspaceRoot,
   workspaceGlobs,
@@ -191,6 +202,7 @@ export {
   getWorkspaceInfo,
   expandPaths,
   expandWorkspaces,
+  parseWorkspacePackages,
   getPnpmWorkspaces,
   directoryInfo,
   getMainStep,

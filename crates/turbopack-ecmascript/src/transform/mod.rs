@@ -288,7 +288,7 @@ pub fn remove_shebang(program: &mut Program) {
 
 #[turbo_tasks::value(shared)]
 pub struct UnsupportedServerActionIssue {
-    pub context: Vc<FileSystemPath>,
+    pub file_path: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
@@ -309,8 +309,8 @@ impl Issue for UnsupportedServerActionIssue {
     }
 
     #[turbo_tasks::function]
-    fn context(&self) -> Vc<FileSystemPath> {
-        self.context
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.file_path
     }
 
     #[turbo_tasks::function]

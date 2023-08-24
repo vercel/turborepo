@@ -136,7 +136,7 @@ export async function create(
     skipTransforms || !selectedPackageManagerDetails
       ? {
           name: project.packageManager,
-          version: availablePackageManagers[project.packageManager].version,
+          version: availablePackageManagers[project.packageManager],
         }
       : selectedPackageManagerDetails;
 
@@ -173,7 +173,7 @@ export async function create(
     // before we attempt an install
     if (
       opts.skipTransforms &&
-      !availablePackageManagers[project.packageManager].available
+      !availablePackageManagers[project.packageManager]
     ) {
       warn(
         `Unable to install dependencies - "${exampleName}" uses "${project.packageManager}" which could not be found.`

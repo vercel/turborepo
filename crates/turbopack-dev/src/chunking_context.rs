@@ -27,42 +27,42 @@ use crate::{
 };
 
 pub struct DevChunkingContextBuilder {
-    context: DevChunkingContext,
+    chunking_context: DevChunkingContext,
 }
 
 impl DevChunkingContextBuilder {
     pub fn hot_module_replacement(mut self) -> Self {
-        self.context.enable_hot_module_replacement = true;
+        self.chunking_context.enable_hot_module_replacement = true;
         self
     }
 
     pub fn chunk_base_path(mut self, chunk_base_path: Vc<Option<String>>) -> Self {
-        self.context.chunk_base_path = chunk_base_path;
+        self.chunking_context.chunk_base_path = chunk_base_path;
         self
     }
 
     pub fn layer(mut self, layer: &str) -> Self {
-        self.context.layer = (!layer.is_empty()).then(|| layer.to_string());
+        self.chunking_context.layer = (!layer.is_empty()).then(|| layer.to_string());
         self
     }
 
     pub fn reference_chunk_source_maps(mut self, source_maps: bool) -> Self {
-        self.context.reference_chunk_source_maps = source_maps;
+        self.chunking_context.reference_chunk_source_maps = source_maps;
         self
     }
 
     pub fn reference_css_chunk_source_maps(mut self, source_maps: bool) -> Self {
-        self.context.reference_css_chunk_source_maps = source_maps;
+        self.chunking_context.reference_css_chunk_source_maps = source_maps;
         self
     }
 
     pub fn runtime_type(mut self, runtime_type: RuntimeType) -> Self {
-        self.context.runtime_type = runtime_type;
+        self.chunking_context.runtime_type = runtime_type;
         self
     }
 
     pub fn build(self) -> Vc<DevChunkingContext> {
-        DevChunkingContext::new(Value::new(self.context))
+        DevChunkingContext::new(Value::new(self.chunking_context))
     }
 }
 
@@ -109,7 +109,7 @@ impl DevChunkingContext {
         environment: Vc<Environment>,
     ) -> DevChunkingContextBuilder {
         DevChunkingContextBuilder {
-            context: DevChunkingContext {
+            chunking_context: DevChunkingContext {
                 context_path,
                 output_root,
                 chunk_root_path,
@@ -167,12 +167,14 @@ impl DevChunkingContext {
     fn generate_chunk_list_register_chunk(
         self: Vc<Self>,
         entry_chunk: Vc<Box<dyn Chunk>>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
         other_chunks: Vc<OutputAssets>,
         source: Value<EcmascriptDevChunkListSource>,
     ) -> Vc<Box<dyn OutputAsset>> {
         Vc::upcast(EcmascriptDevChunkList::new(
             self,
             entry_chunk,
+            evaluatable_assets,
             other_chunks,
             source,
         ))
@@ -302,9 +304,9 @@ impl ChunkingContext for DevChunkingContext {
 
     #[turbo_tasks::function]
     async fn with_layer(self: Vc<Self>, layer: String) -> Result<Vc<Self>> {
-        let mut context = self.await?.clone_value();
-        context.layer = (!layer.is_empty()).then(|| layer.to_string());
-        Ok(DevChunkingContext::new(Value::new(context)))
+        let mut chunking_context = self.await?.clone_value();
+        chunking_context.layer = (!layer.is_empty()).then(|| layer.to_string());
+        Ok(DevChunkingContext::new(Value::new(chunking_context)))
     }
 
     #[turbo_tasks::function]
@@ -324,6 +326,7 @@ impl ChunkingContext for DevChunkingContext {
 
         assets.push(self.generate_chunk_list_register_chunk(
             entry_chunk,
+            EvaluatableAssets::empty(),
             Vc::cell(assets.clone()),
             Value::new(EcmascriptDevChunkListSource::Dynamic),
         ));
@@ -370,6 +373,7 @@ impl ChunkingContext for DevChunkingContext {
 
         assets.push(self.generate_chunk_list_register_chunk(
             entry_chunk,
+            evaluatable_assets,
             other_assets,
             Value::new(EcmascriptDevChunkListSource::Entry),
         ));

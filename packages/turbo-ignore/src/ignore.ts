@@ -1,25 +1,28 @@
-import { exec } from "child_process";
-import path from "path";
+import { exec } from "node:child_process";
+import path from "node:path";
 import { getTurboRoot } from "@turbo/utils";
+import type { DryRun } from "@turbo/types";
 import { getComparison } from "./getComparison";
 import { getTask } from "./getTask";
 import { getWorkspace } from "./getWorkspace";
 import { info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
-import { TurboIgnoreArgs } from "./types";
+import type { TurboIgnoreArgs } from "./types";
 import { checkCommit } from "./checkCommit";
 
 function ignoreBuild() {
+  // eslint-disable-next-line no-console
   console.log("⏭ Ignoring the change");
   return process.exit(0);
 }
 
 function continueBuild() {
+  // eslint-disable-next-line no-console
   console.log("✓ Proceeding with deployment");
   return process.exit(1);
 }
 
-export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
+export function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   info(
     `Using Turborepo to determine if this project is affected by the commit...\n`
   );
@@ -49,7 +52,7 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   }
 
   // Identify which task to execute from the command-line args
-  let task = getTask(args);
+  const task = getTask(args);
 
   // check the commit message
   const parsedCommit = checkCommit({ workspace });
@@ -86,19 +89,19 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
         if (level === "warn") {
           warn(message);
         } else {
-          error(`${code}: ${err}`);
+          error(`${code}: ${err.message}`);
         }
         return continueBuild();
       }
 
       try {
-        const parsed = JSON.parse(stdout);
-        if (parsed == null) {
+        const parsed = JSON.parse(stdout) as DryRun | null;
+        if (parsed === null) {
           error(`Failed to parse JSON output from \`${command}\`.`);
           return continueBuild();
         }
         const { packages } = parsed;
-        if (packages && packages.length > 0) {
+        if (packages.length > 0) {
           if (packages.length === 1) {
             info(`This commit affects "${workspace}"`);
           } else {
@@ -111,10 +114,9 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
           }
 
           return continueBuild();
-        } else {
-          info(`This project and its dependencies are not affected`);
-          return ignoreBuild();
         }
+        info(`This project and its dependencies are not affected`);
+        return ignoreBuild();
       } catch (e) {
         error(`Failed to parse JSON output from \`${command}\`.`);
         error(e);

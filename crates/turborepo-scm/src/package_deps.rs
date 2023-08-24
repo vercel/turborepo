@@ -81,7 +81,7 @@ impl Git {
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
         let git_to_pkg_path = self.root.anchor(&full_pkg_path)?;
-        let pkg_prefix = git_to_pkg_path.to_unix()?;
+        let pkg_prefix = git_to_pkg_path.to_unix();
         let mut hashes = self.git_ls_tree(&full_pkg_path)?;
         // Note: to_hash is *git repo relative*
         let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
@@ -96,7 +96,7 @@ impl Git {
     ) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
         let to_hash = files
-            .map(|f| self.root.anchor(process_relative_to.resolve(&f))?.to_unix())
+            .map(|f| Ok(self.root.anchor(process_relative_to.resolve(&f))?.to_unix()))
             .collect::<Result<Vec<_>, PathError>>()?;
         // Note: to_hash is *git repo relative*
         hash_objects(&self.root, process_relative_to, to_hash, &mut hashes)?;
@@ -110,7 +110,7 @@ impl Git {
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
-        let package_unix_path_buf = package_path.to_unix()?;
+        let package_unix_path_buf = package_path.to_unix();
         let package_unix_path = package_unix_path_buf.as_str();
 
         let mut inputs = inputs
@@ -156,7 +156,7 @@ impl Git {
         let to_hash = files
             .iter()
             .map(|entry| {
-                let path = self.root.anchor(entry)?.to_unix()?;
+                let path = self.root.anchor(entry)?.to_unix();
                 Ok(path)
             })
             .collect::<Result<Vec<_>, Error>>()?;

@@ -7,13 +7,13 @@ use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
+use turborepo_ui::BOLD;
 
 use super::CommandBase;
 use crate::{
     config::RawTurboJSON,
     package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
     package_json::PackageJson,
-    ui::BOLD,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -111,7 +111,7 @@ pub fn prune(
                     .package_json_path()
                     .parent()
                     .unwrap()
-                    .to_unix()?
+                    .to_unix()
                     .to_string(),
             );
 
@@ -168,7 +168,7 @@ pub fn prune(
 
         let original = prune.root.resolve(package_json());
         let permissions = original.symlink_metadata()?.permissions();
-        let new_package_json_path = prune.out_directory.resolve(package_json());
+        let new_package_json_path = prune.full_directory.resolve(package_json());
         new_package_json_path.create_with_contents(&pruned_json_contents)?;
         #[cfg(unix)]
         new_package_json_path.set_mode(permissions.mode())?;
@@ -308,7 +308,7 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn copy_workspace(&self, package_json_path: &AnchoredSystemPathBuf) -> Result<(), Error> {
+    fn copy_workspace(&self, package_json_path: &AnchoredSystemPath) -> Result<(), Error> {
         let package_json_path = self.root.resolve(package_json_path);
         let original_dir = package_json_path
             .parent()

@@ -42,6 +42,37 @@ pub struct RepoConfigValue {
     #[serde(alias = "TEAMID")]
     #[serde(rename = "teamid")]
     pub(crate) team_id: Option<String>,
+
+    pub(crate) spaces: Option<SpacesConfigValue>,
+}
+
+// This is identical to RepoConfigValue; it's a clone of the behavior allowing
+// separate configuration.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
+pub struct SpacesConfigValue {
+    #[serde(alias = "apiUrl")]
+    #[serde(alias = "ApiUrl")]
+    #[serde(alias = "APIURL")]
+    #[serde(rename = "apiurl")]
+    pub(crate) api_url: Option<String>,
+
+    #[serde(alias = "loginUrl")]
+    #[serde(alias = "LoginUrl")]
+    #[serde(alias = "LOGINURL")]
+    #[serde(rename = "loginurl")]
+    pub(crate) login_url: Option<String>,
+
+    #[serde(alias = "teamSlug")]
+    #[serde(alias = "TeamSlug")]
+    #[serde(alias = "TEAMSLUG")]
+    #[serde(rename = "teamslug")]
+    pub(crate) team_slug: Option<String>,
+
+    #[serde(alias = "teamId")]
+    #[serde(alias = "TeamId")]
+    #[serde(alias = "TEAMID")]
+    #[serde(rename = "teamid")]
+    pub(crate) team_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +117,62 @@ impl RepoConfig {
         self.disk_config.team_id = team_id.clone();
         self.config.team_id = team_id;
         self.write_to_disk()
+    }
+
+    #[allow(dead_code)]
+    pub fn space_api_url(&self) -> &str {
+        if let Some(space_config) = &self.config.spaces {
+            space_config.api_url.as_deref().unwrap_or(DEFAULT_API_URL)
+        } else {
+            self.api_url()
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn space_login_url(&self) -> &str {
+        if let Some(space_config) = &self.config.spaces {
+            space_config
+                .login_url
+                .as_deref()
+                .unwrap_or(DEFAULT_LOGIN_URL)
+        } else {
+            self.login_url()
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn space_team_slug(&self) -> Option<&str> {
+        if let Some(space_config) = &self.config.spaces {
+            space_config.team_slug.as_deref()
+        } else {
+            self.team_slug()
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn space_team_id(&self) -> Option<&str> {
+        if let Some(space_config) = &self.config.spaces {
+            space_config.team_id.as_deref()
+        } else {
+            self.team_id()
+        }
+    }
+
+    /// Sets the team id and clears the team slug, since it may have been from
+    /// an old team
+    #[allow(dead_code)]
+    pub fn set_space_team_id(&mut self, team_id: Option<String>) -> Result<(), Error> {
+        if let (Some(space_config), Some(space_disk_config)) =
+            (&mut self.config.spaces, &mut self.disk_config.spaces)
+        {
+            space_disk_config.team_slug = None;
+            space_config.team_slug = None;
+            space_disk_config.team_id = team_id.clone();
+            space_config.team_id = team_id;
+            self.write_to_disk()
+        } else {
+            self.set_team_id(team_id)
+        }
     }
 
     fn write_to_disk(&self) -> Result<(), Error> {

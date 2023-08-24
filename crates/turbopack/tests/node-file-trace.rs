@@ -162,7 +162,6 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::stripe("integration/stripe.js")]
 #[case::strong_error_handler("integration/strong-error-handler.js")]
 #[case::symlink_to_file("integration/symlink-to-file/index.js")]
-#[case::tensorflow("integration/tensorflow.js")]
 #[case::tiny_json_http("integration/tiny-json-http.js")]
 #[case::twilio("integration/twilio.js")]
 #[case::ts_morph("integration/ts-morph.js")]
@@ -174,12 +173,11 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::webpack_target_node("integration/webpack-target-node/index.js")]
 #[case::whatwg_url("integration/whatwg-url.js")]
 #[case::when("integration/when.js")]
-// These two tests print a deprecation warning about using folders in exports field to stderr.
 #[case::package_exports_alt_folders_base(
-    CaseInput::new("integration/package-exports/pass/alt-folders.js").expected_stderr("DeprecationWarning")
+    CaseInput::new("integration/package-exports/pass/alt-folders.js").expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_folder(
-    CaseInput::new("integration/package-exports/pass/folder.js").expected_stderr("DeprecationWarning")
+    CaseInput::new("integration/package-exports/pass/folder.js").expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_alt_base("integration/package-exports/pass/alt.js")]
 #[case::package_exports_catch_all("integration/package-exports/pass/catch-all.js")]
@@ -202,7 +200,7 @@ static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 #[case::package_exports_package_sub_suffix_base("integration/package-exports/pass/sub-suffix.js")]
 #[case::package_exports_alt_folders_multiple(
     CaseInput::new("integration/package-exports/fail/alt-folders-multiple.js")
-        .expected_stderr("Error [ERR_MODULE_NOT_FOUND]: Cannot find module")
+        .expected_stderr("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath")
 )]
 #[case::package_exports_alt_multiple(
     CaseInput::new("integration/package-exports/fail/alt-multiple.js")
@@ -416,7 +414,7 @@ fn node_file_trace<B: Backend + 'static>(
                 let output_dir = output_fs.root();
 
                 let source = FileSource::new(input);
-                let context = ModuleAssetContext::new(
+                let module_asset_context = ModuleAssetContext::new(
                     Vc::cell(HashMap::new()),
                     // TODO It's easy to make a mistake here as this should match the config in the
                     // binary. TODO These test cases should move into the
@@ -438,8 +436,8 @@ fn node_file_trace<B: Backend + 'static>(
                     }
                     .cell(),
                 );
-                let module =
-                    context.process(Vc::upcast(source), Value::new(ReferenceType::Undefined));
+                let module = module_asset_context
+                    .process(Vc::upcast(source), Value::new(ReferenceType::Undefined));
                 let rebased = RebasedAsset::new(Vc::upcast(module), input_dir, output_dir);
 
                 #[cfg(not(feature = "bench_against_node_nft"))]

@@ -45,17 +45,17 @@ impl<'a> CacheReader<'a> {
     }
 
     pub fn get_sha(mut self) -> Result<Vec<u8>, CacheError> {
-        let mut context = Sha512::new();
+        let mut hasher = Sha512::new();
         let mut buffer = [0; 8192];
         loop {
             let n = self.reader.read(&mut buffer)?;
             if n == 0 {
                 break;
             }
-            context.update(&buffer[..n]);
+            hasher.update(&buffer[..n]);
         }
 
-        Ok(context.finalize().to_vec())
+        Ok(hasher.finalize().to_vec())
     }
 
     pub fn restore(
