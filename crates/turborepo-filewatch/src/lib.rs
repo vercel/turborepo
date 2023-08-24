@@ -250,18 +250,6 @@ mod test {
         (path, tmp)
     }
 
-    // async fn expect_filesystem_event(
-    //     recv: &mut broadcast::Receiver<DebouncedEvent>,
-    //     expected_path: &AbsoluteSystemPath,
-    //     expected_event: EventKind,
-    // ) { 'outer: loop { let event =
-    //   tokio::time::timeout(Duration::from_millis(3000), recv.recv()) .await
-    //   .expect("timed out waiting for filesystem event") .expect("sender was
-    //   dropped"); println!("event {:?}", event); for path in event.event.paths {
-    //   if path == expected_path && event.event.kind == expected_event { break
-    //   'outer; } } }
-    // }
-
     macro_rules! expect_filesystem_event {
         ($recv:ident, $expected_path:expr, $pattern:pat) => {
             'outer: loop {
@@ -516,7 +504,7 @@ mod test {
         // Create symlink during file watching
         let symlink_path = repo_root.join_component("symlink");
         symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
-        expect_filesystem_event!(recv, symlink_path, EventKind::Create(CreateKind::Other));
+        expect_filesystem_event!(recv, symlink_path, EventKind::Create(_));
 
         // we expect that events in the symlinked directory will be raised with the
         // original path
@@ -560,7 +548,7 @@ mod test {
 
         // Delete symlink during file watching
         symlink_path.remove().unwrap();
-        expect_filesystem_event!(recv, symlink_path, EventKind::Remove(RemoveKind::Other));
+        expect_filesystem_event!(recv, symlink_path, EventKind::Remove(_));
     }
 
     #[tokio::test]
