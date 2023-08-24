@@ -80,7 +80,19 @@ impl<'a> Run<'a> {
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        opts.cache_opts.remote_cache_opts = root_turbo_json.remote_cache_options.clone();
+        let team_id = if let Some(configuration_options) = &root_turbo_json.remote_cache_options {
+            configuration_options.team_id.clone().unwrap_or_default()
+        } else {
+            "".to_string()
+        };
+
+        let signature = if let Some(configuration_options) = &root_turbo_json.remote_cache_options {
+            configuration_options.signature.clone().unwrap_or_default()
+        } else {
+            false
+        };
+
+        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(team_id, signature));
 
         if opts.run_opts.experimental_space_id.is_none() {
             opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();

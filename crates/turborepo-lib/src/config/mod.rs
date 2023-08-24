@@ -2,6 +2,7 @@ mod client;
 mod env;
 mod repo;
 mod turbo;
+mod turbo_config;
 mod user;
 
 use std::path::PathBuf;
@@ -24,6 +25,7 @@ use thiserror::Error;
 pub use turbo::{
     validate_extends, validate_no_package_task_syntax, RawTurboJSON, SpacesJson, TurboJson,
 };
+pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
 pub use user::{UserConfig, UserConfigLoader};
 
 #[derive(Debug, Error)]

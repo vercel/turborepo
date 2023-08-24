@@ -6,11 +6,10 @@ use std::{
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
-use turborepo_cache::RemoteCacheOpts;
 
 use crate::{
     cli::OutputLogsMode,
-    config::Error,
+    config::{turbo_config::ConfigurationOptions, Error},
     package_json::PackageJson,
     run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
     task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionStable, TaskOutputs},
@@ -33,7 +32,7 @@ pub struct TurboJson {
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) pipeline: Pipeline,
-    pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
+    pub(crate) remote_cache_options: Option<ConfigurationOptions>,
     pub(crate) space_id: Option<String>,
 }
 
@@ -64,7 +63,7 @@ pub struct RawTurboJSON {
     pipeline: Option<RawPipeline>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
+    pub(crate) remote_cache_options: Option<ConfigurationOptions>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
@@ -281,6 +280,14 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
 }
 
 impl RawTurboJSON {
+    pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<RawTurboJSON, Error> {
+        let contents = path.read()?;
+        let raw_turbo_json: RawTurboJSON =
+            serde_json::from_reader(json_comments::StripComments::new(contents.as_slice()))?;
+
+        Ok(raw_turbo_json)
+    }
+
     /// Produces a new turbo.json without any tasks that reference non-existent
     /// workspaces
     pub fn prune_tasks<S: AsRef<str>>(&self, workspaces: &[S]) -> Self {
@@ -479,12 +486,9 @@ impl TurboJson {
 
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
-    fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
-        let contents = path.read()?;
-        let turbo_json: RawTurboJSON =
-            serde_json::from_reader(json_comments::StripComments::new(contents.as_slice()))?;
-
-        turbo_json.try_into()
+    pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
+        let raw_turbo_json = RawTurboJSON::read(path)?;
+        raw_turbo_json.try_into()
     }
 
     pub fn task(

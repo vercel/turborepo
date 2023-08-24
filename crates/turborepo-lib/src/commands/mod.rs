@@ -9,7 +9,8 @@ use turborepo_ui::UI;
 use crate::{
     config::{
         default_user_config_path, get_repo_config_path, ClientConfig, ClientConfigLoader,
-        Error as ConfigError, RepoConfig, RepoConfigLoader, UserConfig, UserConfigLoader,
+        ConfigurationOptions, Error as ConfigError, RepoConfig, RepoConfigLoader,
+        TurborepoConfigBuilder, UserConfig, UserConfigLoader,
     },
     Args,
 };
@@ -29,6 +30,7 @@ pub(crate) mod unlink;
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
+    config: OnceCell<ConfigurationOptions>,
     user_config: OnceCell<UserConfig>,
     repo_config: OnceCell<RepoConfig>,
     client_config: OnceCell<ClientConfig>,
@@ -47,11 +49,27 @@ impl CommandBase {
             repo_root,
             ui,
             args,
+            config: OnceCell::new(),
             repo_config: OnceCell::new(),
             user_config: OnceCell::new(),
             client_config: OnceCell::new(),
             version,
         })
+    }
+
+    fn turbo_config_init(&self) -> Result<ConfigurationOptions, String> {
+        TurborepoConfigBuilder::new(&self.repo_root)
+            // The below should be deprecated and removed.
+            .with_api_url(self.args.api.clone())
+            .with_login_url(self.args.login.clone())
+            .with_team_slug(self.args.team.clone())
+            .with_token(self.args.token.clone())
+            .with_timeout(self.args.remote_cache_timeout)
+            .build()
+    }
+
+    pub fn turbo_config(&self) -> Result<&ConfigurationOptions, String> {
+        self.config.get_or_try_init(|| self.turbo_config_init())
     }
 
     fn repo_config_init(&self) -> Result<RepoConfig, ConfigError> {
