@@ -9,6 +9,8 @@ use crate::{
     package_json::PackageJson,
 };
 
+const DEFAULT_TIMEOUT: u64 = 20;
+
 macro_rules! create_builder {
     ($func_name:ident, $property_name:ident, $type:ty) => {
         pub fn $func_name(mut self, value: $type) -> Self {
@@ -36,6 +38,49 @@ pub struct TurborepoConfigBuilder {
 
     // Used for testing.
     override_config: ConfigurationOptions,
+}
+
+// Getters
+impl ConfigurationOptions {
+    #[allow(dead_code)]
+    pub fn api_url(&self) -> &str {
+        self.api_url.as_deref().unwrap_or(DEFAULT_API_URL)
+    }
+
+    #[allow(dead_code)]
+    pub fn login_url(&self) -> &str {
+        self.login_url.as_deref().unwrap_or(DEFAULT_LOGIN_URL)
+    }
+
+    #[allow(dead_code)]
+    pub fn team_slug(&self) -> Option<&str> {
+        self.team_slug.as_deref()
+    }
+
+    #[allow(dead_code)]
+    pub fn team_id(&self) -> Option<&str> {
+        self.team_id.as_deref()
+    }
+
+    #[allow(dead_code)]
+    pub fn token(&self) -> Option<&str> {
+        self.token.as_deref()
+    }
+
+    #[allow(dead_code)]
+    pub fn signature(&self) -> bool {
+        self.signature.as_deref().unwrap_or_default()
+    }
+
+    #[allow(dead_code)]
+    pub fn preflight(&self) -> bool {
+        self.preflight.as_deref().unwrap_or_default()
+    }
+
+    #[allow(dead_code)]
+    pub fn timeout(&self) -> bool {
+        self.timeout.as_deref().unwrap_or(DEFAULT_TIMEOUT)
+    }
 }
 
 impl config::Source for PackageJson {
