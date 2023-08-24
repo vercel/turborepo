@@ -130,12 +130,11 @@ impl CommandBase {
     }
 
     pub fn api_client(&self) -> Result<APIClient> {
-        let repo_config = self.repo_config()?;
-        let client_config = self.client_config()?;
+        let config = self.turbo_config()?;
         let args = self.args();
 
-        let api_url = repo_config.api_url();
-        let timeout = client_config.remote_cache_timeout();
+        let api_url = config.api_url();
+        let timeout = config.timeout();
         Ok(APIClient::new(
             api_url,
             timeout,

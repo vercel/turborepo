@@ -48,27 +48,24 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
             PackageManager::get_package_manager(&base.repo_root, root_package_json.as_ref())?;
         trace!("Found {} as package manager", package_manager);
 
-        let repo_config = base.repo_config()?;
-        let user_config = base.user_config()?;
-        let client_config = base.client_config()?;
-        let args = base.args();
+        let config = base.turbo_config()?;
 
         let api_client_config = APIClientConfig {
-            token: user_config.token(),
-            team_id: repo_config.team_id(),
-            team_slug: repo_config.team_slug(),
-            api_url: repo_config.api_url(),
-            use_preflight: args.preflight,
-            timeout: client_config.remote_cache_timeout(),
+            token: config.token(),
+            team_id: config.team_id(),
+            team_slug: config.team_slug(),
+            api_url: config.api_url(),
+            use_preflight: config.preflight(),
+            timeout: config.remote_cache_timeout(),
         };
 
         let spaces_api_client_config = SpacesAPIClientConfig {
-            token: user_config.token(),
-            team_id: repo_config.space_team_id(),
-            team_slug: repo_config.space_team_slug(),
-            api_url: repo_config.space_api_url(),
-            use_preflight: args.preflight,
-            timeout: client_config.remote_cache_timeout(),
+            token: config.token(),
+            team_id: config.team_id(),
+            team_slug: config.team_slug(),
+            api_url: config.api_url(),
+            use_preflight: config.preflight(),
+            timeout: config.remote_cache_timeout(),
         };
 
         Ok(ExecutionState {

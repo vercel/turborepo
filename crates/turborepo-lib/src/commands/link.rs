@@ -114,7 +114,7 @@ pub async fn link(
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let token = base.user_config()?.token().ok_or_else(|| {
+    let token = base.turbo_config()?.token().ok_or_else(|| {
         anyhow!(
             "User not found. Please login to Turborepo first by running {}.",
             BOLD.apply_to("`npx turbo login`")
@@ -496,6 +496,14 @@ mod test {
             )
             .unwrap(),
             ui: UI::new(false),
+            config: OnceCell::from(
+                TurborepoConfigBuilder::new()
+                    .with_api_url(Some(format!("http://localhost:{}", port)))
+                    .with_login_url(Some(format!("http://localhost:{}", port)))
+                    .with_token(Some("token".to_string()))
+                    .build()
+                    .unwrap(),
+            ),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
                 UserConfigLoader::new(user_config_file.path().to_str().unwrap())
@@ -519,7 +527,7 @@ mod test {
             .unwrap();
 
         handle.abort();
-        let team_id = base.repo_config().unwrap().team_id();
+        let team_id = base.turbo_config().unwrap().team_id();
         assert!(
             team_id == Some(turborepo_vercel_api_mock::EXPECTED_USER_ID)
                 || team_id == Some(turborepo_vercel_api_mock::EXPECTED_TEAM_ID)
@@ -549,6 +557,14 @@ mod test {
             repo_root: AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().into_path())
                 .unwrap(),
             ui: UI::new(false),
+            config: OnceCell::from(
+                TurborepoConfigBuilder::new()
+                    .with_api_url(Some(format!("http://localhost:{}", port)))
+                    .with_login_url(Some(format!("http://localhost:{}", port)))
+                    .with_token(Some("token".to_string()))
+                    .build()
+                    .unwrap(),
+            ),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
                 UserConfigLoader::new(user_config_file.path().to_str().unwrap())
