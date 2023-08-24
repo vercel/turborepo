@@ -50,6 +50,9 @@ pub async fn node_evaluate_asset_context(
         } else {
             "development".to_string()
         };
+
+    // base context used for node_modules (and context for app code will be derived
+    // from this)
     let resolve_options_context = ResolveOptionsContext {
         enable_node_modules: Some(execution_context.project_path().root().resolve().await?),
         enable_node_externals: true,
@@ -57,6 +60,7 @@ pub async fn node_evaluate_asset_context(
         custom_conditions: vec![node_env.clone(), "node".to_string()],
         ..Default::default()
     };
+    // app code context, includes a rule to switch to the node_modules context
     let resolve_options_context = ResolveOptionsContext {
         enable_typescript: true,
         import_map: Some(import_map),
@@ -67,6 +71,7 @@ pub async fn node_evaluate_asset_context(
         ..resolve_options_context
     }
     .cell();
+
     Ok(Vc::upcast(ModuleAssetContext::new(
         transitions.unwrap_or_else(|| Vc::cell(Default::default())),
         CompileTimeInfo::builder(node_build_environment())
