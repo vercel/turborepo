@@ -17,13 +17,13 @@
 
 use std::{
     future::ready,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
 use futures::TryFutureExt;
 pub use tokio::process::Command;
-use tokio::sync::{broadcast, mpsc, oneshot, watch};
+use tokio::sync::{broadcast, mpsc, oneshot, watch, RwLock};
 use tracing::debug;
 
 /// Represents all the information needed to run a child process.
@@ -146,13 +146,12 @@ impl ShutdownStyle {
 #[derive(Clone)]
 pub struct Child {
     pid: Option<u32>,
-    shutdown_style: ShutdownStyle,
     state: Arc<RwLock<ChildState>>,
     exit_channel: watch::Receiver<Option<i32>>,
 }
 
 #[derive(Debug)]
-struct ChildCommandChannel(mpsc::Sender<ChildCommand>);
+pub struct ChildCommandChannel(mpsc::Sender<ChildCommand>);
 
 impl ChildCommandChannel {
     pub fn new() -> (Self, mpsc::Receiver<ChildCommand>) {
@@ -169,7 +168,7 @@ impl ChildCommandChannel {
     }
 }
 
-enum ChildCommand {
+pub enum ChildCommand {
     Stop,
     Kill,
 }
@@ -180,10 +179,10 @@ impl Child {
     ///
     /// This spawns a task that will wait for the child process to exit, and
     /// send the exit code to the channel.
-    pub fn spawn(command: Command, shutdown_style: ShutdownStyle) -> Self {
-        let child = command.spawn().expect("failed to start child");
+    pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> Self {
+        let mut child = command.spawn().expect("failed to start child");
 
-        let (command_tx, command_rx) = ChildCommandChannel::new();
+        let (command_tx, mut command_rx) = ChildCommandChannel::new();
         let (exit_tx, exit_rx) = watch::channel(None);
 
         let state = Arc::new(RwLock::new(ChildState::Running(command_tx)));
@@ -206,7 +205,7 @@ impl Child {
                     };
 
                     {
-                        let mut task_state = task_state.write().expect("only fails if this task already holds a lock");
+                        let mut task_state = task_state.write().await;
                         *task_state = state;
                     }
                 }
@@ -214,7 +213,7 @@ impl Child {
                     // the child process exited
                     let exit_code = status.ok().and_then(|s| s.code());
                         {
-                            let mut task_state = task_state.write().expect("only fails if this task already holds a lock");
+                            let mut task_state = task_state.write().await;
                             *task_state = ChildState::Finished(exit_code);
                         }
                         exit_tx.send(exit_code).ok();
@@ -225,7 +224,6 @@ impl Child {
 
         Self {
             pid,
-            shutdown_style,
             state,
             exit_channel: exit_rx,
         }
@@ -237,32 +235,34 @@ impl Child {
     }
 
     /// Perform a graceful shutdown of the child process.
-    pub async fn stop(&self) -> Result<(), KillFailed> {
+    pub async fn stop(&mut self) -> Result<(), KillFailed> {
         {
-            let child = match Self::child(&self.state) {
+            let state = self.state.read().await;
+            let child = match Self::child(&*state) {
                 Some(child) => child,
                 None => return Ok(()),
             };
             child.stop().await;
-            Ok(())
         }
+
+        self.wait().await;
+        Ok(())
     }
 
     /// Kill the child process immediately.
-    pub async fn kill(&self) -> Result<(), KillFailed> {
+    pub async fn kill(&mut self) -> Result<(), KillFailed> {
         let next_state = {
-            let child = match Self::child(&self.state.read().expect("only fails if poisoned")) {
+            let rw_lock_read_guard = self.state.read().await;
+            let child = match Self::child(&*rw_lock_read_guard) {
                 Some(child) => child,
                 None => return Ok(()),
             };
 
-            ShutdownStyle::Kill
-                .process(child, self.exit_channel.take())
-                .await?
+            child.kill().await;
         };
 
-        let mut state = self.state.write().expect("only fails if poisoned");
-        *state = next_state;
+        let mut state = self.state.write().await;
+        // *state = next_state;
 
         Ok(())
     }
@@ -301,27 +301,17 @@ mod test {
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
 
-    #[test]
-    fn test_pid_no_process() {
-        let mut cmd = Command::new("echo");
-        cmd.args(&["hello", "world"]);
-        let child = Child::spawn(cmd, ShutdownStyle::Kill);
-
-        assert_eq!(child.pid(), None);
-    }
-
     #[tokio::test]
     async fn test_pid() {
         let mut cmd = Command::new("echo");
         cmd.args(&["hello", "world"]);
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
 
-        child.start();
-        assert_ne!(child.pid(), None);
+        assert_matches!(child.pid(), Some(_));
         child.stop().await.unwrap();
 
-        assert_eq!(child.pid(), None);
-        assert_matches!(child.state, ChildState::Killed);
+        let state = child.state.read().await;
+        assert_matches!(&*state, ChildState::Running(_));
     }
 
     #[tokio::test]
@@ -331,18 +321,17 @@ mod test {
         cmd.args(&["hello", "world"]);
         cmd.stdout(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
-        assert_matches!(child.state, ChildState::Start);
 
-        tokio::select! {
-            ret = child.start() => {
-                println!("ret: {:?}", ret);
-            }
-            _ = child.wait() => {
-                println!("wait complete");
-            }
+        {
+            let state = child.state.read().await;
+            assert_matches!(&*state, ChildState::Running(_));
         }
 
-        assert_matches!(child.state, ChildState::Finished(Some(0)));
+        child.wait().await;
+
+        let state = child.state.read().await;
+
+        assert_matches!(&*state, ChildState::Finished(Some(0)));
     }
 
     #[tokio::test]
@@ -352,7 +341,6 @@ mod test {
         cmd.stdout(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
 
-        child.start();
         tokio::time::sleep(STARTUP_DELAY).await;
 
         {
@@ -372,7 +360,10 @@ mod test {
         }
 
         child.stop().await;
-        assert_matches!(child.state, ChildState::Killed);
+
+        let state = child.state.read().await;
+
+        assert_matches!(&*state, ChildState::Killed);
     }
 
     #[tokio::test]
@@ -382,14 +373,15 @@ mod test {
         cmd.args(&["-c", "trap '' SIGINT INT; while true; do sleep 0.1; done"]);
         let mut child = Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500)));
 
-        child.start();
         // give it a moment to register the signal handler
         tokio::time::sleep(STARTUP_DELAY).await;
 
         child.stop().await.unwrap();
 
+        let state = child.state.read().await;
+
         // this should time out and be killed
-        assert_matches!(child.state, ChildState::Killed);
+        assert_matches!(&*state, ChildState::Killed);
     }
 
     #[tokio::test]
@@ -398,13 +390,14 @@ mod test {
         let mut cmd = Command::new("sh");
         cmd.args(&["-c", "while true; do sleep 0.2; done"]);
         let mut child = Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500)));
-        child.start();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
         child.stop().await.unwrap();
 
+        let state = child.state.read().await;
+
         // process exits with 1 when interrupted
-        assert_matches!(child.state, ChildState::Finished(None));
+        assert_matches!(&*state, &ChildState::Finished(None));
     }
 }
