@@ -6,6 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(target_os = "macos")]
 use fsevent::FsEventWatcher;
 use itertools::Itertools;
 use notify::{
@@ -13,8 +14,8 @@ use notify::{
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use notify_debouncer_full::{
-    new_debouncer_opt, DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer,
-    FileIdMap,
+    new_bouncer, new_debouncer_opt, DebounceEventHandler, DebounceEventResult, DebouncedEvent,
+    Debouncer, FileIdMap,
 };
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
