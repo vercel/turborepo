@@ -3,7 +3,7 @@ Setup
 
 Bad flag should print misuse text
   $ ${TURBO} --bad-flag
-  ERROR unexpected argument '--bad-flag' found
+   ERROR  unexpected argument '--bad-flag' found
   
     note: to pass '--bad-flag' as a value, use '-- --bad-flag'
   
@@ -15,7 +15,7 @@ Bad flag should print misuse text
 
 Bad flag with an implied run command should display run flags
   $ ${TURBO} build --bad-flag
-  ERROR unexpected argument '--bad-flag' found
+   ERROR  unexpected argument '--bad-flag' found
   
     note: to pass '--bad-flag' as a value, use '-- --bad-flag'
   
