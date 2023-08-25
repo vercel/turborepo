@@ -183,13 +183,8 @@ impl AsyncModule {
     }
 
     #[turbo_tasks::function]
-    async fn has_top_level_await(self: Vc<Self>) -> Result<Vc<bool>> {
-        Ok(Vc::cell(self.await?.has_top_level_await))
-    }
-
-    #[turbo_tasks::function]
-    pub(crate) async fn is_self_async(&self) -> Result<Vc<bool>> {
-        Ok(Vc::cell(self.has_top_level_await))
+    pub(crate) fn is_self_async(&self) -> Vc<bool> {
+        Vc::cell(self.has_top_level_await)
     }
 
     #[turbo_tasks::function]
