@@ -1,4 +1,4 @@
-import path from "path";
+import path from "node:path";
 import chalk from "chalk";
 import type { Project } from "@turbo/workspaces";
 import {
@@ -12,13 +12,13 @@ import {
   createProject,
   logger,
 } from "@turbo/utils";
-import type { CreateCommandArgument, CreateCommandOptions } from "./types";
-import * as prompts from "./prompts";
 import { tryGitCommit, tryGitInit } from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
 import { isDefaultExample } from "../../utils/isDefaultExample";
+import * as prompts from "./prompts";
+import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 
 const { turboGradient, turboLoader, info, error, warn } = logger;
 
@@ -52,8 +52,10 @@ export async function create(
   opts: CreateCommandOptions
 ) {
   const { skipInstall, skipTransforms } = opts;
+  // eslint-disable-next-line no-console
   console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
+  // eslint-disable-next-line no-console
   console.log();
 
   const [online, availablePackageManagers] = await Promise.all([
@@ -67,13 +69,13 @@ export async function create(
     );
     process.exit(1);
   }
-  const { root, projectName } = await prompts.directory({ directory });
+  const { root, projectName } = await prompts.directory({ dir: directory });
   const relativeProjectDir = path.relative(process.cwd(), root);
   const projectDirIsCurrentDir = relativeProjectDir === "";
 
   // selected package manager can be undefined if the user chooses to skip transforms
   const selectedPackageManagerDetails = await prompts.packageManager({
-    packageManager,
+    manager: packageManager,
     skipTransforms,
   });
 
@@ -107,6 +109,7 @@ export async function create(
   if (!skipTransforms) {
     for (const transform of transforms) {
       try {
+        // eslint-disable-next-line no-await-in-loop
         const transformResult = await transform({
           example: {
             repo: repoInfo,
@@ -141,11 +144,12 @@ export async function create(
       : selectedPackageManagerDetails;
 
   info("Created a new Turborepo with the following:");
+  // eslint-disable-next-line no-console
   console.log();
   if (project.workspaceData.workspaces.length > 0) {
     const workspacesForDisplay = project.workspaceData.workspaces
       .map((w) => ({
-        group: path.relative(root, w.paths.root).split(path.sep)?.[0] || "",
+        group: path.relative(root, w.paths.root).split(path.sep)[0] || "",
         title: path.relative(root, w.paths.root),
         description: w.description,
       }))
@@ -154,19 +158,24 @@ export async function create(
     let lastGroup: string | undefined;
     workspacesForDisplay.forEach(({ group, title, description }, idx) => {
       if (idx === 0 || group !== lastGroup) {
+        // eslint-disable-next-line no-console
         console.log(chalk.cyan(group));
       }
+      // eslint-disable-next-line no-console
       console.log(
         ` - ${chalk.bold(title)}${description ? `: ${description}` : ""}`
       );
       lastGroup = group;
     });
   } else {
+    // eslint-disable-next-line no-console
     console.log(chalk.cyan("apps"));
+    // eslint-disable-next-line no-console
     console.log(` - ${chalk.bold(projectName)}`);
   }
 
   // run install
+  // eslint-disable-next-line no-console
   console.log();
   if (hasPackageJson && !skipInstall) {
     // in the case when the user opted out of transforms, but not install, we need to make sure the package manager is available
@@ -181,9 +190,12 @@ export async function create(
       warn(
         `Try running without "--skip-transforms" to convert "${exampleName}" to a package manager that is available on your system.`
       );
+      // eslint-disable-next-line no-console
       console.log();
-    } else if (projectPackageManager) {
+    } else if (projectPackageManager.version) {
+      // eslint-disable-next-line no-console
       console.log("Installing packages. This might take a couple of minutes.");
+      // eslint-disable-next-line no-console
       console.log();
 
       const loader = turboLoader("Installing dependencies...").start();
@@ -201,12 +213,14 @@ export async function create(
   }
 
   if (projectDirIsCurrentDir) {
+    // eslint-disable-next-line no-console
     console.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
       )} Your new Turborepo is ready.`
     );
   } else {
+    // eslint-disable-next-line no-console
     console.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
@@ -216,6 +230,7 @@ export async function create(
 
   // get the package manager details so we display the right commands to the user in log messages
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
+  /* eslint-disable no-console */
   if (packageManagerMeta && hasPackageJson) {
     console.log(
       `Inside ${
@@ -246,4 +261,5 @@ export async function create(
     console.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
     console.log();
   }
+  /* eslint-enable no-console */
 }
