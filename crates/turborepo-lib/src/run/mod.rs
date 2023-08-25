@@ -184,7 +184,11 @@ impl Run {
             .map_err(|errors| {
                 anyhow!(
                     "error preparing engine: Invalid persistent task configuration:\n{}",
-                    errors.into_iter().join("\n")
+                    errors
+                        .into_iter()
+                        .map(|e| e.to_string())
+                        .sorted()
+                        .join("\n")
                 )
             })?;
 
