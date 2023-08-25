@@ -3,7 +3,7 @@
   "private": true,
   "main": "src/index.js",
   "scripts": {
-    "lint": "eslint src/**/*",
+    "lint": "eslint src/",
     "pack": "ncc -t -o . build src/index.ts",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../../.prettierignore"
   },
