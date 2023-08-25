@@ -454,12 +454,12 @@ func (e *Engine) AddDep(fromTaskID string, toTaskID string) error {
 // ValidatePersistentDependencies checks if any task dependsOn persistent tasks and throws
 // an error if that task is actually implemented
 func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph, concurrency int) error {
-	var validationError error
+	var validationErrors []string
 	persistentCount := 0
 
 	// Adding in a lock because otherwise walking the graph can introduce a data race
 	// (reproducible with `go test -race`)
-	var sema = util.NewSemaphore(1)
+	var mu sync.Mutex
 
 	errs := e.TaskGraph.Walk(func(v dag.Vertex) error {
 		vertexName := dag.VertexName(v) // vertexName is a taskID
@@ -468,12 +468,6 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph, conc
 		if strings.Contains(vertexName, ROOT_NODE_NAME) {
 			return nil
 		}
-
-		// Aquire a lock, because otherwise walking this group can cause a race condition
-		// writing to the same validationError var defined outside the Walk(). This shows
-		// up when running tests with the `-race` flag.
-		sema.Acquire()
-		defer sema.Release()
 
 		currentTaskDefinition, currentTaskExists := e.completeGraph.TaskDefinitions[vertexName]
 		if currentTaskExists && currentTaskDefinition.Persistent {
@@ -511,11 +505,16 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph, conc
 
 			// If both conditions are true set a value and break out of checking the dependencies
 			if depTaskDefinition.Persistent && hasScript {
-				validationError = fmt.Errorf(
+				// Aquire a lock, because otherwise walking this group can cause a race condition
+				// writing to the same validationErrors var defined outside the Walk(). This shows
+				// up when running tests with the `-race` flag.
+				mu.Lock()
+				defer mu.Unlock()
+				validationErrors = append(validationErrors, fmt.Sprintf(
 					"\"%s\" is a persistent task, \"%s\" cannot depend on it",
 					util.GetTaskId(packageName, taskName),
 					util.GetTaskId(currentPackageName, currentTaskName),
-				)
+				))
 
 				break
 			}
@@ -528,8 +527,9 @@ func (e *Engine) ValidatePersistentDependencies(graph *graph.CompleteGraph, conc
 		return fmt.Errorf("Validation failed: %v", err)
 	}
 
-	if validationError != nil {
-		return validationError
+	if len(validationErrors) > 0 {
+		sort.Strings(validationErrors)
+		return fmt.Errorf("%s", strings.Join(validationErrors, "\n"))
 	} else if persistentCount >= concurrency {
 		return fmt.Errorf("You have %v persistent tasks but `turbo` is configured for concurrency of %v. Set --concurrency to at least %v", persistentCount, concurrency, persistentCount+1)
 	}
