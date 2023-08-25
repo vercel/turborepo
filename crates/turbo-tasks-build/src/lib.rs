@@ -461,8 +461,8 @@ impl<'a> RegisterContext<'a> {
             let fn_ident = Ident::new(fn_name, ident.span());
 
             let (impl_fn_ident, global_name) = (
-                get_trait_impl_function_ident(ident, &trait_ident, &fn_ident),
-                self.get_global_name(&[ident, &trait_ident, &fn_ident]),
+                get_trait_impl_function_ident(ident, trait_ident, &fn_ident),
+                self.get_global_name(&[ident, trait_ident, &fn_ident]),
             );
 
             self.register(impl_fn_ident, global_name)?;
