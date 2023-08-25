@@ -5,7 +5,7 @@
   "scripts": {
     "build": "ncc build src/index.ts -o dist --source-map --minify",
     "prepare": "pnpm run build",
-    "lint": "eslint src/**/*",
+    "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../../.prettierignore"
   },
   "dependencies": {
