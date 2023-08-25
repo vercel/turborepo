@@ -224,8 +224,8 @@ pub enum ValidateError {
         dependant: String,
     },
     #[error(
-        "You have {persistent_count} persistent tasks, but `turbo` is configured for concurrency \
-         of {concurrency}. Set --concurrency to at least {persistent_count}"
+        "You have {persistent_count} persistent tasks but `turbo` is configured for concurrency \
+         of {concurrency}. Set --concurrency to at least {}", persistent_count+1
     )]
     PersistentTasksExceedConcurrency {
         persistent_count: u32,

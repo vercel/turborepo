@@ -147,7 +147,7 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32> {
         };
     }
     match concurrency_raw.parse::<u32>() {
-        Ok(concurrency) if concurrency > 1 => Ok(concurrency),
+        Ok(concurrency) if concurrency >= 1 => Ok(concurrency),
         Ok(_) | Err(_) => Err(anyhow!(
             "invalid value for --concurrency CLI flag. This should be a positive integer greater \
              than or equal to 1: {}",
