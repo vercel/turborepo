@@ -1,4 +1,4 @@
-import { PackageManager } from "../src/types";
+import type { PackageManager } from "../src/types";
 
 const PACKAGE_MANAGERS: Array<PackageManager> = ["pnpm", "npm", "yarn"];
 const REPO_TYPES: Array<"monorepo" | "non-monorepo"> = [
