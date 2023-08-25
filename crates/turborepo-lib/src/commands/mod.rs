@@ -74,18 +74,6 @@ impl CommandBase {
         Ok(self.repo_config.get_mut().unwrap())
     }
 
-    // NOTE: This deletes the repo config file. It does *not* remove the
-    // `RepoConfig` struct from `CommandBase`. This is fine because we
-    // currently do not have any commands that delete the repo config file
-    // and then attempt to read from it.
-    pub fn delete_repo_config_file(&mut self) -> Result<()> {
-        let repo_config_path = get_repo_config_path(self.repo_root.borrow());
-        if repo_config_path.exists() {
-            std::fs::remove_file(repo_config_path)?;
-        }
-        Ok(())
-    }
-
     fn user_config_init(&self) -> Result<UserConfig, ConfigError> {
         UserConfigLoader::new(default_user_config_path()?)
             .with_token(self.args.token.clone())
