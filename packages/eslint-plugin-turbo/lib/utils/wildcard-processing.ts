@@ -1,4 +1,4 @@
-import { EnvWildcard } from "@turbo/types/src/types/config";
+import type { EnvWildcard } from "@turbo/types/src/types/config";
 
 const reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
 const reHasRegExpChar = RegExp(reRegExpChar.source);
@@ -13,20 +13,20 @@ const wildcardEscape = "\\";
 const regexWildcardSegment = ".*";
 
 function wildcardToRegexPattern(pattern: string): string {
-  let regexString: string[] = [];
+  const regexString: Array<string> = [];
 
-  let previousIndex: number = 0;
+  let previousIndex = 0;
   let previousRune: null | string = null;
 
   for (let i = 0; i < pattern.length; i++) {
-    let char = pattern[i];
+    const char = pattern[i];
     if (char === wildcard) {
       if (previousRune === wildcardEscape) {
         // Found a literal *
 
         // Replace the trailing "\*" with just "*" before adding the segment.
         regexString.push(
-          escapeRegExp(pattern.slice(previousIndex, i - 1) + "*")
+          escapeRegExp(`${pattern.slice(previousIndex, i - 1)}*`)
         );
       } else {
         // Found a wildcard
@@ -53,7 +53,7 @@ function wildcardToRegexPattern(pattern: string): string {
 }
 
 interface Testable {
-  test(input: string): boolean;
+  test: (input: string) => boolean;
 }
 
 const NO_PATTERNS = {
@@ -62,28 +62,30 @@ const NO_PATTERNS = {
   },
 };
 
-export type WildcardTests = {
+export interface WildcardTests {
   inclusions: Testable;
   exclusions: Testable;
-};
+}
 
 // wildcardTests returns a WildcardSet after processing wildcards against it.
-export function wildcardTests(wildcardPatterns: EnvWildcard[]): WildcardTests {
-  let includePatterns: string[] = [];
-  let excludePatterns: string[] = [];
+export function wildcardTests(
+  wildcardPatterns: Array<EnvWildcard>
+): WildcardTests {
+  const includePatterns: Array<string> = [];
+  const excludePatterns: Array<string> = [];
 
   wildcardPatterns.forEach((wildcardPattern) => {
-    let isExclude = wildcardPattern[0] === "!";
-    let isLiteralLeadingExclamation = wildcardPattern.indexOf("\\!") === 0;
+    const isExclude = wildcardPattern.startsWith("!");
+    const isLiteralLeadingExclamation = wildcardPattern.startsWith("\\!");
 
     if (isExclude) {
-      let excludePattern = wildcardToRegexPattern(wildcardPattern.slice(1));
+      const excludePattern = wildcardToRegexPattern(wildcardPattern.slice(1));
       excludePatterns.push(excludePattern);
     } else if (isLiteralLeadingExclamation) {
-      let includePattern = wildcardToRegexPattern(wildcardPattern.slice(1));
+      const includePattern = wildcardToRegexPattern(wildcardPattern.slice(1));
       includePatterns.push(includePattern);
     } else {
-      let includePattern = wildcardToRegexPattern(wildcardPattern);
+      const includePattern = wildcardToRegexPattern(wildcardPattern);
       includePatterns.push(includePattern);
     }
   });
@@ -94,10 +96,10 @@ export function wildcardTests(wildcardPatterns: EnvWildcard[]): WildcardTests {
 
   // Override if they're not empty.
   if (includePatterns.length > 0) {
-    inclusions = new RegExp("^(" + includePatterns.join("|") + ")$");
+    inclusions = new RegExp(`^(${includePatterns.join("|")})$`);
   }
   if (excludePatterns.length > 0) {
-    exclusions = new RegExp("^(" + excludePatterns.join("|") + ")$");
+    exclusions = new RegExp(`^(${excludePatterns.join("|")})$`);
   }
 
   return {
