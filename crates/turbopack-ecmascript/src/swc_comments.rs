@@ -119,4 +119,32 @@ impl Comments for ImmutableComments {
     fn add_pure_comment(&self, _pos: swc_core::common::BytePos) {
         panic!("Comments are immutable after parsing")
     }
+
+    fn with_leading<F, Ret>(&self, pos: BytePos, f: F) -> Ret
+    where
+        Self: Sized,
+        F: FnOnce(&[Comment]) -> Ret,
+    {
+        let cmts = self.get_leading(pos);
+
+        if let Some(cmts) = &cmts {
+            f(cmts)
+        } else {
+            f(&[])
+        }
+    }
+
+    fn with_trailing<F, Ret>(&self, pos: BytePos, f: F) -> Ret
+    where
+        Self: Sized,
+        F: FnOnce(&[Comment]) -> Ret,
+    {
+        let cmts = self.get_trailing(pos);
+
+        if let Some(cmts) = &cmts {
+            f(cmts)
+        } else {
+            f(&[])
+        }
+    }
 }
