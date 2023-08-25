@@ -416,7 +416,7 @@ impl<'a> RegisterContext<'a> {
         self.add_value_trait(
             ident,
             &get_type_ident(&parse_quote! {
-                turbo_tasks::default::ValueDefault
+                turbo_tasks::ValueDefault
             })
             .unwrap(),
         );
@@ -488,7 +488,7 @@ impl<'a> RegisterContext<'a> {
         self.register_impl(
             ident,
             &get_type_ident(&parse_quote! {
-                turbo_tasks::default::ValueDefault
+                turbo_tasks::ValueDefault
             })
             .unwrap(),
             &["value_default"],
