@@ -19,7 +19,7 @@ use notify_debouncer_full::{
 };
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, PathRelation};
 use walkdir::WalkDir;
 
 #[cfg(target_os = "macos")]
@@ -65,6 +65,7 @@ impl FileSystemWatcher {
             let mut debouncer = debouncer;
             #[cfg(not(target_os = "linux"))]
             let _debouncer = debouncer;
+            let watch_root = watch_root;
 
             let mut exit_signal = exit_signal;
             'outer: loop {
@@ -73,7 +74,7 @@ impl FileSystemWatcher {
                     Some(event) = recv_file_events.recv().into_future() => {
                         match event {
                             Ok(events) => {
-                                for event in events {
+                                for mut event in events {
                                     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                                     {
                                         let time = event.time;
@@ -82,6 +83,7 @@ impl FileSystemWatcher {
                                                 watch_recursively(&new_path, debouncer.watcher(), Some((time, &broadcast_sender)))?;
                                             }
                                         }
+                                        filter_relevant(&watch_root, &mut event);
                                     }
                                     // we don't care if we fail to send, it just means no one is currently watching
                                     let _ = broadcast_sender.send(event);
@@ -106,9 +108,67 @@ impl FileSystemWatcher {
     }
 }
 
+// Since we're manually watching the parent directories, we need
+// to handle both getting irrelevant events and getting ancestor
+// events that translate to events at the root.
+#[cfg(not(target_os = "macos"))]
+fn filter_relevant(root: &AbsoluteSystemPath, event: &mut DebouncedEvent) {
+    // If path contains root && event type is modify, synthesize modify at root
+    let is_modify_existing = matches!(event.kind, EventKind::Remove(_) | EventKind::Modify(_));
+
+    event.paths.retain_mut(|path| {
+        match root.relation_to_path(&path) {
+            PathRelation::Incomparable => panic!("Non-absolute path from filewatching"),
+            // An irrelevant path, probably from a non-recursive watch of a parent directory
+            PathRelation::Divergent => false,
+            // A path contained in the root
+            PathRelation::Parent => true,
+            PathRelation::Child => {
+                // If we're modifying something along the path to the
+                // root, move the event to the root
+                if is_modify_existing {
+                    *path = root.as_std_path().to_owned();
+                }
+                true
+            }
+        }
+}   )
+}
+
+fn is_permission_denied(result: &Result<(), notify::Error>) -> bool {
+    if let Err(err) = result {
+        if let notify::ErrorKind::Io(io_err) = &err.kind {
+            matches!(io_err.kind(), std::io::ErrorKind::PermissionDenied)
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
+fn watch_parents(
+    root: &AbsoluteSystemPath,
+    watcher: &mut Backend
+) -> Result<(), WatchError> {
+    let mut current = root;
+    while let Some(parent) = current.parent() {
+        current = parent;
+        let watch_result = watcher.watch(current.as_std_path(), RecursiveMode::NonRecursive);
+        if is_permission_denied(&watch_result) {
+            // It is expected we hit a permission denied error at some point. We won't
+            // get notifications if someone e.g. deletes all of /home
+            break;
+        } else {
+            watch_result?;
+        }
+    }
+    Ok(())
+}
+
 fn watch_recursively(
     root: &Path,
-    watcher: &mut RecommendedWatcher,
+    watcher: &mut Backend,
     sender: Option<(Instant, &broadcast::Sender<DebouncedEvent>)>,
 ) -> Result<(), WatchError> {
     for dir in WalkDir::new(root).follow_links(false).into_iter() {
@@ -155,8 +215,11 @@ fn run_watcher(
         .watcher()
         .watch(&root.as_std_path(), RecursiveMode::Recursive)?;
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    // Don't synthesize initial events
-    watch_recursively(root.as_std_path(), debouncer.watcher(), None)?;
+    {
+        // Don't synthesize initial events
+        watch_recursively(root.as_std_path(), debouncer.watcher(), None)?;
+        watch_parents(root, debouncer.watcher())?;
+    }
     Ok(debouncer)
 }
 
@@ -472,7 +535,7 @@ mod test {
         expect_filesystem_event!(
             recv,
             repo_root,
-            EventKind::Modify(ModifyKind::Name(RenameMode::Any))
+            EventKind::Modify(ModifyKind::Name(_))
         );
     }
 
@@ -659,7 +722,7 @@ mod test {
         expect_filesystem_event!(
             recv,
             repo_root,
-            EventKind::Modify(ModifyKind::Name(RenameMode::From))
+            EventKind::Modify(ModifyKind::Name(_)) | EventKind::Remove(RemoveKind::Folder)
         );
     }
 }

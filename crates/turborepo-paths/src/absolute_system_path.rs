@@ -20,6 +20,18 @@ use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
 };
 
+#[derive(Debug)]
+pub enum PathRelation {
+    // absolute vs relative
+    Incomparable,
+    // e.g. /a/b vs /a/c
+    Divergent,
+    // e.g. /a vs /a/b
+    Parent,
+    // e.g. /a/b vs /a
+    Child
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct AbsoluteSystemPath(Utf8Path);
 
@@ -301,6 +313,7 @@ impl AbsoluteSystemPath {
             .expect("collapsed path should be absolute")
     }
 
+    // TODO: consider consolidating with `relation_to_path` below
     pub fn contains(&self, other: &Self) -> bool {
         // On windows, trying to get a relative path between files on different volumes
         // is an error. We don't care about the error, it's good enough for us to say
@@ -313,6 +326,29 @@ impl AbsoluteSystemPath {
         let other = other.collapse();
         let rel = AnchoredSystemPathBuf::relative_path_between(&this, &other);
         rel.components().next() != Some(Utf8Component::ParentDir)
+    }
+
+    pub fn relation_to_path(&self, other: &Path) -> PathRelation {
+        if !other.is_absolute() {
+            return PathRelation::Incomparable;
+        }
+        let mut self_components = self.as_std_path().components();
+        let mut other_components = other.components();
+        loop {
+            match (self_components.next(), other_components.next()) {
+                // Non-matching component, the paths diverge
+                (Some(self_component), Some(other_component)) if self_component != other_component => return PathRelation::Divergent,
+                // A matching component, continue iterating
+                (Some(_), Some(_))  => {},
+                // We've reached the end of a possible parent without hitting a
+                // non-matching component. Return Parent.
+                (None, _) => return PathRelation::Parent,
+                // We've hit the end of the other path without hitting the
+                // end of this path. Since we haven't hit a non-matching component,
+                // our path must be a child
+                (_, None) => return PathRelation::Child,
+            }
+        }
     }
 
     pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
