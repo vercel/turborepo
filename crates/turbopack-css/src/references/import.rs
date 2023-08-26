@@ -121,7 +121,11 @@ impl ImportAttributes {
         // })
         let mut rule = CssRule::Unknown(UnknownAtRule {});
 
-        fn at_rule(name: &str, prelude: CssRule, inner_rule: Rule) -> Rule {
+        fn at_rule(
+            name: &str,
+            prelude: CssRule<'static>,
+            inner_rule: CssRule<'static>,
+        ) -> CssRule<'static> {
             Rule::AtRule(Box::new(AtRule {
                 span: DUMMY_SP,
                 name: AtRuleName::Ident(Ident {
@@ -141,7 +145,7 @@ impl ImportAttributes {
         if let Some(media) = &self.media {
             rule = at_rule(
                 "media",
-                CssRule::Media(MediaQueryList {
+                CssRule::Media(MediaQueryRule {
                     span: DUMMY_SP,
                     queries: media.clone(),
                 }),
