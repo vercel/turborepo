@@ -543,6 +543,9 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
+
       - name: Run cargo clippy
         run: |
           cargo groups clippy turborepo-libraries --features rustls-tls
@@ -710,6 +713,9 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           save-cache: true
+
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
 
       - name: Setup Protoc
         uses: arduino/setup-protoc@v1
