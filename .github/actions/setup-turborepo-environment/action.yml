@@ -41,8 +41,6 @@ runs:
 
     - name: "Setup capnproto"
       uses: ./.github/actions/setup-capnproto
-      with:
-        target: ${{ inputs.target }}
 
     - name: Install Turbo globally
       shell: bash
