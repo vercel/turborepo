@@ -58,11 +58,11 @@ macro_rules! create_visitor {
         }), $name($arg: &mut $ty) $b)
     };
     (__ $ast_path:expr, $name:ident($arg:ident: &mut $ty:ident) $b:block) => {{
-        struct Visitor<T: Fn(&mut swc_core::css::ast::$ty) + Send + Sync> {
+        struct Visitor<T: Fn(&mut $ty) + Send + Sync> {
             $name: T,
         }
 
-        impl<T: Fn(&mut swc_core::css::ast::$ty) + Send + Sync> $crate::code_gen::VisitorFactory
+        impl<T: Fn(&mut $ty) + Send + Sync> $crate::code_gen::VisitorFactory
             for Box<Visitor<T>>
         {
             fn create<'a>(&'a self) -> Box<dyn swc_core::css::visit::VisitMut + Send + Sync + 'a> {
@@ -70,10 +70,10 @@ macro_rules! create_visitor {
             }
         }
 
-        impl<'a, T: Fn(&mut swc_core::css::ast::$ty) + Send + Sync> swc_core::css::visit::VisitMut
+        impl<'a, T: Fn(&mut $ty) + Send + Sync> swc_core::css::visit::VisitMut
             for &'a Visitor<T>
         {
-            fn $name(&mut self, $arg: &mut swc_core::css::ast::$ty) {
+            fn $name(&mut self, $arg: &mut $ty) {
                 (self.$name)($arg);
             }
         }
@@ -81,16 +81,16 @@ macro_rules! create_visitor {
         (
             $ast_path,
             Box::new(Box::new(Visitor {
-                $name: move |$arg: &mut swc_core::css::ast::$ty| $b,
+                $name: move |$arg: &mut $ty| $b,
             })) as Box<dyn $crate::code_gen::VisitorFactory>,
         )
     }};
     (visit_mut_stylesheet($arg:ident: &mut Stylesheet) $b:block) => {{
-        struct Visitor<T: Fn(&mut swc_core::css::ast::Stylesheet) + Send + Sync> {
+        struct Visitor<T: Fn(&mut Stylesheet) + Send + Sync> {
             visit_mut_stylesheet: T,
         }
 
-        impl<T: Fn(&mut swc_core::css::ast::Stylesheet) + Send + Sync> $crate::code_gen::VisitorFactory
+        impl<T: Fn(&mut Stylesheet) + Send + Sync> $crate::code_gen::VisitorFactory
             for Box<Visitor<T>>
         {
             fn create<'a>(&'a self) -> Box<dyn VisitMut + Send + Sync + 'a> {
@@ -98,10 +98,10 @@ macro_rules! create_visitor {
             }
         }
 
-        impl<'a, T: Fn(&mut swc_core::css::ast::Stylesheet) + Send + Sync> swc_core::css::visit::VisitMut
+        impl<'a, T: Fn(&mut Stylesheet) + Send + Sync> swc_core::css::visit::VisitMut
             for &'a Visitor<T>
         {
-            fn visit_mut_stylesheet(&mut self, $arg: &mut swc_core::css::ast::Stylesheet) {
+            fn visit_mut_stylesheet(&mut self, $arg: &mut Stylesheet) {
                 (self.visit_mut_stylesheet)($arg);
             }
         }
@@ -109,7 +109,7 @@ macro_rules! create_visitor {
         (
             Vec::new(),
             Box::new(Box::new(Visitor {
-                visit_mut_stylesheet: move |$arg: &mut swc_core::css::ast::Stylesheet| $b,
+                visit_mut_stylesheet: move |$arg: &mut Stylesheet| $b,
             })) as Box<dyn $crate::code_gen::VisitorFactory>,
         )
     }};
