@@ -100,7 +100,7 @@ pub fn as_parent_path(ast_path: &AstNodePath<'_>) -> Vec<AstParentKind> {
 
 impl<'a> Visit for ModuleReferencesVisitor<'a> {
     fn visit_import<'ast: 'r, 'r>(&mut self, i: &'ast ImportRule, ast_path: &mut AstNodePath<'r>) {
-        let src = &*i.ulr;
+        let src = &*i.url;
 
         let issue_span = i.href.span();
 
