@@ -109,7 +109,7 @@ impl ResolvedConfigurationOptions for PackageJson {
                 let synthetic_raw_turbo_json: RawTurboJSON =
                     serde_json::from_value(legacy_turbo_config.clone())
                         .map_err(|_| anyhow!("global_de"))?;
-                return synthetic_raw_turbo_json.get_configuration_options();
+                synthetic_raw_turbo_json.get_configuration_options()
             }
             None => Ok(ConfigurationOptions::default()),
         }

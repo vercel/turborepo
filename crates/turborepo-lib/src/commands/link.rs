@@ -464,7 +464,6 @@ mod test {
     use std::{cell::OnceCell, fs};
 
     use anyhow::Result;
-    use camino::Utf8PathBuf;
     use tempfile::{NamedTempFile, TempDir};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::UI;
