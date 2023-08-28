@@ -38,7 +38,7 @@ impl ImmutableComments {
         }
     }
 
-    pub fn consumable<'a>(&'a self) -> CowComments<'a> {
+    pub fn consumable(&self) -> CowComments<'_> {
         CowComments::new(self)
     }
 }
