@@ -39,20 +39,10 @@ runs:
         cache-key: ${{ inputs.target }}
         save-cache: true
 
-    - name: "Setup capnproto for ubuntu"
-      if: inputs.target == 'ubuntu'
-      shell: bash
-      run: sudo apt-get update && sudo apt-get install capnproto
-
-    - name: "Setup capnproto for macos"
-      if: inputs.target == 'macos'
-      shell: bash
-      run: brew install capnp
-
-    - name: "Setup capnproto for Windows"
-      if: inputs.target == 'windows'
-      shell: bash
-      run: choco install capnproto
+    - name: "Setup capnproto"
+      uses: ./.github/actions/setup-capnproto
+      with:
+        target: ${{ inputs.target }}
 
     - name: Install Turbo globally
       shell: bash

@@ -517,6 +517,11 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
+        with:
+          target: ubuntu
+
       - name: Run cargo check
         run: |
           cargo groups check turborepo-libraries --features rustls-tls
