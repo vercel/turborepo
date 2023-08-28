@@ -1,7 +1,6 @@
 use std::cell::OnceCell;
 
 use anyhow::{anyhow, Error, Result};
-use camino::Utf8PathBuf;
 use dirs_next::config_dir;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};

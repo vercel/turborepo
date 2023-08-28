@@ -22,12 +22,7 @@ use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
 use turborepo_vercel_api::{CachingStatus, Space, Team};
 
-use crate::{
-    cli::LinkTarget,
-    commands::CommandBase,
-    rewrite_json,
-    rewrite_json::{set_path, unset_path},
-};
+use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json, rewrite_json::set_path};
 
 #[derive(Clone)]
 pub(crate) enum SelectedTeam<'a> {

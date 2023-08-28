@@ -6,7 +6,7 @@ use turborepo_ui::GREY;
 use crate::{
     cli::LinkTarget,
     commands::CommandBase,
-    rewrite_json::{self, set_path, unset_path},
+    rewrite_json::{self, unset_path},
 };
 
 enum UnlinkSpacesResult {

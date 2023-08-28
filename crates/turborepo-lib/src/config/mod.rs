@@ -3,7 +3,7 @@ mod turbo_config;
 
 use std::path::PathBuf;
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use config::ConfigError;
 #[cfg(not(windows))]
 use dirs_next::config_dir;

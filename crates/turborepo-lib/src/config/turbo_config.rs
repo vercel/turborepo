@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{commands::CommandBase, config::RawTurboJSON, package_json::PackageJson};
 
@@ -11,8 +11,6 @@ const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 20;
 
 use anyhow::{anyhow, Error};
-
-use crate::config::Error as ConfigError;
 
 macro_rules! create_builder {
     ($func_name:ident, $property_name:ident, $type:ty) => {
