@@ -9676,6 +9676,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "turborepo-ci",
+ "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
  "url",
 ]
@@ -9849,6 +9850,7 @@ dependencies = [
  "turborepo-lockfiles",
  "turborepo-scm",
  "turborepo-ui",
+ "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
  "uds_windows",
  "url",
@@ -9913,6 +9915,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-vercel-api"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "url",
+]
+
+[[package]]
 name = "turborepo-vercel-api-mock"
 version = "0.1.0"
 dependencies = [
@@ -9924,7 +9935,7 @@ dependencies = [
  "port_scanner",
  "tempfile",
  "tokio",
- "turborepo-api-client",
+ "turborepo-vercel-api",
 ]
 
 [[package]]

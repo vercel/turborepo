@@ -16,10 +16,11 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
-use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
+use turborepo_api_client::APIClient;
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
+use turborepo_vercel_api::{CachingStatus, Space, Team};
 
 use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
 
