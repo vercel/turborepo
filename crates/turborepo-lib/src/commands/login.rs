@@ -220,7 +220,7 @@ struct SsoPayload {
 }
 
 fn get_token_and_redirect(payload: SsoPayload) -> Result<(Option<String>, Url)> {
-    let location_stub = "https://vercel.com/notifications/cli-login-";
+    let location_stub = "https://vercel.com/notifications/cli-login/turbo/";
     if let Some(login_error) = payload.login_error {
         let mut url = Url::parse(&format!("{}failed", location_stub))?;
         url.query_pairs_mut()
@@ -417,7 +417,7 @@ mod test {
             get_token_and_redirect(SsoPayload::default()).unwrap(),
             (
                 None,
-                Url::parse("https://vercel.com/notifications/cli-login-success").unwrap()
+                Url::parse("https://vercel.com/notifications/cli-login/turbo/success").unwrap()
             )
         );
 
@@ -429,8 +429,10 @@ mod test {
             .unwrap(),
             (
                 None,
-                Url::parse("https://vercel.com/notifications/cli-login-failed?loginError=error")
-                    .unwrap()
+                Url::parse(
+                    "https://vercel.com/notifications/cli-login/turbo/failed?loginError=error"
+                )
+                .unwrap()
             )
         );
 
@@ -442,8 +444,10 @@ mod test {
             .unwrap(),
             (
                 None,
-                Url::parse("https://vercel.com/notifications/cli-login-incomplete?ssoEmail=email")
-                    .unwrap()
+                Url::parse(
+                    "https://vercel.com/notifications/cli-login/turbo/incomplete?ssoEmail=email"
+                )
+                .unwrap()
             )
         );
 
@@ -455,7 +459,7 @@ mod test {
             }).unwrap(),
             (
                 None,
-                Url::parse("https://vercel.com/notifications/cli-login-incomplete?ssoEmail=email&teamName=team")
+                Url::parse("https://vercel.com/notifications/cli-login/turbo/incomplete?ssoEmail=email&teamName=team")
                     .unwrap()
             )
         );
@@ -468,7 +472,7 @@ mod test {
             .unwrap(),
             (
                 Some("token".to_string()),
-                Url::parse("https://vercel.com/notifications/cli-login-success").unwrap()
+                Url::parse("https://vercel.com/notifications/cli-login/turbo/success").unwrap()
             )
         );
     }
