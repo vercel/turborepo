@@ -66,12 +66,12 @@ macro_rules! create_visitor {
         impl<T: Fn(&mut $ty) + Send + Sync> $crate::code_gen::VisitorFactory
             for Box<Visitor<T>>
         {
-            fn create<'a>(&'a self) -> Box<dyn lightningcss::visitor::Visit + Send + Sync + 'a> {
+            fn create<'a>(&'a self) -> Box<dyn lightningcss::visitor::Visitor + Send + Sync + 'a> {
                 Box::new(&**self)
             }
         }
 
-        impl<'a, T: Fn(&mut $ty) + Send + Sync> lightningcss::visitor::Visitor
+        impl<'a, T: Fn(&mut $ty) + Send + Sync> lightningcss::visitor::Visitor<'_>
             for &'a Visitor<T>
         {
             fn $name(&mut self, $arg: &mut $ty) {
