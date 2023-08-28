@@ -1,4 +1,4 @@
-use lightningcss::visitor::Visit;
+use lightningcss::visitor::{Visit, Visitor};
 use turbo_tasks::Vc;
 use turbopack_core::chunk::ChunkingContext;
 
@@ -22,7 +22,7 @@ pub struct CodeGeneration {
 }
 
 pub trait VisitorFactory: Send + Sync {
-    fn create<'a>(&'a self) -> Box<dyn Visit + Send + Sync + 'a>;
+    fn create<'a>(&'a self) -> Box<dyn Visitor + Send + Sync + 'a>;
 }
 
 #[turbo_tasks::value_trait]
