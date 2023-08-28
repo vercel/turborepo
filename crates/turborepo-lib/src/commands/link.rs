@@ -466,7 +466,7 @@ mod test {
     use tempfile::{NamedTempFile, TempDir};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::UI;
-    use vercel_api_mock::start_test_server;
+    use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         cli::LinkTarget,
@@ -520,8 +520,8 @@ mod test {
         handle.abort();
         let team_id = base.repo_config().unwrap().team_id();
         assert!(
-            team_id == Some(vercel_api_mock::EXPECTED_USER_ID)
-                || team_id == Some(vercel_api_mock::EXPECTED_TEAM_ID)
+            team_id == Some(turborepo_vercel_api_mock::EXPECTED_USER_ID)
+                || team_id == Some(turborepo_vercel_api_mock::EXPECTED_TEAM_ID)
         );
 
         Ok(())
@@ -586,7 +586,7 @@ mod test {
         let turbo_json: RawTurboJSON = serde_json::from_str(&turbo_json_contents).unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
-            vercel_api_mock::EXPECTED_SPACE_ID
+            turborepo_vercel_api_mock::EXPECTED_SPACE_ID
         );
     }
 }

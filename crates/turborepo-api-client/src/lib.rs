@@ -509,7 +509,7 @@ impl APIClient {
 #[cfg(test)]
 mod test {
     use anyhow::Result;
-    use vercel_api_mock::start_test_server;
+    use turborepo_vercel_api_mock::start_test_server;
 
     use crate::APIClient;
 

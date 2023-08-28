@@ -9676,8 +9676,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "turborepo-ci",
+ "turborepo-vercel-api-mock",
  "url",
- "vercel-api-mock",
 ]
 
 [[package]]
@@ -9711,7 +9711,7 @@ dependencies = [
  "turbopath",
  "turborepo-api-client",
  "turborepo-ui",
- "vercel-api-mock",
+ "turborepo-vercel-api-mock",
  "zstd",
 ]
 
@@ -9849,9 +9849,9 @@ dependencies = [
  "turborepo-lockfiles",
  "turborepo-scm",
  "turborepo-ui",
+ "turborepo-vercel-api-mock",
  "uds_windows",
  "url",
- "vercel-api-mock",
  "wax",
  "webbrowser",
  "which",
@@ -9910,6 +9910,21 @@ dependencies = [
  "tracing",
  "turbopath",
  "turborepo-ci",
+]
+
+[[package]]
+name = "turborepo-vercel-api-mock"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-macros",
+ "axum-server",
+ "futures-util",
+ "port_scanner",
+ "tempfile",
+ "tokio",
+ "turborepo-api-client",
 ]
 
 [[package]]
@@ -10168,21 +10183,6 @@ name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
-
-[[package]]
-name = "vercel-api-mock"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "axum-macros",
- "axum-server",
- "futures-util",
- "port_scanner",
- "tempfile",
- "tokio",
- "turborepo-api-client",
-]
 
 [[package]]
 name = "vergen"
