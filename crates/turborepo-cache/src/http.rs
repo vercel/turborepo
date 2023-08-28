@@ -192,7 +192,7 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::APIClient;
-    use vercel_api_mock::start_test_server;
+    use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         http::{APIAuth, HTTPCache},

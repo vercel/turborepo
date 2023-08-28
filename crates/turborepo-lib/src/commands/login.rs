@@ -177,7 +177,7 @@ async fn run_login_one_shot_server(
     login_token: Arc<OnceCell<String>>,
 ) -> Result<()> {
     login_token
-        .set(vercel_api_mock::EXPECTED_TOKEN.to_string())
+        .set(turborepo_vercel_api_mock::EXPECTED_TOKEN.to_string())
         .unwrap();
     Ok(())
 }
@@ -297,7 +297,7 @@ mod test {
     use tempfile::{tempdir, NamedTempFile};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::UI;
-    use vercel_api_mock::start_test_server;
+    use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         commands::{
@@ -352,7 +352,7 @@ mod test {
 
         assert_eq!(
             base.user_config().unwrap().token().unwrap(),
-            vercel_api_mock::EXPECTED_TOKEN
+            turborepo_vercel_api_mock::EXPECTED_TOKEN
         );
     }
 
@@ -399,7 +399,7 @@ mod test {
             version: "",
         };
 
-        login::sso_login(&mut base, vercel_api_mock::EXPECTED_SSO_TEAM_SLUG)
+        login::sso_login(&mut base, turborepo_vercel_api_mock::EXPECTED_SSO_TEAM_SLUG)
             .await
             .unwrap();
 
@@ -407,7 +407,7 @@ mod test {
 
         assert_eq!(
             base.user_config().unwrap().token().unwrap(),
-            vercel_api_mock::EXPECTED_TOKEN
+            turborepo_vercel_api_mock::EXPECTED_TOKEN
         );
     }
 

@@ -16,10 +16,11 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
-use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
+use turborepo_api_client::APIClient;
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
+use turborepo_vercel_api::{CachingStatus, Space, Team};
 
 use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
 
@@ -466,7 +467,7 @@ mod test {
     use tempfile::{NamedTempFile, TempDir};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::UI;
-    use vercel_api_mock::start_test_server;
+    use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         cli::LinkTarget,
@@ -520,8 +521,8 @@ mod test {
         handle.abort();
         let team_id = base.repo_config().unwrap().team_id();
         assert!(
-            team_id == Some(vercel_api_mock::EXPECTED_USER_ID)
-                || team_id == Some(vercel_api_mock::EXPECTED_TEAM_ID)
+            team_id == Some(turborepo_vercel_api_mock::EXPECTED_USER_ID)
+                || team_id == Some(turborepo_vercel_api_mock::EXPECTED_TEAM_ID)
         );
 
         Ok(())
@@ -586,7 +587,7 @@ mod test {
         let turbo_json: RawTurboJSON = serde_json::from_str(&turbo_json_contents).unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
-            vercel_api_mock::EXPECTED_SPACE_ID
+            turborepo_vercel_api_mock::EXPECTED_SPACE_ID
         );
     }
 }

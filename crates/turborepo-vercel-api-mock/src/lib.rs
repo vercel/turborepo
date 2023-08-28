@@ -11,7 +11,7 @@ use axum::{
 };
 use futures_util::StreamExt;
 use tokio::sync::Mutex;
-use turborepo_api_client::{
+use turborepo_vercel_api::{
     CachingStatus, CachingStatusResponse, Membership, Role, Space, SpacesResponse, Team,
     TeamsResponse, User, UserResponse, VerificationResponse,
 };
