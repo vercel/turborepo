@@ -1,5 +1,5 @@
 use anyhow::Result;
-use lightningcss::{rules::import::ImportRule, values::url::Url, visitor::Visit};
+use lightningcss::{rules::import::ImportRule, values::url::Url, visitor::Visitor};
 use swc_core::common::{
     errors::{Handler, HANDLER},
     source_map::Pos,
@@ -98,7 +98,7 @@ pub fn as_parent_path(ast_path: &AstNodePath<'_>) -> Vec<AstParentKind> {
     ast_path.iter().map(|n| n.kind()).collect()
 }
 
-impl<'a> Visit for ModuleReferencesVisitor<'a> {
+impl<'a> Visitor for ModuleReferencesVisitor<'a> {
     fn visit_import<'ast: 'r, 'r>(&mut self, i: &'ast ImportRule, ast_path: &mut AstNodePath<'r>) {
         let src = &*i.url;
 
