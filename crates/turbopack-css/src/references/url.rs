@@ -142,11 +142,7 @@ impl CodeGenerateable for UrlAssetReference {
 
             visitors.push(
                 create_visitor!((&this.path.await?), visit_mut_url(u: &mut Url) {
-                    u.value = Some(Box::new(UrlValue::Str(Str {
-                        span: DUMMY_SP,
-                        value: relative_path.as_str().into(),
-                        raw: None,
-                    })))
+                    u.url = relative_path.as_str().into();
                 }),
             );
         }
