@@ -646,6 +646,8 @@ async fn gen_content_with_visitors(
 
         let mut srcmap = vec![];
 
+        let comments = comments.consumable();
+
         let mut emitter = Emitter {
             cfg: swc_core::ecma::codegen::Config {
                 ..Default::default()
