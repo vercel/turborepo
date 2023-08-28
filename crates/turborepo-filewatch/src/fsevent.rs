@@ -423,14 +423,14 @@ impl FsEventWatcher {
         // stream, and will be freed when the stream is closed. This means we
         // will leak the context if we panic before reacing
         // `FSEventStreamRelease`.
-        let context = Box::into_raw(Box::new(StreamContextInfo {
+        let stream_context_info = Box::into_raw(Box::new(StreamContextInfo {
             event_handler: self.event_handler.clone(),
             recursive_info: self.recursive_info.clone(),
         }));
 
         let stream_context = fs::FSEventStreamContext {
             version: 0,
-            info: context as *mut libc::c_void,
+            info: stream_context_info as *mut libc::c_void,
             retain: None,
             release: Some(release_context),
             copy_description: None,
