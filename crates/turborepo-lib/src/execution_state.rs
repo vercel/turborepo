@@ -48,7 +48,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
             PackageManager::get_package_manager(&base.repo_root, root_package_json.as_ref())?;
         trace!("Found {} as package manager", package_manager);
 
-        let config = base.turbo_config()?;
+        let config = base.config()?;
 
         let api_client_config = APIClientConfig {
             token: config.token(),

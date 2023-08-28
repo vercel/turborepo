@@ -1,19 +1,18 @@
 use std::collections::HashMap;
 
-use config::Config;
+use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-use crate::{
-    config::{default_user_config_path, RawTurboJSON},
-    package_json::PackageJson,
-};
+use crate::{commands::CommandBase, config::RawTurboJSON, package_json::PackageJson};
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 20;
 
 use anyhow::{anyhow, Error};
+
+use crate::config::Error as ConfigError;
 
 macro_rules! create_builder {
     ($func_name:ident, $property_name:ident, $type:ty) => {
@@ -25,10 +24,23 @@ macro_rules! create_builder {
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfigurationOptions {
+    #[serde(alias = "apiurl")]
+    #[serde(alias = "ApiUrl")]
+    #[serde(alias = "APIURL")]
     pub(crate) api_url: Option<String>,
+    #[serde(alias = "loginurl")]
+    #[serde(alias = "LoginUrl")]
+    #[serde(alias = "LOGINURL")]
     pub(crate) login_url: Option<String>,
+    #[serde(alias = "teamslug")]
+    #[serde(alias = "TeamSlug")]
+    #[serde(alias = "TEAMSLUG")]
     pub(crate) team_slug: Option<String>,
+    #[serde(alias = "teamid")]
+    #[serde(alias = "TeamId")]
+    #[serde(alias = "TEAMID")]
     pub(crate) team_id: Option<String>,
     pub(crate) token: Option<String>,
     pub(crate) signature: Option<bool>,
@@ -39,9 +51,10 @@ pub struct ConfigurationOptions {
 #[derive(Default)]
 pub struct TurborepoConfigBuilder {
     repo_root: AbsoluteSystemPathBuf,
+    override_config: ConfigurationOptions,
 
     // Used for testing.
-    override_config: ConfigurationOptions,
+    global_config_path: Option<AbsoluteSystemPathBuf>,
 }
 
 // Getters
@@ -87,126 +100,40 @@ impl ConfigurationOptions {
     }
 }
 
-impl config::Source for PackageJson {
-    fn clone_into_box(&self) -> Box<dyn config::Source + Send + Sync> {
-        todo!()
-    }
+trait ResolvedConfigurationOptions {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error>;
+}
 
-    fn collect(&self) -> Result<config::Map<String, config::Value>, config::ConfigError> {
+impl ResolvedConfigurationOptions for PackageJson {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
                 let synthetic_raw_turbo_json: RawTurboJSON =
                     serde_json::from_value(legacy_turbo_config.clone())
-                        .map_err(|_| config::ConfigError::Message("()".to_string()))?;
-                return synthetic_raw_turbo_json.collect();
+                        .map_err(|_| anyhow!("global_de"))?;
+                return synthetic_raw_turbo_json.get_configuration_options();
             }
-            None => Ok(config::Map::new()),
+            None => Ok(ConfigurationOptions::default()),
         }
     }
 }
 
-impl config::Source for RawTurboJSON {
-    fn clone_into_box(&self) -> Box<dyn config::Source + Send + Sync> {
-        todo!()
-    }
-
-    fn collect(&self) -> Result<config::Map<String, config::Value>, config::ConfigError> {
+impl ResolvedConfigurationOptions for RawTurboJSON {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
         match &self.remote_cache_options {
-            Some(configuration_options) => configuration_options.collect(),
-            None => Ok(config::Map::new()),
+            Some(configuration_options) => {
+                configuration_options.clone().get_configuration_options()
+            }
+            None => Ok(ConfigurationOptions::default()),
         }
     }
 }
 
 // Used for global config and local config.
-impl config::Source for ConfigurationOptions {
-    fn clone_into_box(&self) -> Box<dyn config::Source + Send + Sync> {
-        todo!()
+impl ResolvedConfigurationOptions for ConfigurationOptions {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+        Ok(self)
     }
-
-    fn collect(&self) -> Result<config::Map<String, config::Value>, config::ConfigError> {
-        let mut output = config::Map::new();
-
-        if let Some(api_url) = self.api_url.clone() {
-            output.insert(
-                String::from("api_url"),
-                config::Value::new(None, config::ValueKind::String(api_url)),
-            );
-        }
-        if let Some(login_url) = self.login_url.clone() {
-            output.insert(
-                String::from("login_url"),
-                config::Value::new(None, config::ValueKind::String(login_url)),
-            );
-        }
-        if let Some(team_slug) = self.team_slug.clone() {
-            output.insert(
-                String::from("team_slug"),
-                config::Value::new(None, config::ValueKind::String(team_slug)),
-            );
-        }
-        if let Some(team_id) = self.team_id.clone() {
-            output.insert(
-                String::from("team_id"),
-                config::Value::new(None, config::ValueKind::String(team_id)),
-            );
-        }
-        if let Some(token) = self.token.clone() {
-            output.insert(
-                String::from("token"),
-                config::Value::new(None, config::ValueKind::String(token)),
-            );
-        }
-        if let Some(signature) = self.signature.clone() {
-            output.insert(
-                String::from("signature"),
-                config::Value::new(None, config::ValueKind::Boolean(signature)),
-            );
-        }
-        if let Some(preflight) = self.preflight.clone() {
-            output.insert(
-                String::from("preflight"),
-                config::Value::new(None, config::ValueKind::Boolean(preflight)),
-            );
-        }
-        if let Some(timeout) = self.timeout.clone() {
-            output.insert(
-                String::from("timeout"),
-                config::Value::new(None, config::ValueKind::U64(timeout)),
-            );
-        }
-
-        Ok(output)
-    }
-}
-
-fn get_global_config() -> Result<ConfigurationOptions, Error> {
-    let global_config_path = default_user_config_path().map_err(|e| {
-        dbg!(e);
-        anyhow!("global_path")
-    })?;
-    let contents = std::fs::read_to_string(global_config_path).map_err(|e| {
-        dbg!(e);
-        anyhow!("global_read")
-    })?;
-    let global_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
-        dbg!(e);
-        anyhow!("global_de")
-    })?;
-    Ok(global_config)
-}
-
-fn get_local_config(repo_root: &AbsoluteSystemPath) -> Result<ConfigurationOptions, Error> {
-    let local_config_path = repo_root.join_components(&[".turbo", "config.json"]);
-    let contents = local_config_path.read_to_string().map_err(|e| {
-        dbg!(e);
-        anyhow!("local_read")
-    })?;
-    let local_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
-        dbg!(e);
-        anyhow!("local_de")
-    })?;
-    Ok(local_config)
 }
 
 fn get_lowercased_env_vars() -> HashMap<String, String> {
@@ -302,11 +229,62 @@ fn get_env_var_config(environment: HashMap<String, String>) -> Result<Configurat
 }
 
 impl TurborepoConfigBuilder {
-    pub fn new(repo_root: &AbsoluteSystemPath) -> Self {
+    pub fn new(base: &CommandBase) -> Self {
         Self {
-            repo_root: repo_root.to_owned(),
+            repo_root: base.repo_root.to_owned(),
             override_config: Default::default(),
+            global_config_path: base.global_config_path.clone(),
         }
+    }
+
+    // Getting all of the paths.
+    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+        if let Some(global_config_path) = self.global_config_path.clone() {
+            return Ok(global_config_path);
+        }
+        Ok(AbsoluteSystemPathBuf::try_from(
+            config_dir()
+                .map(|p| p.join("turborepo").join("config.json"))
+                .ok_or(anyhow!("No global config path"))?,
+        )?)
+    }
+    fn local_config_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root.join_components(&[".turbo", "config.json"])
+    }
+    fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root.join_component("package.json")
+    }
+    fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root.join_component("turbo.json")
+    }
+
+    fn get_global_config(&self) -> Result<ConfigurationOptions, Error> {
+        let global_config_path = self.global_config_path().map_err(|e| {
+            dbg!(e);
+            anyhow!("global_path")
+        })?;
+        let contents = std::fs::read_to_string(global_config_path).map_err(|e| {
+            dbg!(e);
+            anyhow!("global_read")
+        })?;
+        let global_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
+            dbg!(e);
+            anyhow!("global_de")
+        })?;
+        Ok(global_config)
+    }
+
+    fn get_local_config(&self) -> Result<ConfigurationOptions, Error> {
+        let local_config_path = self.local_config_path();
+        let contents = local_config_path.read_to_string().map_err(|e| {
+            dbg!(e);
+            anyhow!("local_read")
+        })?;
+        let local_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
+            dbg!(e);
+            anyhow!("local_de")
+        })?;
+        Ok(local_config)
     }
 
     create_builder!(with_api_url, api_url, Option<String>);
@@ -338,74 +316,56 @@ impl TurborepoConfigBuilder {
                 dbg!(e);
                 anyhow!("raw_turbo_json")
             })?;
-        let global_config = get_global_config()?;
-        let local_config = get_local_config(&self.repo_root)?;
+        let global_config = self.get_global_config()?;
+        let local_config = self.get_local_config()?;
         let env_var_config = get_env_var_config(get_lowercased_env_vars())?;
 
-        let output: ConfigurationOptions = Config::builder()
-            .add_source(root_package_json)
-            .add_source(turbo_json)
-            .add_source(global_config)
-            .add_source(local_config)
-            .add_source(env_var_config)
-            .set_override_option("api_url", self.override_config.api_url.clone())
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("api_url")
-            })?
-            .set_override_option("login_url", self.override_config.login_url.clone())
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("login_url")
-            })?
-            .set_override_option("team_slug", self.override_config.team_slug.clone())
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("team_slug")
-            })?
-            .set_override_option("team_id", self.override_config.team_id.clone())
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("team_id")
-            })?
-            .set_override_option("token", self.override_config.token.clone())
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("token")
-            })?
-            .set_override_option("signature", self.override_config.signature.clone())
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("signature")
-            })?
-            .set_override_option("preflight", self.override_config.preflight.clone())
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("preflight")
-            })?
-            .set_override_option("timeout", self.override_config.timeout.clone())
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("timeout")
-            })?
-            .build()
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("build")
-            })?
-            .try_deserialize()
-            .map_err(|e| {
-                dbg!(e);
-                anyhow!("try_deserialize")
-            })?;
+        let sources = [
+            root_package_json.get_configuration_options(),
+            turbo_json.get_configuration_options(),
+            global_config.get_configuration_options(),
+            local_config.get_configuration_options(),
+            env_var_config.get_configuration_options(),
+            Ok(self.override_config.clone()),
+        ];
+
+        let output = sources.iter().fold(
+            ConfigurationOptions::default(),
+            |mut acc, current_source| -> ConfigurationOptions {
+                match current_source {
+                    Ok(current_source_config) => {
+                        if let Some(api_url) = current_source_config.api_url.clone() {
+                            acc.api_url = Some(api_url);
+                        }
+                        if let Some(login_url) = current_source_config.login_url.clone() {
+                            acc.login_url = Some(login_url);
+                        }
+                        if let Some(team_slug) = current_source_config.team_slug.clone() {
+                            acc.team_slug = Some(team_slug);
+                        }
+                        if let Some(team_id) = current_source_config.team_id.clone() {
+                            acc.team_id = Some(team_id);
+                        }
+                        if let Some(token) = current_source_config.token.clone() {
+                            acc.token = Some(token);
+                        }
+                        if let Some(signature) = current_source_config.signature {
+                            acc.signature = Some(signature);
+                        }
+                        if let Some(preflight) = current_source_config.preflight {
+                            acc.preflight = Some(preflight);
+                        }
+                        if let Some(timeout) = current_source_config.timeout {
+                            acc.timeout = Some(timeout);
+                        }
+                    }
+                    Err(_) => todo!(),
+                }
+
+                acc
+            },
+        );
 
         Ok(output)
     }
-}
-
-#[test]
-fn test() {
-    let repo_root = AbsoluteSystemPathBuf::new("/Users/nathanhammond/repos/vercel/turbo").unwrap();
-    let foo = TurborepoConfigBuilder::new(&repo_root);
-    dbg!(foo.build());
 }

@@ -3,7 +3,11 @@ use std::fs;
 use anyhow::{Context, Result};
 use turborepo_ui::GREY;
 
-use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
+use crate::{
+    cli::LinkTarget,
+    commands::CommandBase,
+    rewrite_json::{self, set_path, unset_path},
+};
 
 enum UnlinkSpacesResult {
     Unlinked,
@@ -11,11 +15,27 @@ enum UnlinkSpacesResult {
 }
 
 fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
-    let repo_config: &mut crate::config::RepoConfig = base.repo_config_mut()?;
-    let needs_disabling = repo_config.team_id().is_some() || repo_config.team_slug().is_some();
+    let needs_disabling =
+        base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
 
     let output = if needs_disabling {
-        repo_config.set_team_id(None)?;
+        let before = base.local_config_path().read_to_string()?;
+        let mut updated = before;
+        let minus_team_slug = unset_path(&updated, &["teamSlug"])?;
+        updated = if let Some(minus_team_slug) = minus_team_slug {
+            minus_team_slug
+        } else {
+            updated
+        };
+        let minus_team_id = unset_path(&updated, &["teamId"])?;
+        updated = if let Some(minus_team_id) = minus_team_id {
+            minus_team_id
+        } else {
+            updated
+        };
+        base.local_config_path().ensure_dir();
+        base.local_config_path().create_with_contents(updated);
+
         "> Disabled Remote Caching"
     } else {
         "> No Remote Caching config found"
@@ -27,12 +47,26 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
 }
 
 fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
-    let repo_config: &mut crate::config::RepoConfig = base.repo_config_mut()?;
     let needs_disabling =
-        repo_config.space_team_id().is_some() || repo_config.space_team_slug().is_some();
+        base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
 
     if needs_disabling {
-        repo_config.set_space_team_id(None)?;
+        let before = base.local_config_path().read_to_string()?;
+        let mut updated = before;
+        let minus_team_slug = unset_path(&updated, &["teamSlug"])?;
+        updated = if let Some(minus_team_slug) = minus_team_slug {
+            minus_team_slug
+        } else {
+            updated
+        };
+        let minus_team_id = unset_path(&updated, &["teamId"])?;
+        updated = if let Some(minus_team_id) = minus_team_id {
+            minus_team_id
+        } else {
+            updated
+        };
+        base.local_config_path().ensure_dir();
+        base.local_config_path().create_with_contents(updated);
     }
 
     // Space config is _also_ in turbo.json.

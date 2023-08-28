@@ -1,17 +1,15 @@
-use std::{borrow::Borrow, cell::OnceCell};
+use std::cell::OnceCell;
 
-use anyhow::Result;
+use anyhow::{anyhow, Error, Result};
+use camino::Utf8PathBuf;
+use dirs_next::config_dir;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::APIClient;
 use turborepo_ui::UI;
 
 use crate::{
-    config::{
-        default_user_config_path, get_repo_config_path, ClientConfig, ClientConfigLoader,
-        ConfigurationOptions, Error as ConfigError, RepoConfig, RepoConfigLoader,
-        TurborepoConfigBuilder, UserConfig, UserConfigLoader,
-    },
+    config::{ConfigurationOptions, TurborepoConfigBuilder},
     Args,
 };
 
@@ -30,10 +28,8 @@ pub(crate) mod unlink;
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
-    config: OnceCell<ConfigurationOptions>,
-    user_config: OnceCell<UserConfig>,
-    repo_config: OnceCell<RepoConfig>,
-    client_config: OnceCell<ClientConfig>,
+    pub global_config_path: Option<AbsoluteSystemPathBuf>,
+    pub config: OnceCell<ConfigurationOptions>,
     args: Args,
     version: &'static str,
 }
@@ -49,16 +45,20 @@ impl CommandBase {
             repo_root,
             ui,
             args,
+            global_config_path: None,
             config: OnceCell::new(),
-            repo_config: OnceCell::new(),
-            user_config: OnceCell::new(),
-            client_config: OnceCell::new(),
             version,
         })
     }
 
-    fn turbo_config_init(&self) -> Result<ConfigurationOptions, anyhow::Error> {
-        TurborepoConfigBuilder::new(&self.repo_root)
+    #[cfg(test)]
+    pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
+        self.global_config_path = Some(path);
+        self
+    }
+
+    fn config_init(&self) -> Result<ConfigurationOptions, anyhow::Error> {
+        TurborepoConfigBuilder::new(self)
             // The below should be deprecated and removed.
             .with_api_url(self.args.api.clone())
             .with_login_url(self.args.login.clone())
@@ -68,44 +68,29 @@ impl CommandBase {
             .build()
     }
 
-    pub fn turbo_config(&self) -> Result<&ConfigurationOptions, anyhow::Error> {
-        self.config.get_or_try_init(|| self.turbo_config_init())
+    pub fn config(&self) -> Result<&ConfigurationOptions, anyhow::Error> {
+        self.config.get_or_try_init(|| self.config_init())
     }
 
-    fn repo_config_init(&self) -> Result<RepoConfig, ConfigError> {
-        let repo_config_path = get_repo_config_path(self.repo_root.borrow());
-
-        RepoConfigLoader::new(repo_config_path)
-            .with_api(self.args.api.clone())
-            .with_login(self.args.login.clone())
-            .with_team_slug(self.args.team.clone())
-            .load()
+    // Getting all of the paths.
+    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+        if let Some(global_config_path) = self.global_config_path.clone() {
+            return Ok(global_config_path);
+        }
+        Ok(AbsoluteSystemPathBuf::try_from(
+            config_dir()
+                .map(|p| p.join("turborepo").join("config.json"))
+                .ok_or(anyhow!("No global config path"))?,
+        )?)
     }
-
-    pub fn repo_config(&self) -> Result<&RepoConfig, ConfigError> {
-        self.repo_config.get_or_try_init(|| self.repo_config_init())
+    fn local_config_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root.join_components(&[".turbo", "config.json"])
     }
-
-    pub fn repo_config_mut(&mut self) -> Result<&mut RepoConfig, ConfigError> {
-        // Approximates `get_mut_or_try_init`
-        self.repo_config()?;
-        Ok(self.repo_config.get_mut().unwrap())
+    fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root.join_component("package.json")
     }
-
-    fn user_config_init(&self) -> Result<UserConfig, ConfigError> {
-        UserConfigLoader::new(default_user_config_path()?)
-            .with_token(self.args.token.clone())
-            .load()
-    }
-
-    pub fn user_config(&self) -> Result<&UserConfig, ConfigError> {
-        self.user_config.get_or_try_init(|| self.user_config_init())
-    }
-
-    pub fn user_config_mut(&mut self) -> Result<&mut UserConfig, ConfigError> {
-        // Approximates `get_mut_or_try_init`
-        self.user_config()?;
-        Ok(self.user_config.get_mut().unwrap())
+    fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root.join_component("turbo.json")
     }
 
     pub fn args(&self) -> &Args {
@@ -113,7 +98,7 @@ impl CommandBase {
     }
 
     pub fn api_client(&self) -> Result<APIClient> {
-        let config = self.turbo_config()?;
+        let config = self.config()?;
         let args = self.args();
 
         let api_url = config.api_url();
