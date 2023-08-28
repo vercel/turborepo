@@ -1,5 +1,6 @@
 use std::{borrow::Cow, collections::HashMap};
 
+use lightningcss::{values::url::Url, visitor::Visitor};
 use swc_core::common::pass::AstKindPath;
 
 use crate::code_gen::VisitorFactory;
@@ -88,16 +89,10 @@ impl<'a> ApplyVisitors<'a> {
     }
 }
 
-macro_rules! method {
-    ($name:ident,$T:ty) => {
-        fn $name(&mut self, n: &mut $T, ast_path: &mut AstKindPath<AstParentKind>) {
-            self.visit_if_required(n, ast_path);
-        }
-    };
-}
-
-impl VisitMutAstPath for ApplyVisitors<'_> {
+impl Visitor for ApplyVisitors<'_> {
     // TODO: we need a macro to apply that for all methods
-    method!(visit_mut_url_value, UrlValue);
-    method!(visit_mut_url, Url);
+
+    fn visit_url(&mut self, n: &mut Url, ast_path: &mut AstKindPath<AstParentKind>) {
+        self.visit_if_required(n, ast_path);
+    }
 }
