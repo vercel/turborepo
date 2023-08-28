@@ -11,7 +11,6 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/inference"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -180,7 +179,7 @@ func (th *Tracker) CalculateFileHashes(
 // 	hashOfFiles          string
 // 	externalDepsHash     string
 // 	task                 string
-// 	outputs              hash.TaskOutputs
+// 	outputs              fs.TaskOutputs
 // 	passThruArgs         []string
 // 	env                  []string
 // 	resolvedEnvVars      env.EnvironmentVariablePairs
@@ -190,7 +189,7 @@ func (th *Tracker) CalculateFileHashes(
 // }
 
 // calculateTaskHashFromHashable returns a hash string from the taskHashable
-func calculateTaskHashFromHashable(full *hash.TaskHashable) (string, error) {
+func calculateTaskHashFromHashable(full *fs.TaskHashable) (string, error) {
 	switch full.EnvMode {
 	case util.Loose:
 		// Remove the passthroughs from hash consideration if we're explicitly loose.
@@ -323,7 +322,7 @@ func (th *Tracker) CalculateTaskHash(logger hclog.Logger, packageTask *nodes.Pac
 	// log any auto detected env vars
 	logger.Debug(fmt.Sprintf("task hash env vars for %s:%s", packageTask.PackageName, packageTask.Task), "vars", hashableEnvPairs)
 
-	hash, err := calculateTaskHashFromHashable(&hash.TaskHashable{
+	hash, err := calculateTaskHashFromHashable(&fs.TaskHashable{
 		GlobalHash:           th.globalHash,
 		TaskDependencyHashes: taskDependencyHashes,
 		PackageDir:           packageTask.Pkg.Dir.ToUnixPath(),

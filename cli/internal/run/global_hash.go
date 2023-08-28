@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/lockfile"
@@ -40,7 +39,7 @@ type GlobalHashableInputs struct {
 // It's used for the situations where we have an `EnvMode` specified
 // as that is not compatible with existing global hashes.
 func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashGlobal(hash.GlobalHashable{
+	return fs.HashGlobal(fs.GlobalHashable{
 		GlobalCacheKey:       full.globalCacheKey,
 		GlobalFileHashMap:    full.globalFileHashMap,
 		RootExternalDepsHash: full.rootExternalDepsHash,
