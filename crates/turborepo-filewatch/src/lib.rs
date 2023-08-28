@@ -83,8 +83,9 @@ impl FileSystemWatcher {
                                                 watch_recursively(&new_path, debouncer.watcher(), Some((time, &broadcast_sender)))?;
                                             }
                                         }
-                                        filter_relevant(&watch_root, &mut event);
                                     }
+                                    #[cfg(not(target_os = "macos"))]
+                                    filter_relevant(&watch_root, &mut event);
                                     // we don't care if we fail to send, it just means no one is currently watching
                                     let _ = broadcast_sender.send(event);
                                 }
@@ -132,7 +133,7 @@ fn filter_relevant(root: &AbsoluteSystemPath, event: &mut DebouncedEvent) {
                 true
             }
         }
-}   )
+    })
 }
 
 fn is_permission_denied(result: &Result<(), notify::Error>) -> bool {
@@ -147,10 +148,7 @@ fn is_permission_denied(result: &Result<(), notify::Error>) -> bool {
     }
 }
 
-fn watch_parents(
-    root: &AbsoluteSystemPath,
-    watcher: &mut Backend
-) -> Result<(), WatchError> {
+fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
     let mut current = root;
     while let Some(parent) = current.parent() {
         current = parent;
@@ -218,8 +216,9 @@ fn run_watcher(
     {
         // Don't synthesize initial events
         watch_recursively(root.as_std_path(), debouncer.watcher(), None)?;
-        watch_parents(root, debouncer.watcher())?;
     }
+    #[cfg(not(target_os = "macos"))]
+    watch_parents(root, debouncer.watcher())?;
     Ok(debouncer)
 }
 
@@ -278,7 +277,7 @@ mod test {
     use std::{sync::atomic::AtomicUsize, time::Duration};
 
     use notify::{
-        event::{CreateKind, ModifyKind, RemoveKind, RenameMode},
+        event::{ModifyKind, RemoveKind, RenameMode},
         EventKind,
     };
     use notify_debouncer_full::DebouncedEvent;
@@ -343,7 +342,7 @@ mod test {
             let filename = dir.join_component(format!("test-{}", count).as_str());
             filename.create_with_contents("hello").unwrap();
 
-            expect_filesystem_event!(recv, filename, EventKind::Create(CreateKind::File));
+            expect_filesystem_event!(recv, filename, EventKind::Create(_));
         }
     }
 
@@ -376,16 +375,16 @@ mod test {
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
         let foo_path = child_path.join_component("foo");
         foo_path.create_with_contents("hello").unwrap();
-        expect_filesystem_event!(recv, foo_path, EventKind::Create(CreateKind::File));
+        expect_filesystem_event!(recv, foo_path, EventKind::Create(_));
 
         let deep_path = sibling_path.join_components(&["deep", "path"]);
         deep_path.create_dir_all().unwrap();
         expect_filesystem_event!(
             recv,
             sibling_path.join_component("deep"),
-            EventKind::Create(CreateKind::Folder)
+            EventKind::Create(_)
         );
-        expect_filesystem_event!(recv, deep_path, EventKind::Create(CreateKind::Folder));
+        expect_filesystem_event!(recv, deep_path, EventKind::Create(_));
         expect_watching(
             &mut recv,
             &[
@@ -429,16 +428,16 @@ mod test {
 
         // Delete parent folder during file watching
         parent_path.remove_dir_all().unwrap();
-        expect_filesystem_event!(recv, parent_path, EventKind::Remove(RemoveKind::Folder));
+        expect_filesystem_event!(recv, parent_path, EventKind::Remove(_));
 
         // Ensure we get events when creating file in deleted directory
         child_path.create_dir_all().unwrap();
-        expect_filesystem_event!(recv, parent_path, EventKind::Create(CreateKind::Folder));
-        expect_filesystem_event!(recv, child_path, EventKind::Create(CreateKind::Folder));
+        expect_filesystem_event!(recv, parent_path, EventKind::Create(_));
+        expect_filesystem_event!(recv, child_path, EventKind::Create(_));
 
         let foo_path = child_path.join_component("foo");
         foo_path.create_with_contents("hello").unwrap();
-        expect_filesystem_event!(recv, foo_path, EventKind::Create(CreateKind::File));
+        expect_filesystem_event!(recv, foo_path, EventKind::Create(_));
         // We cannot guarantee no more events, windows sends multiple delete
         // events
     }
@@ -469,7 +468,7 @@ mod test {
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
         repo_root.remove_dir_all().unwrap();
-        expect_filesystem_event!(recv, repo_root, EventKind::Remove(RemoveKind::Folder));
+        expect_filesystem_event!(recv, repo_root, EventKind::Remove(_));
     }
 
     #[tokio::test]
@@ -532,11 +531,7 @@ mod test {
         let new_repo_root = repo_root.parent().unwrap().join_component("new_repo_root");
         repo_root.rename(&new_repo_root).unwrap();
 
-        expect_filesystem_event!(
-            recv,
-            repo_root,
-            EventKind::Modify(ModifyKind::Name(_))
-        );
+        expect_filesystem_event!(recv, repo_root, EventKind::Modify(ModifyKind::Name(_)));
     }
 
     #[tokio::test]
@@ -574,11 +569,7 @@ mod test {
         let symlink_subfile = symlink_path.join_component("symlink_subfile");
         symlink_subfile.create_with_contents("hello").unwrap();
         let expected_subfile_path = child_path.join_component("symlink_subfile");
-        expect_filesystem_event!(
-            recv,
-            expected_subfile_path,
-            EventKind::Create(CreateKind::File)
-        );
+        expect_filesystem_event!(recv, expected_subfile_path, EventKind::Create(_));
     }
 
     #[tokio::test]
@@ -610,6 +601,11 @@ mod test {
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
         // Delete symlink during file watching
+        // Note that on Windows, to remove a symlink to a directory
+        // remove_dir is required.
+        #[cfg(windows)]
+        symlink_path.remove_dir().unwrap();
+        #[cfg(not(windows))]
         symlink_path.remove().unwrap();
         expect_filesystem_event!(recv, symlink_path, EventKind::Remove(_));
     }
@@ -652,6 +648,13 @@ mod test {
         );
     }
 
+    // Watching a directory on windows locks it, so we cannot rename it.
+    // Since we are recursively watching parents, we also cannot rename parents.
+    // Note the contrast to the root of our watch, which we don't lock,
+    // but instead rely on watching the parent directory. This means we
+    // have permission to rename or delete the repo root, but not anything
+    // else in the path.
+    #[cfg(not(target_os = "windows"))]
     #[tokio::test]
     async fn test_file_watching_root_parent_rename() {
         // Directory layout:
@@ -663,7 +666,7 @@ mod test {
         //     parent/
         //       child/
         let (tmp_root, _tmp_repo_root) = temp_dir();
-        let tmp_root = tmp_root.to_realpath().unwrap();
+        let tmp_root = tmp_root.to_realpath().unwrap().join_component("layer");
         let repo_root = tmp_root.join_components(&["repo_parent", "repo_root"]);
 
         repo_root.join_component(".git").create_dir_all().unwrap();
@@ -722,7 +725,7 @@ mod test {
         expect_filesystem_event!(
             recv,
             repo_root,
-            EventKind::Modify(ModifyKind::Name(_)) | EventKind::Remove(RemoveKind::Folder)
+            EventKind::Modify(ModifyKind::Name(_)) | EventKind::Remove(_)
         );
     }
 }

@@ -29,7 +29,7 @@ pub enum PathRelation {
     // e.g. /a vs /a/b
     Parent,
     // e.g. /a/b vs /a
-    Child
+    Child,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -281,6 +281,10 @@ impl AbsoluteSystemPath {
         fs::remove_file(&self.0)
     }
 
+    pub fn remove_dir(&self) -> Result<(), io::Error> {
+        fs::remove_dir(&self.0)
+    }
+
     pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
     }
@@ -337,9 +341,13 @@ impl AbsoluteSystemPath {
         loop {
             match (self_components.next(), other_components.next()) {
                 // Non-matching component, the paths diverge
-                (Some(self_component), Some(other_component)) if self_component != other_component => return PathRelation::Divergent,
+                (Some(self_component), Some(other_component))
+                    if self_component != other_component =>
+                {
+                    return PathRelation::Divergent
+                }
                 // A matching component, continue iterating
-                (Some(_), Some(_))  => {},
+                (Some(_), Some(_)) => {}
                 // We've reached the end of a possible parent without hitting a
                 // non-matching component. Return Parent.
                 (None, _) => return PathRelation::Parent,
