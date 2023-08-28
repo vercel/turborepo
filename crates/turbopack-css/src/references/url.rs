@@ -1,4 +1,5 @@
 use anyhow::Result;
+use lightningcss::values::url::Url;
 use swc_core::common::DUMMY_SP;
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
@@ -122,11 +123,7 @@ impl CodeGenerateable for UrlAssetReference {
 
             visitors.push(
                 create_visitor!((&this.path.await?), visit_mut_url(u: &mut Url) {
-                    u.value = Some(Box::new(UrlValue::Str(Str {
-                        span: DUMMY_SP,
-                        value: relative_path.as_str().into(),
-                        raw: None,
-                    })))
+                    u.url = relative_path.as_str().into();
                 }),
             );
         }
