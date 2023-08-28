@@ -249,9 +249,11 @@ impl TurborepoConfigBuilder {
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
     }
+    #[allow(dead_code)]
     fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("package.json")
     }
+    #[allow(dead_code)]
     fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("turbo.json")
     }

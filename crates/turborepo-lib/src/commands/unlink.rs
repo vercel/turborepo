@@ -33,8 +33,8 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
         } else {
             updated
         };
-        base.local_config_path().ensure_dir();
-        base.local_config_path().create_with_contents(updated);
+        base.local_config_path().ensure_dir()?;
+        base.local_config_path().create_with_contents(updated)?;
 
         "> Disabled Remote Caching"
     } else {
@@ -65,8 +65,8 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
         } else {
             updated
         };
-        base.local_config_path().ensure_dir();
-        base.local_config_path().create_with_contents(updated);
+        base.local_config_path().ensure_dir()?;
+        base.local_config_path().create_with_contents(updated)?;
     }
 
     // Space config is _also_ in turbo.json.

@@ -165,8 +165,8 @@ pub async fn link(
 
             let before = base.local_config_path().read_to_string()?;
             let after = set_path(&before, &["teamId"], team_id)?;
-            base.local_config_path().ensure_dir();
-            base.local_config_path().create_with_contents(after);
+            base.local_config_path().ensure_dir()?;
+            base.local_config_path().create_with_contents(after)?;
 
             let chosen_team_name = match selected_team {
                 SelectedTeam::User => user_display_name,
@@ -246,8 +246,8 @@ pub async fn link(
 
             let before = base.local_config_path().read_to_string()?;
             let after = set_path(&before, &["spaces", "teamId"], team_id)?;
-            base.local_config_path().ensure_dir();
-            base.local_config_path().create_with_contents(after);
+            base.local_config_path().ensure_dir()?;
+            base.local_config_path().create_with_contents(after)?;
 
             println!(
                 "
