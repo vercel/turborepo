@@ -5,7 +5,7 @@ use lightningcss::{
         import::ImportRule,
         layer::{LayerName, LayerStatementRule},
         media::MediaRule,
-        supports::SupportsRule,
+        supports::{SupportsCondition, SupportsRule},
         unknown::UnknownAtRule,
         CssRule,
     },
@@ -70,8 +70,8 @@ impl ImportAttributes {
                             ComponentValue::SupportsCondition(s) => Some(*s.clone()),
                             ComponentValue::Declaration(d) => Some(SupportsCondition {
                                 span: DUMMY_SP,
-                                conditions: vec![SupportsConditionType::SupportsInParens(
-                                    SupportsInParens::Feature(SupportsFeature::Declaration(
+                                conditions: vec![SupportsCondition::SupportsInParens(
+                                    SupportsCondition::Feature(SupportsCondition::Declaration(
                                         d.clone(),
                                     )),
                                 )],
@@ -142,7 +142,7 @@ impl ImportAttributes {
         if let Some(media) = &self.media {
             rule = at_rule(
                 "media",
-                CssRule::Media(MediaQueryRule {
+                CssRule::Media(MediaRule {
                     span: DUMMY_SP,
                     queries: media.clone(),
                 }),

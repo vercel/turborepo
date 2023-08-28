@@ -1,6 +1,5 @@
 use anyhow::Result;
 use lightningcss::values::url::Url;
-use swc_core::common::DUMMY_SP;
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::ChunkingContext,
@@ -122,7 +121,7 @@ impl CodeGenerateable for UrlAssetReference {
                 .unwrap_or_else(|| format!("/{}", path.path));
 
             visitors.push(
-                create_visitor!((&this.path.await?), visit_mut_url(u: &mut Url) {
+                create_visitor!((&this.path.await?), visit_url(u: &mut Url) {
                     u.url = relative_path.as_str().into();
                 }),
             );
