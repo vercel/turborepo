@@ -6,21 +6,22 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(target_os = "macos")]
-use fsevent::FsEventWatcher;
 use itertools::Itertools;
 use notify::{
     event::{CreateKind, EventAttributes},
-    Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+    Event, EventKind, RecursiveMode, Watcher,
 };
 use notify_debouncer_full::{
-    new_debouncer, new_debouncer_opt, DebounceEventHandler, DebounceEventResult, DebouncedEvent,
-    Debouncer, FileIdMap,
+    DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
 };
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
-use turbopath::{AbsoluteSystemPath, PathRelation};
+use turbopath::AbsoluteSystemPath;
 use walkdir::WalkDir;
+#[cfg(target_os = "macos")]
+use {fsevent::FsEventWatcher, notify_debouncer_full::new_debouncer_opt};
+#[cfg(not(target_os = "macos"))]
+use {notify::RecommendedWatcher, notify_debouncer_full::new_debouncer, turbopath::PathRelation};
 
 #[cfg(target_os = "macos")]
 mod fsevent;
@@ -31,7 +32,7 @@ type Backend = RecommendedWatcher;
 type Backend = FsEventWatcher;
 
 #[derive(Debug, Error)]
-enum WatchError {
+pub enum WatchError {
     #[error("filewatching backend error: {0}")]
     Notify(#[from] notify::Error),
     #[error("filewatching stopped")]
@@ -42,9 +43,9 @@ enum WatchError {
     Setup(String),
 }
 
-struct FileSystemWatcher {
+pub struct FileSystemWatcher {
     sender: broadcast::Sender<DebouncedEvent>,
-    exit_ch: tokio::sync::oneshot::Sender<()>,
+    _exit_ch: tokio::sync::oneshot::Sender<()>,
 }
 
 impl FileSystemWatcher {
@@ -101,7 +102,10 @@ impl FileSystemWatcher {
             println!("DONE");
             Ok::<(), WatchError>(())
         });
-        Ok(Self { sender, exit_ch })
+        Ok(Self {
+            sender,
+            _exit_ch: exit_ch,
+        })
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<DebouncedEvent> {
