@@ -65,12 +65,12 @@ macro_rules! create_visitor {
         impl<T: Fn(&mut $ty) + Send + Sync> $crate::code_gen::VisitorFactory
             for Box<Visitor<T>>
         {
-            fn create<'a>(&'a self) -> Box<dyn swc_core::css::visit::VisitMut + Send + Sync + 'a> {
+            fn create<'a>(&'a self) -> Box<dyn lightningcss::visitor::Visit + Send + Sync + 'a> {
                 Box::new(&**self)
             }
         }
 
-        impl<'a, T: Fn(&mut $ty) + Send + Sync> swc_core::css::visit::VisitMut
+        impl<'a, T: Fn(&mut $ty) + Send + Sync> lightningcss::visitor::Visit
             for &'a Visitor<T>
         {
             fn $name(&mut self, $arg: &mut $ty) {
@@ -98,7 +98,7 @@ macro_rules! create_visitor {
             }
         }
 
-        impl<'a, T: Fn(&mut Stylesheet) + Send + Sync> swc_core::css::visit::VisitMut
+        impl<'a, T: Fn(&mut Stylesheet) + Send + Sync> lightningcss::visitor::Visit
             for &'a Visitor<T>
         {
             fn visit_mut_stylesheet(&mut self, $arg: &mut Stylesheet) {
