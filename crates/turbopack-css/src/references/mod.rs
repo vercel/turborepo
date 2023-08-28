@@ -1,5 +1,5 @@
 use anyhow::Result;
-use lightningcss::{values::url::Url, visitor::Visit};
+use lightningcss::{rules::import::ImportRule, values::url::Url, visitor::Visit};
 use swc_core::common::{
     errors::{Handler, HANDLER},
     source_map::Pos,
@@ -99,16 +99,8 @@ pub fn as_parent_path(ast_path: &AstNodePath<'_>) -> Vec<AstParentKind> {
 }
 
 impl<'a> Visit for ModuleReferencesVisitor<'a> {
-    fn visit_import_prelude<'ast: 'r, 'r>(
-        &mut self,
-        i: &'ast ImportPrelude,
-        ast_path: &mut AstNodePath<'r>,
-    ) {
-        let src = match &i.href {
-            box ImportHref::Str(s) => s.value.as_ref(),
-            // covered by `visit_url` below
-            box ImportHref::Url(ref u) => url_string(u),
-        };
+    fn visit_import<'ast: 'r, 'r>(&mut self, i: &'ast ImportRule, ast_path: &mut AstNodePath<'r>) {
+        let src = &*i.ulr;
 
         let issue_span = i.href.span();
 
