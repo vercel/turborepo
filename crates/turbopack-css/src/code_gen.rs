@@ -71,7 +71,7 @@ macro_rules! create_visitor {
             }
         }
 
-        impl<'a, T: Fn(&mut $ty) + Send + Sync> lightningcss::visitor::Visit
+        impl<'a, T: Fn(&mut $ty) + Send + Sync> lightningcss::visitor::Visitor
             for &'a Visitor<T>
         {
             fn $name(&mut self, $arg: &mut $ty) {
