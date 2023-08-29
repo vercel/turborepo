@@ -1,9 +1,5 @@
 use anyhow::Result;
-use lightningcss::{
-    rules::{import::ImportRule, CssRule},
-    values::url::Url,
-    visitor::Visitor,
-};
+use lightningcss::{rules::CssRule, values::url::Url, visitor::Visitor};
 use swc_core::common::{
     errors::{Handler, HANDLER},
     source_map::Pos,
