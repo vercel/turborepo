@@ -79,7 +79,12 @@ impl ImportAttributes {
         //         },
         //     )))],
         // })
-        let mut rule = CssRule::Unknown(UnknownAtRule {});
+        let mut rule = CssRule::Unknown(UnknownAtRule {
+            name: "".into(),
+            prelude: Default::default(),
+            block: None,
+            loc: Default::default(),
+        });
 
         if let Some(media) = &self.media {
             rule = CssRule::Media(media.clone())

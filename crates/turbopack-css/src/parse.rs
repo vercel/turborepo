@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use indexmap::IndexMap;
+use lightningcss::{
+    css_modules::{Pattern, Segment},
+    stylesheet::{ParserOptions, StyleSheet},
+};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use swc_core::{
@@ -42,8 +46,6 @@ pub enum ParseCssResult {
         source_map: Arc<SourceMap>,
         #[turbo_tasks(debug_ignore, trace_ignore)]
         imports: Vec<JsWord>,
-        #[turbo_tasks(debug_ignore, trace_ignore)]
-        exports: IndexMap<JsWord, Vec<CssClassName>>,
     },
     Unparseable,
     NotFound,
