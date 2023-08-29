@@ -232,8 +232,8 @@ impl Run {
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
-        let visitor = Visitor::new(pkg_dep_graph, &opts);
-        visitor.visit(engine).await?;
+        let visitor = Visitor::new(pkg_dep_graph.clone(), &opts);
+        visitor.visit(engine.clone()).await?;
 
         let tasks: Vec<_> = engine.tasks().collect();
         let workspaces = pkg_dep_graph.workspaces().collect();

@@ -21,6 +21,16 @@ pub struct Framework {
     dependency_match: Matcher,
 }
 
+impl Framework {
+    pub fn slug(&self) -> &'static str {
+        self.slug
+    }
+
+    pub fn env_wildcards(&self) -> &[&'static str] {
+        &self.env_wildcards
+    }
+}
+
 static FRAMEWORKS: OnceLock<[Framework; 12]> = OnceLock::new();
 
 fn get_frameworks() -> &'static [Framework] {
