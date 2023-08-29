@@ -1,4 +1,6 @@
-use std::{fmt::Debug, future::IntoFuture, result::Result, time::Duration};
+#![feature(assert_matches)]
+
+use std::{fmt::Debug, future::IntoFuture, result::Result, sync::Arc, time::Duration};
 
 #[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
 use notify::event::EventKind;
@@ -47,8 +49,20 @@ pub enum WatchError {
     Setup(String),
 }
 
+// We want to broadcast the errors we get, but notify::Error does not implement
+// Clone. We provide a wrapper that uses an Arc to implement Clone so that we
+// can send errors on a broadcast channel.
+#[derive(Clone, Debug)]
+pub struct NotifyError(Arc<notify::Error>);
+
+impl From<notify::Error> for NotifyError {
+    fn from(value: notify::Error) -> Self {
+        Self(Arc::new(value))
+    }
+}
+
 pub struct FileSystemWatcher {
-    sender: broadcast::Sender<DebouncedEvent>,
+    sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
     _exit_ch: tokio::sync::oneshot::Sender<()>,
 }
 
@@ -77,7 +91,7 @@ impl FileSystemWatcher {
         })
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<DebouncedEvent> {
+    pub fn subscribe(&self) -> broadcast::Receiver<Result<DebouncedEvent, Vec<NotifyError>>> {
         self.sender.subscribe()
     }
 }
@@ -88,29 +102,28 @@ async fn watch_events(
     _watch_root: AbsoluteSystemPathBuf,
     mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
-    broadcast_sender: broadcast::Sender<DebouncedEvent>,
+    broadcast_sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
 ) -> Result<(), WatchError> {
     let mut exit_signal = exit_signal;
     'outer: loop {
         tokio::select! {
-            _ = &mut exit_signal => { println!("exit ch dropped"); break 'outer; },
+            _ = &mut exit_signal => break 'outer,
             Some(event) = recv_file_events.recv().into_future() => {
                 match event {
                     Ok(events) => {
                         for event in events {
                             // we don't care if we fail to send, it just means no one is currently watching
-                            let _ = broadcast_sender.send(event);
+                            let _ = broadcast_sender.send(Ok(event));
                         }
                     },
                     Err(errors) => {
-                        println!("errors {:?}", errors);
-                        panic!("uh oh")
+                        // we don't care if we fail to send, it just means no one is currently watching
+                        let _ = broadcast_sender.send(Err(errors.into_iter().map(NotifyError::from).collect()));
                     }
                 }
             }
         }
     }
-    println!("DONE");
     Ok::<(), WatchError>(())
 }
 
@@ -125,7 +138,7 @@ async fn watch_events(
     let mut exit_signal = exit_signal;
     'outer: loop {
         tokio::select! {
-            _ = &mut exit_signal => { println!("exit ch dropped"); break 'outer; },
+            _ = &mut exit_signal => break 'outer,
             Some(event) = recv_file_events.recv().into_future() => {
                 match event {
                     Ok(events) => {
@@ -146,14 +159,13 @@ async fn watch_events(
                         }
                     },
                     Err(errors) => {
-                        println!("errors {:?}", errors);
-                        panic!("uh oh")
+                        // we don't care if we fail to send, it just means no one is currently watching
+                        let _ = broadcast_sender.send(Err(errors.into_iter().map(NotifyError::from).collect()));
                     }
                 }
             }
         }
     }
-    println!("DONE");
     Ok::<(), WatchError>(())
 }
 
@@ -325,7 +337,7 @@ async fn wait_for_cookie(
 
 #[cfg(test)]
 mod test {
-    use std::{sync::atomic::AtomicUsize, time::Duration};
+    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize, time::Duration};
 
     use notify::{
         event::{ModifyKind, RenameMode},
@@ -335,7 +347,7 @@ mod test {
     use tokio::sync::broadcast;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-    use crate::FileSystemWatcher;
+    use crate::{FileSystemWatcher, NotifyError};
 
     fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {
         let tmp = tempfile::tempdir().unwrap();
@@ -349,7 +361,8 @@ mod test {
                 let event = tokio::time::timeout(Duration::from_millis(3000), $recv.recv())
                     .await
                     .expect("timed out waiting for filesystem event")
-                    .expect("sender was dropped");
+                    .expect("sender was dropped")
+                    .expect("filewatching error");
                 println!("event {:?}", event);
                 for path in event.event.paths {
                     if path == (&$expected_path as &AbsoluteSystemPath)
@@ -365,7 +378,7 @@ mod test {
     static WATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     async fn expect_watching(
-        recv: &mut broadcast::Receiver<DebouncedEvent>,
+        recv: &mut broadcast::Receiver<Result<DebouncedEvent, Vec<NotifyError>>>,
         dirs: &[&AbsoluteSystemPath],
     ) {
         for dir in dirs {
@@ -758,5 +771,20 @@ mod test {
             repo_root,
             EventKind::Modify(ModifyKind::Name(_)) | EventKind::Remove(_)
         );
+    }
+
+    #[tokio::test]
+    async fn test_close() {
+        let (repo_root, _tmp_repo_root) = temp_dir();
+        let repo_root = repo_root.to_realpath().unwrap();
+
+        let mut recv = {
+            // create and immediately drop the watcher, which should trigger the exit
+            // channel
+            let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+            watcher.subscribe()
+        };
+
+        assert_matches!(recv.recv().await, Err(broadcast::error::RecvError::Closed));
     }
 }
