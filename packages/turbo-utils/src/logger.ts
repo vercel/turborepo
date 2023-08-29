@@ -19,22 +19,37 @@ export const turboLoader = (text: string) =>
     },
   });
 
-export const info = (...args: any[]) => {
+export const info = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console
   console.log(turboBlue.bold(">>>"), ...args);
 };
 
-export const error = (...args: any[]) => {
+export const error = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console
   console.error(turboRed.bold(">>>"), ...args);
 };
 
-export const warn = (...args: any[]) => {
+export const warn = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console
   console.error(yellow.bold(">>>"), ...args);
 };
 
-export const dimmed = (...args: any[]) => {
+export const bold = (...args: Array<string>) => {
+  // eslint-disable-next-line no-console
+  console.log(chalk.bold(...args));
+};
+
+export const dimmed = (...args: Array<string>) => {
+  // eslint-disable-next-line no-console
   console.log(chalk.dim(...args));
 };
 
-export const item = (...args: any[]) => {
+export const item = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console
   console.log(turboBlue.bold("  •"), ...args);
+};
+
+export const log = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console
+  console.log(...args);
 };
