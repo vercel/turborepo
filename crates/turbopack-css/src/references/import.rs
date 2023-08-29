@@ -36,7 +36,7 @@ pub struct ImportAttributes {
     #[turbo_tasks(trace_ignore)]
     pub supports: Option<SupportsRule<'static>>,
     #[turbo_tasks(trace_ignore)]
-    pub media: MediaList<'static>,
+    pub media: Option<MediaRule<'static>>,
 }
 
 impl ImportAttributes {
@@ -90,12 +90,8 @@ impl ImportAttributes {
         // })
         let mut rule = CssRule::Unknown(UnknownAtRule {});
 
-        if !self.media.media_queries.is_empty() {
-            rule = CssRule::Media(MediaRule {
-                query: self.media.clone(),
-                rules: rules,
-                loc: self.loc,
-            });
+        if let Some(media) = &self.media {
+            rule = CssRule::Media(media.clone())
         }
 
         if let Some(supports) = &self.supports {
