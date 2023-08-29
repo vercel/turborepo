@@ -71,13 +71,6 @@ impl ImportAttributes {
     }
 
     pub fn print_block(&self) -> Result<(String, String)> {
-        fn token(token: Token) -> TokenAndSpan {
-            TokenAndSpan {
-                span: DUMMY_SP,
-                token,
-            }
-        }
-
         // something random that's never gonna be in real css
         // Box::new(ListOfComponentValues {
         //     span: DUMMY_SP,

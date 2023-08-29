@@ -95,7 +95,7 @@ impl<'a> ModuleReferencesVisitor<'a> {
 }
 
 impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
-    fn visit_import<'ast: 'r, 'r>(&mut self, i: &'ast ImportRule, ast_path: &mut AstKindPath) {
+    fn visit_import(&mut self, i: &ImportRule, ast_path: &mut AstKindPath) {
         let src = &*i.url;
 
         let issue_span = i.href.span();
@@ -103,7 +103,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
         self.references.push(Vc::upcast(ImportAssetReference::new(
             self.origin,
             Request::parse(Value::new(src.to_string().into())),
-            Vc::cell(as_parent_path(ast_path)),
+            Vc::cell(ast_path),
             ImportAttributes::new_from_prelude(i).into(),
             IssueSource::from_byte_offset(
                 Vc::upcast(self.source),
@@ -117,7 +117,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
         self.is_import = false;
     }
 
-    fn visit_url<'ast: 'r, 'r>(&mut self, u: &'ast Url, ast_path: &mut AstKindPath<'r>) {
+    fn visit_url(&mut self, u: &Url, ast_path: &mut AstKindPath) {
         if self.is_import {
             return u.visit_children_with_path(self, ast_path);
         }
