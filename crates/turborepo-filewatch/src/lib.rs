@@ -129,7 +129,7 @@ async fn watch_events(
 
 #[cfg(any(feature = "watch_ancestors", feature = "watch_recursively"))]
 async fn watch_events(
-    #[cfg(feature = "watch_recursively")] debouncer: Debouncer<Backend, FileIdMap>,
+    #[cfg(feature = "watch_recursively")] mut debouncer: Debouncer<Backend, FileIdMap>,
     #[cfg(not(feature = "watch_recursively"))] _debouncer: Debouncer<Backend, FileIdMap>,
     watch_root: AbsoluteSystemPathBuf,
     mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
@@ -231,7 +231,10 @@ fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(),
 fn watch_recursively(
     root: &Path,
     watcher: &mut Backend,
-    sender: Option<(Instant, &broadcast::Sender<DebouncedEvent>)>,
+    sender: Option<(
+        Instant,
+        &broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
+    )>,
 ) -> Result<(), WatchError> {
     for dir in WalkDir::new(root).follow_links(false).into_iter() {
         let dir = dir?;
@@ -253,7 +256,7 @@ fn watch_recursively(
                 time: *instant,
             };
             // It's ok if we fail to send, it means we're shutting down
-            let _ = sender.send(event);
+            let _ = sender.send(Ok(event));
         }
     }
     Ok(())
