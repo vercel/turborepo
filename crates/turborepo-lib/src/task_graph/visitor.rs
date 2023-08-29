@@ -3,22 +3,25 @@ use std::sync::{Arc, OnceLock};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::mpsc;
+use tracing::debug;
+use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 
 use crate::{
+    cli::EnvMode,
     engine::{Engine, ExecutionOptions},
     opts::Opts,
     package_graph::{PackageGraph, WorkspaceName},
-    run::{
-        task_id::{self, TaskId},
-        RunCache,
-    },
+    run::task_id::{self, TaskId},
+    task_hash,
+    task_hash::{PackageInputsHashes, TaskHasher},
 };
 
 // This holds the whole world
 pub struct Visitor<'a> {
     package_graph: Arc<PackageGraph>,
-    run_cache: Arc<RunCache>,
     opts: &'a Opts<'a>,
+    task_hasher: TaskHasher<'a>,
+    global_env_mode: EnvMode,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -36,14 +39,31 @@ pub enum Error {
     MissingDefinition,
     #[error("error while executing engine: {0}")]
     Engine(#[from] crate::engine::ExecuteError),
+    #[error(transparent)]
+    TaskHash(#[from] task_hash::Error),
 }
 
 impl<'a> Visitor<'a> {
-    pub fn new(package_graph: Arc<PackageGraph>, run_cache: Arc<RunCache>, opts: &'a Opts) -> Self {
+    pub fn new(
+        package_graph: Arc<PackageGraph>,
+        opts: &'a Opts,
+        package_inputs_hashes: PackageInputsHashes,
+        env_at_execution_start: &'a EnvironmentVariableMap,
+        global_hash: &'a str,
+        global_env_mode: EnvMode,
+    ) -> Self {
+        let task_hasher = TaskHasher::new(
+            package_inputs_hashes,
+            opts,
+            env_at_execution_start,
+            global_hash,
+        );
+
         Self {
             package_graph,
-            run_cache,
             opts,
+            task_hasher,
+            global_env_mode,
         }
     }
 
@@ -61,19 +81,19 @@ impl<'a> Visitor<'a> {
         while let Some(message) = node_stream.recv().await {
             let crate::engine::Message { info, callback } = message;
             let package_name = WorkspaceName::from(info.package());
-            let package_json = self
+            let workspace_info = self
                 .package_graph
-                .package_json(&package_name)
+                .workspace_info(&package_name)
                 .ok_or_else(|| Error::MissingPackage {
                     package_name: package_name.clone(),
                     task_id: info.clone(),
                 })?;
-            let workspace_dir = self
-                .package_graph
-                .workspace_dir(&package_name)
-                .unwrap_or_else(|| panic!("no directory for workspace {package_name}"));
 
-            let command = package_json.scripts.get(info.task()).cloned();
+            let command = workspace_info
+                .package_json
+                .scripts
+                .get(info.task())
+                .cloned();
 
             match command {
                 Some(cmd)
@@ -87,20 +107,40 @@ impl<'a> Visitor<'a> {
                 _ => (),
             }
 
-            let task_def = engine
+            let task_definition = engine
                 .task_definition(&info)
                 .ok_or(Error::MissingDefinition)?;
 
-            let task_cache =
-                self.run_cache
-                    .task_cache(task_def, workspace_dir, info.clone(), "fake");
+            let task_env_mode = match self.global_env_mode {
+                // Task env mode is only independent when global env mode is `infer`.
+                EnvMode::Infer if !task_definition.pass_through_env.is_empty() => {
+                    ResolvedEnvMode::Strict
+                }
+                // If we're in infer mode we have just detected non-usage of strict env vars.
+                // But our behavior's actual meaning of this state is `loose`.
+                EnvMode::Infer => ResolvedEnvMode::Loose,
+                // Otherwise we just use the global env mode.
+                EnvMode::Strict => ResolvedEnvMode::Strict,
+                EnvMode::Loose => ResolvedEnvMode::Loose,
+            };
+
+            let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
+
+            let task_hash = self.task_hasher.calculate_task_hash(
+                &info,
+                &task_definition,
+                task_env_mode,
+                workspace_info,
+                dependency_set,
+            )?;
+
+            debug!("task {} hash is {}", info, task_hash);
 
             tasks.push(tokio::spawn(async move {
                 println!(
                     "Executing {info}: {}",
                     command.as_deref().unwrap_or("no script def")
                 );
-                let _task_cache = task_cache;
                 callback.send(Ok(())).unwrap();
             }));
         }

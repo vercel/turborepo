@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    rc::Rc,
-};
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 use thiserror::Error;
@@ -12,6 +9,7 @@ use turborepo_scm::SCM;
 
 use crate::{
     engine::TaskNode,
+    framework::infer_framework,
     hash::{FileHashes, TaskHashable, TurboHash},
     package_graph::{WorkspaceInfo, WorkspaceName},
     run::task_id::{TaskId, ROOT_PKG_NAME},
@@ -164,10 +162,11 @@ struct TaskHasher {
 impl TaskHasher {
     fn calculate_task_hash(
         &mut self,
+        is_monorepo: bool,
         global_hash: &str,
         do_framework_inference: bool,
         env_at_execution_start: &EnvironmentVariableMap,
-        task_id: &TaskId,
+        task_id: TaskId<'static>,
         task_definition: &TaskDefinition,
         env_mode: ResolvedEnvMode,
         workspace: &WorkspaceInfo,
@@ -184,7 +183,53 @@ impl TaskHasher {
         let mut matching_env_var_map = EnvironmentVariableMap::default();
 
         if do_framework_inference {
-            todo!("framework inference not implemented yet")
+            // Se if we infer a framework
+            if let Some(framework) = infer_framework(workspace, is_monorepo) {
+                debug!("auto detected framework for {}", task_id.package());
+                debug!(
+                    "framework: {}, env_prefix: {:?}",
+                    framework.slug(),
+                    framework.env_wildcards()
+                );
+                let mut computed_wildcards = framework
+                    .env_wildcards()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>();
+
+                if let Some(exclude_prefix) = env_at_execution_start.get("TURBOREPO_EXCLUDE_PREFIX")
+                {
+                    if !exclude_prefix.is_empty() {
+                        let computed_exclude = format!("!{}*", exclude_prefix);
+                        debug!(
+                            "excluding environment variables matching wildcard {}",
+                            computed_exclude
+                        );
+                        computed_wildcards.push(computed_exclude);
+                    }
+                }
+
+                let inference_env_var_map =
+                    env_at_execution_start.from_wildcards(&computed_wildcards)?;
+
+                let user_env_var_set = env_at_execution_start
+                    .wildcard_map_from_wildcards_unresolved(&task_definition.env)?;
+
+                all_env_var_map.union(&user_env_var_set.inclusions);
+                all_env_var_map.union(&inference_env_var_map);
+                all_env_var_map.difference(&user_env_var_set.exclusions);
+
+                explicit_env_var_map.union(&user_env_var_set.inclusions);
+                explicit_env_var_map.difference(&user_env_var_set.exclusions);
+
+                matching_env_var_map.union(&inference_env_var_map);
+                matching_env_var_map.difference(&user_env_var_set.exclusions);
+            } else {
+                let all_env_var_map =
+                    env_at_execution_start.from_wildcards(&task_definition.env)?;
+
+                explicit_env_var_map.union(&all_env_var_map);
+            }
         } else {
             all_env_var_map = env_at_execution_start.from_wildcards(&task_definition.env)?;
 
@@ -205,16 +250,18 @@ impl TaskHasher {
 
         debug!(
             "task hash env vars for {}:{}\n vars: {:?}",
-            task_id.package, task_id.task, hashable_env_pairs
+            task_id.package(),
+            task_id.task(),
+            hashable_env_pairs
         );
 
         let task_hashable = TaskHashable {
             global_hash,
             task_dependency_hashes,
-            package_dir: workspace.package_path().to_unix()?,
+            package_dir: workspace.package_path().to_unix(),
             hash_of_files,
             external_deps_hash: workspace.get_external_deps_hash(),
-            task: &task_id.task,
+            task: task_id.task(),
             outputs,
 
             pass_through_args,
@@ -227,8 +274,7 @@ impl TaskHasher {
         let task_hash = task_hashable.hash();
 
         self.package_task_env_vars.insert(task_id.clone(), env_vars);
-        self.package_task_hashes
-            .insert(task_id.clone(), task_hash.clone());
+        self.package_task_hashes.insert(task_id, task_hash.clone());
 
         Ok(task_hash)
     }
@@ -244,7 +290,7 @@ impl TaskHasher {
                 continue;
             };
 
-            if dependency_task_id.package == ROOT_PKG_NAME {
+            if dependency_task_id.package() == ROOT_PKG_NAME {
                 continue;
             }
 
