@@ -1,19 +1,17 @@
 use anyhow::Result;
 use lightningcss::{
-    media_query::MediaList,
     printer::Printer,
     rules::{
         import::ImportRule,
         layer::{LayerName, LayerStatementRule},
         media::MediaRule,
-        supports::{SupportsCondition, SupportsRule},
+        supports::SupportsRule,
         unknown::UnknownAtRule,
         CssRule,
     },
     stylesheet::PrinterOptions,
     traits::ToCss,
 };
-use swc_core::common::DUMMY_SP;
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingContext},
