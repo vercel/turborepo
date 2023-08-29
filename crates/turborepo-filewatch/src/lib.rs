@@ -6,11 +6,11 @@ use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
-use turbopath::AbsoluteSystemPath;
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
 #[cfg(feature = "watch_ancestors")]
 use turbopath::PathRelation;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 // macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
 #[cfg(target_os = "macos")]
 use {
@@ -64,48 +64,13 @@ impl FileSystemWatcher {
         futures::executor::block_on(async {
             wait_for_cookie(&watch_root, &mut recv_file_events).await
         })?;
-        tokio::task::spawn(async move {
-            // Ensure we move the debouncer to our task
-            #[cfg(target_os = "linux")]
-            let mut debouncer = debouncer;
-            #[cfg(not(target_os = "linux"))]
-            let _debouncer = debouncer;
-            let watch_root = watch_root;
-
-            let mut exit_signal = exit_signal;
-            'outer: loop {
-                tokio::select! {
-                    _ = &mut exit_signal => { println!("exit ch dropped"); break 'outer; },
-                    Some(event) = recv_file_events.recv().into_future() => {
-                        match event {
-                            Ok(events) => {
-                                for mut event in events {
-                                    #[cfg(feature = "watch_recursively")]
-                                    {
-                                        let time = event.time;
-                                        if event.event.kind == EventKind::Create(CreateKind::Folder) {
-                                            for new_path in &event.event.paths {
-                                                watch_recursively(&new_path, debouncer.watcher(), Some((time, &broadcast_sender)))?;
-                                            }
-                                        }
-                                    }
-                                    #[cfg(feature = "watch_ancestors")]
-                                    filter_relevant(&watch_root, &mut event);
-                                    // we don't care if we fail to send, it just means no one is currently watching
-                                    let _ = broadcast_sender.send(event);
-                                }
-                            },
-                            Err(errors) => {
-                                println!("errors {:?}", errors);
-                                panic!("uh oh")
-                            }
-                        }
-                    }
-                }
-            }
-            println!("DONE");
-            Ok::<(), WatchError>(())
-        });
+        tokio::task::spawn(watch_events(
+            debouncer,
+            watch_root,
+            recv_file_events,
+            exit_signal,
+            broadcast_sender,
+        ));
         Ok(Self {
             sender,
             _exit_ch: exit_ch,
@@ -115,6 +80,81 @@ impl FileSystemWatcher {
     pub fn subscribe(&self) -> broadcast::Receiver<DebouncedEvent> {
         self.sender.subscribe()
     }
+}
+
+#[cfg(not(any(feature = "watch_ancestors", feature = "watch_recursively")))]
+async fn watch_events(
+    _debouncer: Debouncer<Backend, FileIdMap>,
+    _watch_root: AbsoluteSystemPathBuf,
+    mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
+    exit_signal: tokio::sync::oneshot::Receiver<()>,
+    broadcast_sender: broadcast::Sender<DebouncedEvent>,
+) -> Result<(), WatchError> {
+    let mut exit_signal = exit_signal;
+    'outer: loop {
+        tokio::select! {
+            _ = &mut exit_signal => { println!("exit ch dropped"); break 'outer; },
+            Some(event) = recv_file_events.recv().into_future() => {
+                match event {
+                    Ok(events) => {
+                        for event in events {
+                            // we don't care if we fail to send, it just means no one is currently watching
+                            let _ = broadcast_sender.send(event);
+                        }
+                    },
+                    Err(errors) => {
+                        println!("errors {:?}", errors);
+                        panic!("uh oh")
+                    }
+                }
+            }
+        }
+    }
+    println!("DONE");
+    Ok::<(), WatchError>(())
+}
+
+#[cfg(any(feature = "watch_ancestors", feature = "watch_recursively"))]
+async fn watch_events(
+    debouncer: Debouncer<Backend, FileIdMap>,
+    watch_root: AbsoluteSystemPathBuf,
+    mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
+    exit_signal: tokio::sync::oneshot::Receiver<()>,
+    broadcast_sender: broadcast::Sender<DebouncedEvent>,
+) -> Result<(), WatchError> {
+    let mut exit_signal = exit_signal;
+    'outer: loop {
+        tokio::select! {
+            _ = &mut exit_signal => { println!("exit ch dropped"); break 'outer; },
+            Some(event) = recv_file_events.recv().into_future() => {
+                match event {
+                    Ok(events) => {
+                        for mut event in events {
+                            #[cfg(feature = "watch_recursively")]
+                            {
+                                let time = event.time;
+                                if event.event.kind == EventKind::Create(CreateKind::Folder) {
+                                    for new_path in &event.event.paths {
+                                        watch_recursively(&new_path, debouncer.watcher(), Some((time, &broadcast_sender)))?;
+                                    }
+                                }
+                            }
+                            #[cfg(feature = "watch_ancestors")]
+                            filter_relevant(&watch_root, &mut event);
+                            // we don't care if we fail to send, it just means no one is currently watching
+                            let _ = broadcast_sender.send(event);
+                        }
+                    },
+                    Err(errors) => {
+                        println!("errors {:?}", errors);
+                        panic!("uh oh")
+                    }
+                }
+            }
+        }
+    }
+    println!("DONE");
+    Ok::<(), WatchError>(())
 }
 
 // Since we're manually watching the parent directories, we need
@@ -287,7 +327,10 @@ async fn wait_for_cookie(
 mod test {
     use std::{sync::atomic::AtomicUsize, time::Duration};
 
-    use notify::{event::ModifyKind, EventKind};
+    use notify::{
+        event::{ModifyKind, RenameMode},
+        EventKind,
+    };
     use notify_debouncer_full::DebouncedEvent;
     use tokio::sync::broadcast;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
