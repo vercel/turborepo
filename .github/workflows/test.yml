@@ -517,6 +517,9 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
+
       - name: Run cargo check
         run: |
           cargo groups check turborepo-libraries --features rustls-tls
@@ -539,6 +542,9 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
 
       - name: Run cargo clippy
         run: |
@@ -707,6 +713,9 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           save-cache: true
+
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
 
       - name: Setup Protoc
         uses: arduino/setup-protoc@v1
