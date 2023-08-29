@@ -63,6 +63,10 @@ impl From<notify::Error> for NotifyError {
 
 pub struct FileSystemWatcher {
     sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
+    // _exit_ch exists to trigger a close on the receiver when an instance
+    // of this struct is dropped. The task that is receiving events will exit,
+    // dropping the other sender for the broadcast channel, causing all receivers
+    // to be notified of a close.
     _exit_ch: tokio::sync::oneshot::Sender<()>,
 }
 
@@ -74,10 +78,8 @@ impl FileSystemWatcher {
         let broadcast_sender = sender.clone();
         let debouncer = run_watcher(&watch_root, send_file_events).unwrap();
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
-        //#[cfg(target_os = "macos")]
-        futures::executor::block_on(async {
-            wait_for_cookie(&watch_root, &mut recv_file_events).await
-        })?;
+        // Ensure we are ready to receive new events, not events for existing state
+        futures::executor::block_on(wait_for_cookie(&watch_root, &mut recv_file_events))?;
         tokio::task::spawn(watch_events(
             debouncer,
             watch_root,
@@ -275,7 +277,9 @@ fn run_watcher(
         let _ = sender.blocking_send(res);
     })?;
 
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    // Note that the "watch_recursively" feature corresponds to manual
+    // recursive watching.
+    #[cfg(not(feature = "watch_recursively"))]
     debouncer
         .watcher()
         .watch(&root.as_std_path(), RecursiveMode::Recursive)?;
@@ -302,7 +306,9 @@ fn make_debouncer<F: DebounceEventHandler>(
     )
 }
 
-//#[cfg(target_os = "macos")]
+/// wait_for_cookie performs a roundtrip through the filewatching mechanism.
+/// This ensures that we are ready to receive *new* filesystem events, rather
+/// than receiving events from existing state, which some backends can do.
 async fn wait_for_cookie(
     root: &AbsoluteSystemPath,
     recv: &mut mpsc::Receiver<DebounceEventResult>,
@@ -328,9 +334,7 @@ async fn wait_for_cookie(
             })?;
         for event in events {
             for path in &event.paths {
-                if path == (&cookie_path as &AbsoluteSystemPath)
-                /* && event.kind == EventKind::Create(CreateKind::File) */
-                {
+                if path == (&cookie_path as &AbsoluteSystemPath) {
                     let _ = cookie_path.remove();
                     return Ok(());
                 }

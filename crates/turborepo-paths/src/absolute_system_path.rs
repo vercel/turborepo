@@ -20,7 +20,7 @@ use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PathRelation {
     // absolute vs relative
     Incomparable,
@@ -332,6 +332,10 @@ impl AbsoluteSystemPath {
         rel.components().next() != Some(Utf8Component::ParentDir)
     }
 
+    /// relation_to_path does a lexical comparison of path components to
+    /// determine how this path relates to the given path. In the event that
+    /// the paths are the same, we return `Parent`, much the way that `contains`
+    /// would return `true`.
     pub fn relation_to_path(&self, other: &Path) -> PathRelation {
         if !other.is_absolute() {
             return PathRelation::Incomparable;
@@ -440,6 +444,8 @@ impl PartialEq<&AbsoluteSystemPath> for PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use anyhow::Result;
     use tempdir::TempDir;
     use test_case::test_case;
@@ -564,5 +570,33 @@ mod tests {
 
             Ok(())
         }
+    }
+
+    #[test_case(&["a", "b"], &["a", "b"], PathRelation::Parent ; "equal paths return parent")]
+    #[test_case(&["a"], &["a", "b"], PathRelation::Parent ; "a is a parent of a/b")]
+    #[test_case(&["a", "b"], &["a"], PathRelation::Child ; "a/b is a child of a")]
+    #[test_case(&["a", "b"], &["a", "c"], PathRelation::Divergent ; "a/b and a/c are divergent")]
+    fn test_path_relation(
+        abs_path_components: &[&str],
+        other_components: &[&str],
+        expected: PathRelation,
+    ) {
+        #[cfg(windows)]
+        let root = "C:\\";
+        #[cfg(not(windows))]
+        let root = "/";
+
+        let abs_path = AbsoluteSystemPathBuf::try_from(root)
+            .unwrap()
+            .join_components(abs_path_components);
+        let other_path = other_components.iter().fold(
+            PathBuf::from_str(root).unwrap(),
+            |mut current, component| {
+                current.push(component);
+                current
+            },
+        );
+        let relation = abs_path.relation_to_path(&other_path);
+        assert_eq!(relation, expected);
     }
 }
