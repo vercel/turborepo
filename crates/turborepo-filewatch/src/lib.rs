@@ -1,5 +1,7 @@
 use std::{fmt::Debug, future::IntoFuture, result::Result, time::Duration};
 
+#[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
+use notify::event::EventKind;
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap};
 use thiserror::Error;
@@ -18,9 +20,7 @@ use {
 };
 #[cfg(feature = "watch_recursively")]
 use {
-    notify::event::{
-        Event, EventKind, {CreateKind, EventAttributes},
-    },
+    notify::event::{CreateKind, Event, EventAttributes},
     std::{path::Path, time::Instant},
     walkdir::WalkDir,
 };
@@ -287,10 +287,7 @@ async fn wait_for_cookie(
 mod test {
     use std::{sync::atomic::AtomicUsize, time::Duration};
 
-    use notify::{
-        event::{ModifyKind, RenameMode},
-        EventKind,
-    };
+    use notify::{event::ModifyKind, EventKind};
     use notify_debouncer_full::DebouncedEvent;
     use tokio::sync::broadcast;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
