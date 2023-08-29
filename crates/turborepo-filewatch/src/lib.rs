@@ -1,27 +1,33 @@
-use std::{
-    fmt::Debug,
-    future::IntoFuture,
-    path::Path,
-    result::Result,
-    time::{Duration, Instant},
-};
+use std::{fmt::Debug, future::IntoFuture, result::Result, time::Duration};
 
 use itertools::Itertools;
-use notify::{
-    event::{CreateKind, EventAttributes},
-    Event, EventKind, RecursiveMode, Watcher,
-};
+use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{
     DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
 };
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
 use turbopath::AbsoluteSystemPath;
-use walkdir::WalkDir;
+// macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
 #[cfg(target_os = "macos")]
 use {fsevent::FsEventWatcher, notify_debouncer_full::new_debouncer_opt};
 #[cfg(not(target_os = "macos"))]
 use {notify::RecommendedWatcher, notify_debouncer_full::new_debouncer, turbopath::PathRelation};
+// windows -> no recursive watch, watch ancestors
+// linux -> recursive watch, watch ancestors
+#[cfg(target_os = "linux")]
+use {
+    notify::{
+        event::{
+            Event, EventKind, {CreateKind, EventAttributes},
+        },
+        RecommendedWatcher,
+    },
+    notify_debouncer_full::new_debouncer,
+    std::{path::Path, time::Instant},
+    turbopath::PathRelation,
+    walkdir::WalkDir,
+};
 
 #[cfg(target_os = "macos")]
 mod fsevent;
@@ -284,7 +290,7 @@ mod test {
     use std::{sync::atomic::AtomicUsize, time::Duration};
 
     use notify::{
-        event::{ModifyKind, RemoveKind, RenameMode},
+        event::{ModifyKind, RenameMode},
         EventKind,
     };
     use notify_debouncer_full::DebouncedEvent;
