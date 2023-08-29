@@ -78,7 +78,7 @@ impl<'a> Visitor<'a> {
                 _ => (),
             }
 
-            let _task_def = engine
+            let task_definition = engine
                 .task_definition(&info)
                 .ok_or(Error::MissingDefinition)?;
 
