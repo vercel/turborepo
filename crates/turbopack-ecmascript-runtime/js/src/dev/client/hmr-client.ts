@@ -3,6 +3,10 @@
 /// <reference path="../runtime/base/protocol.d.ts" />
 /// <reference path="../runtime/base/extensions.d.ts" />
 
+import {
+  addMessageListener as turboSocketAddMessageListener,
+  sendMessage as turboSocketSendMessage,
+} from "./websocket";
 type SendMessage = typeof import("./websocket").sendMessage;
 
 export type ClientOptions = {
@@ -10,7 +14,14 @@ export type ClientOptions = {
   sendMessage: SendMessage;
 };
 
-export function connect({ addMessageListener, sendMessage }: ClientOptions) {
+export function connect({
+  // TODO(WEB-1465) Remove this backwards compat fallback once
+  // vercel/next.js#54586 is merged.
+  addMessageListener = turboSocketAddMessageListener,
+  // TODO(WEB-1465) Remove this backwards compat fallback once
+  // vercel/next.js#54586 is merged.
+  sendMessage = turboSocketSendMessage,
+}: ClientOptions) {
   addMessageListener((msg) => {
     switch (msg.type) {
       case "turbopack-connected":
@@ -518,7 +529,7 @@ function handleSocketMessage(msg: ServerMessage) {
   }
 }
 
-export function subscribeToChunkUpdate(
+function subscribeToChunkUpdate(
   chunkPath: ChunkPath,
   sendMessage: SendMessage,
   callback: UpdateCallback
@@ -537,6 +548,13 @@ export function subscribeToUpdate(
   sendMessage: SendMessage,
   callback: UpdateCallback
 ) {
+  // TODO(WEB-1465) Remove this backwards compat fallback once
+  // vercel/next.js#54586 is merged.
+  if (callback === undefined) {
+    callback = sendMessage;
+    sendMessage = turboSocketSendMessage;
+  }
+
   const key = resourceKey(resource);
   let callbackSet: UpdateCallbackSet;
   const existingCallbackSet = updateCallbackSets.get(key);
