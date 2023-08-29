@@ -1,9 +1,9 @@
 import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
+import { rimraf } from "rimraf";
 import {
   mkdirSync,
   existsSync,
-  rmSync,
   copySync,
   writeFileSync,
   readFileSync,
@@ -25,16 +25,24 @@ export function setupTestFixtures({
   options = {},
 }: SetupTextFixtures) {
   const fixtures: Array<string> = [];
-  const parentDirectory = path.join(directory, test ? test : "test-runs");
+  const parentDirectory = path.join(directory, test ? test : uuidv4());
 
-  afterEach(() => {
-    fixtures.forEach((fixture) => {
-      rmSync(fixture, { recursive: true, force: true });
-    });
+  afterEach(async () => {
+    await Promise.all(
+      fixtures.map((fixture) =>
+        rimraf(fixture, {
+          retryDelay: 50,
+          maxRetries: 5,
+        })
+      )
+    );
   });
 
-  afterAll(() => {
-    rmSync(parentDirectory, { recursive: true, force: true });
+  afterAll(async () => {
+    await rimraf(parentDirectory, {
+      retryDelay: 50,
+      maxRetries: 5,
+    });
   });
 
   const useFixture = ({ fixture }: { fixture: string }) => {
