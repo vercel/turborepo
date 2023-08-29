@@ -2,7 +2,7 @@ use lightningcss::visitor::{Visit, Visitor};
 use turbo_tasks::Vc;
 use turbopack_core::chunk::ChunkingContext;
 
-use crate::chunk::CssImport;
+use crate::{chunk::CssImport, references::AstParentKind};
 
 /// impl of code generation inferred from a ModuleReference.
 /// This is rust only and can't be implemented by non-rust plugins.
@@ -55,7 +55,7 @@ macro_rules! create_visitor {
     };
     ($ast_path:expr, $name:ident($arg:ident: &mut $ty:ident) $b:block) => {
         $crate::create_visitor!(__ $crate::code_gen::path_to(&$ast_path, |n| {
-            matches!(n, swc_core::css::visit::AstParentKind::$ty(_))
+            matches!(n, $crate::references::AstParentKind::$ty(_))
         }), $name($arg: &mut $ty) $b)
     };
     (__ $ast_path:expr, $name:ident($arg:ident: &mut $ty:ident) $b:block) => {{
