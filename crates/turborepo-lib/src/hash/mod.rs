@@ -136,7 +136,7 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
             .total_size()
             .expect("unable to calculate total size")
             .word_count
-            + 1;
+            + 1; // + 1 to solve an off by one error inside capnp
         let mut canon_builder =
             Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
@@ -179,7 +179,7 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             .total_size()
             .expect("unable to calculate total size")
             .word_count
-            + 1;
+            + 1; // + 1 to solve an off by one error inside capnp
         let mut canon_builder =
             Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
@@ -270,7 +270,7 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
             .total_size()
             .expect("unable to calculate total size")
             .word_count
-            + 1;
+            + 1; // + 1 to solve an off by one error inside capnp
         let mut canon_builder =
             Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder
@@ -358,7 +358,7 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
             .total_size()
             .expect("unable to calculate total size")
             .word_count
-            + 1;
+            + 1; // + 1 to solve an off by one error inside capnp
         let mut canon_builder =
             Builder::new(HeapAllocator::default().first_segment_words(size as u32));
         canon_builder

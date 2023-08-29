@@ -96,7 +96,12 @@ impl Git {
     ) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
         let to_hash = files
-            .map(|f| Ok(self.root.anchor(process_relative_to.resolve(&f))?.to_unix()))
+            .map(|f| {
+                Ok(self
+                    .root
+                    .anchor(process_relative_to.resolve(f.as_ref()))?
+                    .to_unix())
+            })
             .collect::<Result<Vec<_>, PathError>>()?;
         // Note: to_hash is *git repo relative*
         hash_objects(&self.root, process_relative_to, to_hash, &mut hashes)?;
