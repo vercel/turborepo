@@ -40,7 +40,7 @@ pub(crate) fn hash_files(
             }
         };
         let hash = git_like_hash_file(&path, &metadata)?;
-        hashes.insert(file.to_unix(), hash);
+        hashes.insert(file.as_ref().to_unix(), hash);
     }
     Ok(hashes)
 }

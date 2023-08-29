@@ -366,7 +366,10 @@ impl PackageGraph {
     }
 
     #[allow(dead_code)]
-    fn external_dependencies(&self, workspace: &WorkspaceName) -> Option<&HashSet<Package>> {
+    fn external_dependencies(
+        &self,
+        workspace: &WorkspaceName,
+    ) -> Option<&BTreeMap<PackageName, PackageVersion>> {
         let entry = self.workspaces.get(workspace)?;
         entry.unresolved_external_dependencies.as_ref()
     }
