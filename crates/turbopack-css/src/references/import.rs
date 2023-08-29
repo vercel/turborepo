@@ -39,23 +39,7 @@ pub struct ImportAttributes {
 
 impl ImportAttributes {
     pub fn new_from_prelude(prelude: &ImportRule<'static>) -> Self {
-        let layer_name = prelude
-            .layer
-            .as_ref()
-            .map(|v| v.as_ref())
-            .flatten()
-            .and_then(|l| match l {
-                LayerName::Ident(_) => LayerName(Default::default()),
-                LayerName::Function(f) => {
-                    assert_eq!(f.value.len(), 1);
-                    assert!(matches!(&f.value[0], ComponentValue::LayerName(_)));
-                    if let ComponentValue::LayerName(layer_name) = &f.value[0] {
-                        *layer_name.clone()
-                    } else {
-                        unreachable!()
-                    }
-                }
-            });
+        let layer_name = prelude.layer.clone().flatten();
 
         let supports = prelude.supports.clone();
 
