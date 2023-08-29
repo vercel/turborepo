@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
+import { logger } from "@turbo/utils";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
 
@@ -76,13 +77,12 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       regexAllowList.push(new RegExp(allowed));
     } catch (err) {
       // log the error, but just move on without this allowList entry
-      // eslint-disable-next-line no-console
-      console.error(`Unable to convert "${allowed}" to regex`);
+      logger.error(`Unable to convert "${allowed}" to regex`);
     }
   });
 
   const cwd = normalizeCwd(
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- needed to support older eslint versions
     context.getCwd ? context.getCwd() : undefined,
     options
   );

@@ -22,7 +22,7 @@ export async function directory({ dir }: { dir: CreateCommandArgument }) {
     filter: (d: string) => d.trim(),
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it's defined because of the `when` condition above
   const { projectDirectory: selectedProjectDirectory = dir! } =
     projectDirectoryAnswer;
 

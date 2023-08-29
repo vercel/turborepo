@@ -8,7 +8,7 @@ const meta = {
   name: "git-ignore",
 };
 
-// eslint-disable-next-line @typescript-eslint/require-await
+// eslint-disable-next-line @typescript-eslint/require-await -- must match transform function signature
 export async function transform(args: TransformInput): TransformResult {
   const { prompts } = args;
   const ignorePath = path.join(prompts.root, ".gitignore");

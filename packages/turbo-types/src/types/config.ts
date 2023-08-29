@@ -13,7 +13,7 @@ export interface BaseSchema {
    *
    * @defaultValue `{}`
    */
-  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
+  // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- it's more readable to specify a name for the key
   pipeline: {
     /**
      * The name of a task that can be executed by turbo. If turbo finds a workspace

@@ -52,11 +52,9 @@ export async function create(
   opts: CreateCommandOptions
 ) {
   const { skipInstall, skipTransforms } = opts;
-  // eslint-disable-next-line no-console
-  console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
+  logger.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
-  // eslint-disable-next-line no-console
-  console.log();
+  logger.log();
 
   const [online, availablePackageManagers] = await Promise.all([
     isOnline(),
@@ -109,7 +107,7 @@ export async function create(
   if (!skipTransforms) {
     for (const transform of transforms) {
       try {
-        // eslint-disable-next-line no-await-in-loop
+        // eslint-disable-next-line no-await-in-loop -- we need to run transforms sequentially
         const transformResult = await transform({
           example: {
             repo: repoInfo,
@@ -144,8 +142,7 @@ export async function create(
       : selectedPackageManagerDetails;
 
   info("Created a new Turborepo with the following:");
-  // eslint-disable-next-line no-console
-  console.log();
+  logger.log();
   if (project.workspaceData.workspaces.length > 0) {
     const workspacesForDisplay = project.workspaceData.workspaces
       .map((w) => ({
@@ -158,25 +155,20 @@ export async function create(
     let lastGroup: string | undefined;
     workspacesForDisplay.forEach(({ group, title, description }, idx) => {
       if (idx === 0 || group !== lastGroup) {
-        // eslint-disable-next-line no-console
-        console.log(chalk.cyan(group));
+        logger.log(chalk.cyan(group));
       }
-      // eslint-disable-next-line no-console
-      console.log(
+      logger.log(
         ` - ${chalk.bold(title)}${description ? `: ${description}` : ""}`
       );
       lastGroup = group;
     });
   } else {
-    // eslint-disable-next-line no-console
-    console.log(chalk.cyan("apps"));
-    // eslint-disable-next-line no-console
-    console.log(` - ${chalk.bold(projectName)}`);
+    logger.log(chalk.cyan("apps"));
+    logger.log(` - ${chalk.bold(projectName)}`);
   }
 
   // run install
-  // eslint-disable-next-line no-console
-  console.log();
+  logger.log();
   if (hasPackageJson && !skipInstall) {
     // in the case when the user opted out of transforms, but not install, we need to make sure the package manager is available
     // before we attempt an install
@@ -190,13 +182,10 @@ export async function create(
       warn(
         `Try running without "--skip-transforms" to convert "${exampleName}" to a package manager that is available on your system.`
       );
-      // eslint-disable-next-line no-console
-      console.log();
+      logger.log();
     } else if (projectPackageManager.version) {
-      // eslint-disable-next-line no-console
-      console.log("Installing packages. This might take a couple of minutes.");
-      // eslint-disable-next-line no-console
-      console.log();
+      logger.log("Installing packages. This might take a couple of minutes.");
+      logger.log();
 
       const loader = turboLoader("Installing dependencies...").start();
       await install({
@@ -213,15 +202,13 @@ export async function create(
   }
 
   if (projectDirIsCurrentDir) {
-    // eslint-disable-next-line no-console
-    console.log(
+    logger.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
       )} Your new Turborepo is ready.`
     );
   } else {
-    // eslint-disable-next-line no-console
-    console.log(
+    logger.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
       )} Created a new Turborepo at "${relativeProjectDir}".`
@@ -230,36 +217,32 @@ export async function create(
 
   // get the package manager details so we display the right commands to the user in log messages
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
-  /* eslint-disable no-console */
   if (packageManagerMeta && hasPackageJson) {
-    console.log(
+    logger.log(
       `Inside ${
         projectDirIsCurrentDir ? "this" : "that"
       } directory, you can run several commands:`
     );
-    console.log();
+    logger.log();
     availableScripts
       .filter((script) => SCRIPTS_TO_DISPLAY[script])
       .forEach((script) => {
-        console.log(
-          chalk.cyan(`  ${packageManagerMeta.command} run ${script}`)
-        );
-        console.log(`     ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`);
-        console.log();
+        logger.log(chalk.cyan(`  ${packageManagerMeta.command} run ${script}`));
+        logger.log(`     ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`);
+        logger.log();
       });
-    console.log(`Turborepo will cache locally by default. For an additional`);
-    console.log(`speed boost, enable Remote Caching with Vercel by`);
-    console.log(`entering the following command:`);
-    console.log();
-    console.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
-    console.log();
-    console.log(`We suggest that you begin by typing:`);
-    console.log();
+    logger.log(`Turborepo will cache locally by default. For an additional`);
+    logger.log(`speed boost, enable Remote Caching with Vercel by`);
+    logger.log(`entering the following command:`);
+    logger.log();
+    logger.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
+    logger.log();
+    logger.log(`We suggest that you begin by typing:`);
+    logger.log();
     if (!projectDirIsCurrentDir) {
-      console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
+      logger.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
     }
-    console.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
-    console.log();
+    logger.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
+    logger.log();
   }
-  /* eslint-enable no-console */
 }
