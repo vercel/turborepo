@@ -9,12 +9,6 @@
 
 /// <reference path="./runtime-types.d.ts" />
 
-interface Exports {
-  __esModule?: boolean;
-
-  [key: string]: any;
-}
-
 type EsmNamespaceObject = Record<string, any>;
 
 const REEXPORTED_OBJECTS = Symbol("reexported objects");

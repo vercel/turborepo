@@ -1,3 +1,4 @@
+/// <reference path="../shared/runtime-types.ts" />
 /// <reference path="../shared/runtime-utils.ts" />
 
 interface RequireContextEntry {

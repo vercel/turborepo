@@ -10,6 +10,12 @@
 type ChunkPath = string;
 type ModuleId = string;
 
+interface Exports {
+  __esModule?: boolean;
+
+  [key: string]: any;
+}
+
 type ChunkData =
   | ChunkPath
   | {
@@ -30,7 +36,10 @@ type ExportNamespace = (namespace: any) => void;
 type DynamicExport = (object: Record<string, any>) => void;
 
 type LoadChunk = (chunkPath: ChunkPath) => Promise<any> | undefined;
-type LoadWebAssembly = (wasmChunkPath: ChunkPath, imports: WebAssembly.Imports) => Exports;
+type LoadWebAssembly = (
+  wasmChunkPath: ChunkPath,
+  imports: WebAssembly.Imports
+) => Exports;
 type LoadWebAssemblyModule = (wasmChunkPath: ChunkPath) => WebAssembly.Module;
 
 type ModuleCache = Record<ModuleId, Module>;
@@ -59,8 +68,8 @@ interface TurbopackBaseContext {
   m: Module;
   c: ModuleCache;
   l: LoadChunk;
-  w: LoadWebAssembly,
-  u: LoadWebAssemblyModule,
+  w: LoadWebAssembly;
+  u: LoadWebAssemblyModule;
   g: typeof globalThis;
   __dirname: string;
 }

@@ -5,6 +5,8 @@
  * code, not by user code.
  */
 
+/// <reference path="./runtime-base.d.ts" />
+
 type UpdateCallback = (update: ServerMessage) => void;
 
 type ChunkRegistry = {
