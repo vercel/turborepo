@@ -2,6 +2,7 @@
 
 use std::{fmt::Debug, future::IntoFuture, result::Result, sync::Arc, time::Duration};
 
+use itertools::Itertools;
 #[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
 use notify::event::EventKind;
 use notify::{RecursiveMode, Watcher};
@@ -17,7 +18,6 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 #[cfg(target_os = "macos")]
 use {
     fsevent::FsEventWatcher,
-    itertools::Itertools,
     notify_debouncer_full::{new_debouncer_opt, DebounceEventHandler},
 };
 #[cfg(feature = "watch_recursively")]
@@ -74,7 +74,7 @@ impl FileSystemWatcher {
         let broadcast_sender = sender.clone();
         let debouncer = run_watcher(&watch_root, send_file_events).unwrap();
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
-        #[cfg(target_os = "macos")]
+        //#[cfg(target_os = "macos")]
         futures::executor::block_on(async {
             wait_for_cookie(&watch_root, &mut recv_file_events).await
         })?;
@@ -129,11 +129,12 @@ async fn watch_events(
 
 #[cfg(any(feature = "watch_ancestors", feature = "watch_recursively"))]
 async fn watch_events(
-    debouncer: Debouncer<Backend, FileIdMap>,
+    #[cfg(feature = "watch_recursively")] debouncer: Debouncer<Backend, FileIdMap>,
+    #[cfg(not(feature = "watch_recursively"))] _debouncer: Debouncer<Backend, FileIdMap>,
     watch_root: AbsoluteSystemPathBuf,
     mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
-    broadcast_sender: broadcast::Sender<DebouncedEvent>,
+    broadcast_sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
 ) -> Result<(), WatchError> {
     let mut exit_signal = exit_signal;
     'outer: loop {
@@ -155,7 +156,7 @@ async fn watch_events(
                             #[cfg(feature = "watch_ancestors")]
                             filter_relevant(&watch_root, &mut event);
                             // we don't care if we fail to send, it just means no one is currently watching
-                            let _ = broadcast_sender.send(event);
+                            let _ = broadcast_sender.send(Ok(event));
                         }
                     },
                     Err(errors) => {
@@ -298,7 +299,7 @@ fn make_debouncer<F: DebounceEventHandler>(
     )
 }
 
-#[cfg(target_os = "macos")]
+//#[cfg(target_os = "macos")]
 async fn wait_for_cookie(
     root: &AbsoluteSystemPath,
     recv: &mut mpsc::Receiver<DebounceEventResult>,
@@ -339,10 +340,9 @@ async fn wait_for_cookie(
 mod test {
     use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize, time::Duration};
 
-    use notify::{
-        event::{ModifyKind, RenameMode},
-        EventKind,
-    };
+    #[cfg(not(target_os = "windows"))]
+    use notify::event::RenameMode;
+    use notify::{event::ModifyKind, EventKind};
     use notify_debouncer_full::DebouncedEvent;
     use tokio::sync::broadcast;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
