@@ -131,7 +131,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             self.references.push(Vc::upcast(UrlAssetReference::new(
                 self.origin,
                 Request::parse(Value::new(src.to_string().into())),
-                Vc::cell(as_parent_path(ast_path)),
+                Vc::cell(ast_path),
                 IssueSource::from_byte_offset(
                     Vc::upcast(self.source),
                     issue_span.lo.to_usize(),
