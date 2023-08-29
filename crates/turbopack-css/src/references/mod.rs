@@ -1,5 +1,9 @@
 use anyhow::Result;
-use lightningcss::{rules::import::ImportRule, values::url::Url, visitor::Visitor};
+use lightningcss::{
+    rules::{import::ImportRule, CssRule},
+    values::url::Url,
+    visitor::Visitor,
+};
 use swc_core::common::{
     errors::{Handler, HANDLER},
     source_map::Pos,
@@ -95,26 +99,33 @@ impl<'a> ModuleReferencesVisitor<'a> {
 }
 
 impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
-    fn visit_import(&mut self, i: &ImportRule, ast_path: &mut AstKindPath) {
-        let src = &*i.url;
+    fn visit_rule(&mut self, rule: &mut CssRule) -> std::result::Result<(), Self::Error> {
+        match rule {
+            CssRule::Import(i) => {
+                let src = &*i.url;
 
-        let issue_span = i.href.span();
+                let issue_span = i.href.span();
 
-        self.references.push(Vc::upcast(ImportAssetReference::new(
-            self.origin,
-            Request::parse(Value::new(src.to_string().into())),
-            Vc::cell(ast_path),
-            ImportAttributes::new_from_prelude(i).into(),
-            IssueSource::from_byte_offset(
-                Vc::upcast(self.source),
-                issue_span.lo.to_usize(),
-                issue_span.hi.to_usize(),
-            ),
-        )));
+                self.references.push(Vc::upcast(ImportAssetReference::new(
+                    self.origin,
+                    Request::parse(Value::new(src.to_string().into())),
+                    Vc::cell(ast_path),
+                    ImportAttributes::new_from_prelude(i).into(),
+                    IssueSource::from_byte_offset(
+                        Vc::upcast(self.source),
+                        issue_span.lo.to_usize(),
+                        issue_span.hi.to_usize(),
+                    ),
+                )));
 
-        self.is_import = true;
-        i.visit_children_with_path(self, ast_path);
-        self.is_import = false;
+                self.is_import = true;
+                let res = i.visit_children_with_path(self, ast_path);
+                self.is_import = false;
+                res
+            }
+
+            _ => rule.visit_children_with(self),
+        }
     }
 
     fn visit_url(&mut self, u: &Url, ast_path: &mut AstKindPath) {
