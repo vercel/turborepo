@@ -1,7 +1,5 @@
 use std::{fmt::Debug, future::IntoFuture, result::Result, time::Duration};
 
-#[cfg(target_os = "macos")]
-use fsevent::FsEventWatcher;
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap};
 use thiserror::Error;
@@ -15,6 +13,7 @@ use turbopath::PathRelation;
 #[cfg(target_os = "macos")]
 use {
     fsevent::FsEventWatcher,
+    itertools::Itertools,
     notify_debouncer_full::{new_debouncer_opt, DebounceEventHandler},
 };
 #[cfg(feature = "watch_recursively")]
