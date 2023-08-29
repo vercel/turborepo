@@ -3,7 +3,7 @@ use std::{borrow::Cow, collections::HashMap};
 use lightningcss::{values::url::Url, visitor::Visitor};
 use swc_core::common::pass::AstKindPath;
 
-use crate::code_gen::VisitorFactory;
+use crate::{code_gen::VisitorFactory, references::AstParentKind};
 
 pub type AstPath = Vec<AstParentKind>;
 

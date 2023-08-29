@@ -94,12 +94,8 @@ impl<'a> ModuleReferencesVisitor<'a> {
     }
 }
 
-pub fn as_parent_path(ast_path: &AstNodePath<'_>) -> Vec<AstParentKind> {
-    ast_path.iter().map(|n| n.kind()).collect()
-}
-
 impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
-    fn visit_import<'ast: 'r, 'r>(&mut self, i: &'ast ImportRule, ast_path: &mut AstNodePath<'r>) {
+    fn visit_import<'ast: 'r, 'r>(&mut self, i: &'ast ImportRule, ast_path: &mut AstKindPath) {
         let src = &*i.url;
 
         let issue_span = i.href.span();
@@ -121,7 +117,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
         self.is_import = false;
     }
 
-    fn visit_url<'ast: 'r, 'r>(&mut self, u: &'ast Url, ast_path: &mut AstNodePath<'r>) {
+    fn visit_url<'ast: 'r, 'r>(&mut self, u: &'ast Url, ast_path: &mut AstKindPath<'r>) {
         if self.is_import {
             return u.visit_children_with_path(self, ast_path);
         }
@@ -174,3 +170,8 @@ pub async fn css_resolve(
 // TODO enable serialization
 #[turbo_tasks::value(transparent, serialization = "none")]
 pub struct AstPath(#[turbo_tasks(trace_ignore)] Vec<AstParentKind>);
+
+#[derive(Debug, Clone)]
+pub enum AstParentKind {}
+
+pub type AstKindPath = Vec<AstParentKind>;
