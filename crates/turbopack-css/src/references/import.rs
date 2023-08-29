@@ -40,56 +40,51 @@ pub struct ImportAttributes {
 
 impl ImportAttributes {
     pub fn new_from_prelude(prelude: &ImportRule<'static>) -> Self {
-        let layer_name = prelude.layer.as_ref().and_then(|l| match l {
-            box LayerName::Ident(_) => LayerName(Default::default()),
-            box LayerName::Function(f) => {
-                assert_eq!(f.value.len(), 1);
-                assert!(matches!(&f.value[0], ComponentValue::LayerName(_)));
-                if let ComponentValue::LayerName(layer_name) = &f.value[0] {
-                    *layer_name.clone()
-                } else {
-                    unreachable!()
-                }
-            }
-        });
-
-        let (supports, media) = prelude
-            .import_conditions
+        let layer_name = prelude
+            .layer
             .as_ref()
-            .map(|c| {
-                let supports = if let Some(supports) = &c.supports {
-                    let v = supports.value.iter().find(|v| {
-                        matches!(
-                            v,
-                            ComponentValue::SupportsCondition(..) | ComponentValue::Declaration(..)
-                        )
-                    });
-
-                    if let Some(supports) = v {
-                        match &supports {
-                            ComponentValue::SupportsCondition(s) => Some(*s.clone()),
-                            ComponentValue::Declaration(d) => Some(SupportsCondition {
-                                span: DUMMY_SP,
-                                conditions: vec![SupportsCondition::SupportsInParens(
-                                    SupportsCondition::Feature(SupportsCondition::Declaration(
-                                        d.clone(),
-                                    )),
-                                )],
-                            }),
-                            _ => None,
-                        }
+            .map(|v| v.as_ref())
+            .flatten()
+            .and_then(|l| match l {
+                LayerName::Ident(_) => LayerName(Default::default()),
+                LayerName::Function(f) => {
+                    assert_eq!(f.value.len(), 1);
+                    assert!(matches!(&f.value[0], ComponentValue::LayerName(_)));
+                    if let ComponentValue::LayerName(layer_name) = &f.value[0] {
+                        *layer_name.clone()
                     } else {
-                        None
+                        unreachable!()
                     }
-                } else {
-                    None
-                };
+                }
+            });
 
-                let media = c.media.as_ref().map(|m| m.queries.clone());
+        let supports = if let Some(supports) = &prelude.supports {
+            let v = supports.value.iter().find(|v| {
+                matches!(
+                    v,
+                    ComponentValue::SupportsCondition(..) | ComponentValue::Declaration(..)
+                )
+            });
 
-                (supports, media)
-            })
-            .unwrap_or_else(|| (None, None));
+            if let Some(supports) = v {
+                match &supports {
+                    ComponentValue::SupportsCondition(s) => Some(*s.clone()),
+                    ComponentValue::Declaration(d) => Some(SupportsCondition {
+                        span: DUMMY_SP,
+                        conditions: vec![SupportsCondition::SupportsInParens(
+                            SupportsCondition::Feature(SupportsCondition::Declaration(d.clone())),
+                        )],
+                    }),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let media = prelude.media.as_ref().map(|m| m.queries.clone());
 
         Self {
             layer_name,
