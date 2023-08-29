@@ -1,6 +1,9 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use lightningcss::{values::url::Url, visitor::Visitor};
+use lightningcss::{
+    values::url::Url,
+    visitor::{Visit, Visitor},
+};
 use swc_core::common::pass::AstKindPath;
 
 use crate::{code_gen::VisitorFactory, references::AstParentKind};
@@ -31,8 +34,8 @@ impl<'a> ApplyVisitors<'a> {
 
     fn visit_if_required<N>(&mut self, n: &mut N, ast_path: &mut AstKindPath<AstParentKind>)
     where
-        N: for<'aa> VisitMutWith<dyn VisitMut + Send + Sync + 'aa>
-            + for<'aa> VisitMutWithPath<ApplyVisitors<'aa>>,
+        N: for<'aa> Visit<'aa, DefaultAtRule, dyn for<'i> Visitor<'i> + Send + Sync + 'aa>
+            + for<'aa> Visit<'aa, DefaultAtRule, ApplyVisitors<'aa>>,
     {
         let mut index = self.index;
         let mut current_visitors_map = Cow::Borrowed(&self.visitors);
@@ -89,7 +92,7 @@ impl<'a> ApplyVisitors<'a> {
     }
 }
 
-impl Visitor for ApplyVisitors<'_> {
+impl Visitor<'_> for ApplyVisitors<'_> {
     // TODO: we need a macro to apply that for all methods
 
     fn visit_url(&mut self, n: &mut Url, ast_path: &mut AstKindPath<AstParentKind>) {
