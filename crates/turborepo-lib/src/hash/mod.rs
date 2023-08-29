@@ -288,7 +288,7 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
 
         let mut builder = message.init_root();
 
-        builder.set_global_cache_key(&hashable.global_cache_key);
+        builder.set_global_cache_key(hashable.global_cache_key);
 
         {
             let mut entries = builder

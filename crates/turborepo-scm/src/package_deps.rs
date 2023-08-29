@@ -18,9 +18,9 @@ impl SCM {
         allow_missing: bool,
     ) -> Result<GitHashes, Error> {
         if allow_missing {
-            self.hash_existing_of(&turbo_root, files.into_iter())
+            self.hash_existing_of(turbo_root, files.iter())
         } else {
-            self.hash_files(&turbo_root, files.into_iter())
+            self.hash_files(turbo_root, files.iter())
         }
     }
 
