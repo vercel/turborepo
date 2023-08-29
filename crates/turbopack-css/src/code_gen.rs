@@ -1,4 +1,4 @@
-use lightningcss::visitor::{Visit, Visitor};
+use lightningcss::visitor::Visitor;
 use turbo_tasks::Vc;
 use turbopack_core::chunk::ChunkingContext;
 
