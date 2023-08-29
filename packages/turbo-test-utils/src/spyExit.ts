@@ -1,7 +1,13 @@
-export type SpyExit = { exit?: any };
+type Spy = jest.SpyInstance | undefined;
 
-export default function spyExit() {
-  let spy: SpyExit = {};
+export interface SpyExit {
+  exit: Spy;
+}
+
+export function spyExit() {
+  const spy: SpyExit = {
+    exit: undefined,
+  };
 
   beforeEach(() => {
     spy.exit = jest
@@ -10,11 +16,11 @@ export default function spyExit() {
   });
 
   afterEach(() => {
-    spy.exit.mockClear();
+    spy.exit?.mockClear();
   });
 
   afterAll(() => {
-    spy.exit.mockRestore();
+    spy.exit?.mockRestore();
   });
 
   return spy;
