@@ -75,7 +75,7 @@ impl FileSystemWatcher {
                         match event {
                             Ok(events) => {
                                 for mut event in events {
-                                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                                    #[cfg(feature = "watch_recursively")]
                                     {
                                         let time = event.time;
                                         if event.event.kind == EventKind::Create(CreateKind::Folder) {
@@ -84,7 +84,7 @@ impl FileSystemWatcher {
                                             }
                                         }
                                     }
-                                    #[cfg(not(target_os = "macos"))]
+                                    #[cfg(feature = "watch_ancestors")]
                                     filter_relevant(&watch_root, &mut event);
                                     // we don't care if we fail to send, it just means no one is currently watching
                                     let _ = broadcast_sender.send(event);
@@ -112,7 +112,7 @@ impl FileSystemWatcher {
 // Since we're manually watching the parent directories, we need
 // to handle both getting irrelevant events and getting ancestor
 // events that translate to events at the root.
-#[cfg(not(target_os = "macos"))]
+#[cfg(feature = "watch_ancestors")]
 fn filter_relevant(root: &AbsoluteSystemPath, event: &mut DebouncedEvent) {
     // If path contains root && event type is modify, synthesize modify at root
     let is_modify_existing = matches!(event.kind, EventKind::Remove(_) | EventKind::Modify(_));
@@ -136,6 +136,7 @@ fn filter_relevant(root: &AbsoluteSystemPath, event: &mut DebouncedEvent) {
     })
 }
 
+#[cfg(feature = "watch_ancestors")]
 fn is_permission_denied(result: &Result<(), notify::Error>) -> bool {
     if let Err(err) = result {
         if let notify::ErrorKind::Io(io_err) = &err.kind {
@@ -148,6 +149,7 @@ fn is_permission_denied(result: &Result<(), notify::Error>) -> bool {
     }
 }
 
+#[cfg(feature = "watch_ancestors")]
 fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
     let mut current = root;
     while let Some(parent) = current.parent() {
@@ -164,6 +166,7 @@ fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(),
     Ok(())
 }
 
+#[cfg(feature = "watch_recursively")]
 fn watch_recursively(
     root: &Path,
     watcher: &mut Backend,
@@ -212,12 +215,12 @@ fn run_watcher(
     debouncer
         .watcher()
         .watch(&root.as_std_path(), RecursiveMode::Recursive)?;
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(feature = "watch_recursively")]
     {
         // Don't synthesize initial events
         watch_recursively(root.as_std_path(), debouncer.watcher(), None)?;
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(feature = "watch_ancestors")]
     watch_parents(root, debouncer.watcher())?;
     Ok(debouncer)
 }
