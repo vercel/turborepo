@@ -1,5 +1,6 @@
 use anyhow::Result;
 use lightningcss::{
+    media_query::MediaList,
     printer::Printer,
     rules::{
         import::ImportRule,
@@ -35,7 +36,7 @@ pub struct ImportAttributes {
     #[turbo_tasks(trace_ignore)]
     pub supports: Option<SupportsRule<'static>>,
     #[turbo_tasks(trace_ignore)]
-    pub media: Option<Vec<MediaRule<'static>>>,
+    pub media: MediaList<'static>,
 }
 
 impl ImportAttributes {
@@ -58,33 +59,9 @@ impl ImportAttributes {
                 }
             });
 
-        let supports = if let Some(supports) = &prelude.supports {
-            let v = supports.value.iter().find(|v| {
-                matches!(
-                    v,
-                    ComponentValue::SupportsCondition(..) | ComponentValue::Declaration(..)
-                )
-            });
+        let supports = prelude.supports.clone();
 
-            if let Some(supports) = v {
-                match &supports {
-                    ComponentValue::SupportsCondition(s) => Some(*s.clone()),
-                    ComponentValue::Declaration(d) => Some(SupportsCondition {
-                        span: DUMMY_SP,
-                        conditions: vec![SupportsCondition::SupportsInParens(
-                            SupportsCondition::Feature(SupportsCondition::Declaration(d.clone())),
-                        )],
-                    }),
-                    _ => None,
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        let media = prelude.media.as_ref().map(|m| m.queries.clone());
+        let media = prelude.media.clone();
 
         Self {
             layer_name,
@@ -113,42 +90,19 @@ impl ImportAttributes {
         // })
         let mut rule = CssRule::Unknown(UnknownAtRule {});
 
-        fn at_rule(
-            name: &str,
-            prelude: CssRule<'static>,
-            inner_rule: CssRule<'static>,
-        ) -> CssRule<'static> {
-            Rule::AtRule(Box::new(AtRule {
-                span: DUMMY_SP,
-                name: AtRuleName::Ident(Ident {
-                    span: DUMMY_SP,
-                    value: name.into(),
-                    raw: None,
-                }),
-                prelude: Some(Box::new(prelude)),
-                block: Some(SimpleBlock {
-                    span: DUMMY_SP,
-                    name: token(Token::LBrace),
-                    value: vec![ComponentValue::from(inner_rule)],
-                }),
-            }))
+        if !self.media.media_queries.is_empty() {
+            rule = CssRule::Media(MediaRule {
+                query: self.media.clone(),
+                rules: rules,
+                loc: self.loc,
+            });
         }
 
-        if let Some(media) = &self.media {
-            rule = at_rule(
-                "media",
-                CssRule::Media(MediaRule {
-                    span: DUMMY_SP,
-                    queries: media.clone(),
-                }),
-                rule,
-            );
-        }
         if let Some(supports) = &self.supports {
-            rule = at_rule("supports", CssRule::Supports(supports.clone()), rule);
+            rule = CssRule::Supports(supports.clone())
         }
         if let Some(layer_name) = &self.layer_name {
-            rule = at_rule("layer", CssRule::LayerStatement(layer_name.clone()), rule);
+            rule = CssRule::LayerStatement(layer_name.clone());
         }
 
         let mut output = String::new();
