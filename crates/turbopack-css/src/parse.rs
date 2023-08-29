@@ -208,17 +208,10 @@ async fn parse_content(
             .await?;
     }
 
-    let (imports, exports) = match ty {
+    let imports = match ty {
         CssModuleAssetType::Default => Default::default(),
         CssModuleAssetType::Module => {
-            let imports = swc_core::css::modules::imports::analyze_imports(&parsed_stylesheet);
-
-            let mut exports = result.renamed.into_iter().collect::<IndexMap<_, _>>();
-            // exports should be reported deterministically
-            // TODO(sokra) report in order of occurrence within swc_css_modules using an
-            // IndexMap
-            exports.sort_keys();
-            (imports, exports)
+            swc_core::css::modules::imports::analyze_imports(&parsed_stylesheet)
         }
     };
 
@@ -226,7 +219,6 @@ async fn parse_content(
         stylesheet: parsed_stylesheet,
         source_map,
         imports,
-        exports,
     }
     .into())
 }
