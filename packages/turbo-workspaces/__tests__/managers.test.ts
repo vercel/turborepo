@@ -1,9 +1,9 @@
-import path from "path";
+import path from "node:path";
+import { ensureDirSync, existsSync } from "fs-extra";
 import { setupTestFixtures } from "@turbo/test-utils";
-import { Logger } from "../src/logger";
-import MANAGERS from "../src/managers";
 import type { PackageJson } from "@turbo/utils";
-import fs from "fs-extra";
+import { Logger } from "../src/logger";
+import { MANAGERS } from "../src/managers";
 import {
   generateDetectMatrix,
   generateCreateMatrix,
@@ -91,7 +91,7 @@ describe("managers", () => {
         expect(project.packageManager).toEqual(fixtureManager);
 
         if (withNodeModules) {
-          fs.ensureDirSync(project.paths.nodeModules);
+          ensureDirSync(project.paths.nodeModules);
         }
 
         await MANAGERS[fixtureManager].remove({
@@ -105,7 +105,7 @@ describe("managers", () => {
         });
 
         if (withNodeModules) {
-          expect(fs.existsSync(project.paths.nodeModules)).toEqual(dry);
+          expect(existsSync(project.paths.nodeModules)).toEqual(dry);
         }
 
         const packageJson = readJson<PackageJson>(project.paths.packageJson);
@@ -165,11 +165,11 @@ describe("managers", () => {
           MANAGERS[toManager].read({ workspaceRoot: path.join(root) });
         if (shouldThrow) {
           if (toManager === "pnpm") {
-            expect(read).rejects.toThrow(`Not a pnpm project`);
+            await expect(read).rejects.toThrow(`Not a pnpm project`);
           } else if (toManager === "yarn") {
-            expect(read).rejects.toThrow(`Not a yarn project`);
-          } else if (toManager === "npm") {
-            expect(read).rejects.toThrow(`Not an npm project`);
+            await expect(read).rejects.toThrow(`Not a yarn project`);
+          } else {
+            await expect(read).rejects.toThrow(`Not an npm project`);
           }
           return;
         }
@@ -183,11 +183,9 @@ describe("managers", () => {
         expect(project.packageManager).toEqual(toManager);
 
         // paths
-        expect(project.paths.root).toMatch(
-          new RegExp(`^.*\/${directoryName}$`)
-        );
+        expect(project.paths.root).toMatch(new RegExp(`^.*/${directoryName}$`));
         expect(project.paths.packageJson).toMatch(
-          new RegExp(`^.*\/${directoryName}\/package.json$`)
+          new RegExp(`^.*/${directoryName}/package.json$`)
         );
 
         if (fixtureManager === "pnpm") {
@@ -211,11 +209,11 @@ describe("managers", () => {
               : "packages";
             expect(workspace.paths.packageJson).toMatch(
               new RegExp(
-                `^.*${directoryName}\/${type}\/${workspace.name}\/package.json$`
+                `^.*${directoryName}/${type}/${workspace.name}/package.json$`
               )
             );
             expect(workspace.paths.root).toMatch(
-              new RegExp(`^.*${directoryName}\/${type}\/${workspace.name}$`)
+              new RegExp(`^.*${directoryName}/${type}/${workspace.name}$`)
             );
           });
         }
@@ -234,7 +232,7 @@ describe("managers", () => {
         // alter the fixtures package.json to use the alternate workspace format
         const packageJsonPath = path.join(root, "package.json");
         const packageJson = readJson<PackageJson>(packageJsonPath);
-        if (packageJson && packageJson.workspaces) {
+        if (packageJson?.workspaces) {
           packageJson.workspaces = {
             packages: packageJson.workspaces as Array<string>,
           };
@@ -245,11 +243,11 @@ describe("managers", () => {
           MANAGERS[toManager].read({ workspaceRoot: root });
         if (shouldThrow) {
           if (toManager === "pnpm") {
-            expect(read).rejects.toThrow(`Not a pnpm project`);
+            await expect(read).rejects.toThrow(`Not a pnpm project`);
           } else if (toManager === "yarn") {
-            expect(read).rejects.toThrow(`Not a yarn project`);
-          } else if (toManager === "npm") {
-            expect(read).rejects.toThrow(`Not an npm project`);
+            await expect(read).rejects.toThrow(`Not a yarn project`);
+          } else {
+            await expect(read).rejects.toThrow(`Not an npm project`);
           }
           return;
         }
@@ -263,11 +261,9 @@ describe("managers", () => {
         expect(project.packageManager).toEqual(toManager);
 
         // paths
-        expect(project.paths.root).toMatch(
-          new RegExp(`^.*\/${directoryName}$`)
-        );
+        expect(project.paths.root).toMatch(new RegExp(`^.*/${directoryName}$`));
         expect(project.paths.packageJson).toMatch(
-          new RegExp(`^.*\/${directoryName}\/package.json$`)
+          new RegExp(`^.*/${directoryName}/package.json$`)
         );
 
         if (fixtureManager === "pnpm") {
@@ -291,11 +287,11 @@ describe("managers", () => {
               : "packages";
             expect(workspace.paths.packageJson).toMatch(
               new RegExp(
-                `^.*${directoryName}\/${type}\/${workspace.name}\/package.json$`
+                `^.*${directoryName}/${type}/${workspace.name}/package.json$`
               )
             );
             expect(workspace.paths.root).toMatch(
-              new RegExp(`^.*${directoryName}\/${type}\/${workspace.name}$`)
+              new RegExp(`^.*${directoryName}/${type}/${workspace.name}$`)
             );
           });
         }
@@ -326,7 +322,7 @@ describe("managers", () => {
           },
         });
 
-        expect(fs.existsSync(project.paths.lockfile)).toEqual(dry);
+        expect(existsSync(project.paths.lockfile)).toEqual(dry);
       }
     );
   });

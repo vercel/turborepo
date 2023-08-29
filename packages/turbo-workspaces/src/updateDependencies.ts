@@ -1,9 +1,14 @@
-import fs from "fs-extra";
+import path from "node:path";
+import { writeJSONSync } from "fs-extra";
 import chalk from "chalk";
-import path from "path";
 import type { DependencyList, DependencyGroups } from "@turbo/utils";
-import { Project, Workspace, PackageManagerDetails, Options } from "./types";
-import { Logger } from "./logger";
+import type {
+  Project,
+  Workspace,
+  AvailablePackageManagerDetails,
+  Options,
+} from "./types";
+import type { Logger } from "./logger";
 import { getPackageJson } from "./utils";
 
 function updateDependencyList({
@@ -13,7 +18,7 @@ function updateDependencyList({
 }: {
   dependencyList: DependencyList;
   project: Project;
-  to: PackageManagerDetails;
+  to: AvailablePackageManagerDetails;
 }): { dependencyList: DependencyList; updated: Array<string> } {
   const updated: Array<string> = [];
   project.workspaceData.workspaces.forEach((workspace) => {
@@ -32,7 +37,7 @@ function updateDependencyList({
   return { dependencyList, updated };
 }
 
-export default function updateDependencies({
+export function updateDependencies({
   project,
   workspace,
   to,
@@ -41,7 +46,7 @@ export default function updateDependencies({
 }: {
   workspace: Workspace;
   project: Project;
-  to: PackageManagerDetails;
+  to: AvailablePackageManagerDetails;
   logger: Logger;
   options?: Options;
 }): void {
@@ -95,7 +100,9 @@ export default function updateDependencies({
     return undefined;
   };
 
-  const allChanges = allDependencyKeys.map(toLog).filter(Boolean);
+  const allChanges = allDependencyKeys
+    .map(toLog)
+    .filter(Boolean) as Array<string>;
   const workspaceLocation = `./${path.relative(
     project.paths.root,
     workspace.paths.packageJson
@@ -105,12 +112,10 @@ export default function updateDependencies({
     allChanges.forEach((stat, idx) => {
       if (allChanges.length === 1) {
         logLine += ` ${stat} in ${workspaceLocation}`;
+      } else if (idx === allChanges.length - 1) {
+        logLine += `and ${stat} in ${workspaceLocation}`;
       } else {
-        if (idx === allChanges.length - 1) {
-          logLine += `and ${stat} in ${workspaceLocation}`;
-        } else {
-          logLine += ` ${stat}, `;
-        }
+        logLine += ` ${stat}, `;
       }
     });
 
@@ -122,7 +127,7 @@ export default function updateDependencies({
   }
 
   if (!options?.dry) {
-    fs.writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
+    writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
       spaces: 2,
     });
   }

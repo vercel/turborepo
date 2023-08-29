@@ -1,8 +1,8 @@
-import fs from "fs-extra";
-import path from "path";
+import path from "node:path";
+import { writeJSONSync, existsSync, rmSync, rm } from "fs-extra";
 import { ConvertError } from "../errors";
-import updateDependencies from "../updateDependencies";
-import {
+import { updateDependencies } from "../updateDependencies";
+import type {
   DetectArgs,
   ReadArgs,
   CreateArgs,
@@ -28,12 +28,13 @@ import {
  *  1. package-lock.json
  *  2. packageManager field in package.json
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {
   const lockFile = path.join(args.workspaceRoot, "package-lock.json");
   const packageManager = getWorkspacePackageManager({
     workspaceRoot: args.workspaceRoot,
   });
-  return fs.existsSync(lockFile) || packageManager === "npm";
+  return existsSync(lockFile) || packageManager === "npm";
 }
 
 /**
@@ -63,7 +64,7 @@ async function read(args: ReadArgs): Promise<Project> {
     workspaceData: {
       globs: workspaceGlobs,
       workspaces: expandWorkspaces({
-        workspaceGlobs: workspaceGlobs,
+        workspaceGlobs,
         ...args,
       }),
     },
@@ -78,6 +79,7 @@ async function read(args: ReadArgs): Promise<Project> {
  *  2. Setting the packageManager field in package.json
  *  3. Updating all workspace package.json dependencies to ensure correct format
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the create type signature
 async function create(args: CreateArgs): Promise<void> {
   const { project, options, to, logger } = args;
   const hasWorkspaces = project.workspaceData.globs.length > 0;
@@ -109,7 +111,7 @@ async function create(args: CreateArgs): Promise<void> {
 
     // write package.json here instead of deferring to avoid negating the changes made by updateDependencies
     if (!options?.dry) {
-      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+      writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
     }
 
     // root dependencies
@@ -123,13 +125,11 @@ async function create(args: CreateArgs): Promise<void> {
 
     // workspace dependencies
     logger.workspaceHeader();
-    project.workspaceData.workspaces.forEach((workspace) =>
-      updateDependencies({ workspace, project, to, logger, options })
-    );
-  } else {
-    if (!options?.dry) {
-      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
-    }
+    project.workspaceData.workspaces.forEach((workspace) => {
+      updateDependencies({ workspace, project, to, logger, options });
+    });
+  } else if (!options?.dry) {
+    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
 }
 
@@ -161,7 +161,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   delete packageJson.packageManager;
 
   if (!options?.dry) {
-    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
 
     // collect all workspace node_modules directories
     const allModulesDirs = [
@@ -171,9 +171,7 @@ async function remove(args: RemoveArgs): Promise<void> {
     try {
       logger.subStep(`removing "node_modules"`);
       await Promise.all(
-        allModulesDirs.map((dir) =>
-          fs.rm(dir, { recursive: true, force: true })
-        )
+        allModulesDirs.map((dir) => rm(dir, { recursive: true, force: true }))
       );
     } catch (err) {
       throw new ConvertError("Failed to remove node_modules", {
@@ -188,6 +186,7 @@ async function remove(args: RemoveArgs): Promise<void> {
  * from this package manager that were needed for install,
  * but not required after migration
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the clean type signature
 async function clean(args: CleanArgs): Promise<void> {
   const { project, logger, options } = args;
 
@@ -195,7 +194,7 @@ async function clean(args: CleanArgs): Promise<void> {
     `removing ${path.relative(project.paths.root, project.paths.lockfile)}`
   );
   if (!options?.dry) {
-    fs.rmSync(project.paths.lockfile, { force: true });
+    rmSync(project.paths.lockfile, { force: true });
   }
 }
 
@@ -204,18 +203,19 @@ async function clean(args: CleanArgs): Promise<void> {
  *
  * If this is not possible, the non npm lockfile is removed
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the convertLock type signature
 async function convertLock(args: ConvertArgs): Promise<void> {
   const { project, options } = args;
 
   if (project.packageManager !== "npm") {
     // remove the lockfile
     if (!options?.dry) {
-      fs.rmSync(project.paths.lockfile, { force: true });
+      rmSync(project.paths.lockfile, { force: true });
     }
   }
 }
 
-const npm: ManagerHandler = {
+export const npm: ManagerHandler = {
   detect,
   read,
   create,
@@ -223,5 +223,3 @@ const npm: ManagerHandler = {
   clean,
   convertLock,
 };
-
-export default npm;
