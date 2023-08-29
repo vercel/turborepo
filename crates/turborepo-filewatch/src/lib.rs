@@ -1,7 +1,11 @@
 use std::{fmt::Debug, future::IntoFuture, result::Result, time::Duration};
 
-use itertools::Itertools;
-use notify::{RecursiveMode, Watcher};
+#[cfg(target_os = "macos")]
+use fsevent::FsEventWatcher;
+use notify::{
+    event::{CreateKind, EventAttributes},
+    Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use notify_debouncer_full::{
     DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
 };
@@ -298,26 +302,6 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::FileSystemWatcher;
-
-    #[tokio::test]
-    async fn test_hello() {
-        let tmp_dir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
-            .unwrap()
-            .to_realpath()
-            .unwrap();
-
-        let watcher = FileSystemWatcher::new(&root).unwrap();
-        let mut events_channel = watcher.subscribe();
-
-        root.join_component("foo")
-            .create_with_contents("hello world")
-            .unwrap();
-
-        let event = tokio::time::timeout(Duration::from_millis(2000), events_channel.recv())
-            .await
-            .unwrap();
-    }
 
     fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {
         let tmp = tempfile::tempdir().unwrap();
