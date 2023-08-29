@@ -77,9 +77,9 @@ struct TaskOutputs {
     exclusions: Vec<String>,
 }
 
-struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
+struct LockFilePackages(Vec<turborepo_lockfiles::Package>);
 
-struct FileHashes(pub HashMap<turbopath::RelativeUnixPathBuf, String>);
+struct FileHashes(HashMap<turbopath::RelativeUnixPathBuf, String>);
 
 impl From<TaskOutputs> for Builder<HeapAllocator> {
     fn from(value: TaskOutputs) -> Self {
