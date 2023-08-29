@@ -11,6 +11,7 @@ use crate::{
     engine::TaskNode,
     framework::infer_framework,
     hash::{FileHashes, TaskHashable, TurboHash},
+    opts::Opts,
     package_graph::{WorkspaceInfo, WorkspaceName},
     run::task_id::{TaskId, ROOT_PKG_NAME},
     task_graph::TaskDefinition,
@@ -151,20 +152,19 @@ impl PackageInputsHashes {
 }
 
 /// Caches package-inputs hashes, and package-task hashes.
-struct TaskHasher {
+struct TaskHasher<'a> {
     package_inputs_hashes: PackageInputsHashes,
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
     package_task_hashes: HashMap<TaskId<'static>, String>,
     package_task_framework: HashMap<TaskId<'static>, String>,
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
+    opts: &'a Opts<'a>,
 }
 
 impl TaskHasher {
     fn calculate_task_hash(
         &mut self,
-        is_monorepo: bool,
         global_hash: &str,
-        do_framework_inference: bool,
         env_at_execution_start: &EnvironmentVariableMap,
         task_id: TaskId<'static>,
         task_definition: &TaskDefinition,
@@ -173,6 +173,9 @@ impl TaskHasher {
         dependency_set: &HashSet<TaskNode>,
         pass_through_args: &[String],
     ) -> Result<String, Error> {
+        let do_framework_inference = self.opts.run_opts.framework_inference;
+        let is_monorepo = !self.opts.run_opts.single_package;
+
         let hash_of_files = self
             .package_inputs_hashes
             .hashes
