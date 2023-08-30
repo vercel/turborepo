@@ -365,7 +365,13 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 
 		// hasTopoDeps will be true if the task depends on any tasks from dependency packages
 		// E.g. `dev: { dependsOn: [^dev] }`
-		hasTopoDeps := topoDeps.Len() > 0 && e.completeGraph.WorkspaceGraph.DownEdges(pkg).Len() > 0
+		nonRootDepPkgs := e.completeGraph.WorkspaceGraph.DownEdges(pkg).Filter(func(node interface{}) bool {
+			if packageName, ok := node.(string); ok {
+				return packageName != ROOT_NODE_NAME
+			}
+			return true
+		})
+		hasTopoDeps := topoDeps.Len() > 0 && nonRootDepPkgs.Len() > 0
 
 		// hasDeps will be true if the task depends on any tasks from its own package
 		// E.g. `build: { dependsOn: [dev] }`
@@ -380,10 +386,9 @@ func (e *Engine) Prepare(options *EngineBuildingOptions) error {
 		}
 
 		if hasTopoDeps {
-			depPkgs := e.completeGraph.WorkspaceGraph.DownEdges(pkg)
 			for _, from := range topoDeps.UnsafeListOfStrings() {
 				// add task dep from all the package deps within repo
-				for depPkg := range depPkgs {
+				for depPkg := range nonRootDepPkgs {
 					fromTaskID := util.GetTaskId(depPkg, from)
 					e.TaskGraph.Add(fromTaskID)
 					e.TaskGraph.Add(toTaskID)
