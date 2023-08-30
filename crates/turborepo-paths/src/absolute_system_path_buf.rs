@@ -185,12 +185,6 @@ impl AbsoluteSystemPathBuf {
         Ok(self.0.symlink_metadata()?.permissions().readonly())
     }
 
-    pub fn create_with_contents<B: AsRef<[u8]>>(&self, contents: B) -> Result<(), io::Error> {
-        let mut f = fs::File::create(self.0.as_path())?;
-        f.write_all(contents.as_ref())?;
-        Ok(())
-    }
-
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -217,11 +211,7 @@ impl TryFrom<PathBuf> for AbsoluteSystemPathBuf {
     type Error = PathError;
 
     fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
-
-        Self::new(Utf8PathBuf::from(path_str))
+        Self::new(Utf8PathBuf::try_from(path)?)
     }
 }
 
@@ -229,11 +219,8 @@ impl TryFrom<&Path> for AbsoluteSystemPathBuf {
     type Error = PathError;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
-
-        Self::new(Utf8PathBuf::from(path_str))
+        let utf8_path: &Utf8Path = path.try_into()?;
+        Self::new(utf8_path.to_owned())
     }
 }
 

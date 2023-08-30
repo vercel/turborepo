@@ -480,7 +480,9 @@ impl FsEventWatcher {
                         cur_runloop,
                         cf::kCFRunLoopDefaultMode,
                     );
-                    fs::FSEventStreamStart(stream);
+                    if fs::FSEventStreamStart(stream) == 0x0 {
+                        panic!("FSEventStream failed to start");
+                    }
 
                     // the calling to CFRunLoopRun will be terminated by CFRunLoopStop call in
                     // drop()
