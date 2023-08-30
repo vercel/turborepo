@@ -52,12 +52,13 @@ impl RunCache {
         self: &Arc<Self>,
         // TODO: Group these in a struct
         task_definition: &TaskDefinition,
-        task_dir: &AbsoluteSystemPath,
+        workspace_dir: &AnchoredSystemPath,
         task_id: TaskId<'static>,
-        log_file: &AnchoredSystemPath,
         hash: &str,
     ) -> TaskCache {
-        let log_file_path = self.repo_root.resolve(log_file);
+        let task_dir = self.repo_root.resolve(workspace_dir);
+        let log_file_path =
+            task_dir.join_components(&[".turbo", &format!("turbo-{}.log", task_id.task())]);
         let hashable_outputs = task_definition.hashable_outputs(&task_id);
         let mut repo_relative_globs = TaskOutputs {
             inclusions: Vec::with_capacity(hashable_outputs.inclusions.len()),
