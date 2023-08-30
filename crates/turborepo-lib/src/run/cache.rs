@@ -115,7 +115,7 @@ pub struct TaskCache {
 }
 
 impl TaskCache {
-    fn replay_log_file(
+    pub fn replay_log_file(
         &self,
         prefixed_ui: &mut PrefixedUI<impl Write>,
     ) -> Result<(), anyhow::Error> {
@@ -126,7 +126,7 @@ impl TaskCache {
         Ok(())
     }
 
-    fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), anyhow::Error> {
+    pub fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), anyhow::Error> {
         if self.task_output_mode == OutputLogsMode::ErrorsOnly {
             prefixed_ui.output(format!(
                 "cache miss, executing {}",
@@ -138,7 +138,7 @@ impl TaskCache {
         Ok(())
     }
 
-    fn output_writer<W: Write>(
+    pub fn output_writer<W: Write>(
         &self,
         prefix: StyledObject<String>,
         writer: W,
@@ -163,7 +163,7 @@ impl TaskCache {
         Ok(log_writer)
     }
 
-    async fn restore_outputs(
+    pub async fn restore_outputs(
         &mut self,
         team_id: &str,
         team_slug: Option<&str>,
