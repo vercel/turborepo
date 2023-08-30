@@ -14,15 +14,14 @@ use crate::count_hash_set::CountHashSet;
 /// certain connectivity depending on the "height". Every level of the tree
 /// aggregates the previous level.
 ///
-/// The first level aggregates an item with all of its children plus potentially
+/// The every level aggregates an item with all of its children plus potentially
 /// all of their children. This depends on a flag called "is_blue" of the
-/// children. A "blue" child will aggregate one additional layer of
-/// connectivity, but this is not applies recursively. So the first lever of the
+/// child. A "blue" child will aggregate one additional layer of
+/// connectivity, but this is not applies recursively. So every level of the
 /// tree will aggregate a connectivity of 2 to 3.
 ///
-/// The higher levels will only aggregate a connectivity of 2. "Blue" nodes
-/// doesn't exist on this level, but that might be something to consider for the
-/// future.
+/// It's assumed that the "is_blue" flag of an item is randomly distributed, but
+/// deterministic.
 ///
 /// The concept of "blue" nodes will improve the sharing of graphs as
 /// aggregation will eventually propagate to use the same items, even if they
@@ -130,7 +129,7 @@ impl<T: AggregationContext> BottomTree<T> {
                             parent.clone().add_child_of_child(
                                 context,
                                 *location,
-                                false,
+                                context.is_blue(child_of_child.clone()),
                                 child_of_child.clone(),
                             );
                         }
@@ -196,7 +195,7 @@ impl<T: AggregationContext> BottomTree<T> {
                             parent.clone().remove_child_of_child(
                                 context,
                                 *location,
-                                false,
+                                context.is_blue(child_of_child.clone()),
                                 child_of_child.clone(),
                             );
                         }
@@ -222,9 +221,12 @@ impl<T: AggregationContext> BottomTree<T> {
                 parent.child_change(context, &change);
             }
             for following in state.following.iter() {
-                parent
-                    .clone()
-                    .add_child_of_child(context, location, false, following.clone());
+                parent.clone().add_child_of_child(
+                    context,
+                    location,
+                    context.is_blue(following.clone()),
+                    following.clone(),
+                );
             }
         }
     }
@@ -244,9 +246,12 @@ impl<T: AggregationContext> BottomTree<T> {
                 parent.child_change(context, &change);
             }
             for following in state.following.iter() {
-                parent
-                    .clone()
-                    .remove_child_of_child(context, location, false, following.clone());
+                parent.clone().remove_child_of_child(
+                    context,
+                    location,
+                    context.is_blue(following.clone()),
+                    following.clone(),
+                );
             }
         }
     }

@@ -44,6 +44,7 @@ pub trait AggregationContext {
 
     fn new_info() -> Self::Info;
 
+    fn is_blue(&self, reference: Self::ItemRef) -> bool;
     fn item(&self, reference: Self::ItemRef) -> Self::ItemLock;
 
     fn apply_change(

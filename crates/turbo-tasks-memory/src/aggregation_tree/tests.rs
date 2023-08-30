@@ -120,6 +120,10 @@ impl AggregationContext for NodeAggregationContext {
         Aggregated { value: 0 }
     }
 
+    fn is_blue(&self, reference: Self::ItemRef) -> bool {
+        reference.0.blue
+    }
+
     fn item(&self, reference: Self::ItemRef) -> Self::ItemLock {
         let r = reference.0.clone();
         let guard = r.inner.lock();
@@ -176,7 +180,7 @@ fn test() {
         additions: AtomicU32::new(0),
     };
     let leaf = Arc::new(Node {
-        blue: true,
+        blue: false,
         inner: Mutex::new(NodeInner {
             children: vec![],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -186,7 +190,7 @@ fn test() {
     let mut current = leaf.clone();
     for i in 1..=100 {
         current = Arc::new(Node {
-            blue: i % 2 == 0,
+            blue: (i % 2 == 0) ^ (i % 3 == 0) ^ (i % 4 == 0),
             inner: Mutex::new(NodeInner {
                 children: vec![current],
                 aggregation_leaf: AggregationTreeLeaf::new(),
@@ -206,7 +210,8 @@ fn test() {
 
     println!("incr");
     leaf.incr(&context);
-    assert_eq!(context.additions.load(Ordering::SeqCst), 12);
+    // The change need to propagate through 5 top trees and 5 bottom trees
+    assert_eq!(context.additions.load(Ordering::SeqCst), 10);
     context.additions.store(0, Ordering::SeqCst);
 
     println!("aggregate");
@@ -217,12 +222,13 @@ fn test() {
     assert_eq!(context.additions.load(Ordering::SeqCst), 0);
     context.additions.store(0, Ordering::SeqCst);
 
+    let i = 101;
     let current = Arc::new(Node {
-        blue: false,
+        blue: (i % 2 == 0) ^ (i % 3 == 0) ^ (i % 4 == 0),
         inner: Mutex::new(NodeInner {
             children: vec![current.0],
             aggregation_leaf: AggregationTreeLeaf::new(),
-            value: 101,
+            value: i,
         }),
     });
     let current = NodeRef(current);
@@ -232,7 +238,13 @@ fn test() {
         let aggregated = aggregation_info(&context, current);
         assert_eq!(aggregated.value, 25151);
     }
-    // This should be less the 100 to prove that we are reusing trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 52);
+    // This should be way less the 100 to prove that we are reusing trees
+    assert_eq!(context.additions.load(Ordering::SeqCst), 21);
+    context.additions.store(0, Ordering::SeqCst);
+
+    println!("incr");
+    leaf.incr(&context);
+    // This should be less the 20 to prove that we are reusing trees
+    assert_eq!(context.additions.load(Ordering::SeqCst), 17);
     context.additions.store(0, Ordering::SeqCst);
 }
