@@ -1,6 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 
-use serde::Serialize;
+use rayon::prelude::*;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
@@ -27,6 +30,8 @@ pub enum Error {
     MissingPackageFileHash(String),
     #[error("missing hash for dependent task {0}")]
     MissingDependencyTaskHash(String),
+    #[error("cannot acquire lock for task hash tracker")]
+    Mutex,
     #[error(transparent)]
     SCM(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -54,7 +59,7 @@ impl TaskHashable<'_> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default)]
 pub struct PackageInputsHashes {
     // We make the TaskId a String for serialization purposes
     hashes: HashMap<String, String>,
@@ -64,114 +69,142 @@ pub struct PackageInputsHashes {
 impl PackageInputsHashes {
     pub fn calculate_file_hashes<'a>(
         scm: SCM,
-        all_tasks: impl Iterator<Item = &'a TaskNode>,
+        all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
         workspaces: HashMap<&WorkspaceName, &WorkspaceInfo>,
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<PackageInputsHashes, Error> {
-        let mut hash_tasks = Vec::new();
+        let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
+            .filter_map(|task| {
+                let TaskNode::Task(task_id) = task else {
+                    return None;
+                };
 
-        for task in all_tasks {
-            let TaskNode::Task(task_id) = task else {
-                continue;
-            };
+                if task_id.package() == ROOT_PKG_NAME {
+                    return None;
+                }
 
-            if task_id.package() == ROOT_PKG_NAME {
-                continue;
-            }
+                let task_definition = match task_definitions
+                    .get(&task_id)
+                    .ok_or_else(|| Error::MissingPipelineEntry(task_id.clone()))
+                {
+                    Ok(def) => def,
+                    Err(err) => return Some(Err(err)),
+                };
 
-            let task_definition = task_definitions
-                .get(&task_id)
-                .ok_or_else(|| Error::MissingPipelineEntry(task_id.clone()))?;
+                // TODO: Look into making WorkspaceName take a Cow
+                let workspace_name = WorkspaceName::Other(task_id.package().to_string());
 
-            // TODO: Look into making WorkspaceName take a Cow
-            let workspace_name = WorkspaceName::Other(task_id.package().to_string());
+                let package_file_hash_inputs = PackageFileHashInputs {
+                    task_id: task_id.clone(),
+                    task_definition,
+                    workspace_name,
+                };
 
-            let package_file_hash_inputs = PackageFileHashInputs {
-                task_id: task_id.clone(),
-                task_definition,
-                workspace_name,
-            };
+                let pkg = match workspaces
+                    .get(&package_file_hash_inputs.workspace_name)
+                    .ok_or_else(|| {
+                        Error::MissingPackageJson(
+                            package_file_hash_inputs.workspace_name.to_string(),
+                        )
+                    }) {
+                    Ok(pkg) => pkg,
+                    Err(err) => return Some(Err(err)),
+                };
 
-            hash_tasks.push(package_file_hash_inputs);
-        }
-
-        let mut hashes = HashMap::with_capacity(hash_tasks.len());
-        let mut hash_objects = HashMap::with_capacity(hash_tasks.len());
-
-        for package_file_hash_inputs in hash_tasks {
-            let pkg = workspaces
-                .get(&package_file_hash_inputs.workspace_name)
-                .ok_or_else(|| {
-                    Error::MissingPackageJson(package_file_hash_inputs.workspace_name.to_string())
-                })?;
-
-            let package_path = pkg
-                .package_json_path
-                .parent()
-                .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
-
-            let mut hash_object = scm.get_package_file_hashes(
-                &repo_root,
-                package_path,
-                &package_file_hash_inputs.task_definition.inputs,
-            )?;
-
-            if !package_file_hash_inputs.task_definition.dot_env.is_empty() {
                 let package_path = pkg
                     .package_json_path
                     .parent()
                     .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
-                let absolute_package_path = repo_root.resolve(package_path);
-                let dot_env_object = scm.hash_existing_of(
-                    &absolute_package_path,
-                    package_file_hash_inputs
-                        .task_definition
-                        .dot_env
-                        .iter()
-                        .map(|p| p.to_anchored_system_path_buf()),
-                )?;
 
-                for (key, value) in dot_env_object {
-                    hash_object.insert(key, value);
+                let mut hash_object = match scm.get_package_file_hashes(
+                    &repo_root,
+                    package_path,
+                    &package_file_hash_inputs.task_definition.inputs,
+                ) {
+                    Ok(hash_object) => hash_object,
+                    Err(err) => return Some(Err(err.into())),
+                };
+
+                if !package_file_hash_inputs.task_definition.dot_env.is_empty() {
+                    let package_path = pkg
+                        .package_json_path
+                        .parent()
+                        .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
+                    let absolute_package_path = repo_root.resolve(package_path);
+                    let dot_env_object = match scm.hash_existing_of(
+                        &absolute_package_path,
+                        package_file_hash_inputs
+                            .task_definition
+                            .dot_env
+                            .iter()
+                            .map(|p| p.to_anchored_system_path_buf()),
+                    ) {
+                        Ok(dot_env_object) => dot_env_object,
+                        Err(err) => return Some(Err(err.into())),
+                    };
+
+                    for (key, value) in dot_env_object {
+                        hash_object.insert(key, value);
+                    }
                 }
-            }
 
-            let file_hashes = FileHashes(hash_object);
-            let hash = file_hashes.clone().hash();
+                let file_hashes = FileHashes(hash_object);
+                let hash = file_hashes.clone().hash();
+                let task_id = package_file_hash_inputs.task_id.to_string();
 
-            hashes.insert(package_file_hash_inputs.task_id.to_string(), hash);
-            hash_objects.insert(package_file_hash_inputs.task_id.to_string(), file_hashes);
-        }
+                Some(Ok(((task_id.clone(), hash), (task_id, file_hashes))))
+            })
+            .collect::<Result<_, _>>()?;
 
         Ok(PackageInputsHashes {
-            hashes: hashes,
-            expanded_hashes: hash_objects,
+            hashes,
+            expanded_hashes,
         })
     }
 }
 
-/// Caches package-inputs hashes, and package-task hashes.
-struct TaskHasher<'a> {
-    package_inputs_hashes: PackageInputsHashes,
+#[derive(Default)]
+pub struct TaskHashTracker {
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
     package_task_hashes: HashMap<TaskId<'static>, String>,
     package_task_framework: HashMap<TaskId<'static>, String>,
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
-    opts: &'a Opts<'a>,
 }
 
-impl TaskHasher {
-    fn calculate_task_hash(
-        &mut self,
-        global_hash: &str,
-        env_at_execution_start: &EnvironmentVariableMap,
-        task_id: TaskId<'static>,
+/// Caches package-inputs hashes, and package-task hashes.
+pub struct TaskHasher<'a> {
+    package_inputs_hashes: PackageInputsHashes,
+    opts: &'a Opts<'a>,
+    env_at_execution_start: &'a EnvironmentVariableMap,
+    global_hash: &'a str,
+
+    task_hash_tracker: Mutex<TaskHashTracker>,
+}
+
+impl<'a> TaskHasher<'a> {
+    pub fn new(
+        package_inputs_hashes: PackageInputsHashes,
+        opts: &'a Opts,
+        env_at_execution_start: &'a EnvironmentVariableMap,
+        global_hash: &'a str,
+    ) -> Self {
+        Self {
+            package_inputs_hashes,
+            opts,
+            env_at_execution_start,
+            global_hash,
+            task_hash_tracker: Mutex::new(TaskHashTracker::default()),
+        }
+    }
+
+    pub fn calculate_task_hash(
+        &self,
+        task_id: &TaskId<'static>,
         task_definition: &TaskDefinition,
-        env_mode: ResolvedEnvMode,
+        task_env_mode: ResolvedEnvMode,
         workspace: &WorkspaceInfo,
-        dependency_set: &HashSet<TaskNode>,
-        pass_through_args: &[String],
+        dependency_set: HashSet<&TaskNode>,
     ) -> Result<String, Error> {
         let do_framework_inference = self.opts.run_opts.framework_inference;
         let is_monorepo = !self.opts.run_opts.single_package;
@@ -200,7 +233,8 @@ impl TaskHasher {
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>();
 
-                if let Some(exclude_prefix) = env_at_execution_start.get("TURBOREPO_EXCLUDE_PREFIX")
+                if let Some(exclude_prefix) =
+                    self.env_at_execution_start.get("TURBOREPO_EXCLUDE_PREFIX")
                 {
                     if !exclude_prefix.is_empty() {
                         let computed_exclude = format!("!{}*", exclude_prefix);
@@ -212,10 +246,12 @@ impl TaskHasher {
                     }
                 }
 
-                let inference_env_var_map =
-                    env_at_execution_start.from_wildcards(&computed_wildcards)?;
+                let inference_env_var_map = self
+                    .env_at_execution_start
+                    .from_wildcards(&computed_wildcards)?;
 
-                let user_env_var_set = env_at_execution_start
+                let user_env_var_set = self
+                    .env_at_execution_start
                     .wildcard_map_from_wildcards_unresolved(&task_definition.env)?;
 
                 all_env_var_map.union(&user_env_var_set.inclusions);
@@ -228,13 +264,16 @@ impl TaskHasher {
                 matching_env_var_map.union(&inference_env_var_map);
                 matching_env_var_map.difference(&user_env_var_set.exclusions);
             } else {
-                let all_env_var_map =
-                    env_at_execution_start.from_wildcards(&task_definition.env)?;
+                let all_env_var_map = self
+                    .env_at_execution_start
+                    .from_wildcards(&task_definition.env)?;
 
                 explicit_env_var_map.union(&all_env_var_map);
             }
         } else {
-            all_env_var_map = env_at_execution_start.from_wildcards(&task_definition.env)?;
+            all_env_var_map = self
+                .env_at_execution_start
+                .from_wildcards(&task_definition.env)?;
 
             explicit_env_var_map.union(&mut all_env_var_map);
         }
@@ -259,7 +298,7 @@ impl TaskHasher {
         );
 
         let task_hashable = TaskHashable {
-            global_hash,
+            global_hash: self.global_hash,
             task_dependency_hashes,
             package_dir: workspace.package_path().to_unix(),
             hash_of_files,
@@ -267,25 +306,39 @@ impl TaskHasher {
             task: task_id.task(),
             outputs,
 
-            pass_through_args,
+            pass_through_args: self.opts.run_opts.pass_through_args,
             env: &task_definition.env,
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: &task_definition.pass_through_env,
-            env_mode,
+            env_mode: task_env_mode,
             dot_env: &task_definition.dot_env,
         };
         let task_hash = task_hashable.hash();
 
-        self.package_task_env_vars.insert(task_id.clone(), env_vars);
-        self.package_task_hashes.insert(task_id, task_hash.clone());
+        let mut task_hash_tracker = self.task_hash_tracker.lock().map_err(|_| Error::Mutex)?;
+        task_hash_tracker
+            .package_task_env_vars
+            .insert(task_id.clone(), env_vars);
+        task_hash_tracker
+            .package_task_hashes
+            .insert(task_id.clone(), task_hash.clone());
 
         Ok(task_hash)
     }
 
-    fn calculate_dependency_hashes<'a>(
-        &'a self,
-        dependency_set: &'a HashSet<TaskNode>,
-    ) -> Result<Vec<&'a String>, Error> {
+    /// Gets the hashes of a task's dependencies. Because the visitor
+    /// receives the nodes in topological order, we know that all of
+    /// the dependencies have been processed before the current task.
+    ///
+    /// # Arguments
+    ///
+    /// * `dependency_set`: The dependencies of the current task
+    ///
+    /// returns: Result<Vec<String, Global>, Error>
+    fn calculate_dependency_hashes(
+        &self,
+        dependency_set: HashSet<&TaskNode>,
+    ) -> Result<Vec<String>, Error> {
         let mut dependency_hash_set = HashSet::new();
 
         for dependency_task in dependency_set {
@@ -297,11 +350,12 @@ impl TaskHasher {
                 continue;
             }
 
-            let dependency_hash = self
+            let task_hash_tracker = self.task_hash_tracker.lock().map_err(|_| Error::Mutex)?;
+            let dependency_hash = task_hash_tracker
                 .package_task_hashes
                 .get(&dependency_task_id)
                 .ok_or_else(|| Error::MissingDependencyTaskHash(dependency_task.to_string()))?;
-            dependency_hash_set.insert(dependency_hash);
+            dependency_hash_set.insert(dependency_hash.clone());
         }
 
         let mut dependency_hash_list = dependency_hash_set.into_iter().collect::<Vec<_>>();

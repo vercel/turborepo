@@ -450,8 +450,6 @@ impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use anyhow::Result;
     use tempdir::TempDir;
     use test_case::test_case;

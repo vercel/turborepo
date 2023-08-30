@@ -11,13 +11,17 @@ use crate::{
     engine::{Engine, ExecutionOptions},
     opts::Opts,
     package_graph::{PackageGraph, WorkspaceName},
-    run::task_id::{self, TaskId},
+    run::{
+        task_id::{self, TaskId},
+        RunCache,
+    },
     task_hash,
     task_hash::{PackageInputsHashes, TaskHasher},
 };
 
 // This holds the whole world
 pub struct Visitor<'a> {
+    runcache: Arc<RunCache>,
     package_graph: Arc<PackageGraph>,
     opts: &'a Opts<'a>,
     task_hasher: TaskHasher<'a>,
@@ -46,6 +50,7 @@ pub enum Error {
 impl<'a> Visitor<'a> {
     pub fn new(
         package_graph: Arc<PackageGraph>,
+        runcache: Arc<RunCache>,
         opts: &'a Opts,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
@@ -60,6 +65,7 @@ impl<'a> Visitor<'a> {
         );
 
         Self {
+            runcache,
             package_graph,
             opts,
             task_hasher,

@@ -33,7 +33,7 @@ pub struct GlobalHashableInputs<'a> {
     env: &'a [String],
     // Only Option to allow #[derive(Default)]
     resolved_env_vars: Option<DetailedMap>,
-    pass_through_env: Option<&'a [String]>,
+    pass_through_env: &'a [String],
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: &'a [RelativeUnixPathBuf],
@@ -129,7 +129,7 @@ impl<'a> GlobalHashableInputs<'a> {
                 self.env_mode = EnvMode::Strict;
             }
             EnvMode::Loose => {
-                self.pass_through_env = Vec::new();
+                self.pass_through_env = &[];
             }
             _ => {}
         }
