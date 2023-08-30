@@ -45,7 +45,7 @@ mod proto_capnp {
 pub struct TaskHashable<'a> {
     // hashes
     pub(crate) global_hash: &'a str,
-    pub(crate) task_dependency_hashes: Vec<&'a String>,
+    pub(crate) task_dependency_hashes: Vec<String>,
     pub(crate) hash_of_files: &'a str,
     pub(crate) external_deps_hash: String,
 
