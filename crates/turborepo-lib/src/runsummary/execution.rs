@@ -118,8 +118,9 @@ impl ExecutionSummary {
             state_thread,
             sender,
         } = self;
-        // We drop the sender so the channel closes once all trackers have finished
-        // we don't explicitly close as that would
+        // We drop the sender so the channel closes once all trackers have finished.
+        // We don't explicitly close as that would cause running trackers to be unable
+        // to send their execution summary.
         drop(sender);
 
         state_thread.await
