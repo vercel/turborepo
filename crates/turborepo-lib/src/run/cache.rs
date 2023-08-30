@@ -1,4 +1,4 @@
-use std::{io::Write, rc::Rc};
+use std::{io::Write, sync::Arc};
 
 use console::StyledObject;
 use tracing::{debug, log::warn};
@@ -49,7 +49,7 @@ impl RunCache {
     }
 
     pub fn task_cache(
-        self: &Rc<Self>,
+        self: &Arc<Self>,
         // TODO: Group these in a struct
         task_definition: &TaskDefinition,
         task_dir: &AbsoluteSystemPath,
@@ -102,7 +102,7 @@ impl RunCache {
 
 pub struct TaskCache {
     expanded_outputs: Vec<AnchoredSystemPathBuf>,
-    run_cache: Rc<RunCache>,
+    run_cache: Arc<RunCache>,
     repo_relative_globs: TaskOutputs,
     hash: String,
     task_output_mode: OutputLogsMode,
