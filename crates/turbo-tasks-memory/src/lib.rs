@@ -4,8 +4,10 @@
 #![feature(lint_reasons)]
 #![feature(box_patterns)]
 #![feature(int_roundings)]
+#![feature(impl_trait_in_assoc_type)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod aggregation_tree;
 mod cell;
 mod concurrent_priority_queue;
 mod count_hash_set;
