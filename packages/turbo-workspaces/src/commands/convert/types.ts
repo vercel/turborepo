@@ -1,6 +1,6 @@
 export type ConvertCommandArgument = string;
-export type ConvertCommandOptions = {
+export interface ConvertCommandOptions {
   dry: boolean;
   force: boolean;
   skipInstall: boolean;
-};
+}

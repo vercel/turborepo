@@ -11,8 +11,11 @@ const meta = {
   name: "official-starter",
 };
 
-// applied to "official starter" examples (those hosted within vercel/turbo/examples)
-// eslint-disable-next-line @typescript-eslint/require-await
+/**
+ * Transform applied to "official starter" examples (those hosted within vercel/turbo/examples)
+ **/
+
+// eslint-disable-next-line @typescript-eslint/require-await -- must match transform function signature
 export async function transform(args: TransformInput): TransformResult {
   const { prompts, example, opts } = args;
 

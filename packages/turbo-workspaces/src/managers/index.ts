@@ -1,11 +1,10 @@
-import pnpm from "./pnpm";
-import npm from "./npm";
-import yarn from "./yarn";
-import { ManagerHandler, PackageManager } from "../types";
+import type { ManagerHandler, PackageManager } from "../types";
+import { pnpm } from "./pnpm";
+import { npm } from "./npm";
+import { yarn } from "./yarn";
 
-const MANAGERS: Record<PackageManager, ManagerHandler> = {
+export const MANAGERS: Record<PackageManager, ManagerHandler> = {
   pnpm,
   yarn,
   npm,
 };
-export default MANAGERS;

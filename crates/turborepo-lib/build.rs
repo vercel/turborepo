@@ -12,5 +12,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_server(true)
         .file_descriptor_set_path("src/daemon/file_descriptor_set.bin")
         .compile(&["turbod.proto"], &["../../cli/internal/turbodprotocol"])?;
+
+    capnpc::CompilerCommand::new()
+        .file("./src/hash/proto.capnp")
+        .import_path("./src/hash/std") // we need to include the 'stdlib' for capnp-go
+        .default_parent_module(vec!["hash".to_string()])
+        .run()
+        .expect("schema compiler command");
+
     Ok(())
 }

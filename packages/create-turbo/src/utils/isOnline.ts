@@ -19,17 +19,20 @@ export function isOnline(): Promise<boolean> {
   return new Promise((resolve) => {
     dns.lookup("registry.yarnpkg.com", (registryErr) => {
       if (!registryErr) {
-        return resolve(true);
+        resolve(true);
+        return;
       }
 
       const proxy = getProxy();
       if (!proxy) {
-        return resolve(false);
+        resolve(false);
+        return;
       }
 
       const { hostname } = url.parse(proxy);
       if (!hostname) {
-        return resolve(false);
+        resolve(false);
+        return;
       }
 
       dns.lookup(hostname, (proxyErr) => {
