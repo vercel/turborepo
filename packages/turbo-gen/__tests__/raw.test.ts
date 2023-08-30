@@ -4,7 +4,7 @@ import * as workspace from "../src/commands/workspace";
 
 describe("raw", () => {
   const testMatrix = [
-    // // run
+    // run
     {
       command: "run",
       options: { config: "../config.ts", root: "../" },
