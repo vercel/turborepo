@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ops::ControlFlow, sync::Arc};
 
 use auto_hash_map::AutoMap;
 use nohash_hasher::BuildNoHashHasher;
@@ -48,6 +48,21 @@ impl<T: AggregationContext> AggregationTreeLeaf<T> {
         {
             parent.child_change(context, change);
         }
+    }
+
+    pub fn get_root_info(&self, context: &T, root_info_type: &T::RootInfoType) -> T::RootInfo {
+        let mut result = context.new_root_info(root_info_type);
+        for BottomRef {
+            parent,
+            location: _,
+        } in self.upper.iter()
+        {
+            let info = parent.get_root_info(context, root_info_type);
+            if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
+                break;
+            }
+        }
+        result
     }
 
     #[must_use]

@@ -31,7 +31,7 @@ mod leaf;
 mod tests;
 mod top_tree;
 
-use std::hash::Hash;
+use std::{hash::Hash, ops::ControlFlow};
 
 use self::leaf::top_tree;
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
@@ -41,6 +41,8 @@ pub trait AggregationContext {
     type Info;
     type ItemChange;
     type ItemRef: Eq + Hash + Clone;
+    type RootInfo;
+    type RootInfoType;
 
     fn new_info() -> Self::Info;
 
@@ -55,6 +57,18 @@ pub trait AggregationContext {
 
     fn info_to_add_change(&self, info: &Self::Info) -> Option<Self::ItemChange>;
     fn info_to_remove_change(&self, info: &Self::Info) -> Option<Self::ItemChange>;
+
+    fn new_root_info(&self, root_info_type: &Self::RootInfoType) -> Self::RootInfo;
+    fn info_to_root_info(
+        &self,
+        info: &Self::Info,
+        root_info_type: &Self::RootInfoType,
+    ) -> Self::RootInfo;
+    fn merge_root_info(
+        &self,
+        root_info: &mut Self::RootInfo,
+        other: Self::RootInfo,
+    ) -> ControlFlow<()>;
 }
 
 pub trait AggregationItemLock {

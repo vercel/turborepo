@@ -117,7 +117,10 @@ impl AggregationContext for NodeAggregationContext {
     type ItemChange = Change;
 
     fn new_info() -> Self::Info {
-        Aggregated { value: 0 }
+        Aggregated {
+            value: 0,
+            active: false,
+        }
     }
 
     fn is_blue(&self, reference: Self::ItemRef) -> bool {
@@ -136,12 +139,6 @@ impl AggregationContext for NodeAggregationContext {
     fn apply_change(&self, info: &mut Aggregated, change: &Change) -> Option<Change> {
         if info.value != 0 {
             self.additions.fetch_add(1, Ordering::SeqCst);
-            println!(
-                "apply_change {:?} + {:?} = {:?}",
-                info.value,
-                change.value,
-                info.value + change.value
-            );
         }
         info.value += change.value;
         Some(change.clone())
@@ -168,10 +165,40 @@ impl AggregationContext for NodeAggregationContext {
             Some(change)
         }
     }
+
+    type RootInfo = bool;
+
+    type RootInfoType = ();
+
+    fn new_root_info(&self, root_info_type: &Self::RootInfoType) -> Self::RootInfo {
+        false
+    }
+
+    fn info_to_root_info(
+        &self,
+        info: &Self::Info,
+        root_info_type: &Self::RootInfoType,
+    ) -> Self::RootInfo {
+        info.active
+    }
+
+    fn merge_root_info(
+        &self,
+        root_info: &mut Self::RootInfo,
+        other: Self::RootInfo,
+    ) -> std::ops::ControlFlow<()> {
+        if other {
+            *root_info = true;
+            std::ops::ControlFlow::Break(())
+        } else {
+            std::ops::ControlFlow::Continue(())
+        }
+    }
 }
 
 struct Aggregated {
     value: i32,
+    active: bool,
 }
 
 #[test]
@@ -200,7 +227,15 @@ fn test() {
     }
     let current = NodeRef(current);
 
-    println!("aggregate");
+    {
+        let root_info = leaf
+            .inner
+            .lock()
+            .aggregation_leaf
+            .get_root_info(&context, &());
+        assert_eq!(root_info, false);
+    }
+
     {
         let aggregated = aggregation_info(&context, current.clone());
         assert_eq!(aggregated.value, 15050);
@@ -208,19 +243,36 @@ fn test() {
     assert_eq!(context.additions.load(Ordering::SeqCst), 100);
     context.additions.store(0, Ordering::SeqCst);
 
-    println!("incr");
+    {
+        let root_info = leaf
+            .inner
+            .lock()
+            .aggregation_leaf
+            .get_root_info(&context, &());
+        assert_eq!(root_info, false);
+    }
+
     leaf.incr(&context);
     // The change need to propagate through 5 top trees and 5 bottom trees
     assert_eq!(context.additions.load(Ordering::SeqCst), 10);
     context.additions.store(0, Ordering::SeqCst);
 
-    println!("aggregate");
     {
-        let aggregated = aggregation_info(&context, current.clone());
+        let mut aggregated = aggregation_info(&context, current.clone());
         assert_eq!(aggregated.value, 25050);
+        (*aggregated).active = true;
     }
     assert_eq!(context.additions.load(Ordering::SeqCst), 0);
     context.additions.store(0, Ordering::SeqCst);
+
+    {
+        let root_info = leaf
+            .inner
+            .lock()
+            .aggregation_leaf
+            .get_root_info(&context, &());
+        assert_eq!(root_info, true);
+    }
 
     let i = 101;
     let current = Arc::new(Node {
@@ -233,7 +285,6 @@ fn test() {
     });
     let current = NodeRef(current);
 
-    println!("aggregate + 1");
     {
         let aggregated = aggregation_info(&context, current);
         assert_eq!(aggregated.value, 25151);
@@ -242,9 +293,17 @@ fn test() {
     assert_eq!(context.additions.load(Ordering::SeqCst), 21);
     context.additions.store(0, Ordering::SeqCst);
 
-    println!("incr");
     leaf.incr(&context);
     // This should be less the 20 to prove that we are reusing trees
     assert_eq!(context.additions.load(Ordering::SeqCst), 17);
     context.additions.store(0, Ordering::SeqCst);
+
+    {
+        let root_info = leaf
+            .inner
+            .lock()
+            .aggregation_leaf
+            .get_root_info(&context, &());
+        assert_eq!(root_info, true);
+    }
 }

@@ -1,4 +1,4 @@
-use std::{mem::transmute, sync::Arc};
+use std::{mem::transmute, ops::ControlFlow, sync::Arc};
 
 use parking_lot::{Mutex, MutexGuard};
 
@@ -52,6 +52,29 @@ impl<T: AggregationContext> TopTree<T> {
         state.upper.remove(TopRef { parent });
     }
 
+    pub(super) fn child_change(&self, context: &T, change: &T::ItemChange) {
+        let mut state = self.state.lock();
+        let change = context.apply_change(&mut state.data, change);
+        propagate_change_to_upper(&mut state, context, change);
+    }
+
+    pub fn get_root_info(&self, context: &T, root_info_type: &T::RootInfoType) -> T::RootInfo {
+        let state = self.state.lock();
+        if self.depth == 0 {
+            // This is the root
+            context.info_to_root_info(&state.data, root_info_type)
+        } else {
+            let mut result = context.new_root_info(root_info_type);
+            for TopRef { parent } in state.upper.iter() {
+                let info = parent.get_root_info(context, root_info_type);
+                if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
+                    break;
+                }
+            }
+            result
+        }
+    }
+
     pub(super) fn info(self: Arc<Self>) -> AggregationInfoGuard<T> {
         AggregationInfoGuard {
             // SAFETY: We can cast the lifetime as we keep a strong reference to the tree.
@@ -59,12 +82,6 @@ impl<T: AggregationContext> TopTree<T> {
             guard: unsafe { transmute(self.state.lock()) },
             tree: self.clone(),
         }
-    }
-
-    pub(super) fn child_change(&self, context: &T, change: &T::ItemChange) {
-        let mut state = self.state.lock();
-        let change = context.apply_change(&mut state.data, change);
-        propagate_change_to_upper(&mut state, context, change);
     }
 }
 
@@ -91,5 +108,11 @@ impl<T: AggregationContext> std::ops::Deref for AggregationInfoGuard<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.guard.data
+    }
+}
+
+impl<T: AggregationContext> std::ops::DerefMut for AggregationInfoGuard<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard.data
     }
 }

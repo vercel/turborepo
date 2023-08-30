@@ -1,4 +1,4 @@
-use std::{hash::Hash, sync::Arc};
+use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
 use parking_lot::{Mutex, MutexGuard};
 
@@ -292,6 +292,35 @@ impl<T: AggregationContext> BottomTree<T> {
         let mut state = self.state.lock();
         let change = context.apply_change(&mut state.data, change);
         propagate_change_to_upper(&mut state, context, change);
+    }
+
+    pub(super) fn get_root_info(
+        &self,
+        context: &T,
+        root_info_type: &T::RootInfoType,
+    ) -> T::RootInfo {
+        let mut result = context.new_root_info(root_info_type);
+        let state = self.state.lock();
+        for parent in state.upper.iter() {
+            match parent {
+                BottomTreeParent::Top(TopRef { parent }) => {
+                    let info = parent.get_root_info(context, root_info_type);
+                    if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
+                        break;
+                    }
+                }
+                BottomTreeParent::Bottom(BottomRef {
+                    parent,
+                    location: _,
+                }) => {
+                    let info = parent.get_root_info(context, root_info_type);
+                    if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
+                        break;
+                    }
+                }
+            }
+        }
+        result
     }
 }
 
