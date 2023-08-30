@@ -26,7 +26,6 @@ mod package_json;
 mod package_manager;
 mod rewrite_json;
 mod run;
-mod runsummary;
 mod shim;
 mod task_graph;
 mod tracing;

@@ -3,6 +3,7 @@
 mod cache;
 mod global_hash;
 mod scope;
+mod summary;
 pub mod task_id;
 
 use std::io::{BufWriter, IsTerminal};
