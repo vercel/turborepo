@@ -21,10 +21,11 @@ use std::{
     time::Duration,
 };
 
+use command_group::AsyncCommandGroup;
 use futures::TryFutureExt;
 pub use tokio::process::Command;
 use tokio::sync::{broadcast, mpsc, oneshot, watch, RwLock};
-use tracing::debug;
+use tracing::{debug, info};
 
 /// Represents all the information needed to run a child process.
 ///
@@ -65,6 +66,7 @@ pub enum ShutdownStyle {
     Kill,
 }
 
+/// Child process stopped.
 #[derive(Debug)]
 pub struct KillFailed;
 
@@ -87,52 +89,46 @@ impl ShutdownStyle {
         match self {
             ShutdownStyle::Graceful(timeout) => {
                 // try ro run the command for the given timeout
-                let fut = async {
-                    #[cfg(unix)]
-                    {
+                #[cfg(unix)]
+                {
+                    let fut = async {
                         if let Some(pid) = child.id() {
                             debug!("sending SIGINT to child {}", pid);
                             unsafe {
                                 libc::kill(pid as i32, libc::SIGINT);
                             }
+                            debug!("waiting for child {}", pid);
                             child.wait().await.ok()
                         } else {
                             None
                         }
-                    }
+                    };
 
-                    #[cfg(windows)]
-                    {
-                        // send the CTRL_BREAK_EVENT signal to the child process
-                        if let Some(pid) = child.id() {
-                            debug!("sending CTRL_BREAK_EVENT to child {}", pid);
-                            unsafe {
-                                winapi::um::wincon::GenerateConsoleCtrlEvent(
-                                    winapi::um::wincon::CTRL_BREAK_EVENT,
-                                    pid,
-                                );
+                    info!("starting shutdown");
+
+                    let result = tokio::time::timeout(*timeout, fut).await;
+                    match result {
+                        Ok(x) => {
+                            let exit_code = x.and_then(|es| es.code());
+                            if let Some(channel) = exit_channel {
+                                channel.send(exit_code).ok();
                             }
-                            child.wait().await.ok()
-                        } else {
-                            None
+                            Ok(ChildState::Finished(exit_code))
+                        }
+                        Err(_) => {
+                            info!("graceful shutdown timed out, killing child");
+                            child.kill().await?;
+                            Ok(ChildState::Killed)
                         }
                     }
-                };
+                }
 
-                let result = tokio::time::timeout(*timeout, fut).await;
-                match result {
-                    Ok(x) => {
-                        let exit_code = x.and_then(|es| es.code());
-                        if let Some(channel) = exit_channel {
-                            channel.send(exit_code).ok();
-                        }
-                        Ok(ChildState::Finished(exit_code))
-                    }
-                    Err(_) => {
-                        debug!("graceful shutdown timed out, killing child");
-                        child.kill().await?;
-                        Ok(ChildState::Killed)
-                    }
+                #[cfg(windows)]
+                {
+                    // send the CTRL_BREAK_EVENT signal to the child process
+                    debug!("timeout not supported on windows, killing");
+                    child.kill().await?;
+                    Ok(ChildState::Killed)
                 }
             }
             ShutdownStyle::Kill => {
@@ -143,11 +139,21 @@ impl ShutdownStyle {
     }
 }
 
+/// A child process that can be interacted with asynchronously.
+///
+/// This is a wrapper around the `tokio::process::Child` struct, which provides
+/// a cross platform interface for spawning and managing child processes.
+///
+/// note:
 #[derive(Clone)]
 pub struct Child {
     pid: Option<u32>,
+    gid: Option<u32>,
     state: Arc<RwLock<ChildState>>,
     exit_channel: watch::Receiver<Option<i32>>,
+    stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>,
+    stdout: Arc<Mutex<Option<tokio::process::ChildStdout>>>,
+    stderr: Arc<Mutex<Option<tokio::process::ChildStderr>>>,
 }
 
 #[derive(Debug)]
@@ -159,12 +165,12 @@ impl ChildCommandChannel {
         (ChildCommandChannel(tx), rx)
     }
 
-    pub async fn kill(&self) {
-        self.0.send(ChildCommand::Kill).await;
+    pub async fn kill(&self) -> Result<(), mpsc::error::SendError<ChildCommand>> {
+        self.0.send(ChildCommand::Kill).await
     }
 
-    pub async fn stop(&self) {
-        self.0.send(ChildCommand::Stop).await;
+    pub async fn stop(&self) -> Result<(), mpsc::error::SendError<ChildCommand>> {
+        self.0.send(ChildCommand::Stop).await
     }
 }
 
@@ -180,16 +186,24 @@ impl Child {
     /// This spawns a task that will wait for the child process to exit, and
     /// send the exit code to the channel.
     pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> Self {
-        let mut child = command.spawn().expect("failed to start child");
+        let mut group = command.group().spawn().expect("failed to start child");
+
+        let stdin = group.inner().stdin.take();
+        let stdout = group.inner().stdout.take();
+        let stderr = group.inner().stderr.take();
 
         let (command_tx, mut command_rx) = ChildCommandChannel::new();
         let (exit_tx, exit_rx) = watch::channel(None);
 
         let state = Arc::new(RwLock::new(ChildState::Running(command_tx)));
         let task_state = state.clone();
-        let pid = child.id();
+        let pid = group.inner().id();
+        let gid = group.id();
+
+        let mut child = group.into_inner();
 
         let task = tokio::spawn(async move {
+            info!("waiting for task");
             tokio::select! {
                 command = command_rx.recv() => {
                     let state = match command {
@@ -199,8 +213,8 @@ impl Child {
                         }
                         Some(ChildCommand::Kill) => {
                             // we received a command to kill the child process
+                            debug!("killing child process");
                             ShutdownStyle::Kill.process(&mut child, Some(exit_tx)).await.unwrap()
-
                         }
                     };
 
@@ -220,12 +234,18 @@ impl Child {
 
                 }
             }
+
+            debug!("child process exited");
         });
 
         Self {
             pid,
+            gid,
             state,
             exit_channel: exit_rx,
+            stdin: Arc::new(Mutex::new(stdin)),
+            stdout: Arc::new(Mutex::new(stdout)),
+            stderr: Arc::new(Mutex::new(stderr)),
         }
     }
 
@@ -235,50 +255,53 @@ impl Child {
     }
 
     /// Perform a graceful shutdown of the child process.
-    pub async fn stop(&mut self) -> Result<(), KillFailed> {
+    pub async fn stop(&mut self) {
         {
             let state = self.state.read().await;
-            let child = match Self::child(&*state) {
+            let child = match Self::child(&state) {
                 Some(child) => child,
-                None => return Ok(()),
+                None => return,
             };
-            child.stop().await;
+
+            // if this fails, it's because the channel is dropped (toctou)
+            // we can just ignore it
+            child.stop().await.ok();
         }
 
         self.wait().await;
-        Ok(())
     }
 
     /// Kill the child process immediately.
-    pub async fn kill(&mut self) -> Result<(), KillFailed> {
-        let next_state = {
+    pub async fn kill(&mut self) {
+        {
             let rw_lock_read_guard = self.state.read().await;
-            let child = match Self::child(&*rw_lock_read_guard) {
+            let child = match Self::child(&rw_lock_read_guard) {
                 Some(child) => child,
-                None => return Ok(()),
+                None => return,
             };
 
-            child.kill().await;
-        };
+            // if this fails, it's because the channel is dropped (toctou)
+            // we can just ignore it
+            child.kill().await.ok();
+        }
 
-        let mut state = self.state.write().await;
-        // *state = next_state;
-
-        Ok(())
+        self.wait().await;
     }
 
     fn pid(&self) -> Option<u32> {
         self.pid
     }
 
-    fn stdout(&mut self) -> Option<&mut tokio::process::ChildStdout> {
-        todo!()
-        // Self::child(&mut self.state).and_then(|c| c.stdout.as_mut())
+    fn stdin(&mut self) -> Option<tokio::process::ChildStdin> {
+        self.stdin.lock().unwrap().take()
     }
 
-    fn stderr(&mut self) -> Option<&mut tokio::process::ChildStderr> {
-        todo!()
-        // Self::child(&mut self.state).and_then(|c| c.stderr.as_mut())
+    fn stdout(&mut self) -> Option<tokio::process::ChildStdout> {
+        self.stdout.lock().unwrap().take()
+    }
+
+    fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
+        self.stderr.lock().unwrap().take()
     }
 
     fn child(state: &ChildState) -> Option<&ChildCommandChannel> {
@@ -293,7 +316,10 @@ impl Child {
 mod test {
     use std::{assert_matches::assert_matches, process::Stdio, time::Duration};
 
-    use tokio::{io::AsyncReadExt, process::Command};
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        process::Command,
+    };
     use tracing_test::traced_test;
 
     use super::{Child, ChildState};
@@ -303,23 +329,27 @@ mod test {
 
     #[tokio::test]
     async fn test_pid() {
-        let mut cmd = Command::new("echo");
-        cmd.args(&["hello", "world"]);
+        let mut cmd = Command::new("node");
+        cmd.args(&["./test/scripts/hello_world.js"]);
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
 
         assert_matches!(child.pid(), Some(_));
-        child.stop().await.unwrap();
+        child.stop().await;
 
         let state = child.state.read().await;
-        assert_matches!(&*state, ChildState::Running(_));
+        assert_matches!(&*state, ChildState::Killed);
     }
 
     #[tokio::test]
     #[traced_test]
-    async fn test_await_start() {
-        let mut cmd = Command::new("echo");
-        cmd.args(&["hello", "world"]);
-        cmd.stdout(Stdio::piped());
+    async fn test_spawn() {
+        let cmd = {
+            let mut cmd = Command::new("node");
+            cmd.args(&["./test/scripts/hello_world.js"]);
+            cmd.stdout(Stdio::piped());
+            cmd
+        };
+
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
 
         {
@@ -327,21 +357,26 @@ mod test {
             assert_matches!(&*state, ChildState::Running(_));
         }
 
-        child.wait().await;
+        let code = child.wait().await;
+        assert_eq!(code, Some(0));
 
-        let state = child.state.read().await;
-
-        assert_matches!(&*state, ChildState::Finished(Some(0)));
+        {
+            let state = child.state.read().await;
+            assert_matches!(&*state, ChildState::Finished(Some(0)));
+        }
     }
 
     #[tokio::test]
-    async fn test_start() {
-        let mut cmd = Command::new("env");
-        cmd.envs([("a", "b"), ("c", "d")].iter().copied());
+    #[traced_test]
+    async fn test_stdout() {
+        let mut cmd = Command::new("node");
+        cmd.args(&["./test/scripts/hello_world.js"]);
         cmd.stdout(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
 
         tokio::time::sleep(STARTUP_DELAY).await;
+
+        child.wait().await;
 
         {
             let mut output = Vec::new();
@@ -354,29 +389,61 @@ mod test {
 
             let output_str = String::from_utf8(output).expect("Failed to parse stdout");
 
-            for &env_var in &["a=b", "c=d"] {
-                assert!(output_str.contains(env_var));
-            }
+            assert!(output_str.contains("hello world"));
         }
-
-        child.stop().await;
 
         let state = child.state.read().await;
 
-        assert_matches!(&*state, ChildState::Killed);
+        assert_matches!(&*state, ChildState::Finished(Some(0)));
+    }
+
+    #[tokio::test]
+    async fn test_stdio() {
+        let mut cmd = Command::new("node");
+        cmd.args(&["./test/scripts/stdin_stdout.js"]);
+        cmd.stdout(Stdio::piped());
+        cmd.stdin(Stdio::piped());
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
+
+        let mut stdout = child.stdout().unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // drop stdin to close the pipe
+        {
+            let mut stdin = child.stdin().unwrap();
+            stdin.write_all(b"hello world").await.unwrap();
+        }
+
+        let mut output = Vec::new();
+        stdout.read_to_end(&mut output).await.unwrap();
+
+        let output_str = String::from_utf8(output).expect("Failed to parse stdout");
+
+        assert_eq!(output_str, "hello world");
+
+        child.wait().await;
+
+        let state = child.state.read().await;
+
+        assert_matches!(&*state, ChildState::Finished(Some(0)));
     }
 
     #[tokio::test]
     #[traced_test]
     async fn test_graceful_shutdown_timeout() {
-        let mut cmd = Command::new("sh");
-        cmd.args(&["-c", "trap '' SIGINT INT; while true; do sleep 0.1; done"]);
+        let cmd = {
+            let mut cmd = Command::new("node");
+            cmd.args(&["./test/scripts/sleep_5_ignore.js"]);
+            cmd
+        };
+
         let mut child = Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500)));
 
         // give it a moment to register the signal handler
         tokio::time::sleep(STARTUP_DELAY).await;
 
-        child.stop().await.unwrap();
+        child.stop().await;
 
         let state = child.state.read().await;
 
@@ -387,17 +454,26 @@ mod test {
     #[tokio::test]
     #[traced_test]
     async fn test_graceful_shutdown() {
-        let mut cmd = Command::new("sh");
-        cmd.args(&["-c", "while true; do sleep 0.2; done"]);
+        let cmd = {
+            let mut cmd = Command::new("node");
+            cmd.args(&["./test/scripts/sleep_5_interruptable.js"]);
+            cmd
+        };
+
         let mut child = Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500)));
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
-        child.stop().await.unwrap();
+        child.stop().await;
+        child.wait().await;
 
         let state = child.state.read().await;
 
-        // process exits with 1 when interrupted
+        // process exits with no code when interrupted
+        #[cfg(unix)]
         assert_matches!(&*state, &ChildState::Finished(None));
+
+        #[cfg(not(unix))]
+        assert_matches!(&*state, &ChildState::Killed);
     }
 }
