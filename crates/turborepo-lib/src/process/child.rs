@@ -16,15 +16,13 @@
 //! them when the manager is closed.
 
 use std::{
-    future::ready,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use command_group::AsyncCommandGroup;
-use futures::TryFutureExt;
 pub use tokio::process::Command;
-use tokio::sync::{broadcast, mpsc, oneshot, watch, RwLock};
+use tokio::sync::{mpsc, watch, RwLock};
 use tracing::{debug, info};
 
 /// Represents all the information needed to run a child process.
@@ -202,7 +200,7 @@ impl Child {
 
         let mut child = group.into_inner();
 
-        let task = tokio::spawn(async move {
+        let _task = tokio::spawn(async move {
             info!("waiting for task");
             tokio::select! {
                 command = command_rx.recv() => {
@@ -292,15 +290,15 @@ impl Child {
         self.pid
     }
 
-    fn stdin(&mut self) -> Option<tokio::process::ChildStdin> {
+    pub fn stdin(&mut self) -> Option<tokio::process::ChildStdin> {
         self.stdin.lock().unwrap().take()
     }
 
-    fn stdout(&mut self) -> Option<tokio::process::ChildStdout> {
+    pub fn stdout(&mut self) -> Option<tokio::process::ChildStdout> {
         self.stdout.lock().unwrap().take()
     }
 
-    fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
+    pub fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
         self.stderr.lock().unwrap().take()
     }
 
@@ -330,7 +328,7 @@ mod test {
     #[tokio::test]
     async fn test_pid() {
         let mut cmd = Command::new("node");
-        cmd.args(&["./test/scripts/hello_world.js"]);
+        cmd.args(["./test/scripts/hello_world.js"]);
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
 
         assert_matches!(child.pid(), Some(_));
@@ -345,7 +343,7 @@ mod test {
     async fn test_spawn() {
         let cmd = {
             let mut cmd = Command::new("node");
-            cmd.args(&["./test/scripts/hello_world.js"]);
+            cmd.args(["./test/scripts/hello_world.js"]);
             cmd.stdout(Stdio::piped());
             cmd
         };
@@ -370,7 +368,7 @@ mod test {
     #[traced_test]
     async fn test_stdout() {
         let mut cmd = Command::new("node");
-        cmd.args(&["./test/scripts/hello_world.js"]);
+        cmd.args(["./test/scripts/hello_world.js"]);
         cmd.stdout(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
 
@@ -400,7 +398,7 @@ mod test {
     #[tokio::test]
     async fn test_stdio() {
         let mut cmd = Command::new("node");
-        cmd.args(&["./test/scripts/stdin_stdout.js"]);
+        cmd.args(["./test/scripts/stdin_stdout.js"]);
         cmd.stdout(Stdio::piped());
         cmd.stdin(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
@@ -434,7 +432,7 @@ mod test {
     async fn test_graceful_shutdown_timeout() {
         let cmd = {
             let mut cmd = Command::new("node");
-            cmd.args(&["./test/scripts/sleep_5_ignore.js"]);
+            cmd.args(["./test/scripts/sleep_5_ignore.js"]);
             cmd
         };
 
@@ -456,7 +454,7 @@ mod test {
     async fn test_graceful_shutdown() {
         let cmd = {
             let mut cmd = Command::new("node");
-            cmd.args(&["./test/scripts/sleep_5_interruptable.js"]);
+            cmd.args(["./test/scripts/sleep_5_interruptable.js"]);
             cmd
         };
 
