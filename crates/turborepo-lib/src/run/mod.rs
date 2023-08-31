@@ -32,6 +32,7 @@ use crate::{
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
+    process::ProcessManager,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
     task_hash::PackageInputsHashes,
@@ -249,6 +250,9 @@ impl Run {
         )?;
 
         debug!("package inputs hashes: {:?}", package_inputs_hashes);
+
+        // remove dead code warnings
+        let _proc_manager = ProcessManager::new();
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
