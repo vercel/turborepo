@@ -44,7 +44,7 @@ pub fn set_path(
     path: &[&str],
     json_value: &str,
 ) -> Result<String, RewriteError> {
-    let string_to_process = if json_document_string == "" {
+    let string_to_process = if json_document_string.is_empty() {
         "{}"
     } else {
         json_document_string

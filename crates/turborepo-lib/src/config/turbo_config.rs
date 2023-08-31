@@ -275,7 +275,7 @@ impl TurborepoConfigBuilder {
                 Err(anyhow!("global_read"))
             }
         })?;
-        if contents == "" {
+        if contents.is_empty() {
             contents = String::from("{}");
         }
         let global_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
@@ -296,7 +296,7 @@ impl TurborepoConfigBuilder {
                 Err(anyhow!("local_read"))
             }
         })?;
-        if contents == "" {
+        if contents.is_empty() {
             contents = String::from("{}");
         }
         let local_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
