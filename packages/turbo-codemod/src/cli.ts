@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import chalk from "chalk";
+import { logger } from "@turbo/utils";
 import { Command } from "commander";
-
-import { transform, migrate } from "./commands";
-import notifyUpdate from "./utils/notifyUpdate";
 import cliPkg from "../package.json";
+import { transform, migrate } from "./commands";
+import { notifyUpdate } from "./utils/notifyUpdate";
 
 const codemodCli = new Command();
 
@@ -60,14 +60,11 @@ codemodCli
   .parseAsync()
   .then(notifyUpdate)
   .catch(async (reason) => {
-    console.log();
-    if (reason.command) {
-      console.log(`  ${chalk.cyan(reason.command)} has failed.`);
-    } else {
-      console.log(chalk.red("Unexpected error. Please report it as a bug:"));
-      console.log(reason);
-    }
-    console.log();
+    logger.log();
+    logger.log(chalk.red("Unexpected error. Please report it as a bug:"));
+    logger.log(reason);
+
+    logger.log();
     await notifyUpdate();
     process.exit(1);
   });

@@ -1,5 +1,5 @@
+import type { ExecSyncOptions } from "node:child_process";
 import type { Project } from "@turbo/workspaces";
-import type { ExecSyncOptions } from "child_process";
 import { exec } from "../utils";
 
 export function shutdownDaemon({ project }: { project: Project }) {

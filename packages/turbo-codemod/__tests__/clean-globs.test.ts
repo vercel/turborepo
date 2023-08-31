@@ -1,6 +1,5 @@
-import { transformer, fixGlobPattern } from "../src/transforms/clean-globs";
 import { setupTestFixtures } from "@turbo/test-utils";
-import getTransformerHelpers from "../src/utils/getTransformerHelpers";
+import { transformer, fixGlobPattern } from "../src/transforms/clean-globs";
 
 describe("clean-globs", () => {
   const { useFixture } = setupTestFixtures({
@@ -10,7 +9,7 @@ describe("clean-globs", () => {
 
   test("basic", () => {
     // load the fixture for the test
-    const { root, read, readJson } = useFixture({
+    const { root } = useFixture({
       fixture: "clean-globs",
     });
 
@@ -33,14 +32,8 @@ describe("clean-globs", () => {
     `);
   });
 
-  const { log } = getTransformerHelpers({
-    transformer: "test",
-    rootPath: ".",
-    options: { force: false, dry: false, print: false },
-  });
-
   test("collapses back-to-back doublestars", () => {
-    let badGlobPatterns = [
+    const badGlobPatterns = [
       ["../../app-store/**/**", "../../app-store/**"],
       ["**/**/result.json", "**/result.json"],
       ["**/**/**/**", "**"],
@@ -51,17 +44,17 @@ describe("clean-globs", () => {
 
     // Now let's test the function
     badGlobPatterns.forEach(([input, output]) => {
-      expect(fixGlobPattern(input, log)).toBe(output);
+      expect(fixGlobPattern(input)).toBe(output);
     });
   });
 
   test("doesn't update valid globs and prints a message", () => {
     // Now let's test the function
-    expect(fixGlobPattern("a/b/c/*", log)).toBe("a/b/c/*");
+    expect(fixGlobPattern("a/b/c/*")).toBe("a/b/c/*");
   });
 
   test("transforms '**ext' to '**/*ext'", () => {
-    let badGlobPatterns = [
+    const badGlobPatterns = [
       ["cypress/integration/**.test.ts", "cypress/integration/**/*.test.ts"],
       ["scripts/**.mjs", "scripts/**/*.mjs"],
       ["scripts/**.js", "scripts/**/*.js"],
@@ -73,12 +66,12 @@ describe("clean-globs", () => {
 
     // Now let's test the function
     badGlobPatterns.forEach(([input, output]) => {
-      expect(fixGlobPattern(input, log)).toBe(output);
+      expect(fixGlobPattern(input)).toBe(output);
     });
   });
 
   test("transforms 'pre**' to pre*/**", () => {
-    let badGlobPatterns = [
+    const badGlobPatterns = [
       ["pre**", "pre*/**"],
       ["pre**/foo", "pre*/**/foo"],
       ["pre**/foo/bar", "pre*/**/foo/bar"],
@@ -88,68 +81,58 @@ describe("clean-globs", () => {
 
     // Now let's test the function
     badGlobPatterns.forEach(([input, output]) => {
-      expect(fixGlobPattern(input, log)).toBe(output);
+      expect(fixGlobPattern(input)).toBe(output);
     });
   });
 
   it("should collapse back-to-back doublestars to a single doublestar", () => {
-    expect(fixGlobPattern("../../app-store/**/**", log)).toBe(
-      "../../app-store/**"
-    );
-    expect(fixGlobPattern("**/**/result.json", log)).toBe("**/result.json");
+    expect(fixGlobPattern("../../app-store/**/**")).toBe("../../app-store/**");
+    expect(fixGlobPattern("**/**/result.json")).toBe("**/result.json");
   });
 
   it("should change **.ext to **/*.ext", () => {
-    expect(fixGlobPattern("**.js", log)).toBe("**/*.js");
-    expect(fixGlobPattern("**.json", log)).toBe("**/*.json");
-    expect(fixGlobPattern("**.ext", log)).toBe("**/*.ext");
+    expect(fixGlobPattern("**.js")).toBe("**/*.js");
+    expect(fixGlobPattern("**.json")).toBe("**/*.json");
+    expect(fixGlobPattern("**.ext")).toBe("**/*.ext");
   });
 
   it("should change prefix** to prefix*/**", () => {
-    expect(fixGlobPattern("app**", log)).toBe("app*/**");
-    expect(fixGlobPattern("src**", log)).toBe("src*/**");
-    expect(fixGlobPattern("prefix**", log)).toBe("prefix*/**");
+    expect(fixGlobPattern("app**")).toBe("app*/**");
+    expect(fixGlobPattern("src**")).toBe("src*/**");
+    expect(fixGlobPattern("prefix**")).toBe("prefix*/**");
   });
 
   it("should collapse back-to-back doublestars and change **.ext to **/*.ext", () => {
-    expect(fixGlobPattern("../../app-store/**/**/*.js", log)).toBe(
+    expect(fixGlobPattern("../../app-store/**/**/*.js")).toBe(
       "../../app-store/**/*.js"
     );
-    expect(fixGlobPattern("**/**/result.json", log)).toBe("**/result.json");
+    expect(fixGlobPattern("**/**/result.json")).toBe("**/result.json");
   });
 
   it("should collapse back-to-back doublestars and change prefix** to prefix*/**", () => {
-    expect(fixGlobPattern("../../app-store/**/**prefix**", log)).toBe(
+    expect(fixGlobPattern("../../app-store/**/**prefix**")).toBe(
       "../../app-store/**/*prefix*/**"
     );
-    expect(fixGlobPattern("**/**/prefix**", log)).toBe("**/prefix*/**");
+    expect(fixGlobPattern("**/**/prefix**")).toBe("**/prefix*/**");
   });
 
   it("should not modify valid glob patterns", () => {
-    expect(fixGlobPattern("src/**/*.js", log)).toBe("src/**/*.js");
-    expect(fixGlobPattern("src/**/test/*.js", log)).toBe("src/**/test/*.js");
-    expect(fixGlobPattern("src/**/test/**/*.js", log)).toBe(
-      "src/**/test/**/*.js"
-    );
-    expect(fixGlobPattern("src/**/test/**/result.json", log)).toBe(
+    expect(fixGlobPattern("src/**/*.js")).toBe("src/**/*.js");
+    expect(fixGlobPattern("src/**/test/*.js")).toBe("src/**/test/*.js");
+    expect(fixGlobPattern("src/**/test/**/*.js")).toBe("src/**/test/**/*.js");
+    expect(fixGlobPattern("src/**/test/**/result.json")).toBe(
       "src/**/test/**/result.json"
     );
   });
 
   it("should handle glob patterns with non-ASCII characters", () => {
-    expect(fixGlobPattern("src/日本語/**/*.js", log)).toBe(
-      "src/日本語/**/*.js"
-    );
-    expect(fixGlobPattern("src/中文/**/*.json", log)).toBe(
-      "src/中文/**/*.json"
-    );
-    expect(fixGlobPattern("src/русский/**/*.ts", log)).toBe(
-      "src/русский/**/*.ts"
-    );
+    expect(fixGlobPattern("src/日本語/**/*.js")).toBe("src/日本語/**/*.js");
+    expect(fixGlobPattern("src/中文/**/*.json")).toBe("src/中文/**/*.json");
+    expect(fixGlobPattern("src/русский/**/*.ts")).toBe("src/русский/**/*.ts");
   });
   it("should handle glob patterns with emojis", () => {
-    expect(fixGlobPattern("src/👋**/*.js", log)).toBe("src/👋*/**/*.js");
-    expect(fixGlobPattern("src/🌎**/*.json", log)).toBe("src/🌎*/**/*.json");
-    expect(fixGlobPattern("src/🚀**/*.ts", log)).toBe("src/🚀*/**/*.ts");
+    expect(fixGlobPattern("src/👋**/*.js")).toBe("src/👋*/**/*.js");
+    expect(fixGlobPattern("src/🌎**/*.json")).toBe("src/🌎*/**/*.json");
+    expect(fixGlobPattern("src/🚀**/*.ts")).toBe("src/🚀*/**/*.ts");
   });
 });

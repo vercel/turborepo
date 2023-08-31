@@ -1,11 +1,10 @@
-import path from "path";
-import fs from "fs-extra";
-
-import getTransformerHelpers from "../utils/getTransformerHelpers";
-import { TransformerResults } from "../runner";
+import path from "node:path";
+import { readJsonSync } from "fs-extra";
+import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
+import { type PackageJson, getAvailablePackageManagers } from "@turbo/utils";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
 import type { TransformerArgs } from "../types";
-import { Project, getWorkspaceDetails } from "@turbo/workspaces";
-import { getAvailablePackageManagers } from "@turbo/utils";
 
 // transformer details
 const TRANSFORMER = "add-package-manager";
@@ -43,7 +42,7 @@ export async function transformer({
 
   const pkgManagerString = `${packageManager}@${version}`;
   const rootPackageJsonPath = path.join(root, "package.json");
-  const rootPackageJson = fs.readJsonSync(rootPackageJsonPath);
+  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
   const allWorkspaces = [
     {
       name: "package.json",
@@ -74,4 +73,5 @@ const transformerMeta = {
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;
