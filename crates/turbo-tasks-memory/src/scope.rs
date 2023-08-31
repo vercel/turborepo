@@ -753,23 +753,4 @@ impl TaskScopeState {
     pub fn take_dependent_tasks(&mut self) -> AutoSet<TaskId, BuildNoHashHasher<TaskId>> {
         take(&mut self.dependent_tasks)
     }
-
-    pub fn get_read_collectibles_task(
-        &mut self,
-        trait_id: TraitTypeId,
-        create_new: impl FnOnce() -> TaskId,
-    ) -> TaskId {
-        let task_id = &mut self
-            .collectibles
-            .entry(trait_id)
-            .or_default()
-            .read_collectibles_task;
-        if let Some(task_id) = *task_id {
-            task_id
-        } else {
-            let new_task_id = create_new();
-            *task_id = Some(new_task_id);
-            new_task_id
-        }
-    }
 }

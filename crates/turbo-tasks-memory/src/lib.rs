@@ -7,6 +7,7 @@
 #![feature(impl_trait_in_assoc_type)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod aggregation;
 mod aggregation_tree;
 mod cell;
 mod concurrent_priority_queue;
