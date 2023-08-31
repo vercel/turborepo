@@ -1,4 +1,4 @@
-use std::{ops::ControlFlow, sync::Arc};
+use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
 use auto_hash_map::AutoMap;
 use nohash_hasher::BuildNoHashHasher;
@@ -11,13 +11,13 @@ use super::{
 };
 use crate::count_hash_set::CountHashSet;
 
-pub struct AggregationTreeLeaf<T: AggregationContext> {
+pub struct AggregationTreeLeaf<T, I> {
     top_trees: AutoMap<u8, Arc<TopTree<T>>, BuildNoHashHasher<u8>>,
-    bottom_trees: AutoMap<u8, Arc<BottomTree<T>>, BuildNoHashHasher<u8>>,
-    upper: CountHashSet<BottomRef<T>>,
+    bottom_trees: AutoMap<u8, Arc<BottomTree<T, I>>, BuildNoHashHasher<u8>>,
+    upper: CountHashSet<BottomRef<T, I>>,
 }
 
-impl<T: AggregationContext> AggregationTreeLeaf<T> {
+impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
     pub fn new() -> Self {
         Self {
             top_trees: AutoMap::with_hasher(),
@@ -26,7 +26,12 @@ impl<T: AggregationContext> AggregationTreeLeaf<T> {
         }
     }
 
-    pub fn add_child(&self, self_is_blue: bool, context: &T, child: &T::ItemRef) {
+    pub fn add_child<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        self_is_blue: bool,
+        context: &C,
+        child: &I,
+    ) {
         for BottomRef { parent, location } in self.upper.iter() {
             parent
                 .clone()
@@ -34,13 +39,22 @@ impl<T: AggregationContext> AggregationTreeLeaf<T> {
         }
     }
 
-    pub fn remove_child(&self, self_is_blue: bool, context: &T, child: &T::ItemRef) {
+    pub fn remove_child<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        self_is_blue: bool,
+        context: &C,
+        child: &I,
+    ) {
         for BottomRef { parent, location } in self.upper.iter() {
             parent.remove_child_of_child(context, *location, self_is_blue, child.clone());
         }
     }
 
-    pub fn change(&self, context: &T, change: &T::ItemChange) {
+    pub fn change<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        change: &C::ItemChange,
+    ) {
         for BottomRef {
             parent,
             location: _,
@@ -50,7 +64,11 @@ impl<T: AggregationContext> AggregationTreeLeaf<T> {
         }
     }
 
-    pub fn get_root_info(&self, context: &T, root_info_type: &T::RootInfoType) -> T::RootInfo {
+    pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        root_info_type: &C::RootInfoType,
+    ) -> C::RootInfo {
         let mut result = context.new_root_info(root_info_type);
         for BottomRef {
             parent,
@@ -68,7 +86,7 @@ impl<T: AggregationContext> AggregationTreeLeaf<T> {
     #[must_use]
     pub(super) fn add_upper(
         &mut self,
-        parent: Arc<BottomTree<T>>,
+        parent: Arc<BottomTree<T, I>>,
         location: ChildLocation,
     ) -> bool {
         self.upper.add(BottomRef { parent, location })
@@ -77,18 +95,18 @@ impl<T: AggregationContext> AggregationTreeLeaf<T> {
     #[must_use]
     pub(super) fn remove_upper(
         &mut self,
-        parent: Arc<BottomTree<T>>,
+        parent: Arc<BottomTree<T, I>>,
         location: ChildLocation,
     ) -> bool {
         self.upper.remove(BottomRef { parent, location })
     }
 }
 
-pub fn top_tree<T: AggregationContext>(
-    context: &T,
-    item: &mut T::ItemLock,
+pub fn top_tree<C: AggregationContext>(
+    context: &C,
+    item: &mut C::ItemLock,
     depth: u8,
-) -> Arc<TopTree<T>> {
+) -> Arc<TopTree<C::Info>> {
     if let Some(top_tree) = item.leaf().top_trees.get(&depth) {
         return top_tree.clone();
     }
@@ -99,11 +117,11 @@ pub fn top_tree<T: AggregationContext>(
     top_tree
 }
 
-pub fn bottom_tree<T: AggregationContext>(
-    context: &T,
-    item: &mut T::ItemLock,
+pub fn bottom_tree<C: AggregationContext>(
+    context: &C,
+    item: &mut C::ItemLock,
     height: u8,
-) -> Arc<BottomTree<T>> {
+) -> Arc<BottomTree<C::Info, C::ItemRef>> {
     if let Some(bottom_tree) = item.leaf().bottom_trees.get(&height) {
         return bottom_tree.clone();
     }

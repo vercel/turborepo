@@ -5,38 +5,52 @@ use parking_lot::{Mutex, MutexGuard};
 use super::{inner_refs::TopRef, leaf::top_tree, AggregationContext};
 use crate::count_hash_set::CountHashSet;
 
-pub struct TopTree<T: AggregationContext> {
+pub struct TopTree<T> {
     depth: u8,
     state: Mutex<TopTreeState<T>>,
 }
 
-struct TopTreeState<T: AggregationContext> {
-    data: T::Info,
+struct TopTreeState<T> {
+    data: T,
     upper: CountHashSet<TopRef<T>>,
 }
 
-impl<T: AggregationContext> TopTree<T> {
+impl<T: Default> TopTree<T> {
     pub fn new(depth: u8) -> Self {
         Self {
             depth,
             state: Mutex::new(TopTreeState {
-                data: T::new_info(),
+                data: T::default(),
                 upper: CountHashSet::new(),
             }),
         }
     }
+}
 
-    pub(super) fn add_child_of_child(self: Arc<Self>, context: &T, child_of_child: T::ItemRef) {
+impl<T> TopTree<T> {
+    pub(super) fn add_child_of_child<C: AggregationContext<Info = T>>(
+        self: Arc<Self>,
+        context: &C,
+        child_of_child: C::ItemRef,
+    ) {
         top_tree(context, &mut context.item(child_of_child), self.depth + 1)
             .add_parent(context, self);
     }
 
-    pub(super) fn remove_child_of_child(self: Arc<Self>, context: &T, child_of_child: T::ItemRef) {
+    pub(super) fn remove_child_of_child<C: AggregationContext<Info = T>>(
+        self: Arc<Self>,
+        context: &C,
+        child_of_child: C::ItemRef,
+    ) {
         top_tree(context, &mut context.item(child_of_child), self.depth + 1)
             .remove_parent(context, self);
     }
 
-    pub(super) fn add_parent(&self, context: &T, parent: Arc<TopTree<T>>) {
+    pub(super) fn add_parent<C: AggregationContext<Info = T>>(
+        &self,
+        context: &C,
+        parent: Arc<TopTree<T>>,
+    ) {
         let mut state = self.state.lock();
         if let Some(change) = context.info_to_add_change(&state.data) {
             parent.child_change(context, &change);
@@ -44,7 +58,11 @@ impl<T: AggregationContext> TopTree<T> {
         state.upper.add(TopRef { parent });
     }
 
-    pub(super) fn remove_parent(&self, context: &T, parent: Arc<TopTree<T>>) {
+    pub(super) fn remove_parent<C: AggregationContext<Info = T>>(
+        &self,
+        context: &C,
+        parent: Arc<TopTree<T>>,
+    ) {
         let mut state = self.state.lock();
         if let Some(change) = context.info_to_remove_change(&state.data) {
             parent.child_change(context, &change);
@@ -52,13 +70,21 @@ impl<T: AggregationContext> TopTree<T> {
         state.upper.remove(TopRef { parent });
     }
 
-    pub(super) fn child_change(&self, context: &T, change: &T::ItemChange) {
+    pub(super) fn child_change<C: AggregationContext<Info = T>>(
+        &self,
+        context: &C,
+        change: &C::ItemChange,
+    ) {
         let mut state = self.state.lock();
         let change = context.apply_change(&mut state.data, change);
         propagate_change_to_upper(&mut state, context, change);
     }
 
-    pub fn get_root_info(&self, context: &T, root_info_type: &T::RootInfoType) -> T::RootInfo {
+    pub fn get_root_info<C: AggregationContext<Info = T>>(
+        &self,
+        context: &C,
+        root_info_type: &C::RootInfoType,
+    ) -> C::RootInfo {
         let state = self.state.lock();
         if self.depth == 0 {
             // This is the root
@@ -85,10 +111,10 @@ impl<T: AggregationContext> TopTree<T> {
     }
 }
 
-fn propagate_change_to_upper<T: AggregationContext>(
-    state: &mut MutexGuard<TopTreeState<T>>,
-    context: &T,
-    change: Option<T::ItemChange>,
+fn propagate_change_to_upper<C: AggregationContext>(
+    state: &mut MutexGuard<TopTreeState<C::Info>>,
+    context: &C,
+    change: Option<C::ItemChange>,
 ) {
     let Some(change) = change else {
         return;
@@ -98,20 +124,20 @@ fn propagate_change_to_upper<T: AggregationContext>(
     }
 }
 
-pub struct AggregationInfoGuard<T: AggregationContext + 'static> {
+pub struct AggregationInfoGuard<T: 'static> {
     guard: MutexGuard<'static, TopTreeState<T>>,
     tree: Arc<TopTree<T>>,
 }
 
-impl<T: AggregationContext> std::ops::Deref for AggregationInfoGuard<T> {
-    type Target = T::Info;
+impl<T> std::ops::Deref for AggregationInfoGuard<T> {
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.guard.data
     }
 }
 
-impl<T: AggregationContext> std::ops::DerefMut for AggregationInfoGuard<T> {
+impl<T> std::ops::DerefMut for AggregationInfoGuard<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.guard.data
     }

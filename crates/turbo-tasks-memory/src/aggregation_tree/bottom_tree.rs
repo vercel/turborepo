@@ -26,17 +26,17 @@ use crate::count_hash_set::CountHashSet;
 /// The concept of "blue" nodes will improve the sharing of graphs as
 /// aggregation will eventually propagate to use the same items, even if they
 /// start on different depths of the graph.
-pub struct BottomTree<T: AggregationContext> {
+pub struct BottomTree<T, I> {
     height: u8,
-    state: Mutex<BottomTreeState<T>>,
+    state: Mutex<BottomTreeState<T, I>>,
 }
 
-enum BottomTreeParent<T: AggregationContext> {
+enum BottomTreeParent<T, I> {
     Top(TopRef<T>),
-    Bottom(BottomRef<T>),
+    Bottom(BottomRef<T, I>),
 }
 
-impl<T: AggregationContext> PartialEq for BottomTreeParent<T> {
+impl<T, I> PartialEq for BottomTreeParent<T, I> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Top(left), Self::Top(right)) => left == right,
@@ -46,9 +46,9 @@ impl<T: AggregationContext> PartialEq for BottomTreeParent<T> {
     }
 }
 
-impl<T: AggregationContext> Eq for BottomTreeParent<T> {}
+impl<T, I> Eq for BottomTreeParent<T, I> {}
 
-impl<T: AggregationContext> Hash for BottomTreeParent<T> {
+impl<T, I> Hash for BottomTreeParent<T, I> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Self::Top(top) => top.hash(state),
@@ -57,31 +57,33 @@ impl<T: AggregationContext> Hash for BottomTreeParent<T> {
     }
 }
 
-pub struct BottomTreeState<T: AggregationContext> {
-    data: T::Info,
-    upper: CountHashSet<BottomTreeParent<T>>,
+pub struct BottomTreeState<T, I> {
+    data: T,
+    upper: CountHashSet<BottomTreeParent<T, I>>,
     /// Items that are referenced by right children of this node.
-    following: CountHashSet<T::ItemRef>,
+    following: CountHashSet<I>,
 }
 
-impl<T: AggregationContext> BottomTree<T> {
+impl<T: Default, I> BottomTree<T, I> {
     pub fn new(height: u8) -> Self {
         Self {
             height,
             state: Mutex::new(BottomTreeState {
-                data: T::new_info(),
+                data: T::default(),
                 upper: CountHashSet::new(),
                 following: CountHashSet::new(),
             }),
         }
     }
+}
 
-    pub fn add_child_of_child(
+impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
+    pub fn add_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         self: Arc<Self>,
-        context: &T,
+        context: &C,
         child_location: ChildLocation,
         child_is_blue: bool,
-        child_of_child: T::ItemRef,
+        child_of_child: I,
     ) {
         match (child_location, child_is_blue) {
             (ChildLocation::Left, false) | (ChildLocation::Middle, _) => {
@@ -140,12 +142,12 @@ impl<T: AggregationContext> BottomTree<T> {
         }
     }
 
-    pub fn remove_child_of_child(
+    pub fn remove_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
-        context: &T,
+        context: &C,
         child_location: ChildLocation,
         child_is_blue: bool,
-        child_of_child: T::ItemRef,
+        child_of_child: I,
     ) {
         match (child_location, child_is_blue) {
             (ChildLocation::Left, false) | (ChildLocation::Middle, _) => {
@@ -206,10 +208,10 @@ impl<T: AggregationContext> BottomTree<T> {
         }
     }
 
-    pub(super) fn add_bottom_tree_parent(
+    pub(super) fn add_bottom_tree_parent<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &T,
-        parent: Arc<BottomTree<T>>,
+        context: &C,
+        parent: Arc<BottomTree<T, I>>,
         location: ChildLocation,
     ) {
         let mut state = self.state.lock();
@@ -231,10 +233,10 @@ impl<T: AggregationContext> BottomTree<T> {
         }
     }
 
-    pub(super) fn remove_bottom_tree_parent(
+    pub(super) fn remove_bottom_tree_parent<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &T,
-        parent: Arc<BottomTree<T>>,
+        context: &C,
+        parent: Arc<BottomTree<T, I>>,
         location: ChildLocation,
     ) {
         let mut state = self.state.lock();
@@ -256,7 +258,11 @@ impl<T: AggregationContext> BottomTree<T> {
         }
     }
 
-    pub(super) fn add_top_tree_parent(&self, context: &T, parent: Arc<TopTree<T>>) {
+    pub(super) fn add_top_tree_parent<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        parent: Arc<TopTree<T>>,
+    ) {
         let mut state = self.state.lock();
         if state.upper.add(BottomTreeParent::Top(TopRef {
             parent: parent.clone(),
@@ -272,7 +278,11 @@ impl<T: AggregationContext> BottomTree<T> {
         }
     }
 
-    pub(super) fn remove_top_tree_parent(&self, context: &T, parent: Arc<TopTree<T>>) {
+    pub(super) fn remove_top_tree_parent<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        parent: Arc<TopTree<T>>,
+    ) {
         let mut state = self.state.lock();
         if state.upper.remove(BottomTreeParent::Top(TopRef {
             parent: parent.clone(),
@@ -288,17 +298,21 @@ impl<T: AggregationContext> BottomTree<T> {
         }
     }
 
-    pub(super) fn child_change(&self, context: &T, change: &T::ItemChange) {
+    pub(super) fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        change: &C::ItemChange,
+    ) {
         let mut state = self.state.lock();
         let change = context.apply_change(&mut state.data, change);
         propagate_change_to_upper(&mut state, context, change);
     }
 
-    pub(super) fn get_root_info(
+    pub(super) fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &T,
-        root_info_type: &T::RootInfoType,
-    ) -> T::RootInfo {
+        context: &C,
+        root_info_type: &C::RootInfoType,
+    ) -> C::RootInfo {
         let mut result = context.new_root_info(root_info_type);
         let state = self.state.lock();
         for parent in state.upper.iter() {
@@ -324,10 +338,10 @@ impl<T: AggregationContext> BottomTree<T> {
     }
 }
 
-fn propagate_change_to_upper<T: AggregationContext>(
-    state: &mut MutexGuard<BottomTreeState<T>>,
-    context: &T,
-    change: Option<T::ItemChange>,
+fn propagate_change_to_upper<C: AggregationContext>(
+    state: &mut MutexGuard<BottomTreeState<C::Info, C::ItemRef>>,
+    context: &C,
+    change: Option<C::ItemChange>,
 ) {
     let Some(change) = change else {
         return;
@@ -347,10 +361,10 @@ fn propagate_change_to_upper<T: AggregationContext>(
     }
 }
 
-pub fn add_parent_to_item<T: AggregationContext>(
-    context: &T,
-    item: &mut T::ItemLock,
-    parent: Arc<BottomTree<T>>,
+pub fn add_parent_to_item<C: AggregationContext>(
+    context: &C,
+    item: &mut C::ItemLock,
+    parent: Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
 ) {
     if item.leaf().add_upper(parent.clone(), location) {
@@ -368,10 +382,10 @@ pub fn add_parent_to_item<T: AggregationContext>(
     }
 }
 
-pub fn remove_parent_from_item<T: AggregationContext>(
-    context: &T,
-    item: &mut T::ItemLock,
-    parent: Arc<BottomTree<T>>,
+pub fn remove_parent_from_item<C: AggregationContext>(
+    context: &C,
+    item: &mut C::ItemLock,
+    parent: Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
 ) {
     if item.leaf().remove_upper(parent.clone(), location) {

@@ -38,12 +38,13 @@ impl Change {
 
 struct NodeInner {
     children: Vec<Arc<Node>>,
-    aggregation_leaf: AggregationTreeLeaf<NodeAggregationContext>,
+    aggregation_leaf: AggregationTreeLeaf<Aggregated, NodeRef>,
     value: u32,
 }
 
-struct NodeAggregationContext {
+struct NodeAggregationContext<'a> {
     additions: AtomicU32,
+    something_with_lifetime: &'a u32,
 }
 
 #[derive(Clone)]
@@ -69,10 +70,12 @@ struct NodeGuard {
 }
 
 impl AggregationItemLock for NodeGuard {
-    type Context = NodeAggregationContext;
+    type Info = Aggregated;
+    type ItemRef = NodeRef;
+    type ItemChange = Change;
     type ChildrenIter<'a> = impl Iterator<Item = NodeRef> + 'a;
 
-    fn leaf(&mut self) -> &mut AggregationTreeLeaf<Self::Context> {
+    fn leaf(&mut self) -> &mut AggregationTreeLeaf<Aggregated, NodeRef> {
         &mut self.guard.aggregation_leaf
     }
 
@@ -110,18 +113,11 @@ impl AggregationItemLock for NodeGuard {
     }
 }
 
-impl AggregationContext for NodeAggregationContext {
+impl<'a> AggregationContext for NodeAggregationContext<'a> {
     type ItemLock = NodeGuard;
     type Info = Aggregated;
     type ItemRef = NodeRef;
     type ItemChange = Change;
-
-    fn new_info() -> Self::Info {
-        Aggregated {
-            value: 0,
-            active: false,
-        }
-    }
 
     fn is_blue(&self, reference: Self::ItemRef) -> bool {
         reference.0.blue
@@ -196,6 +192,7 @@ impl AggregationContext for NodeAggregationContext {
     }
 }
 
+#[derive(Default)]
 struct Aggregated {
     value: i32,
     active: bool,
@@ -203,8 +200,10 @@ struct Aggregated {
 
 #[test]
 fn test() {
+    let something_with_lifetime = 0;
     let context = NodeAggregationContext {
         additions: AtomicU32::new(0),
+        something_with_lifetime: &something_with_lifetime,
     };
     let leaf = Arc::new(Node {
         blue: false,

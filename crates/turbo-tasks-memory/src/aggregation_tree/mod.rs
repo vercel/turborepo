@@ -37,14 +37,16 @@ use self::leaf::top_tree;
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
 pub trait AggregationContext {
-    type ItemLock: AggregationItemLock<Context = Self>;
-    type Info;
+    type ItemLock: AggregationItemLock<
+        ItemRef = Self::ItemRef,
+        Info = Self::Info,
+        ItemChange = Self::ItemChange,
+    >;
+    type Info: Default;
     type ItemChange;
     type ItemRef: Eq + Hash + Clone;
     type RootInfo;
     type RootInfoType;
-
-    fn new_info() -> Self::Info;
 
     fn is_blue(&self, reference: Self::ItemRef) -> bool;
     fn item(&self, reference: Self::ItemRef) -> Self::ItemLock;
@@ -72,22 +74,31 @@ pub trait AggregationContext {
 }
 
 pub trait AggregationItemLock {
-    type Context: AggregationContext;
-    type ChildrenIter<'a>: Iterator<Item = <Self::Context as AggregationContext>::ItemRef> + 'a
+    type Info;
+    type ItemRef;
+    type ItemChange;
+    type ChildrenIter<'a>: Iterator<Item = Self::ItemRef> + 'a
     where
         Self: 'a;
-    fn leaf(&mut self) -> &mut AggregationTreeLeaf<Self::Context>;
+    fn leaf(&mut self) -> &mut AggregationTreeLeaf<Self::Info, Self::ItemRef>;
     fn children(&self) -> Self::ChildrenIter<'_>;
     fn is_blue(&self) -> bool;
-    fn get_remove_change(&self) -> Option<<Self::Context as AggregationContext>::ItemChange>;
-    fn get_add_change(&self) -> Option<<Self::Context as AggregationContext>::ItemChange>;
+    fn get_remove_change(&self) -> Option<Self::ItemChange>;
+    fn get_add_change(&self) -> Option<Self::ItemChange>;
 }
 
-pub fn aggregation_info<T: AggregationContext>(
-    context: &T,
-    reference: T::ItemRef,
-) -> AggregationInfoGuard<T> {
+pub fn aggregation_info<C: AggregationContext>(
+    context: &C,
+    reference: C::ItemRef,
+) -> AggregationInfoGuard<C::Info> {
     let mut item = context.item(reference);
     let top_tree = top_tree(context, &mut item, 0);
     top_tree.info()
+}
+
+pub fn aggregation_info_from_item<C: AggregationContext>(
+    context: &C,
+    item: &mut C::ItemLock,
+) -> AggregationInfoGuard<C::Info> {
+    top_tree(context, item, 0).info()
 }
