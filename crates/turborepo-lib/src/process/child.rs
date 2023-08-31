@@ -56,7 +56,7 @@ pub enum ChildState {
 
 #[derive(Clone)]
 pub enum ShutdownStyle {
-    /// On windows this will send a CTRL_BREAK_EVENT, and on posix systems it
+    /// On windows this will immediately kill, and on posix systems it
     /// will send a SIGINT. If `Duration` elapses, we then follow up with a
     /// `Kill`.
     Graceful(Duration),
@@ -123,7 +123,6 @@ impl ShutdownStyle {
 
                 #[cfg(windows)]
                 {
-                    // send the CTRL_BREAK_EVENT signal to the child process
                     debug!("timeout not supported on windows, killing");
                     child.kill().await?;
                     Ok(ChildState::Killed)
@@ -141,8 +140,6 @@ impl ShutdownStyle {
 ///
 /// This is a wrapper around the `tokio::process::Child` struct, which provides
 /// a cross platform interface for spawning and managing child processes.
-///
-/// note:
 #[derive(Clone)]
 pub struct Child {
     pid: Option<u32>,
@@ -178,11 +175,8 @@ pub enum ChildCommand {
 }
 
 impl Child {
-    /// Start a child process, returning a oneshot channel that will receive
-    /// the exit code of the process when it exits.
-    ///
-    /// This spawns a task that will wait for the child process to exit, and
-    /// send the exit code to the channel.
+    /// Start a child process, returning a handle that can be used to interact
+    /// with it. The command will be started immediately.
     pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> Self {
         let mut group = command.group().spawn().expect("failed to start child");
 
@@ -247,16 +241,17 @@ impl Child {
         }
     }
 
+    /// Wait for the `Child` to exit, returning the exit code.
     pub async fn wait(&mut self) -> Option<i32> {
         self.exit_channel.changed().await.ok()?;
         *self.exit_channel.borrow()
     }
 
-    /// Perform a graceful shutdown of the child process.
+    /// Perform a graceful shutdown of the `Child` process.
     pub async fn stop(&mut self) {
         {
             let state = self.state.read().await;
-            let child = match Self::child(&state) {
+            let child = match Self::child_channel(&state) {
                 Some(child) => child,
                 None => return,
             };
@@ -269,11 +264,11 @@ impl Child {
         self.wait().await;
     }
 
-    /// Kill the child process immediately.
+    /// Kill the `Child` process immediately.
     pub async fn kill(&mut self) {
         {
             let rw_lock_read_guard = self.state.read().await;
-            let child = match Self::child(&rw_lock_read_guard) {
+            let child = match Self::child_channel(&rw_lock_read_guard) {
                 Some(child) => child,
                 None => return,
             };
@@ -302,7 +297,8 @@ impl Child {
         self.stderr.lock().unwrap().take()
     }
 
-    fn child(state: &ChildState) -> Option<&ChildCommandChannel> {
+    /// Get a channel for interacting with the child process.
+    fn child_channel(state: &ChildState) -> Option<&ChildCommandChannel> {
         match state {
             ChildState::Running(child) => Some(child),
             _ => None,
