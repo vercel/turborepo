@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, convert::Infallible};
 
 use lightningcss::{
     values::url::Url,
@@ -34,8 +34,11 @@ impl<'a> ApplyVisitors<'a> {
 
     fn visit_if_required<N>(&mut self, n: &mut N, ast_path: &mut AstKindPath<AstParentKind>)
     where
-        N: for<'aa> Visit<'aa, DefaultAtRule, dyn for<'i> Visitor<'i> + Send + Sync + 'aa>
-            + for<'aa> Visit<'aa, DefaultAtRule, ApplyVisitors<'aa>>,
+        N: for<'aa> Visit<
+                'aa,
+                DefaultAtRule,
+                dyn for<'i> Visitor<'i, Error = Infallible> + Send + Sync + 'aa,
+            > + for<'aa> Visit<'aa, DefaultAtRule, ApplyVisitors<'aa>>,
     {
         let mut index = self.index;
         let mut current_visitors_map = Cow::Borrowed(&self.visitors);
