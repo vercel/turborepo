@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use lightningcss::visitor::Visitor;
 use turbo_tasks::Vc;
 use turbopack_core::chunk::ChunkingContext;
@@ -22,7 +24,7 @@ pub struct CodeGeneration {
 }
 
 pub trait VisitorFactory: Send + Sync {
-    fn create<'a>(&'a self) -> Box<dyn Visitor + Send + Sync + 'a>;
+    fn create<'a>(&'a self) -> Box<dyn Visitor<Error = Infallible> + Send + Sync + 'a>;
 }
 
 #[turbo_tasks::value_trait]
@@ -66,7 +68,7 @@ macro_rules! create_visitor {
         impl<T: Fn(&mut $ty) + Send + Sync> $crate::code_gen::VisitorFactory
             for Box<Visitor<T>>
         {
-            fn create<'a>(&'a self) -> Box<dyn lightningcss::visitor::Visitor + Send + Sync + 'a> {
+            fn create<'a>(&'a self) -> Box<dyn lightningcss::visitor::Visitor<Error = std::convert::Infallible> + Send + Sync + 'a> {
                 Box::new(&**self)
             }
         }
