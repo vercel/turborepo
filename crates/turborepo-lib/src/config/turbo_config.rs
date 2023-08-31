@@ -4,7 +4,11 @@ use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
 
-use crate::{commands::CommandBase, config::RawTurboJSON, package_json::PackageJson};
+use crate::{
+    commands::CommandBase,
+    config::{Error as ConfigError, RawTurboJSON},
+    package_json::PackageJson,
+};
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
@@ -328,9 +332,14 @@ impl TurborepoConfigBuilder {
             anyhow!("package_json")
         })?;
         let turbo_json =
-            RawTurboJSON::read(&self.repo_root.join_component("turbo.json")).map_err(|e| {
-                dbg!(e);
-                anyhow!("raw_turbo_json")
+            RawTurboJSON::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
+                if let ConfigError::Io(e) = &e {
+                    if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                        return Ok(Default::default());
+                    }
+                }
+
+                Err(e)
             })?;
         let global_config = self.get_global_config()?;
         let local_config = self.get_local_config()?;
